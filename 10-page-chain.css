@@ -1,0 +1,39 @@
+/* ═══════════════════════════════════════════════════════════
+   AURA8 v106 · 10-page-chain.css
+   blockchain log
+   Source: AURA8_v105.html lignes 867 → 899
+   ═══════════════════════════════════════════════════════════ */
+
+/* ─────────────────────────────────────────────────── */
+/* PAGE 4: BLOCKCHAIN LOG                              */
+/* ─────────────────────────────────────────────────── */
+
+.chain-card {
+  margin: 10px 16px 0;
+}
+
+.chain-row {
+  display: flex;
+  gap: 10px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border);
+  align-items: flex-start;
+  transition: background .12s;
+}
+.chain-row:last-child { border-bottom: none; }
+.chain-row:active { background: var(--s2); }
+
+.chain-icon-wrap {
+  width: 32px; height: 32px;
+  border-radius: 9px;
+  background: var(--s2);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 15px;
+  flex-shrink: 0;
+}
+
+.chain-content { flex: 1; min-width: 0; }
+.chain-desc { font-size: 11px; color: var(--t1); line-height: 1.4; word-break: break-word; overflow-wrap: anywhere; min-width: 0; flex: 1; }
+.chain-hash { font-size: 9px; color: var(--ice); font-family: var(--font-mono); opacity:.7; }
+.chain-time { font-size: 9px; color: var(--t3); }
+

@@ -1,0 +1,170 @@
+/* ═══════════════════════════════════════════════════════════
+   AURA8 v106 · 17-v55-swarm-21agents.css
+   swarm orchestration (21 agents)
+   Source: AURA8_v105.html lignes 2382 → 2545
+   ═══════════════════════════════════════════════════════════ */
+
+/* ═══════════════════════════════════════════════════════════
+   v5.5 — 21 AGENTS ORCHESTRATED · Full coordination
+   ═══════════════════════════════════════════════════════════ */
+
+.swarm-section {
+  background: linear-gradient(145deg, rgba(167,139,250,.04), rgba(56,212,245,.03));
+  border-radius: 12px;
+  padding: 10px;
+  border: 1px solid rgba(167,139,250,.15);
+}
+
+.swarm-tier {
+  margin-bottom: 10px;
+}
+.swarm-tier-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 6px 8px;
+  background: var(--s3);
+  border-radius: 7px;
+  margin-bottom: 5px;
+}
+.swarm-tier-name {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+.swarm-tier-count {
+  font-family: var(--font-mono);
+  font-size: 8px;
+  color: var(--t3);
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: var(--s2);
+}
+
+.swarm-agent {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 8px;
+  background: var(--s2);
+  border-radius: 7px;
+  margin-bottom: 3px;
+  border-left: 2px solid transparent;
+  font-size: 9px;
+  position: relative;
+  transition: border-color .2s, background .2s;
+}
+.swarm-agent.tier-1 { border-left-color: var(--pur); background: linear-gradient(145deg, rgba(167,139,250,.05), var(--s2)); }
+.swarm-agent.tier-2 { border-left-color: var(--ice); }
+.swarm-agent.tier-3 { border-left-color: var(--gold); background: linear-gradient(145deg, rgba(245,200,66,.04), var(--s2)); }
+
+.swarm-agent.firing {
+  animation: agent-fire 1.2s infinite;
+}
+@keyframes agent-fire {
+  0%,100% { box-shadow: 0 0 0 0 rgba(167,139,250,.4); }
+  50%     { box-shadow: 0 0 0 4px rgba(167,139,250,0); }
+}
+
+.swarm-avatar {
+  width: 22px; height: 22px;
+  border-radius: 5px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  background: var(--s3);
+  flex-shrink: 0;
+}
+.swarm-body { flex: 1; min-width: 0; }
+.swarm-name {
+  font-size: 9px;
+  font-weight: 600;
+  color: var(--t1);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.swarm-reason {
+  font-size: 7px;
+  color: var(--t3);
+  font-style: italic;
+  line-height: 1.3;
+  margin-top: 1px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.swarm-signal {
+  font-family: var(--font-display);
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 5px;
+  flex-shrink: 0;
+  min-width: 36px;
+  text-align: center;
+}
+.swarm-signal.bullish { background: rgba(0,232,122,.15); color: var(--up); }
+.swarm-signal.bearish { background: rgba(255,61,107,.15); color: var(--down); }
+.swarm-signal.neutral { background: rgba(245,200,66,.1);  color: var(--gold); }
+.swarm-signal.veto    { background: rgba(255,61,107,.25); color: var(--down); font-size: 9px; }
+.swarm-signal.approve { background: rgba(0,232,122,.15); color: var(--up); font-size: 9px; }
+
+.coalition-banner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  background: linear-gradient(135deg, rgba(167,139,250,.12), rgba(56,212,245,.08));
+  border: 1px solid rgba(167,139,250,.3);
+  border-radius: 10px;
+  margin: 8px 0;
+}
+.coalition-banner .icon { font-size: 16px; }
+.coalition-banner .text { flex: 1; font-size: 9px; color: var(--t1); }
+.coalition-banner .conv {
+  font-family: var(--font-display);
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--pur);
+}
+
+.fitness-bar {
+  height: 2px;
+  background: var(--s3);
+  border-radius: 2px;
+  margin-top: 3px;
+  overflow: hidden;
+}
+.fitness-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--ice), var(--up));
+  border-radius: 2px;
+  transition: width .6s;
+}
+
+/* Enhanced debate panel (council only, 5 voters) */
+.council-enhanced .persona-row {
+  position: relative;
+}
+.council-enhanced .advisors {
+  margin-top: 3px;
+  font-size: 7px;
+  color: var(--t3);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.council-enhanced .advisor-chip {
+  padding: 1px 5px;
+  border-radius: 3px;
+  background: rgba(56,212,245,.08);
+  color: var(--ice);
+  border: 1px solid rgba(56,212,245,.15);
+  font-size: 7px;
+}
+.council-enhanced .advisor-chip.bullish { background: rgba(0,232,122,.08); color: var(--up); border-color: rgba(0,232,122,.2); }
+.council-enhanced .advisor-chip.bearish { background: rgba(255,61,107,.08); color: var(--down); border-color: rgba(255,61,107,.2); }
+

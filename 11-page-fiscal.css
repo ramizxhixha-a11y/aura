@@ -1,0 +1,266 @@
+/* ═══════════════════════════════════════════════════════════
+   AURA8 v106 · 11-page-fiscal.css
+   page 5 fiscal
+   Source: AURA8_v105.html lignes 4767 → 5026
+   ═══════════════════════════════════════════════════════════ */
+
+/* ── PAGE 5: FISCAL ─────────────────────────────────────── */
+.fiscal-summary {
+  background: var(--s1);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 16px;
+}
+.fiscal-hero {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 12px;
+}
+.fiscal-hero-label { font-size: 10px; color: var(--t3); letter-spacing:.07em; text-transform:uppercase; }
+.fiscal-hero-val   { font-family: var(--font-display); font-size: 28px; font-weight: 700; color: var(--down); margin-top:2px; }
+.fiscal-hero-sub   { font-size: 9px; color: var(--t3); margin-top: 2px; }
+.fiscal-badge { text-align: right; }
+.fiscal-badge-val { font-size: 11px; font-weight: 600; padding: 4px 10px; border-radius: 20px; background: rgba(255,200,50,.12); color: var(--gold); }
+.fiscal-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-top: 8px;
+}
+.fiscal-item {
+  background: var(--s2);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 11px;
+  transition: background .2s;
+}
+.fiscal-item:active { background: var(--s3); }
+.fiscal-item-label { font-size: 8px; color: var(--t3); text-transform: uppercase; letter-spacing:.07em; }
+.fiscal-item-val   { font-size: 15px; font-weight: 700; margin-top: 4px; }
+.fiscal-item-sub   { font-size: 8px; color: var(--t3); margin-top: 2px; }
+
+.fee-log-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 11px 14px;
+  border-bottom: 1px solid var(--border);
+  background: var(--s1);
+  transition: background .15s;
+}
+.fee-log-item:active { background: var(--s2); }
+.fee-log-item:first-child { border-radius: 14px 14px 0 0; }
+.fee-log-item:last-child  { border-radius: 0 0 14px 14px; border-bottom: none; }
+.fee-log-icon  { font-size: 18px; flex-shrink: 0; width: 28px; text-align:center; }
+.fee-log-body  { flex: 1; min-width: 0; }
+.fee-log-title { font-size: 11px; font-weight: 600; color: var(--t1); }
+.fee-log-detail{ font-size: 9px; color: var(--t3); margin-top: 2px; line-height: 1.5; }
+.fee-log-right { text-align: right; flex-shrink: 0; }
+.fee-log-total { font-size: 12px; font-weight: 700; color: var(--down); }
+.fee-log-tax   { font-size: 9px; color: var(--gold); margin-top: 2px; }
+
+.pair-fee-card {
+  background: var(--s1);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 14px;
+  margin-bottom: 10px;
+  transition: border-color .2s;
+}
+.pair-fee-card:active { border-color: var(--border2); }
+.pair-fee-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+}
+.pair-fee-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 5px 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 11px;
+}
+.pair-fee-row:last-child { border-bottom: none; padding-bottom: 0; }
+.pair-fee-row-label { color: var(--t3); }
+.pair-fee-row-val   { font-weight: 600; color: var(--t1); }
+.pair-fee-total-row {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border2);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+/* Fee reserve account card — gradient gold border */
+.fee-reserve-card {
+  background: linear-gradient(135deg, rgba(245,200,66,.09), rgba(167,139,250,.04));
+  border: 1px solid rgba(245,200,66,.3);
+  border-radius: 18px;
+  padding: 16px;
+  margin-bottom: 12px;
+  position: relative;
+  overflow: hidden;
+}
+.fee-reserve-card::before {
+  content:'';
+  position:absolute; top:-30px; right:-30px;
+  width:100px; height:100px;
+  background: radial-gradient(circle, rgba(245,200,66,.12) 0%, transparent 70%);
+  pointer-events:none;
+}
+.fee-reserve-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 12px;
+}
+.fee-reserve-label {
+  font-size: 9px;
+  color: var(--t3);
+  text-transform: uppercase;
+  letter-spacing: .08em;
+}
+.fee-reserve-val {
+  font-family: var(--font-display);
+  font-size: 32px;
+  font-weight: 700;
+  color: var(--gold);
+  margin-top: 3px;
+  text-shadow: 0 0 20px rgba(245,200,66,.3);
+}
+.fee-reserve-sub {
+  font-size: 9px;
+  color: var(--t3);
+  margin-top: 3px;
+}
+.fee-reserve-badge {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--gold);
+  background: rgba(245,200,66,.14);
+  border: 1px solid rgba(245,200,66,.25);
+  border-radius: 8px;
+  padding: 4px 9px;
+}
+.fee-reserve-breakdown {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr 1fr;
+  gap: 5px;
+}
+.fee-reserve-item {
+  background: rgba(0,0,0,.25);
+  border-radius: 9px;
+  padding: 7px 5px;
+  text-align: center;
+  border: 1px solid rgba(255,255,255,.04);
+}
+.fee-reserve-item-label {
+  font-size: 7px;
+  color: var(--t3);
+  text-transform: uppercase;
+  letter-spacing: .05em;
+}
+.fee-reserve-item-val {
+  font-size: 10px;
+  font-weight: 700;
+  margin-top: 2px;
+}
+
+/* Pair fee grid (4-cell) */
+.pair-fee-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr 1fr;
+  gap: 5px;
+  margin-bottom: 8px;
+}
+.pair-fee-cell {
+  background: var(--s2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 8px 5px;
+  text-align: center;
+}
+.pair-fee-cell-label {
+  font-size: 7px;
+  color: var(--t3);
+  text-transform: uppercase;
+  letter-spacing: .04em;
+}
+.pair-fee-cell-val {
+  font-size: 11px;
+  font-weight: 700;
+  margin-top: 3px;
+}
+.pair-fee-cell-sub {
+  font-size: 7px;
+  color: var(--t3);
+  margin-top: 1px;
+}
+
+/* Tax region card */
+.tax-region-card {
+  background: linear-gradient(135deg, rgba(56,212,245,.05), rgba(56,212,245,.02));
+  border: 1px solid rgba(56,212,245,.2);
+  border-radius: 16px;
+  padding: 16px;
+  margin-bottom: 10px;
+}
+.tax-region-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; }
+.tax-big { font-family:var(--font-display); font-size:34px; font-weight:700; color:var(--down); }
+.tax-big.zero { color: var(--up); }
+.tax-note { font-size:9px; color:var(--t3); margin-top:4px; line-height:1.6; }
+.tax-breakdown-row { display:flex; justify-content:space-between; align-items:center; padding:8px 14px; font-size:11px; border-bottom:1px solid var(--border); }
+.tax-breakdown-row:last-child { border-bottom:none; }
+.tax-breakdown-row:last-child { font-weight:700; font-size:12px; }
+
+/* Region selector */
+.region-btn {
+  display: flex; align-items: center; gap: 12px;
+  padding: 13px 14px; border-radius: 13px;
+  background: var(--s1); border: 1px solid var(--border);
+  margin-bottom: 8px; cursor: pointer; -webkit-user-select:none;
+  transition: background .15s, border-color .15s;
+}
+.region-btn.active {
+  border-color: var(--gold);
+  background: rgba(255,200,50,.07);
+  box-shadow: 0 0 0 1px rgba(245,200,66,.15);
+}
+.region-btn:active { background: var(--s3); }
+.region-btn-flag   { font-size: 20px; }
+.region-btn-info   { flex: 1; min-width:0; }
+.region-btn-name   { font-size: 12px; font-weight: 600; color: var(--t1); }
+.region-btn-note   { font-size: 9px; color: var(--t3); margin-top: 2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.region-btn-rate   { font-size: 15px; font-weight: 700; flex-shrink:0; }
+.region-btn-rate.zero { color: var(--up); }
+.region-btn-rate.nonzero { color: var(--gold); }
+
+/* FISCAL MINI BAR (Home) */
+.fiscal-mini-bar {
+  background: var(--s1);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 10px 14px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  cursor: pointer;
+}
+.fiscal-mini-icon { font-size: 18px; flex-shrink: 0; }
+.fiscal-mini-body { flex: 1; min-width: 0; }
+.fiscal-mini-title {
+  font-size: 9px; color: var(--t3); letter-spacing: .07em;
+  text-transform: uppercase; margin-bottom: 2px;
+}
+.fiscal-mini-vals {
+  display: flex; gap: 10px; align-items: center; flex-wrap: wrap;
+}
+.fiscal-mini-val  { font-size: 11px; font-weight: 700; }
+.fiscal-mini-sep  { color: var(--border2); font-size: 10px; }
+.fiscal-mini-arrow { font-size: 11px; color: var(--t3); flex-shrink: 0; }
+
+/* ACTION CARD live P&L block */

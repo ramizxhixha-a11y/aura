@@ -1,0 +1,301 @@
+/* ═══════════════════════════════════════════════════════════
+   AURA8 v106 · 05-action-cards-base.css
+   Action cards redesign v7.12 (cœur visuel)
+   Source: AURA8_v105.html lignes 1091 → 1385
+   ═══════════════════════════════════════════════════════════ */
+
+/* ── ACTIONS GRID ─────────────────────────────── */
+.actions-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 10px;
+  margin-top: 0;
+}
+
+/* Wrapper colonne : carte action + bloc positions */
+/* ═══════════════════════════════════════════════════════
+   v7.12 · REDESIGN COMPLET — CARTES PAIRES
+   ═══════════════════════════════════════════════════════ */
+.ac-pair-wrap {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.action-card {
+  background: rgba(10,14,24,0.7);
+  border: 1px solid rgba(255,255,255,.07);
+  border-radius: 16px;
+  padding: 12px 12px 10px;
+  position: relative;
+  overflow: hidden;
+  transition: border-color .3s, background .3s;
+  min-width: 0;
+  backdrop-filter: blur(4px);
+}
+
+/* État BUY/SELL/HOLD — couleur de bordure + fond ambiance */
+.action-card.buy  {
+  border-color: rgba(0,232,122,.30);
+  background: linear-gradient(160deg,rgba(0,232,122,.05) 0%,rgba(10,14,24,.85) 60%);
+}
+.action-card.sell {
+  border-color: rgba(255,61,107,.30);
+  background: linear-gradient(160deg,rgba(255,61,107,.05) 0%,rgba(10,14,24,.85) 60%);
+}
+.action-card.hold {
+  border-color: rgba(255,255,255,.06);
+  background: rgba(10,14,24,0.7);
+}
+
+/* Quand des positions existent sous la carte */
+.ac-pair-wrap.has-pos .action-card {
+  border-radius: 16px 16px 0 0;
+  border-bottom-color: transparent;
+}
+
+/* Glow spot en coin haut-droit */
+.action-glow {
+  position: absolute; top: -16px; right: -16px;
+  width: 70px; height: 70px; border-radius: 50%;
+  pointer-events: none;
+  filter: blur(18px);
+  opacity: .18;
+}
+.action-card.buy  .action-glow { background: var(--up); }
+.action-card.sell .action-glow { background: var(--down); }
+.action-card.hold .action-glow { background: transparent; }
+
+/* ── Header : paire + badge 24h ── */
+.action-card-pair {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 6px;
+  min-width: 0;
+  /* espace pour le badge absolu droit */
+  padding-right: 0;
+}
+.action-card-pair .ac-pair-name {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: .05em;
+  color: var(--t1);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.action-card-pair .ac-pair-lmsr {
+  font-size: 8px;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 6px;
+  background: rgba(56,212,245,.1);
+  color: var(--ice);
+  white-space: nowrap;
+  flex-shrink: 0;
+  margin-left: 4px;
+}
+
+/* Badge 24h change (absolu top-right) */
+.ac-change24 {
+  position: absolute;
+  top: 10px; right: 10px;
+  font-size: 9px;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 6px;
+  font-family: var(--font-mono);
+  z-index: 2;
+  max-width: 62px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  letter-spacing: .03em;
+}
+
+/* ── Ligne stats (WR / trades / σ) ── */
+.ac-header-stats {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-bottom: 8px;
+  overflow: hidden;
+  min-width: 0;
+}
+.ac-stat-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  font-family: var(--font-mono);
+  font-weight: 700;
+  font-size: 8px;
+  padding: 2px 5px;
+  border-radius: 5px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.ac-stat-pill.win  { background: rgba(0,232,122,.10); color: var(--up); }
+.ac-stat-pill.loss { background: rgba(255,61,107,.10); color: var(--down); }
+.ac-stat-pill.neutral { background: rgba(136,153,187,.08); color: var(--t3); }
+.ac-stat-pill.ice  { background: rgba(56,212,245,.08); color: var(--ice); }
+.ac-stat-pill.gold { background: rgba(245,200,66,.08); color: var(--gold); }
+.ac-stat-pill.pur  { background: rgba(167,139,250,.08); color: var(--pur); }
+.ac-volatility {
+  font-family: var(--font-mono);
+  font-size: 8px;
+  color: var(--t3);
+  white-space: nowrap;
+  flex-shrink: 0;
+  margin-left: auto;
+}
+
+/* ── Label principal (HOLD / LONG / SHORT) ── */
+.action-card-action {
+  font-family: var(--font-display);
+  font-size: 24px;
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: -.01em;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+.action-card.buy  .action-card-action { color: var(--up); }
+.action-card.sell .action-card-action { color: var(--down); }
+.action-card.hold .action-card-action { color: rgba(255,255,255,.45); }
+
+/* Point clignotant pour position active */
+.ac-live-dot {
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  animation: livePulse 1.6s infinite;
+}
+.action-card.buy  .ac-live-dot { background: var(--up); }
+.action-card.sell .ac-live-dot { background: var(--down); }
+
+/* Prix sous le label principal */
+.action-card-price {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--t2);
+  margin-top: 1px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ── Agents bar ── */
+.ac-agents-bar {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  margin: 7px 0 4px;
+  padding: 3px 6px;
+  background: rgba(167,139,250,.04);
+  border-radius: 6px;
+  border: 1px solid rgba(167,139,250,.08);
+  overflow: hidden;
+  min-width: 0;
+}
+.ac-agents-bar-label {
+  font-size: 7px;
+  color: var(--t3);
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  margin-right: 2px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.ac-agent-dot {
+  width: 10px; height: 10px; border-radius: 50%;
+  font-size: 8px; display: inline-flex;
+  align-items: center; justify-content: center;
+  border: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+/* ── Bloc données (Mise / Timer / Cycle / Frais / Net) ── */
+.ac-pnl-block {
+  margin: 2px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.ac-pnl-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  min-width: 0;
+}
+.ac-pnl-label {
+  font-size: 8px;
+  color: var(--t3);
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.ac-pnl-stake {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--gold);
+  white-space: nowrap;
+}
+.ac-pnl-val {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 600;
+  transition: color .3s;
+  white-space: nowrap;
+}
+.ac-pnl-fee {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ac-pnl-gp {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 700;
+  transition: color .3s;
+  white-space: nowrap;
+}
+
+/* Diviseur optique entre les sections */
+.ac-divider {
+  height: 1px;
+  background: rgba(255,255,255,.05);
+  margin: 5px 0;
+}
+
+/* ── Mini-chart ── */
+.ac-mini-chart {
+  margin-top: 6px;
+  height: 34px;
+  position: relative;
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+/* ── P&L cumulatif ── */
+.ac-cum-pnl {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 4px 8px;
+  margin-top: 5px;
+  background: rgba(5,7,9,.5);
+  border-radius: 8px;
+  border-left: 2px solid rgba(255,255,255,.06);
+}
+.ac-cum-pnl.up   { border-left-color: var(--up);   background: rgba(0,232,122,.04); }
+.ac-cum-pnl.down { border-left-color: var(--down); background: rgba(255,61,107,.04); }
+.ac-cum-lbl { font-size: 8px; color: var(--t3); text-transform: uppercase; letter-spacing: .05em; }
+.ac-cum-val { font-family: var(--font-mono); font-size: 10px; font-weight: 700; }
+

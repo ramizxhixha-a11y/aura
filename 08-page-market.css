@@ -1,0 +1,87 @@
+/* ═══════════════════════════════════════════════════════════
+   AURA8 v106 · 08-page-market.css
+   candle, signals feed
+   Source: AURA8_v105.html lignes 712 → 792
+   ═══════════════════════════════════════════════════════════ */
+
+/* ─────────────────────────────────────────────────── */
+/* PAGE 2: MARKET                                       */
+/* ─────────────────────────────────────────────────── */
+
+.candle-wrap {
+  margin: 0 16px;
+  background: var(--s1);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  overflow: hidden;
+}
+
+.candle-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 14px 16px 10px;
+  border-bottom: 1px solid var(--border);
+}
+
+.candle-price {
+  font-family: var(--font-display);
+  font-size: 24px;
+  font-weight: 700;
+}
+
+.tf-pills {
+  display: flex;
+  gap: 4px;
+}
+
+.tf-pill {
+  padding: 4px 10px;
+  border-radius: 8px;
+  font-size: 10px;
+  font-weight: 500;
+  cursor: pointer;
+  border: 1px solid transparent;
+  color: var(--t3);
+  transition: background .15s, color .15s, border-color .15s;
+  -webkit-user-select: none;
+}
+
+.tf-pill.active { background: rgba(56,212,245,.12); color: var(--ice); border-color: rgba(56,212,245,.25); }
+
+/* SIGNALS FEED */
+.signal-feed {
+  margin: 0 16px;
+}
+
+.signal-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.signal-row:last-child { border-bottom: none; }
+
+.signal-indicator {
+  width: 36px; height: 36px;
+  border-radius: 10px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 16px;
+  flex-shrink: 0;
+}
+
+.signal-info { flex: 1; }
+.signal-name { font-size: 12px; font-weight: 500; color: var(--t1); }
+.signal-sub { font-size: 10px; color: var(--t3); margin-top: 1px; }
+
+.signal-score {
+  font-family: var(--font-display);
+  font-size: 18px;
+  font-weight: 600;
+  text-align: right;
+}
+
+.signal-conf { font-size: 10px; color: var(--t3); text-align: right; }
+

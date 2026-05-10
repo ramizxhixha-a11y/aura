@@ -1,0 +1,167 @@
+/* ═══════════════════════════════════════════════════════════
+   AURA8 v106 · 02-layout.css
+   #app, statusBar, pages, nav, scroll container
+   Source: AURA8_v105.html lignes 63 → 223
+   ═══════════════════════════════════════════════════════════ */
+
+/* ── LAYOUT: PHONE SHELL ──────────────────────────── */
+#app {
+  display: flex;
+  flex-direction: column;
+  height: 100dvh;
+  max-width: 430px;
+  margin: 0 auto;
+  position: relative;
+  overflow: hidden;
+}
+
+/* ── STATUS BAR ───────────────────────────────────── */
+#statusBar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: calc(var(--safe-top) + 4px) 20px 6px;
+  font-size: 11px;
+  color: var(--t2);
+  background: var(--bg);
+  flex-shrink: 0;
+  z-index: 10;
+  gap: 6px;
+}
+/* v7.12 · STABILITÉ + ANTI-OVERFLOW EN-TÊTE (mobile) */
+#statusBar {
+  overflow: hidden;  /* sécurité : rien ne peut déborder visuellement */
+}
+#statusBar > div:last-child {
+  flex-wrap: nowrap;
+  overflow: hidden;
+  min-width: 0;  /* permet au flex de se contracter si vraiment nécessaire */
+}
+@media (max-width: 420px) {
+  #statusBar { padding-left: 8px !important; padding-right: 8px !important; gap: 3px; }
+  #statusBar > div:last-child { gap: 3px !important; flex-wrap: nowrap; overflow: hidden; }
+  #statusBar .status-time { margin-right: 2px !important; font-size: 10px; min-width:34px !important; max-width:34px !important; }
+  #statusBar #livePriceIndicator { font-size: 9px !important; padding: 2px 5px !important; min-width: 42px !important; max-width: 42px !important; }
+  #statusBar #settingsBtn,
+  #statusBar #simToggleBtn,
+  #statusBar #closeAllBtn {
+    width: 26px !important; height: 26px !important; font-size: 12px !important;
+  }
+  #statusBar #modeToggleBtn { min-width: 46px !important; max-width: 46px !important; padding: 3px 6px !important; font-size: 8px !important; }
+  /* Logo plus compact aussi */
+  .nexus-logo { font-size: 14px !important; }
+  .nexus-sub { font-size: 8px !important; max-width: 60px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+}
+/* Très petit (< 360px) : ultra-compact */
+@media (max-width: 360px) {
+  #statusBar { padding-left: 6px !important; padding-right: 6px !important; gap: 2px; }
+  #statusBar > div:last-child { gap: 2px !important; }
+  #statusBar #settingsBtn,
+  #statusBar #simToggleBtn,
+  #statusBar #closeAllBtn {
+    width: 24px !important; height: 24px !important; font-size: 11px !important;
+  }
+  #statusBar #modeToggleBtn { min-width: 36px !important; max-width: 36px !important; font-size: 7px !important; padding: 2px 4px !important; }
+  #statusBar .mode-dot { width: 4px !important; height: 4px !important; }
+  #statusBar #livePriceIndicator { min-width: 38px !important; max-width: 38px !important; }
+  #statusBar .status-time { min-width: 30px !important; max-width: 30px !important; }
+}
+
+.status-time { font-weight: 500; color: var(--t1); letter-spacing: 0.03em; }
+.status-icons { display: flex; gap: 6px; align-items: center; }
+.live-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--up); box-shadow: 0 0 6px rgba(0,232,122,.6); animation: blink 3s ease infinite; opacity:.85; }
+@keyframes blink { 0%,100%{opacity:.9} 50%{opacity:.5} }
+
+/* MINI LMSR INSIDE ACTION CARDS */
+.ac-lmsr-wrap {
+  margin-top: 8px;
+}
+.ac-lmsr-track {
+  height: 5px;
+  border-radius: 100px;
+  background: linear-gradient(to right, var(--down) 0%, #1a2333 50%, var(--up) 100%);
+  position: relative;
+  margin-bottom: 4px;
+}
+.ac-lmsr-fill { will-change: left;
+  position: absolute;
+  top: 50%;
+  width: 10px; height: 10px;
+  border-radius: 50%;
+  background: white;
+  transform: translate(-50%, -50%);
+  box-shadow: 0 1px 4px rgba(0,0,0,.6), 0 0 0 2px rgba(255,255,255,.15);
+  transition: left .4s cubic-bezier(.25,.8,.25,1);
+}
+.ac-lmsr-center {
+  position: absolute;
+  top: 0; left: 50%;
+  width: 1px; height: 100%;
+  background: rgba(255,255,255,.15);
+  transform: translateX(-50%);
+}
+.ac-lmsr-labels {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+/* ── SCROLL CONTAINER ─────────────────────────────── */
+#pages {
+  flex: 1;
+  overflow: hidden;
+  position: relative;
+}
+
+.page {
+  position: absolute;
+  inset: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+  padding: 0 0 calc(var(--safe-bot) + 70px);
+  opacity: 0;
+  pointer-events: none;
+  transform: translateX(20px);
+  transition: opacity .25s ease, transform .25s ease;
+}
+
+.page.active {
+  opacity: 1;
+  pointer-events: auto;
+  transform: none;
+}
+
+/* ── BOTTOM NAV ───────────────────────────────────── */
+#nav {
+  position: absolute;
+  bottom: 0; left: 0; right: 0;
+  padding: 10px 24px calc(var(--safe-bot) + 10px);
+  display: flex;
+  justify-content: space-around;
+  background: linear-gradient(to top, var(--s1) 60%, transparent);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  z-index: 20;
+  border-top: 1px solid var(--border);
+}
+
+.nav-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  cursor: pointer;
+  -webkit-user-select: none;
+  padding: 4px 12px;
+  border-radius: 12px;
+  transition: background .2s;
+}
+
+.nav-btn.active { background: rgba(56,212,245,.08); }
+.nav-btn.active::after { content:''; display:block; width:16px; height:2px; border-radius:1px; background:var(--ice); margin:2px auto 0; }
+.nav-btn svg { width: 22px; height: 22px; }
+.nav-btn span { font-size: 9px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--t3); }
+.nav-btn.active span { color: var(--ice); }
+.nav-btn.active svg path, .nav-btn.active svg circle, .nav-btn.active svg rect { stroke: var(--ice); }
+

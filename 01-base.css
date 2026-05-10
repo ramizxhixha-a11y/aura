@@ -1,0 +1,48 @@
+/* ═══════════════════════════════════════════════════════════
+   AURA8 v106 · 01-base.css
+   Reset, :root variables, body, html
+   Source: AURA8_v105.html lignes 21 → 62
+   ═══════════════════════════════════════════════════════════ */
+
+/* ── RESET & BASE ─────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+
+:root {
+  --bg:       #050709;
+  --s1:       #0b0e14;
+  --s2:       #111620;
+  --s3:       #18202e;
+  --border:   rgba(255,255,255,0.07);
+  --border2:  rgba(255,255,255,0.12);
+
+  --up:   #00e87a;
+  --down: #ff3d6b;
+  --gold: #f5c842;
+  --ice:  #38d4f5;
+  --pur:  #a78bfa;
+
+  --t1: #f0f4ff;
+  --t2: #8899bb;
+  --t3: #3d5070;
+
+  --font-display: 'Clash Display', sans-serif;
+  --font-mono: 'DM Mono', monospace;
+
+  --safe-top: env(safe-area-inset-top, 20px);
+  --safe-bot: env(safe-area-inset-bottom, 16px);
+
+  /* v8.0 LIVRAISON 31 · Système de thèmes RETIRÉ */
+}
+
+/* v8.0 LIVRAISON 31 · CSS thèmes RETIRÉS */
+
+html, body {
+  height: 100%;
+  background: var(--bg);
+  color: var(--t1);
+  font-family: var(--font-mono);
+  font-size: 13px;
+  -webkit-font-smoothing: antialiased;
+  overflow: hidden;
+}
+

@@ -1,0 +1,225 @@
+/* ═══════════════════════════════════════════════════════════
+   AURA8 v106 · 21a-v712-controls-charts.css
+   mobile inputs, steppers, position buttons, leverage, mini charts
+   Source: AURA8_v105.html lignes 4548 → 4766
+   ═══════════════════════════════════════════════════════════ */
+
+/* ── Mobile number input: hide spinners ──── */
+input[type="number"]::-webkit-outer-spin-button,
+input[type="number"]::-webkit-inner-spin-button { -webkit-appearance:none; margin:0; }
+input[type="number"] { -moz-appearance:textfield; }
+input[type="number"]:focus { outline:none; box-shadow:0 0 0 2px rgba(56,212,245,.18); }
+
+.pair-ctrl-row {
+  background: var(--s2);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 12px 12px 10px;
+  margin-bottom: 8px;
+}
+.pair-ctrl-header {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+.pair-ctrl-header-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.pair-ctrl-btns {
+  display: flex;
+  gap: 8px;
+}
+.pair-ctrl-label {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: .04em;
+}
+.pair-ctrl-row2 {
+  display: flex;
+  gap: 8px;
+}
+/* Stepper container — no text labels */
+.pair-mini-ctrl {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  flex: 1;
+  background: var(--s3);
+  border-radius: 10px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+}
+.pair-mini-ctrl .step-btn {
+  width: 36px;
+  height: 36px;
+  border-radius: 0;
+  border: none;
+  border-right: 1px solid var(--border);
+  background: transparent;
+  font-size: 18px;
+  color: var(--t2);
+  flex-shrink: 0;
+}
+.pair-mini-ctrl .step-btn:last-child {
+  border-right: none;
+  border-left: 1px solid var(--border);
+}
+.pair-mini-ctrl .step-btn:active { background: var(--border); color: var(--t1); }
+.pair-mini-val {
+  flex: 1;
+  text-align: center;
+  font-family: var(--font-display);
+  font-size: 13px;
+  font-weight: 700;
+  padding: 0 4px;
+  white-space: nowrap;
+}
+
+/* PER-PAIR POSITION BUTTONS */
+.pair-pos-row {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 0;
+}
+.pair-pos-label {
+  font-size: 9px;
+  font-weight: 600;
+  flex: 1;
+  min-width: 0;
+}
+
+/* Levier par paire — entre LONG et SHORT */
+.pair-lev-btn {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  background: var(--s3);
+  border: 1px solid var(--border2);
+  border-radius: 9px;
+  overflow: hidden;
+  height: 36px;
+  flex-shrink: 0;
+}
+.pair-lev-btn .step-btn {
+  width: 28px;
+  height: 36px;
+  border-radius: 0;
+  border: none;
+  border-right: 1px solid var(--border);
+  background: transparent;
+  font-size: 16px;
+  color: var(--t2);
+  flex-shrink: 0;
+  cursor: pointer;
+  -webkit-user-select: none;
+}
+.pair-lev-btn .step-btn:last-child {
+  border-right: none;
+  border-left: 1px solid var(--border);
+}
+.pair-lev-btn .step-btn:active { background: var(--border); color: var(--t1); }
+.pair-lev-val {
+  font-family: var(--font-display);
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--gold);
+  padding: 0 5px;
+  min-width: 28px;
+  text-align: center;
+  white-space: nowrap;
+}
+
+/* Freq label above the cycle stepper */
+.pair-ctrl-subrow {
+  display: flex;
+  gap: 8px;
+  align-items: stretch;
+  margin-top: 6px;
+}
+.pair-ctrl-subitem {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  flex: 1;
+}
+.pair-ctrl-sublabel {
+  font-size: 8px;
+  color: var(--t3);
+  text-transform: uppercase;
+  letter-spacing: .07em;
+  padding-left: 4px;
+}
+.pair-pos-btn {
+  padding: 8px 14px;
+  border-radius: 9px;
+  border: 1px solid;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  background: transparent;
+  -webkit-user-select: none;
+  transition: background .12s;
+  flex: 1;
+  text-align: center;
+}
+.pair-pos-btn.long  { border-color: rgba(0,232,122,.4); color: var(--up); background: rgba(0,232,122,.05); }
+.pair-pos-btn.short { border-color: rgba(255,61,107,.4); color: var(--down); background: rgba(255,61,107,.05); }
+.pair-pos-btn.long:active  { background: rgba(0,232,122,.18); }
+.pair-pos-btn.short:active { background: rgba(255,61,107,.18); }
+
+/* Bouton actif — position ouverte — brille */
+.pair-pos-btn.long.active-pos {
+  background: rgba(0,232,122,.18);
+  border-color: rgba(0,232,122,.8);
+  color: var(--up);
+  box-shadow: 0 0 0 1px rgba(0,232,122,.4), 0 0 14px rgba(0,232,122,.35);
+  animation: glowPulse-up 2s ease-in-out infinite;
+}
+.pair-pos-btn.short.active-pos {
+  background: rgba(255,61,107,.18);
+  border-color: rgba(255,61,107,.8);
+  color: var(--down);
+  box-shadow: 0 0 0 1px rgba(255,61,107,.4), 0 0 14px rgba(255,61,107,.35);
+  animation: glowPulse-down 2s ease-in-out infinite;
+}
+@keyframes glowPulse-up {
+  0%,100% { box-shadow: 0 0 0 1px rgba(0,232,122,.4), 0 0 10px rgba(0,232,122,.25); }
+  50%     { box-shadow: 0 0 0 2px rgba(0,232,122,.6), 0 0 22px rgba(0,232,122,.55); }
+}
+@keyframes glowPulse-down {
+  0%,100% { box-shadow: 0 0 0 1px rgba(255,61,107,.4), 0 0 10px rgba(255,61,107,.25); }
+  50%     { box-shadow: 0 0 0 2px rgba(255,61,107,.6), 0 0 22px rgba(255,61,107,.55); }
+}
+
+/* MINI CHARTS GRID */
+.mini-charts-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-top: 0;
+}
+.mini-chart-card {
+  background: var(--s1);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: hidden;
+  cursor: pointer;
+  transition: border-color .2s;
+}
+.mini-chart-card:active { border-color: var(--border2); }
+.mini-chart-card.selected { border-color: var(--ice); }
+.mini-chart-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 10px 4px;
+}
+.mini-chart-pair { font-size: 10px; font-weight: 700; }
+.mini-chart-price { font-size: 9px; color: var(--t2); text-align: right; }
+.mini-chart-pnl   { font-size: 9px; font-weight: 600; }
+

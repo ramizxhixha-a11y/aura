@@ -1,0 +1,466 @@
+/* ═══════════════════════════════════════════════════════════
+   AURA8 v106 · 18-v54-dialogue-mirror.css
+   inner dialogue, shadow mirror, analytics
+   Source: AURA8_v105.html lignes 2546 → 3005
+   ═══════════════════════════════════════════════════════════ */
+
+/* ═══════════════════════════════════════════════════════════
+   v5.4 — REVOLUTIONARY FEATURES (4 world-firsts)
+   ═══════════════════════════════════════════════════════════ */
+
+/* ── 1. INNER DIALOGUE — 5 Personas Debate Panel ── */
+.dialogue-wrap {
+  background: linear-gradient(145deg, rgba(167,139,250,.05), rgba(56,212,245,.03));
+  border: 1px solid rgba(167,139,250,.2);
+  border-radius: 14px;
+  padding: 10px 12px;
+}
+.dialogue-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--border);
+}
+.persona-row {
+  display: flex;
+  gap: 8px;
+  padding: 7px 8px;
+  margin-bottom: 4px;
+  background: var(--s2);
+  border-radius: 9px;
+  border-left: 2px solid transparent;
+  transition: border-color .2s, background .2s;
+}
+.persona-row.vote-long  { border-left-color: var(--up); }
+.persona-row.vote-short { border-left-color: var(--down); }
+.persona-row.vote-hold  { border-left-color: var(--gold); }
+.persona-avatar {
+  width: 24px; height: 24px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  flex-shrink: 0;
+  background: var(--s3);
+}
+.persona-body { flex: 1; min-width: 0; }
+.persona-name {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: .04em;
+}
+.persona-quote {
+  font-size: 9px;
+  color: var(--t2);
+  font-style: italic;
+  line-height: 1.4;
+  margin-top: 2px;
+}
+.persona-vote {
+  font-family: var(--font-display);
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 5px;
+  flex-shrink: 0;
+  align-self: center;
+}
+.persona-vote.long  { background: rgba(0,232,122,.15); color: var(--up); }
+.persona-vote.short { background: rgba(255,61,107,.15); color: var(--down); }
+.persona-vote.hold  { background: rgba(245,200,66,.12); color: var(--gold); }
+
+.dialogue-verdict {
+  margin-top: 8px;
+  padding: 8px 10px;
+  background: var(--s3);
+  border-radius: 9px;
+  text-align: center;
+}
+.dialogue-verdict-label {
+  font-size: 7px;
+  color: var(--t3);
+  text-transform: uppercase;
+  letter-spacing: .09em;
+}
+.dialogue-verdict-val {
+  font-family: var(--font-display);
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1.1;
+  margin-top: 2px;
+}
+
+/* ── 2. SHADOW MIRROR — Adversarial Bot Comparison ── */
+.mirror-wrap {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+.mirror-card {
+  background: var(--s2);
+  border-radius: 12px;
+  padding: 10px;
+  border: 1px solid var(--border);
+  position: relative;
+  overflow: hidden;
+}
+.mirror-card.main    { border-color: rgba(56,212,245,.3); background: linear-gradient(145deg, rgba(56,212,245,.06), var(--s2)); }
+.mirror-card.shadow  { border-color: rgba(255,61,107,.25); background: linear-gradient(145deg, rgba(255,61,107,.04), var(--s2)); }
+.mirror-label {
+  font-size: 8px;
+  color: var(--t3);
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  margin-bottom: 3px;
+}
+.mirror-val {
+  font-family: var(--font-display);
+  font-size: 18px;
+  font-weight: 700;
+}
+.mirror-delta {
+  margin-top: 8px;
+  padding: 7px 10px;
+  background: var(--s3);
+  border-radius: 8px;
+  text-align: center;
+  font-size: 10px;
+}
+.mirror-insight {
+  font-size: 9px;
+  color: var(--t2);
+  line-height: 1.5;
+  padding: 6px 0 0;
+}
+
+/* ── 3. HARMONIC RESONANCE — Multi-indicator alignment ── */
+.resonance-wrap { padding: 4px 0; }
+.resonance-meter {
+  height: 10px;
+  background: linear-gradient(to right, rgba(255,61,107,.1), rgba(245,200,66,.12), rgba(0,232,122,.15), var(--pur));
+  border-radius: 100px;
+  position: relative;
+  overflow: hidden;
+  margin: 8px 0;
+}
+.resonance-fill {
+  height: 100%;
+  background: linear-gradient(to right, var(--gold), var(--pur));
+  border-radius: 100px;
+  transition: width .6s cubic-bezier(.25,.8,.25,1);
+  box-shadow: 0 0 10px rgba(167,139,250,.5);
+}
+.resonance-note {
+  display: inline-block;
+  padding: 3px 8px;
+  margin: 2px 3px 2px 0;
+  border-radius: 6px;
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: .04em;
+  background: var(--s2);
+  border: 1px solid var(--border);
+}
+.resonance-note.active {
+  background: rgba(167,139,250,.15);
+  color: var(--pur);
+  border-color: rgba(167,139,250,.35);
+  box-shadow: 0 0 6px rgba(167,139,250,.3);
+}
+@keyframes resonance-pulse {
+  0%,100% { box-shadow: 0 0 0 0 rgba(167,139,250,.6); }
+  50%     { box-shadow: 0 0 0 8px rgba(167,139,250,0); }
+}
+.resonance-event {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  background: linear-gradient(145deg, rgba(167,139,250,.1), rgba(245,200,66,.05));
+  border: 1px solid rgba(167,139,250,.3);
+  border-radius: 10px;
+  margin-top: 6px;
+  animation: resonance-pulse 2s infinite;
+}
+
+/* ── 4. BUTTERFLY CASCADE — Decision traceability ── */
+.cascade-wrap {
+  font-size: 10px;
+}
+.cascade-node {
+  display: flex;
+  gap: 8px;
+  padding: 6px 8px;
+  margin-bottom: 4px;
+  background: var(--s2);
+  border-radius: 8px;
+  border-left: 2px solid var(--ice);
+  position: relative;
+}
+.cascade-node::before {
+  content: '';
+  position: absolute;
+  left: -2px; top: 100%;
+  width: 2px; height: 4px;
+  background: var(--ice);
+}
+.cascade-node:last-child::before { display: none; }
+.cascade-time {
+  font-size: 7px;
+  color: var(--t3);
+  font-family: var(--font-mono);
+  min-width: 36px;
+}
+.cascade-body { flex: 1; min-width: 0; }
+.cascade-title { font-size: 9px; font-weight: 700; color: var(--t1); }
+.cascade-detail { font-size: 8px; color: var(--t3); margin-top: 1px; }
+
+/* ── DREAM JOURNAL — post-trade narratives (bonus) ── */
+.dream-entry {
+  padding: 9px 11px;
+  background: linear-gradient(145deg, rgba(56,212,245,.04), rgba(167,139,250,.03));
+  border: 1px solid rgba(56,212,245,.15);
+  border-radius: 10px;
+  margin-bottom: 6px;
+  position: relative;
+}
+.dream-entry::before {
+  content: '💭';
+  position: absolute;
+  top: -6px; left: 10px;
+  background: var(--bg);
+  padding: 0 4px;
+  font-size: 11px;
+}
+.dream-quote {
+  font-size: 10px;
+  font-style: italic;
+  color: var(--t2);
+  line-height: 1.5;
+}
+.dream-meta {
+  font-size: 7px;
+  color: var(--t3);
+  margin-top: 4px;
+  display: flex;
+  justify-content: space-between;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   v5.3 — INTELLIGENCE ANALYTICS (5 features)
+   ═══════════════════════════════════════════════════════════ */
+
+/* ── ANALYTICS SECTION WRAPPER ── */
+.analytics-section {
+  margin: 0 16px;
+  background: linear-gradient(145deg, rgba(167,139,250,.04) 0%, rgba(56,212,245,.02) 100%);
+  border: 1px solid rgba(167,139,250,.15);
+  border-radius: 16px;
+  overflow: hidden;
+}
+.analytics-tabs {
+  display: flex;
+  border-bottom: 1px solid var(--border);
+  background: rgba(0,0,0,.2);
+}
+.analytics-tab {
+  flex: 1;
+  padding: 8px 4px;
+  border: none; background: transparent;
+  color: var(--t3);
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: .04em;
+  cursor: pointer;
+  -webkit-user-select: none;
+  transition: color .15s, background .15s;
+}
+.analytics-tab.active {
+  color: var(--pur);
+  background: rgba(167,139,250,.08);
+  box-shadow: inset 0 -2px 0 var(--pur);
+}
+.analytics-panel {
+  padding: 12px;
+  min-height: 80px;
+}
+
+/* ── 1. ADVANCED METRICS ── */
+.perf-metrics-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 6px;
+}
+.perf-metric {
+  background: var(--s2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 8px 10px;
+  position: relative;
+}
+.perf-metric-name {
+  font-size: 7px;
+  color: var(--t3);
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  margin-bottom: 3px;
+}
+.perf-metric-val {
+  font-family: var(--font-display);
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1;
+}
+.perf-metric-sub {
+  font-size: 7px;
+  color: var(--t3);
+  margin-top: 2px;
+}
+.perf-metric.hl { border-color: rgba(167,139,250,.35); box-shadow: 0 0 0 1px rgba(167,139,250,.1); }
+
+/* ── 2. MULTI-HORIZON FORECAST ── */
+.horizon-card {
+  background: var(--s2);
+  border-radius: 10px;
+  padding: 10px;
+  margin-bottom: 8px;
+  border: 1px solid var(--border);
+}
+.horizon-card-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 6px;
+}
+.horizon-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 5px;
+}
+.horizon-cell {
+  background: var(--s3);
+  border-radius: 6px;
+  padding: 6px 5px;
+  text-align: center;
+  border: 1px solid transparent;
+  transition: border-color .2s;
+}
+.horizon-cell.up   { border-color: rgba(0,232,122,.25);  background: rgba(0,232,122,.04); }
+.horizon-cell.down { border-color: rgba(255,61,107,.25); background: rgba(255,61,107,.04); }
+.horizon-cell.flat { border-color: rgba(245,200,66,.2);  background: rgba(245,200,66,.03); }
+.horizon-label {
+  font-size: 7px;
+  color: var(--t3);
+  letter-spacing: .07em;
+  text-transform: uppercase;
+  margin-bottom: 2px;
+}
+.horizon-dir {
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1;
+}
+.horizon-conf-bar {
+  height: 2px;
+  border-radius: 2px;
+  background: var(--s3);
+  margin-top: 4px;
+  overflow: hidden;
+}
+.horizon-conf-fill { height: 100%; border-radius: 2px; transition: width .6s; }
+
+/* ── 3. TEMPORAL HEATMAP ── */
+.heatmap-wrap {
+  font-size: 8px;
+}
+.heatmap-hours-grid {
+  display: grid;
+  grid-template-columns: repeat(24, 1fr);
+  gap: 1px;
+  margin-top: 5px;
+}
+.heat-cell {
+  aspect-ratio: 1;
+  border-radius: 2px;
+  background: rgba(255,255,255,.02);
+  position: relative;
+  cursor: pointer;
+  transition: transform .15s;
+}
+.heat-cell:hover,
+.heat-cell:active {
+  transform: scale(1.4);
+  z-index: 10;
+  box-shadow: 0 2px 8px rgba(0,0,0,.5);
+}
+.heatmap-hours-labels {
+  display: grid;
+  grid-template-columns: repeat(24, 1fr);
+  gap: 1px;
+  font-size: 6px;
+  color: var(--t3);
+  text-align: center;
+  margin-top: 4px;
+}
+
+/* ── 4. WHAT-IF SCENARIOS ── */
+.whatif-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 7px 10px;
+  background: var(--s2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  margin-bottom: 5px;
+  font-size: 10px;
+}
+.whatif-label {
+  color: var(--t2);
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+.whatif-val {
+  font-family: var(--font-display);
+  font-size: 12px;
+  font-weight: 700;
+}
+.whatif-diff {
+  font-size: 9px;
+  color: var(--t3);
+  margin-left: 4px;
+}
+
+/* ── 5. LEAD-LAG CORRELATIONS ── */
+.leadlag-row {
+  display: flex;
+  align-items: center;
+  padding: 7px 10px;
+  background: var(--s2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  margin-bottom: 5px;
+  gap: 8px;
+  font-size: 10px;
+}
+.leadlag-arrow {
+  font-size: 12px;
+  color: var(--pur);
+}
+.leadlag-corr {
+  margin-left: auto;
+  font-family: var(--font-display);
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 5px;
+}
+.leadlag-corr.strong { background: rgba(167,139,250,.15); color: var(--pur); }
+.leadlag-corr.weak   { background: rgba(245,200,66,.1);  color: var(--gold); }
+
