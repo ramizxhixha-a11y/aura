@@ -1,207 +1,213 @@
 /* ═══════════════════════════════════════════════════════════
-   AURA8 v108 · js/01-chrono-network.js
-   LIVRAISON 1 — Chrono multi-mode + Détection réseau + Auto-pause
+   AURA8 v119 · js/01-chrono-network.js
+   Chrono 3 modes indépendants + couleurs dédiées + réseau
 
-   COEXISTENCE avec le code existant :
-   - Les boutons header ont des onclick natifs (toggleSim, toggleMode, toggleWakeLock, etc.)
-     qui appellent les fonctions JS existantes du HTML.
-   - Ce module N'ATTACHE PAS de listener sur ces boutons : il ne fait que
-     OBSERVER les changements et METTRE À JOUR le chrono + l'indicateur réseau.
-   - Le code existant peut appeler window.AuraChrono.* pour synchroniser.
+   Modes internes (JAMAIS renommer) :
+     'sim'       → "Mode Auto-apprentissage"  🔵 cyan  #38d4f5
+     'paperReal' → "Mode Évaluation"          🟡 ambre #f5a623
+     'real'      → "Mode Réel"                🟢 vert  #00e87a
+
+   Source de vérité : window.S.tradingMode  (02-state-init.js)
    ═══════════════════════════════════════════════════════════ */
 
-(function() {
+(function () {
   'use strict';
 
-  // ─── Clés localStorage ──────────────────────────────
-  const K_AUTO_SEC = 'aura_chrono_auto_seconds';
-  const K_MANU_SEC = 'aura_chrono_manu_seconds';
-  const K_RUNNING  = 'aura_system_running';
-  const K_MODE     = 'aura_current_mode';
+  /* ── Clés localStorage ─────────────────────────────────── */
+  const K_SIM_SEC   = 'aura_chrono_sim_seconds';
+  const K_PAPER_SEC = 'aura_chrono_paper_seconds';
+  const K_REAL_SEC  = 'aura_chrono_real_seconds';
+  const K_RUNNING   = 'aura_system_running';
   const K_NET_PAUSE = 'aura_paused_by_network';
   const K_QUIT_OFF  = 'aura_quit_while_offline';
 
-  // ─── État ───────────────────────────────────────────
-  const state = {
-    chronoSeconds: {
-      AUTO: parseInt(localStorage.getItem(K_AUTO_SEC) || '0', 10),
-      MANU: parseInt(localStorage.getItem(K_MANU_SEC) || '0', 10),
-    },
-    mode: localStorage.getItem(K_MODE) || 'AUTO',
-    running: false,
-    pausedByNetwork: false,
-    netStatus: 'online',
+  /* ── Config couleurs/labels par mode ───────────────────── */
+  const MODE_CFG = {
+    sim:       { color: '#38d4f5', label: 'AUTO-APPR',  cssClass: 'mode-sim'   },
+    paperReal: { color: '#f5a623', label: 'ÉVALUATION', cssClass: 'mode-paper' },
+    real:      { color: '#00e87a', label: 'RÉEL',       cssClass: 'mode-real'  },
   };
 
-  // À l'install : si on a quitté l'app offline, on ne reprend pas auto
+  /* ── État interne ──────────────────────────────────────── */
+  const _state = {
+    chronoSeconds: {
+      sim:       parseInt(localStorage.getItem(K_SIM_SEC)   || '0', 10),
+      paperReal: parseInt(localStorage.getItem(K_PAPER_SEC) || '0', 10),
+      real:      parseInt(localStorage.getItem(K_REAL_SEC)  || '0', 10),
+    },
+    running:         false,
+    pausedByNetwork: false,
+    netStatus:       'online',
+  };
+
+  /* Lit le mode courant DIRECTEMENT depuis S.tradingMode */
+  function currentMode() {
+    const m = (typeof window.S !== 'undefined') ? window.S.tradingMode : null;
+    return (m && MODE_CFG[m]) ? m : 'sim';
+  }
+
   const quitOffline = localStorage.getItem(K_QUIT_OFF) === 'true';
 
-  // ─── Formatage adaptatif (MM:SS → HH:MM:SS → Xd HH:MM) ───
+  /* ── Formatage MM:SS → HH:MM:SS → Xd HH:MM ───────────── */
   function formatChrono(s) {
     s = Math.max(0, Math.floor(s));
-    const d = Math.floor(s / 86400);
-    const h = Math.floor((s % 86400) / 3600);
-    const m = Math.floor((s % 3600) / 60);
+    const d   = Math.floor(s / 86400);
+    const h   = Math.floor((s % 86400) / 3600);
+    const m   = Math.floor((s % 3600) / 60);
     const sec = s % 60;
-    const pad = (n) => String(n).padStart(2, '0');
+    const pad = n => String(n).padStart(2, '0');
     if (d > 0) return `${d}d ${pad(h)}:${pad(m)}`;
     if (h > 0) return `${pad(h)}:${pad(m)}:${pad(sec)}`;
     return `${pad(m)}:${pad(sec)}`;
   }
 
-  // ─── Persistance ────────────────────────────────────
+  /* ── Persistance (toutes les 10s) ─────────────────────── */
   function save() {
-    localStorage.setItem(K_AUTO_SEC, state.chronoSeconds.AUTO);
-    localStorage.setItem(K_MANU_SEC, state.chronoSeconds.MANU);
-    localStorage.setItem(K_MODE, state.mode);
-    localStorage.setItem(K_RUNNING, state.running);
+    localStorage.setItem(K_SIM_SEC,   _state.chronoSeconds.sim);
+    localStorage.setItem(K_PAPER_SEC, _state.chronoSeconds.paperReal);
+    localStorage.setItem(K_REAL_SEC,  _state.chronoSeconds.real);
+    localStorage.setItem(K_RUNNING,   _state.running);
   }
 
-  // ─── Détection réseau ───────────────────────────────
+  /* ── Détection réseau ──────────────────────────────────── */
   function evaluateNetwork() {
     if (!navigator.onLine) return 'offline';
     const conn = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
     if (conn && conn.effectiveType) {
       const t = conn.effectiveType;
-      if (t === '4g') return 'online';
-      if (t === '3g') return 'unstable';
-      if (t === '2g' || t === 'slow-2g') return 'unstable';
+      if (t === '3g' || t === '2g' || t === 'slow-2g') return 'unstable';
     }
     return 'online';
   }
 
   function onNetworkChange() {
-    const prev = state.netStatus;
-    state.netStatus = evaluateNetwork();
+    const prev = _state.netStatus;
+    _state.netStatus = evaluateNetwork();
 
-    if (state.netStatus === 'offline') {
-      if (state.running) {
-        state.pausedByNetwork = true;
-        state.running = false;
+    if (_state.netStatus === 'offline') {
+      if (_state.running) {
+        _state.pausedByNetwork = true;
+        _state.running = false;
         localStorage.setItem(K_NET_PAUSE, 'true');
         save();
-        // Notifier le code legacy qu'on a forcé la pause
-        if (typeof window.simulationPaused !== 'undefined') {
-          window.simulationPaused = true;
-        }
+        if (typeof window.simulationPaused !== 'undefined') window.simulationPaused = true;
       }
-    } else if (prev === 'offline' && state.pausedByNetwork && !quitOffline) {
-      // Reprise auto si pas quit-offline
-      state.pausedByNetwork = false;
-      state.running = true;
+    } else if (prev === 'offline' && _state.pausedByNetwork && !quitOffline) {
+      _state.pausedByNetwork = false;
+      _state.running = true;
       localStorage.setItem(K_NET_PAUSE, 'false');
       save();
-      if (typeof window.simulationPaused !== 'undefined') {
-        window.simulationPaused = false;
-      }
+      if (typeof window.simulationPaused !== 'undefined') window.simulationPaused = false;
     }
     render();
   }
 
-  // À l'init : si on était offline et pause-réseau → marquer quit-offline
+  /* Init quit-offline */
   if (!navigator.onLine && localStorage.getItem(K_NET_PAUSE) === 'true') {
     localStorage.setItem(K_QUIT_OFF, 'true');
   } else {
     localStorage.setItem(K_QUIT_OFF, 'false');
   }
 
-  // ─── Détecter l'état du système depuis le code existant ───
-  // Le bouton #simToggleBtn affiche ⏸ quand running, ▶ quand pause
+  /* ── Sync état running depuis bouton UI ────────────────── */
   function syncRunningFromUI() {
     const btn = document.getElementById('simToggleBtn');
     if (!btn) return;
-    // On lit le texte pour savoir si système est en marche
-    const text = btn.textContent.trim();
-    const isRunning = text === '⏸';
-    if (state.running !== isRunning && !state.pausedByNetwork) {
-      state.running = isRunning;
+    const isRunning = btn.textContent.trim() === '⏸';
+    if (_state.running !== isRunning && !_state.pausedByNetwork) {
+      _state.running = isRunning;
       save();
     }
   }
 
-  function syncModeFromUI() {
-    const lbl = document.getElementById('modeLabelText');
-    if (!lbl) return;
-    const m = (lbl.textContent || '').trim().toUpperCase();
-    if ((m === 'AUTO' || m === 'MANU') && state.mode !== m) {
-      state.mode = m;
-      save();
-    }
-  }
-
-  // ─── Tick 1 seconde ─────────────────────────────────
+  /* ── Tick 1 seconde ────────────────────────────────────── */
+  let _tickCount = 0;
   function tick() {
     syncRunningFromUI();
-    syncModeFromUI();
-    if (state.running && state.netStatus !== 'offline') {
-      state.chronoSeconds[state.mode]++;
-      if (state.chronoSeconds[state.mode] % 10 === 0) save();
+    const mode = currentMode();
+    if (_state.running && _state.netStatus !== 'offline') {
+      _state.chronoSeconds[mode]++;
+      _tickCount++;
+      if (_tickCount % 10 === 0) save();
     }
     render();
   }
 
-  // ─── Rendu UI ───────────────────────────────────────
+  /* ── Rendu UI ──────────────────────────────────────────── */
   function render() {
-    // Chrono
+    const mode = currentMode();
+    const cfg  = MODE_CFG[mode];
+
+    /* — Chrono — */
     const chronoEl = document.getElementById('chronoEl');
     if (chronoEl) {
-      chronoEl.textContent = formatChrono(state.chronoSeconds[state.mode]);
-      chronoEl.className = 'chrono-display';
-      if (state.running) chronoEl.classList.add('running');
-      if (state.pausedByNetwork) chronoEl.classList.add('paused-auto');
+      chronoEl.textContent = formatChrono(_state.chronoSeconds[mode]);
+      chronoEl.className   = 'chrono-display';
+      if (_state.running)         chronoEl.classList.add('running');
+      if (_state.pausedByNetwork) chronoEl.classList.add('paused-auto');
+      else                        chronoEl.classList.add(cfg.cssClass);
     }
 
-    // Indicateur réseau
+    /* — Badge mode sous le chrono — */
+    const badgeEl = document.getElementById('modeBadgeEl');
+    if (badgeEl) {
+      badgeEl.textContent = cfg.label;
+      badgeEl.className   = 'mode-badge ' + cfg.cssClass;
+    }
+
+    /* — Indicateur réseau — */
     const netEl = document.getElementById('netIndicator');
-    if (netEl) {
-      netEl.className = 'net-indicator ' + state.netStatus;
+    if (netEl) netEl.className = 'net-indicator ' + _state.netStatus;
+
+    /* — Bouton play/pause si pause réseau — */
+    const btn = document.getElementById('simToggleBtn');
+    if (btn && _state.pausedByNetwork) {
+      btn.className   = 'btn-icon btn-play-pause network-lost';
+      btn.textContent = '▶';
     }
 
-    // Bouton play/pause : seulement si on a forcé la pause par réseau
-    // (sinon laisser le code existant gérer son état)
-    const btn = document.getElementById('simToggleBtn');
-    if (btn && state.pausedByNetwork) {
-      btn.className = 'btn-icon btn-play-pause network-lost';
-      btn.textContent = '▶';
+    /* — Bordure colorée du header selon mode — */
+    const bar = document.getElementById('statusBar');
+    if (bar) {
+      if (mode === 'real')           bar.style.borderBottomColor = 'rgba(0,232,122,.25)';
+      else if (mode === 'paperReal') bar.style.borderBottomColor = 'rgba(245,166,35,.20)';
+      else                           bar.style.borderBottomColor = 'rgba(56,212,245,.07)';
     }
   }
 
-  // ─── API publique ───────────────────────────────────
+  /* ── API publique window.AuraChrono ────────────────────── */
   window.AuraChrono = {
-    state: state,
-    formatChrono: formatChrono,
-    resetChrono: function(mode) {
-      if (state.chronoSeconds[mode] !== undefined) {
-        state.chronoSeconds[mode] = 0;
+    formatChrono,
+    /** Appelé après chaque changement de S.tradingMode */
+    refresh: function () { render(); },
+    resetChrono: function (mode) {
+      const m = mode || currentMode();
+      if (_state.chronoSeconds[m] !== undefined) {
+        _state.chronoSeconds[m] = 0;
         save();
         render();
       }
     },
-    getChrono: function(mode) {
-      return state.chronoSeconds[mode || state.mode];
-    }
+    getChrono: function (mode) {
+      return _state.chronoSeconds[mode || currentMode()];
+    },
+    getAllChronos: function () {
+      return { ..._state.chronoSeconds };
+    },
   };
 
-  // ─── Init ───────────────────────────────────────────
+  /* ── Init ──────────────────────────────────────────────── */
   function init() {
-    // Écouter les événements réseau
-    window.addEventListener('online', onNetworkChange);
+    window.addEventListener('online',  onNetworkChange);
     window.addEventListener('offline', onNetworkChange);
     if (navigator.connection) {
       navigator.connection.addEventListener('change', onNetworkChange);
     }
-
-    // Sauver l'état "quit while offline" à la fermeture
     window.addEventListener('beforeunload', () => {
-      if (!navigator.onLine) {
-        localStorage.setItem(K_QUIT_OFF, 'true');
-      } else {
-        localStorage.setItem(K_QUIT_OFF, 'false');
-      }
+      localStorage.setItem(K_QUIT_OFF, !navigator.onLine ? 'true' : 'false');
       save();
     });
 
-    // Démarrer le tick et l'évaluation réseau initiale
     onNetworkChange();
     setInterval(tick, 1000);
     render();
