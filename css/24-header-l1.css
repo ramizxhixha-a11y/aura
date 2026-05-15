@@ -1,9 +1,8 @@
 /* ═══════════════════════════════════════════════════════════
    AURA8 v119 · 24-header-l1.css
-   Couleurs définitives :
-     sim       → Auto-apprentissage  🔵 Cyan  #38d4f5
-     paperReal → Évaluation          🟢 Vert  #00e87a
-     real      → Réel                🔴 Rouge #ff3d6b
+   FIX 4 : Bouton AUTO/MANU rendu à ses couleurs d'origine
+     AUTO → cyan (couleur par défaut)
+     MANU → or
    ═══════════════════════════════════════════════════════════ */
 
 #statusBar {
@@ -49,7 +48,7 @@
 
 .btn-diag { border-color: rgba(56,212,245,.4); background: rgba(56,212,245,.08); color: var(--ice); }
 
-/* Bouton santé 🩺 (remplace ancien diagnostic ✓) */
+/* Bouton santé 🩺 */
 .btn-health {
   border-color: rgba(56,212,245,.4);
   background: rgba(56,212,245,.08);
@@ -57,7 +56,7 @@
   font-size: 14px;
 }
 
-/* Bouton trades en cours — couleur du mode actif */
+/* Bouton trades — couleur du mode */
 .btn-trades {
   font-size: 13px;
   font-weight: 800;
@@ -82,17 +81,19 @@
 
 .btn-settings { border-color: rgba(167,139,250,.35); background: rgba(167,139,250,.10); color: var(--pur); }
 
-/* ═══ AUTO/MANU pill (couleurs gérées par JS inline pour AUTO) ═══ */
+/* ═══ FIX 4 : AUTO/MANU pill — COULEUR D'ORIGINE ═══ */
+/* AUTO = CYAN par défaut */
 .btn-mode-toggle {
   height: 32px; padding: 0 10px; border-radius: 16px;
-  border: 1px solid rgba(0,232,122,.4);
-  background: rgba(0,232,122,.08);
-  color: var(--up);
+  border: 1px solid rgba(56,212,245,.5);
+  background: rgba(56,212,245,.10);
+  color: var(--ice);
   font-family: var(--font-mono); font-size: 9px; font-weight: 700;
   display: flex; align-items: center; gap: 4px;
   cursor: pointer; flex-shrink: 0; transition: all .3s;
   user-select: none; -webkit-user-select: none;
 }
+/* MANU = OR */
 .btn-mode-toggle.manu {
   border-color: rgba(245,200,66,.4);
   background: rgba(245,200,66,.08);
@@ -103,7 +104,7 @@
   background: currentColor; box-shadow: 0 0 5px currentColor;
 }
 
-/* ═══ NOUVEAU BOUTON MODE TRADING (AA/EV/RE) ═══ */
+/* ═══ Bouton AA/EV/RE (mode trading) ═══ */
 .btn-mode-trading {
   height: 32px; padding: 0 10px; border-radius: 16px;
   border: 1px solid;
@@ -116,7 +117,7 @@
 }
 .btn-mode-trading:active { transform: scale(.92); }
 
-/* ═══ PLAY/PAUSE (inchangé) ═══ */
+/* ═══ PLAY/PAUSE — INTOUCHÉ ═══ */
 .btn-play-pause.idle    { border-color: rgba(59,130,246,.55); background: rgba(59,130,246,.12); color: #3b82f6; }
 .btn-play-pause.running { border-color: rgba(59,130,246,.55); background: rgba(59,130,246,.12); color: #3b82f6; }
 .btn-play-pause.network-lost {
@@ -159,7 +160,7 @@
 .chrono-display.mode-paper  { color: #00e87a; }
 .chrono-display.mode-real   { color: #ff3d6b; }
 
-/* ═══ BADGE MODE (sous le chrono) ═══ */
+/* ═══ BADGE MODE ═══ */
 .mode-badge {
   font-family: var(--font-mono); font-size: 7px;
   font-weight: 800; letter-spacing: .08em;
