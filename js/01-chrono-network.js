@@ -1,18 +1,20 @@
 /* ═══════════════════════════════════════════════════════════
-   AURA8 v123 · js/01-chrono-network.js
+   AURA8 v124 · js/01-chrono-network.js
    LIVRAISON — Chrono multi-mode + Détection réseau + Auto-pause
    + FILET DE SÉCURITÉ bouton play (v119)
    + DIAGNOSTIC visible (v120/v121)
    + SHIM startSim/stopSim (v122)
-   + OVERRIDE toggleSim qui alterne vraiment start↔stop (v123)
+   + OVERRIDE toggleSim (v123)
+   + FORCE-INSTALL shims + state direct (v124)
 
-   v123 corrige le deuxième bug : le toggleSim() inline du HTML
-   appelait toujours startSim, jamais stopSim — donc impossible
-   de mettre le bot en pause. Cette version remplace window.toggleSim
-   par une implémentation qui se base sur window.simulationPaused
-   (maintenu par les shims) comme source de vérité unique.
+   v124 corrige le 3ème bug : un autre code définissait déjà
+   stopSim avant mon module, donc mon shim ne s'installait pas
+   et la pause ne marchait pas. Maintenant :
+   - Force-install : on écrase les shims même s'ils existent
+   - Le toggleSim override bascule directement window.simulationPaused
+     au lieu de déléguer à startSim/stopSim (qui pouvaient être brisés)
 
-   Tout le reste est identique à v122.
+   Tout le reste est identique à v123.
    ═══════════════════════════════════════════════════════════ */
 
 (function() {
@@ -59,7 +61,7 @@
 
     const bar = document.createElement('div');
     bar.style.cssText = 'display:flex;gap:4px;padding:4px 6px;background:#222;align-items:center;flex-wrap:wrap';
-    bar.innerHTML = '<span style="color:#f0f;font-weight:bold;margin-right:4px">AURA-DBG v123</span>';
+    bar.innerHTML = '<span style="color:#f0f;font-weight:bold;margin-right:4px">AURA-DBG v124</span>';
 
     function mkBtn(label, color, fn) {
       const b = document.createElement('button');
@@ -162,74 +164,58 @@
     } catch (err) { /* silencieux */ }
   }
 
-  // ─── SHIM startSim / stopSim (v122) ─────────────────
-  // Ces fonctions manquaient au scope global depuis la modularisation v118.
-  // toggleSim() les appelle de l'inline HTML, donc elles DOIVENT exister sur window.
+  // ─── SHIM startSim / stopSim (v124 : FORCE-INSTALL) ──
+  // On écrase systématiquement les versions existantes — un autre code pouvait
+  // les avoir définies sans qu'elles fassent ce qu'il faut.
   function installSimShims() {
-    let installed = [];
+    window.startSim = function() {
+      window.simulationPaused = false;
+      const btn = document.getElementById('simToggleBtn');
+      if (btn) {
+        btn.classList.remove('paused');
+        btn.classList.add('running');
+      }
+      try { window.dispatchEvent(new CustomEvent('aura-sim-start')); } catch(e){}
+      dbg('SHIM startSim() exécuté · simulationPaused=false');
+    };
 
-    if (typeof window.startSim !== 'function') {
-      window.startSim = function() {
-        window.simulationPaused = false;
-        const btn = document.getElementById('simToggleBtn');
-        if (btn) {
-          btn.classList.remove('paused');
-          btn.classList.add('running');
-          // ne pas forcer le texte ici, on laisse toggleSim/HTML inline le gérer s'il le fait
-        }
-        try { window.dispatchEvent(new CustomEvent('aura-sim-start')); } catch(e){}
-        dbg('SHIM startSim() exécuté · simulationPaused=false');
-      };
-      installed.push('startSim');
-    }
+    window.stopSim = function() {
+      window.simulationPaused = true;
+      const btn = document.getElementById('simToggleBtn');
+      if (btn) {
+        btn.classList.remove('running');
+        btn.classList.add('paused');
+      }
+      try { window.dispatchEvent(new CustomEvent('aura-sim-stop')); } catch(e){}
+      dbg('SHIM stopSim() exécuté · simulationPaused=true');
+    };
 
-    if (typeof window.stopSim !== 'function') {
-      window.stopSim = function() {
-        window.simulationPaused = true;
-        const btn = document.getElementById('simToggleBtn');
-        if (btn) {
-          btn.classList.remove('running');
-          btn.classList.add('paused');
-        }
-        try { window.dispatchEvent(new CustomEvent('aura-sim-stop')); } catch(e){}
-        dbg('SHIM stopSim() exécuté · simulationPaused=true');
-      };
-      installed.push('stopSim');
-    }
+    window.pauseSim = function() { window.stopSim(); };
+    window.resumeSim = function() { window.startSim(); };
 
-    // Aliases couramment utilisés au cas où l'inline appelle d'autres noms
-    if (typeof window.pauseSim !== 'function') {
-      window.pauseSim = function() { window.stopSim(); };
-    }
-    if (typeof window.resumeSim !== 'function') {
-      window.resumeSim = function() { window.startSim(); };
-    }
+    dbg('SHIMS FORCE-installés (start/stop/pause/resume)');
 
-    if (installed.length) {
-      dbg('SHIMS installés: ' + installed.join(', '));
-    } else {
-      dbg('SHIMS déjà présents (rien à installer)');
-    }
-
-    // v123 : REMPLACER window.toggleSim par une version qui alterne vraiment
-    // L'original (inline HTML) appelle toujours startSim, jamais stopSim.
-    // Notre version utilise window.simulationPaused comme source de vérité.
+    // v124 : OVERRIDE autonome de toggleSim — bascule simulationPaused directement,
+    // ne dépend pas du fait que startSim/stopSim fassent quoi que ce soit d'utile.
     window.toggleSim = function() {
       const currentlyRunning = (window.simulationPaused === false);
       dbg('TOGGLE-SIM override · running=' + currentlyRunning);
+      const btn = document.getElementById('simToggleBtn');
       if (currentlyRunning) {
         // En marche → mettre en pause
-        window.stopSim();
-        const btn = document.getElementById('simToggleBtn');
+        window.simulationPaused = true;
+        try { window.stopSim(); } catch(e) { dbg('stopSim erreur: ' + (e.message||e)); }
         if (btn) btn.textContent = '►';
+        dbg('PAUSE appliquée · simulationPaused=true');
       } else {
         // En pause (ou inconnu) → démarrer
-        window.startSim();
-        const btn = document.getElementById('simToggleBtn');
+        window.simulationPaused = false;
+        try { window.startSim(); } catch(e) { dbg('startSim erreur: ' + (e.message||e)); }
         if (btn) btn.textContent = '❚❚';
+        dbg('START appliqué · simulationPaused=false');
       }
     };
-    dbg('OVERRIDE toggleSim installée (utilise simulationPaused comme source de vérité)');
+    dbg('OVERRIDE toggleSim installée (autonome v124)');
   }
 
   // ─── Reste du module (identique v121) ───────────────
