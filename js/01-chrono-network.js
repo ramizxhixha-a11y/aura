@@ -1,15 +1,11 @@
 /* ═══════════════════════════════════════════════════════════
    AURA8 v119 · js/01-chrono-network.js
-   Corrections :
-   1. Pas de doublon de badge / boutons (vérification stricte)
-   2. Play/pause INTOUCHÉ (jamais modifié sauf pause réseau)
-   3. Bouton AA/EV/RE cycle au tap (1 tap = mode suivant)
-   4. Bouton AUTO/MANU : couleur d'origine respectée (cyan/or)
 
-   Couleurs modes :
-     sim       → 🔵 Cyan  #38d4f5 (Auto-apprentissage)
-     paperReal → 🟢 Vert  #00e87a (Évaluation)
-     real      → 🔴 Rouge #ff3d6b (Réel)
+   FIX 1 : Détection des 🩺 par CONTENU (pas par ID)
+           → supprime tous les 🩺 sauf le premier
+   FIX 2 : simToggleBtn JAMAIS modifié sauf pause réseau
+   FIX 3 : Bouton AA/EV/RE — listener fiable, 1 tap = mode suivant
+   FIX 4 : Bouton AUTO/MANU — AUCUN style inline appliqué
    ═══════════════════════════════════════════════════════════ */
 
 (function () {
@@ -76,94 +72,93 @@
     return count;
   }
 
-  // ─── Changement de mode trading (FIX 3) ─────────────
   function setTradingMode(newMode) {
     if (!MODE_CFG[newMode]) return;
     if (typeof window.S === 'undefined') return;
     const oldMode = window.S.tradingMode;
     if (oldMode === newMode) return;
-
     if (newMode === 'real') {
-      const ok = confirm(
-        '🔴 PASSAGE EN MODE RÉEL\n\n' +
-        'Ce mode utilise de vraies données Binance.\n' +
-        'Confirmer le changement ?'
-      );
+      const ok = confirm('🔴 PASSAGE EN MODE RÉEL\n\nCe mode utilise de vraies données Binance.\nConfirmer le changement ?');
       if (!ok) return;
     }
-
     window.S.tradingMode = newMode;
-
-    // Sauvegarder le state
     try {
       if (typeof window.buildSnapshot === 'function') {
         const snap = window.buildSnapshot();
         localStorage.setItem('nexus_state', JSON.stringify(snap));
       }
     } catch(e) {}
-
     try {
       if (typeof window.showToast === 'function') {
         window.showToast('Mode → ' + MODE_CFG[newMode].full, 2500, newMode === 'real' ? 'warn' : 'win');
       }
     } catch(e) {}
-
     render();
   }
   window.auraSetTradingMode = setTradingMode;
 
-  // ─── FIX 1 : Nettoyer les doublons existants ────────
+  // ─── FIX 1 : Nettoyer doublons par CONTENU et par ID ────
   function cleanDuplicates() {
-    // Supprimer doublons #modeBadgeEl
-    const badges = document.querySelectorAll('#modeBadgeEl');
-    for (let i = 1; i < badges.length; i++) badges[i].remove();
+    const headerBtns = document.querySelector('.header-buttons');
+    if (!headerBtns) return;
 
-    // Supprimer doublons #healthBtn
-    const healths = document.querySelectorAll('#healthBtn');
-    for (let i = 1; i < healths.length; i++) healths[i].remove();
+    // Trouver TOUS les boutons contenant 🩺 (peu importe l'ID)
+    const allButtons = headerBtns.querySelectorAll('button');
+    const stethoscopeBtns = [];
+    allButtons.forEach(b => {
+      if (b.textContent && b.textContent.trim() === '🩺') {
+        stethoscopeBtns.push(b);
+      }
+    });
+    // Garder le premier, supprimer les autres
+    for (let i = 1; i < stethoscopeBtns.length; i++) {
+      stethoscopeBtns[i].remove();
+    }
+    // S'assurer que le premier a bien l'ID #healthBtn
+    if (stethoscopeBtns[0] && !stethoscopeBtns[0].id) {
+      stethoscopeBtns[0].id = 'healthBtn';
+      stethoscopeBtns[0].className = 'btn-icon btn-health';
+    }
 
-    // Supprimer doublons #tradesCountBtn
-    const trades = document.querySelectorAll('#tradesCountBtn');
-    for (let i = 1; i < trades.length; i++) trades[i].remove();
-
-    // Supprimer doublons #auraModeBtn
-    const auras = document.querySelectorAll('#auraModeBtn');
-    for (let i = 1; i < auras.length; i++) auras[i].remove();
+    // Doublons d'IDs (au cas où)
+    ['modeBadgeEl', 'tradesCountBtn', 'auraModeBtn'].forEach(id => {
+      const els = document.querySelectorAll('#' + id);
+      for (let i = 1; i < els.length; i++) els[i].remove();
+    });
   }
 
-  // ─── Création / ajout des boutons (FIX 1) ───────────
   function ensureButtons() {
     cleanDuplicates();
-
     const headerBtns = document.querySelector('.header-buttons');
     if (!headerBtns) return;
     const settingsBtn = document.getElementById('settingsBtn');
 
-    // 1. Bouton santé 🩺 (remplace ✓ diagnostic)
-    if (!document.getElementById('healthBtn')) {
+    // 1. Bouton santé 🩺 — ne créer que si AUCUN 🩺 n'existe
+    const existingHealth = Array.from(headerBtns.querySelectorAll('button')).find(
+      b => b.textContent && b.textContent.trim() === '🩺'
+    );
+    if (!existingHealth) {
+      // Renommer l'ancien diagnostic ✓ s'il existe
       const oldDiag = headerBtns.querySelector('.btn-diag');
       if (oldDiag && oldDiag.textContent.trim() === '✓') {
         oldDiag.id = 'healthBtn';
         oldDiag.className = 'btn-icon btn-health';
         oldDiag.textContent = '🩺';
         oldDiag.title = 'Diagnostic santé';
-      } else if (!headerBtns.querySelector('.btn-health')) {
-        // Créer seulement si aucun bouton santé existant
+      } else {
+        // Créer un nouveau seulement si rien
         const b = document.createElement('button');
         b.id = 'healthBtn';
         b.className = 'btn-icon btn-health';
         b.textContent = '🩺';
         b.title = 'Diagnostic santé';
         const regBtn = headerBtns.querySelector('.btn-regime');
-        if (regBtn && regBtn.nextSibling) {
-          headerBtns.insertBefore(b, regBtn.nextSibling);
-        } else {
-          headerBtns.appendChild(b);
-        }
+        if (regBtn && regBtn.nextSibling) headerBtns.insertBefore(b, regBtn.nextSibling);
+        else headerBtns.appendChild(b);
       }
     }
 
-    // 2. Bouton trades en cours
+    // 2. Bouton trades
     if (!document.getElementById('tradesCountBtn')) {
       const b = document.createElement('button');
       b.id = 'tradesCountBtn';
@@ -174,36 +169,28 @@
         try { if (typeof window.switchPage === 'function') window.switchPage('positions'); } catch(e) {}
       };
       const healthBtn = document.getElementById('healthBtn');
-      if (healthBtn && healthBtn.nextSibling) {
-        headerBtns.insertBefore(b, healthBtn.nextSibling);
-      } else {
-        headerBtns.appendChild(b);
-      }
+      if (healthBtn && healthBtn.nextSibling) headerBtns.insertBefore(b, healthBtn.nextSibling);
+      else headerBtns.appendChild(b);
     }
 
-    // 3. Bouton AA/EV/RE (FIX 3 : cycle au tap)
+    // 3. FIX 3 : Bouton AA/EV/RE — onclick au lieu d'addEventListener
     if (!document.getElementById('auraModeBtn')) {
       const b = document.createElement('button');
       b.id = 'auraModeBtn';
       b.className = 'btn-mode-trading';
       b.title = 'Changer le mode trading';
-      // 1 tap = mode suivant
-      b.addEventListener('click', function(e) {
-        e.preventDefault();
-        e.stopPropagation();
+      b.onclick = function(e) {
+        if (e && e.preventDefault) e.preventDefault();
         const cur = currentMode();
         const idx = MODE_ORDER.indexOf(cur);
         const next = MODE_ORDER[(idx + 1) % MODE_ORDER.length];
         setTradingMode(next);
-      });
-      if (settingsBtn) {
-        headerBtns.insertBefore(b, settingsBtn);
-      } else {
-        headerBtns.appendChild(b);
-      }
+      };
+      if (settingsBtn) headerBtns.insertBefore(b, settingsBtn);
+      else headerBtns.appendChild(b);
     }
 
-    // 4. Badge mode sous le chrono (un seul exemplaire)
+    // 4. Badge mode
     if (!document.getElementById('modeBadgeEl')) {
       const headerRight = document.querySelector('.header-right');
       const chronoEl = document.getElementById('chronoEl');
@@ -212,16 +199,12 @@
         badge.id = 'modeBadgeEl';
         badge.className = 'mode-badge mode-sim';
         badge.textContent = 'AUTO-APPR';
-        if (chronoEl.nextSibling) {
-          headerRight.insertBefore(badge, chronoEl.nextSibling);
-        } else {
-          headerRight.appendChild(badge);
-        }
+        if (chronoEl.nextSibling) headerRight.insertBefore(badge, chronoEl.nextSibling);
+        else headerRight.appendChild(badge);
       }
     }
   }
 
-  // ─── Détection réseau ───────────────────────────────
   function evalNet() {
     if (!navigator.onLine) return 'offline';
     const conn = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
@@ -259,7 +242,7 @@
     localStorage.setItem(K_QUIT_OFF, 'false');
   }
 
-  // ─── FIX 2 : Lecture seule du simToggleBtn ───────────
+  // FIX 2 : Lecture seule du bouton play
   function syncRunning() {
     const btn = document.getElementById('simToggleBtn');
     if (!btn) return;
@@ -281,54 +264,37 @@
     render();
   }
 
-  // ─── Rendu UI ───────────────────────────────────────
   function render() {
     ensureButtons();
     const mode = currentMode();
     const cfg  = MODE_CFG[mode];
 
-    // Chrono
     const chronoEl = document.getElementById('chronoEl');
     if (chronoEl) {
       chronoEl.textContent = fmtChrono(_st.chrono[mode]);
       chronoEl.className = 'chrono-display';
-      if (_st.pausedByNetwork) {
-        chronoEl.classList.add('paused-auto');
-      } else {
+      if (_st.pausedByNetwork) chronoEl.classList.add('paused-auto');
+      else {
         chronoEl.classList.add(cfg.cls);
         if (_st.running) chronoEl.classList.add('running');
       }
     }
 
-    // Badge
     const badge = document.getElementById('modeBadgeEl');
     if (badge) {
       badge.textContent = cfg.label;
       badge.className = 'mode-badge ' + cfg.cls;
     }
 
-    // FIX 4 : Bouton AUTO/MANU — NE PAS TOUCHER aux couleurs d'origine
-    // Le bouton garde son CSS d'origine (cyan pour AUTO, or pour MANU)
-    // On retire seulement nos anciens styles inline si présents
-    const modeLbl = document.getElementById('modeLabelText');
-    if (modeLbl) {
-      const modeBtn = modeLbl.closest('button') || modeLbl.parentElement;
-      if (modeBtn) {
-        modeBtn.style.borderColor = '';
-        modeBtn.style.background  = '';
-        modeBtn.style.color       = '';
-        modeBtn.style.boxShadow   = '';
-      }
-    }
+    // FIX 4 : NE TOUCHER À RIEN sur le bouton AUTO/MANU
+    // (pas de style inline, le CSS d'origine gère tout)
 
-    // Bouton trades : nombre + couleur du mode
     const tradesBtn = document.getElementById('tradesCountBtn');
     if (tradesBtn) {
       tradesBtn.textContent = String(countOpenTrades());
       tradesBtn.className = 'btn-icon btn-trades ' + cfg.cls;
     }
 
-    // Bouton AA/EV/RE — couleur du mode actif
     const modeBtn = document.getElementById('auraModeBtn');
     if (modeBtn) {
       modeBtn.textContent = cfg.abbr;
@@ -337,18 +303,16 @@
       modeBtn.style.background  = cfg.color + '1a';
     }
 
-    // Indicateur réseau
     const netEl = document.getElementById('netIndicator');
     if (netEl) netEl.className = 'net-indicator ' + _st.netStatus;
 
-    // FIX 2 : Play/pause SEULEMENT en pause réseau (jamais sinon)
+    // FIX 2 : Play/pause SEULEMENT en pause réseau
     const simBtn = document.getElementById('simToggleBtn');
     if (simBtn && _st.pausedByNetwork) {
       simBtn.className = 'btn-icon btn-play-pause network-lost';
       simBtn.textContent = '▶';
     }
 
-    // Bordure header
     const bar = document.getElementById('statusBar');
     if (bar) bar.style.borderBottomColor = cfg.border;
   }
@@ -372,16 +336,12 @@
       localStorage.setItem(K_QUIT_OFF, !navigator.onLine ? 'true' : 'false');
       save();
     });
-    // Nettoyer les doublons immédiatement
     cleanDuplicates();
     onNetChange();
     setInterval(tick, 1000);
     render();
   }
 
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', init);
-  } else {
-    init();
-  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
+  else init();
 })();
