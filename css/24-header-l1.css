@@ -1,16 +1,10 @@
 /* ═══════════════════════════════════════════════════════════
    AURA8 v119 · 24-header-l1.css
-   LIVRAISON 1 — Header refondu :
-   · 3 nouveaux boutons (⚡ régime / 🩺 diag / CALM-VOLA)
-   · Wake lock toggle (☾/☀)
-   · Indicateur réseau (point coloré)
-   · Chrono séparé par mode + couleur dédiée par mode
-   · Badge mode (AUTO-APPR / ÉVALUATION / RÉEL)
-   · Play/Pause avec logique inversée
-   · Responsive harmonieux
+   Header refondu — couleurs dédiées par mode trading
+   sur le bouton AUTO/MANU ET le chrono
    ═══════════════════════════════════════════════════════════ */
 
-/* ═══ STATUS BAR (en-tête refondu) ═══ */
+/* ═══ STATUS BAR ═══ */
 #statusBar {
   display: flex;
   align-items: center;
@@ -20,7 +14,6 @@
   border-bottom: 1px solid rgba(56,212,245,.07);
   gap: 10px;
   transition: border-bottom-color .4s;
-  /* PAS de flex-wrap : les 3 blocs (left/buttons/right) toujours alignés */
 }
 .header-left {
   display: flex;
@@ -48,7 +41,7 @@
   text-align: center;
 }
 
-/* ═══ BOUTONS RONDS (taille uniforme) ═══ */
+/* ═══ BOUTONS RONDS ═══ */
 .btn-icon {
   width: 32px;
   height: 32px;
@@ -69,7 +62,6 @@
 }
 .btn-icon:active { transform: scale(.92); }
 
-/* Wake lock (☾ par défaut → ☀ activé) */
 .btn-wake {
   border-color: rgba(230,235,245,.35);
   background: rgba(230,235,245,.08);
@@ -82,7 +74,6 @@
   box-shadow: 0 0 8px rgba(245,200,66,.3);
 }
 
-/* ⚡ Régime : doré non-activé → vert activé */
 .btn-regime {
   border-color: rgba(245,200,66,.4);
   color: var(--gold);
@@ -94,14 +85,12 @@
   box-shadow: 0 0 8px rgba(0,232,122,.3);
 }
 
-/* 🩺 Diagnostique : cyan */
 .btn-diag {
   border-color: rgba(56,212,245,.4);
   background: rgba(56,212,245,.08);
   color: var(--ice);
 }
 
-/* CALM/VOLA pill */
 .btn-regime-marche {
   height: 32px;
   padding: 0 12px;
@@ -129,21 +118,20 @@
   color: var(--down);
 }
 
-/* Bouton réglages ⚙ */
 .btn-settings {
   border-color: rgba(167,139,250,.35);
   background: rgba(167,139,250,.10);
   color: var(--pur);
 }
 
-/* AUTO/MANU pill */
+/* ═══ BOUTON AUTO/MANU — couleur par mode trading ═══
+   Classes appliquées dynamiquement par 01-chrono-network.js
+   selon S.tradingMode : 'sim' | 'paperReal' | 'real'
+   ═══════════════════════════════════════════════════ */
 .btn-mode-toggle {
   height: 32px;
   padding: 0 10px;
   border-radius: 16px;
-  border: 1px solid rgba(0,232,122,.4);
-  background: rgba(0,232,122,.08);
-  color: var(--up);
   font-family: var(--font-mono);
   font-size: 9px;
   font-weight: 700;
@@ -152,15 +140,53 @@
   gap: 4px;
   cursor: pointer;
   flex-shrink: 0;
-  transition: all .2s;
+  transition: all .3s;
   user-select: none;
   -webkit-user-select: none;
+  /* défaut neutre (jamais affiché longtemps) */
+  border: 1px solid rgba(56,212,245,.4);
+  background: rgba(56,212,245,.08);
+  color: var(--ice);
 }
+
+/* Mode Auto-apprentissage (sim) → cyan */
+.btn-mode-toggle.trading-sim {
+  border-color: rgba(56,212,245,.5);
+  background: rgba(56,212,245,.12);
+  color: #38d4f5;
+  box-shadow: 0 0 8px rgba(56,212,245,.15);
+}
+
+/* Mode Évaluation (paperReal) → ambre */
+.btn-mode-toggle.trading-paper {
+  border-color: rgba(245,166,35,.5);
+  background: rgba(245,166,35,.12);
+  color: #f5a623;
+  box-shadow: 0 0 8px rgba(245,166,35,.15);
+}
+
+/* Mode Réel (real) → vert + pulsation */
+.btn-mode-toggle.trading-real {
+  border-color: rgba(0,232,122,.55);
+  background: rgba(0,232,122,.12);
+  color: #00e87a;
+  box-shadow: 0 0 10px rgba(0,232,122,.25);
+  animation: real-btn-pulse 2s infinite;
+}
+@keyframes real-btn-pulse {
+  0%,100% { box-shadow: 0 0 6px rgba(0,232,122,.25); }
+  50%      { box-shadow: 0 0 14px rgba(0,232,122,.5); }
+}
+
+/* Mode MANU (mode bot = manuel, indépendant du mode trading) */
 .btn-mode-toggle.manu {
   border-color: rgba(245,200,66,.4);
   background: rgba(245,200,66,.08);
   color: var(--gold);
+  box-shadow: none;
+  animation: none;
 }
+
 .mode-dot {
   width: 5px;
   height: 5px;
@@ -169,7 +195,7 @@
   box-shadow: 0 0 5px currentColor;
 }
 
-/* ═══ Play/Pause logique INVERSÉE ═══ */
+/* ═══ PLAY/PAUSE ═══ */
 .btn-play-pause.idle {
   border-color: rgba(59,130,246,.55);
   background: rgba(59,130,246,.12);
@@ -230,7 +256,7 @@
   50%      { opacity: 0.4; }
 }
 
-/* ═══ CHRONO — couleur dédiée par mode ═══ */
+/* ═══ CHRONO — couleur dédiée par mode trading ═══ */
 .chrono-display {
   font-family: var(--font-mono);
   font-size: 12px;
@@ -244,10 +270,10 @@
 /* pause réseau → rouge */
 .chrono-display.paused-auto { color: var(--down); }
 
-/* couleur par mode (priorité sur .running) */
-.chrono-display.mode-sim   { color: var(--mode-sim);   }
-.chrono-display.mode-paper { color: var(--mode-paper); }
-.chrono-display.mode-real  { color: var(--mode-real);  }
+/* couleur par mode */
+.chrono-display.mode-sim   { color: #38d4f5; }
+.chrono-display.mode-paper { color: #f5a623; }
+.chrono-display.mode-real  { color: #00e87a; }
 
 /* ═══ BADGE MODE (sous le chrono) ═══ */
 .mode-badge {
@@ -264,17 +290,17 @@
   white-space: nowrap;
 }
 .mode-badge.mode-sim {
-  color: var(--mode-sim);
+  color: #38d4f5;
   background: rgba(56,212,245,.10);
   border: 1px solid rgba(56,212,245,.25);
 }
 .mode-badge.mode-paper {
-  color: var(--mode-paper);
+  color: #f5a623;
   background: rgba(245,166,35,.10);
   border: 1px solid rgba(245,166,35,.25);
 }
 .mode-badge.mode-real {
-  color: var(--mode-real);
+  color: #00e87a;
   background: rgba(0,232,122,.10);
   border: 1px solid rgba(0,232,122,.30);
   animation: real-pulse 2s infinite;
@@ -294,9 +320,7 @@
   .header-right { min-width: 52px; }
   .chrono-display { font-size: 11px; }
   .mode-badge { font-size: 6.5px; padding: 1px 4px; }
-  .btn-regime-marche, .btn-mode-toggle {
-    height: 30px; padding: 0 9px; font-size: 9px;
-  }
+  .btn-regime-marche, .btn-mode-toggle { height: 30px; padding: 0 9px; font-size: 9px; }
   .btn-regime-marche { min-width: 54px; }
   .aura-circular-wrap { width: 56px; height: 56px; }
   .aura-circular-bg { width: 36px; height: 36px; }
@@ -326,7 +350,5 @@
   .header-right { min-width: 64px; }
   .chrono-display { font-size: 14px; }
   .mode-badge { font-size: 8px; }
-  .btn-regime-marche, .btn-mode-toggle {
-    height: 36px; padding: 0 14px; font-size: 11px;
-  }
+  .btn-regime-marche, .btn-mode-toggle { height: 36px; padding: 0 14px; font-size: 11px; }
 }
