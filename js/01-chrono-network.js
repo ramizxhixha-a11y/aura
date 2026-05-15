@@ -1,347 +1,277 @@
 /* ═══════════════════════════════════════════════════════════
    AURA8 v119 · js/01-chrono-network.js
+   LIVRAISON — Chrono multi-mode + Détection réseau + Auto-pause
+   + FILET DE SÉCURITÉ bouton play (livraison v119)
 
-   FIX 1 : Détection des 🩺 par CONTENU (pas par ID)
-           → supprime tous les 🩺 sauf le premier
-   FIX 2 : simToggleBtn JAMAIS modifié sauf pause réseau
-   FIX 3 : Bouton AA/EV/RE — listener fiable, 1 tap = mode suivant
-   FIX 4 : Bouton AUTO/MANU — AUCUN style inline appliqué
+   COEXISTENCE avec le code existant :
+   - Les boutons header ont des onclick natifs (toggleSim, toggleMode, toggleWakeLock, etc.)
+     qui appellent les fonctions JS existantes du HTML.
+   - Ce module N'ATTACHE PAS de listener sur ces boutons : il ne fait que
+     OBSERVER les changements et METTRE À JOUR le chrono + l'indicateur réseau.
+   - Le code existant peut appeler window.AuraChrono.* pour synchroniser.
+   - AJOUT v119 : un click handler DÉFENSIF en phase bubbling sur #simToggleBtn
+     qui détecte si le clic a eu effet ; si non, applique un fallback visuel
+     et synchronise window.simulationPaused. Ne s'active QUE si toggleSim est cassé.
    ═══════════════════════════════════════════════════════════ */
 
-(function () {
+(function() {
   'use strict';
 
-  const K_SIM_SEC   = 'aura_chrono_sim_seconds';
-  const K_PAPER_SEC = 'aura_chrono_paper_seconds';
-  const K_REAL_SEC  = 'aura_chrono_real_seconds';
+  // ─── Clés localStorage ──────────────────────────────
+  const K_AUTO_SEC = 'aura_chrono_auto_seconds';
+  const K_MANU_SEC = 'aura_chrono_manu_seconds';
+  const K_RUNNING  = 'aura_system_running';
+  const K_MODE     = 'aura_current_mode';
   const K_NET_PAUSE = 'aura_paused_by_network';
   const K_QUIT_OFF  = 'aura_quit_while_offline';
 
-  const MODE_CFG = {
-    sim:       { color:'#38d4f5', label:'AUTO-APPR',  full:'Auto-apprentissage', abbr:'AA', cls:'mode-sim',   border:'rgba(56,212,245,.15)' },
-    paperReal: { color:'#00e87a', label:'ÉVALUATION', full:'Évaluation',         abbr:'EV', cls:'mode-paper', border:'rgba(0,232,122,.18)'  },
-    real:      { color:'#ff3d6b', label:'RÉEL',       full:'Réel',               abbr:'RE', cls:'mode-real',  border:'rgba(255,61,107,.30)' },
-  };
-  const MODE_ORDER = ['sim', 'paperReal', 'real'];
-
-  const _st = {
-    chrono: {
-      sim:       parseInt(localStorage.getItem(K_SIM_SEC)   || '0', 10),
-      paperReal: parseInt(localStorage.getItem(K_PAPER_SEC) || '0', 10),
-      real:      parseInt(localStorage.getItem(K_REAL_SEC)  || '0', 10),
+  // ─── État ───────────────────────────────────────────
+  const state = {
+    chronoSeconds: {
+      AUTO: parseInt(localStorage.getItem(K_AUTO_SEC) || '0', 10),
+      MANU: parseInt(localStorage.getItem(K_MANU_SEC) || '0', 10),
     },
-    running:         false,
+    mode: localStorage.getItem(K_MODE) || 'AUTO',
+    running: false,
     pausedByNetwork: false,
-    netStatus:       'online',
+    netStatus: 'online',
   };
 
-  function currentMode() {
-    const m = (typeof window.S !== 'undefined') ? window.S.tradingMode : null;
-    return (m && MODE_CFG[m]) ? m : 'sim';
-  }
-
+  // À l'install : si on a quitté l'app offline, on ne reprend pas auto
   const quitOffline = localStorage.getItem(K_QUIT_OFF) === 'true';
 
-  function fmtChrono(s) {
+  // ─── Formatage adaptatif (MM:SS → HH:MM:SS → Xd HH:MM) ───
+  function formatChrono(s) {
     s = Math.max(0, Math.floor(s));
-    const d = Math.floor(s/86400), h = Math.floor((s%86400)/3600), m = Math.floor((s%3600)/60), sec = s%60;
-    const pad = n => String(n).padStart(2,'0');
+    const d = Math.floor(s / 86400);
+    const h = Math.floor((s % 86400) / 3600);
+    const m = Math.floor((s % 3600) / 60);
+    const sec = s % 60;
+    const pad = (n) => String(n).padStart(2, '0');
     if (d > 0) return `${d}d ${pad(h)}:${pad(m)}`;
     if (h > 0) return `${pad(h)}:${pad(m)}:${pad(sec)}`;
     return `${pad(m)}:${pad(sec)}`;
   }
 
-  let _tickCount = 0;
+  // ─── Persistance ────────────────────────────────────
   function save() {
-    localStorage.setItem(K_SIM_SEC,   _st.chrono.sim);
-    localStorage.setItem(K_PAPER_SEC, _st.chrono.paperReal);
-    localStorage.setItem(K_REAL_SEC,  _st.chrono.real);
+    localStorage.setItem(K_AUTO_SEC, state.chronoSeconds.AUTO);
+    localStorage.setItem(K_MANU_SEC, state.chronoSeconds.MANU);
+    localStorage.setItem(K_MODE, state.mode);
+    localStorage.setItem(K_RUNNING, state.running);
   }
 
-  function countOpenTrades() {
-    if (typeof window.S === 'undefined') return 0;
-    let count = 0;
-    try {
-      if (window.S.pairStates) {
-        for (const pair in window.S.pairStates) {
-          const ps = window.S.pairStates[pair];
-          if (ps && ps.position && ps.position.isOpen) count++;
-        }
-      }
-    } catch(e) {}
-    return count;
-  }
-
-  function setTradingMode(newMode) {
-    if (!MODE_CFG[newMode]) return;
-    if (typeof window.S === 'undefined') return;
-    const oldMode = window.S.tradingMode;
-    if (oldMode === newMode) return;
-    if (newMode === 'real') {
-      const ok = confirm('🔴 PASSAGE EN MODE RÉEL\n\nCe mode utilise de vraies données Binance.\nConfirmer le changement ?');
-      if (!ok) return;
-    }
-    window.S.tradingMode = newMode;
-    try {
-      if (typeof window.buildSnapshot === 'function') {
-        const snap = window.buildSnapshot();
-        localStorage.setItem('nexus_state', JSON.stringify(snap));
-      }
-    } catch(e) {}
-    try {
-      if (typeof window.showToast === 'function') {
-        window.showToast('Mode → ' + MODE_CFG[newMode].full, 2500, newMode === 'real' ? 'warn' : 'win');
-      }
-    } catch(e) {}
-    render();
-  }
-  window.auraSetTradingMode = setTradingMode;
-
-  // ─── FIX 1 : Nettoyer doublons par CONTENU et par ID ────
-  function cleanDuplicates() {
-    const headerBtns = document.querySelector('.header-buttons');
-    if (!headerBtns) return;
-
-    // Trouver TOUS les boutons contenant 🩺 (peu importe l'ID)
-    const allButtons = headerBtns.querySelectorAll('button');
-    const stethoscopeBtns = [];
-    allButtons.forEach(b => {
-      if (b.textContent && b.textContent.trim() === '🩺') {
-        stethoscopeBtns.push(b);
-      }
-    });
-    // Garder le premier, supprimer les autres
-    for (let i = 1; i < stethoscopeBtns.length; i++) {
-      stethoscopeBtns[i].remove();
-    }
-    // S'assurer que le premier a bien l'ID #healthBtn
-    if (stethoscopeBtns[0] && !stethoscopeBtns[0].id) {
-      stethoscopeBtns[0].id = 'healthBtn';
-      stethoscopeBtns[0].className = 'btn-icon btn-health';
-    }
-
-    // Doublons d'IDs (au cas où)
-    ['modeBadgeEl', 'tradesCountBtn', 'auraModeBtn'].forEach(id => {
-      const els = document.querySelectorAll('#' + id);
-      for (let i = 1; i < els.length; i++) els[i].remove();
-    });
-  }
-
-  function ensureButtons() {
-    cleanDuplicates();
-    const headerBtns = document.querySelector('.header-buttons');
-    if (!headerBtns) return;
-    const settingsBtn = document.getElementById('settingsBtn');
-
-    // 1. Bouton santé 🩺 — ne créer que si AUCUN 🩺 n'existe
-    const existingHealth = Array.from(headerBtns.querySelectorAll('button')).find(
-      b => b.textContent && b.textContent.trim() === '🩺'
-    );
-    if (!existingHealth) {
-      // Renommer l'ancien diagnostic ✓ s'il existe
-      const oldDiag = headerBtns.querySelector('.btn-diag');
-      if (oldDiag && oldDiag.textContent.trim() === '✓') {
-        oldDiag.id = 'healthBtn';
-        oldDiag.className = 'btn-icon btn-health';
-        oldDiag.textContent = '🩺';
-        oldDiag.title = 'Diagnostic santé';
-      } else {
-        // Créer un nouveau seulement si rien
-        const b = document.createElement('button');
-        b.id = 'healthBtn';
-        b.className = 'btn-icon btn-health';
-        b.textContent = '🩺';
-        b.title = 'Diagnostic santé';
-        const regBtn = headerBtns.querySelector('.btn-regime');
-        if (regBtn && regBtn.nextSibling) headerBtns.insertBefore(b, regBtn.nextSibling);
-        else headerBtns.appendChild(b);
-      }
-    }
-
-    // 2. Bouton trades
-    if (!document.getElementById('tradesCountBtn')) {
-      const b = document.createElement('button');
-      b.id = 'tradesCountBtn';
-      b.className = 'btn-icon btn-trades';
-      b.textContent = '0';
-      b.title = 'Trades en cours';
-      b.onclick = function() {
-        try { if (typeof window.switchPage === 'function') window.switchPage('positions'); } catch(e) {}
-      };
-      const healthBtn = document.getElementById('healthBtn');
-      if (healthBtn && healthBtn.nextSibling) headerBtns.insertBefore(b, healthBtn.nextSibling);
-      else headerBtns.appendChild(b);
-    }
-
-    // 3. FIX 3 : Bouton AA/EV/RE — onclick au lieu d'addEventListener
-    if (!document.getElementById('auraModeBtn')) {
-      const b = document.createElement('button');
-      b.id = 'auraModeBtn';
-      b.className = 'btn-mode-trading';
-      b.title = 'Changer le mode trading';
-      b.onclick = function(e) {
-        if (e && e.preventDefault) e.preventDefault();
-        const cur = currentMode();
-        const idx = MODE_ORDER.indexOf(cur);
-        const next = MODE_ORDER[(idx + 1) % MODE_ORDER.length];
-        setTradingMode(next);
-      };
-      if (settingsBtn) headerBtns.insertBefore(b, settingsBtn);
-      else headerBtns.appendChild(b);
-    }
-
-    // 4. Badge mode
-    if (!document.getElementById('modeBadgeEl')) {
-      const headerRight = document.querySelector('.header-right');
-      const chronoEl = document.getElementById('chronoEl');
-      if (headerRight && chronoEl) {
-        const badge = document.createElement('div');
-        badge.id = 'modeBadgeEl';
-        badge.className = 'mode-badge mode-sim';
-        badge.textContent = 'AUTO-APPR';
-        if (chronoEl.nextSibling) headerRight.insertBefore(badge, chronoEl.nextSibling);
-        else headerRight.appendChild(badge);
-      }
-    }
-  }
-
-  function evalNet() {
+  // ─── Détection réseau ───────────────────────────────
+  function evaluateNetwork() {
     if (!navigator.onLine) return 'offline';
     const conn = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
     if (conn && conn.effectiveType) {
       const t = conn.effectiveType;
-      if (t === '3g' || t === '2g' || t === 'slow-2g') return 'unstable';
+      if (t === '4g') return 'online';
+      if (t === '3g') return 'unstable';
+      if (t === '2g' || t === 'slow-2g') return 'unstable';
     }
     return 'online';
   }
 
-  function onNetChange() {
-    const prev = _st.netStatus;
-    _st.netStatus = evalNet();
-    if (_st.netStatus === 'offline') {
-      if (_st.running) {
-        _st.pausedByNetwork = true;
-        _st.running = false;
+  function onNetworkChange() {
+    const prev = state.netStatus;
+    state.netStatus = evaluateNetwork();
+
+    if (state.netStatus === 'offline') {
+      if (state.running) {
+        state.pausedByNetwork = true;
+        state.running = false;
         localStorage.setItem(K_NET_PAUSE, 'true');
         save();
-        if (typeof window.simulationPaused !== 'undefined') window.simulationPaused = true;
+        // Notifier le code legacy qu'on a forcé la pause
+        if (typeof window.simulationPaused !== 'undefined') {
+          window.simulationPaused = true;
+        }
       }
-    } else if (prev === 'offline' && _st.pausedByNetwork && !quitOffline) {
-      _st.pausedByNetwork = false;
-      _st.running = true;
+    } else if (prev === 'offline' && state.pausedByNetwork && !quitOffline) {
+      // Reprise auto si pas quit-offline
+      state.pausedByNetwork = false;
+      state.running = true;
       localStorage.setItem(K_NET_PAUSE, 'false');
       save();
-      if (typeof window.simulationPaused !== 'undefined') window.simulationPaused = false;
+      if (typeof window.simulationPaused !== 'undefined') {
+        window.simulationPaused = false;
+      }
     }
     render();
   }
 
+  // À l'init : si on était offline et pause-réseau → marquer quit-offline
   if (!navigator.onLine && localStorage.getItem(K_NET_PAUSE) === 'true') {
     localStorage.setItem(K_QUIT_OFF, 'true');
   } else {
     localStorage.setItem(K_QUIT_OFF, 'false');
   }
 
-  // FIX 2 : Lecture seule du bouton play
-  function syncRunning() {
+  // ─── Détecter l'état du système depuis le code existant ───
+  // Le bouton #simToggleBtn affiche ⏸ quand running, ▶ quand pause
+  function syncRunningFromUI() {
     const btn = document.getElementById('simToggleBtn');
     if (!btn) return;
-    const isRun = btn.textContent.trim() === '⏸';
-    if (_st.running !== isRun && !_st.pausedByNetwork) {
-      _st.running = isRun;
+    // On lit le texte pour savoir si système est en marche
+    const text = btn.textContent.trim();
+    const isRunning = text === '⏸';
+    if (state.running !== isRunning && !state.pausedByNetwork) {
+      state.running = isRunning;
       save();
     }
   }
 
+  function syncModeFromUI() {
+    const lbl = document.getElementById('modeLabelText');
+    if (!lbl) return;
+    const m = (lbl.textContent || '').trim().toUpperCase();
+    if ((m === 'AUTO' || m === 'MANU') && state.mode !== m) {
+      state.mode = m;
+      save();
+    }
+  }
+
+  // ─── Tick 1 seconde ─────────────────────────────────
   function tick() {
-    syncRunning();
-    const mode = currentMode();
-    if (_st.running && _st.netStatus !== 'offline') {
-      _st.chrono[mode]++;
-      _tickCount++;
-      if (_tickCount % 10 === 0) save();
+    syncRunningFromUI();
+    syncModeFromUI();
+    if (state.running && state.netStatus !== 'offline') {
+      state.chronoSeconds[state.mode]++;
+      if (state.chronoSeconds[state.mode] % 10 === 0) save();
     }
     render();
   }
 
+  // ─── Rendu UI ───────────────────────────────────────
   function render() {
-    ensureButtons();
-    const mode = currentMode();
-    const cfg  = MODE_CFG[mode];
-
+    // Chrono
     const chronoEl = document.getElementById('chronoEl');
     if (chronoEl) {
-      chronoEl.textContent = fmtChrono(_st.chrono[mode]);
+      chronoEl.textContent = formatChrono(state.chronoSeconds[state.mode]);
       chronoEl.className = 'chrono-display';
-      if (_st.pausedByNetwork) chronoEl.classList.add('paused-auto');
-      else {
-        chronoEl.classList.add(cfg.cls);
-        if (_st.running) chronoEl.classList.add('running');
-      }
+      if (state.running) chronoEl.classList.add('running');
+      if (state.pausedByNetwork) chronoEl.classList.add('paused-auto');
     }
 
-    const badge = document.getElementById('modeBadgeEl');
-    if (badge) {
-      badge.textContent = cfg.label;
-      badge.className = 'mode-badge ' + cfg.cls;
-    }
-
-    // FIX 4 : NE TOUCHER À RIEN sur le bouton AUTO/MANU
-    // (pas de style inline, le CSS d'origine gère tout)
-
-    const tradesBtn = document.getElementById('tradesCountBtn');
-    if (tradesBtn) {
-      tradesBtn.textContent = String(countOpenTrades());
-      tradesBtn.className = 'btn-icon btn-trades ' + cfg.cls;
-    }
-
-    const modeBtn = document.getElementById('auraModeBtn');
-    if (modeBtn) {
-      modeBtn.textContent = cfg.abbr;
-      modeBtn.style.borderColor = cfg.color;
-      modeBtn.style.color       = cfg.color;
-      modeBtn.style.background  = cfg.color + '1a';
-    }
-
+    // Indicateur réseau
     const netEl = document.getElementById('netIndicator');
-    if (netEl) netEl.className = 'net-indicator ' + _st.netStatus;
-
-    // FIX 2 : Play/pause SEULEMENT en pause réseau
-    const simBtn = document.getElementById('simToggleBtn');
-    if (simBtn && _st.pausedByNetwork) {
-      simBtn.className = 'btn-icon btn-play-pause network-lost';
-      simBtn.textContent = '▶';
+    if (netEl) {
+      netEl.className = 'net-indicator ' + state.netStatus;
     }
 
-    const bar = document.getElementById('statusBar');
-    if (bar) bar.style.borderBottomColor = cfg.border;
+    // Bouton play/pause : seulement si on a forcé la pause par réseau
+    // (sinon laisser le code existant gérer son état)
+    const btn = document.getElementById('simToggleBtn');
+    if (btn && state.pausedByNetwork) {
+      btn.className = 'btn-icon btn-play-pause network-lost';
+      btn.textContent = '▶';
+    }
   }
 
+  // ─── API publique ───────────────────────────────────
   window.AuraChrono = {
-    fmtChrono,
-    refresh: function() { render(); },
-    resetChrono: function(m) {
-      const mm = m || currentMode();
-      if (_st.chrono[mm] !== undefined) { _st.chrono[mm] = 0; save(); render(); }
+    state: state,
+    formatChrono: formatChrono,
+    resetChrono: function(mode) {
+      if (state.chronoSeconds[mode] !== undefined) {
+        state.chronoSeconds[mode] = 0;
+        save();
+        render();
+      }
     },
-    getChrono: function(m) { return _st.chrono[m || currentMode()]; },
-    getAllChronos: function() { return { ..._st.chrono }; },
+    getChrono: function(mode) {
+      return state.chronoSeconds[mode || state.mode];
+    }
   };
 
-  function init() {
-    window.addEventListener('online',  onNetChange);
-    window.addEventListener('offline', onNetChange);
-    if (navigator.connection) navigator.connection.addEventListener('change', onNetChange);
-    window.addEventListener('beforeunload', () => {
-      localStorage.setItem(K_QUIT_OFF, !navigator.onLine ? 'true' : 'false');
-      save();
-    });
-    cleanDuplicates();
-    onNetChange();
-    setInterval(tick, 1000);
-    render();
+  // ─── FILET DE SÉCURITÉ bouton play (v119) ───────────
+  // Attache un listener en phase bubbling sur #simToggleBtn.
+  // Le listener mesure si le clic a réellement changé l'état du bouton.
+  // - Si oui (toggleSim a fonctionné) → ne fait RIEN, transparent.
+  // - Si non (toggleSim cassé/absent) → applique un fallback :
+  //     bascule le texte ▶/⏸ et synchronise window.simulationPaused.
+  function attachDefensivePlayHandler() {
+    const btn = document.getElementById('simToggleBtn');
+    if (!btn) {
+      // Le bouton n'est pas encore dans le DOM → réessayer dans 500ms
+      setTimeout(attachDefensivePlayHandler, 500);
+      return;
+    }
+    if (btn._auraDefensiveAttached) return; // pas deux fois
+    btn._auraDefensiveAttached = true;
+
+    btn.addEventListener('click', function(e) {
+      const textBefore = btn.textContent.trim();
+      const disabledBefore = btn.disabled;
+
+      // Laisse 50ms aux handlers natifs (onclick="toggleSim()") pour s'exécuter
+      setTimeout(function() {
+        const textAfter = btn.textContent.trim();
+        const stateChanged = (textBefore !== textAfter);
+
+        if (stateChanged) return; // toggleSim a fait son boulot, on ne touche à rien
+
+        // Fallback : toggleSim absente, cassée, ou n'a pas modifié le bouton
+        console.warn('[AuraChrono] Bouton play sans effet — fallback v119 activé');
+
+        if (textBefore === '⏸' || textBefore === '⏸') {
+          // Était en marche → mettre en pause
+          btn.textContent = '▶';
+          if (typeof window.simulationPaused !== 'undefined') {
+            window.simulationPaused = true;
+          }
+          state.running = false;
+          state.pausedByNetwork = false;
+          localStorage.setItem(K_NET_PAUSE, 'false');
+        } else {
+          // Était en pause → démarrer
+          btn.textContent = '⏸';
+          if (typeof window.simulationPaused !== 'undefined') {
+            window.simulationPaused = false;
+          }
+          state.running = true;
+          state.pausedByNetwork = false;
+          localStorage.setItem(K_NET_PAUSE, 'false');
+        }
+        save();
+        render();
+      }, 50);
+    }, false); // bubbling phase, après le onclick natif
   }
 
-  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
-  else init();
+  // ─── Init ───────────────────────────────────────────
+  function init() {
+    // Écouter les événements réseau
+    window.addEventListener('online', onNetworkChange);
+    window.addEventListener('offline', onNetworkChange);
+    if (navigator.connection) {
+      navigator.connection.addEventListener('change', onNetworkChange);
+    }
+
+    // Sauver l'état "quit while offline" à la fermeture
+    window.addEventListener('beforeunload', () => {
+      if (!navigator.onLine) {
+        localStorage.setItem(K_QUIT_OFF, 'true');
+      } else {
+        localStorage.setItem(K_QUIT_OFF, 'false');
+      }
+      save();
+    });
+
+    // Démarrer le tick et l'évaluation réseau initiale
+    onNetworkChange();
+    setInterval(tick, 1000);
+    render();
+
+    // Attacher le filet de sécurité du bouton play (v119)
+    attachDefensivePlayHandler();
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', init);
+  } else {
+    init();
+  }
 })();
