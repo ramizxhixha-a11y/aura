@@ -1,19 +1,18 @@
 /* ═══════════════════════════════════════════════════════════
-   AURA8 v122 · js/01-chrono-network.js
+   AURA8 v123 · js/01-chrono-network.js
    LIVRAISON — Chrono multi-mode + Détection réseau + Auto-pause
    + FILET DE SÉCURITÉ bouton play (v119)
    + DIAGNOSTIC visible (v120/v121)
-   + SHIM startSim/stopSim qui faisaient défaut depuis la
-     modularisation v118 (v122)
+   + SHIM startSim/stopSim (v122)
+   + OVERRIDE toggleSim qui alterne vraiment start↔stop (v123)
 
-   v122 corrige le bug racine : toggleSim() dans le HTML inline
-   appelle startSim() qui n'existe plus depuis le découpage v118.
-   Ce module définit des shims window.startSim et window.stopSim
-   qui basculent window.simulationPaused + émettent un event
-   personnalisé. Si la boucle bot écoute simulationPaused ou les
-   events, elle reprendra/s'arrêtera correctement.
+   v123 corrige le deuxième bug : le toggleSim() inline du HTML
+   appelait toujours startSim, jamais stopSim — donc impossible
+   de mettre le bot en pause. Cette version remplace window.toggleSim
+   par une implémentation qui se base sur window.simulationPaused
+   (maintenu par les shims) comme source de vérité unique.
 
-   Tout le reste est identique à v121.
+   Tout le reste est identique à v122.
    ═══════════════════════════════════════════════════════════ */
 
 (function() {
@@ -60,7 +59,7 @@
 
     const bar = document.createElement('div');
     bar.style.cssText = 'display:flex;gap:4px;padding:4px 6px;background:#222;align-items:center;flex-wrap:wrap';
-    bar.innerHTML = '<span style="color:#f0f;font-weight:bold;margin-right:4px">AURA-DBG v122</span>';
+    bar.innerHTML = '<span style="color:#f0f;font-weight:bold;margin-right:4px">AURA-DBG v123</span>';
 
     function mkBtn(label, color, fn) {
       const b = document.createElement('button');
@@ -211,6 +210,26 @@
     } else {
       dbg('SHIMS déjà présents (rien à installer)');
     }
+
+    // v123 : REMPLACER window.toggleSim par une version qui alterne vraiment
+    // L'original (inline HTML) appelle toujours startSim, jamais stopSim.
+    // Notre version utilise window.simulationPaused comme source de vérité.
+    window.toggleSim = function() {
+      const currentlyRunning = (window.simulationPaused === false);
+      dbg('TOGGLE-SIM override · running=' + currentlyRunning);
+      if (currentlyRunning) {
+        // En marche → mettre en pause
+        window.stopSim();
+        const btn = document.getElementById('simToggleBtn');
+        if (btn) btn.textContent = '►';
+      } else {
+        // En pause (ou inconnu) → démarrer
+        window.startSim();
+        const btn = document.getElementById('simToggleBtn');
+        if (btn) btn.textContent = '❚❚';
+      }
+    };
+    dbg('OVERRIDE toggleSim installée (utilise simulationPaused comme source de vérité)');
   }
 
   // ─── Reste du module (identique v121) ───────────────
@@ -273,6 +292,16 @@
   }
 
   function syncRunningFromUI() {
+    // v123 : si simulationPaused est défini (par les shims), c'est la source de vérité
+    if (typeof window.simulationPaused === 'boolean') {
+      const isRunning = (window.simulationPaused === false);
+      if (state.running !== isRunning && !state.pausedByNetwork) {
+        state.running = isRunning;
+        save();
+      }
+      return;
+    }
+    // Sinon : fallback historique sur le texte du bouton
     const btn = document.getElementById('simToggleBtn');
     if (!btn) return;
     const text = btn.textContent.trim();
@@ -392,23 +421,20 @@
         const stateChanged = (textBefore !== textAfter);
         dbg('BTN-AFTER after="' + textAfter + '" changed=' + stateChanged);
         if (stateChanged) return;
-        dbg('FALLBACK déclenché');
-        // v122 : on ne fait plus le check typeof, on force toujours
-        if (textBefore === '⏸' || textBefore === '❚❚') {
-          btn.textContent = '▶';
-          window.simulationPaused = true;
+        // v123 : utiliser simulationPaused comme source de vérité (plus fiable que Unicode)
+        const paused = (window.simulationPaused !== false);
+        dbg('FALLBACK · simulationPaused=' + window.simulationPaused + ' → paused=' + paused);
+        if (paused) {
+          // Réellement pausé → afficher l'icône lecture
+          btn.textContent = '►';
           state.running = false;
-          state.pausedByNetwork = false;
-          localStorage.setItem(K_NET_PAUSE, 'false');
-          try { window.dispatchEvent(new CustomEvent('aura-sim-stop')); } catch(e){}
         } else {
-          btn.textContent = '⏸';
-          window.simulationPaused = false;
+          // Réellement en marche → afficher l'icône pause
+          btn.textContent = '❚❚';
           state.running = true;
-          state.pausedByNetwork = false;
-          localStorage.setItem(K_NET_PAUSE, 'false');
-          try { window.dispatchEvent(new CustomEvent('aura-sim-start')); } catch(e){}
         }
+        state.pausedByNetwork = false;
+        localStorage.setItem(K_NET_PAUSE, 'false');
         save();
         render();
       }, 50);
