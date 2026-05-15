@@ -1,10 +1,9 @@
 /* ═══════════════════════════════════════════════════════════
-   AURA8 v106 · 01-base.css
+   AURA8 v119 · 01-base.css
    Reset, :root variables, body, html
-   Source: AURA8_v105.html lignes 21 → 62
    ═══════════════════════════════════════════════════════════ */
 
-/* ── RESET & BASE ─────────────────────────────────── */
+/* ── RESET & BASE ─────────────────────────────── */
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
 
 :root {
@@ -31,10 +30,11 @@
   --safe-top: env(safe-area-inset-top, 20px);
   --safe-bot: env(safe-area-inset-bottom, 16px);
 
-  /* v8.0 LIVRAISON 31 · Système de thèmes RETIRÉ */
+  /* ═══ COULEURS MODES TRADING ═══ */
+  --mode-sim:   #38d4f5;   /* Auto-apprentissage → cyan  */
+  --mode-paper: #f5a623;   /* Évaluation         → ambre */
+  --mode-real:  #00e87a;   /* Mode Réel          → vert  */
 }
-
-/* v8.0 LIVRAISON 31 · CSS thèmes RETIRÉS */
 
 html, body {
   height: 100%;
@@ -45,4 +45,3 @@ html, body {
   -webkit-font-smoothing: antialiased;
   overflow: hidden;
 }
-
