@@ -1,16 +1,14 @@
 /* ═══════════════════════════════════════════════════════════
-   AURA8 v120 · js/01-chrono-network.js
+   AURA8 v121 · js/01-chrono-network.js
    LIVRAISON — Chrono multi-mode + Détection réseau + Auto-pause
    + FILET DE SÉCURITÉ bouton play (v119)
-   + MODE DIAGNOSTIC visible à l'écran (v120)
+   + DIAGNOSTIC visible v120, corrigé en v121 :
+       · panneau désormais en BAS (ne couvre plus le header)
+       · bouton TEST qui force toggleSim() avec try/catch
+       · log de TOUS les clics (sans filtre heuristique)
+       · panneau non-dismissable par tap (✕ explicite pour le masquer)
 
-   v120 ajoute un panneau noir fixé en haut de l'écran qui affiche
-   en temps réel ce qui se passe sur #simToggleBtn :
-   - À l'init : bouton trouvé ? toggleSim existe ? autres boutons header ?
-   - À chaque clic : élément cible, texte avant/après, fallback déclenché ?
-   - Le panneau est tappable pour le masquer.
-
-   Tout le reste du code est strictement identique à v119.
+   Tout le reste est strictement identique à v120.
    ═══════════════════════════════════════════════════════════ */
 
 (function() {
@@ -38,37 +36,93 @@
 
   const quitOffline = localStorage.getItem(K_QUIT_OFF) === 'true';
 
-  // ─── DIAGNOSTIC PANEL (v120) ────────────────────────
+  // ─── DIAGNOSTIC PANEL (v121, en bas, avec bouton TEST) ──
+  function dbgEnsurePanel() {
+    let wrap = document.getElementById('auraDebugWrap');
+    if (wrap) return wrap;
+    if (!document.body) return null;
+
+    wrap = document.createElement('div');
+    wrap.id = 'auraDebugWrap';
+    wrap.style.cssText = [
+      'position:fixed', 'bottom:0', 'left:0', 'right:0',
+      'background:rgba(0,0,0,0.93)', 'color:#0ff',
+      'font:10px/1.35 monospace',
+      'z-index:99999999', 'pointer-events:auto',
+      'border-top:2px solid #f0f',
+      'max-height:40vh', 'display:flex', 'flex-direction:column'
+    ].join(';');
+
+    // Barre du haut avec bouton TEST et ✕
+    const bar = document.createElement('div');
+    bar.style.cssText = 'display:flex;gap:6px;padding:4px 6px;background:#222;align-items:center';
+    bar.innerHTML = '<span style="color:#f0f;font-weight:bold">AURA-DBG v121</span>';
+
+    const testBtn = document.createElement('button');
+    testBtn.textContent = 'TEST toggleSim()';
+    testBtn.style.cssText = 'background:#0ff;color:#000;border:none;padding:4px 8px;font:bold 10px monospace;cursor:pointer';
+    testBtn.addEventListener('click', function(ev) {
+      ev.stopPropagation();
+      const btn = document.getElementById('simToggleBtn');
+      const before = btn ? btn.textContent.trim() : '(no btn)';
+      dbg('TEST · before="' + before + '"');
+      try {
+        if (typeof window.toggleSim === 'function') {
+          window.toggleSim();
+          setTimeout(function() {
+            const after = btn ? btn.textContent.trim() : '(no btn)';
+            dbg('TEST · after="' + after + '" changed=' + (before !== after));
+          }, 100);
+        } else {
+          dbg('TEST · toggleSim absent');
+        }
+      } catch (err) {
+        dbg('TEST · ERROR ' + (err.message || err));
+      }
+    });
+    bar.appendChild(testBtn);
+
+    const clearBtn = document.createElement('button');
+    clearBtn.textContent = 'CLEAR';
+    clearBtn.style.cssText = 'background:#444;color:#fff;border:none;padding:4px 8px;font:bold 10px monospace;cursor:pointer';
+    clearBtn.addEventListener('click', function(ev) {
+      ev.stopPropagation();
+      const log = document.getElementById('auraDebugLog');
+      if (log) log.textContent = '';
+    });
+    bar.appendChild(clearBtn);
+
+    const hideBtn = document.createElement('button');
+    hideBtn.textContent = '✕';
+    hideBtn.style.cssText = 'background:#900;color:#fff;border:none;padding:4px 8px;font:bold 10px monospace;cursor:pointer;margin-left:auto';
+    hideBtn.addEventListener('click', function(ev) {
+      ev.stopPropagation();
+      wrap.style.display = 'none';
+    });
+    bar.appendChild(hideBtn);
+
+    wrap.appendChild(bar);
+
+    const log = document.createElement('div');
+    log.id = 'auraDebugLog';
+    log.style.cssText = 'padding:6px 8px;overflow-y:auto;white-space:pre-wrap;word-break:break-all;flex:1';
+    wrap.appendChild(log);
+
+    document.body.appendChild(wrap);
+    return wrap;
+  }
+
   function dbg(msg) {
     try {
-      let p = document.getElementById('auraDebugPanel');
-      if (!p) {
-        p = document.createElement('div');
-        p.id = 'auraDebugPanel';
-        p.style.cssText = [
-          'position:fixed', 'top:0', 'left:0', 'right:0',
-          'background:rgba(0,0,0,0.92)', 'color:#0ff',
-          'font:10px/1.35 monospace', 'padding:6px 8px',
-          'z-index:99999999', 'white-space:pre-wrap',
-          'max-height:38vh', 'overflow-y:auto',
-          'border-bottom:2px solid #f0f', 'pointer-events:auto',
-          'word-break:break-all'
-        ].join(';');
-        p.title = 'Tap to hide';
-        p.addEventListener('click', function(ev) {
-          ev.stopPropagation();
-          p.style.display = (p.style.display === 'none') ? 'block' : 'none';
-        });
-        if (document.body) {
-          document.body.appendChild(p);
-        } else {
-          setTimeout(function(){ dbg(msg); }, 200);
-          return;
-        }
+      const wrap = dbgEnsurePanel();
+      if (!wrap) {
+        setTimeout(function(){ dbg(msg); }, 200);
+        return;
       }
+      const log = document.getElementById('auraDebugLog');
       const time = new Date().toTimeString().slice(0,8);
-      const prev = (p.textContent || '').split('\n').slice(0, 12).join('\n');
-      p.textContent = '[' + time + '] ' + msg + '\n' + prev;
+      const prev = (log.textContent || '').split('\n').slice(0, 18).join('\n');
+      log.textContent = '[' + time + '] ' + msg + '\n' + prev;
     } catch (err) {
       // ne jamais casser le module à cause du debug
     }
@@ -201,7 +255,7 @@
     }
   };
 
-  // ─── FILET DE SÉCURITÉ + DIAGNOSTIC bouton play (v120) ───
+  // ─── DIAGNOSTIC + FILET DE SÉCURITÉ (v121) ──────────
   function describeEl(el) {
     if (!el) return 'null';
     const id = el.id ? '#' + el.id : '';
@@ -213,20 +267,13 @@
   }
 
   function diagnosticInit() {
+    dbgEnsurePanel();
     const btn = document.getElementById('simToggleBtn');
 
-    // Liste les boutons de l'en-tête pour repérer un éventuel ID différent
     try {
-      const header = document.querySelector('header') ||
-                     document.querySelector('.header-l1') ||
-                     document.querySelector('[class*="header"]') ||
-                     document.body;
-      const btns = header.querySelectorAll('button, [role="button"]');
-      const headerBtns = Array.from(btns).slice(0, 6).map(describeEl).join(' | ');
-      dbg('HEADER ' + btns.length + ' btns: ' + (headerBtns || 'AUCUN'));
-    } catch(e) {
-      dbg('header scan err: ' + e.message);
-    }
+      const allBtns = document.querySelectorAll('button, [role="button"]');
+      dbg('DOC ' + allBtns.length + ' btns total');
+    } catch(e) {}
 
     if (btn) {
       dbg('simToggleBtn TROUVÉ ' + describeEl(btn) + ' onclick=' + (typeof btn.onclick));
@@ -234,19 +281,14 @@
       dbg('simToggleBtn ABSENT du DOM');
     }
     dbg('toggleSim=' + typeof window.toggleSim + ' simulationPaused=' + typeof window.simulationPaused);
+    dbg('Utilise le bouton TEST ci-dessus pour appeler toggleSim() directement');
 
-    // Listener de capture global — voit TOUT clic, même si simToggleBtn n'est pas là
+    // Capture phase : LOG TOUS LES CLICS (sans filtre)
     document.addEventListener('click', function(e) {
       const t = e.target;
-      const txt = (t.textContent || '').trim();
-      const isPlayLike = (t.id === 'simToggleBtn') ||
-                        (t.closest && t.closest('#simToggleBtn')) ||
-                        /[▶⏸▷⏵]/.test(txt) ||
-                        /play|pause|sim/i.test(t.className || '') ||
-                        /play|pause|sim/i.test((t.parentElement && t.parentElement.className) || '');
-      if (isPlayLike) {
-        dbg('CLICK ' + describeEl(t) + ' phase=capture');
-      }
+      const inDebug = t.closest && t.closest('#auraDebugWrap');
+      if (inDebug) return; // ignore clics dans le panneau lui-même
+      dbg('CLICK ' + describeEl(t));
     }, true);
   }
 
@@ -261,7 +303,7 @@
 
     btn.addEventListener('click', function(e) {
       const textBefore = btn.textContent.trim();
-      dbg('BTN-CLICK before="' + textBefore + '" onclick=' + (typeof btn.onclick));
+      dbg('BTN-CLICK before="' + textBefore + '"');
       setTimeout(function() {
         const textAfter = btn.textContent.trim();
         const stateChanged = (textBefore !== textAfter);
