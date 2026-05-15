@@ -1,13 +1,14 @@
 /* ═══════════════════════════════════════════════════════════
    AURA8 v119 · js/01-chrono-network.js
-   Chrono 3 modes indépendants + couleurs dédiées + réseau
+   Chrono 3 compteurs séparés + couleurs par mode
+   + Bouton AUTO coloré selon le mode trading
 
    Modes internes (JAMAIS renommer) :
      'sim'       → "Mode Auto-apprentissage"  🔵 cyan  #38d4f5
      'paperReal' → "Mode Évaluation"          🟡 ambre #f5a623
      'real'      → "Mode Réel"                🟢 vert  #00e87a
 
-   Source de vérité : window.S.tradingMode  (02-state-init.js)
+   Source de vérité : window.S.tradingMode
    ═══════════════════════════════════════════════════════════ */
 
 (function () {
@@ -21,11 +22,29 @@
   const K_NET_PAUSE = 'aura_paused_by_network';
   const K_QUIT_OFF  = 'aura_quit_while_offline';
 
-  /* ── Config couleurs/labels par mode ───────────────────── */
+  /* ── Config par mode ───────────────────────────────────── */
   const MODE_CFG = {
-    sim:       { color: '#38d4f5', label: 'AUTO-APPR',  cssClass: 'mode-sim'   },
-    paperReal: { color: '#f5a623', label: 'ÉVALUATION', cssClass: 'mode-paper' },
-    real:      { color: '#00e87a', label: 'RÉEL',       cssClass: 'mode-real'  },
+    sim: {
+      color:      '#38d4f5',
+      label:      'AUTO-APPR',
+      cssClass:   'mode-sim',
+      btnClass:   'trading-sim',
+      borderColor:'rgba(56,212,245,.07)',
+    },
+    paperReal: {
+      color:      '#f5a623',
+      label:      'ÉVALUATION',
+      cssClass:   'mode-paper',
+      btnClass:   'trading-paper',
+      borderColor:'rgba(245,166,35,.20)',
+    },
+    real: {
+      color:      '#00e87a',
+      label:      'RÉEL',
+      cssClass:   'mode-real',
+      btnClass:   'trading-real',
+      borderColor:'rgba(0,232,122,.25)',
+    },
   };
 
   /* ── État interne ──────────────────────────────────────── */
@@ -40,7 +59,7 @@
     netStatus:       'online',
   };
 
-  /* Lit le mode courant DIRECTEMENT depuis S.tradingMode */
+  /* Lit le mode courant depuis S.tradingMode */
   function currentMode() {
     const m = (typeof window.S !== 'undefined') ? window.S.tradingMode : null;
     return (m && MODE_CFG[m]) ? m : 'sim';
@@ -61,7 +80,8 @@
     return `${pad(m)}:${pad(sec)}`;
   }
 
-  /* ── Persistance (toutes les 10s) ─────────────────────── */
+  /* ── Persistance ───────────────────────────────────────── */
+  let _tickCount = 0;
   function save() {
     localStorage.setItem(K_SIM_SEC,   _state.chronoSeconds.sim);
     localStorage.setItem(K_PAPER_SEC, _state.chronoSeconds.paperReal);
@@ -102,7 +122,6 @@
     render();
   }
 
-  /* Init quit-offline */
   if (!navigator.onLine && localStorage.getItem(K_NET_PAUSE) === 'true') {
     localStorage.setItem(K_QUIT_OFF, 'true');
   } else {
@@ -121,7 +140,6 @@
   }
 
   /* ── Tick 1 seconde ────────────────────────────────────── */
-  let _tickCount = 0;
   function tick() {
     syncRunningFromUI();
     const mode = currentMode();
@@ -143,9 +161,11 @@
     if (chronoEl) {
       chronoEl.textContent = formatChrono(_state.chronoSeconds[mode]);
       chronoEl.className   = 'chrono-display';
-      if (_state.running)         chronoEl.classList.add('running');
-      if (_state.pausedByNetwork) chronoEl.classList.add('paused-auto');
-      else                        chronoEl.classList.add(cfg.cssClass);
+      if (_state.pausedByNetwork) {
+        chronoEl.classList.add('paused-auto');
+      } else {
+        chronoEl.classList.add(cfg.cssClass);
+      }
     }
 
     /* — Badge mode sous le chrono — */
@@ -155,30 +175,38 @@
       badgeEl.className   = 'mode-badge ' + cfg.cssClass;
     }
 
+    /* — Bouton AUTO/MANU — couleur du mode trading ─────── */
+    const modeBtn = document.getElementById('modeToggleBtn');
+    if (modeBtn) {
+      // Retirer toutes les classes de mode
+      modeBtn.classList.remove('trading-sim', 'trading-paper', 'trading-real');
+      // Ajouter seulement si pas en MANU
+      if (!modeBtn.classList.contains('manu')) {
+        modeBtn.classList.add(cfg.btnClass);
+      }
+    }
+
     /* — Indicateur réseau — */
     const netEl = document.getElementById('netIndicator');
     if (netEl) netEl.className = 'net-indicator ' + _state.netStatus;
 
     /* — Bouton play/pause si pause réseau — */
-    const btn = document.getElementById('simToggleBtn');
-    if (btn && _state.pausedByNetwork) {
-      btn.className   = 'btn-icon btn-play-pause network-lost';
-      btn.textContent = '▶';
+    const simBtn = document.getElementById('simToggleBtn');
+    if (simBtn && _state.pausedByNetwork) {
+      simBtn.className   = 'btn-icon btn-play-pause network-lost';
+      simBtn.textContent = '▶';
     }
 
-    /* — Bordure colorée du header selon mode — */
+    /* — Bordure header colorée selon mode — */
     const bar = document.getElementById('statusBar');
     if (bar) {
-      if (mode === 'real')           bar.style.borderBottomColor = 'rgba(0,232,122,.25)';
-      else if (mode === 'paperReal') bar.style.borderBottomColor = 'rgba(245,166,35,.20)';
-      else                           bar.style.borderBottomColor = 'rgba(56,212,245,.07)';
+      bar.style.borderBottomColor = cfg.borderColor;
     }
   }
 
-  /* ── API publique window.AuraChrono ────────────────────── */
+  /* ── API publique ──────────────────────────────────────── */
   window.AuraChrono = {
     formatChrono,
-    /** Appelé après chaque changement de S.tradingMode */
     refresh: function () { render(); },
     resetChrono: function (mode) {
       const m = mode || currentMode();
