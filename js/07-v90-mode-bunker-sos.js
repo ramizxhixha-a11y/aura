@@ -34,10 +34,10 @@ function _bkGet() {
 function _bkInitCapRef() {
   const cap = S.tradingAccount||0;
   if(cap>0) {
-    const stored = parseFloat(localStorage.getItem(_BK_CAP_REF_KEY)||'0');
-    if(!stored || stored < cap * 0.5 || stored > cap * 2) {
-      localStorage.setItem(_BK_CAP_REF_KEY, cap.toString());
-    }
+    // v118 FIX · Toujours réinitialiser la référence au démarrage
+    // Évite les déclenchements parasites basés sur des anciens highs de sessions précédentes
+    // La référence repart du capital actuel → le bunker ne peut déclencher que sur une chute FUTURE
+    localStorage.setItem(_BK_CAP_REF_KEY, cap.toString());
   }
 }
 
@@ -4901,7 +4901,8 @@ function renderHome() {
   try { if(typeof btcImpactTick==='function') btcImpactTick(); } catch(e) {}
   if(_cwOpen) try { _updateCompactWidget(); } catch(e) {}
   try { if(typeof checkGraceMoment==='function') checkGraceMoment(false); } catch(e) {}
-  try { if(typeof checkBunker==='function') checkBunker(); } catch(e) {}
+  // v118 FIX · checkBunker() retiré de la boucle de rendu (causait déclenchement parasite à chaque frame)
+  // Le bunker tourne uniquement via son timer dédié (toutes les 120s) + _bkInitCapRef() au démarrage
   // v23 · Vérifier alertes P&L (silencieux)
   try { if(typeof checkPnlAlerts === 'function') checkPnlAlerts(); } catch(e) {}
   // v69 · Alertes prix temps réel
