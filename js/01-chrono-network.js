@@ -1,14 +1,19 @@
 /* ═══════════════════════════════════════════════════════════
-   AURA8 v121 · js/01-chrono-network.js
+   AURA8 v122 · js/01-chrono-network.js
    LIVRAISON — Chrono multi-mode + Détection réseau + Auto-pause
    + FILET DE SÉCURITÉ bouton play (v119)
-   + DIAGNOSTIC visible v120, corrigé en v121 :
-       · panneau désormais en BAS (ne couvre plus le header)
-       · bouton TEST qui force toggleSim() avec try/catch
-       · log de TOUS les clics (sans filtre heuristique)
-       · panneau non-dismissable par tap (✕ explicite pour le masquer)
+   + DIAGNOSTIC visible (v120/v121)
+   + SHIM startSim/stopSim qui faisaient défaut depuis la
+     modularisation v118 (v122)
 
-   Tout le reste est strictement identique à v120.
+   v122 corrige le bug racine : toggleSim() dans le HTML inline
+   appelle startSim() qui n'existe plus depuis le découpage v118.
+   Ce module définit des shims window.startSim et window.stopSim
+   qui basculent window.simulationPaused + émettent un event
+   personnalisé. Si la boucle bot écoute simulationPaused ou les
+   events, elle reprendra/s'arrêtera correctement.
+
+   Tout le reste est identique à v121.
    ═══════════════════════════════════════════════════════════ */
 
 (function() {
@@ -36,7 +41,7 @@
 
   const quitOffline = localStorage.getItem(K_QUIT_OFF) === 'true';
 
-  // ─── DIAGNOSTIC PANEL (v121, en bas, avec bouton TEST) ──
+  // ─── DIAGNOSTIC PANEL ───────────────────────────────
   function dbgEnsurePanel() {
     let wrap = document.getElementById('auraDebugWrap');
     if (wrap) return wrap;
@@ -50,41 +55,73 @@
       'font:10px/1.35 monospace',
       'z-index:99999999', 'pointer-events:auto',
       'border-top:2px solid #f0f',
-      'max-height:40vh', 'display:flex', 'flex-direction:column'
+      'max-height:45vh', 'display:flex', 'flex-direction:column'
     ].join(';');
 
-    // Barre du haut avec bouton TEST et ✕
     const bar = document.createElement('div');
-    bar.style.cssText = 'display:flex;gap:6px;padding:4px 6px;background:#222;align-items:center';
-    bar.innerHTML = '<span style="color:#f0f;font-weight:bold">AURA-DBG v121</span>';
+    bar.style.cssText = 'display:flex;gap:4px;padding:4px 6px;background:#222;align-items:center;flex-wrap:wrap';
+    bar.innerHTML = '<span style="color:#f0f;font-weight:bold;margin-right:4px">AURA-DBG v122</span>';
 
-    const testBtn = document.createElement('button');
-    testBtn.textContent = 'TEST toggleSim()';
-    testBtn.style.cssText = 'background:#0ff;color:#000;border:none;padding:4px 8px;font:bold 10px monospace;cursor:pointer';
-    testBtn.addEventListener('click', function(ev) {
-      ev.stopPropagation();
+    function mkBtn(label, color, fn) {
+      const b = document.createElement('button');
+      b.textContent = label;
+      b.style.cssText = 'background:' + color + ';color:#000;border:none;padding:4px 6px;font:bold 9px monospace;cursor:pointer';
+      b.addEventListener('click', function(ev) {
+        ev.stopPropagation();
+        fn();
+      });
+      bar.appendChild(b);
+      return b;
+    }
+
+    mkBtn('TEST toggleSim()', '#0ff', function() {
       const btn = document.getElementById('simToggleBtn');
       const before = btn ? btn.textContent.trim() : '(no btn)';
-      dbg('TEST · before="' + before + '"');
+      dbg('TEST-TOGGLE before="' + before + '"');
       try {
         if (typeof window.toggleSim === 'function') {
           window.toggleSim();
           setTimeout(function() {
             const after = btn ? btn.textContent.trim() : '(no btn)';
-            dbg('TEST · after="' + after + '" changed=' + (before !== after));
+            dbg('TEST-TOGGLE after="' + after + '" changed=' + (before !== after));
           }, 100);
         } else {
-          dbg('TEST · toggleSim absent');
+          dbg('TEST-TOGGLE · toggleSim absent');
         }
       } catch (err) {
-        dbg('TEST · ERROR ' + (err.message || err));
+        dbg('TEST-TOGGLE · ERROR ' + (err.message || err));
       }
     });
-    bar.appendChild(testBtn);
+
+    mkBtn('TEST startSim()', '#0f0', function() {
+      try {
+        if (typeof window.startSim === 'function') {
+          window.startSim();
+          dbg('TEST-START OK · simulationPaused=' + window.simulationPaused);
+        } else {
+          dbg('TEST-START · startSim absent');
+        }
+      } catch (err) {
+        dbg('TEST-START · ERROR ' + (err.message || err));
+      }
+    });
+
+    mkBtn('TEST stopSim()', '#fa0', function() {
+      try {
+        if (typeof window.stopSim === 'function') {
+          window.stopSim();
+          dbg('TEST-STOP OK · simulationPaused=' + window.simulationPaused);
+        } else {
+          dbg('TEST-STOP · stopSim absent');
+        }
+      } catch (err) {
+        dbg('TEST-STOP · ERROR ' + (err.message || err));
+      }
+    });
 
     const clearBtn = document.createElement('button');
     clearBtn.textContent = 'CLEAR';
-    clearBtn.style.cssText = 'background:#444;color:#fff;border:none;padding:4px 8px;font:bold 10px monospace;cursor:pointer';
+    clearBtn.style.cssText = 'background:#444;color:#fff;border:none;padding:4px 6px;font:bold 9px monospace;cursor:pointer';
     clearBtn.addEventListener('click', function(ev) {
       ev.stopPropagation();
       const log = document.getElementById('auraDebugLog');
@@ -121,13 +158,62 @@
       }
       const log = document.getElementById('auraDebugLog');
       const time = new Date().toTimeString().slice(0,8);
-      const prev = (log.textContent || '').split('\n').slice(0, 18).join('\n');
+      const prev = (log.textContent || '').split('\n').slice(0, 20).join('\n');
       log.textContent = '[' + time + '] ' + msg + '\n' + prev;
-    } catch (err) {
-      // ne jamais casser le module à cause du debug
+    } catch (err) { /* silencieux */ }
+  }
+
+  // ─── SHIM startSim / stopSim (v122) ─────────────────
+  // Ces fonctions manquaient au scope global depuis la modularisation v118.
+  // toggleSim() les appelle de l'inline HTML, donc elles DOIVENT exister sur window.
+  function installSimShims() {
+    let installed = [];
+
+    if (typeof window.startSim !== 'function') {
+      window.startSim = function() {
+        window.simulationPaused = false;
+        const btn = document.getElementById('simToggleBtn');
+        if (btn) {
+          btn.classList.remove('paused');
+          btn.classList.add('running');
+          // ne pas forcer le texte ici, on laisse toggleSim/HTML inline le gérer s'il le fait
+        }
+        try { window.dispatchEvent(new CustomEvent('aura-sim-start')); } catch(e){}
+        dbg('SHIM startSim() exécuté · simulationPaused=false');
+      };
+      installed.push('startSim');
+    }
+
+    if (typeof window.stopSim !== 'function') {
+      window.stopSim = function() {
+        window.simulationPaused = true;
+        const btn = document.getElementById('simToggleBtn');
+        if (btn) {
+          btn.classList.remove('running');
+          btn.classList.add('paused');
+        }
+        try { window.dispatchEvent(new CustomEvent('aura-sim-stop')); } catch(e){}
+        dbg('SHIM stopSim() exécuté · simulationPaused=true');
+      };
+      installed.push('stopSim');
+    }
+
+    // Aliases couramment utilisés au cas où l'inline appelle d'autres noms
+    if (typeof window.pauseSim !== 'function') {
+      window.pauseSim = function() { window.stopSim(); };
+    }
+    if (typeof window.resumeSim !== 'function') {
+      window.resumeSim = function() { window.startSim(); };
+    }
+
+    if (installed.length) {
+      dbg('SHIMS installés: ' + installed.join(', '));
+    } else {
+      dbg('SHIMS déjà présents (rien à installer)');
     }
   }
 
+  // ─── Reste du module (identique v121) ───────────────
   function formatChrono(s) {
     s = Math.max(0, Math.floor(s));
     const d = Math.floor(s / 86400);
@@ -168,18 +254,14 @@
         state.running = false;
         localStorage.setItem(K_NET_PAUSE, 'true');
         save();
-        if (typeof window.simulationPaused !== 'undefined') {
-          window.simulationPaused = true;
-        }
+        window.simulationPaused = true;
       }
     } else if (prev === 'offline' && state.pausedByNetwork && !quitOffline) {
       state.pausedByNetwork = false;
       state.running = true;
       localStorage.setItem(K_NET_PAUSE, 'false');
       save();
-      if (typeof window.simulationPaused !== 'undefined') {
-        window.simulationPaused = false;
-      }
+      window.simulationPaused = false;
     }
     render();
   }
@@ -255,7 +337,7 @@
     }
   };
 
-  // ─── DIAGNOSTIC + FILET DE SÉCURITÉ (v121) ──────────
+  // ─── Diagnostic + filet de sécurité ────────────────
   function describeEl(el) {
     if (!el) return 'null';
     const id = el.id ? '#' + el.id : '';
@@ -268,26 +350,27 @@
 
   function diagnosticInit() {
     dbgEnsurePanel();
-    const btn = document.getElementById('simToggleBtn');
+    installSimShims(); // ← v122 : installer les shims AVANT toute autre chose
 
+    const btn = document.getElementById('simToggleBtn');
     try {
       const allBtns = document.querySelectorAll('button, [role="button"]');
       dbg('DOC ' + allBtns.length + ' btns total');
     } catch(e) {}
-
     if (btn) {
-      dbg('simToggleBtn TROUVÉ ' + describeEl(btn) + ' onclick=' + (typeof btn.onclick));
+      dbg('simToggleBtn ' + describeEl(btn) + ' onclick=' + (typeof btn.onclick));
     } else {
-      dbg('simToggleBtn ABSENT du DOM');
+      dbg('simToggleBtn ABSENT');
     }
-    dbg('toggleSim=' + typeof window.toggleSim + ' simulationPaused=' + typeof window.simulationPaused);
-    dbg('Utilise le bouton TEST ci-dessus pour appeler toggleSim() directement');
+    dbg('toggleSim=' + typeof window.toggleSim +
+        ' startSim=' + typeof window.startSim +
+        ' stopSim=' + typeof window.stopSim +
+        ' simulationPaused=' + typeof window.simulationPaused);
 
-    // Capture phase : LOG TOUS LES CLICS (sans filtre)
     document.addEventListener('click', function(e) {
       const t = e.target;
       const inDebug = t.closest && t.closest('#auraDebugWrap');
-      if (inDebug) return; // ignore clics dans le panneau lui-même
+      if (inDebug) return;
       dbg('CLICK ' + describeEl(t));
     }, true);
   }
@@ -310,22 +393,21 @@
         dbg('BTN-AFTER after="' + textAfter + '" changed=' + stateChanged);
         if (stateChanged) return;
         dbg('FALLBACK déclenché');
-        if (textBefore === '⏸') {
+        // v122 : on ne fait plus le check typeof, on force toujours
+        if (textBefore === '⏸' || textBefore === '❚❚') {
           btn.textContent = '▶';
-          if (typeof window.simulationPaused !== 'undefined') {
-            window.simulationPaused = true;
-          }
+          window.simulationPaused = true;
           state.running = false;
           state.pausedByNetwork = false;
           localStorage.setItem(K_NET_PAUSE, 'false');
+          try { window.dispatchEvent(new CustomEvent('aura-sim-stop')); } catch(e){}
         } else {
           btn.textContent = '⏸';
-          if (typeof window.simulationPaused !== 'undefined') {
-            window.simulationPaused = false;
-          }
+          window.simulationPaused = false;
           state.running = true;
           state.pausedByNetwork = false;
           localStorage.setItem(K_NET_PAUSE, 'false');
+          try { window.dispatchEvent(new CustomEvent('aura-sim-start')); } catch(e){}
         }
         save();
         render();
@@ -350,6 +432,8 @@
     onNetworkChange();
     setInterval(tick, 1000);
     render();
+    // v122 : installer les shims TOUT DE SUITE, avant tout clic possible
+    installSimShims();
     attachDefensivePlayHandler();
     setTimeout(diagnosticInit, 300);
   }
