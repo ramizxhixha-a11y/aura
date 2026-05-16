@@ -1,13 +1,12 @@
 /* ═══════════════════════════════════════════════════════════
-   AURA8 v126 · js/01-chrono-network.js
+   AURA8 v127 · js/01-chrono-network.js
    LIVRAISON — Chrono multi-mode + Détection réseau + Auto-pause
    + Shim startSim/stopSim/pauseSim/resumeSim
    + Override toggleSim autonome
    + Filet de sécurité bouton play
-   + NOUVEAU v126 : Cycle de mode trading (AA / EV / RE)
-
-   v126 = v125 + bloc TRADE-MODE en fin de fichier.
-   Aucune autre modification : la logique v125 reste IDENTIQUE.
+   + Cycle de mode trading (AA / EV / RE)
+   + NOUVEAU v127 : AUTO-INJECTION du CSS et du bouton dans le DOM
+     → AUCUNE modification HTML requise. Tout est dans ce fichier JS.
 
    IMPORTANT : les valeurs INTERNES restent 'sim' / 'paperReal' / 'real'.
    Seuls les LIBELLÉS visibles changent (AA / EV / RE).
@@ -40,7 +39,33 @@
 
   function dbg(_msg) { /* silencieux */ }
 
-  // ─── SHIM startSim / stopSim (v125, inchangé) ───────
+  // ═══ AUTO-INJECTION DU CSS ══════════════════════════
+  // Ajoute automatiquement le link vers 25-mode-trading.css
+  // si l'utilisateur n'a pas ajouté la ligne dans le HTML.
+  function injectModeTradingCSS() {
+    if (document.querySelector('link[href*="25-mode-trading"]')) return;
+    const link = document.createElement('link');
+    link.rel = 'stylesheet';
+    link.href = 'css/25-mode-trading.css';
+    (document.head || document.documentElement).appendChild(link);
+  }
+
+  // ═══ AUTO-INJECTION DU BOUTON DE MODE ══════════════
+  function injectTradeModeButton() {
+    if (document.getElementById('tradeModeBtn')) return true;
+    const autoBtn = document.querySelector('.btn-mode-toggle')
+                 || document.getElementById('modeToggleBtn');
+    if (!autoBtn) return false;
+    const btn = document.createElement('button');
+    btn.id = 'tradeModeBtn';
+    btn.className = 'btn-trade-mode mode-AA';
+    btn.title = 'Mode trading : tap pour cycler';
+    btn.textContent = 'AA';
+    autoBtn.parentNode.insertBefore(btn, autoBtn.nextSibling);
+    return true;
+  }
+
+  // ─── SHIM startSim / stopSim (inchangé) ─────────────
   function installSimShims() {
     window.startSim = function() {
       window.simulationPaused = false;
@@ -71,7 +96,7 @@
     };
   }
 
-  // ─── Chrono (v125, inchangé) ─────────────────────────
+  // ─── Chrono (inchangé) ─────────────────────────────
   function formatChrono(s) {
     s = Math.max(0, Math.floor(s));
     const d = Math.floor(s / 86400);
@@ -91,7 +116,6 @@
     localStorage.setItem(K_RUNNING, state.running);
   }
 
-  // ─── Détection réseau (v125, inchangé) ──────────────
   function evaluateNetwork() {
     if (!navigator.onLine) return 'offline';
     const conn = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
@@ -174,7 +198,6 @@
     const chronoEl = document.getElementById('chronoEl');
     if (chronoEl) {
       chronoEl.textContent = formatChrono(state.chronoSeconds[state.mode]);
-      // On garde les classes mode-XX en plus de chrono-display et running/paused-auto
       const tradeMode = chronoEl.className.match(/mode-(AA|EV|RE)/);
       chronoEl.className = 'chrono-display';
       if (tradeMode) chronoEl.classList.add(tradeMode[0]);
@@ -227,16 +250,14 @@
   }
 
   // ═══════════════════════════════════════════════════════════
-  // ═══ NOUVEAU v126 — CYCLE MODE TRADING (AA / EV / RE) ═══
+  // ═══ CYCLE MODE TRADING (AA / EV / RE) ═══
   // ═══════════════════════════════════════════════════════════
 
-  // Mapping interne ↔ libellé visible
   const TRADE_LABEL = { sim: 'AA', paperReal: 'EV', real: 'RE' };
   const TRADE_CLASS = { sim: 'mode-AA', paperReal: 'mode-EV', real: 'mode-RE' };
   const TRADE_ORDER = ['sim', 'paperReal', 'real'];
   const K_TRADE_MODE = 'aura_trade_mode_v126';
 
-  // Lecture du mode actif (priorité : S.tradingMode > localStorage > sim)
   function getTradeMode() {
     try {
       if (window.S && window.S.tradingMode &&
@@ -249,20 +270,17 @@
     return 'sim';
   }
 
-  // Application des classes CSS sur tous les éléments cibles
   function applyTradeModeUI(mode) {
     const cls = TRADE_CLASS[mode] || 'mode-AA';
     const label = TRADE_LABEL[mode] || 'AA';
     const allClasses = 'mode-AA mode-EV mode-RE';
 
-    // 1. Logo (cercle extérieur)
     const logo = document.querySelector('.aura-circular-wrap');
     if (logo) {
       allClasses.split(' ').forEach(c => logo.classList.remove(c));
       logo.classList.add(cls);
     }
 
-    // 2. Bouton AUTO/MANU
     const autoBtn = document.querySelector('.btn-mode-toggle')
                  || document.getElementById('modeToggleBtn');
     if (autoBtn) {
@@ -270,14 +288,12 @@
       autoBtn.classList.add(cls);
     }
 
-    // 3. Chrono
     const chronoEl = document.getElementById('chronoEl');
     if (chronoEl) {
       allClasses.split(' ').forEach(c => chronoEl.classList.remove(c));
       chronoEl.classList.add(cls);
     }
 
-    // 4. Badge sous le chrono
     let badge = document.getElementById('chronoModeBadge');
     if (!badge && chronoEl && chronoEl.parentNode) {
       badge = document.createElement('div');
@@ -291,14 +307,12 @@
       badge.textContent = label;
     }
 
-    // 5. Bordure du header (#statusBar)
     const statusBar = document.getElementById('statusBar');
     if (statusBar) {
       allClasses.split(' ').forEach(c => statusBar.classList.remove(c));
       statusBar.classList.add(cls);
     }
 
-    // 6. Le bouton de cycle lui-même
     const tradeBtn = document.getElementById('tradeModeBtn');
     if (tradeBtn) {
       allClasses.split(' ').forEach(c => tradeBtn.classList.remove(c));
@@ -307,22 +321,16 @@
     }
   }
 
-  // Cycle : sim → paperReal → real → sim
   window.cycleTradingMode = function() {
     const current = getTradeMode();
     const idx = TRADE_ORDER.indexOf(current);
     const next = TRADE_ORDER[(idx + 1) % TRADE_ORDER.length];
 
-    // Écriture dans S si présent (source de vérité de l'app)
-    try {
-      if (window.S) window.S.tradingMode = next;
-    } catch(e) {}
-    // Sauvegarde localStorage en parallèle (filet de sécurité)
+    try { if (window.S) window.S.tradingMode = next; } catch(e) {}
     try { localStorage.setItem(K_TRADE_MODE, next); } catch(e) {}
 
     applyTradeModeUI(next);
 
-    // Notifier le reste de l'app (si elle écoute)
     try {
       window.dispatchEvent(new CustomEvent('aura-trade-mode-changed', {
         detail: { mode: next, label: TRADE_LABEL[next] }
@@ -330,24 +338,21 @@
     } catch(e) {}
   };
 
-  // Init au démarrage : applique le mode déjà actif
+  // Init du bouton — réessaie jusqu'à ce que le header soit chargé
   function initTradeMode() {
-    const tradeBtn = document.getElementById('tradeModeBtn');
-    if (!tradeBtn) {
-      // Bouton pas encore là, on retente bientôt
+    const ok = injectTradeModeButton();
+    if (!ok) {
       setTimeout(initTradeMode, 500);
       return;
     }
-    // Branche le click si pas encore branché
-    if (!tradeBtn._auraCycleAttached) {
+    const tradeBtn = document.getElementById('tradeModeBtn');
+    if (tradeBtn && !tradeBtn._auraCycleAttached) {
       tradeBtn._auraCycleAttached = true;
       tradeBtn.addEventListener('click', window.cycleTradingMode, false);
     }
     applyTradeModeUI(getTradeMode());
   }
 
-  // Re-synchronise toutes les 2 secondes au cas où S.tradingMode aurait changé
-  // ailleurs (par le code existant de l'app, par exemple via les Réglages)
   let _lastSeenTradeMode = null;
   function watchTradeMode() {
     const current = getTradeMode();
@@ -359,6 +364,9 @@
 
   // ─── Init ───────────────────────────────────────────
   function init() {
+    // AUTO-INJECT le CSS d'abord
+    injectModeTradingCSS();
+
     window.addEventListener('online', onNetworkChange);
     window.addEventListener('offline', onNetworkChange);
     if (navigator.connection) {
