@@ -1,170 +1,60 @@
 /* ═══════════════════════════════════════════════════════════
-   AURA8 v128.1 · js/01-chrono-network.js
+   AURA8 v108 · js/01-chrono-network.js
+   LIVRAISON 1 — Chrono multi-mode + Détection réseau + Auto-pause
 
-   CORRECTIFS depuis v127 :
-   - SUPPRIMÉ : shims startSim/stopSim/toggleSim qui forçaient
-     window.simulationPaused = true (cause du bot dormant)
-   - SUPPRIMÉ : touche au bouton AUTO/MANU (cause du bouton cassé)
-   - REFAIT : chrono compte par mode trading (sim/paperReal/real)
-     au lieu de AUTO/MANU
-   - SETTRADE : tente d'appeler la fonction de l'app avant fallback
-     direct (pour rester cohérent avec l'app)
-   - RENDER : utilise classList.toggle au lieu de réécrire className
-     (n'écrase plus les classes ajoutées par d'autres scripts)
-
-   Auto-injection CSS + bouton de cycle. Aucune modif HTML requise.
+   COEXISTENCE avec le code existant :
+   - Les boutons header ont des onclick natifs (toggleSim, toggleMode, toggleWakeLock, etc.)
+     qui appellent les fonctions JS existantes du HTML.
+   - Ce module N'ATTACHE PAS de listener sur ces boutons : il ne fait que
+     OBSERVER les changements et METTRE À JOUR le chrono + l'indicateur réseau.
+   - Le code existant peut appeler window.AuraChrono.* pour synchroniser.
    ═══════════════════════════════════════════════════════════ */
 
 (function() {
   'use strict';
 
-  const TRADE_LABEL = { sim: 'AA', paperReal: 'EV', real: 'RE' };
-  const TRADE_CLASS = { sim: 'mode-AA', paperReal: 'mode-EV', real: 'mode-RE' };
-  const TRADE_ORDER = ['sim', 'paperReal', 'real'];
+  // ─── Clés localStorage ──────────────────────────────
+  const K_AUTO_SEC = 'aura_chrono_auto_seconds';
+  const K_MANU_SEC = 'aura_chrono_manu_seconds';
+  const K_RUNNING  = 'aura_system_running';
+  const K_MODE     = 'aura_current_mode';
+  const K_NET_PAUSE = 'aura_paused_by_network';
+  const K_QUIT_OFF  = 'aura_quit_while_offline';
 
-  const K_CHRONO = {
-    sim:       'aura_chrono_sim',
-    paperReal: 'aura_chrono_paper',
-    real:      'aura_chrono_real',
-  };
-  const K_NET_PAUSE  = 'aura_paused_by_network';
-  const K_QUIT_OFF   = 'aura_quit_while_offline';
-  const K_TRADE_MODE = 'aura_trade_mode';
-
+  // ─── État ───────────────────────────────────────────
   const state = {
-    chronos: {
-      sim:       parseInt(localStorage.getItem(K_CHRONO.sim)       || '0', 10),
-      paperReal: parseInt(localStorage.getItem(K_CHRONO.paperReal) || '0', 10),
-      real:      parseInt(localStorage.getItem(K_CHRONO.real)      || '0', 10),
+    chronoSeconds: {
+      AUTO: parseInt(localStorage.getItem(K_AUTO_SEC) || '0', 10),
+      MANU: parseInt(localStorage.getItem(K_MANU_SEC) || '0', 10),
     },
+    mode: localStorage.getItem(K_MODE) || 'AUTO',
     running: false,
     pausedByNetwork: false,
     netStatus: 'online',
   };
 
+  // À l'install : si on a quitté l'app offline, on ne reprend pas auto
   const quitOffline = localStorage.getItem(K_QUIT_OFF) === 'true';
 
-  // ─── Auto-injection CSS ──────────────────────────────
-  function injectCSS() {
-    if (document.querySelector('link[href*="25-mode-trading"]')) return;
-    const link = document.createElement('link');
-    link.rel = 'stylesheet';
-    link.href = 'css/25-mode-trading.css';
-    (document.head || document.documentElement).appendChild(link);
-  }
-
-  // ─── Auto-injection bouton mode (après bouton AUTO) ──
-  function injectTradeBtn() {
-    if (document.getElementById('tradeModeBtn')) return true;
-    const autoBtn = document.querySelector('.btn-mode-toggle')
-                 || document.getElementById('modeToggleBtn');
-    if (!autoBtn) return false;
-    const btn = document.createElement('button');
-    btn.id = 'tradeModeBtn';
-    btn.className = 'btn-trade-mode';
-    btn.title = 'Mode trading (tap pour cycler)';
-    btn.textContent = 'AA';
-    btn.addEventListener('click', cycleTradeMode, false);
-    autoBtn.parentNode.insertBefore(btn, autoBtn.nextSibling);
-    return true;
-  }
-
-  // ─── Format chrono ──────────────────────────────────
+  // ─── Formatage adaptatif (MM:SS → HH:MM:SS → Xd HH:MM) ───
   function formatChrono(s) {
     s = Math.max(0, Math.floor(s));
     const d = Math.floor(s / 86400);
     const h = Math.floor((s % 86400) / 3600);
     const m = Math.floor((s % 3600) / 60);
     const sec = s % 60;
-    const pad = n => String(n).padStart(2, '0');
-    if (d > 0) return `${d}j ${pad(h)}:${pad(m)}`;
+    const pad = (n) => String(n).padStart(2, '0');
+    if (d > 0) return `${d}d ${pad(h)}:${pad(m)}`;
     if (h > 0) return `${pad(h)}:${pad(m)}:${pad(sec)}`;
     return `${pad(m)}:${pad(sec)}`;
   }
 
-  // ─── Mode trading ───────────────────────────────────
-  function getTradeMode() {
-    try {
-      if (window.S && window.S.tradingMode &&
-          TRADE_ORDER.indexOf(window.S.tradingMode) !== -1) {
-        return window.S.tradingMode;
-      }
-    } catch(e) {}
-    const saved = localStorage.getItem(K_TRADE_MODE);
-    if (saved && TRADE_ORDER.indexOf(saved) !== -1) return saved;
-    return 'sim';
-  }
-
-  // Tente d'appeler une fonction de l'app pour changer le mode
-  // (qui gère les effets de bord : feeds, positions, UI). Si aucune
-  // fonction trouvée, fallback en écrivant directement la variable.
-  function setTradeMode(mode) {
-    const appFns = [
-      'setTradingMode', 'changeTradingMode', 'applyTradingMode',
-      'switchTradingMode', 'switchMode', 'changeMode', 'setMode'
-    ];
-    for (let i = 0; i < appFns.length; i++) {
-      const fn = window[appFns[i]];
-      if (typeof fn === 'function') {
-        try { fn(mode); break; } catch(e) {}
-      }
-    }
-    // Fallback / parallèle : écriture directe
-    try { if (window.S) window.S.tradingMode = mode; } catch(e) {}
-    try { localStorage.setItem(K_TRADE_MODE, mode); } catch(e) {}
-  }
-
-  function cycleTradeMode() {
-    const cur = getTradeMode();
-    const next = TRADE_ORDER[(TRADE_ORDER.indexOf(cur) + 1) % TRADE_ORDER.length];
-    setTradeMode(next);
-    applyTradeUI();
-    try {
-      window.dispatchEvent(new CustomEvent('aura-trade-mode-changed', {
-        detail: { mode: next, label: TRADE_LABEL[next] }
-      }));
-    } catch(e) {}
-  }
-
-  // ⚠️ Ne touche JAMAIS au bouton AUTO/MANU.
-  // Utilise classList add/remove pour ne pas écraser les autres classes.
-  function applyTradeUI() {
-    const mode = getTradeMode();
-    const cls = TRADE_CLASS[mode];
-    const label = TRADE_LABEL[mode];
-    const allCls = ['mode-AA', 'mode-EV', 'mode-RE'];
-
-    function setMode(el) {
-      if (!el) return;
-      allCls.forEach(c => el.classList.remove(c));
-      el.classList.add(cls);
-    }
-
-    setMode(document.querySelector('.aura-circular-wrap'));
-    setMode(document.getElementById('chronoEl'));
-    setMode(document.getElementById('statusBar'));
-
-    // Badge sous le chrono (créé si absent)
-    let badge = document.getElementById('chronoModeBadge');
-    const chronoEl = document.getElementById('chronoEl');
-    if (!badge && chronoEl && chronoEl.parentNode) {
-      badge = document.createElement('div');
-      badge.id = 'chronoModeBadge';
-      badge.className = 'chrono-mode-badge';
-      chronoEl.parentNode.appendChild(badge);
-    }
-    if (badge) {
-      setMode(badge);
-      badge.textContent = label;
-    }
-
-    // Bouton de cycle
-    const tradeBtn = document.getElementById('tradeModeBtn');
-    if (tradeBtn) {
-      setMode(tradeBtn);
-      tradeBtn.textContent = label;
-    }
-    // ❌ Aucune modif sur .btn-mode-toggle / #modeToggleBtn
+  // ─── Persistance ────────────────────────────────────
+  function save() {
+    localStorage.setItem(K_AUTO_SEC, state.chronoSeconds.AUTO);
+    localStorage.setItem(K_MANU_SEC, state.chronoSeconds.MANU);
+    localStorage.setItem(K_MODE, state.mode);
+    localStorage.setItem(K_RUNNING, state.running);
   }
 
   // ─── Détection réseau ───────────────────────────────
@@ -174,7 +64,8 @@
     if (conn && conn.effectiveType) {
       const t = conn.effectiveType;
       if (t === '4g') return 'online';
-      if (t === '3g' || t === '2g' || t === 'slow-2g') return 'unstable';
+      if (t === '3g') return 'unstable';
+      if (t === '2g' || t === 'slow-2g') return 'unstable';
     }
     return 'online';
   }
@@ -182,78 +73,96 @@
   function onNetworkChange() {
     const prev = state.netStatus;
     state.netStatus = evaluateNetwork();
+
     if (state.netStatus === 'offline') {
       if (state.running) {
         state.pausedByNetwork = true;
         state.running = false;
         localStorage.setItem(K_NET_PAUSE, 'true');
-        // ⚠️ window.simulationPaused N'EST PAS TOUCHÉ (cassait le bot)
+        save();
+        // Notifier le code legacy qu'on a forcé la pause
+        if (typeof window.simulationPaused !== 'undefined') {
+          window.simulationPaused = true;
+        }
       }
     } else if (prev === 'offline' && state.pausedByNetwork && !quitOffline) {
+      // Reprise auto si pas quit-offline
       state.pausedByNetwork = false;
       state.running = true;
       localStorage.setItem(K_NET_PAUSE, 'false');
+      save();
+      if (typeof window.simulationPaused !== 'undefined') {
+        window.simulationPaused = false;
+      }
     }
-    renderNet();
+    render();
   }
 
+  // À l'init : si on était offline et pause-réseau → marquer quit-offline
   if (!navigator.onLine && localStorage.getItem(K_NET_PAUSE) === 'true') {
     localStorage.setItem(K_QUIT_OFF, 'true');
   } else {
     localStorage.setItem(K_QUIT_OFF, 'false');
   }
 
-  // ─── Lecture passive du bouton play ──────────────────
-  function syncRunningFromBtn() {
+  // ─── Détecter l'état du système depuis le code existant ───
+  // Le bouton #simToggleBtn affiche ⏸ quand running, ▶ quand pause
+  function syncRunningFromUI() {
     const btn = document.getElementById('simToggleBtn');
     if (!btn) return;
+    // On lit le texte pour savoir si système est en marche
     const text = btn.textContent.trim();
-    const isRunning = (text === '⏸' || text === '❚❚');
+    const isRunning = text === '⏸';
     if (state.running !== isRunning && !state.pausedByNetwork) {
       state.running = isRunning;
+      save();
+    }
+  }
+
+  function syncModeFromUI() {
+    const lbl = document.getElementById('modeLabelText');
+    if (!lbl) return;
+    const m = (lbl.textContent || '').trim().toUpperCase();
+    if ((m === 'AUTO' || m === 'MANU') && state.mode !== m) {
+      state.mode = m;
+      save();
     }
   }
 
   // ─── Tick 1 seconde ─────────────────────────────────
   function tick() {
-    syncRunningFromBtn();
+    syncRunningFromUI();
+    syncModeFromUI();
     if (state.running && state.netStatus !== 'offline') {
-      const tm = getTradeMode();
-      state.chronos[tm]++;
-      if (state.chronos[tm] % 10 === 0) {
-        try { localStorage.setItem(K_CHRONO[tm], state.chronos[tm]); } catch(e) {}
-      }
+      state.chronoSeconds[state.mode]++;
+      if (state.chronoSeconds[state.mode] % 10 === 0) save();
     }
     render();
   }
 
-  // Render utilise classList.toggle (non-destructif) au lieu de className=
+  // ─── Rendu UI ───────────────────────────────────────
   function render() {
-    const tm = getTradeMode();
+    // Chrono
     const chronoEl = document.getElementById('chronoEl');
     if (chronoEl) {
-      chronoEl.textContent = formatChrono(state.chronos[tm]);
-      chronoEl.classList.add('chrono-display');
-      chronoEl.classList.toggle('running', state.running);
-      chronoEl.classList.toggle('paused-auto', state.pausedByNetwork);
-      // Les classes mode-XX restent en place (gérées par applyTradeUI)
+      chronoEl.textContent = formatChrono(state.chronoSeconds[state.mode]);
+      chronoEl.className = 'chrono-display';
+      if (state.running) chronoEl.classList.add('running');
+      if (state.pausedByNetwork) chronoEl.classList.add('paused-auto');
     }
-  }
 
-  function renderNet() {
+    // Indicateur réseau
     const netEl = document.getElementById('netIndicator');
-    if (!netEl) return;
-    netEl.classList.remove('online', 'unstable', 'offline');
-    netEl.classList.add('net-indicator', state.netStatus);
-  }
+    if (netEl) {
+      netEl.className = 'net-indicator ' + state.netStatus;
+    }
 
-  // ─── Re-sync mode trading si modifié ailleurs ────────
-  let _lastMode = null;
-  function watchTradeMode() {
-    const cur = getTradeMode();
-    if (cur !== _lastMode) {
-      _lastMode = cur;
-      applyTradeUI();
+    // Bouton play/pause : seulement si on a forcé la pause par réseau
+    // (sinon laisser le code existant gérer son état)
+    const btn = document.getElementById('simToggleBtn');
+    if (btn && state.pausedByNetwork) {
+      btn.className = 'btn-icon btn-play-pause network-lost';
+      btn.textContent = '▶';
     }
   }
 
@@ -262,48 +171,40 @@
     state: state,
     formatChrono: formatChrono,
     resetChrono: function(mode) {
-      if (state.chronos[mode] !== undefined) {
-        state.chronos[mode] = 0;
-        try { localStorage.setItem(K_CHRONO[mode], 0); } catch(e) {}
+      if (state.chronoSeconds[mode] !== undefined) {
+        state.chronoSeconds[mode] = 0;
+        save();
         render();
       }
     },
     getChrono: function(mode) {
-      return state.chronos[mode || getTradeMode()];
+      return state.chronoSeconds[mode || state.mode];
     }
   };
-  window.cycleTradingMode = cycleTradeMode;
 
   // ─── Init ───────────────────────────────────────────
-  function tryInjectBtn() {
-    if (!injectTradeBtn()) {
-      setTimeout(tryInjectBtn, 500);
-      return;
-    }
-    applyTradeUI();
-  }
-
   function init() {
-    injectCSS();
+    // Écouter les événements réseau
     window.addEventListener('online', onNetworkChange);
     window.addEventListener('offline', onNetworkChange);
     if (navigator.connection) {
       navigator.connection.addEventListener('change', onNetworkChange);
     }
+
+    // Sauver l'état "quit while offline" à la fermeture
     window.addEventListener('beforeunload', () => {
-      if (!navigator.onLine) localStorage.setItem(K_QUIT_OFF, 'true');
-      else localStorage.setItem(K_QUIT_OFF, 'false');
-      try {
-        Object.keys(K_CHRONO).forEach(m => {
-          localStorage.setItem(K_CHRONO[m], state.chronos[m]);
-        });
-      } catch(e) {}
+      if (!navigator.onLine) {
+        localStorage.setItem(K_QUIT_OFF, 'true');
+      } else {
+        localStorage.setItem(K_QUIT_OFF, 'false');
+      }
+      save();
     });
+
+    // Démarrer le tick et l'évaluation réseau initiale
     onNetworkChange();
     setInterval(tick, 1000);
-    setInterval(watchTradeMode, 2000);
     render();
-    tryInjectBtn();
   }
 
   if (document.readyState === 'loading') {
