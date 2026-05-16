@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AURA8 · Outil de Restauration</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: #050709;
+    color: #e6ebf5;
+    font-family: -apple-system, system-ui, sans-serif;
+    padding: 20px;
+    min-height: 100vh;
+  }
+  h1 {
+    font-size: 18px;
+    color: #38d4f5;
+    letter-spacing: .08em;
+    margin-bottom: 6px;
+  }
+  .sub {
+    font-size: 12px;
+    color: #9aa0a6;
+    margin-bottom: 24px;
+  }
+  .btn {
+    width: 100%;
+    padding: 14px;
+    margin: 8px 0;
+    border-radius: 12px;
+    border: 1.5px solid;
+    background: transparent;
+    font-size: 14px;
+    font-weight: 700;
+    letter-spacing: .05em;
+    cursor: pointer;
+    transition: all .2s;
+  }
+  .btn-diag {
+    border-color: rgba(56,212,245,.5);
+    color: #38d4f5;
+    background: rgba(56,212,245,.08);
+  }
+  .btn-restore {
+    border-color: rgba(245,200,66,.6);
+    color: #f5c842;
+    background: rgba(245,200,66,.1);
+  }
+  .btn-go {
+    border-color: rgba(0,232,122,.6);
+    color: #00e87a;
+    background: rgba(0,232,122,.1);
+  }
+  .btn:active { transform: scale(.98); }
+  .btn:disabled { opacity: .4; pointer-events: none; }
+  .log {
+    background: rgba(255,255,255,.02);
+    border: 1px solid rgba(255,255,255,.06);
+    border-radius: 10px;
+    padding: 14px;
+    margin-top: 16px;
+    font-family: 'SF Mono', monospace;
+    font-size: 11px;
+    line-height: 1.6;
+    max-height: 50vh;
+    overflow-y: auto;
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+  .ok    { color: #00e87a; }
+  .warn  { color: #f5c842; }
+  .err   { color: #ff3d6b; }
+  .info  { color: #38d4f5; }
+  .muted { color: #5a6068; }
+</style>
+</head>
+<body>
+
+<h1>🔧 AURA8 · OUTIL DE RESTAURATION</h1>
+<div class="sub">Diagnostic et restauration du state depuis le backup 06/05/2026</div>
+
+<button class="btn btn-diag" id="diagBtn">📊 Diagnostiquer le storage actuel</button>
+<button class="btn btn-restore" id="restoreBtn">🔄 Forcer restauration depuis backup 06/05</button>
+<button class="btn btn-go" id="goBtn" disabled>▶ Ouvrir AURA8 (après restauration)</button>
+
+<div class="log" id="log"></div>
+
+<script>
+const SAVE_KEY = 'nexus_state_v2';
+const DB_NAME  = 'NEXUS_DB';
+const DB_VERSION = 3;
+const STORE_STATE = 'state';
+
+// ═══════════════════════════════════════════════════════════
+// BACKUP STATE COMPLET — extrait du PRELOAD inline du HTML
+// État au 06/05/2026 17:01
+// ═══════════════════════════════════════════════════════════
+const BACKUP_STATE = {
+  cycle: 12383,
+  cycleTimer: 26,
+  cycleMax: 30,
+  portfolio: 1514.4325154867681,
+  pnl24h: 29.643010662919306,
+  cashAccount: 0.8516242735984881,
+  tradingAccount: 1513.5808912131697,
+  leverage: 0,
+  portfolioTotal: 1293.8372464159345,
+  usdEurRate: 0.854338,
+  _usdEurLastFetch: 1778079656525,
+  fiatRates: {
+    EUR: 0.854338, GBP: 0.737688, CHF: 0.782642,
+    CAD: 1.360999, AUD: 1.391429, JPY: 157.672786, CNY: 6.8399
+  },
+  fiatConvFeePct: 0.002,
+  fiscalReserveAccount: 0,
+  fiscalReserveLog: [],
+  ownFundsInjected: 1168.1559289180627,
+  ownFundsLog: [{
+    amount: 1168.1559289180627,
+    fiatType: "EUR",
+    fiatAmount: 1000,
+    rate: 0.854338,
+    fee: 2.34099384552718,
+    feePct: 0.002,
+    ts: 1778060854233,
+    time: "11:47:34"
+  }],
+  leverageReserve: 151358.08912131697,
+  leverageMaxMult: 10,
+  leverageBorrowRate: 0,
+  leverageBorrowed: 0,
+  leverageTotalFees: 0,
+  _autoLevBase: 0,
+  _autoLevBorrowed: 0,
+  _marginCallFired: false,
+  totalTrades: 9,
+  winTrades: 4,
+  botAutoMode: true,
+  toastVerbose: false,
+  version: 2  // important : pour passer la vérification de loadState
+};
+
+// ═══════════════════════════════════════════════════════════
+const logEl = document.getElementById('log');
+function log(msg, cls) {
+  const span = document.createElement('div');
+  if (cls) span.className = cls;
+  span.textContent = msg;
+  logEl.appendChild(span);
+  logEl.scrollTop = logEl.scrollHeight;
+}
+function clearLog() { logEl.innerHTML = ''; }
+
+// ═══ Diagnostic ═══
+async function diagnose() {
+  clearLog();
+  log('═══ DIAGNOSTIC DU STORAGE ACTUEL ═══', 'info');
+  log('');
+  
+  // 1. localStorage
+  log('▶ [1/3] localStorage', 'info');
+  const lsKeys = ['nexus_state_v2', 'nexus_state', 'nexusSnap_a', 'nexusSnap_b', 'nexusSnap_latest'];
+  let foundLs = false;
+  lsKeys.forEach(k => {
+    const v = localStorage.getItem(k);
+    if (v) {
+      foundLs = true;
+      try {
+        const parsed = JSON.parse(v);
+        const portfolio = parsed.portfolio || parsed.tradingAccount || 0;
+        const cash = parsed.cashAccount;
+        const trading = parsed.tradingAccount;
+        const cycle = parsed.cycle;
+        log('  ✓ ' + k + ' (' + v.length.toLocaleString() + ' chars)', 'ok');
+        log('     cycle=' + cycle + ' cash=' + cash + ' trading=' + trading + ' portfolio=' + portfolio, 'muted');
+      } catch(e) {
+        log('  ⚠ ' + k + ' présent mais corrompu', 'warn');
+      }
+    } else {
+      log('  · ' + k + ' VIDE', 'muted');
+    }
+  });
+  if (!foundLs) log('  ⚠ AUCUNE clé localStorage trouvée', 'warn');
+  log('');
+  
+  // 2. IndexedDB
+  log('▶ [2/3] IndexedDB ' + DB_NAME, 'info');
+  try {
+    const db = await openDB();
+    log('  ✓ Base ouverte (version ' + db.version + ')', 'ok');
+    if (db.objectStoreNames.contains(STORE_STATE)) {
+      const tx = db.transaction(STORE_STATE, 'readonly');
+      const store = tx.objectStore(STORE_STATE);
+      const req = store.get(SAVE_KEY);
+      const result = await new Promise((res, rej) => {
+        req.onsuccess = () => res(req.result);
+        req.onerror = () => rej(req.error);
+      });
+      if (result) {
+        log('  ✓ State trouvé dans IndexedDB', 'ok');
+        log('     cycle=' + result.cycle + ' cash=' + result.cashAccount + ' trading=' + result.tradingAccount, 'muted');
+      } else {
+        log('  · IndexedDB.' + STORE_STATE + ' VIDE', 'muted');
+      }
+    } else {
+      log('  · Store "' + STORE_STATE + '" inexistant', 'muted');
+    }
+    db.close();
+  } catch(e) {
+    log('  ⚠ IndexedDB erreur: ' + e.message, 'warn');
+  }
+  log('');
+  
+  // 3. sessionStorage
+  log('▶ [3/3] sessionStorage', 'info');
+  const ss = sessionStorage.getItem('nexusSnap_current');
+  if (ss) {
+    try {
+      const parsed = JSON.parse(ss);
+      log('  ✓ nexusSnap_current présent (' + ss.length.toLocaleString() + ' chars)', 'ok');
+      log('     cycle=' + parsed.cycle + ' cash=' + parsed.cashAccount, 'muted');
+    } catch(e) {
+      log('  ⚠ nexusSnap_current corrompu', 'warn');
+    }
+  } else {
+    log('  · nexusSnap_current VIDE', 'muted');
+  }
+  const factoryFlag = sessionStorage.getItem('nexus_factory_reset');
+  if (factoryFlag) {
+    log('  ⚠ FLAG nexus_factory_reset présent: "' + factoryFlag + '" — empêche la restauration !', 'err');
+  } else {
+    log('  · Flag factory_reset absent (bon)', 'muted');
+  }
+  log('');
+  log('═══ FIN DIAGNOSTIC ═══', 'info');
+}
+
+// ═══ Restauration ═══
+async function restore() {
+  clearLog();
+  log('═══ RESTAURATION FORCÉE DEPUIS BACKUP 06/05 ═══', 'info');
+  log('');
+  
+  document.getElementById('restoreBtn').disabled = true;
+  document.getElementById('diagBtn').disabled = true;
+  
+  try {
+    // 0. Nettoyer le flag factory_reset si présent
+    log('▶ [1/5] Nettoyage flags sessionStorage', 'info');
+    sessionStorage.removeItem('nexus_factory_reset');
+    log('  ✓ Flag factory_reset supprimé', 'ok');
+    log('');
+    
+    // 1. IndexedDB
+    log('▶ [2/5] Écriture IndexedDB ' + DB_NAME, 'info');
+    const db = await openDB();
+    await new Promise((res, rej) => {
+      const tx = db.transaction(STORE_STATE, 'readwrite');
+      const req = tx.objectStore(STORE_STATE).put(BACKUP_STATE, SAVE_KEY);
+      req.onsuccess = () => res();
+      req.onerror = () => rej(req.error);
+    });
+    log('  ✓ IndexedDB écrit (' + JSON.stringify(BACKUP_STATE).length.toLocaleString() + ' chars)', 'ok');
+    db.close();
+    log('');
+    
+    // 2. localStorage (toutes les clés)
+    log('▶ [3/5] Écriture localStorage (4 clés)', 'info');
+    const json = JSON.stringify(BACKUP_STATE);
+    localStorage.setItem('nexus_state_v2', json);
+    log('  ✓ nexus_state_v2', 'ok');
+    localStorage.setItem('nexus_state', json);
+    log('  ✓ nexus_state (compat import)', 'ok');
+    localStorage.setItem('nexusSnap_a', json);
+    localStorage.setItem('nexusSnap_latest', 'nexusSnap_a');
+    log('  ✓ nexusSnap_a + nexusSnap_latest', 'ok');
+    localStorage.setItem('nexus_state_v2_ts', Date.now().toString());
+    log('');
+    
+    // 3. sessionStorage
+    log('▶ [4/5] Écriture sessionStorage', 'info');
+    sessionStorage.setItem('nexusSnap_current', json);
+    log('  ✓ nexusSnap_current', 'ok');
+    log('');
+    
+    // 4. Vérification
+    log('▶ [5/5] Vérification post-écriture', 'info');
+    const verify = localStorage.getItem('nexus_state_v2');
+    if (verify) {
+      const v = JSON.parse(verify);
+      log('  ✓ Relecture OK : cycle=' + v.cycle + ' cash=$' + v.cashAccount.toFixed(2) + ' trading=$' + v.tradingAccount.toFixed(2), 'ok');
+    } else {
+      throw new Error('Relecture nexus_state_v2 a échoué');
+    }
+    log('');
+    log('✅ RESTAURATION COMPLÈTE', 'ok');
+    log('');
+    log('Maintenant tape sur "▶ Ouvrir AURA8" pour aller voir.', 'info');
+    
+    document.getElementById('goBtn').disabled = false;
+    document.getElementById('restoreBtn').textContent = '✅ Restauration terminée';
+    
+  } catch(e) {
+    log('', 'err');
+    log('❌ ERREUR: ' + e.message, 'err');
+    log('Stack: ' + (e.stack || 'n/a'), 'err');
+    document.getElementById('restoreBtn').disabled = false;
+    document.getElementById('diagBtn').disabled = false;
+  }
+}
+
+function openDB() {
+  return new Promise((res, rej) => {
+    const req = indexedDB.open(DB_NAME, DB_VERSION);
+    req.onsuccess = () => res(req.result);
+    req.onerror = () => rej(req.error);
+    req.onupgradeneeded = (e) => {
+      const db = e.target.result;
+      if (!db.objectStoreNames.contains(STORE_STATE)) {
+        db.createObjectStore(STORE_STATE);
+      }
+      if (!db.objectStoreNames.contains('fees')) {
+        db.createObjectStore('fees');
+      }
+      if (!db.objectStoreNames.contains('trades')) {
+        db.createObjectStore('trades');
+      }
+    };
+  });
+}
+
+document.getElementById('diagBtn').addEventListener('click', diagnose);
+document.getElementById('restoreBtn').addEventListener('click', restore);
+document.getElementById('goBtn').addEventListener('click', () => {
+  window.location.href = './AURA8_v118.html';
+});
+
+// Status initial
+log('Outil prêt. Tape sur "Diagnostiquer" pour voir ton storage actuel,', 'info');
+log('puis sur "Forcer restauration" pour réinjecter le backup 06/05.', 'info');
+</script>
+
+</body>
+</html>
