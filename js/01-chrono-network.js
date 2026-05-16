@@ -1,6 +1,7 @@
 /* ═══════════════════════════════════════════════════════════
    AURA8 v108 · js/01-chrono-network.js
    LIVRAISON 1 — Chrono multi-mode + Détection réseau + Auto-pause
+   + PATCH v118 : FIX RENDER HOME AT STARTUP (en bas du fichier)
 
    COEXISTENCE avec le code existant :
    - Les boutons header ont des onclick natifs (toggleSim, toggleMode, toggleWakeLock, etc.)
@@ -212,4 +213,112 @@
   } else {
     init();
   }
+})();
+
+/* ═══════════════════════════════════════════════════════════
+   ░░ PATCH v118 · FIX RENDER HOME AT STARTUP ░░
+   
+   PROBLÈME RÉSOLU :
+   Au chargement initial de l'app, les cards Caisse et Trading
+   sur le dashboard HOME affichent $0 / $0 alors que S.cashAccount
+   et S.tradingAccount contiennent bien les vraies valeurs
+   (visibles dans le modal Transfert).
+   
+   CAUSE :
+   La fonction de render du dashboard est appelée AVANT que
+   loadState() ait fini de restaurer les valeurs depuis IndexedDB.
+   Résultat : le render se fait avec des 0 par défaut.
+   
+   FIX :
+   Ce patch attend que loadState() ait fini (2-8 secondes),
+   puis force un re-render manuellement en appelant toutes les
+   fonctions de render globales connues. Idempotent et low-risk :
+   ne fait rien si S.cashAccount et S.tradingAccount sont déjà à 0.
+   
+   USAGE MANUEL (debug) :
+   Appeler window._auraForceRender() depuis la console
+   pour forcer un re-render à n'importe quel moment.
+   ═══════════════════════════════════════════════════════════ */
+
+(function _auraForceRenderFix() {
+  'use strict';
+
+  let _lastRenderTs = 0;
+  let _renderCount = 0;
+
+  function _auraTryRender() {
+    if (typeof window.S === 'undefined') {
+      return false;
+    }
+    
+    // Vérifie si on a des fonds dans le state
+    const cash    = window.S.cashAccount    || 0;
+    const trading = window.S.tradingAccount || 0;
+    const cycle   = window.S.cycle          || 0;
+    
+    if (cash < 0.01 && trading < 0.01 && cycle === 0) {
+      // Vraiment vide (premier démarrage légitime) → rien à forcer
+      return false;
+    }
+    
+    // Tente toutes les fonctions de render globales connues
+    const renderFns = [
+      'renderHome', 'render', 'refreshAll',
+      'updateHomeUI', 'renderWallet', 'renderDashboard',
+      'updateWalletCards', 'refreshDashboard',
+      'renderPortfolio', 'updatePortfolio',
+      'rerenderHome', 'forceRender'
+    ];
+    
+    let calledAny = false;
+    const calledList = [];
+    
+    renderFns.forEach(function(fnName) {
+      if (typeof window[fnName] === 'function') {
+        try {
+          window[fnName]();
+          calledAny = true;
+          calledList.push(fnName);
+        } catch(e) {
+          console.warn('[AURA fix] ' + fnName + ' threw:', e);
+        }
+      }
+    });
+    
+    // Trigger un événement custom au cas où quelque chose écoute
+    try {
+      window.dispatchEvent(new CustomEvent('aura:state-loaded', {
+        detail: { S: window.S }
+      }));
+    } catch(e) {}
+    
+    _renderCount++;
+    _lastRenderTs = Date.now();
+    
+    if (calledAny) {
+      console.log('[AURA fix] Force render #' + _renderCount +
+                  ' · cash=$' + cash.toFixed(2) +
+                  ' trading=$' + trading.toFixed(2) +
+                  ' cycle=#' + cycle +
+                  ' · called: ' + calledList.join(', '));
+    } else if (_renderCount === 1) {
+      console.warn('[AURA fix] Aucune fonction de render trouvée. ' +
+                   'Les cards Caisse/Trading pourraient rester à $0. ' +
+                   'État interne: cash=$' + cash.toFixed(2) +
+                   ' trading=$' + trading.toFixed(2));
+    }
+    
+    return calledAny;
+  }
+  
+  // Exécution à plusieurs délais (loadState peut être long)
+  setTimeout(_auraTryRender, 1500);
+  setTimeout(_auraTryRender, 3000);
+  setTimeout(_auraTryRender, 5000);
+  setTimeout(_auraTryRender, 8000);
+  
+  // Expose globalement pour debug manuel
+  window._auraForceRender = _auraTryRender;
+  
+  console.log('[AURA fix v118] Render fix module loaded · sera exécuté à 1.5s, 3s, 5s, 8s');
 })();
