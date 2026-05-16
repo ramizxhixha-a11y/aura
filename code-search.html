@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AURA8 · Code Search</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: #050709;
+    color: #e6ebf5;
+    font-family: -apple-system, system-ui, sans-serif;
+    padding: 16px;
+    min-height: 100vh;
+    font-size: 13px;
+  }
+  h1 {
+    font-size: 17px;
+    color: #38d4f5;
+    letter-spacing: .06em;
+    margin-bottom: 4px;
+  }
+  .sub { font-size: 11px; color: #9aa0a6; margin-bottom: 18px; }
+  
+  label {
+    display: block;
+    font-size: 10px;
+    color: #9aa0a6;
+    margin: 12px 0 4px;
+    letter-spacing: .05em;
+    text-transform: uppercase;
+  }
+  
+  input[type=text], select {
+    width: 100%;
+    padding: 10px 12px;
+    background: rgba(255,255,255,.04);
+    border: 1px solid rgba(255,255,255,.1);
+    border-radius: 8px;
+    color: #e6ebf5;
+    font-size: 13px;
+    font-family: 'SF Mono', monospace;
+  }
+  
+  .quick-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 6px;
+  }
+  
+  .quick-btn {
+    padding: 6px 10px;
+    background: rgba(56,212,245,.08);
+    border: 1px solid rgba(56,212,245,.25);
+    border-radius: 6px;
+    color: #38d4f5;
+    font-size: 11px;
+    cursor: pointer;
+    font-family: 'SF Mono', monospace;
+  }
+  
+  .btn-search {
+    width: 100%;
+    padding: 14px;
+    margin: 16px 0;
+    border-radius: 10px;
+    border: 1.5px solid rgba(0,232,122,.5);
+    background: rgba(0,232,122,.1);
+    color: #00e87a;
+    font-size: 14px;
+    font-weight: 700;
+    cursor: pointer;
+    letter-spacing: .05em;
+  }
+  .btn-search:disabled { opacity: .4; }
+  
+  #status {
+    padding: 10px;
+    background: rgba(255,255,255,.02);
+    border-radius: 6px;
+    margin-top: 12px;
+    font-size: 11px;
+    color: #9aa0a6;
+    font-family: 'SF Mono', monospace;
+  }
+  
+  .result {
+    margin: 14px 0;
+    background: rgba(255,255,255,.02);
+    border: 1px solid rgba(255,255,255,.06);
+    border-radius: 8px;
+    padding: 10px;
+  }
+  
+  .result-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+    gap: 8px;
+  }
+  
+  .result-line {
+    font-size: 10px;
+    color: #38d4f5;
+    font-family: 'SF Mono', monospace;
+  }
+  
+  .copy-btn {
+    padding: 4px 10px;
+    background: rgba(168,85,247,.15);
+    border: 1px solid rgba(168,85,247,.4);
+    border-radius: 5px;
+    color: #a855f7;
+    font-size: 10px;
+    font-weight: 700;
+    cursor: pointer;
+    font-family: inherit;
+  }
+  .copy-btn.copied {
+    background: rgba(0,232,122,.15);
+    border-color: rgba(0,232,122,.4);
+    color: #00e87a;
+  }
+  
+  pre {
+    background: #000;
+    border-radius: 6px;
+    padding: 10px;
+    overflow-x: auto;
+    font-family: 'SF Mono', monospace;
+    font-size: 10px;
+    line-height: 1.5;
+    color: #c0c0c0;
+    max-height: 360px;
+    overflow-y: auto;
+    white-space: pre;
+  }
+  
+  .match { 
+    background: rgba(245,200,66,.25);
+    color: #f5c842;
+    font-weight: 700;
+  }
+  
+  .err { color: #ff3d6b; }
+  .ok  { color: #00e87a; }
+</style>
+</head>
+<body>
+
+<h1>🔍 AURA8 · CODE SEARCH</h1>
+<div class="sub">Chercher un mot-clé dans un fichier GitHub avec contexte</div>
+
+<label>1. URL du fichier à fouiller</label>
+<input type="text" id="url" value="https://raw.githubusercontent.com/ramizxhixha-a11y/aura/main/AURA8_v118.html">
+<div class="quick-row">
+  <button class="quick-btn" onclick="setUrl('AURA8_v118.html')">📄 AURA8_v118.html</button>
+  <button class="quick-btn" onclick="setUrl('js/02-state-init.js')">📄 02-state-init.js</button>
+  <button class="quick-btn" onclick="setUrl('js/04-v8-0-livraison-35-mode-max-permissif-v.js')">📄 04-permissif</button>
+</div>
+
+<label>2. Mot-clé à chercher</label>
+<input type="text" id="keyword" value="renderHome">
+<div class="quick-row">
+  <button class="quick-btn" onclick="setKw('renderHome')">renderHome</button>
+  <button class="quick-btn" onclick="setKw('renderWallet')">renderWallet</button>
+  <button class="quick-btn" onclick="setKw('updateHomeUI')">updateHomeUI</button>
+  <button class="quick-btn" onclick="setKw('cashAccount')">cashAccount</button>
+  <button class="quick-btn" onclick="setKw('tradingAccount')">tradingAccount</button>
+  <button class="quick-btn" onclick="setKw('CAISSE')">CAISSE</button>
+  <button class="quick-btn" onclick="setKw('BOT LOCK')">BOT LOCK</button>
+  <button class="quick-btn" onclick="setKw('confirmTransfer')">confirmTransfer</button>
+  <button class="quick-btn" onclick="setKw('transferFunds')">transferFunds</button>
+</div>
+
+<label>3. Lignes de contexte autour de chaque match</label>
+<input type="text" id="context" value="15">
+
+<button class="btn-search" id="searchBtn" onclick="doSearch()">🔍 Lancer la recherche</button>
+
+<div id="status">Prêt. Choisis un fichier, un mot-clé, et lance la recherche.</div>
+
+<div id="results"></div>
+
+<script>
+function setUrl(path) {
+  document.getElementById('url').value = 
+    'https://raw.githubusercontent.com/ramizxhixha-a11y/aura/main/' + path;
+}
+function setKw(kw) {
+  document.getElementById('keyword').value = kw;
+}
+
+let _fileCache = {};
+
+async function doSearch() {
+  const url = document.getElementById('url').value.trim();
+  const kw = document.getElementById('keyword').value.trim();
+  const ctx = parseInt(document.getElementById('context').value, 10) || 15;
+  const status = document.getElementById('status');
+  const results = document.getElementById('results');
+  const btn = document.getElementById('searchBtn');
+  
+  if (!url || !kw) {
+    status.innerHTML = '<span class="err">⚠ URL et mot-clé requis</span>';
+    return;
+  }
+  
+  btn.disabled = true;
+  results.innerHTML = '';
+  status.textContent = '⏳ Téléchargement du fichier...';
+  
+  try {
+    let content;
+    if (_fileCache[url]) {
+      content = _fileCache[url];
+      status.textContent = '⚡ Fichier en cache (' + content.length.toLocaleString() + ' chars) · recherche...';
+    } else {
+      const t0 = Date.now();
+      const r = await fetch(url, { cache: 'no-cache' });
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      content = await r.text();
+      _fileCache[url] = content;
+      const dt = Date.now() - t0;
+      status.innerHTML = '✓ Fichier chargé : ' + content.length.toLocaleString() + 
+                         ' chars en ' + dt + 'ms · recherche...';
+    }
+    
+    const lines = content.split('\n');
+    const matches = [];
+    
+    for (let i = 0; i < lines.length; i++) {
+      if (lines[i].includes(kw)) {
+        matches.push(i);
+      }
+    }
+    
+    if (matches.length === 0) {
+      status.innerHTML = '<span class="err">❌ Aucun match pour "' + kw + 
+                         '" dans ' + lines.length.toLocaleString() + ' lignes</span>';
+      btn.disabled = false;
+      return;
+    }
+    
+    status.innerHTML = '<span class="ok">✓ ' + matches.length + ' match(es) trouvé(s) pour "' + 
+                       kw + '" dans ' + lines.length.toLocaleString() + ' lignes total</span>';
+    
+    // Group consecutive matches to avoid duplicates
+    const groups = [];
+    let curGroup = [matches[0]];
+    for (let i = 1; i < matches.length; i++) {
+      if (matches[i] - curGroup[curGroup.length-1] < ctx * 2) {
+        curGroup.push(matches[i]);
+      } else {
+        groups.push(curGroup);
+        curGroup = [matches[i]];
+      }
+    }
+    groups.push(curGroup);
+    
+    let html = '';
+    groups.forEach((group, gi) => {
+      const start = Math.max(0, group[0] - ctx);
+      const end = Math.min(lines.length, group[group.length-1] + ctx + 1);
+      
+      const blockLines = lines.slice(start, end);
+      const blockText = blockLines.join('\n');
+      
+      // Highlight matches
+      const highlighted = blockLines.map((line, idx) => {
+        const lineNum = start + idx + 1;
+        const numStr = String(lineNum).padStart(5, ' ');
+        const isMatch = line.includes(kw);
+        let displayLine = escapeHtml(line);
+        // Highlight kw in line
+        const reg = new RegExp(escapeRegex(kw), 'g');
+        displayLine = displayLine.replace(reg, '<span class="match">' + escapeHtml(kw) + '</span>');
+        return '<span style="color:#666;">' + numStr + '</span>  ' + displayLine;
+      }).join('\n');
+      
+      html += '<div class="result">';
+      html += '<div class="result-header">';
+      html += '<div class="result-line">📍 Match #' + (gi+1) + ' · lignes ' + 
+              (start+1) + '-' + end + ' (' + group.length + ' occurrence' + 
+              (group.length > 1 ? 's' : '') + ')</div>';
+      html += '<button class="copy-btn" onclick="copyBlock(this, ' + gi + ')">📋 Copier</button>';
+      html += '</div>';
+      html += '<pre id="block_' + gi + '" data-raw="' + escapeAttr(blockText) + '">' + 
+              highlighted + '</pre>';
+      html += '</div>';
+    });
+    
+    results.innerHTML = html;
+    btn.disabled = false;
+    
+  } catch(e) {
+    status.innerHTML = '<span class="err">❌ Erreur: ' + e.message + '</span>';
+    btn.disabled = false;
+  }
+}
+
+function copyBlock(btn, gi) {
+  const pre = document.getElementById('block_' + gi);
+  const raw = pre.getAttribute('data-raw').replace(/&quot;/g, '"').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>');
+  navigator.clipboard.writeText(raw).then(() => {
+    btn.classList.add('copied');
+    btn.textContent = '✅ Copié !';
+    setTimeout(() => {
+      btn.classList.remove('copied');
+      btn.textContent = '📋 Copier';
+    }, 2000);
+  });
+}
+
+function escapeHtml(s) {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+function escapeAttr(s) {
+  return s.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+function escapeRegex(s) {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+</script>
+
+</body>
+</html>
