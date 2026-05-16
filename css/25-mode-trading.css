@@ -1,11 +1,8 @@
 /* ═══════════════════════════════════════════════════════════
-   AURA8 v126 · 25-mode-trading.css
-   LIVRAISON — Bouton cycle mode trading (AA / EV / RE)
-   + surcharges colorées du logo, AUTO, chrono, bordure header
-   selon le mode actif (sim / paperReal / real)
-
-   IMPORTANT : les valeurs INTERNES restent 'sim' / 'paperReal' / 'real'.
-   Seuls les LIBELLÉS visibles sont AA / EV / RE.
+   AURA8 v128 · 25-mode-trading.css
+   Bouton cycle mode trading (AA / EV / RE)
+   + surcharges colorées du logo, chrono, badge, bordure header.
+   ⚠️ NE TOUCHE PAS au bouton AUTO/MANU.
    ═══════════════════════════════════════════════════════════ */
 
 /* ═══ BOUTON CYCLE MODE TRADING ═══ */
@@ -31,23 +28,18 @@
 }
 .btn-trade-mode:active { transform: scale(.92); }
 
-/* AA — Auto-apprentissage (sim) — cyan */
 .btn-trade-mode.mode-AA {
   border-color: rgba(56,212,245,.65);
   color: var(--ice);
   background: rgba(56,212,245,.12);
   box-shadow: 0 0 8px rgba(56,212,245,.25);
 }
-
-/* EV — Évaluation (paperReal) — vert */
 .btn-trade-mode.mode-EV {
   border-color: rgba(0,232,122,.65);
   color: var(--up);
   background: rgba(0,232,122,.12);
   box-shadow: 0 0 8px rgba(0,232,122,.25);
 }
-
-/* RE — Réel (real) — rouge */
 .btn-trade-mode.mode-RE {
   border-color: rgba(255,61,107,.7);
   color: var(--down);
@@ -55,13 +47,9 @@
   box-shadow: 0 0 10px rgba(255,61,107,.3);
 }
 
-/* ═══ LOGO — CERCLE EXTÉRIEUR COLORÉ SELON MODE ═══ */
-/* Le mot AURA reste en gold (identité), seul le cercle change */
-.aura-circular-wrap {
-  transition: filter .4s;
-}
+/* ═══ LOGO — cercle extérieur coloré selon mode ═══ */
+.aura-circular-wrap { transition: filter .4s; }
 
-/* Mode AA — cercle cyan */
 .aura-circular-wrap.mode-AA .aura-circular-bg {
   border-color: var(--ice) !important;
   box-shadow: 0 0 10px rgba(56,212,245,.35),
@@ -71,7 +59,6 @@
   border-color: rgba(56,212,245,.5) !important;
 }
 
-/* Mode EV — cercle vert */
 .aura-circular-wrap.mode-EV .aura-circular-bg {
   border-color: var(--up) !important;
   box-shadow: 0 0 10px rgba(0,232,122,.35),
@@ -81,7 +68,6 @@
   border-color: rgba(0,232,122,.5) !important;
 }
 
-/* Mode RE — cercle rouge (avec halo plus intense pour avertissement) */
 .aura-circular-wrap.mode-RE .aura-circular-bg {
   border-color: var(--down) !important;
   box-shadow: 0 0 14px rgba(255,61,107,.45),
@@ -91,29 +77,12 @@
   border-color: rgba(255,61,107,.55) !important;
 }
 
-/* ═══ BOUTON AUTO/MANU — COULEUR SELON MODE ═══ */
-.btn-mode-toggle.mode-AA {
-  border-color: rgba(56,212,245,.5);
-  background: rgba(56,212,245,.08);
-  color: var(--ice);
-}
-.btn-mode-toggle.mode-EV {
-  border-color: rgba(0,232,122,.5);
-  background: rgba(0,232,122,.08);
-  color: var(--up);
-}
-.btn-mode-toggle.mode-RE {
-  border-color: rgba(255,61,107,.55);
-  background: rgba(255,61,107,.10);
-  color: var(--down);
-}
-
-/* ═══ CHRONO — COULEUR SELON MODE ═══ */
+/* ═══ CHRONO — couleur selon mode ═══ */
 .chrono-display.mode-AA { color: var(--ice); }
 .chrono-display.mode-EV { color: var(--up); }
 .chrono-display.mode-RE { color: var(--down); }
 
-/* ═══ BADGE SOUS LE CHRONO (AA / EV / RE) ═══ */
+/* ═══ BADGE sous le chrono (AA / EV / RE) ═══ */
 .chrono-mode-badge {
   font-family: var(--font-mono);
   font-size: 8px;
@@ -128,16 +97,10 @@
 .chrono-mode-badge.mode-EV { color: var(--up); }
 .chrono-mode-badge.mode-RE { color: var(--down); }
 
-/* ═══ BORDURE DU HEADER SELON MODE ═══ */
-#statusBar {
-  transition: border-color .4s, box-shadow .4s;
-}
-#statusBar.mode-AA {
-  border-bottom-color: rgba(56,212,245,.45);
-}
-#statusBar.mode-EV {
-  border-bottom-color: rgba(0,232,122,.45);
-}
+/* ═══ BORDURE du header selon mode ═══ */
+#statusBar { transition: border-color .4s, box-shadow .4s; }
+#statusBar.mode-AA { border-bottom-color: rgba(56,212,245,.45); }
+#statusBar.mode-EV { border-bottom-color: rgba(0,232,122,.45); }
 #statusBar.mode-RE {
   border-bottom-color: rgba(255,61,107,.55);
   box-shadow: 0 2px 12px rgba(255,61,107,.15);
