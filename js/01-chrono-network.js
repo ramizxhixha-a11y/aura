@@ -1,25 +1,23 @@
 /* ═══════════════════════════════════════════════════════════
-   AURA8 v128 · js/01-chrono-network.js
-   REFONTE PROPRE pour réparer 3 problèmes :
+   AURA8 v128.1 · js/01-chrono-network.js
 
-   1. Le bot ne tradait plus → CAUSE : mes shims v124-v127 forçaient
-      window.simulationPaused = true. → FIX : supprimés totalement.
-      window.simulationPaused n'est PLUS touché par ce fichier.
+   CORRECTIFS depuis v127 :
+   - SUPPRIMÉ : shims startSim/stopSim/toggleSim qui forçaient
+     window.simulationPaused = true (cause du bot dormant)
+   - SUPPRIMÉ : touche au bouton AUTO/MANU (cause du bouton cassé)
+   - REFAIT : chrono compte par mode trading (sim/paperReal/real)
+     au lieu de AUTO/MANU
+   - SETTRADE : tente d'appeler la fonction de l'app avant fallback
+     direct (pour rester cohérent avec l'app)
+   - RENDER : utilise classList.toggle au lieu de réécrire className
+     (n'écrase plus les classes ajoutées par d'autres scripts)
 
-   2. Le chrono ne comptait pas par mode trading → FIX : 3 chronos
-      séparés (sim/paperReal/real) au lieu de AUTO/MANU.
-
-   3. Le bouton AUTO/MANU était cassé → FIX : ce fichier ne touche
-      JAMAIS au bouton AUTO/MANU.
-
-   Auto-injection du CSS et du bouton mode dans le DOM (aucune modif
-   HTML requise).
+   Auto-injection CSS + bouton de cycle. Aucune modif HTML requise.
    ═══════════════════════════════════════════════════════════ */
 
 (function() {
   'use strict';
 
-  // ─── Constantes ──────────────────────────────────────
   const TRADE_LABEL = { sim: 'AA', paperReal: 'EV', real: 'RE' };
   const TRADE_CLASS = { sim: 'mode-AA', paperReal: 'mode-EV', real: 'mode-RE' };
   const TRADE_ORDER = ['sim', 'paperReal', 'real'];
@@ -33,7 +31,6 @@
   const K_QUIT_OFF   = 'aura_quit_while_offline';
   const K_TRADE_MODE = 'aura_trade_mode';
 
-  // ─── État ───────────────────────────────────────────
   const state = {
     chronos: {
       sim:       parseInt(localStorage.getItem(K_CHRONO.sim)       || '0', 10),
@@ -56,7 +53,7 @@
     (document.head || document.documentElement).appendChild(link);
   }
 
-  // ─── Auto-injection bouton mode (juste après bouton AUTO) ──
+  // ─── Auto-injection bouton mode (après bouton AUTO) ──
   function injectTradeBtn() {
     if (document.getElementById('tradeModeBtn')) return true;
     const autoBtn = document.querySelector('.btn-mode-toggle')
@@ -64,8 +61,8 @@
     if (!autoBtn) return false;
     const btn = document.createElement('button');
     btn.id = 'tradeModeBtn';
-    btn.className = 'btn-trade-mode mode-AA';
-    btn.title = 'Mode trading';
+    btn.className = 'btn-trade-mode';
+    btn.title = 'Mode trading (tap pour cycler)';
     btn.textContent = 'AA';
     btn.addEventListener('click', cycleTradeMode, false);
     autoBtn.parentNode.insertBefore(btn, autoBtn.nextSibling);
@@ -87,21 +84,32 @@
 
   // ─── Mode trading ───────────────────────────────────
   function getTradeMode() {
-    // 1. Priorité : S.tradingMode (source de vérité de l'app)
     try {
       if (window.S && window.S.tradingMode &&
           TRADE_ORDER.indexOf(window.S.tradingMode) !== -1) {
         return window.S.tradingMode;
       }
     } catch(e) {}
-    // 2. Fallback : localStorage
     const saved = localStorage.getItem(K_TRADE_MODE);
     if (saved && TRADE_ORDER.indexOf(saved) !== -1) return saved;
-    // 3. Défaut : sim
     return 'sim';
   }
 
+  // Tente d'appeler une fonction de l'app pour changer le mode
+  // (qui gère les effets de bord : feeds, positions, UI). Si aucune
+  // fonction trouvée, fallback en écrivant directement la variable.
   function setTradeMode(mode) {
+    const appFns = [
+      'setTradingMode', 'changeTradingMode', 'applyTradingMode',
+      'switchTradingMode', 'switchMode', 'changeMode', 'setMode'
+    ];
+    for (let i = 0; i < appFns.length; i++) {
+      const fn = window[appFns[i]];
+      if (typeof fn === 'function') {
+        try { fn(mode); break; } catch(e) {}
+      }
+    }
+    // Fallback / parallèle : écriture directe
     try { if (window.S) window.S.tradingMode = mode; } catch(e) {}
     try { localStorage.setItem(K_TRADE_MODE, mode); } catch(e) {}
   }
@@ -118,34 +126,27 @@
     } catch(e) {}
   }
 
-  // ⚠️ Cette fonction NE TOUCHE PAS au bouton AUTO/MANU.
+  // ⚠️ Ne touche JAMAIS au bouton AUTO/MANU.
+  // Utilise classList add/remove pour ne pas écraser les autres classes.
   function applyTradeUI() {
     const mode = getTradeMode();
     const cls = TRADE_CLASS[mode];
     const label = TRADE_LABEL[mode];
     const allCls = ['mode-AA', 'mode-EV', 'mode-RE'];
 
-    function setMode(el, modeCls) {
+    function setMode(el) {
       if (!el) return;
       allCls.forEach(c => el.classList.remove(c));
-      el.classList.add(modeCls);
+      el.classList.add(cls);
     }
 
-    // Logo (cercle externe seulement, le texte AURA reste jaune)
-    setMode(document.querySelector('.aura-circular-wrap'), cls);
-
-    // Chrono affiché
-    const chronoEl = document.getElementById('chronoEl');
-    if (chronoEl) {
-      allCls.forEach(c => chronoEl.classList.remove(c));
-      chronoEl.classList.add(cls);
-    }
-
-    // Bordure du header
-    setMode(document.getElementById('statusBar'), cls);
+    setMode(document.querySelector('.aura-circular-wrap'));
+    setMode(document.getElementById('chronoEl'));
+    setMode(document.getElementById('statusBar'));
 
     // Badge sous le chrono (créé si absent)
     let badge = document.getElementById('chronoModeBadge');
+    const chronoEl = document.getElementById('chronoEl');
     if (!badge && chronoEl && chronoEl.parentNode) {
       badge = document.createElement('div');
       badge.id = 'chronoModeBadge';
@@ -153,19 +154,17 @@
       chronoEl.parentNode.appendChild(badge);
     }
     if (badge) {
-      allCls.forEach(c => badge.classList.remove(c));
-      badge.classList.add('chrono-mode-badge', cls);
+      setMode(badge);
       badge.textContent = label;
     }
 
-    // Bouton de cycle lui-même
+    // Bouton de cycle
     const tradeBtn = document.getElementById('tradeModeBtn');
     if (tradeBtn) {
-      allCls.forEach(c => tradeBtn.classList.remove(c));
-      tradeBtn.classList.add('btn-trade-mode', cls);
+      setMode(tradeBtn);
       tradeBtn.textContent = label;
     }
-    // ❌ JAMAIS toucher au bouton AUTO/MANU (.btn-mode-toggle / #modeToggleBtn)
+    // ❌ Aucune modif sur .btn-mode-toggle / #modeToggleBtn
   }
 
   // ─── Détection réseau ───────────────────────────────
@@ -188,7 +187,7 @@
         state.pausedByNetwork = true;
         state.running = false;
         localStorage.setItem(K_NET_PAUSE, 'true');
-        // ⚠️ ON NE TOUCHE PLUS À window.simulationPaused
+        // ⚠️ window.simulationPaused N'EST PAS TOUCHÉ (cassait le bot)
       }
     } else if (prev === 'offline' && state.pausedByNetwork && !quitOffline) {
       state.pausedByNetwork = false;
@@ -204,12 +203,11 @@
     localStorage.setItem(K_QUIT_OFF, 'false');
   }
 
-  // ─── Lecture passive du bouton play (sans shim) ──────
+  // ─── Lecture passive du bouton play ──────────────────
   function syncRunningFromBtn() {
     const btn = document.getElementById('simToggleBtn');
     if (!btn) return;
     const text = btn.textContent.trim();
-    // Le bouton affiche ⏸ ou ❚❚ quand le système tourne, ▶ ou ► quand en pause
     const isRunning = (text === '⏸' || text === '❚❚');
     if (state.running !== isRunning && !state.pausedByNetwork) {
       state.running = isRunning;
@@ -229,23 +227,24 @@
     render();
   }
 
+  // Render utilise classList.toggle (non-destructif) au lieu de className=
   function render() {
     const tm = getTradeMode();
     const chronoEl = document.getElementById('chronoEl');
     if (chronoEl) {
       chronoEl.textContent = formatChrono(state.chronos[tm]);
-      // Préserver les classes mode-XX (couleur) tout en mettant à jour running/paused
-      const tradeMode = chronoEl.className.match(/mode-(AA|EV|RE)/);
-      chronoEl.className = 'chrono-display';
-      if (tradeMode) chronoEl.classList.add(tradeMode[0]);
-      if (state.running) chronoEl.classList.add('running');
-      if (state.pausedByNetwork) chronoEl.classList.add('paused-auto');
+      chronoEl.classList.add('chrono-display');
+      chronoEl.classList.toggle('running', state.running);
+      chronoEl.classList.toggle('paused-auto', state.pausedByNetwork);
+      // Les classes mode-XX restent en place (gérées par applyTradeUI)
     }
   }
 
   function renderNet() {
     const netEl = document.getElementById('netIndicator');
-    if (netEl) netEl.className = 'net-indicator ' + state.netStatus;
+    if (!netEl) return;
+    netEl.classList.remove('online', 'unstable', 'offline');
+    netEl.classList.add('net-indicator', state.netStatus);
   }
 
   // ─── Re-sync mode trading si modifié ailleurs ────────
@@ -294,7 +293,6 @@
     window.addEventListener('beforeunload', () => {
       if (!navigator.onLine) localStorage.setItem(K_QUIT_OFF, 'true');
       else localStorage.setItem(K_QUIT_OFF, 'false');
-      // Sauvegarde finale des 3 chronos
       try {
         Object.keys(K_CHRONO).forEach(m => {
           localStorage.setItem(K_CHRONO[m], state.chronos[m]);
