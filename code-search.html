@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>AURA8 · Code Search</title>
+<title>AURA8 · Code Search v2</title>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body {
@@ -146,19 +146,21 @@
   
   .err { color: #ff3d6b; }
   .ok  { color: #00e87a; }
+  .info { color: #38d4f5; }
 </style>
 </head>
 <body>
 
-<h1>🔍 AURA8 · CODE SEARCH</h1>
-<div class="sub">Chercher un mot-clé dans un fichier GitHub avec contexte</div>
+<h1>🔍 AURA8 · CODE SEARCH v2</h1>
+<div class="sub">Recherche dans les fichiers via URL relative (pas de CORS)</div>
 
-<label>1. URL du fichier à fouiller</label>
-<input type="text" id="url" value="https://raw.githubusercontent.com/ramizxhixha-a11y/aura/main/AURA8_v118.html">
+<label>1. Fichier à fouiller (URL relative)</label>
+<input type="text" id="url" value="./AURA8_v118.html">
 <div class="quick-row">
-  <button class="quick-btn" onclick="setUrl('AURA8_v118.html')">📄 AURA8_v118.html</button>
-  <button class="quick-btn" onclick="setUrl('js/02-state-init.js')">📄 02-state-init.js</button>
-  <button class="quick-btn" onclick="setUrl('js/04-v8-0-livraison-35-mode-max-permissif-v.js')">📄 04-permissif</button>
+  <button class="quick-btn" onclick="setUrl('./AURA8_v118.html')">📄 AURA8_v118.html</button>
+  <button class="quick-btn" onclick="setUrl('./js/02-state-init.js')">📄 02-state-init.js</button>
+  <button class="quick-btn" onclick="setUrl('./js/04-v8-0-livraison-35-mode-max-permissif-v.js')">📄 04-permissif</button>
+  <button class="quick-btn" onclick="setUrl('./js/08-learning-history-render.js')">📄 08-render</button>
 </div>
 
 <label>2. Mot-clé à chercher</label>
@@ -173,6 +175,7 @@
   <button class="quick-btn" onclick="setKw('BOT LOCK')">BOT LOCK</button>
   <button class="quick-btn" onclick="setKw('confirmTransfer')">confirmTransfer</button>
   <button class="quick-btn" onclick="setKw('transferFunds')">transferFunds</button>
+  <button class="quick-btn" onclick="setKw('S.cashAccount')">S.cashAccount</button>
 </div>
 
 <label>3. Lignes de contexte autour de chaque match</label>
@@ -186,8 +189,7 @@
 
 <script>
 function setUrl(path) {
-  document.getElementById('url').value = 
-    'https://raw.githubusercontent.com/ramizxhixha-a11y/aura/main/' + path;
+  document.getElementById('url').value = path;
 }
 function setKw(kw) {
   document.getElementById('keyword').value = kw;
@@ -210,7 +212,7 @@ async function doSearch() {
   
   btn.disabled = true;
   results.innerHTML = '';
-  status.textContent = '⏳ Téléchargement du fichier...';
+  status.textContent = '⏳ Téléchargement de ' + url + '...';
   
   try {
     let content;
@@ -220,12 +222,12 @@ async function doSearch() {
     } else {
       const t0 = Date.now();
       const r = await fetch(url, { cache: 'no-cache' });
-      if (!r.ok) throw new Error('HTTP ' + r.status);
+      if (!r.ok) throw new Error('HTTP ' + r.status + ' · fichier introuvable');
       content = await r.text();
       _fileCache[url] = content;
       const dt = Date.now() - t0;
-      status.innerHTML = '✓ Fichier chargé : ' + content.length.toLocaleString() + 
-                         ' chars en ' + dt + 'ms · recherche...';
+      status.innerHTML = '<span class="ok">✓ Fichier chargé : ' + content.length.toLocaleString() + 
+                         ' chars en ' + dt + 'ms · recherche...</span>';
     }
     
     const lines = content.split('\n');
@@ -244,7 +246,7 @@ async function doSearch() {
       return;
     }
     
-    status.innerHTML = '<span class="ok">✓ ' + matches.length + ' match(es) trouvé(s) pour "' + 
+    status.innerHTML = '<span class="ok">✓ ' + matches.length + ' match(es) pour "' + 
                        kw + '" dans ' + lines.length.toLocaleString() + ' lignes total</span>';
     
     // Group consecutive matches to avoid duplicates
@@ -260,21 +262,29 @@ async function doSearch() {
     }
     groups.push(curGroup);
     
+    // Limit to first 20 groups to avoid memory issues
+    const displayGroups = groups.slice(0, 20);
+    
     let html = '';
-    groups.forEach((group, gi) => {
+    if (groups.length > 20) {
+      html += '<div style="background:rgba(245,200,66,.1);border:1px solid rgba(245,200,66,.3);border-radius:6px;padding:8px;margin-bottom:10px;font-size:11px;color:#f5c842;">⚠ ' + 
+              groups.length + ' groupes trouvés, affichage des 20 premiers</div>';
+    }
+    
+    displayGroups.forEach((group, gi) => {
       const start = Math.max(0, group[0] - ctx);
       const end = Math.min(lines.length, group[group.length-1] + ctx + 1);
       
       const blockLines = lines.slice(start, end);
-      const blockText = blockLines.join('\n');
+      const blockText = blockLines.map((line, idx) => {
+        const lineNum = start + idx + 1;
+        return String(lineNum).padStart(5, ' ') + '  ' + line;
+      }).join('\n');
       
-      // Highlight matches
       const highlighted = blockLines.map((line, idx) => {
         const lineNum = start + idx + 1;
         const numStr = String(lineNum).padStart(5, ' ');
-        const isMatch = line.includes(kw);
         let displayLine = escapeHtml(line);
-        // Highlight kw in line
         const reg = new RegExp(escapeRegex(kw), 'g');
         displayLine = displayLine.replace(reg, '<span class="match">' + escapeHtml(kw) + '</span>');
         return '<span style="color:#666;">' + numStr + '</span>  ' + displayLine;
@@ -296,14 +306,25 @@ async function doSearch() {
     btn.disabled = false;
     
   } catch(e) {
-    status.innerHTML = '<span class="err">❌ Erreur: ' + e.message + '</span>';
+    let hint = '';
+    if (e.message.includes('404') || e.message.includes('introuvable')) {
+      hint = '<br><span class="info">→ Vérifie que le fichier existe à cette URL. Tu peux tester directement en allant sur https://ramizxhixha-a11y.github.io/aura/' + url.replace(/^\.\//, '') + '</span>';
+    }
+    if (e.message.includes('Network') || e.message.includes('Failed')) {
+      hint = '<br><span class="info">→ Erreur réseau. Vérifie ta connexion. Si le fichier vient de raw.githubusercontent.com, c\'est un problème CORS — utilise une URL relative comme ./AURA8_v118.html</span>';
+    }
+    status.innerHTML = '<span class="err">❌ Erreur: ' + escapeHtml(e.message) + '</span>' + hint;
     btn.disabled = false;
   }
 }
 
 function copyBlock(btn, gi) {
   const pre = document.getElementById('block_' + gi);
-  const raw = pre.getAttribute('data-raw').replace(/&quot;/g, '"').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>');
+  const raw = pre.getAttribute('data-raw')
+    .replace(/&quot;/g, '"')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&amp;/g, '&');
   navigator.clipboard.writeText(raw).then(() => {
     btn.classList.add('copied');
     btn.textContent = '✅ Copié !';
@@ -311,6 +332,24 @@ function copyBlock(btn, gi) {
       btn.classList.remove('copied');
       btn.textContent = '📋 Copier';
     }, 2000);
+  }).catch(err => {
+    // Fallback pour les navigateurs qui n'autorisent pas l'API clipboard
+    const ta = document.createElement('textarea');
+    ta.value = raw;
+    document.body.appendChild(ta);
+    ta.select();
+    try {
+      document.execCommand('copy');
+      btn.classList.add('copied');
+      btn.textContent = '✅ Copié !';
+      setTimeout(() => {
+        btn.classList.remove('copied');
+        btn.textContent = '📋 Copier';
+      }, 2000);
+    } catch(e) {
+      alert('Copie manuelle requise · sélectionne le texte et copie');
+    }
+    document.body.removeChild(ta);
   });
 }
 
