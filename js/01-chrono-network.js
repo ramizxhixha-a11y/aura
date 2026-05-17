@@ -1,8 +1,10 @@
 /* ═══════════════════════════════════════════════════════════
-   AURA8 v108 · js/01-chrono-network.js
-   + PATCH v118.5 : FIX RENDER HOME (multi-fallback scope)
+   AURA8 · js/01-chrono-network.js
+   v118.6 — FIX RENDER + RETRAIT window.simulationPaused
 
-   Chrono multi-mode + Détection réseau + Auto-pause
+   v118.5 cassait le play/pause à cause de window.simulationPaused.
+   v118.6 : retire toutes les références à cette variable.
+            L'auto-pause réseau devient purement visuelle (indicateur).
    ═══════════════════════════════════════════════════════════ */
 
 (function() {
@@ -12,8 +14,6 @@
   const K_MANU_SEC = 'aura_chrono_manu_seconds';
   const K_RUNNING  = 'aura_system_running';
   const K_MODE     = 'aura_current_mode';
-  const K_NET_PAUSE = 'aura_paused_by_network';
-  const K_QUIT_OFF  = 'aura_quit_while_offline';
 
   const state = {
     chronoSeconds: {
@@ -22,11 +22,8 @@
     },
     mode: localStorage.getItem(K_MODE) || 'AUTO',
     running: false,
-    pausedByNetwork: false,
     netStatus: 'online',
   };
-
-  const quitOffline = localStorage.getItem(K_QUIT_OFF) === 'true';
 
   function formatChrono(s) {
     s = Math.max(0, Math.floor(s));
@@ -60,35 +57,8 @@
   }
 
   function onNetworkChange() {
-    const prev = state.netStatus;
     state.netStatus = evaluateNetwork();
-
-    if (state.netStatus === 'offline') {
-      if (state.running) {
-        state.pausedByNetwork = true;
-        state.running = false;
-        localStorage.setItem(K_NET_PAUSE, 'true');
-        save();
-        if (typeof window.simulationPaused !== 'undefined') {
-          window.simulationPaused = true;
-        }
-      }
-    } else if (prev === 'offline' && state.pausedByNetwork && !quitOffline) {
-      state.pausedByNetwork = false;
-      state.running = true;
-      localStorage.setItem(K_NET_PAUSE, 'false');
-      save();
-      if (typeof window.simulationPaused !== 'undefined') {
-        window.simulationPaused = false;
-      }
-    }
     render();
-  }
-
-  if (!navigator.onLine && localStorage.getItem(K_NET_PAUSE) === 'true') {
-    localStorage.setItem(K_QUIT_OFF, 'true');
-  } else {
-    localStorage.setItem(K_QUIT_OFF, 'false');
   }
 
   function syncRunningFromUI() {
@@ -96,7 +66,7 @@
     if (!btn) return;
     const text = btn.textContent.trim();
     const isRunning = text === '⏸';
-    if (state.running !== isRunning && !state.pausedByNetwork) {
+    if (state.running !== isRunning) {
       state.running = isRunning;
       save();
     }
@@ -128,18 +98,11 @@
       chronoEl.textContent = formatChrono(state.chronoSeconds[state.mode]);
       chronoEl.className = 'chrono-display';
       if (state.running) chronoEl.classList.add('running');
-      if (state.pausedByNetwork) chronoEl.classList.add('paused-auto');
     }
 
     const netEl = document.getElementById('netIndicator');
     if (netEl) {
       netEl.className = 'net-indicator ' + state.netStatus;
-    }
-
-    const btn = document.getElementById('simToggleBtn');
-    if (btn && state.pausedByNetwork) {
-      btn.className = 'btn-icon btn-play-pause network-lost';
-      btn.textContent = '▶';
     }
   }
 
@@ -166,11 +129,6 @@
     }
 
     window.addEventListener('beforeunload', () => {
-      if (!navigator.onLine) {
-        localStorage.setItem(K_QUIT_OFF, 'true');
-      } else {
-        localStorage.setItem(K_QUIT_OFF, 'false');
-      }
       save();
     });
 
@@ -187,28 +145,18 @@
 })();
 
 /* ═══════════════════════════════════════════════════════════
-   ░░ PATCH v118.5 · FIX RENDER HOME (multi-fallback) ░░
+   ░░ PATCH v118.6 · FIX RENDER HOME ░░
    
-   v118.3 a échoué : window.S undefined
-   v118.4 a échoué : new Function crée scope global, voit pas S
-   
-   v118.5 : essaie 4 approches en cascade pour trouver S et renderAll
-            1. window.S (au cas où exposé)
-            2. globalThis.S
-            3. eval('S') dans le scope local de l'IIFE (voit script scope)
-            4. document title indicator (ultime debug visible utilisateur)
+   Identique à v118.5 (qui fonctionne) — multi-fallback scope
+   pour accéder à S et appeler renderAll() au chargement.
    ═══════════════════════════════════════════════════════════ */
 
-(function _auraRenderFixV5() {
+(function _auraRenderFixV6() {
   'use strict';
 
-  // ─── Approche multi-fallback pour trouver S ─────────────
   function _getS() {
-    // 1. window.S
     try { if (typeof window !== 'undefined' && window.S) return window.S; } catch(e) {}
-    // 2. globalThis.S
     try { if (typeof globalThis !== 'undefined' && globalThis.S) return globalThis.S; } catch(e) {}
-    // 3. eval dans le scope local (voit le script scope englobant)
     try {
       // eslint-disable-next-line no-eval
       const v = eval('typeof S !== "undefined" ? S : null');
@@ -218,29 +166,17 @@
   }
 
   function _callRenderAll() {
-    // 1. window.renderAll
     try {
       if (typeof window !== 'undefined' && typeof window.renderAll === 'function') {
         window.renderAll();
         return true;
       }
     } catch(e) {}
-    // 2. eval dans le scope local
     try {
       // eslint-disable-next-line no-eval
       return eval('typeof renderAll === "function" ? (renderAll(), true) : false');
     } catch(e) {}
     return false;
-  }
-
-  // ─── Indicateur visuel debug (titre de la page) ─────────
-  // Permet à l'utilisateur de voir si le patch tourne SANS DevTools
-  let _origTitle = '';
-  function _showDebugInTitle(text) {
-    try {
-      if (!_origTitle) _origTitle = document.title;
-      document.title = '[AURA fix] ' + text + ' · ' + _origTitle;
-    } catch(e) {}
   }
 
   let _attempts = 0;
@@ -275,14 +211,7 @@
     _attempts++;
     
     const S = _getS();
-    if (!S) {
-      if (_attempts <= 3) {
-        _showDebugInTitle('S not found · #' + _attempts);
-      } else if (_attempts === 4) {
-        _showDebugInTitle('❌ S inaccessible');
-      }
-      return false;
-    }
+    if (!S) return false;
     
     const cash    = S.cashAccount    || 0;
     const trading = S.tradingAccount || 0;
@@ -292,13 +221,11 @@
       if (_attempts > 8 && _intervalId) {
         clearInterval(_intervalId);
         _intervalId = null;
-        _showDebugInTitle('⚠ État vide');
       }
       return false;
     }
     
-    // S trouvée et a des valeurs → tentons le fix
-    const renderAllCalled = _callRenderAll();
+    _callRenderAll();
     
     const total = cash + trading;
     const cashPct = total > 0 ? Math.round(cash / total * 1000) / 10 : 0;
@@ -336,37 +263,23 @@
       _setIfChanged('levBorrowedSub', 'Emprunté: ' + _fmtUsd(levBorrowed));
     }
     
-    // Indicateur visuel dans le titre
-    if (directFixed > 0 || renderAllCalled) {
-      _showDebugInTitle('✅ ' + directFixed + ' fixed · cash=' + _fmtUsd(cash));
-    } else {
-      _showDebugInTitle('🔄 S OK · pas de fix nécessaire');
-    }
-    
-    // Tracker la stabilité
     const sig = _fmtUsd(cash) + '|' + _fmtUsd(trading) + '|' + cycle;
     if (sig === _lastSig && directFixed === 0) {
       _stableTicks++;
       if (_stableTicks >= 4 && _intervalId) {
         clearInterval(_intervalId);
         _intervalId = null;
-        // Restaurer le titre original
-        try { if (_origTitle) document.title = _origTitle; } catch(e) {}
       }
     } else {
       _stableTicks = 0;
     }
     _lastSig = sig;
     
-    return directFixed > 0 || renderAllCalled;
+    return directFixed > 0;
   }
   
-  // Démarrer le scan : 1.5s puis toutes les 2s
   setTimeout(function() {
     _fix();
     _intervalId = setInterval(_fix, 2000);
   }, 1500);
-
-  // Exposer pour debug
-  try { window._auraFixRender = _fix; } catch(e) {}
 })();
