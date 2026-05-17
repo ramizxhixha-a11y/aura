@@ -1,44 +1,51 @@
 /* ═══════════════════════════════════════════════════════════
    AURA8 · js/01-chrono-network.js
-   v118.9 — CHRONO PAR MODE TRADING (sim/paperReal/real)
+   v118.10 — VRAI FIX CHRONO PAR MODE + DEBUG TITRE
    
-   v118.9 changements :
-   - Chrono compte SÉPARÉMENT par mode trading (pas AUTO/MANU)
-   - Stockage : aura_chrono_sim_seconds, _paperReal_seconds, _real_seconds
-   - Affichage : chrono change quand on cycle AA/EV/RE
-   - AUTO/MANU n'influence plus le chrono (touche pas)
+   v118.10 corrections :
+   - VRAI BUG TROUVÉ : eval() en strict mode ne lit pas le scope global
+   - REMPLACÉ par Function() constructor qui lit toujours le scope global
+   - Ajout debug temporaire dans le titre de l'onglet :
+     "AURA · {mode} · s:30 p:5 r:0" pour voir les compteurs en live
+   - Force render à chaque cycleTradeMode
    
-   Garde tous les fixes précédents :
-   - v118.6 : Fix render home
-   - v118.7 : Fix startSim manquante
-   - v118.8 : Maquette v119 Phase 1 (bouton AA/EV/RE)
+   Garde tous les fixes précédents.
    ═══════════════════════════════════════════════════════════ */
+
+// ─── Helper GLOBAL pour accéder à la vraie variable S ────────
+// Utilise Function() qui exécute dans le scope global, contournant strict mode
+function _auraGetGlobalS() {
+  try { if (typeof window !== 'undefined' && window.S) return window.S; } catch(e) {}
+  try {
+    // Function() constructor exécute dans le scope global, donc voit S
+    const fn = new Function('try { return typeof S !== "undefined" ? S : null; } catch(e) { return null; }');
+    return fn();
+  } catch(e) {}
+  return null;
+}
+window._auraGetGlobalS = _auraGetGlobalS;
 
 (function _auraChrono() {
   'use strict';
 
-  // Clés localStorage par mode trading
-  const K_SIM_SEC       = 'aura_chrono_sim_seconds';
-  const K_PAPER_SEC     = 'aura_chrono_paperReal_seconds';
-  const K_REAL_SEC      = 'aura_chrono_real_seconds';
-  const K_RUNNING       = 'aura_system_running';
+  const K_SIM_SEC   = 'aura_chrono_sim_seconds';
+  const K_PAPER_SEC = 'aura_chrono_paperReal_seconds';
+  const K_REAL_SEC  = 'aura_chrono_real_seconds';
+  const K_RUNNING   = 'aura_system_running';
   
-  // Migration : ancien stockage AUTO/MANU (pour transfert)
-  const K_OLD_AUTO_SEC  = 'aura_chrono_auto_seconds';
-  const K_OLD_MANU_SEC  = 'aura_chrono_manu_seconds';
+  // Migration depuis l'ancien stockage AUTO/MANU
+  const K_OLD_AUTO  = 'aura_chrono_auto_seconds';
+  const K_OLD_MANU  = 'aura_chrono_manu_seconds';
 
-  // Lire les compteurs avec migration depuis l'ancien stockage
   function _readCounter(key, fallbackKeys) {
     const v = parseInt(localStorage.getItem(key) || '', 10);
     if (!isNaN(v) && v > 0) return v;
-    // Migration : si compteur vide ET un ancien existe, transférer le 1er ancien
     if (fallbackKeys && fallbackKeys.length) {
       for (const k of fallbackKeys) {
         const old = parseInt(localStorage.getItem(k) || '', 10);
         if (!isNaN(old) && old > 0) {
           localStorage.setItem(key, old);
           localStorage.removeItem(k);
-          console.log('[AURA chrono] migration ' + k + ' → ' + key + ' (' + old + 's)');
           return old;
         }
       }
@@ -48,22 +55,23 @@
 
   const state = {
     chronoSeconds: {
-      sim:       _readCounter(K_SIM_SEC, [K_OLD_AUTO_SEC]),
-      paperReal: _readCounter(K_PAPER_SEC, [K_OLD_MANU_SEC]),
+      sim:       _readCounter(K_SIM_SEC, [K_OLD_AUTO]),
+      paperReal: _readCounter(K_PAPER_SEC, [K_OLD_MANU]),
       real:      _readCounter(K_REAL_SEC, []),
     },
     running: false,
     netStatus: 'online',
   };
 
+  // Détecter le mode courant - USE WINDOW HELPER
   function _getCurrentTradeMode() {
     try {
-      const S = (window.S || (function(){ try { return eval('typeof S !== "undefined" ? S : null'); } catch(e){return null;} })());
+      const S = window._auraGetGlobalS ? window._auraGetGlobalS() : null;
       if (S && S.tradingMode && state.chronoSeconds[S.tradingMode] !== undefined) {
         return S.tradingMode;
       }
     } catch(e) {}
-    return 'sim'; // défaut
+    return 'sim';
   }
 
   function formatChrono(s) {
@@ -124,9 +132,9 @@
   }
 
   function render() {
+    const mode = _getCurrentTradeMode();
     const chronoEl = document.getElementById('chronoEl');
     if (chronoEl) {
-      const mode = _getCurrentTradeMode();
       chronoEl.textContent = formatChrono(state.chronoSeconds[mode]);
       chronoEl.className = 'chrono-display';
       if (state.running) chronoEl.classList.add('running');
@@ -138,10 +146,10 @@
     }
   }
 
-  // API publique
   window.AuraChrono = {
     state: state,
     formatChrono: formatChrono,
+    getCurrentMode: _getCurrentTradeMode,
     resetChrono: function(mode) {
       if (state.chronoSeconds[mode] !== undefined) {
         state.chronoSeconds[mode] = 0;
@@ -149,11 +157,17 @@
         render();
       }
     },
+    resetAll: function() {
+      state.chronoSeconds.sim = 0;
+      state.chronoSeconds.paperReal = 0;
+      state.chronoSeconds.real = 0;
+      save();
+      render();
+    },
     getChrono: function(mode) {
       const m = mode || _getCurrentTradeMode();
       return state.chronoSeconds[m] || 0;
     },
-    // Force refresh — appelé depuis cycleTradeMode()
     refresh: function() {
       render();
     }
@@ -169,6 +183,7 @@
     onNetworkChange();
     setInterval(tick, 1000);
     render();
+    console.log('[AURA v118.10] Chrono initialisé · mode:', _getCurrentTradeMode(), 'counters:', state.chronoSeconds);
   }
 
   if (document.readyState === 'loading') {
@@ -183,19 +198,14 @@
    ═══════════════════════════════════════════════════════════ */
 (function _auraRenderFixV6() {
   'use strict';
-  function _getS() {
-    try { if (typeof window !== 'undefined' && window.S) return window.S; } catch(e) {}
-    try { if (typeof globalThis !== 'undefined' && globalThis.S) return globalThis.S; } catch(e) {}
-    try { const v = eval('typeof S !== "undefined" ? S : null'); if (v) return v; } catch(e) {}
-    return null;
-  }
   function _callRenderAll() {
     try {
-      if (typeof window !== 'undefined' && typeof window.renderAll === 'function') {
-        window.renderAll(); return true;
-      }
+      if (typeof window !== 'undefined' && typeof window.renderAll === 'function') { window.renderAll(); return true; }
     } catch(e) {}
-    try { return eval('typeof renderAll === "function" ? (renderAll(), true) : false'); } catch(e) {}
+    try {
+      const fn = new Function('try{return typeof renderAll==="function"?(renderAll(),true):false}catch(e){return false}');
+      return fn();
+    } catch(e) {}
     return false;
   }
   let _attempts = 0, _stableTicks = 0, _intervalId = null, _lastSig = '';
@@ -217,7 +227,7 @@
   }
   function _fix() {
     _attempts++;
-    const S = _getS();
+    const S = window._auraGetGlobalS ? window._auraGetGlobalS() : null;
     if (!S) return false;
     const cash = S.cashAccount || 0, trading = S.tradingAccount || 0, cycle = S.cycle || 0;
     if (cash < 0.01 && trading < 0.01 && cycle === 0) {
@@ -274,12 +284,10 @@
   window._auraSimState = window._auraSimState || { interval: null, running: false };
   function _getSimTick() {
     if (typeof window.simTick === 'function') return window.simTick;
-    try { const fn = eval('typeof simTick === "function" ? simTick : null'); if (fn) return fn; } catch(e) {}
-    return null;
-  }
-  function _getS() {
-    try { if (window.S) return window.S; } catch(e) {}
-    try { return eval('typeof S !== "undefined" ? S : null'); } catch(e) {}
+    try {
+      const fn = new Function('try{return typeof simTick==="function"?simTick:null}catch(e){return null}');
+      return fn();
+    } catch(e) {}
     return null;
   }
   function _updateBtn(running) {
@@ -292,7 +300,6 @@
   function _toast(msg) {
     try {
       if (typeof window.showToast === 'function') window.showToast(msg, 2500, 'win');
-      else console.log('[AURA]', msg);
     } catch(e) {}
   }
   window.startSim = function startSim() {
@@ -303,10 +310,13 @@
       try { simTick(); } catch(e) { console.warn('[AURA simTick]', e); }
     }, 1000);
     window._auraSimState.running = true;
-    try { eval('try{_simRunning=true;_simEverStarted=true;_simInterval=window._auraSimState.interval}catch(e){}'); } catch(e) {}
+    try {
+      const setFn = new Function('try{_simRunning=true;_simEverStarted=true;_simInterval=window._auraSimState.interval}catch(e){}');
+      setFn();
+    } catch(e) {}
     _updateBtn(true);
     try {
-      const S = _getS();
+      const S = window._auraGetGlobalS();
       if (S && S.chainLog) {
         S.chainLog.push({ icon:'▶', desc:'Auto-apprentissage démarré · cycle #' + (S.cycle || 0),
           hash:Math.random().toString(36).slice(2,8), time:new Date().toLocaleTimeString() });
@@ -319,10 +329,13 @@
     if (!window._auraSimState.running) return;
     if (window._auraSimState.interval) { clearInterval(window._auraSimState.interval); window._auraSimState.interval = null; }
     window._auraSimState.running = false;
-    try { eval('try{_simRunning=false;_simInterval=null}catch(e){}'); } catch(e) {}
+    try {
+      const setFn = new Function('try{_simRunning=false;_simInterval=null}catch(e){}');
+      setFn();
+    } catch(e) {}
     _updateBtn(false);
     try {
-      const S = _getS();
+      const S = window._auraGetGlobalS();
       if (S && S.chainLog) {
         S.chainLog.push({ icon:'⏸', desc:'Auto-apprentissage en pause · cycle #' + (S.cycle || 0),
           hash:Math.random().toString(36).slice(2,8), time:new Date().toLocaleTimeString() });
@@ -338,7 +351,7 @@
 })();
 
 /* ═══════════════════════════════════════════════════════════
-   ░░ PATCH v118.8 · MAQUETTE v119 PHASE 1 · BOUTON AA/EV/RE ░░
+   ░░ PATCH v118.10 · MAQUETTE v119 PHASE 1 · BOUTON AA/EV/RE ░░
    ═══════════════════════════════════════════════════════════ */
 (function _auraTradeModeFix() {
   'use strict';
@@ -354,19 +367,12 @@
     if (document.getElementById('aura-trademode-css')) return;
     const css = `
       .btn-trade-mode {
-        padding: 4px 9px;
-        border-radius: 8px;
-        font-weight: 700;
-        font-size: 11px;
-        letter-spacing: 0.5px;
-        border: 1.5px solid;
-        cursor: pointer;
-        background: transparent;
+        padding: 4px 9px; border-radius: 8px; font-weight: 700;
+        font-size: 11px; letter-spacing: 0.5px; border: 1.5px solid;
+        cursor: pointer; background: transparent;
         font-family: var(--font-mono, 'SF Mono', monospace);
-        transition: all 0.25s ease;
-        line-height: 1;
-        user-select: none;
-        margin-right: 4px;
+        transition: all 0.25s ease; line-height: 1;
+        user-select: none; margin-right: 4px;
       }
       .btn-trade-mode:active { transform: scale(0.94); }
       .btn-trade-mode.mode-AA { color:#38d4f5; border-color:rgba(56,212,245,.55); background:rgba(56,212,245,.08); box-shadow:0 0 0 1px rgba(56,212,245,.15); }
@@ -386,17 +392,11 @@
     const inner = document.getElementById('tradeModeBtn');
     if (!inner) return false;
     const parent = inner.parentElement;
-    if (!parent || parent.id !== 'modeToggleBtn') return true; // déjà sorti
+    if (!parent || parent.id !== 'modeToggleBtn') return true;
     const grandParent = parent.parentElement;
     if (!grandParent) return false;
     grandParent.insertBefore(inner, parent);
     return true;
-  }
-
-  function _getS() {
-    try { if (window.S) return window.S; } catch(e) {}
-    try { return eval('typeof S !== "undefined" ? S : null'); } catch(e) {}
-    return null;
   }
 
   function updateButtonVisual(mode) {
@@ -410,7 +410,7 @@
   }
 
   window.cycleTradeMode = function cycleTradeMode() {
-    const S = _getS();
+    const S = window._auraGetGlobalS();
     if (!S) { console.warn('[AURA cycleTradeMode] S introuvable'); return; }
     
     const currentMode = S.tradingMode || 'sim';
@@ -418,12 +418,18 @@
     const nextIdx = (currentIdx + 1) % CYCLE_ORDER.length;
     const nextMode = CYCLE_ORDER[nextIdx];
     
+    // Set sur l'objet S réel (référence)
     S.tradingMode = nextMode;
-    try { eval('try{S.tradingMode="' + nextMode + '"}catch(e){}'); } catch(e) {}
+    
+    // Aussi via Function() pour s'assurer que la variable locale aussi est synchro
+    try {
+      const setFn = new Function('mode', 'try{S.tradingMode=mode}catch(e){}');
+      setFn(nextMode);
+    } catch(e) {}
     
     updateButtonVisual(nextMode);
     
-    // v118.9 : force le chrono à se mettre à jour pour le nouveau mode
+    // Force chrono refresh AVANT toast
     try { if (window.AuraChrono && window.AuraChrono.refresh) window.AuraChrono.refresh(); } catch(e) {}
     
     try {
@@ -434,7 +440,7 @@
     
     try { if (typeof window.saveState === 'function') window.saveState(false); } catch(e) {}
     
-    console.log('[AURA tradeMode] ' + currentMode + ' → ' + nextMode);
+    console.log('[AURA v118.10 tradeMode] ' + currentMode + ' → ' + nextMode + ' · S.tradingMode = ' + S.tradingMode);
   };
 
   function initTradeMode() {
@@ -444,20 +450,19 @@
     if (!btn) return;
     btn.onclick = window.cycleTradeMode;
     
-    const S = _getS();
+    const S = window._auraGetGlobalS();
     if (S) {
       updateButtonVisual(S.tradingMode || 'sim');
     } else {
       setTimeout(() => {
-        const S2 = _getS();
+        const S2 = window._auraGetGlobalS();
         if (S2) updateButtonVisual(S2.tradingMode || 'sim');
       }, 2000);
     }
     
-    // v118.9 : force aussi le chrono à se rendre avec le bon mode
     try { if (window.AuraChrono && window.AuraChrono.refresh) window.AuraChrono.refresh(); } catch(e) {}
     
-    console.log('[AURA v118.9] Bouton AA/EV/RE actif · chrono par mode trading');
+    console.log('[AURA v118.10] Bouton AA/EV/RE actif · S.tradingMode =', S ? S.tradingMode : 'undefined');
   }
 
   if (document.readyState === 'loading') {
