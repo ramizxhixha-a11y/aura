@@ -1,10 +1,15 @@
 /* ═══════════════════════════════════════════════════════════
    AURA8 · js/01-chrono-network.js
-   v118.6 — FIX RENDER + RETRAIT window.simulationPaused
+   v118.7 — FIX RENDER + FIX startSim() MANQUANTE
 
-   v118.5 cassait le play/pause à cause de window.simulationPaused.
-   v118.6 : retire toutes les références à cette variable.
-            L'auto-pause réseau devient purement visuelle (indicateur).
+   Découverte v118.7 :
+   La fonction startSim() avait disparu du code source !
+   toggleSim() l'appelle (ligne 14830 de 09-bloc-restauration-v93.js)
+   mais aucune définition existait, d'où le play qui ne fonctionnait pas.
+   
+   Patch : on définit window.startSim et window.stopSim qui appellent
+   simTick() (trouvée dans 08-learning-history-render.js ligne 2548)
+   via setInterval(1000ms).
    ═══════════════════════════════════════════════════════════ */
 
 (function() {
@@ -146,9 +151,6 @@
 
 /* ═══════════════════════════════════════════════════════════
    ░░ PATCH v118.6 · FIX RENDER HOME ░░
-   
-   Identique à v118.5 (qui fonctionne) — multi-fallback scope
-   pour accéder à S et appeler renderAll() au chargement.
    ═══════════════════════════════════════════════════════════ */
 
 (function _auraRenderFixV6() {
@@ -192,8 +194,7 @@
 
   function _fmtEur(v) {
     return (Math.round((v || 0) * 100) / 100).toLocaleString('fr-FR', {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2
+      minimumFractionDigits: 2, maximumFractionDigits: 2
     }) + ' €';
   }
 
@@ -282,4 +283,168 @@
     _fix();
     _intervalId = setInterval(_fix, 2000);
   }, 1500);
+})();
+
+/* ═══════════════════════════════════════════════════════════
+   ░░ PATCH v118.7 · FIX startSim() MANQUANTE ░░
+   
+   CAUSE :
+   La fonction startSim() avait disparu du code source.
+   - toggleSim() (09-bloc-restauration-v93.js ligne 14829) appelle startSim()
+   - Mais aucune définition existait → ReferenceError silencieux → rien ne démarre
+   - simTick() (la vraie fonction tick) existe dans 08-learning-history-render.js ligne 2548
+   
+   PATCH :
+   - On définit window.startSim() qui lance setInterval(simTick, 1000)
+   - window.stopSim() qui clearInterval et reset l'état
+   - L'état est stocké dans window._auraSimState pour éviter conflits
+   - Le tick s'exécute toutes les 1000ms (1 seconde par tick)
+   ═══════════════════════════════════════════════════════════ */
+
+(function _auraStartSimFix() {
+  'use strict';
+
+  // État partagé via window (notre propre namespace)
+  window._auraSimState = window._auraSimState || {
+    interval: null,
+    running: false
+  };
+
+  // Helper : récupérer simTick (la vraie fonction tick du bot)
+  function _getSimTick() {
+    if (typeof window.simTick === 'function') return window.simTick;
+    try {
+      // eslint-disable-next-line no-eval
+      const fn = eval('typeof simTick === "function" ? simTick : null');
+      if (fn) return fn;
+    } catch(e) {}
+    return null;
+  }
+
+  function _getS() {
+    try { if (window.S) return window.S; } catch(e) {}
+    try {
+      // eslint-disable-next-line no-eval
+      return eval('typeof S !== "undefined" ? S : null');
+    } catch(e) {}
+    return null;
+  }
+
+  // Helper : update visual du bouton play/pause
+  function _updateBtn(running) {
+    const btn = document.getElementById('simToggleBtn');
+    if (!btn) return;
+    btn.textContent = running ? '⏸' : '▶';
+    btn.classList.toggle('idle', !running);
+    btn.classList.toggle('running', running);
+  }
+
+  // Mini toast simple (au cas où showToast n'est pas dispo)
+  function _toast(msg) {
+    try {
+      if (typeof window.showToast === 'function') {
+        window.showToast(msg, 2500, 'win');
+      } else {
+        console.log('[AURA]', msg);
+      }
+    } catch(e) {}
+  }
+
+  // ─── startSim() ────────────────────────────────────────────
+  window.startSim = function startSim() {
+    // Déjà running → no-op
+    if (window._auraSimState.running && window._auraSimState.interval) {
+      return;
+    }
+    
+    const simTick = _getSimTick();
+    if (!simTick) {
+      console.warn('[AURA startSim] simTick introuvable — bot non démarré');
+      _toast('⚠ simTick introuvable');
+      return;
+    }
+    
+    // Lance le tick principal (1 tick par seconde, comme cycleMax=30 → 30s par cycle)
+    window._auraSimState.interval = setInterval(function() {
+      try {
+        simTick();
+      } catch(e) {
+        console.warn('[AURA simTick] erreur:', e);
+      }
+    }, 1000);
+    window._auraSimState.running = true;
+    
+    // Sync avec l'état interne du fichier 09 (best-effort via eval)
+    try {
+      // eslint-disable-next-line no-eval
+      eval('try{_simRunning=true;_simEverStarted=true;_simInterval=window._auraSimState.interval}catch(e){}');
+    } catch(e) {}
+    
+    _updateBtn(true);
+    
+    // Log dans la chainLog
+    try {
+      const S = _getS();
+      if (S && S.chainLog) {
+        S.chainLog.push({
+          icon: '▶',
+          desc: 'Auto-apprentissage démarré · cycle #' + (S.cycle || 0),
+          hash: Math.random().toString(36).slice(2, 8),
+          time: new Date().toLocaleTimeString()
+        });
+        if (S.chainLog.length > 100) S.chainLog.splice(0, S.chainLog.length - 100);
+      }
+    } catch(e) {}
+    
+    _toast('▶ Auto-apprentissage démarré');
+    console.log('[AURA startSim v118.7] Bot démarré · tick toutes les 1000ms');
+  };
+
+  // ─── stopSim() ─────────────────────────────────────────────
+  window.stopSim = function stopSim() {
+    if (!window._auraSimState.running) return;
+    
+    if (window._auraSimState.interval) {
+      clearInterval(window._auraSimState.interval);
+      window._auraSimState.interval = null;
+    }
+    window._auraSimState.running = false;
+    
+    // Sync avec l'état interne du fichier 09
+    try {
+      // eslint-disable-next-line no-eval
+      eval('try{_simRunning=false;_simInterval=null}catch(e){}');
+    } catch(e) {}
+    
+    _updateBtn(false);
+    
+    // Log
+    try {
+      const S = _getS();
+      if (S && S.chainLog) {
+        S.chainLog.push({
+          icon: '⏸',
+          desc: 'Auto-apprentissage en pause · cycle #' + (S.cycle || 0),
+          hash: Math.random().toString(36).slice(2, 8),
+          time: new Date().toLocaleTimeString()
+        });
+        if (S.chainLog.length > 100) S.chainLog.splice(0, S.chainLog.length - 100);
+      }
+    } catch(e) {}
+    
+    _toast('⏸ Auto-apprentissage en pause');
+    console.log('[AURA stopSim v118.7] Bot arrêté');
+  };
+
+  // ─── toggleSim() ──────────────────────────────────────────
+  // On le remplace aussi pour être sûr que l'état est cohérent
+  window.toggleSim = function toggleSim() {
+    if (window._auraSimState.running) {
+      window.stopSim();
+    } else {
+      window.startSim();
+    }
+  };
+
+  console.log('[AURA v118.7] startSim/stopSim/toggleSim installées sur window');
 })();
