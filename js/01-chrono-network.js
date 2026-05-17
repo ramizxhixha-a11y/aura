@@ -1,14 +1,8 @@
 /* ═══════════════════════════════════════════════════════════
    AURA8 v108 · js/01-chrono-network.js
-   LIVRAISON 1 — Chrono multi-mode + Détection réseau + Auto-pause
-   + PATCH v118.4 : FIX RENDER HOME (fix scope window.S → S direct)
+   + PATCH v118.5 : FIX RENDER HOME (multi-fallback scope)
 
-   COEXISTENCE avec le code existant :
-   - Les boutons header ont des onclick natifs (toggleSim, toggleMode, toggleWakeLock, etc.)
-     qui appellent les fonctions JS existantes du HTML.
-   - Ce module N'ATTACHE PAS de listener sur ces boutons : il ne fait que
-     OBSERVER les changements et METTRE À JOUR le chrono + l'indicateur réseau.
-   - Le code existant peut appeler window.AuraChrono.* pour synchroniser.
+   Chrono multi-mode + Détection réseau + Auto-pause
    ═══════════════════════════════════════════════════════════ */
 
 (function() {
@@ -193,49 +187,60 @@
 })();
 
 /* ═══════════════════════════════════════════════════════════
-   ░░ PATCH v118.4 · FIX RENDER HOME — SCOPE FIX ░░
+   ░░ PATCH v118.5 · FIX RENDER HOME (multi-fallback) ░░
    
-   PROBLÈME v118.3 :
-   Le patch utilisait window.S et window.renderAll, mais dans cette
-   app S est déclarée avec `const S = {...}` qui n'attache PAS à window.
-   Donc window.S était toujours undefined → patch jamais exécuté.
+   v118.3 a échoué : window.S undefined
+   v118.4 a échoué : new Function crée scope global, voit pas S
    
-   FIX v118.4 :
-   Utilise un eval contrôlé via Function constructor pour accéder à
-   S et renderAll dans le scope global du script. Pas via window.
-   
-   IDs SETTERS DOM :
-   - #cashVal / #cashPct (Caisse)
-   - #tradVal / #tradPct (Trading)
-   - #ownFundsVal / #ownFundsSub (Fonds Propres en EUR)
-   - #fiscalResVal / #fiscalResSub (Réserve Fiscale)
-   - #levReserveVal / #levBorrowedSub (Réserve Levier)
+   v118.5 : essaie 4 approches en cascade pour trouver S et renderAll
+            1. window.S (au cas où exposé)
+            2. globalThis.S
+            3. eval('S') dans le scope local de l'IIFE (voit script scope)
+            4. document title indicator (ultime debug visible utilisateur)
    ═══════════════════════════════════════════════════════════ */
 
-(function _auraRenderFixV4() {
+(function _auraRenderFixV5() {
   'use strict';
 
-  // Helpers pour accéder aux variables/fonctions globales du script scope
-  // (Les const au top-level d'un script classique ne sont PAS sur window)
+  // ─── Approche multi-fallback pour trouver S ─────────────
   function _getS() {
+    // 1. window.S
+    try { if (typeof window !== 'undefined' && window.S) return window.S; } catch(e) {}
+    // 2. globalThis.S
+    try { if (typeof globalThis !== 'undefined' && globalThis.S) return globalThis.S; } catch(e) {}
+    // 3. eval dans le scope local (voit le script scope englobant)
     try {
-      // eslint-disable-next-line no-new-func
-      return (new Function('try { return typeof S !== "undefined" ? S : null } catch(e) { return null }'))();
-    } catch(e) {
-      return null;
-    }
+      // eslint-disable-next-line no-eval
+      const v = eval('typeof S !== "undefined" ? S : null');
+      if (v) return v;
+    } catch(e) {}
+    return null;
   }
 
   function _callRenderAll() {
+    // 1. window.renderAll
     try {
-      // eslint-disable-next-line no-new-func
-      const result = (new Function(
-        'try { if (typeof renderAll === "function") { renderAll(); return true; } return false; } catch(e) { return false }'
-      ))();
-      return result;
-    } catch(e) {
-      return false;
-    }
+      if (typeof window !== 'undefined' && typeof window.renderAll === 'function') {
+        window.renderAll();
+        return true;
+      }
+    } catch(e) {}
+    // 2. eval dans le scope local
+    try {
+      // eslint-disable-next-line no-eval
+      return eval('typeof renderAll === "function" ? (renderAll(), true) : false');
+    } catch(e) {}
+    return false;
+  }
+
+  // ─── Indicateur visuel debug (titre de la page) ─────────
+  // Permet à l'utilisateur de voir si le patch tourne SANS DevTools
+  let _origTitle = '';
+  function _showDebugInTitle(text) {
+    try {
+      if (!_origTitle) _origTitle = document.title;
+      document.title = '[AURA fix] ' + text + ' · ' + _origTitle;
+    } catch(e) {}
   }
 
   let _attempts = 0;
@@ -267,11 +272,14 @@
   }
 
   function _fix() {
+    _attempts++;
+    
     const S = _getS();
     if (!S) {
-      _attempts++;
-      if (_attempts === 1) {
-        console.warn('[AURA fix v118.4] S introuvable dans le scope global (attente du chargement)...');
+      if (_attempts <= 3) {
+        _showDebugInTitle('S not found · #' + _attempts);
+      } else if (_attempts === 4) {
+        _showDebugInTitle('❌ S inaccessible');
       }
       return false;
     }
@@ -281,23 +289,17 @@
     const cycle   = S.cycle          || 0;
     
     if (cash < 0.01 && trading < 0.01 && cycle === 0) {
-      _attempts++;
       if (_attempts > 8 && _intervalId) {
         clearInterval(_intervalId);
         _intervalId = null;
-        console.log('[AURA fix v118.4] Stopped — état vide légitime');
+        _showDebugInTitle('⚠ État vide');
       }
       return false;
     }
     
-    _attempts++;
-    let didSomething = false;
-    
-    // 1. Appeler renderAll() dans le scope global
+    // S trouvée et a des valeurs → tentons le fix
     const renderAllCalled = _callRenderAll();
-    if (renderAllCalled) didSomething = true;
     
-    // 2. Setter direct des cards (filet de sécurité)
     const total = cash + trading;
     const cashPct = total > 0 ? Math.round(cash / total * 1000) / 10 : 0;
     const tradingPct = total > 0 ? Math.round(trading / total * 1000) / 10 : 0;
@@ -308,7 +310,6 @@
     if (_setIfChanged('tradVal', _fmtUsd(trading))) directFixed++;
     if (_setIfChanged('tradPct', tradingPct + '%')) directFixed++;
     
-    // 3. Fonds Propres (en EUR)
     const ownFunds = S.ownFundsInjected || 0;
     const rate = S.usdEurRate || 0.92;
     const ownFundsEUR = ownFunds * rate;
@@ -319,7 +320,6 @@
       if (_setIfChanged('ownFundsSub', subText)) directFixed++;
     }
     
-    // 4. Réserve fiscale
     const fiscal = S.fiscalReserveAccount || 0;
     if (fiscal > 0.01) {
       if (_setIfChanged('fiscalResVal', _fmtUsd(fiscal))) directFixed++;
@@ -327,7 +327,6 @@
       if (_setIfChanged('fiscalResSub', fiscalCount + ' dépôts')) directFixed++;
     }
     
-    // 5. Réserve levier
     const levRes = S.leverageReserve || 0;
     if (levRes > 0.01) {
       if (_setIfChanged('levReserveVal', _fmtUsd(levRes))) directFixed++;
@@ -337,39 +336,30 @@
       _setIfChanged('levBorrowedSub', 'Emprunté: ' + _fmtUsd(levBorrowed));
     }
     
+    // Indicateur visuel dans le titre
+    if (directFixed > 0 || renderAllCalled) {
+      _showDebugInTitle('✅ ' + directFixed + ' fixed · cash=' + _fmtUsd(cash));
+    } else {
+      _showDebugInTitle('🔄 S OK · pas de fix nécessaire');
+    }
+    
     // Tracker la stabilité
     const sig = _fmtUsd(cash) + '|' + _fmtUsd(trading) + '|' + cycle;
     if (sig === _lastSig && directFixed === 0) {
       _stableTicks++;
-      if (_stableTicks >= 4 && _intervalId && (_attempts > 3 || didSomething)) {
+      if (_stableTicks >= 4 && _intervalId) {
         clearInterval(_intervalId);
         _intervalId = null;
-        console.log('[AURA fix v118.4] Display stable — monitoring stopped after ' + _attempts + ' attempts');
+        // Restaurer le titre original
+        try { if (_origTitle) document.title = _origTitle; } catch(e) {}
       }
     } else {
       _stableTicks = 0;
     }
     _lastSig = sig;
     
-    if (didSomething || directFixed > 0) {
-      console.log('[AURA fix v118.4] #' + _attempts + 
-                  ' · renderAll=' + renderAllCalled + 
-                  ' · directFixed=' + directFixed + 
-                  ' · cash=' + _fmtUsd(cash) + ' trading=' + _fmtUsd(trading));
-    }
-    
-    return didSomething || directFixed > 0;
+    return directFixed > 0 || renderAllCalled;
   }
-  
-  // Exposer pour debug manuel
-  // (utilisable depuis eruda console ou n'importe quel JS chargé)
-  function _exposeForDebug() {
-    try {
-      // eslint-disable-next-line no-new-func
-      (new Function('window._auraFixRender = arguments[0]'))(_fix);
-    } catch(e) {}
-  }
-  _exposeForDebug();
   
   // Démarrer le scan : 1.5s puis toutes les 2s
   setTimeout(function() {
@@ -377,5 +367,6 @@
     _intervalId = setInterval(_fix, 2000);
   }, 1500);
 
-  console.log('[AURA fix v118.4] Patch loaded · uses script-scope access (not window.S)');
+  // Exposer pour debug
+  try { window._auraFixRender = _fix; } catch(e) {}
 })();
