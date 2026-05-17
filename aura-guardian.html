@@ -1,0 +1,1504 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AURA Guardian v1</title>
+<style>
+  :root {
+    --bg:        #050709;
+    --card:      #0a0f15;
+    --card-hl:   #0f161e;
+    --border:    rgba(56,212,245,.2);
+    --border-h:  rgba(56,212,245,.5);
+    --ice:       #38d4f5;
+    --gold:      #ffb830;
+    --up:        #00e87a;
+    --down:      #ff3d6b;
+    --purple:    #c084fc;
+    --t1:        #e8ecf1;
+    --t2:        #8a96a8;
+    --t3:        #4a5668;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  body {
+    margin: 0;
+    padding: 12px;
+    font-family: -apple-system, system-ui, sans-serif;
+    background: var(--bg);
+    color: var(--t1);
+    font-size: 14px;
+    line-height: 1.5;
+  }
+  
+  header {
+    background: linear-gradient(135deg, #0a0f15, #0f161e);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 14px;
+    margin-bottom: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+  h1 {
+    color: var(--ice);
+    font-size: 18px;
+    margin: 0;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .header-stats {
+    display: flex;
+    gap: 12px;
+    font-family: monospace;
+    font-size: 11px;
+  }
+  .header-stats div {
+    color: var(--t2);
+  }
+  .header-stats b { color: var(--ice); }
+  
+  .pulse {
+    display: inline-block;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: var(--up);
+    animation: pulse 1.5s infinite;
+  }
+  @keyframes pulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: .4; transform: scale(1.2); }
+  }
+  
+  .alert-bar {
+    background: rgba(255,61,107,.1);
+    border: 1px solid var(--down);
+    border-radius: 8px;
+    padding: 10px 12px;
+    margin-bottom: 12px;
+    display: none;
+    font-size: 12px;
+  }
+  .alert-bar.show { display: block; }
+  .alert-bar .count {
+    color: var(--down);
+    font-weight: 700;
+  }
+  
+  .panels {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+  @media (min-width: 900px) {
+    .panels { grid-template-columns: 1fr 1fr; }
+  }
+  
+  .panel {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+    transition: border-color .2s;
+  }
+  .panel.alert { border-color: var(--down); }
+  .panel.warn  { border-color: var(--gold); }
+  
+  .panel-head {
+    padding: 10px 12px;
+    background: var(--card-hl);
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    cursor: pointer;
+    user-select: none;
+  }
+  .panel-head:hover { background: rgba(56,212,245,.05); }
+  .panel-title {
+    color: var(--gold);
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+  }
+  .panel.alert .panel-title { color: var(--down); }
+  .panel.warn  .panel-title { color: var(--gold); }
+  
+  .panel-status {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 10px;
+    color: var(--t3);
+  }
+  .panel-status .dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: var(--up);
+  }
+  .panel-status.warn .dot { background: var(--gold); }
+  .panel-status.crit .dot { background: var(--down); animation: pulse 1s infinite; }
+  
+  .panel-body {
+    padding: 10px 12px;
+    display: block;
+  }
+  .panel.collapsed .panel-body { display: none; }
+  
+  .row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 3px 0;
+    font-family: 'Menlo','Monaco',monospace;
+    font-size: 11px;
+    border-bottom: 1px dashed rgba(74,86,104,.15);
+  }
+  .row:last-child { border-bottom: none; }
+  .label { color: var(--t2); }
+  .val { color: var(--t1); font-weight: 700; }
+  .val.ok    { color: var(--up); }
+  .val.warn  { color: var(--gold); }
+  .val.crit  { color: var(--down); }
+  .val.empty { color: var(--t3); font-style: italic; }
+  .val.purple{ color: var(--purple); }
+  
+  .invariant {
+    padding: 6px 8px;
+    border-radius: 6px;
+    font-size: 11px;
+    margin: 3px 0;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: rgba(74,86,104,.08);
+  }
+  .invariant.ok { color: var(--up); background: rgba(0,232,122,.05); }
+  .invariant.warn { color: var(--gold); background: rgba(255,184,48,.08); }
+  .invariant.crit { color: var(--down); background: rgba(255,61,107,.1); border: 1px solid var(--down); }
+  .invariant .formula { font-family: monospace; font-size: 10px; color: var(--t3); margin-left: auto; }
+  
+  #journal {
+    background: #000;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px;
+    font-family: 'Menlo',monospace;
+    font-size: 10px;
+    max-height: 360px;
+    overflow-y: auto;
+    white-space: pre-wrap;
+    word-break: break-all;
+  }
+  .log-entry { padding: 2px 0; }
+  .log-time { color: var(--t3); }
+  .log-ok    { color: var(--up); }
+  .log-warn  { color: var(--gold); }
+  .log-crit  { color: var(--down); }
+  .log-event { color: var(--ice); }
+  .log-info  { color: var(--t1); }
+  .log-tag {
+    display: inline-block;
+    padding: 0 4px;
+    border-radius: 3px;
+    font-size: 9px;
+    font-weight: 700;
+    margin-right: 4px;
+    background: rgba(74,86,104,.3);
+    color: var(--t2);
+  }
+  
+  .controls {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px;
+    margin-top: 8px;
+  }
+  .btn {
+    background: rgba(56,212,245,.1);
+    border: 1px solid var(--ice);
+    color: var(--ice);
+    padding: 9px 8px;
+    border-radius: 7px;
+    font-size: 11px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all .15s;
+  }
+  .btn:hover { background: rgba(56,212,245,.2); }
+  .btn:active { transform: scale(.97); }
+  .btn.danger {
+    background: rgba(255,61,107,.1);
+    border-color: var(--down);
+    color: var(--down);
+  }
+  .btn.danger:hover { background: rgba(255,61,107,.2); }
+  .btn.gold {
+    background: rgba(255,184,48,.1);
+    border-color: var(--gold);
+    color: var(--gold);
+  }
+  .btn.gold:hover { background: rgba(255,184,48,.2); }
+  
+  .tab-bar {
+    display: flex;
+    gap: 4px;
+    margin-bottom: 12px;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: 4px;
+  }
+  .tab {
+    padding: 8px 12px;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--t2);
+    font-size: 11px;
+    font-weight: 700;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: all .15s;
+  }
+  .tab.active {
+    color: var(--ice);
+    border-color: var(--ice);
+    background: rgba(56,212,245,.08);
+  }
+  .tab .count {
+    margin-left: 4px;
+    padding: 1px 5px;
+    background: rgba(255,255,255,.1);
+    border-radius: 8px;
+    font-size: 9px;
+  }
+  .tab.has-alert .count {
+    background: var(--down);
+    color: white;
+  }
+  .tab.has-warn .count {
+    background: var(--gold);
+    color: black;
+  }
+  
+  details {
+    margin-top: 8px;
+    background: rgba(74,86,104,.05);
+    border-radius: 6px;
+    padding: 6px 8px;
+  }
+  details summary {
+    cursor: pointer;
+    color: var(--t2);
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+  }
+  details[open] summary { color: var(--ice); }
+  details pre {
+    margin: 6px 0 0;
+    font-size: 9px;
+    color: var(--t2);
+    white-space: pre-wrap;
+    word-break: break-all;
+    max-height: 220px;
+    overflow-y: auto;
+  }
+  
+  .footer {
+    margin-top: 16px;
+    padding-top: 10px;
+    border-top: 1px solid var(--border);
+    color: var(--t3);
+    font-size: 10px;
+    text-align: center;
+  }
+  
+  .hidden { display: none !important; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>🛡️ AURA Guardian <span style="font-size:10px;color:var(--t3);font-weight:400;">v1.0</span></h1>
+  <div class="header-stats">
+    <div>Ticks: <b id="hs-ticks">0</b></div>
+    <div>Anomalies: <b id="hs-anom">0</b></div>
+    <div>Uptime: <b id="hs-up">0s</b></div>
+    <div><span class="pulse"></span></div>
+  </div>
+</header>
+
+<div class="alert-bar" id="alertBar">
+  <span class="count" id="alertCount">0</span> anomalie(s) critique(s) en cours — consulter le journal pour détails
+</div>
+
+<div class="tab-bar">
+  <div class="tab active" data-tab="all">Tout</div>
+  <div class="tab" data-tab="storage">Storage</div>
+  <div class="tab" data-tab="state">État Bot</div>
+  <div class="tab" data-tab="capital">Capital</div>
+  <div class="tab" data-tab="positions">Positions</div>
+  <div class="tab" data-tab="learning">Apprentissage</div>
+  <div class="tab" data-tab="perf">Perf</div>
+  <div class="tab" data-tab="ui">UI/Réseau</div>
+  <div class="tab" data-tab="invariants">Invariants</div>
+  <div class="tab" data-tab="journal">Journal</div>
+</div>
+
+<div class="panels">
+
+  <!-- STORAGE -->
+  <div class="panel" data-category="storage" id="p-storage">
+    <div class="panel-head" onclick="togglePanel('p-storage')">
+      <span class="panel-title">📦 Persistance · Storage</span>
+      <span class="panel-status" id="ps-storage"><span class="dot"></span><span>OK</span></span>
+    </div>
+    <div class="panel-body">
+      <div class="row"><span class="label">localStorage présent</span><span class="val" id="ls-present">…</span></div>
+      <div class="row"><span class="label">└ Cycle</span><span class="val" id="ls-cycle">…</span></div>
+      <div class="row"><span class="label">└ Mode</span><span class="val" id="ls-mode">…</span></div>
+      <div class="row"><span class="label">└ Taille</span><span class="val" id="ls-size">…</span></div>
+      <div class="row"><span class="label">└ SavedAt</span><span class="val" id="ls-saved">…</span></div>
+      <div class="row"><span class="label">IndexedDB ouverte</span><span class="val" id="idb-open">…</span></div>
+      <div class="row"><span class="label">└ Version</span><span class="val" id="idb-version">…</span></div>
+      <div class="row"><span class="label">└ Stores</span><span class="val" id="idb-stores">…</span></div>
+      <div class="row"><span class="label">└ state présent</span><span class="val" id="idb-state-present">…</span></div>
+      <div class="row"><span class="label">└ Cycle</span><span class="val" id="idb-cycle">…</span></div>
+      <div class="row"><span class="label">└ Mode</span><span class="val" id="idb-mode">…</span></div>
+      <div class="row"><span class="label">└ SavedAt</span><span class="val" id="idb-saved">…</span></div>
+      <div class="row"><span class="label">Synchro cycles</span><span class="val" id="sync-cycle">…</span></div>
+      <div class="row"><span class="label">Écart savedAt</span><span class="val" id="sync-delta">…</span></div>
+      <div class="row"><span class="label">Le plus récent</span><span class="val" id="sync-newest">…</span></div>
+    </div>
+  </div>
+
+  <!-- ÉTAT BOT -->
+  <div class="panel" data-category="state" id="p-state">
+    <div class="panel-head" onclick="togglePanel('p-state')">
+      <span class="panel-title">🧠 État du Bot</span>
+      <span class="panel-status" id="ps-state"><span class="dot"></span><span>OK</span></span>
+    </div>
+    <div class="panel-body">
+      <div class="row"><span class="label">Cycle</span><span class="val" id="st-cycle">…</span></div>
+      <div class="row"><span class="label">Mode trading</span><span class="val" id="st-mode">…</span></div>
+      <div class="row"><span class="label">botAutoMode</span><span class="val" id="st-auto">…</span></div>
+      <div class="row"><span class="label">_simRunning</span><span class="val" id="st-sim">…</span></div>
+      <div class="row"><span class="label">_netPaused</span><span class="val" id="st-net">…</span></div>
+      <div class="row"><span class="label">Mode bunker</span><span class="val" id="st-bunker">…</span></div>
+      <div class="row"><span class="label">Plein régime</span><span class="val" id="st-fp">…</span></div>
+      <div class="row"><span class="label">cycleTimer</span><span class="val" id="st-timer">…</span></div>
+      <div class="row"><span class="label">cycleMax</span><span class="val" id="st-cmax">…</span></div>
+      <div class="row"><span class="label">Cycle/min (60s)</span><span class="val" id="st-rate">…</span></div>
+    </div>
+  </div>
+
+  <!-- CAPITAL -->
+  <div class="panel" data-category="capital" id="p-capital">
+    <div class="panel-head" onclick="togglePanel('p-capital')">
+      <span class="panel-title">💰 Capital</span>
+      <span class="panel-status" id="ps-capital"><span class="dot"></span><span>OK</span></span>
+    </div>
+    <div class="panel-body">
+      <div class="row"><span class="label">Portfolio</span><span class="val" id="cap-portfolio">…</span></div>
+      <div class="row"><span class="label">Cash</span><span class="val" id="cap-cash">…</span></div>
+      <div class="row"><span class="label">Trading</span><span class="val" id="cap-trading">…</span></div>
+      <div class="row"><span class="label">Fiscal Reserve</span><span class="val" id="cap-fiscal">…</span></div>
+      <div class="row"><span class="label">Fonds propres</span><span class="val" id="cap-own">…</span></div>
+      <div class="row"><span class="label">Levier index</span><span class="val" id="cap-lev">…</span></div>
+      <div class="row"><span class="label">Lev réserve</span><span class="val" id="cap-levres">…</span></div>
+      <div class="row"><span class="label">Lev emprunté</span><span class="val" id="cap-levbor">…</span></div>
+      <div class="row"><span class="label">_autoLevBase</span><span class="val" id="cap-autolev">…</span></div>
+      <div class="row"><span class="label">_startPortfolio</span><span class="val" id="cap-start">…</span></div>
+      <div class="row"><span class="label">P&L 24h</span><span class="val" id="cap-pnl24">…</span></div>
+    </div>
+  </div>
+
+  <!-- POSITIONS -->
+  <div class="panel" data-category="positions" id="p-positions">
+    <div class="panel-head" onclick="togglePanel('p-positions')">
+      <span class="panel-title">📊 Positions</span>
+      <span class="panel-status" id="ps-positions"><span class="dot"></span><span>OK</span></span>
+    </div>
+    <div class="panel-body">
+      <div class="row"><span class="label">Total ouvertes</span><span class="val" id="pos-total">…</span></div>
+      <div class="row"><span class="label">Bot (auto)</span><span class="val" id="pos-auto">…</span></div>
+      <div class="row"><span class="label">Manuelles</span><span class="val" id="pos-man">…</span></div>
+      <div class="row"><span class="label">Plus ancienne</span><span class="val" id="pos-oldest">…</span></div>
+      <div class="row"><span class="label">Fantômes (>2h)</span><span class="val" id="pos-stale">…</span></div>
+      <div class="row"><span class="label">Sans TP/SL</span><span class="val" id="pos-notp">…</span></div>
+      <div class="row"><span class="label">Avec entryPrice invalide</span><span class="val" id="pos-bad">…</span></div>
+      <div class="row"><span class="label">P&L latent total</span><span class="val" id="pos-pnl">…</span></div>
+      <div class="row"><span class="label">Exposition totale</span><span class="val" id="pos-expo">…</span></div>
+      <div class="row"><span class="label">Trades clôturés</span><span class="val" id="pos-closed">…</span></div>
+      <div class="row"><span class="label">Win rate</span><span class="val" id="pos-wr">…</span></div>
+    </div>
+  </div>
+
+  <!-- APPRENTISSAGE -->
+  <div class="panel" data-category="learning" id="p-learning">
+    <div class="panel-head" onclick="togglePanel('p-learning')">
+      <span class="panel-title">🤖 Apprentissage</span>
+      <span class="panel-status" id="ps-learning"><span class="dot"></span><span>OK</span></span>
+    </div>
+    <div class="panel-body">
+      <div class="row"><span class="label">Agents totaux</span><span class="val" id="lrn-total">…</span></div>
+      <div class="row"><span class="label">Fitness moyenne</span><span class="val" id="lrn-avg">…</span></div>
+      <div class="row"><span class="label">Saturés (≥1900)</span><span class="val" id="lrn-sat">…</span></div>
+      <div class="row"><span class="label">Cassés (≤80)</span><span class="val" id="lrn-broken">…</span></div>
+      <div class="row"><span class="label">Génération</span><span class="val" id="lrn-gen">…</span></div>
+      <div class="row"><span class="label">learningHistory</span><span class="val" id="lrn-hist">…</span></div>
+      <div class="row"><span class="label">Dreams</span><span class="val" id="lrn-dreams">…</span></div>
+      <div class="row"><span class="label">brainLog entries</span><span class="val" id="lrn-brain">…</span></div>
+      <div class="row"><span class="label">agentLessons</span><span class="val" id="lrn-lessons">…</span></div>
+    </div>
+  </div>
+
+  <!-- PERF -->
+  <div class="panel" data-category="perf" id="p-perf">
+    <div class="panel-head" onclick="togglePanel('p-perf')">
+      <span class="panel-title">⚡ Performance</span>
+      <span class="panel-status" id="ps-perf"><span class="dot"></span><span>OK</span></span>
+    </div>
+    <div class="panel-body">
+      <div class="row"><span class="label">Tick avg (S.perf)</span><span class="val" id="perf-avg">…</span></div>
+      <div class="row"><span class="label">Tick max</span><span class="val" id="perf-max">…</span></div>
+      <div class="row"><span class="label">Tick last</span><span class="val" id="perf-last">…</span></div>
+      <div class="row"><span class="label">JS errors capturées</span><span class="val" id="perf-errs">0</span></div>
+      <div class="row"><span class="label">Memory (MB)</span><span class="val" id="perf-mem">…</span></div>
+      <div class="row"><span class="label">visibilityState</span><span class="val" id="perf-vis">…</span></div>
+      <div class="row"><span class="label">Page age</span><span class="val" id="perf-age">…</span></div>
+    </div>
+  </div>
+
+  <!-- UI/RÉSEAU -->
+  <div class="panel" data-category="ui" id="p-ui">
+    <div class="panel-head" onclick="togglePanel('p-ui')">
+      <span class="panel-title">🌐 UI & Réseau</span>
+      <span class="panel-status" id="ps-ui"><span class="dot"></span><span>OK</span></span>
+    </div>
+    <div class="panel-body">
+      <div class="row"><span class="label">navigator.onLine</span><span class="val" id="ui-online">…</span></div>
+      <div class="row"><span class="label">_netwatchState</span><span class="val" id="ui-netwatch">…</span></div>
+      <div class="row"><span class="label">Source prix</span><span class="val" id="ui-pricesrc">…</span></div>
+      <div class="row"><span class="label">WS connectés</span><span class="val" id="ui-ws">…</span></div>
+      <div class="row"><span class="label">Dernier prix réel</span><span class="val" id="ui-lastprice">…</span></div>
+      <div class="row"><span class="label">Toasts silenced</span><span class="val" id="ui-toasts">…</span></div>
+      <div class="row"><span class="label">Paires actives</span><span class="val" id="ui-pairs">…</span></div>
+      <div class="row"><span class="label">Paires en pause</span><span class="val" id="ui-paused">…</span></div>
+    </div>
+  </div>
+
+  <!-- INVARIANTS -->
+  <div class="panel" data-category="invariants" id="p-invariants" style="grid-column:1/-1;">
+    <div class="panel-head" onclick="togglePanel('p-invariants')">
+      <span class="panel-title">🔢 Invariants Mathématiques</span>
+      <span class="panel-status" id="ps-invariants"><span class="dot"></span><span>OK</span></span>
+    </div>
+    <div class="panel-body" id="invariants-body">
+      <div style="font-size:10px;color:var(--t3);margin-bottom:6px;">Équations qui ne doivent JAMAIS être fausses. Si une rouge → preuve mathématique d'un bug.</div>
+    </div>
+  </div>
+
+  <!-- JOURNAL -->
+  <div class="panel" data-category="journal" id="p-journal" style="grid-column:1/-1;">
+    <div class="panel-head" onclick="togglePanel('p-journal')">
+      <span class="panel-title">📜 Journal des événements <span id="journal-count" style="color:var(--t3);font-weight:400;font-size:9px;margin-left:6px;">(0)</span></span>
+      <span class="panel-status"><span class="dot"></span><span>live</span></span>
+    </div>
+    <div class="panel-body">
+      <div id="journal"></div>
+      <div class="controls">
+        <button class="btn gold" onclick="exportLog()">📥 Exporter (.txt)</button>
+        <button class="btn" onclick="clearLog()">🗑️ Vider</button>
+        <button class="btn" onclick="exportForClaude()">🤖 Diagnostic pour Claude</button>
+        <button class="btn danger" onclick="location.reload()">🔄 Recharger</button>
+      </div>
+      <details>
+        <summary>Filtres du journal</summary>
+        <div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:6px;">
+          <label style="font-size:10px;color:var(--t2);"><input type="checkbox" id="f-ok" checked> ok</label>
+          <label style="font-size:10px;color:var(--t2);"><input type="checkbox" id="f-info" checked> info</label>
+          <label style="font-size:10px;color:var(--t2);"><input type="checkbox" id="f-event" checked> event</label>
+          <label style="font-size:10px;color:var(--t2);"><input type="checkbox" id="f-warn" checked> warn</label>
+          <label style="font-size:10px;color:var(--t2);"><input type="checkbox" id="f-crit" checked> crit</label>
+        </div>
+      </details>
+    </div>
+  </div>
+
+</div>
+
+<div class="footer">
+  AURA Guardian v1.0 · Lecture seule · Ne modifie jamais le système<br>
+  L'app AURA doit tourner dans un onglet séparé pour observation (sinon le monitor ne voit que le storage).
+</div>
+
+<script>
+// ════════════════════════════════════════════════════════════
+//  AURA GUARDIAN v1 — Monitor systémique en lecture seule
+// ════════════════════════════════════════════════════════════
+//
+//  Principe :
+//   - Observe sans modifier
+//   - Lit les storages (toujours)
+//   - Lit S, _simRunning, etc. via window (si même onglet)
+//   - Vérifie des invariants mathématiques
+//   - Journalise tous les événements
+//   - Exporte pour analyse
+//
+// ════════════════════════════════════════════════════════════
+
+const SAVE_KEY = 'nexus_state_v2';
+const DB_NAME  = 'NEXUS_DB';
+const REFRESH_MS = 2000;
+
+const journal = [];
+const anomalies = [];
+const jsErrors = [];
+
+let tickCount  = 0;
+let bootTime   = Date.now();
+let prevSnap   = null;     // pour détecter les changements
+
+// État précédent pour comparaisons
+let prevState = {
+  lsCycle: null,
+  lsTs: null,
+  idbCycle: null,
+  idbTs: null,
+  idbPresent: null,
+  appCycle: null,
+  agentCount: null,
+  fitnessAvg: null,
+  portfolio: null,
+  positions: null,
+  jsErrorCount: 0,
+  lastCycleTs: null,        // timestamp dernier changement de cycle
+  cycleHistory: [],         // pour calcul rate
+};
+
+// ═══════════════════════════════════════════════════
+//  LOG
+// ═══════════════════════════════════════════════════
+function log(category, type, msg) {
+  const ts = new Date().toLocaleTimeString();
+  const entry = { ts, category, type, msg };
+  journal.push(entry);
+  if (journal.length > 500) journal.shift();
+  if (type === 'crit' || type === 'warn') {
+    anomalies.push({ ts, category, type, msg });
+    if (anomalies.length > 100) anomalies.shift();
+  }
+  renderJournal();
+  updateHeaderStats();
+}
+
+function renderJournal() {
+  const filters = {
+    ok:    document.getElementById('f-ok')?.checked    ?? true,
+    info:  document.getElementById('f-info')?.checked  ?? true,
+    event: document.getElementById('f-event')?.checked ?? true,
+    warn:  document.getElementById('f-warn')?.checked  ?? true,
+    crit:  document.getElementById('f-crit')?.checked  ?? true,
+  };
+  const visible = journal.filter(e => filters[e.type]).slice(-100).reverse();
+  const html = visible.map(e => 
+    '<div class="log-entry"><span class="log-time">[' + e.ts + ']</span> <span class="log-tag">' + e.category + '</span><span class="log-' + e.type + '">' + escapeHTML(e.msg) + '</span></div>'
+  ).join('');
+  const el = document.getElementById('journal');
+  if (el) el.innerHTML = html;
+  const cntEl = document.getElementById('journal-count');
+  if (cntEl) cntEl.textContent = '(' + journal.length + ')';
+}
+
+function escapeHTML(s) {
+  return String(s).replace(/[&<>]/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;' }[c]));
+}
+
+function updateHeaderStats() {
+  document.getElementById('hs-ticks').textContent = tickCount;
+  document.getElementById('hs-anom').textContent  = anomalies.length;
+  const up = Math.round((Date.now() - bootTime) / 1000);
+  document.getElementById('hs-up').textContent = up < 60 ? up + 's' : Math.round(up/60) + 'min';
+  const alertBar = document.getElementById('alertBar');
+  const critCount = anomalies.filter(a => a.type === 'crit').length;
+  if (critCount > 0) {
+    alertBar.classList.add('show');
+    document.getElementById('alertCount').textContent = critCount;
+  } else {
+    alertBar.classList.remove('show');
+  }
+}
+
+// ═══════════════════════════════════════════════════
+//  UTILITAIRES
+// ═══════════════════════════════════════════════════
+function fmtAge(ts) {
+  if (!ts) return '—';
+  const d = Date.now() - ts;
+  if (d < 0) return 'futur ?';
+  if (d < 1000) return d + 'ms';
+  if (d < 60000) return Math.round(d/1000) + 's';
+  if (d < 3600000) return Math.round(d/60000) + 'min';
+  return Math.round(d/3600000) + 'h';
+}
+function fmtSize(n) {
+  if (n < 1024) return n + ' B';
+  if (n < 1024*1024) return (n/1024).toFixed(1) + ' KB';
+  return (n/(1024*1024)).toFixed(2) + ' MB';
+}
+function fmtDate(iso) {
+  if (!iso) return '—';
+  try { return new Date(iso).toLocaleTimeString(); }
+  catch(e) { return String(iso).slice(0,19); }
+}
+function fmt$(n) {
+  if (n === null || n === undefined || !isFinite(n)) return '—';
+  return '$' + n.toFixed(2);
+}
+
+function setVal(id, value, cls) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.className = 'val' + (cls ? ' ' + cls : '');
+  el.textContent = value;
+}
+
+function setStatus(panelId, status) {
+  const ps = document.getElementById('ps-' + panelId);
+  const panel = document.getElementById('p-' + panelId);
+  if (!ps || !panel) return;
+  ps.className = 'panel-status' + (status === 'ok' ? '' : ' ' + status);
+  panel.className = 'panel' + (status === 'ok' ? '' : ' ' + (status === 'crit' ? 'alert' : status));
+  const txt = ps.querySelector('span:last-child');
+  if (txt) txt.textContent = status === 'ok' ? 'OK' : status === 'warn' ? 'WARN' : 'CRIT';
+}
+
+// ═══════════════════════════════════════════════════
+//  WATCHER 1 : STORAGE
+// ═══════════════════════════════════════════════════
+function readLS() {
+  try {
+    const raw = localStorage.getItem(SAVE_KEY);
+    if (!raw) return { present: false };
+    const snap = JSON.parse(raw);
+    return {
+      present: true,
+      size: raw.length,
+      cycle: snap.cycle,
+      cash: snap.cashAccount,
+      trading: snap.tradingAccount,
+      mode: snap.tradingMode,
+      savedAt: snap.savedAt,
+      ts: snap.savedAt ? new Date(snap.savedAt).getTime() : null,
+      raw: snap
+    };
+  } catch(e) {
+    return { present: false, error: e.message };
+  }
+}
+
+function openIDB() {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(DB_NAME);
+    req.onsuccess = () => resolve(req.result);
+    req.onerror   = () => reject(req.error);
+    req.onblocked = () => reject(new Error('blocked'));
+  });
+}
+
+async function readIDB() {
+  try {
+    const db = await openIDB();
+    const stores = Array.from(db.objectStoreNames);
+    const result = { open: true, version: db.version, stores: stores };
+    if (!stores.includes('state')) {
+      result.statePresent = false;
+      db.close();
+      return result;
+    }
+    const snap = await new Promise(res => {
+      const tx = db.transaction('state', 'readonly');
+      const req = tx.objectStore('state').get(SAVE_KEY);
+      req.onsuccess = e => res(e.target.result || null);
+      req.onerror   = () => res(null);
+    });
+    db.close();
+    if (!snap) {
+      result.statePresent = false;
+      return result;
+    }
+    result.statePresent = true;
+    result.cycle    = snap.cycle;
+    result.cash     = snap.cashAccount;
+    result.trading  = snap.tradingAccount;
+    result.mode     = snap.tradingMode;
+    result.savedAt  = snap.savedAt;
+    result.ts       = snap.savedAt ? new Date(snap.savedAt).getTime() : null;
+    result.raw      = snap;
+    return result;
+  } catch(e) {
+    return { open: false, error: e.message };
+  }
+}
+
+async function watchStorage() {
+  const ls  = readLS();
+  const idb = await readIDB();
+  
+  // localStorage
+  if (ls.present) {
+    setVal('ls-present', '✓ oui', 'ok');
+    setVal('ls-size',    fmtSize(ls.size));
+    setVal('ls-cycle',   '#' + (ls.cycle ?? '?'));
+    setVal('ls-mode',    ls.mode || '—');
+    setVal('ls-saved',   fmtDate(ls.savedAt) + ' (' + fmtAge(ls.ts) + ')');
+  } else {
+    setVal('ls-present', '✗ ABSENT', 'crit');
+    ['ls-size','ls-cycle','ls-mode','ls-saved'].forEach(id => setVal(id, '—', 'empty'));
+  }
+  
+  // IndexedDB
+  if (idb.open) {
+    setVal('idb-open',    '✓ oui', 'ok');
+    setVal('idb-version', 'v' + idb.version);
+    setVal('idb-stores',  idb.stores.join(', '));
+    if (idb.statePresent) {
+      setVal('idb-state-present', '✓ oui', 'ok');
+      setVal('idb-cycle', '#' + (idb.cycle ?? '?'));
+      setVal('idb-mode',  idb.mode || '—');
+      setVal('idb-saved', fmtDate(idb.savedAt) + ' (' + fmtAge(idb.ts) + ')');
+    } else {
+      setVal('idb-state-present', '✗ VIDE', 'crit');
+      ['idb-cycle','idb-mode','idb-saved'].forEach(id => setVal(id, '—', 'empty'));
+    }
+  } else {
+    setVal('idb-open', '✗ ' + (idb.error || 'fermée'), 'crit');
+    ['idb-version','idb-stores','idb-state-present','idb-cycle','idb-mode','idb-saved'].forEach(id => setVal(id, '—', 'empty'));
+  }
+  
+  // Sync
+  const lsC = ls.cycle ?? null;
+  const idbC = idb.cycle ?? null;
+  const lsT = ls.ts ?? null;
+  const idbT = idb.ts ?? null;
+  
+  let storageStatus = 'ok';
+  
+  if (lsC !== null && idbC !== null) {
+    if (lsC === idbC) {
+      setVal('sync-cycle', '✓ ' + lsC, 'ok');
+    } else {
+      setVal('sync-cycle', 'LS=' + lsC + ' / IDB=' + idbC, 'crit');
+      storageStatus = 'crit';
+    }
+  } else {
+    setVal('sync-cycle', '—', 'empty');
+  }
+  
+  if (lsT !== null && idbT !== null) {
+    const delta = Math.abs(lsT - idbT);
+    setVal('sync-delta', (delta/1000).toFixed(1) + 's', delta > 5000 ? 'warn' : 'ok');
+    setVal('sync-newest', lsT > idbT ? 'localStorage' : (lsT < idbT ? 'IndexedDB' : '='), lsT === idbT ? 'ok' : 'warn');
+    if (delta > 5000 && storageStatus === 'ok') storageStatus = 'warn';
+  } else {
+    setVal('sync-delta', '—', 'empty');
+    setVal('sync-newest', '—', 'empty');
+  }
+  
+  // Détections événementielles
+  if (tickCount > 1) {
+    if (lsC !== null && prevState.lsCycle !== null && lsC < prevState.lsCycle) {
+      log('storage', 'crit', '🚨 RÉGRESSION localStorage: ' + prevState.lsCycle + ' → ' + lsC);
+    }
+    if (idbC !== null && prevState.idbCycle !== null && idbC < prevState.idbCycle) {
+      log('storage', 'crit', '🚨 RÉGRESSION IndexedDB: ' + prevState.idbCycle + ' → ' + idbC);
+    }
+    if (lsC !== null && prevState.lsCycle !== null && lsC > prevState.lsCycle) {
+      log('storage', 'ok', '💾 Save LS: #' + prevState.lsCycle + ' → #' + lsC + ' (Δ+' + (lsC - prevState.lsCycle) + ')');
+    }
+    if (idbC !== null && prevState.idbCycle !== null && idbC > prevState.idbCycle) {
+      log('storage', 'ok', '💾 Save IDB: #' + prevState.idbCycle + ' → #' + idbC + ' (Δ+' + (idbC - prevState.idbCycle) + ')');
+    }
+    if (prevState.idbPresent === true && !idb.statePresent) {
+      log('storage', 'crit', '🚨 IndexedDB.state EFFACÉ (wipe détecté)');
+    }
+    if (prevState.idbPresent === false && idb.statePresent) {
+      log('storage', 'ok', '✓ IndexedDB.state restauré (cycle=' + idb.cycle + ')');
+    }
+  } else {
+    log('storage', 'event', '── Démarrage Storage Watcher ──');
+    log('storage', 'info', 'localStorage: ' + (ls.present ? 'cycle=' + ls.cycle + ' mode=' + ls.mode + ' size=' + fmtSize(ls.size) : 'ABSENT'));
+    log('storage', 'info', 'IndexedDB: ' + (idb.open ? 'v' + idb.version + ' stores=[' + idb.stores.join(',') + ']' : 'fermée'));
+    log('storage', 'info', 'IndexedDB.state: ' + (idb.statePresent ? 'cycle=' + idb.cycle + ' mode=' + idb.mode : 'VIDE'));
+    if (ls.present && idb.statePresent && lsC !== idbC) {
+      log('storage', 'warn', '⚠ DÉSYNC INITIALE: LS=' + lsC + ' ≠ IDB=' + idbC);
+    }
+    if (ls.present && !idb.statePresent) {
+      log('storage', 'warn', '⚠ IndexedDB.state VIDE alors que localStorage existe — bug connu');
+    }
+  }
+  
+  prevState.lsCycle = lsC;
+  prevState.idbCycle = idbC;
+  prevState.lsTs = lsT;
+  prevState.idbTs = idbT;
+  prevState.idbPresent = idb.statePresent;
+  
+  setStatus('storage', storageStatus);
+  
+  return { ls, idb };
+}
+
+// ═══════════════════════════════════════════════════
+//  WATCHER 2 : ÉTAT DU BOT (lit depuis le snapshot)
+// ═══════════════════════════════════════════════════
+function watchState(snap) {
+  if (!snap) {
+    ['st-cycle','st-mode','st-auto','st-sim','st-net','st-bunker','st-fp','st-timer','st-cmax','st-rate'].forEach(id => setVal(id, '—', 'empty'));
+    setStatus('state', 'warn');
+    return;
+  }
+  
+  setVal('st-cycle', '#' + (snap.cycle ?? '?'));
+  
+  const mode = snap.tradingMode || 'sim';
+  const modeColors = { sim: 'purple', paperReal: 'ok', real: 'crit' };
+  setVal('st-mode', mode, modeColors[mode] || '');
+  
+  setVal('st-auto', snap.botAutoMode ? 'AUTO ✓' : 'MAN', snap.botAutoMode ? 'ok' : 'warn');
+  
+  // _simRunning n'est pas dans le snapshot, on ne peut pas le lire ici
+  setVal('st-sim', 'voir log app', 'empty');
+  setVal('st-net', 'voir log app', 'empty');
+  
+  // Mode bunker — souvent stocké dans S.bunkerMode ou via flag
+  const bunker = snap.bunkerMode || snap._bunkerActive || false;
+  setVal('st-bunker', bunker ? 'ACTIF ⚠' : 'inactif', bunker ? 'warn' : 'ok');
+  
+  const fp = snap.fullPowerMode || false;
+  setVal('st-fp', fp ? 'ACTIF ⚡' : 'inactif', fp ? 'warn' : 'ok');
+  
+  setVal('st-cmax', snap.cycleMax || '—');
+  
+  // Calcul du taux de cycle par minute
+  if (prevState.appCycle !== null && snap.cycle !== prevState.appCycle) {
+    prevState.cycleHistory.push({ cycle: snap.cycle, ts: Date.now() });
+    if (prevState.cycleHistory.length > 30) prevState.cycleHistory.shift();
+  }
+  const recent = prevState.cycleHistory.filter(h => Date.now() - h.ts < 60000);
+  if (recent.length >= 2) {
+    const first = recent[0];
+    const last = recent[recent.length - 1];
+    const dt = (last.ts - first.ts) / 1000;
+    const dc = last.cycle - first.cycle;
+    const rate = dt > 0 ? (dc / dt * 60).toFixed(1) : '0';
+    setVal('st-rate', rate + ' /min', dc > 0 ? 'ok' : 'warn');
+  } else {
+    setVal('st-rate', 'calcul…', 'empty');
+  }
+  
+  setVal('st-timer', 'voir cycleTimer dans pairStates');
+  
+  // Détections événementielles
+  if (tickCount > 1 && prevState.appCycle !== null) {
+    if (snap.cycle !== undefined && prevState.appCycle !== snap.cycle) {
+      // Pas de log à chaque tick, sinon trop bruyant
+    }
+  }
+  prevState.appCycle = snap.cycle;
+  
+  setStatus('state', 'ok');
+}
+
+// ═══════════════════════════════════════════════════
+//  WATCHER 3 : CAPITAL
+// ═══════════════════════════════════════════════════
+function watchCapital(snap) {
+  if (!snap) {
+    ['cap-portfolio','cap-cash','cap-trading','cap-fiscal','cap-own','cap-lev','cap-levres','cap-levbor','cap-autolev','cap-start','cap-pnl24'].forEach(id => setVal(id, '—', 'empty'));
+    setStatus('capital', 'warn');
+    return;
+  }
+  
+  setVal('cap-portfolio', fmt$(snap.portfolio));
+  setVal('cap-cash',      fmt$(snap.cashAccount));
+  setVal('cap-trading',   fmt$(snap.tradingAccount));
+  setVal('cap-fiscal',    fmt$(snap.fiscalReserveAccount || 0));
+  setVal('cap-own',       (snap.ownFundsInjected || 0).toFixed(2));
+  setVal('cap-lev',       '×' + (snap.leverage || 0));
+  setVal('cap-levres',    fmt$(snap.leverageReserve || 0));
+  setVal('cap-levbor',    fmt$(snap.leverageBorrowed || 0));
+  setVal('cap-autolev',   fmt$(snap._autoLevBase || 0));
+  setVal('cap-start',     fmt$(snap._startPortfolio));
+  setVal('cap-pnl24',     (snap.pnl24h >= 0 ? '+' : '') + fmt$(snap.pnl24h), snap.pnl24h >= 0 ? 'ok' : 'crit');
+  
+  // Détection de fuite de capital
+  if (tickCount > 1 && prevState.portfolio !== null && snap.portfolio !== undefined) {
+    const delta = snap.portfolio - prevState.portfolio;
+    if (Math.abs(delta) > 50 && (!snap.openPositions || snap.openPositions.length === 0)) {
+      log('capital', 'warn', '⚠ Portfolio variation de ' + delta.toFixed(2) + '$ sans position ouverte');
+    }
+  }
+  prevState.portfolio = snap.portfolio;
+  
+  setStatus('capital', 'ok');
+}
+
+// ═══════════════════════════════════════════════════
+//  WATCHER 4 : POSITIONS
+// ═══════════════════════════════════════════════════
+function watchPositions(snap) {
+  if (!snap || !Array.isArray(snap.openPositions)) {
+    setVal('pos-total', '—', 'empty');
+    setStatus('positions', 'warn');
+    return;
+  }
+  
+  const positions = snap.openPositions;
+  const auto = positions.filter(p => p.auto === true);
+  const man  = positions.filter(p => p.auto !== true);
+  
+  setVal('pos-total', positions.length);
+  setVal('pos-auto',  auto.length);
+  setVal('pos-man',   man.length);
+  
+  // Plus ancienne
+  let oldest = null;
+  let oldestAge = 0;
+  const now = Date.now();
+  positions.forEach(p => {
+    const age = now - (p.entryTs || p.openedAt || now);
+    if (age > oldestAge) {
+      oldestAge = age;
+      oldest = p;
+    }
+  });
+  setVal('pos-oldest', oldest ? oldest.pair + ' ' + (oldest.side||'').toUpperCase() + ' · ' + fmtAge(now - oldestAge) : '—');
+  
+  // Fantômes (>2h)
+  const TWO_H = 2 * 60 * 60 * 1000;
+  const stale = positions.filter(p => (now - (p.entryTs || now)) > TWO_H);
+  setVal('pos-stale', stale.length, stale.length > 0 ? 'warn' : 'ok');
+  
+  // Sans TP/SL
+  const noTp = positions.filter(p => !p.tp && !p.sl);
+  setVal('pos-notp', noTp.length + '/' + positions.length, noTp.length > 0 ? 'warn' : 'ok');
+  
+  // entryPrice invalide
+  const bad = positions.filter(p => !isFinite(p.entryPrice) || p.entryPrice <= 0);
+  setVal('pos-bad', bad.length, bad.length > 0 ? 'crit' : 'ok');
+  
+  // P&L latent
+  const pnlSum = positions.reduce((s, p) => s + (p.pnlUsdt || 0), 0);
+  setVal('pos-pnl', (pnlSum >= 0 ? '+' : '') + fmt$(pnlSum), pnlSum >= 0 ? 'ok' : 'crit');
+  
+  // Exposition
+  const expo = positions.reduce((s, p) => s + (p.totalExposure || p.stakeUsdt || 0), 0);
+  setVal('pos-expo', fmt$(expo));
+  
+  // Trades clôturés
+  let closed = 0, wins = 0;
+  if (snap.pairStates) {
+    Object.values(snap.pairStates).forEach(ps => {
+      (ps.trades || []).forEach(t => {
+        if (t.type === 'position' && typeof t.pnlUsdt === 'number') {
+          closed++;
+          if (t.pnlUsdt > 0) wins++;
+        }
+      });
+    });
+  }
+  setVal('pos-closed', closed);
+  const wr = closed > 0 ? (wins / closed * 100).toFixed(1) : 0;
+  setVal('pos-wr', wr + '% (' + wins + '/' + closed + ')', wr >= 50 ? 'ok' : wr >= 40 ? 'warn' : 'crit');
+  
+  let status = 'ok';
+  if (bad.length > 0) status = 'crit';
+  else if (stale.length > 0 || noTp.length > 0) status = 'warn';
+  setStatus('positions', status);
+  
+  // Événements
+  if (tickCount > 1 && prevState.positions !== null && positions.length !== prevState.positions) {
+    const delta = positions.length - prevState.positions;
+    log('positions', delta > 0 ? 'ok' : 'info', '📊 Positions: ' + prevState.positions + ' → ' + positions.length + ' (Δ' + (delta > 0 ? '+' : '') + delta + ')');
+  }
+  prevState.positions = positions.length;
+}
+
+// ═══════════════════════════════════════════════════
+//  WATCHER 5 : APPRENTISSAGE
+// ═══════════════════════════════════════════════════
+function watchLearning(snap) {
+  if (!snap || !Array.isArray(snap.agents)) {
+    setStatus('learning', 'warn');
+    return;
+  }
+  
+  const agents = snap.agents;
+  setVal('lrn-total', agents.length);
+  
+  const fits = agents.map(a => a.fitness || 0).filter(f => isFinite(f));
+  const avgFit = fits.length ? fits.reduce((s,f) => s+f, 0) / fits.length : 0;
+  setVal('lrn-avg', avgFit.toFixed(0));
+  
+  const saturated = agents.filter(a => (a.fitness || 0) >= 1900).length;
+  const broken    = agents.filter(a => (a.fitness || 0) > 0 && (a.fitness || 0) <= 80).length;
+  setVal('lrn-sat',    saturated + '/' + agents.length, saturated > agents.length * 0.5 ? 'warn' : 'ok');
+  setVal('lrn-broken', broken + '/' + agents.length,    broken > agents.length * 0.3    ? 'crit' : broken > 0 ? 'warn' : 'ok');
+  
+  setVal('lrn-gen',     snap._genCount || 0);
+  setVal('lrn-hist',    (snap.learningHistory || []).length);
+  setVal('lrn-dreams',  (snap.dreams || []).length);
+  setVal('lrn-brain',   (snap.brainLog || []).length);
+  setVal('lrn-lessons', (snap.agentLessons || []).length);
+  
+  // Détection chute fitness
+  if (tickCount > 1 && prevState.fitnessAvg !== null) {
+    const drop = (prevState.fitnessAvg - avgFit) / prevState.fitnessAvg * 100;
+    if (drop > 20) {
+      log('learning', 'warn', '⚠ Chute fitness moyenne: ' + prevState.fitnessAvg.toFixed(0) + ' → ' + avgFit.toFixed(0) + ' (-' + drop.toFixed(0) + '%)');
+    }
+  }
+  prevState.fitnessAvg = avgFit;
+  
+  if (tickCount > 1 && prevState.agentCount !== null && agents.length !== prevState.agentCount) {
+    log('learning', 'warn', '⚠ Nombre agents: ' + prevState.agentCount + ' → ' + agents.length);
+  }
+  prevState.agentCount = agents.length;
+  
+  let status = 'ok';
+  if (broken > agents.length * 0.3) status = 'crit';
+  else if (saturated > agents.length * 0.5) status = 'warn';
+  setStatus('learning', status);
+}
+
+// ═══════════════════════════════════════════════════
+//  WATCHER 6 : PERFORMANCE
+// ═══════════════════════════════════════════════════
+function watchPerf(snap) {
+  // Tick durations depuis S.perf si disponible (via window opener ou snap)
+  const perf = snap?.perf || null;
+  if (perf) {
+    setVal('perf-avg', (perf.avgMs || 0).toFixed(1) + 'ms', (perf.avgMs || 0) > 500 ? 'crit' : (perf.avgMs || 0) > 200 ? 'warn' : 'ok');
+    setVal('perf-max', (perf.maxMs || 0).toFixed(1) + 'ms');
+    setVal('perf-last', (perf.lastMs || 0).toFixed(1) + 'ms');
+  } else {
+    ['perf-avg','perf-max','perf-last'].forEach(id => setVal(id, '—', 'empty'));
+  }
+  
+  setVal('perf-errs', jsErrors.length, jsErrors.length > 0 ? 'crit' : 'ok');
+  
+  // Memory (Chrome only)
+  if (performance.memory) {
+    const mb = (performance.memory.usedJSHeapSize / 1024 / 1024).toFixed(1);
+    setVal('perf-mem', mb + ' MB');
+  } else {
+    setVal('perf-mem', 'N/A', 'empty');
+  }
+  
+  setVal('perf-vis', document.visibilityState, document.visibilityState === 'visible' ? 'ok' : 'warn');
+  setVal('perf-age', fmtAge(bootTime));
+  
+  let status = 'ok';
+  if (jsErrors.length > 0) status = 'crit';
+  else if (perf && perf.avgMs > 200) status = 'warn';
+  setStatus('perf', status);
+}
+
+// ═══════════════════════════════════════════════════
+//  WATCHER 7 : UI / RÉSEAU
+// ═══════════════════════════════════════════════════
+function watchUI(snap) {
+  setVal('ui-online', navigator.onLine ? '✓ online' : '✗ offline', navigator.onLine ? 'ok' : 'crit');
+  
+  // _netwatchState et autres sont dans S, pas dans le snap. On affiche ce qu'on peut.
+  setVal('ui-netwatch', snap?._netPaused ? 'PAUSED' : 'normal', snap?._netPaused ? 'crit' : 'ok');
+  
+  setVal('ui-pricesrc', snap?.tradingMode === 'sim' ? 'Simulé' : 'Binance/CG');
+  setVal('ui-ws', 'voir app');
+  setVal('ui-lastprice', 'voir app');
+  
+  if (snap?.alerts && snap.alerts._silencedCount !== undefined) {
+    setVal('ui-toasts', 'silenced: ' + snap.alerts._silencedCount, snap.alerts._silencedCount > 50 ? 'warn' : 'ok');
+  } else {
+    setVal('ui-toasts', '—', 'empty');
+  }
+  
+  // Paires actives
+  if (snap?.pairStates) {
+    const total = Object.keys(snap.pairStates).length;
+    const paused = Object.keys(snap._pausedPairs || {}).length;
+    setVal('ui-pairs', (total - paused) + '/' + total + ' actives');
+    setVal('ui-paused', paused, paused > 0 ? 'warn' : 'ok');
+  } else {
+    setVal('ui-pairs', '—', 'empty');
+    setVal('ui-paused', '—', 'empty');
+  }
+  
+  setStatus('ui', navigator.onLine ? 'ok' : 'crit');
+}
+
+// ═══════════════════════════════════════════════════
+//  WATCHER 8 : INVARIANTS MATHÉMATIQUES
+// ═══════════════════════════════════════════════════
+function watchInvariants(snap) {
+  const body = document.getElementById('invariants-body');
+  if (!body) return;
+  
+  // Garder le titre intro
+  body.innerHTML = '<div style="font-size:10px;color:var(--t3);margin-bottom:6px;">Équations qui ne doivent JAMAIS être fausses. Si rouge → preuve mathématique d\'un bug.</div>';
+  
+  if (!snap) {
+    body.innerHTML += '<div class="invariant warn">⚠ Snapshot indisponible — invariants non testables</div>';
+    setStatus('invariants', 'warn');
+    return;
+  }
+  
+  const inv = [];
+  
+  // INV-1 : portfolio = cash + trading (en USDT)
+  const cash = snap.cashAccount || 0;
+  const trading = snap.tradingAccount || 0;
+  const portfolio = snap.portfolio || 0;
+  const expected = cash + trading;
+  const diff1 = Math.abs(portfolio - expected);
+  inv.push({
+    id: 'I1',
+    label: 'Portfolio = Cash + Trading',
+    ok: diff1 < 0.01,
+    formula: portfolio.toFixed(2) + ' vs ' + expected.toFixed(2) + ' (Δ' + diff1.toFixed(2) + ')'
+  });
+  
+  // INV-2 : Cycle ne descend jamais (vs précédent tick)
+  inv.push({
+    id: 'I2',
+    label: 'Cycle monotone (≥ tick précédent)',
+    ok: prevState.appCycle === null || snap.cycle >= prevState.appCycle,
+    formula: (prevState.appCycle ?? '?') + ' → ' + (snap.cycle ?? '?')
+  });
+  
+  // INV-3 : Levier emprunté ≤ levier réserve + lev_borrowed total
+  const levRes = snap.leverageReserve || 0;
+  const levBor = snap.leverageBorrowed || 0;
+  inv.push({
+    id: 'I3',
+    label: 'Levier emprunté ≤ Réserve + Emprunté (cohérence)',
+    ok: levBor >= 0 && levRes >= 0,
+    formula: 'borrowed=' + levBor.toFixed(2) + ' / reserve=' + levRes.toFixed(2)
+  });
+  
+  // INV-4 : Σ pos.levBorrowed === leverageBorrowed
+  if (Array.isArray(snap.openPositions)) {
+    const posSum = snap.openPositions.reduce((s, p) => s + (p.levBorrowed || 0), 0);
+    const diff4 = Math.abs(posSum - levBor);
+    inv.push({
+      id: 'I4',
+      label: 'Σ pos.levBorrowed === leverageBorrowed',
+      ok: diff4 < 0.5 || (posSum === 0 && levBor === 0),
+      formula: 'positions: ' + posSum.toFixed(2) + ' / S: ' + levBor.toFixed(2)
+    });
+  }
+  
+  // INV-5 : totalTrades >= winTrades
+  const totalT = snap.totalTrades || 0;
+  const winT = snap.winTrades || 0;
+  inv.push({
+    id: 'I5',
+    label: 'totalTrades ≥ winTrades',
+    ok: totalT >= winT,
+    formula: 'total=' + totalT + ' / wins=' + winT
+  });
+  
+  // INV-6 : ownFundsInjected ≥ 0
+  inv.push({
+    id: 'I6',
+    label: 'ownFundsInjected ≥ 0',
+    ok: (snap.ownFundsInjected || 0) >= 0,
+    formula: (snap.ownFundsInjected || 0).toFixed(2)
+  });
+  
+  // INV-7 : Σ pos.stakeUsdt ≤ trading + leverageReserve initial
+  if (Array.isArray(snap.openPositions)) {
+    const expo = snap.openPositions.reduce((s, p) => s + (p.totalExposure || p.stakeUsdt || 0), 0);
+    const maxAllowed = trading + levRes + levBor;
+    inv.push({
+      id: 'I7',
+      label: 'Exposition ouverte ≤ Trading + Lev réserve + emprunté',
+      ok: expo <= maxAllowed + 1,
+      formula: expo.toFixed(2) + ' ≤ ' + maxAllowed.toFixed(2)
+    });
+  }
+  
+  // INV-8 : Tous les openPositions ont entryPrice valide
+  if (Array.isArray(snap.openPositions)) {
+    const bad = snap.openPositions.filter(p => !isFinite(p.entryPrice) || p.entryPrice <= 0);
+    inv.push({
+      id: 'I8',
+      label: 'Toutes positions ont entryPrice valide (>0, fini)',
+      ok: bad.length === 0,
+      formula: bad.length === 0 ? 'toutes OK' : bad.length + ' position(s) cassée(s)'
+    });
+  }
+  
+  // INV-9 : Fitness des agents ≥ 0
+  if (Array.isArray(snap.agents)) {
+    const negFit = snap.agents.filter(a => (a.fitness || 0) < 0);
+    inv.push({
+      id: 'I9',
+      label: 'Tous les agents ont fitness ≥ 0',
+      ok: negFit.length === 0,
+      formula: negFit.length === 0 ? 'OK' : negFit.length + ' agent(s) avec fitness < 0'
+    });
+  }
+  
+  // INV-10 : Cycle ne peut pas être < 0
+  inv.push({
+    id: 'I10',
+    label: 'Cycle ≥ 0',
+    ok: (snap.cycle || 0) >= 0,
+    formula: 'cycle = ' + (snap.cycle ?? '?')
+  });
+  
+  // INV-11 : pairStates et S.openPositions cohérents (pas de double sur même paire)
+  if (Array.isArray(snap.openPositions)) {
+    const pairs = snap.openPositions.map(p => p.pair);
+    const duplicates = pairs.filter((p, i) => pairs.indexOf(p) !== i);
+    inv.push({
+      id: 'I11',
+      label: 'Pas de doublons de paires dans openPositions',
+      ok: duplicates.length === 0,
+      formula: duplicates.length === 0 ? 'OK' : 'doublons: ' + duplicates.join(',')
+    });
+  }
+  
+  // INV-12 : tradingMode est l'une des 3 valeurs valides
+  const validModes = ['sim', 'paperReal', 'real'];
+  inv.push({
+    id: 'I12',
+    label: 'tradingMode ∈ {sim, paperReal, real}',
+    ok: !snap.tradingMode || validModes.includes(snap.tradingMode),
+    formula: 'mode = ' + (snap.tradingMode || 'sim')
+  });
+  
+  // Render
+  let crit = 0, warn = 0;
+  inv.forEach(i => {
+    const cls = i.ok ? 'ok' : 'crit';
+    if (!i.ok) crit++;
+    const html = '<div class="invariant ' + cls + '">' +
+      '<span>' + (i.ok ? '✓' : '✗') + '</span>' +
+      '<span>' + i.id + ' · ' + i.label + '</span>' +
+      '<span class="formula">' + i.formula + '</span>' +
+      '</div>';
+    body.innerHTML += html;
+    
+    // Log les violations
+    if (!i.ok && tickCount > 1) {
+      // Log seulement tous les 30 ticks pour éviter spam
+      if (tickCount % 30 === 1) {
+        log('invariants', 'crit', '✗ ' + i.id + ' violé : ' + i.label + ' · ' + i.formula);
+      }
+    }
+  });
+  
+  setStatus('invariants', crit > 0 ? 'crit' : 'ok');
+}
+
+// ═══════════════════════════════════════════════════
+//  TICK PRINCIPAL
+// ═══════════════════════════════════════════════════
+async function tick() {
+  tickCount++;
+  
+  try {
+    const storage = await watchStorage();
+    
+    // Le "snap" qu'on utilise pour les autres watchers = le plus récent des 2 storages
+    let snap = null;
+    const lsTs = storage.ls?.ts ?? 0;
+    const idbTs = storage.idb?.ts ?? 0;
+    if (lsTs >= idbTs && storage.ls?.raw) snap = storage.ls.raw;
+    else if (storage.idb?.raw) snap = storage.idb.raw;
+    else if (storage.ls?.raw) snap = storage.ls.raw;
+    
+    watchState(snap);
+    watchCapital(snap);
+    watchPositions(snap);
+    watchLearning(snap);
+    watchPerf(snap);
+    watchUI(snap);
+    watchInvariants(snap);
+    
+    prevSnap = snap;
+  } catch(e) {
+    log('system', 'crit', '✗ Tick erreur: ' + e.message);
+    console.error('[Guardian]', e);
+  }
+}
+
+// ═══════════════════════════════════════════════════
+//  CAPTURE DES ERREURS JS DE LA PAGE
+// ═══════════════════════════════════════════════════
+window.addEventListener('error', (e) => {
+  jsErrors.push({ ts: Date.now(), msg: e.message, src: e.filename, line: e.lineno });
+  if (jsErrors.length > 50) jsErrors.shift();
+  log('perf', 'crit', '🛑 JS Error: ' + e.message + ' @ ' + (e.filename || '?') + ':' + (e.lineno || '?'));
+});
+window.addEventListener('unhandledrejection', (e) => {
+  jsErrors.push({ ts: Date.now(), msg: 'Promise rejected: ' + (e.reason?.message || e.reason), src: 'promise' });
+  if (jsErrors.length > 50) jsErrors.shift();
+  log('perf', 'crit', '🛑 Promise rejetée: ' + (e.reason?.message || e.reason));
+});
+document.addEventListener('visibilitychange', () => {
+  log('perf', 'info', '👁 Visibility: ' + document.visibilityState);
+});
+
+// ═══════════════════════════════════════════════════
+//  TABS
+// ═══════════════════════════════════════════════════
+document.querySelectorAll('.tab').forEach(tab => {
+  tab.addEventListener('click', () => {
+    const target = tab.dataset.tab;
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    tab.classList.add('active');
+    document.querySelectorAll('.panel').forEach(p => {
+      if (target === 'all') {
+        p.classList.remove('hidden');
+      } else {
+        p.classList.toggle('hidden', p.dataset.category !== target);
+      }
+    });
+  });
+});
+
+function togglePanel(id) {
+  const p = document.getElementById(id);
+  if (p) p.classList.toggle('collapsed');
+}
+
+// ═══════════════════════════════════════════════════
+//  EXPORT
+// ═══════════════════════════════════════════════════
+function exportLog() {
+  const lines = [];
+  lines.push('═══════════════════════════════════════════════');
+  lines.push('  AURA GUARDIAN v1 · EXPORT COMPLET');
+  lines.push('═══════════════════════════════════════════════');
+  lines.push('Date export : ' + new Date().toLocaleString());
+  lines.push('Durée session : ' + Math.round((Date.now() - bootTime) / 1000) + 's');
+  lines.push('Nombre de ticks : ' + tickCount);
+  lines.push('Entrées journal : ' + journal.length);
+  lines.push('Anomalies détectées : ' + anomalies.length);
+  lines.push('Erreurs JS capturées : ' + jsErrors.length);
+  lines.push('');
+  
+  if (anomalies.length > 0) {
+    lines.push('═══════════════════════════════════════════════');
+    lines.push('  ANOMALIES DÉTECTÉES');
+    lines.push('═══════════════════════════════════════════════');
+    anomalies.forEach(a => lines.push('[' + a.ts + '] [' + a.category + '] [' + a.type.toUpperCase() + '] ' + a.msg));
+    lines.push('');
+  }
+  
+  if (jsErrors.length > 0) {
+    lines.push('═══════════════════════════════════════════════');
+    lines.push('  ERREURS JAVASCRIPT');
+    lines.push('═══════════════════════════════════════════════');
+    jsErrors.forEach(e => lines.push('[' + new Date(e.ts).toLocaleTimeString() + '] ' + e.msg + ' @ ' + e.src + ':' + (e.line || '?')));
+    lines.push('');
+  }
+  
+  lines.push('═══════════════════════════════════════════════');
+  lines.push('  JOURNAL COMPLET');
+  lines.push('═══════════════════════════════════════════════');
+  journal.forEach(e => lines.push('[' + e.ts + '] [' + e.category + '] [' + e.type.toUpperCase() + '] ' + e.msg));
+  
+  download(lines.join('\n'), 'aura-guardian-' + stamp() + '.txt');
+}
+
+function exportForClaude() {
+  const ls = readLS();
+  const lines = [];
+  lines.push('# AURA Guardian · Diagnostic pour Claude');
+  lines.push('Date: ' + new Date().toLocaleString());
+  lines.push('Session: ' + Math.round((Date.now() - bootTime) / 1000) + 's, ' + tickCount + ' ticks');
+  lines.push('');
+  lines.push('## État actuel des storages');
+  if (ls.present) {
+    lines.push('- localStorage: cycle=' + ls.cycle + ', mode=' + ls.mode + ', cash=' + ls.cash + ', trading=' + ls.trading);
+    lines.push('  savedAt: ' + ls.savedAt);
+    lines.push('  size: ' + fmtSize(ls.size));
+  } else {
+    lines.push('- localStorage: ABSENT');
+  }
+  lines.push('');
+  lines.push('## Anomalies détectées (' + anomalies.length + ')');
+  if (anomalies.length === 0) {
+    lines.push('Aucune anomalie.');
+  } else {
+    anomalies.slice(-30).forEach(a => lines.push('- [' + a.ts + '] [' + a.category + '] ' + a.msg));
+  }
+  lines.push('');
+  lines.push('## Erreurs JS (' + jsErrors.length + ')');
+  jsErrors.slice(-10).forEach(e => lines.push('- ' + e.msg + ' @ ' + e.src));
+  lines.push('');
+  lines.push('## 30 dernières entrées journal');
+  journal.slice(-30).forEach(e => lines.push('[' + e.ts + '] [' + e.category + '] [' + e.type + '] ' + e.msg));
+  
+  download(lines.join('\n'), 'aura-diagnostic-claude-' + stamp() + '.txt');
+}
+
+function download(content, filename) {
+  const blob = new Blob([content], { type: 'text/plain' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(() => {
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }, 100);
+}
+
+function stamp() {
+  return new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
+}
+
+function clearLog() {
+  if (!confirm('Vider le journal et les anomalies ?')) return;
+  journal.length = 0;
+  anomalies.length = 0;
+  renderJournal();
+  log('system', 'event', '── Journal vidé manuellement ──');
+}
+
+// Filtres
+['f-ok','f-info','f-event','f-warn','f-crit'].forEach(id => {
+  setTimeout(() => {
+    const el = document.getElementById(id);
+    if (el) el.addEventListener('change', renderJournal);
+  }, 100);
+});
+
+// ═══════════════════════════════════════════════════
+//  DÉMARRAGE
+// ═══════════════════════════════════════════════════
+log('system', 'event', '════ AURA GUARDIAN v1 DÉMARRÉ ════');
+log('system', 'info', 'Lecture seule · Aucune modification de l\'app');
+log('system', 'info', 'Refresh: ' + REFRESH_MS + 'ms');
+
+tick();
+setInterval(tick, REFRESH_MS);
+</script>
+
+</body>
+</html>
