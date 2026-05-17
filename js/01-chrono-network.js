@@ -1,16 +1,17 @@
 /* ═══════════════════════════════════════════════════════════
    AURA8 · js/01-chrono-network.js
    ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓
-   ▓                   VERSION  v118.15                      ▓
+   ▓                   VERSION  v118.16                      ▓
    ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓
    
-   v118.15 : Play/Pause adapte le message au mode trading actif
-   - Mode AA : "▶ Auto-apprentissage démarré" (bleu)
-   - Mode EV : "▶ Évaluation démarrée" (vert)
-   - Mode RE : "▶ Trading Réel démarré" (rouge)
-   - Idem pour la pause avec le bon nom du mode
-   
-   v118.14 : couleurs natives showToast (info/win/loss)
+   v118.16 : BUG CRITIQUE RÉSOLU
+   - Type 'info' est MASQUÉ par défaut dans showToast() de l'app !
+   - C'est pour ça que les notifs AA n'apparaissaient pas
+   - Nouveau mapping :
+     • sim       → 'ice'  (bleu cyan, var(--ice), visible)
+     • paperReal → 'win'  (vert)
+     • real      → 'loss' (rouge)
+   - Appliqué aux 2 endroits : cycleTradeMode + startSim/stopSim
    ═══════════════════════════════════════════════════════════ */
 
 function _auraGetGlobalS() {
@@ -303,10 +304,11 @@ window._auraGetGlobalS = _auraGetGlobalS;
       if (typeof window.showToast === 'function') window.showToast(msg, 2500, type || 'win');
     } catch(e) {}
   }
-  // v118.15 : mapping mode → label adapté pour notifications play/pause
+  // v118.16 : mapping mode → label + type pour notifications adaptatives
+  // ATTENTION : 'info' est MASQUÉ par défaut dans showToast() → utiliser 'ice' pour AA
   function _getModeInfo() {
     const MAP = {
-      'sim':       { name: 'Auto-apprentissage', type: 'info' },
+      'sim':       { name: 'Auto-apprentissage', type: 'ice'  },
       'paperReal': { name: 'Évaluation',         type: 'win'  },
       'real':      { name: 'Trading Réel',       type: 'loss' }
     };
@@ -449,12 +451,13 @@ window._auraGetGlobalS = _auraGetGlobalS;
     // 3. Mise à jour visuelle bouton
     updateButtonVisual(nextMode);
     
-    // 4. ★ NOTIFICATION v118.14 : type natif de showToast pour vraie couleur app ★
-    //    sim → 'info' (bleu) · paperReal → 'win' (vert) · real → 'loss' (rouge)
+    // 4. ★ NOTIFICATION v118.16 : type natif de showToast pour vraie couleur app ★
+    //    ATTENTION : 'info' est MASQUÉ par défaut → utiliser 'ice' pour AA
+    //    sim → 'ice' (bleu cyan) · paperReal → 'win' (vert) · real → 'loss' (rouge)
     try {
-      const TYPE_MAP = { 'sim': 'info', 'paperReal': 'win', 'real': 'loss' };
+      const TYPE_MAP = { 'sim': 'ice', 'paperReal': 'win', 'real': 'loss' };
       const msg = 'Activation Mode ' + MODES[nextMode].name;
-      const type = TYPE_MAP[nextMode] || 'info';
+      const type = TYPE_MAP[nextMode] || 'ice';
       if (typeof window.showToast === 'function') {
         window.showToast(msg, 2500, type);
       }
