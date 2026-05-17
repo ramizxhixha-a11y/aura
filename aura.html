@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#050709">
+<title>AURA ∞</title>
+
+<!-- Empêche le navigateur de cacher CE fichier -->
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
+
+<style>
+  html, body {
+    margin: 0; padding: 0;
+    background: #050709;
+    color: #e6ebf5;
+    font-family: -apple-system, system-ui, sans-serif;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+  }
+  .logo {
+    width: 80px;
+    height: 80px;
+    border-radius: 50%;
+    border: 2px solid #f5c842;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 20px;
+    background: rgba(245,200,66,.08);
+  }
+  .logo-text {
+    color: #f5c842;
+    font-weight: 700;
+    font-size: 14px;
+    letter-spacing: 0.1em;
+  }
+  .infinity {
+    color: #38d4f5;
+    font-size: 20px;
+    margin-top: -2px;
+  }
+  .label {
+    color: #38d4f5;
+    font-size: 13px;
+    letter-spacing: 0.1em;
+    margin-top: 10px;
+    opacity: 0.7;
+  }
+  .spinner {
+    margin-top: 20px;
+    width: 24px;
+    height: 24px;
+    border: 2px solid rgba(56,212,245,.2);
+    border-top-color: #38d4f5;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+  }
+  @keyframes spin {
+    to { transform: rotate(360deg); }
+  }
+</style>
+</head>
+<body>
+
+<div class="logo">
+  <div>
+    <div class="logo-text">AURA</div>
+    <div class="infinity">∞</div>
+  </div>
+</div>
+
+<div class="label">CHARGEMENT…</div>
+<div class="spinner"></div>
+
+<script>
+  // Redirection IMMÉDIATE avec cache-bust dynamique
+  // À chaque ouverture, l'URL change → Firefox ne peut pas utiliser de cache
+  (function() {
+    var ts = Date.now();
+    var nextUrl = './AURA8_v118.html?t=' + ts + '&fresh=1';
+    
+    // Désenregistrer les service workers existants (au cas où)
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.getRegistrations().then(function(regs) {
+        regs.forEach(function(reg) {
+          try { reg.unregister(); } catch(e) {}
+        });
+      }).catch(function() {});
+    }
+    
+    // Vider le cache HTTP (au cas où)
+    if ('caches' in window) {
+      caches.keys().then(function(names) {
+        names.forEach(function(name) {
+          try { caches.delete(name); } catch(e) {}
+        });
+      }).catch(function() {});
+    }
+    
+    // Redirection après 200ms (laisse le temps au clear)
+    setTimeout(function() {
+      location.replace(nextUrl);
+    }, 200);
+  })();
+</script>
+
+</body>
+</html>
