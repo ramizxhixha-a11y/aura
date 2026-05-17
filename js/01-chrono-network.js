@@ -1,32 +1,70 @@
 /* ═══════════════════════════════════════════════════════════
    AURA8 · js/01-chrono-network.js
-   v118.8 — FIX RENDER + FIX startSim + MAQUETTE v119 PHASE 1
+   v118.9 — CHRONO PAR MODE TRADING (sim/paperReal/real)
    
-   v118.8 ajouts :
-   - Patch HTML : sort tradeModeBtn du bouton imbriqué (cassé)
-   - cycleTradeMode() : cycle AA → EV → RE → AA
-   - Mise à jour de S.tradingMode (sim/paperReal/real)
-   - Injection CSS pour les 3 couleurs (bleu/vert/rouge)
-   - Restauration du mode au chargement depuis S.tradingMode
+   v118.9 changements :
+   - Chrono compte SÉPARÉMENT par mode trading (pas AUTO/MANU)
+   - Stockage : aura_chrono_sim_seconds, _paperReal_seconds, _real_seconds
+   - Affichage : chrono change quand on cycle AA/EV/RE
+   - AUTO/MANU n'influence plus le chrono (touche pas)
+   
+   Garde tous les fixes précédents :
+   - v118.6 : Fix render home
+   - v118.7 : Fix startSim manquante
+   - v118.8 : Maquette v119 Phase 1 (bouton AA/EV/RE)
    ═══════════════════════════════════════════════════════════ */
 
-(function() {
+(function _auraChrono() {
   'use strict';
 
-  const K_AUTO_SEC = 'aura_chrono_auto_seconds';
-  const K_MANU_SEC = 'aura_chrono_manu_seconds';
-  const K_RUNNING  = 'aura_system_running';
-  const K_MODE     = 'aura_current_mode';
+  // Clés localStorage par mode trading
+  const K_SIM_SEC       = 'aura_chrono_sim_seconds';
+  const K_PAPER_SEC     = 'aura_chrono_paperReal_seconds';
+  const K_REAL_SEC      = 'aura_chrono_real_seconds';
+  const K_RUNNING       = 'aura_system_running';
+  
+  // Migration : ancien stockage AUTO/MANU (pour transfert)
+  const K_OLD_AUTO_SEC  = 'aura_chrono_auto_seconds';
+  const K_OLD_MANU_SEC  = 'aura_chrono_manu_seconds';
+
+  // Lire les compteurs avec migration depuis l'ancien stockage
+  function _readCounter(key, fallbackKeys) {
+    const v = parseInt(localStorage.getItem(key) || '', 10);
+    if (!isNaN(v) && v > 0) return v;
+    // Migration : si compteur vide ET un ancien existe, transférer le 1er ancien
+    if (fallbackKeys && fallbackKeys.length) {
+      for (const k of fallbackKeys) {
+        const old = parseInt(localStorage.getItem(k) || '', 10);
+        if (!isNaN(old) && old > 0) {
+          localStorage.setItem(key, old);
+          localStorage.removeItem(k);
+          console.log('[AURA chrono] migration ' + k + ' → ' + key + ' (' + old + 's)');
+          return old;
+        }
+      }
+    }
+    return 0;
+  }
 
   const state = {
     chronoSeconds: {
-      AUTO: parseInt(localStorage.getItem(K_AUTO_SEC) || '0', 10),
-      MANU: parseInt(localStorage.getItem(K_MANU_SEC) || '0', 10),
+      sim:       _readCounter(K_SIM_SEC, [K_OLD_AUTO_SEC]),
+      paperReal: _readCounter(K_PAPER_SEC, [K_OLD_MANU_SEC]),
+      real:      _readCounter(K_REAL_SEC, []),
     },
-    mode: localStorage.getItem(K_MODE) || 'AUTO',
     running: false,
     netStatus: 'online',
   };
+
+  function _getCurrentTradeMode() {
+    try {
+      const S = (window.S || (function(){ try { return eval('typeof S !== "undefined" ? S : null'); } catch(e){return null;} })());
+      if (S && S.tradingMode && state.chronoSeconds[S.tradingMode] !== undefined) {
+        return S.tradingMode;
+      }
+    } catch(e) {}
+    return 'sim'; // défaut
+  }
 
   function formatChrono(s) {
     s = Math.max(0, Math.floor(s));
@@ -41,10 +79,10 @@
   }
 
   function save() {
-    localStorage.setItem(K_AUTO_SEC, state.chronoSeconds.AUTO);
-    localStorage.setItem(K_MANU_SEC, state.chronoSeconds.MANU);
-    localStorage.setItem(K_MODE, state.mode);
-    localStorage.setItem(K_RUNNING, state.running);
+    localStorage.setItem(K_SIM_SEC,   state.chronoSeconds.sim);
+    localStorage.setItem(K_PAPER_SEC, state.chronoSeconds.paperReal);
+    localStorage.setItem(K_REAL_SEC,  state.chronoSeconds.real);
+    localStorage.setItem(K_RUNNING,   state.running);
   }
 
   function evaluateNetwork() {
@@ -75,22 +113,12 @@
     }
   }
 
-  function syncModeFromUI() {
-    const lbl = document.getElementById('modeLabelText');
-    if (!lbl) return;
-    const m = (lbl.textContent || '').trim().toUpperCase();
-    if ((m === 'AUTO' || m === 'MANU') && state.mode !== m) {
-      state.mode = m;
-      save();
-    }
-  }
-
   function tick() {
     syncRunningFromUI();
-    syncModeFromUI();
     if (state.running && state.netStatus !== 'offline') {
-      state.chronoSeconds[state.mode]++;
-      if (state.chronoSeconds[state.mode] % 10 === 0) save();
+      const mode = _getCurrentTradeMode();
+      state.chronoSeconds[mode]++;
+      if (state.chronoSeconds[mode] % 10 === 0) save();
     }
     render();
   }
@@ -98,7 +126,8 @@
   function render() {
     const chronoEl = document.getElementById('chronoEl');
     if (chronoEl) {
-      chronoEl.textContent = formatChrono(state.chronoSeconds[state.mode]);
+      const mode = _getCurrentTradeMode();
+      chronoEl.textContent = formatChrono(state.chronoSeconds[mode]);
       chronoEl.className = 'chrono-display';
       if (state.running) chronoEl.classList.add('running');
     }
@@ -109,6 +138,7 @@
     }
   }
 
+  // API publique
   window.AuraChrono = {
     state: state,
     formatChrono: formatChrono,
@@ -120,7 +150,12 @@
       }
     },
     getChrono: function(mode) {
-      return state.chronoSeconds[mode || state.mode];
+      const m = mode || _getCurrentTradeMode();
+      return state.chronoSeconds[m] || 0;
+    },
+    // Force refresh — appelé depuis cycleTradeMode()
+    refresh: function() {
+      render();
     }
   };
 
@@ -228,10 +263,7 @@
     _lastSig = sig;
     return directFixed > 0;
   }
-  setTimeout(function() {
-    _fix();
-    _intervalId = setInterval(_fix, 2000);
-  }, 1500);
+  setTimeout(function() { _fix(); _intervalId = setInterval(_fix, 2000); }, 1500);
 })();
 
 /* ═══════════════════════════════════════════════════════════
@@ -242,10 +274,7 @@
   window._auraSimState = window._auraSimState || { interval: null, running: false };
   function _getSimTick() {
     if (typeof window.simTick === 'function') return window.simTick;
-    try {
-      const fn = eval('typeof simTick === "function" ? simTick : null');
-      if (fn) return fn;
-    } catch(e) {}
+    try { const fn = eval('typeof simTick === "function" ? simTick : null'); if (fn) return fn; } catch(e) {}
     return null;
   }
   function _getS() {
@@ -269,7 +298,7 @@
   window.startSim = function startSim() {
     if (window._auraSimState.running && window._auraSimState.interval) return;
     const simTick = _getSimTick();
-    if (!simTick) { console.warn('[AURA startSim] simTick introuvable'); _toast('⚠ simTick introuvable'); return; }
+    if (!simTick) { _toast('⚠ simTick introuvable'); return; }
     window._auraSimState.interval = setInterval(function() {
       try { simTick(); } catch(e) { console.warn('[AURA simTick]', e); }
     }, 1000);
@@ -279,7 +308,7 @@
     try {
       const S = _getS();
       if (S && S.chainLog) {
-        S.chainLog.push({ icon:'▶', desc:'Auto-apprentissage démarré · cycle #' + (S.cycle || 0), 
+        S.chainLog.push({ icon:'▶', desc:'Auto-apprentissage démarré · cycle #' + (S.cycle || 0),
           hash:Math.random().toString(36).slice(2,8), time:new Date().toLocaleTimeString() });
         if (S.chainLog.length > 100) S.chainLog.splice(0, S.chainLog.length - 100);
       }
@@ -310,23 +339,10 @@
 
 /* ═══════════════════════════════════════════════════════════
    ░░ PATCH v118.8 · MAQUETTE v119 PHASE 1 · BOUTON AA/EV/RE ░░
-   
-   FIX :
-   - Le bouton tradeModeBtn est imbriqué dans modeToggleBtn (HTML invalide)
-   - À l'exécution, on le sort du parent et le remet juste avant
-   - On lui attache cycleTradeMode() pour cycler AA → EV → RE
-   - On injecte le CSS pour les 3 couleurs (bleu/vert/rouge)
-   - On restaure l'état visuel selon S.tradingMode au démarrage
-   
-   VALEURS INTERNES PRÉSERVÉES :
-   - 'sim'       ↔ label "AA" (Auto-apprentissage) · couleur bleu cyan
-   - 'paperReal' ↔ label "EV" (Évaluation)         · couleur vert
-   - 'real'      ↔ label "RE" (Réel)               · couleur rouge
    ═══════════════════════════════════════════════════════════ */
 (function _auraTradeModeFix() {
   'use strict';
 
-  // ─── Configuration des modes ─────────────────────────────
   const MODES = {
     'sim':       { label: 'AA', cssClass: 'mode-AA', color: '#38d4f5', name: 'Auto-apprentissage' },
     'paperReal': { label: 'EV', cssClass: 'mode-EV', color: '#00e87a', name: 'Évaluation' },
@@ -334,11 +350,9 @@
   };
   const CYCLE_ORDER = ['sim', 'paperReal', 'real'];
 
-  // ─── Injection CSS ───────────────────────────────────────
   function injectCSS() {
     if (document.getElementById('aura-trademode-css')) return;
     const css = `
-      /* v118.8 · Bouton AA/EV/RE - 3 modes trading */
       .btn-trade-mode {
         padding: 4px 9px;
         border-radius: 8px;
@@ -355,39 +369,12 @@
         margin-right: 4px;
       }
       .btn-trade-mode:active { transform: scale(0.94); }
-      
-      .btn-trade-mode.mode-AA {
-        color: #38d4f5;
-        border-color: rgba(56, 212, 245, 0.55);
-        background: rgba(56, 212, 245, 0.08);
-        box-shadow: 0 0 0 1px rgba(56, 212, 245, 0.15);
-      }
-      .btn-trade-mode.mode-AA:hover {
-        background: rgba(56, 212, 245, 0.15);
-        box-shadow: 0 0 12px rgba(56, 212, 245, 0.3);
-      }
-      
-      .btn-trade-mode.mode-EV {
-        color: #00e87a;
-        border-color: rgba(0, 232, 122, 0.55);
-        background: rgba(0, 232, 122, 0.08);
-        box-shadow: 0 0 0 1px rgba(0, 232, 122, 0.15);
-      }
-      .btn-trade-mode.mode-EV:hover {
-        background: rgba(0, 232, 122, 0.15);
-        box-shadow: 0 0 12px rgba(0, 232, 122, 0.3);
-      }
-      
-      .btn-trade-mode.mode-RE {
-        color: #ff3d6b;
-        border-color: rgba(255, 61, 107, 0.6);
-        background: rgba(255, 61, 107, 0.10);
-        box-shadow: 0 0 0 1px rgba(255, 61, 107, 0.2);
-      }
-      .btn-trade-mode.mode-RE:hover {
-        background: rgba(255, 61, 107, 0.18);
-        box-shadow: 0 0 14px rgba(255, 61, 107, 0.4);
-      }
+      .btn-trade-mode.mode-AA { color:#38d4f5; border-color:rgba(56,212,245,.55); background:rgba(56,212,245,.08); box-shadow:0 0 0 1px rgba(56,212,245,.15); }
+      .btn-trade-mode.mode-AA:hover { background:rgba(56,212,245,.15); box-shadow:0 0 12px rgba(56,212,245,.3); }
+      .btn-trade-mode.mode-EV { color:#00e87a; border-color:rgba(0,232,122,.55); background:rgba(0,232,122,.08); box-shadow:0 0 0 1px rgba(0,232,122,.15); }
+      .btn-trade-mode.mode-EV:hover { background:rgba(0,232,122,.15); box-shadow:0 0 12px rgba(0,232,122,.3); }
+      .btn-trade-mode.mode-RE { color:#ff3d6b; border-color:rgba(255,61,107,.6); background:rgba(255,61,107,.10); box-shadow:0 0 0 1px rgba(255,61,107,.2); }
+      .btn-trade-mode.mode-RE:hover { background:rgba(255,61,107,.18); box-shadow:0 0 14px rgba(255,61,107,.4); }
     `;
     const style = document.createElement('style');
     style.id = 'aura-trademode-css';
@@ -395,113 +382,84 @@
     document.head.appendChild(style);
   }
 
-  // ─── Réparation HTML : sortir le bouton imbriqué ─────────
   function fixNestedButton() {
     const inner = document.getElementById('tradeModeBtn');
     if (!inner) return false;
-    
     const parent = inner.parentElement;
-    if (!parent || parent.id !== 'modeToggleBtn') {
-      // Déjà sorti, OK
-      return true;
-    }
-    
-    // Sortir le bouton et le placer juste avant modeToggleBtn
+    if (!parent || parent.id !== 'modeToggleBtn') return true; // déjà sorti
     const grandParent = parent.parentElement;
     if (!grandParent) return false;
-    
     grandParent.insertBefore(inner, parent);
     return true;
   }
 
-  // ─── Helper : récupérer S ────────────────────────────────
   function _getS() {
     try { if (window.S) return window.S; } catch(e) {}
     try { return eval('typeof S !== "undefined" ? S : null'); } catch(e) {}
     return null;
   }
 
-  // ─── Mise à jour visuelle du bouton selon le mode ────────
   function updateButtonVisual(mode) {
     const btn = document.getElementById('tradeModeBtn');
     if (!btn) return;
     const cfg = MODES[mode] || MODES['sim'];
-    
     btn.textContent = cfg.label;
     btn.classList.remove('mode-AA', 'mode-EV', 'mode-RE');
     btn.classList.add(cfg.cssClass);
     btn.title = 'Mode: ' + cfg.name + ' (tape pour cycler)';
   }
 
-  // ─── cycleTradeMode : la fonction principale ─────────────
   window.cycleTradeMode = function cycleTradeMode() {
     const S = _getS();
-    if (!S) {
-      console.warn('[AURA cycleTradeMode] S introuvable');
-      return;
-    }
+    if (!S) { console.warn('[AURA cycleTradeMode] S introuvable'); return; }
     
     const currentMode = S.tradingMode || 'sim';
     const currentIdx = CYCLE_ORDER.indexOf(currentMode);
     const nextIdx = (currentIdx + 1) % CYCLE_ORDER.length;
     const nextMode = CYCLE_ORDER[nextIdx];
     
-    // Update S.tradingMode (la vraie variable interne)
     S.tradingMode = nextMode;
     try { eval('try{S.tradingMode="' + nextMode + '"}catch(e){}'); } catch(e) {}
     
-    // Update visuel
     updateButtonVisual(nextMode);
     
-    // Toast
+    // v118.9 : force le chrono à se mettre à jour pour le nouveau mode
+    try { if (window.AuraChrono && window.AuraChrono.refresh) window.AuraChrono.refresh(); } catch(e) {}
+    
     try {
       if (typeof window.showToast === 'function') {
         window.showToast('Mode: ' + MODES[nextMode].name + ' (' + MODES[nextMode].label + ')', 2500);
       }
     } catch(e) {}
     
-    // Save state
-    try {
-      if (typeof window.saveState === 'function') window.saveState(false);
-    } catch(e) {}
+    try { if (typeof window.saveState === 'function') window.saveState(false); } catch(e) {}
     
     console.log('[AURA tradeMode] ' + currentMode + ' → ' + nextMode);
   };
 
-  // ─── Init : appliquer le fix et restaurer l'état ─────────
   function initTradeMode() {
     injectCSS();
-    
-    if (!fixNestedButton()) {
-      // Pas trouvé, on réessaye plus tard
-      setTimeout(initTradeMode, 1500);
-      return;
-    }
-    
+    if (!fixNestedButton()) { setTimeout(initTradeMode, 1500); return; }
     const btn = document.getElementById('tradeModeBtn');
     if (!btn) return;
-    
-    // Attacher onclick (au cas où il n'en a pas)
     btn.onclick = window.cycleTradeMode;
     
-    // Restaurer l'état visuel depuis S.tradingMode
     const S = _getS();
     if (S) {
-      const mode = S.tradingMode || 'sim';
-      updateButtonVisual(mode);
+      updateButtonVisual(S.tradingMode || 'sim');
     } else {
-      // S pas encore chargé, retenter
       setTimeout(() => {
         const S2 = _getS();
         if (S2) updateButtonVisual(S2.tradingMode || 'sim');
       }, 2000);
     }
     
-    console.log('[AURA v118.8] Bouton AA/EV/RE installé · ' + 
-                'mode actuel: ' + ((S && S.tradingMode) || 'sim'));
+    // v118.9 : force aussi le chrono à se rendre avec le bon mode
+    try { if (window.AuraChrono && window.AuraChrono.refresh) window.AuraChrono.refresh(); } catch(e) {}
+    
+    console.log('[AURA v118.9] Bouton AA/EV/RE actif · chrono par mode trading');
   }
 
-  // Lancer après le chargement complet
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', () => setTimeout(initTradeMode, 500));
   } else {
