@@ -1,7 +1,7 @@
 /* ═══════════════════════════════════════════════════════════
    AURA8 v108 · js/01-chrono-network.js
    LIVRAISON 1 — Chrono multi-mode + Détection réseau + Auto-pause
-   + PATCH v118 : FIX RENDER HOME AT STARTUP (en bas du fichier)
+   + PATCH v118.3 : FIX RENDER HOME (renderAll + setter direct IDs)
 
    COEXISTENCE avec le code existant :
    - Les boutons header ont des onclick natifs (toggleSim, toggleMode, toggleWakeLock, etc.)
@@ -14,7 +14,6 @@
 (function() {
   'use strict';
 
-  // ─── Clés localStorage ──────────────────────────────
   const K_AUTO_SEC = 'aura_chrono_auto_seconds';
   const K_MANU_SEC = 'aura_chrono_manu_seconds';
   const K_RUNNING  = 'aura_system_running';
@@ -22,7 +21,6 @@
   const K_NET_PAUSE = 'aura_paused_by_network';
   const K_QUIT_OFF  = 'aura_quit_while_offline';
 
-  // ─── État ───────────────────────────────────────────
   const state = {
     chronoSeconds: {
       AUTO: parseInt(localStorage.getItem(K_AUTO_SEC) || '0', 10),
@@ -34,10 +32,8 @@
     netStatus: 'online',
   };
 
-  // À l'install : si on a quitté l'app offline, on ne reprend pas auto
   const quitOffline = localStorage.getItem(K_QUIT_OFF) === 'true';
 
-  // ─── Formatage adaptatif (MM:SS → HH:MM:SS → Xd HH:MM) ───
   function formatChrono(s) {
     s = Math.max(0, Math.floor(s));
     const d = Math.floor(s / 86400);
@@ -50,7 +46,6 @@
     return `${pad(m)}:${pad(sec)}`;
   }
 
-  // ─── Persistance ────────────────────────────────────
   function save() {
     localStorage.setItem(K_AUTO_SEC, state.chronoSeconds.AUTO);
     localStorage.setItem(K_MANU_SEC, state.chronoSeconds.MANU);
@@ -58,7 +53,6 @@
     localStorage.setItem(K_RUNNING, state.running);
   }
 
-  // ─── Détection réseau ───────────────────────────────
   function evaluateNetwork() {
     if (!navigator.onLine) return 'offline';
     const conn = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
@@ -81,13 +75,11 @@
         state.running = false;
         localStorage.setItem(K_NET_PAUSE, 'true');
         save();
-        // Notifier le code legacy qu'on a forcé la pause
         if (typeof window.simulationPaused !== 'undefined') {
           window.simulationPaused = true;
         }
       }
     } else if (prev === 'offline' && state.pausedByNetwork && !quitOffline) {
-      // Reprise auto si pas quit-offline
       state.pausedByNetwork = false;
       state.running = true;
       localStorage.setItem(K_NET_PAUSE, 'false');
@@ -99,19 +91,15 @@
     render();
   }
 
-  // À l'init : si on était offline et pause-réseau → marquer quit-offline
   if (!navigator.onLine && localStorage.getItem(K_NET_PAUSE) === 'true') {
     localStorage.setItem(K_QUIT_OFF, 'true');
   } else {
     localStorage.setItem(K_QUIT_OFF, 'false');
   }
 
-  // ─── Détecter l'état du système depuis le code existant ───
-  // Le bouton #simToggleBtn affiche ⏸ quand running, ▶ quand pause
   function syncRunningFromUI() {
     const btn = document.getElementById('simToggleBtn');
     if (!btn) return;
-    // On lit le texte pour savoir si système est en marche
     const text = btn.textContent.trim();
     const isRunning = text === '⏸';
     if (state.running !== isRunning && !state.pausedByNetwork) {
@@ -130,7 +118,6 @@
     }
   }
 
-  // ─── Tick 1 seconde ─────────────────────────────────
   function tick() {
     syncRunningFromUI();
     syncModeFromUI();
@@ -141,9 +128,7 @@
     render();
   }
 
-  // ─── Rendu UI ───────────────────────────────────────
   function render() {
-    // Chrono
     const chronoEl = document.getElementById('chronoEl');
     if (chronoEl) {
       chronoEl.textContent = formatChrono(state.chronoSeconds[state.mode]);
@@ -152,14 +137,11 @@
       if (state.pausedByNetwork) chronoEl.classList.add('paused-auto');
     }
 
-    // Indicateur réseau
     const netEl = document.getElementById('netIndicator');
     if (netEl) {
       netEl.className = 'net-indicator ' + state.netStatus;
     }
 
-    // Bouton play/pause : seulement si on a forcé la pause par réseau
-    // (sinon laisser le code existant gérer son état)
     const btn = document.getElementById('simToggleBtn');
     if (btn && state.pausedByNetwork) {
       btn.className = 'btn-icon btn-play-pause network-lost';
@@ -167,7 +149,6 @@
     }
   }
 
-  // ─── API publique ───────────────────────────────────
   window.AuraChrono = {
     state: state,
     formatChrono: formatChrono,
@@ -183,16 +164,13 @@
     }
   };
 
-  // ─── Init ───────────────────────────────────────────
   function init() {
-    // Écouter les événements réseau
     window.addEventListener('online', onNetworkChange);
     window.addEventListener('offline', onNetworkChange);
     if (navigator.connection) {
       navigator.connection.addEventListener('change', onNetworkChange);
     }
 
-    // Sauver l'état "quit while offline" à la fermeture
     window.addEventListener('beforeunload', () => {
       if (!navigator.onLine) {
         localStorage.setItem(K_QUIT_OFF, 'true');
@@ -202,7 +180,6 @@
       save();
     });
 
-    // Démarrer le tick et l'évaluation réseau initiale
     onNetworkChange();
     setInterval(tick, 1000);
     render();
@@ -216,109 +193,164 @@
 })();
 
 /* ═══════════════════════════════════════════════════════════
-   ░░ PATCH v118 · FIX RENDER HOME AT STARTUP ░░
+   ░░ PATCH v118.3 · FIX RENDER HOME — renderAll() + IDs ░░
    
-   PROBLÈME RÉSOLU :
-   Au chargement initial de l'app, les cards Caisse et Trading
-   sur le dashboard HOME affichent $0 / $0 alors que S.cashAccount
-   et S.tradingAccount contiennent bien les vraies valeurs
-   (visibles dans le modal Transfert).
+   DÉCOUVERTE :
+   La fonction qui rafraîchit le dashboard est renderAll(),
+   pas renderHome(). Trouvée à la ligne 5668 de 02-state-init.js :
+     try { renderAll(); } catch(e) {}
    
-   CAUSE :
-   La fonction de render du dashboard est appelée AVANT que
-   loadState() ait fini de restaurer les valeurs depuis IndexedDB.
-   Résultat : le render se fait avec des 0 par défaut.
+   APPROCHE :
+   1. Appelle renderAll() à plusieurs délais après le chargement
+   2. EN PLUS, set directement les IDs des cards (filet de sécurité) :
+      - #cashVal / #cashPct (Caisse)
+      - #tradVal / #tradPct (Trading)
+      - #ownFundsVal / #ownFundsSub (Fonds Propres en EUR)
+      - #fiscalResVal (Réserve Fiscale)
+      - #levReserveVal (Réserve Levier)
    
-   FIX :
-   Ce patch attend que loadState() ait fini (2-8 secondes),
-   puis force un re-render manuellement en appelant toutes les
-   fonctions de render globales connues. Idempotent et low-risk :
-   ne fait rien si S.cashAccount et S.tradingAccount sont déjà à 0.
-   
-   USAGE MANUEL (debug) :
-   Appeler window._auraForceRender() depuis la console
-   pour forcer un re-render à n'importe quel moment.
+   FORMATAGE :
+   - USD : fmt$(v) aligné avec fmt$2 de l'app
+   - EUR : Math.round(*100)/100 + toLocaleString('fr-FR')
    ═══════════════════════════════════════════════════════════ */
 
-(function _auraForceRenderFix() {
+(function _auraRenderFix() {
   'use strict';
 
-  let _lastRenderTs = 0;
-  let _renderCount = 0;
+  let _attempts = 0;
+  let _stableTicks = 0;
+  let _intervalId = null;
+  let _lastSig = '';
 
-  function _auraTryRender() {
-    if (typeof window.S === 'undefined') {
-      return false;
+  // Formatage USD aligné avec fmt$2 de l'app
+  function _fmtUsd(v) {
+    if (Math.abs(v) < 100) return '$' + v.toFixed(2);
+    if (Math.abs(v) < 10000) return '$' + v.toFixed(2);
+    return '$' + Math.round(v).toLocaleString();
+  }
+
+  // Formatage EUR aligné avec fmtEUR de l'app
+  function _fmtEur(v) {
+    return (Math.round((v || 0) * 100) / 100).toLocaleString('fr-FR', {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
+    }) + ' €';
+  }
+
+  function _setIfChanged(id, value) {
+    const el = document.getElementById(id);
+    if (!el) return false;
+    if (el.textContent !== value) {
+      el.textContent = value;
+      return true;
     }
+    return false;
+  }
+
+  function _fix() {
+    if (!window.S) return false;
     
-    // Vérifie si on a des fonds dans le state
     const cash    = window.S.cashAccount    || 0;
     const trading = window.S.tradingAccount || 0;
     const cycle   = window.S.cycle          || 0;
     
+    // Si vraiment vide (premier démarrage légitime) → rien à forcer
     if (cash < 0.01 && trading < 0.01 && cycle === 0) {
-      // Vraiment vide (premier démarrage légitime) → rien à forcer
+      _attempts++;
+      if (_attempts > 8 && _intervalId) {
+        clearInterval(_intervalId);
+        _intervalId = null;
+        console.log('[AURA fix v118.3] Stopped — état vide légitime');
+      }
       return false;
     }
     
-    // Tente toutes les fonctions de render globales connues
-    const renderFns = [
-      'renderHome', 'render', 'refreshAll',
-      'updateHomeUI', 'renderWallet', 'renderDashboard',
-      'updateWalletCards', 'refreshDashboard',
-      'renderPortfolio', 'updatePortfolio',
-      'rerenderHome', 'forceRender'
-    ];
+    _attempts++;
+    let didSomething = false;
     
-    let calledAny = false;
-    const calledList = [];
-    
-    renderFns.forEach(function(fnName) {
-      if (typeof window[fnName] === 'function') {
-        try {
-          window[fnName]();
-          calledAny = true;
-          calledList.push(fnName);
-        } catch(e) {
-          console.warn('[AURA fix] ' + fnName + ' threw:', e);
-        }
+    // 1. Appeler la vraie fonction de render
+    if (typeof window.renderAll === 'function') {
+      try {
+        window.renderAll();
+        didSomething = true;
+      } catch(e) {
+        console.warn('[AURA fix v118.3] renderAll error:', e);
       }
-    });
-    
-    // Trigger un événement custom au cas où quelque chose écoute
-    try {
-      window.dispatchEvent(new CustomEvent('aura:state-loaded', {
-        detail: { S: window.S }
-      }));
-    } catch(e) {}
-    
-    _renderCount++;
-    _lastRenderTs = Date.now();
-    
-    if (calledAny) {
-      console.log('[AURA fix] Force render #' + _renderCount +
-                  ' · cash=$' + cash.toFixed(2) +
-                  ' trading=$' + trading.toFixed(2) +
-                  ' cycle=#' + cycle +
-                  ' · called: ' + calledList.join(', '));
-    } else if (_renderCount === 1) {
-      console.warn('[AURA fix] Aucune fonction de render trouvée. ' +
-                   'Les cards Caisse/Trading pourraient rester à $0. ' +
-                   'État interne: cash=$' + cash.toFixed(2) +
-                   ' trading=$' + trading.toFixed(2));
     }
     
-    return calledAny;
+    // 2. Setter direct des cards (filet de sécurité)
+    const total = cash + trading;
+    const cashPct = total > 0 ? Math.round(cash / total * 1000) / 10 : 0;
+    const tradingPct = total > 0 ? Math.round(trading / total * 1000) / 10 : 0;
+    
+    let directFixed = 0;
+    if (_setIfChanged('cashVal', _fmtUsd(cash))) directFixed++;
+    if (_setIfChanged('cashPct', cashPct + '%')) directFixed++;
+    if (_setIfChanged('tradVal', _fmtUsd(trading))) directFixed++;
+    if (_setIfChanged('tradPct', tradingPct + '%')) directFixed++;
+    
+    // 3. Fonds Propres (en EUR)
+    const ownFunds = window.S.ownFundsInjected || 0;
+    const rate = window.S.usdEurRate || 0.92;
+    const ownFundsEUR = ownFunds * rate;
+    if (ownFundsEUR > 0.01) {
+      if (_setIfChanged('ownFundsVal', _fmtEur(ownFundsEUR))) directFixed++;
+      const injCount = (window.S.ownFundsLog || []).length;
+      const subText = injCount + ' injection' + (injCount > 1 ? 's' : '');
+      if (_setIfChanged('ownFundsSub', subText)) directFixed++;
+    }
+    
+    // 4. Réserve fiscale
+    const fiscal = window.S.fiscalReserveAccount || 0;
+    if (fiscal > 0.01) {
+      if (_setIfChanged('fiscalResVal', _fmtUsd(fiscal))) directFixed++;
+      const fiscalCount = (window.S.fiscalReserveLog || []).length;
+      if (_setIfChanged('fiscalResSub', fiscalCount + ' dépôts')) directFixed++;
+    }
+    
+    // 5. Réserve levier
+    const levRes = window.S.leverageReserve || 0;
+    if (levRes > 0.01) {
+      if (_setIfChanged('levReserveVal', _fmtUsd(levRes))) directFixed++;
+    }
+    const levBorrowed = window.S.leverageBorrowed || 0;
+    if (levBorrowed > 0.01) {
+      _setIfChanged('levBorrowedSub', 'Emprunté: ' + _fmtUsd(levBorrowed));
+    }
+    
+    // Tracker la stabilité
+    const sig = _fmtUsd(cash) + '|' + _fmtUsd(trading) + '|' + cycle;
+    if (sig === _lastSig && directFixed === 0) {
+      _stableTicks++;
+      // Si stable depuis 4 ticks ET on a déjà fixé des choses → on peut arrêter
+      if (_stableTicks >= 4 && _intervalId && (_attempts > 3 || didSomething)) {
+        clearInterval(_intervalId);
+        _intervalId = null;
+        console.log('[AURA fix v118.3] Display stable — monitoring stopped after ' + _attempts + ' attempts');
+      }
+    } else {
+      _stableTicks = 0;
+    }
+    _lastSig = sig;
+    
+    if (didSomething || directFixed > 0) {
+      console.log('[AURA fix v118.3] #' + _attempts + 
+                  ' · renderAll=' + (typeof window.renderAll === 'function') + 
+                  ' · directFixed=' + directFixed + 
+                  ' · cash=' + _fmtUsd(cash) + ' trading=' + _fmtUsd(trading));
+    }
+    
+    return didSomething || directFixed > 0;
   }
   
-  // Exécution à plusieurs délais (loadState peut être long)
-  setTimeout(_auraTryRender, 1500);
-  setTimeout(_auraTryRender, 3000);
-  setTimeout(_auraTryRender, 5000);
-  setTimeout(_auraTryRender, 8000);
-  
+  // Démarrer le scan : 1.5s puis toutes les 2s
+  setTimeout(function() {
+    _fix();
+    _intervalId = setInterval(_fix, 2000);
+  }, 1500);
+
   // Expose globalement pour debug manuel
-  window._auraForceRender = _auraTryRender;
+  window._auraFixRender = _fix;
   
-  console.log('[AURA fix v118] Render fix module loaded · sera exécuté à 1.5s, 3s, 5s, 8s');
+  console.log('[AURA fix v118.3] Patch loaded — scan starts in 1.5s');
 })();
