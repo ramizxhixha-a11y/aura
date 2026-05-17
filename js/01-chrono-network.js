@@ -1,7 +1,7 @@
 /* ═══════════════════════════════════════════════════════════
    AURA8 v108 · js/01-chrono-network.js
    LIVRAISON 1 — Chrono multi-mode + Détection réseau + Auto-pause
-   + PATCH v118.3 : FIX RENDER HOME (renderAll + setter direct IDs)
+   + PATCH v118.4 : FIX RENDER HOME (fix scope window.S → S direct)
 
    COEXISTENCE avec le code existant :
    - Les boutons header ont des onclick natifs (toggleSim, toggleMode, toggleWakeLock, etc.)
@@ -193,43 +193,62 @@
 })();
 
 /* ═══════════════════════════════════════════════════════════
-   ░░ PATCH v118.3 · FIX RENDER HOME — renderAll() + IDs ░░
+   ░░ PATCH v118.4 · FIX RENDER HOME — SCOPE FIX ░░
    
-   DÉCOUVERTE :
-   La fonction qui rafraîchit le dashboard est renderAll(),
-   pas renderHome(). Trouvée à la ligne 5668 de 02-state-init.js :
-     try { renderAll(); } catch(e) {}
+   PROBLÈME v118.3 :
+   Le patch utilisait window.S et window.renderAll, mais dans cette
+   app S est déclarée avec `const S = {...}` qui n'attache PAS à window.
+   Donc window.S était toujours undefined → patch jamais exécuté.
    
-   APPROCHE :
-   1. Appelle renderAll() à plusieurs délais après le chargement
-   2. EN PLUS, set directement les IDs des cards (filet de sécurité) :
-      - #cashVal / #cashPct (Caisse)
-      - #tradVal / #tradPct (Trading)
-      - #ownFundsVal / #ownFundsSub (Fonds Propres en EUR)
-      - #fiscalResVal (Réserve Fiscale)
-      - #levReserveVal (Réserve Levier)
+   FIX v118.4 :
+   Utilise un eval contrôlé via Function constructor pour accéder à
+   S et renderAll dans le scope global du script. Pas via window.
    
-   FORMATAGE :
-   - USD : fmt$(v) aligné avec fmt$2 de l'app
-   - EUR : Math.round(*100)/100 + toLocaleString('fr-FR')
+   IDs SETTERS DOM :
+   - #cashVal / #cashPct (Caisse)
+   - #tradVal / #tradPct (Trading)
+   - #ownFundsVal / #ownFundsSub (Fonds Propres en EUR)
+   - #fiscalResVal / #fiscalResSub (Réserve Fiscale)
+   - #levReserveVal / #levBorrowedSub (Réserve Levier)
    ═══════════════════════════════════════════════════════════ */
 
-(function _auraRenderFix() {
+(function _auraRenderFixV4() {
   'use strict';
+
+  // Helpers pour accéder aux variables/fonctions globales du script scope
+  // (Les const au top-level d'un script classique ne sont PAS sur window)
+  function _getS() {
+    try {
+      // eslint-disable-next-line no-new-func
+      return (new Function('try { return typeof S !== "undefined" ? S : null } catch(e) { return null }'))();
+    } catch(e) {
+      return null;
+    }
+  }
+
+  function _callRenderAll() {
+    try {
+      // eslint-disable-next-line no-new-func
+      const result = (new Function(
+        'try { if (typeof renderAll === "function") { renderAll(); return true; } return false; } catch(e) { return false }'
+      ))();
+      return result;
+    } catch(e) {
+      return false;
+    }
+  }
 
   let _attempts = 0;
   let _stableTicks = 0;
   let _intervalId = null;
   let _lastSig = '';
 
-  // Formatage USD aligné avec fmt$2 de l'app
   function _fmtUsd(v) {
-    if (Math.abs(v) < 100) return '$' + v.toFixed(2);
+    if (Math.abs(v) < 100)   return '$' + v.toFixed(2);
     if (Math.abs(v) < 10000) return '$' + v.toFixed(2);
     return '$' + Math.round(v).toLocaleString();
   }
 
-  // Formatage EUR aligné avec fmtEUR de l'app
   function _fmtEur(v) {
     return (Math.round((v || 0) * 100) / 100).toLocaleString('fr-FR', {
       minimumFractionDigits: 2,
@@ -248,19 +267,25 @@
   }
 
   function _fix() {
-    if (!window.S) return false;
+    const S = _getS();
+    if (!S) {
+      _attempts++;
+      if (_attempts === 1) {
+        console.warn('[AURA fix v118.4] S introuvable dans le scope global (attente du chargement)...');
+      }
+      return false;
+    }
     
-    const cash    = window.S.cashAccount    || 0;
-    const trading = window.S.tradingAccount || 0;
-    const cycle   = window.S.cycle          || 0;
+    const cash    = S.cashAccount    || 0;
+    const trading = S.tradingAccount || 0;
+    const cycle   = S.cycle          || 0;
     
-    // Si vraiment vide (premier démarrage légitime) → rien à forcer
     if (cash < 0.01 && trading < 0.01 && cycle === 0) {
       _attempts++;
       if (_attempts > 8 && _intervalId) {
         clearInterval(_intervalId);
         _intervalId = null;
-        console.log('[AURA fix v118.3] Stopped — état vide légitime');
+        console.log('[AURA fix v118.4] Stopped — état vide légitime');
       }
       return false;
     }
@@ -268,15 +293,9 @@
     _attempts++;
     let didSomething = false;
     
-    // 1. Appeler la vraie fonction de render
-    if (typeof window.renderAll === 'function') {
-      try {
-        window.renderAll();
-        didSomething = true;
-      } catch(e) {
-        console.warn('[AURA fix v118.3] renderAll error:', e);
-      }
-    }
+    // 1. Appeler renderAll() dans le scope global
+    const renderAllCalled = _callRenderAll();
+    if (renderAllCalled) didSomething = true;
     
     // 2. Setter direct des cards (filet de sécurité)
     const total = cash + trading;
@@ -290,30 +309,30 @@
     if (_setIfChanged('tradPct', tradingPct + '%')) directFixed++;
     
     // 3. Fonds Propres (en EUR)
-    const ownFunds = window.S.ownFundsInjected || 0;
-    const rate = window.S.usdEurRate || 0.92;
+    const ownFunds = S.ownFundsInjected || 0;
+    const rate = S.usdEurRate || 0.92;
     const ownFundsEUR = ownFunds * rate;
     if (ownFundsEUR > 0.01) {
       if (_setIfChanged('ownFundsVal', _fmtEur(ownFundsEUR))) directFixed++;
-      const injCount = (window.S.ownFundsLog || []).length;
+      const injCount = (S.ownFundsLog || []).length;
       const subText = injCount + ' injection' + (injCount > 1 ? 's' : '');
       if (_setIfChanged('ownFundsSub', subText)) directFixed++;
     }
     
     // 4. Réserve fiscale
-    const fiscal = window.S.fiscalReserveAccount || 0;
+    const fiscal = S.fiscalReserveAccount || 0;
     if (fiscal > 0.01) {
       if (_setIfChanged('fiscalResVal', _fmtUsd(fiscal))) directFixed++;
-      const fiscalCount = (window.S.fiscalReserveLog || []).length;
+      const fiscalCount = (S.fiscalReserveLog || []).length;
       if (_setIfChanged('fiscalResSub', fiscalCount + ' dépôts')) directFixed++;
     }
     
     // 5. Réserve levier
-    const levRes = window.S.leverageReserve || 0;
+    const levRes = S.leverageReserve || 0;
     if (levRes > 0.01) {
       if (_setIfChanged('levReserveVal', _fmtUsd(levRes))) directFixed++;
     }
-    const levBorrowed = window.S.leverageBorrowed || 0;
+    const levBorrowed = S.leverageBorrowed || 0;
     if (levBorrowed > 0.01) {
       _setIfChanged('levBorrowedSub', 'Emprunté: ' + _fmtUsd(levBorrowed));
     }
@@ -322,11 +341,10 @@
     const sig = _fmtUsd(cash) + '|' + _fmtUsd(trading) + '|' + cycle;
     if (sig === _lastSig && directFixed === 0) {
       _stableTicks++;
-      // Si stable depuis 4 ticks ET on a déjà fixé des choses → on peut arrêter
       if (_stableTicks >= 4 && _intervalId && (_attempts > 3 || didSomething)) {
         clearInterval(_intervalId);
         _intervalId = null;
-        console.log('[AURA fix v118.3] Display stable — monitoring stopped after ' + _attempts + ' attempts');
+        console.log('[AURA fix v118.4] Display stable — monitoring stopped after ' + _attempts + ' attempts');
       }
     } else {
       _stableTicks = 0;
@@ -334,8 +352,8 @@
     _lastSig = sig;
     
     if (didSomething || directFixed > 0) {
-      console.log('[AURA fix v118.3] #' + _attempts + 
-                  ' · renderAll=' + (typeof window.renderAll === 'function') + 
+      console.log('[AURA fix v118.4] #' + _attempts + 
+                  ' · renderAll=' + renderAllCalled + 
                   ' · directFixed=' + directFixed + 
                   ' · cash=' + _fmtUsd(cash) + ' trading=' + _fmtUsd(trading));
     }
@@ -343,14 +361,21 @@
     return didSomething || directFixed > 0;
   }
   
+  // Exposer pour debug manuel
+  // (utilisable depuis eruda console ou n'importe quel JS chargé)
+  function _exposeForDebug() {
+    try {
+      // eslint-disable-next-line no-new-func
+      (new Function('window._auraFixRender = arguments[0]'))(_fix);
+    } catch(e) {}
+  }
+  _exposeForDebug();
+  
   // Démarrer le scan : 1.5s puis toutes les 2s
   setTimeout(function() {
     _fix();
     _intervalId = setInterval(_fix, 2000);
   }, 1500);
 
-  // Expose globalement pour debug manuel
-  window._auraFixRender = _fix;
-  
-  console.log('[AURA fix v118.3] Patch loaded — scan starts in 1.5s');
+  console.log('[AURA fix v118.4] Patch loaded · uses script-scope access (not window.S)');
 })();
