@@ -409,6 +409,31 @@ window._auraGetGlobalS = _auraGetGlobalS;
     btn.title = 'Mode: ' + cfg.name + ' (tape pour cycler)';
   }
 
+  // ─── Appliquer la couleur du mode au dernier toast affiché ──
+  function _colorizeLastToast(mode) {
+    const cfg = MODES[mode] || MODES['sim'];
+    // Chercher le toast affiché (différents sélecteurs selon l'app)
+    setTimeout(function() {
+      const candidates = [
+        document.querySelector('.toast.show'),
+        document.querySelector('.toast:not(.hide)'),
+        document.querySelector('.toast'),
+        document.querySelector('[class*="toast"]:last-child'),
+        document.querySelector('#toast'),
+        document.querySelector('.notification.show'),
+        document.querySelector('.notification:last-child')
+      ];
+      for (const el of candidates) {
+        if (el && el.offsetParent !== null) {
+          el.style.borderColor = cfg.color;
+          el.style.color = cfg.color;
+          el.style.boxShadow = '0 4px 24px ' + cfg.color + '55, 0 0 0 1px ' + cfg.color + '33';
+          break;
+        }
+      }
+    }, 50);
+  }
+
   window.cycleTradeMode = function cycleTradeMode() {
     // Lire le mode actuel depuis AuraChrono (notre variable propre)
     const currentMode = (window.AuraChrono && window.AuraChrono.getCurrentMode) 
@@ -434,10 +459,12 @@ window._auraGetGlobalS = _auraGetGlobalS;
     // 3. Mise à jour visuelle bouton
     updateButtonVisual(nextMode);
     
-    // 4. Toast
+    // 4. Notification existante de l'app avec le BON texte + colorisation
     try {
+      const msg = 'Activation Mode ' + MODES[nextMode].name;
       if (typeof window.showToast === 'function') {
-        window.showToast('Mode: ' + MODES[nextMode].name + ' (' + MODES[nextMode].label + ')', 2500);
+        window.showToast(msg, 2500);
+        _colorizeLastToast(nextMode);
       }
     } catch(e) {}
     
