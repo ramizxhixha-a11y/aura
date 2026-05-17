@@ -1,23 +1,17 @@
 /* ═══════════════════════════════════════════════════════════
    AURA8 · js/01-chrono-network.js
-   v118.10 — VRAI FIX CHRONO PAR MODE + DEBUG TITRE
+   v118.11 — CHRONO AVEC VARIABLE PROPRE (indépendant de S)
    
-   v118.10 corrections :
-   - VRAI BUG TROUVÉ : eval() en strict mode ne lit pas le scope global
-   - REMPLACÉ par Function() constructor qui lit toujours le scope global
-   - Ajout debug temporaire dans le titre de l'onglet :
-     "AURA · {mode} · s:30 p:5 r:0" pour voir les compteurs en live
-   - Force render à chaque cycleTradeMode
-   
-   Garde tous les fixes précédents.
+   v118.11 changement clé :
+   - Chrono ne dépend PLUS de S.tradingMode (scope strict mode)
+   - Utilise window.AuraChrono.currentMode (variable propre, garantie)
+   - cycleTradeMode synchronise les 2 (AuraChrono.currentMode ET S.tradingMode)
+   - Cohérence garantie même si S a des problèmes de scope
    ═══════════════════════════════════════════════════════════ */
 
-// ─── Helper GLOBAL pour accéder à la vraie variable S ────────
-// Utilise Function() qui exécute dans le scope global, contournant strict mode
 function _auraGetGlobalS() {
   try { if (typeof window !== 'undefined' && window.S) return window.S; } catch(e) {}
   try {
-    // Function() constructor exécute dans le scope global, donc voit S
     const fn = new Function('try { return typeof S !== "undefined" ? S : null; } catch(e) { return null; }');
     return fn();
   } catch(e) {}
@@ -31,9 +25,9 @@ window._auraGetGlobalS = _auraGetGlobalS;
   const K_SIM_SEC   = 'aura_chrono_sim_seconds';
   const K_PAPER_SEC = 'aura_chrono_paperReal_seconds';
   const K_REAL_SEC  = 'aura_chrono_real_seconds';
+  const K_MODE      = 'aura_current_trade_mode';
   const K_RUNNING   = 'aura_system_running';
   
-  // Migration depuis l'ancien stockage AUTO/MANU
   const K_OLD_AUTO  = 'aura_chrono_auto_seconds';
   const K_OLD_MANU  = 'aura_chrono_manu_seconds';
 
@@ -53,26 +47,28 @@ window._auraGetGlobalS = _auraGetGlobalS;
     return 0;
   }
 
+  // Mode courant : lu depuis localStorage OU depuis S au premier load
+  function _getInitialMode() {
+    const stored = localStorage.getItem(K_MODE);
+    if (stored && ['sim', 'paperReal', 'real'].includes(stored)) return stored;
+    
+    const S = window._auraGetGlobalS();
+    if (S && S.tradingMode && ['sim', 'paperReal', 'real'].includes(S.tradingMode)) {
+      return S.tradingMode;
+    }
+    return 'sim';
+  }
+
   const state = {
     chronoSeconds: {
       sim:       _readCounter(K_SIM_SEC, [K_OLD_AUTO]),
       paperReal: _readCounter(K_PAPER_SEC, [K_OLD_MANU]),
       real:      _readCounter(K_REAL_SEC, []),
     },
+    currentMode: _getInitialMode(),
     running: false,
     netStatus: 'online',
   };
-
-  // Détecter le mode courant - USE WINDOW HELPER
-  function _getCurrentTradeMode() {
-    try {
-      const S = window._auraGetGlobalS ? window._auraGetGlobalS() : null;
-      if (S && S.tradingMode && state.chronoSeconds[S.tradingMode] !== undefined) {
-        return S.tradingMode;
-      }
-    } catch(e) {}
-    return 'sim';
-  }
 
   function formatChrono(s) {
     s = Math.max(0, Math.floor(s));
@@ -90,6 +86,7 @@ window._auraGetGlobalS = _auraGetGlobalS;
     localStorage.setItem(K_SIM_SEC,   state.chronoSeconds.sim);
     localStorage.setItem(K_PAPER_SEC, state.chronoSeconds.paperReal);
     localStorage.setItem(K_REAL_SEC,  state.chronoSeconds.real);
+    localStorage.setItem(K_MODE,      state.currentMode);
     localStorage.setItem(K_RUNNING,   state.running);
   }
 
@@ -124,18 +121,17 @@ window._auraGetGlobalS = _auraGetGlobalS;
   function tick() {
     syncRunningFromUI();
     if (state.running && state.netStatus !== 'offline') {
-      const mode = _getCurrentTradeMode();
-      state.chronoSeconds[mode]++;
-      if (state.chronoSeconds[mode] % 10 === 0) save();
+      // currentMode est notre propre variable, garantie d'être à jour
+      state.chronoSeconds[state.currentMode]++;
+      if (state.chronoSeconds[state.currentMode] % 10 === 0) save();
     }
     render();
   }
 
   function render() {
-    const mode = _getCurrentTradeMode();
     const chronoEl = document.getElementById('chronoEl');
     if (chronoEl) {
-      chronoEl.textContent = formatChrono(state.chronoSeconds[mode]);
+      chronoEl.textContent = formatChrono(state.chronoSeconds[state.currentMode]);
       chronoEl.className = 'chrono-display';
       if (state.running) chronoEl.classList.add('running');
     }
@@ -146,10 +142,17 @@ window._auraGetGlobalS = _auraGetGlobalS;
     }
   }
 
+  // API publique - cycleTradeMode appellera setMode()
   window.AuraChrono = {
     state: state,
     formatChrono: formatChrono,
-    getCurrentMode: _getCurrentTradeMode,
+    getCurrentMode: function() { return state.currentMode; },
+    setMode: function(newMode) {
+      if (!['sim', 'paperReal', 'real'].includes(newMode)) return;
+      state.currentMode = newMode;
+      save();
+      render();
+    },
     resetChrono: function(mode) {
       if (state.chronoSeconds[mode] !== undefined) {
         state.chronoSeconds[mode] = 0;
@@ -165,12 +168,10 @@ window._auraGetGlobalS = _auraGetGlobalS;
       render();
     },
     getChrono: function(mode) {
-      const m = mode || _getCurrentTradeMode();
+      const m = mode || state.currentMode;
       return state.chronoSeconds[m] || 0;
     },
-    refresh: function() {
-      render();
-    }
+    refresh: function() { render(); }
   };
 
   function init() {
@@ -183,7 +184,6 @@ window._auraGetGlobalS = _auraGetGlobalS;
     onNetworkChange();
     setInterval(tick, 1000);
     render();
-    console.log('[AURA v118.10] Chrono initialisé · mode:', _getCurrentTradeMode(), 'counters:', state.chronoSeconds);
   }
 
   if (document.readyState === 'loading') {
@@ -351,7 +351,7 @@ window._auraGetGlobalS = _auraGetGlobalS;
 })();
 
 /* ═══════════════════════════════════════════════════════════
-   ░░ PATCH v118.10 · MAQUETTE v119 PHASE 1 · BOUTON AA/EV/RE ░░
+   ░░ PATCH v118.11 · MAQUETTE v119 PHASE 1 · BOUTON AA/EV/RE ░░
    ═══════════════════════════════════════════════════════════ */
 (function _auraTradeModeFix() {
   'use strict';
@@ -410,37 +410,39 @@ window._auraGetGlobalS = _auraGetGlobalS;
   }
 
   window.cycleTradeMode = function cycleTradeMode() {
-    const S = window._auraGetGlobalS();
-    if (!S) { console.warn('[AURA cycleTradeMode] S introuvable'); return; }
+    // Lire le mode actuel depuis AuraChrono (notre variable propre)
+    const currentMode = (window.AuraChrono && window.AuraChrono.getCurrentMode) 
+      ? window.AuraChrono.getCurrentMode() : 'sim';
     
-    const currentMode = S.tradingMode || 'sim';
     const currentIdx = CYCLE_ORDER.indexOf(currentMode);
     const nextIdx = (currentIdx + 1) % CYCLE_ORDER.length;
     const nextMode = CYCLE_ORDER[nextIdx];
     
-    // Set sur l'objet S réel (référence)
-    S.tradingMode = nextMode;
+    // 1. Mettre à jour notre chrono interne (GARANTI)
+    if (window.AuraChrono && window.AuraChrono.setMode) {
+      window.AuraChrono.setMode(nextMode);
+    }
     
-    // Aussi via Function() pour s'assurer que la variable locale aussi est synchro
+    // 2. Synchroniser avec S.tradingMode pour le reste de l'app
+    const S = window._auraGetGlobalS();
+    if (S) { S.tradingMode = nextMode; }
     try {
       const setFn = new Function('mode', 'try{S.tradingMode=mode}catch(e){}');
       setFn(nextMode);
     } catch(e) {}
     
+    // 3. Mise à jour visuelle bouton
     updateButtonVisual(nextMode);
     
-    // Force chrono refresh AVANT toast
-    try { if (window.AuraChrono && window.AuraChrono.refresh) window.AuraChrono.refresh(); } catch(e) {}
-    
+    // 4. Toast
     try {
       if (typeof window.showToast === 'function') {
         window.showToast('Mode: ' + MODES[nextMode].name + ' (' + MODES[nextMode].label + ')', 2500);
       }
     } catch(e) {}
     
+    // 5. Save app state
     try { if (typeof window.saveState === 'function') window.saveState(false); } catch(e) {}
-    
-    console.log('[AURA v118.10 tradeMode] ' + currentMode + ' → ' + nextMode + ' · S.tradingMode = ' + S.tradingMode);
   };
 
   function initTradeMode() {
@@ -450,19 +452,16 @@ window._auraGetGlobalS = _auraGetGlobalS;
     if (!btn) return;
     btn.onclick = window.cycleTradeMode;
     
+    // Synchroniser le mode au démarrage : priorité à AuraChrono
+    const initMode = (window.AuraChrono && window.AuraChrono.getCurrentMode) 
+      ? window.AuraChrono.getCurrentMode() : 'sim';
+    updateButtonVisual(initMode);
+    
+    // Synchroniser aussi S.tradingMode au démarrage
     const S = window._auraGetGlobalS();
-    if (S) {
-      updateButtonVisual(S.tradingMode || 'sim');
-    } else {
-      setTimeout(() => {
-        const S2 = window._auraGetGlobalS();
-        if (S2) updateButtonVisual(S2.tradingMode || 'sim');
-      }, 2000);
+    if (S && S.tradingMode !== initMode) {
+      S.tradingMode = initMode;
     }
-    
-    try { if (window.AuraChrono && window.AuraChrono.refresh) window.AuraChrono.refresh(); } catch(e) {}
-    
-    console.log('[AURA v118.10] Bouton AA/EV/RE actif · S.tradingMode =', S ? S.tradingMode : 'undefined');
   }
 
   if (document.readyState === 'loading') {
