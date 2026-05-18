@@ -1,22 +1,29 @@
 // ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓
 // ▓▓▓                                                              ▓▓▓
-// ▓▓▓   AURA8 — 11-persistance.js — VERSION v119                   ▓▓▓
+// ▓▓▓   AURA8 — 11-persistance.js — VERSION v119.1                 ▓▓▓
 // ▓▓▓                                                              ▓▓▓
 // ▓▓▓   MODULE DÉDIÉ À LA PERSISTANCE                              ▓▓▓
 // ▓▓▓                                                              ▓▓▓
-// ▓▓▓   Remplace 2 fonctions zombies du fichier 10 :               ▓▓▓
-// ▓▓▓     - _installPackContinuite (jamais appelée, autosave 15s)  ▓▓▓
-// ▓▓▓     - scheduleAutoSave (jamais appelée, autosave 30s)        ▓▓▓
+// ▓▓▓   ════ CE QUE FAIT CE MODULE ════                            ▓▓▓
 // ▓▓▓                                                              ▓▓▓
-// ▓▓▓   Ce module fait CE QUE LES 2 FAISAIENT, mais en mieux :     ▓▓▓
-// ▓▓▓     - Autosave 5s (équilibre idéal)                          ▓▓▓
-// ▓▓▓     - Hooks pagehide + freeze + beforeunload + visibility    ▓▓▓
-// ▓▓▓     - S'auto-active                                          ▓▓▓
+// ▓▓▓   1) Autosave toutes les 5 secondes                          ▓▓▓
+// ▓▓▓   2) Sauve à la fermeture (pagehide + beforeunload)          ▓▓▓
+// ▓▓▓   3) Sauve si l'onglet gèle (freeze - Chrome Android)        ▓▓▓
+// ▓▓▓   4) Sauve quand l'onglet est caché (visibilitychange)       ▓▓▓
+// ▓▓▓   5) S'auto-active dès que tout est chargé                   ▓▓▓
 // ▓▓▓                                                              ▓▓▓
-// ▓▓▓   COMPATIBILITÉ : utilise _autoSaveInterval (variable du     ▓▓▓
-// ▓▓▓   fichier 10) → factoryReset peut toujours clearInterval     ▓▓▓
+// ▓▓▓   ════ FIX v119.1 ════                                       ▓▓▓
 // ▓▓▓                                                              ▓▓▓
-// ▓▓▓   CHARGEMENT : à placer dans le HTML APRÈS le fichier 10.    ▓▓▓
+// ▓▓▓   v119.0 ne marchait pas : tentait d'accéder à               ▓▓▓
+// ▓▓▓   _autoSaveInterval (let global du fichier 10) qui n'est PAS ▓▓▓
+// ▓▓▓   accessible depuis un autre script en JavaScript.           ▓▓▓
+// ▓▓▓                                                              ▓▓▓
+// ▓▓▓   v119.1 utilise sa propre variable interne, indépendante.   ▓▓▓
+// ▓▓▓   Plus simple, plus propre, fonctionne.                      ▓▓▓
+// ▓▓▓                                                              ▓▓▓
+// ▓▓▓   ════ CHARGEMENT ════                                       ▓▓▓
+// ▓▓▓                                                              ▓▓▓
+// ▓▓▓   À placer dans le HTML APRÈS le fichier 10.                 ▓▓▓
 // ▓▓▓                                                              ▓▓▓
 // ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓
 
@@ -25,6 +32,9 @@
   
   const TAG = '[PERSISTANCE]';
   const AUTOSAVE_MS = 5000;
+  
+  // Variable INTERNE — pas de conflit avec _autoSaveInterval du fichier 10
+  let myInterval = null;
   let installed = false;
   
   function install() {
@@ -36,59 +46,66 @@
     
     installed = true;
     
-    // ── 1. Autosave 5 secondes ──
-    if (typeof _autoSaveInterval !== 'undefined' && _autoSaveInterval) {
-      try { clearInterval(_autoSaveInterval); } catch(e) {}
+    // ── 1. Autosave 5 secondes (variable interne propre) ──
+    if (myInterval) {
+      try { clearInterval(myInterval); } catch(e) {}
     }
     
-    _autoSaveInterval = setInterval(function() {
+    myInterval = setInterval(function() {
       if (window._resetInProgress) return;
-      if (sessionStorage.getItem('nexus_factory_reset') === '1') return;
+      try {
+        if (sessionStorage.getItem('nexus_factory_reset') === '1') return;
+      } catch(e) {}
       try { window.saveState(true); } catch(e) {}
     }, AUTOSAVE_MS);
+    
+    // Exposer sur window pour debug / factoryReset éventuel
+    window._persistanceInterval = myInterval;
     
     // ── 2. Hook pagehide (le plus fiable mobile) ──
     window.addEventListener('pagehide', function() {
       if (window._resetInProgress) return;
-      if (sessionStorage.getItem('nexus_factory_reset') === '1') return;
       try {
-        if (typeof window.buildSnapshot === 'function' && typeof SAVE_KEY !== 'undefined') {
-          const snap = window.buildSnapshot();
-          try { localStorage.setItem(SAVE_KEY, JSON.stringify(snap)); } catch(e) {}
-        }
-        window.saveState(true);
+        if (sessionStorage.getItem('nexus_factory_reset') === '1') return;
       } catch(e) {}
+      try { window.saveState(true); } catch(e) {}
     });
     
-    // ── 3. Hook freeze (Chrome Android) ──
+    // ── 3. Hook freeze (Chrome Android avant kill) ──
     document.addEventListener('freeze', function() {
       if (window._resetInProgress) return;
-      if (sessionStorage.getItem('nexus_factory_reset') === '1') return;
+      try {
+        if (sessionStorage.getItem('nexus_factory_reset') === '1') return;
+      } catch(e) {}
       try { window.saveState(true); } catch(e) {}
     });
     
     // ── 4. Hook beforeunload (desktop) ──
     window.addEventListener('beforeunload', function() {
       if (window._resetInProgress) return;
-      if (sessionStorage.getItem('nexus_factory_reset') === '1') return;
+      try {
+        if (sessionStorage.getItem('nexus_factory_reset') === '1') return;
+      } catch(e) {}
       try { window.saveState(true); } catch(e) {}
     });
     
     // ── 5. Hook visibilitychange ──
     document.addEventListener('visibilitychange', function() {
       if (window._resetInProgress) return;
-      if (sessionStorage.getItem('nexus_factory_reset') === '1') return;
+      try {
+        if (sessionStorage.getItem('nexus_factory_reset') === '1') return;
+      } catch(e) {}
       if (document.hidden) {
         try { window.saveState(true); } catch(e) {}
-      } else {
-        try {
-          if (typeof window.renderAll === 'function') window.renderAll();
-          if (typeof window.updateSimBtn === 'function') window.updateSimBtn();
-        } catch(e) {}
       }
     });
     
-    console.log(TAG, '✅ Persistance active · autosave ' + (AUTOSAVE_MS/1000) + 's + 4 hooks');
+    // Indicateur visible dans le DOM pour confirmation visuelle (Guardian peut le voir)
+    try {
+      window._persistanceActiveAt = Date.now();
+    } catch(e) {}
+    
+    console.log(TAG, '✅ ACTIF · autosave ' + (AUTOSAVE_MS/1000) + 's + 4 hooks');
     return true;
   }
   
@@ -97,17 +114,22 @@
     function tryInstall() {
       attempts++;
       if (install()) return;
-      if (attempts < 50) setTimeout(tryInstall, 200);
-      else console.error(TAG, '❌ Abandon après 10s');
+      if (attempts < 50) {
+        setTimeout(tryInstall, 200);
+      } else {
+        console.error(TAG, '❌ Abandon après 10s · S=' + (typeof window.S) + ' saveState=' + (typeof window.saveState));
+        try { window._persistanceFailed = true; } catch(e) {}
+      }
     }
     tryInstall();
   }
   
+  // Démarrage avec délai pour laisser init() async finir
   if (document.readyState === 'complete') {
-    setTimeout(waitForReady, 1000);
+    setTimeout(waitForReady, 1500);
   } else {
-    window.addEventListener('load', function() { setTimeout(waitForReady, 1000); });
+    window.addEventListener('load', function() { setTimeout(waitForReady, 1500); });
   }
   
-  console.log(TAG, 'Module chargé');
+  console.log(TAG, 'Module chargé (v119.1)');
 })();
