@@ -76,9 +76,9 @@ function activateBunker(dropPct) {
 
   // Actions immédiates
   if(cfg.actions.pauseBot) {
-    S.botAutoMode = false;
-    S.mode = 'manual';
-    (S.agents||[]).forEach(a=>{ a._bunkerPaused=true; });
+  // S.botAutoMode = false;
+  // S.mode = 'manual';
+  // (S.agents||[]).forEach(a=>{ a._bunkerPaused=true; });
   }
   if(cfg.actions.reduceMises) {
     const prevStake = S.stakeConfig?.defaultStake||S.stakeUsdt||20;
