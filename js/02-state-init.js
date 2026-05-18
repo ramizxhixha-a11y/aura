@@ -2590,7 +2590,7 @@ async function confirmSwitchToPaperReal() {
   } catch(e) {}
   
   // Activer
-  S.tradingMode = 'real';
+  S.tradingMode = 'paperReal';
   S.paperRealStartedAt = Date.now();
   S.paperRealConsecLosses = 0;
   S.paperRealGlobalPauseUntil = 0;
