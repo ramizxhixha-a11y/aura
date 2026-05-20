@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>AURA Guardian v1</title>
+<title>AURA Guardian v1.1</title>
 <style>
   :root {
     --bg:        #050709;
@@ -320,12 +320,79 @@
   }
   
   .hidden { display: none !important; }
+  
+  /* ═════ AUDIT PERSISTANCE 7 SOURCES (v1.1) ═════ */
+  .audit-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-family: 'Menlo','Monaco',monospace;
+    font-size: 10px;
+    margin-top: 6px;
+  }
+  .audit-table th {
+    background: var(--card-hl);
+    color: var(--gold);
+    padding: 6px 4px;
+    text-align: left;
+    font-size: 9px;
+    text-transform: uppercase;
+    letter-spacing: .5px;
+    border-bottom: 1px solid var(--border);
+  }
+  .audit-table td {
+    padding: 5px 4px;
+    border-bottom: 1px dashed rgba(74,86,104,.2);
+    color: var(--t1);
+  }
+  .audit-table tr.absent td { color: var(--t3); font-style: italic; }
+  .audit-table tr.newest td.tag-newest { color: var(--up); font-weight: 700; }
+  .audit-table tr.oldest td.tag-oldest { color: var(--down); }
+  .audit-table td.cycle-val { font-weight: 700; }
+  .audit-table td.diff-bad { color: var(--down); }
+  .audit-table td.diff-warn { color: var(--gold); }
+  .audit-table td.diff-ok { color: var(--up); }
+  .audit-source-name {
+    color: var(--ice);
+  }
+  
+  .t0-banner {
+    background: rgba(192,132,252,.1);
+    border: 1px solid var(--purple);
+    border-radius: 6px;
+    padding: 8px 10px;
+    margin-bottom: 8px;
+    font-size: 10px;
+    color: var(--purple);
+    font-family: monospace;
+  }
+  .t0-banner.empty {
+    background: rgba(74,86,104,.08);
+    border-color: var(--t3);
+    color: var(--t3);
+  }
+  
+  .diff-row {
+    padding: 5px 8px;
+    margin: 3px 0;
+    border-radius: 4px;
+    font-family: monospace;
+    font-size: 10px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .diff-row.regression { background: rgba(255,61,107,.12); border-left: 3px solid var(--down); }
+  .diff-row.progress   { background: rgba(0,232,122,.08); border-left: 3px solid var(--up); }
+  .diff-row.stable     { background: rgba(74,86,104,.08); border-left: 3px solid var(--t3); color: var(--t2); }
+  .diff-row.gone       { background: rgba(255,184,48,.1); border-left: 3px solid var(--gold); }
+  .diff-row .src-name { min-width: 140px; }
+  .diff-row .arrow { color: var(--t2); margin: 0 6px; }
 </style>
 </head>
 <body>
 
 <header>
-  <h1>🛡️ AURA Guardian <span style="font-size:10px;color:var(--t3);font-weight:400;">v1.0</span></h1>
+  <h1>🛡️ AURA Guardian <span style="font-size:10px;color:var(--t3);font-weight:400;">v1.1</span></h1>
   <div class="header-stats">
     <div>Ticks: <b id="hs-ticks">0</b></div>
     <div>Anomalies: <b id="hs-anom">0</b></div>
@@ -340,6 +407,7 @@
 
 <div class="tab-bar">
   <div class="tab active" data-tab="all">Tout</div>
+  <div class="tab" data-tab="audit">🔍 Audit 7 sources</div>
   <div class="tab" data-tab="storage">Storage</div>
   <div class="tab" data-tab="state">État Bot</div>
   <div class="tab" data-tab="capital">Capital</div>
@@ -352,6 +420,62 @@
 </div>
 
 <div class="panels">
+
+  <!-- ════════ AUDIT PERSISTANCE 7 SOURCES (NOUVEAU v1.1) ════════ -->
+  <div class="panel" data-category="audit" id="p-audit" style="grid-column:1/-1;">
+    <div class="panel-head" onclick="togglePanel('p-audit')">
+      <span class="panel-title">🔍 Audit Persistance — 7 sources de vérité</span>
+      <span class="panel-status" id="ps-audit"><span class="dot"></span><span>OK</span></span>
+    </div>
+    <div class="panel-body">
+      <div style="font-size:10px;color:var(--t3);margin-bottom:8px;">
+        Lecture seule. Toutes les sources où le cycle peut être stocké. Si elles divergent → on sait laquelle écrase quoi au reboot.
+      </div>
+      
+      <table class="audit-table">
+        <thead>
+          <tr>
+            <th>Source</th>
+            <th>Cycle</th>
+            <th>_savedAt</th>
+            <th>Âge</th>
+            <th>Taille</th>
+          </tr>
+        </thead>
+        <tbody id="audit-tbody">
+          <tr><td colspan="5" style="text-align:center;color:var(--t3);">Lecture en cours…</td></tr>
+        </tbody>
+      </table>
+      
+      <div id="t0-banner" class="t0-banner empty" style="margin-top:12px;">
+        Aucun snapshot T0 capturé. Clique sur 📸 Snapshot T0 maintenant, reboote Firefox, puis Compare.
+      </div>
+      
+      <div id="diff-results" style="margin-top:8px;"></div>
+      
+      <div class="controls" style="margin-top:12px;">
+        <button class="btn gold" onclick="captureT0()">📸 Snapshot T0</button>
+        <button class="btn" onclick="compareWithT0()">🔄 Comparer avec T0</button>
+        <button class="btn" onclick="exportAuditReport()">📥 Export rapport diff (.txt)</button>
+        <button class="btn danger" onclick="clearT0()">🗑️ Effacer T0</button>
+      </div>
+      
+      <details style="margin-top:10px;">
+        <summary>Comment utiliser cet audit (workflow recommandé)</summary>
+        <pre style="color:var(--t1);">
+1. Lance AURA8 dans un onglet, laisse tourner quelques minutes
+2. Ouvre Guardian dans un autre onglet
+3. Clique 📸 Snapshot T0 (capture l'état des 7 sources MAINTENANT)
+4. Ferme Firefox complètement (kill app, pas juste l'onglet)
+5. Rouvre Firefox, rouvre AURA8, laisse charger
+6. Rouvre Guardian
+7. Clique 🔄 Comparer avec T0
+   → tu verras exactement quelle source a régressé et de combien
+8. Clique 📥 Export rapport diff pour Claude
+        </pre>
+      </details>
+    </div>
+  </div>
 
   <!-- STORAGE -->
   <div class="panel" data-category="storage" id="p-storage">
@@ -535,28 +659,25 @@
 </div>
 
 <div class="footer">
-  AURA Guardian v1.0 · Lecture seule · Ne modifie jamais le système<br>
+  AURA Guardian v1.1 · Lecture seule · Ne modifie jamais le système<br>
   L'app AURA doit tourner dans un onglet séparé pour observation (sinon le monitor ne voit que le storage).
 </div>
 
 <script>
 // ════════════════════════════════════════════════════════════
-//  AURA GUARDIAN v1 — Monitor systémique en lecture seule
-// ════════════════════════════════════════════════════════════
-//
-//  Principe :
-//   - Observe sans modifier
-//   - Lit les storages (toujours)
-//   - Lit S, _simRunning, etc. via window (si même onglet)
-//   - Vérifie des invariants mathématiques
-//   - Journalise tous les événements
-//   - Exporte pour analyse
-//
+//  AURA GUARDIAN v1.1 — Monitor systémique en lecture seule
+//  +  Module Audit Persistance 7 sources
 // ════════════════════════════════════════════════════════════
 
 const SAVE_KEY = 'nexus_state_v2';
 const DB_NAME  = 'NEXUS_DB';
 const REFRESH_MS = 2000;
+
+// Clés de Guardian (isolées du namespace de l'app)
+const T0_KEY = '_guardian_audit_t0';
+
+// Les 7 sources de vérité à auditer
+const SESSION_SNAP_KEYS = ['nexusSnap_current', 'nexusSnap_A', 'nexusSnap_B', 'nexusSnap_C'];
 
 const journal = [];
 const anomalies = [];
@@ -564,9 +685,9 @@ const jsErrors = [];
 
 let tickCount  = 0;
 let bootTime   = Date.now();
-let prevSnap   = null;     // pour détecter les changements
+let prevSnap   = null;
+let lastAudit  = null; // pour export
 
-// État précédent pour comparaisons
 let prevState = {
   lsCycle: null,
   lsTs: null,
@@ -579,8 +700,8 @@ let prevState = {
   portfolio: null,
   positions: null,
   jsErrorCount: 0,
-  lastCycleTs: null,        // timestamp dernier changement de cycle
-  cycleHistory: [],         // pour calcul rate
+  lastCycleTs: null,
+  cycleHistory: [],
 };
 
 // ═══════════════════════════════════════════════════
@@ -649,6 +770,7 @@ function fmtAge(ts) {
   return Math.round(d/3600000) + 'h';
 }
 function fmtSize(n) {
+  if (n === null || n === undefined) return '—';
   if (n < 1024) return n + ' B';
   if (n < 1024*1024) return (n/1024).toFixed(1) + ' KB';
   return (n/(1024*1024)).toFixed(2) + ' MB';
@@ -657,6 +779,11 @@ function fmtDate(iso) {
   if (!iso) return '—';
   try { return new Date(iso).toLocaleTimeString(); }
   catch(e) { return String(iso).slice(0,19); }
+}
+function fmtDateFull(iso) {
+  if (!iso) return '—';
+  try { return new Date(iso).toLocaleString(); }
+  catch(e) { return String(iso); }
 }
 function fmt$(n) {
   if (n === null || n === undefined || !isFinite(n)) return '—';
@@ -680,8 +807,23 @@ function setStatus(panelId, status) {
   if (txt) txt.textContent = status === 'ok' ? 'OK' : status === 'warn' ? 'WARN' : 'CRIT';
 }
 
+// Extrait cycle + savedAt d'un snapshot quelconque
+function extractMeta(snap) {
+  if (!snap || typeof snap !== 'object') return { cycle: null, savedAt: null, ts: null };
+  const cycle = snap.cycle ?? snap._cycle ?? null;
+  const savedAt = snap.savedAt ?? snap._savedAt ?? null;
+  let ts = null;
+  if (savedAt) {
+    try {
+      ts = typeof savedAt === 'number' ? savedAt : new Date(savedAt).getTime();
+      if (!isFinite(ts)) ts = null;
+    } catch(e) { ts = null; }
+  }
+  return { cycle, savedAt, ts, mode: snap.tradingMode };
+}
+
 // ═══════════════════════════════════════════════════
-//  WATCHER 1 : STORAGE
+//  WATCHER 1 : STORAGE (legacy, panneau Storage existant)
 // ═══════════════════════════════════════════════════
 function readLS() {
   try {
@@ -752,7 +894,6 @@ async function watchStorage() {
   const ls  = readLS();
   const idb = await readIDB();
   
-  // localStorage
   if (ls.present) {
     setVal('ls-present', '✓ oui', 'ok');
     setVal('ls-size',    fmtSize(ls.size));
@@ -764,7 +905,6 @@ async function watchStorage() {
     ['ls-size','ls-cycle','ls-mode','ls-saved'].forEach(id => setVal(id, '—', 'empty'));
   }
   
-  // IndexedDB
   if (idb.open) {
     setVal('idb-open',    '✓ oui', 'ok');
     setVal('idb-version', 'v' + idb.version);
@@ -783,7 +923,6 @@ async function watchStorage() {
     ['idb-version','idb-stores','idb-state-present','idb-cycle','idb-mode','idb-saved'].forEach(id => setVal(id, '—', 'empty'));
   }
   
-  // Sync
   const lsC = ls.cycle ?? null;
   const idbC = idb.cycle ?? null;
   const lsT = ls.ts ?? null;
@@ -812,7 +951,6 @@ async function watchStorage() {
     setVal('sync-newest', '—', 'empty');
   }
   
-  // Détections événementielles
   if (tickCount > 1) {
     if (lsC !== null && prevState.lsCycle !== null && lsC < prevState.lsCycle) {
       log('storage', 'crit', '🚨 RÉGRESSION localStorage: ' + prevState.lsCycle + ' → ' + lsC);
@@ -857,7 +995,445 @@ async function watchStorage() {
 }
 
 // ═══════════════════════════════════════════════════
-//  WATCHER 2 : ÉTAT DU BOT (lit depuis le snapshot)
+//  ★★★ NOUVEAU v1.1 : AUDIT PERSISTANCE 7 SOURCES ★★★
+// ═══════════════════════════════════════════════════
+//
+// Lit les 7 sources de vérité en parallèle, sans rien modifier.
+// Construit un tableau comparatif et détecte la source la plus récente
+// + la plus ancienne. Permet capture T0 / comparaison post-reboot.
+//
+async function readAll7Sources() {
+  const sources = [];
+  
+  // 1. localStorage 'nexus_state_v2'
+  try {
+    const raw = localStorage.getItem(SAVE_KEY);
+    if (raw) {
+      const snap = JSON.parse(raw);
+      const meta = extractMeta(snap);
+      sources.push({
+        id: 'ls_nexus',
+        name: "localStorage['" + SAVE_KEY + "']",
+        present: true, size: raw.length, ...meta
+      });
+    } else {
+      sources.push({ id: 'ls_nexus', name: "localStorage['" + SAVE_KEY + "']", present: false });
+    }
+  } catch(e) {
+    sources.push({ id: 'ls_nexus', name: "localStorage['" + SAVE_KEY + "']", present: false, error: e.message });
+  }
+  
+  // 2-5. sessionStorage snapshots
+  for (const key of SESSION_SNAP_KEYS) {
+    try {
+      const raw = sessionStorage.getItem(key);
+      if (raw) {
+        const snap = JSON.parse(raw);
+        const meta = extractMeta(snap);
+        sources.push({
+          id: 'ss_' + key,
+          name: "sessionStorage['" + key + "']",
+          present: true, size: raw.length, ...meta
+        });
+      } else {
+        sources.push({ id: 'ss_' + key, name: "sessionStorage['" + key + "']", present: false });
+      }
+    } catch(e) {
+      sources.push({ id: 'ss_' + key, name: "sessionStorage['" + key + "']", present: false, error: e.message });
+    }
+  }
+  
+  // 6. IndexedDB NEXUS_DB / state
+  try {
+    const db = await openIDB();
+    const stores = Array.from(db.objectStoreNames);
+    if (stores.includes('state')) {
+      const snap = await new Promise(res => {
+        const tx = db.transaction('state', 'readonly');
+        const req = tx.objectStore('state').get(SAVE_KEY);
+        req.onsuccess = e => res(e.target.result || null);
+        req.onerror   = () => res(null);
+      });
+      db.close();
+      if (snap) {
+        const meta = extractMeta(snap);
+        const size = JSON.stringify(snap).length;
+        sources.push({
+          id: 'idb_nexus',
+          name: "IndexedDB[" + DB_NAME + ".state]",
+          present: true, size, ...meta
+        });
+      } else {
+        sources.push({ id: 'idb_nexus', name: "IndexedDB[" + DB_NAME + ".state]", present: false, error: 'store vide' });
+      }
+    } else {
+      db.close();
+      sources.push({ id: 'idb_nexus', name: "IndexedDB[" + DB_NAME + ".state]", present: false, error: 'store inexistant' });
+    }
+  } catch(e) {
+    sources.push({ id: 'idb_nexus', name: "IndexedDB[" + DB_NAME + ".state]", present: false, error: e.message });
+  }
+  
+  // 7. _BACKUP_STATE inline (variable globale window._BACKUP_STATE si même onglet, sinon inconnu)
+  // On peut tenter de lire via window.opener mais Guardian tourne dans onglet séparé.
+  // On signale juste qu'on ne peut pas le lire depuis ici (l'utilisateur sait que c'est figé au 06/05).
+  try {
+    if (typeof window !== 'undefined' && window._BACKUP_STATE) {
+      const snap = window._BACKUP_STATE;
+      const meta = extractMeta(snap);
+      const size = JSON.stringify(snap).length;
+      sources.push({
+        id: 'window_backup',
+        name: "window._BACKUP_STATE (inline)",
+        present: true, size, ...meta
+      });
+    } else {
+      sources.push({
+        id: 'window_backup',
+        name: "window._BACKUP_STATE (inline)",
+        present: false,
+        error: 'onglet séparé — non lisible (figé code source 06/05)'
+      });
+    }
+  } catch(e) {
+    sources.push({ id: 'window_backup', name: "window._BACKUP_STATE (inline)", present: false, error: e.message });
+  }
+  
+  return sources;
+}
+
+function renderAuditTable(sources) {
+  const tbody = document.getElementById('audit-tbody');
+  if (!tbody) return;
+  
+  // Identifier la source la plus récente et la plus ancienne (parmi celles présentes avec ts)
+  const withTs = sources.filter(s => s.present && s.ts);
+  let newestTs = null, oldestTs = null;
+  if (withTs.length > 0) {
+    newestTs = Math.max(...withTs.map(s => s.ts));
+    oldestTs = Math.min(...withTs.map(s => s.ts));
+  }
+  
+  // Identifier le cycle max (référence)
+  const withCycle = sources.filter(s => s.present && typeof s.cycle === 'number');
+  const maxCycle = withCycle.length > 0 ? Math.max(...withCycle.map(s => s.cycle)) : null;
+  
+  const rows = sources.map(s => {
+    if (!s.present) {
+      const reason = s.error ? ' <span style="color:var(--t3);font-size:9px;">(' + escapeHTML(s.error) + ')</span>' : '';
+      return '<tr class="absent">' +
+        '<td><span class="audit-source-name">' + escapeHTML(s.name) + '</span>' + reason + '</td>' +
+        '<td>—</td><td>—</td><td>—</td><td>—</td></tr>';
+    }
+    
+    const isNewest = s.ts && s.ts === newestTs && withTs.length > 1;
+    const isOldest = s.ts && s.ts === oldestTs && oldestTs !== newestTs;
+    const rowCls = isNewest ? 'newest' : (isOldest ? 'oldest' : '');
+    
+    let cycleHtml = s.cycle !== null && s.cycle !== undefined ? '#' + s.cycle : '<span style="color:var(--t3);">—</span>';
+    // Si ce n'est pas le cycle max, marquer en rouge
+    let cycleCls = 'cycle-val';
+    if (maxCycle !== null && typeof s.cycle === 'number') {
+      if (s.cycle < maxCycle) cycleCls += ' diff-bad';
+      else if (s.cycle === maxCycle) cycleCls += ' diff-ok';
+    }
+    
+    const savedHtml = s.savedAt ? fmtDateFull(s.savedAt) : '<span style="color:var(--down);">ABSENT</span>';
+    const ageHtml = s.ts ? fmtAge(s.ts) : '<span style="color:var(--t3);">—</span>';
+    const sizeHtml = fmtSize(s.size);
+    
+    const newestTag = isNewest ? ' 🟢' : '';
+    const oldestTag = isOldest ? ' 🔴' : '';
+    
+    return '<tr class="' + rowCls + '">' +
+      '<td class="tag-newest tag-oldest"><span class="audit-source-name">' + escapeHTML(s.name) + '</span>' + newestTag + oldestTag + '</td>' +
+      '<td class="' + cycleCls + '">' + cycleHtml + '</td>' +
+      '<td>' + savedHtml + '</td>' +
+      '<td>' + ageHtml + '</td>' +
+      '<td>' + sizeHtml + '</td>' +
+      '</tr>';
+  }).join('');
+  
+  tbody.innerHTML = rows;
+  
+  // Statut panneau audit
+  const cycleDiverge = withCycle.length > 1 && new Set(withCycle.map(s => s.cycle)).size > 1;
+  const noSavedAt = withCycle.some(s => !s.ts);
+  let status = 'ok';
+  if (cycleDiverge) status = 'crit';
+  else if (noSavedAt && withCycle.length > 0) status = 'warn';
+  setStatus('audit', status);
+  
+  // Stocker pour export
+  lastAudit = {
+    capturedAt: Date.now(),
+    sources: sources.map(s => ({ ...s, raw: undefined })) // pas le raw, trop lourd
+  };
+  
+  // Mise à jour bandeau T0
+  updateT0Banner();
+}
+
+// ─── T0 SNAPSHOT (persistant dans localStorage de Guardian) ───
+function captureT0() {
+  if (!lastAudit) {
+    alert('Audit pas encore lancé. Attends 2-3 secondes et réessaie.');
+    return;
+  }
+  try {
+    localStorage.setItem(T0_KEY, JSON.stringify(lastAudit));
+    log('audit', 'event', '📸 Snapshot T0 capturé (' + lastAudit.sources.filter(s => s.present).length + ' sources présentes)');
+    updateT0Banner();
+    alert('Snapshot T0 sauvegardé.\n\nMaintenant :\n1. Note les cycles actuels\n2. Reboot Firefox (kill complet)\n3. Rouvre Guardian\n4. Clique "Comparer avec T0"');
+  } catch(e) {
+    alert('Erreur sauvegarde T0 : ' + e.message);
+  }
+}
+
+function loadT0() {
+  try {
+    const raw = localStorage.getItem(T0_KEY);
+    if (!raw) return null;
+    return JSON.parse(raw);
+  } catch(e) {
+    return null;
+  }
+}
+
+function clearT0() {
+  if (!confirm('Supprimer le snapshot T0 ?')) return;
+  localStorage.removeItem(T0_KEY);
+  document.getElementById('diff-results').innerHTML = '';
+  updateT0Banner();
+  log('audit', 'info', 'Snapshot T0 effacé');
+}
+
+function updateT0Banner() {
+  const banner = document.getElementById('t0-banner');
+  if (!banner) return;
+  const t0 = loadT0();
+  if (!t0) {
+    banner.className = 't0-banner empty';
+    banner.textContent = 'Aucun snapshot T0 capturé. Clique sur 📸 Snapshot T0 maintenant, reboote Firefox, puis Compare.';
+    return;
+  }
+  const age = fmtAge(t0.capturedAt);
+  const present = t0.sources.filter(s => s.present).length;
+  const cycles = t0.sources.filter(s => s.present && typeof s.cycle === 'number').map(s => s.cycle);
+  const cycleRange = cycles.length ? (Math.min(...cycles) + (Math.min(...cycles) !== Math.max(...cycles) ? '–' + Math.max(...cycles) : '')) : '?';
+  banner.className = 't0-banner';
+  banner.innerHTML = '📸 T0 capturé il y a <b>' + age + '</b> · ' + present + ' sources · cycles : <b>' + cycleRange + '</b> · ' + new Date(t0.capturedAt).toLocaleString();
+}
+
+// ─── COMPARAISON T0 vs MAINTENANT ───
+function compareWithT0() {
+  const t0 = loadT0();
+  if (!t0) {
+    alert('Aucun snapshot T0. Capture-en un d\'abord.');
+    return;
+  }
+  if (!lastAudit) {
+    alert('Audit pas encore lancé. Attends 2-3 secondes.');
+    return;
+  }
+  
+  const now = lastAudit;
+  const container = document.getElementById('diff-results');
+  
+  const lines = [];
+  lines.push('<h3 style="color:var(--ice);font-size:12px;margin:12px 0 6px;">📊 Diff T0 → maintenant</h3>');
+  lines.push('<div style="font-size:10px;color:var(--t2);margin-bottom:8px;">' +
+    'T0 capturé : ' + new Date(t0.capturedAt).toLocaleString() + '<br>' +
+    'Maintenant : ' + new Date(now.capturedAt).toLocaleString() + '<br>' +
+    'Écart : <b>' + fmtAge(t0.capturedAt) + '</b> entre les deux mesures' +
+    '</div>');
+  
+  // Indexer T0 par id
+  const t0Map = {};
+  t0.sources.forEach(s => t0Map[s.id] = s);
+  
+  let regressions = 0;
+  let progressions = 0;
+  let stables = 0;
+  let gones = 0;
+  
+  now.sources.forEach(snow => {
+    const t0src = t0Map[snow.id];
+    if (!t0src) return;
+    
+    const c0 = t0src.present ? t0src.cycle : null;
+    const c1 = snow.present ? snow.cycle : null;
+    
+    let cls = 'stable';
+    let icon = '⏸';
+    let label = '';
+    
+    if (t0src.present && !snow.present) {
+      cls = 'gone';
+      icon = '❌';
+      label = 'PERDU (présent à T0, absent maintenant)';
+      gones++;
+    } else if (!t0src.present && snow.present) {
+      cls = 'progress';
+      icon = '➕';
+      label = 'NOUVEAU (absent à T0, présent maintenant, cycle=' + c1 + ')';
+      progressions++;
+    } else if (t0src.present && snow.present) {
+      if (typeof c0 === 'number' && typeof c1 === 'number') {
+        const delta = c1 - c0;
+        if (delta < 0) {
+          cls = 'regression';
+          icon = '🚨';
+          label = 'RÉGRESSION : #' + c0 + ' → #' + c1 + ' (Δ' + delta + ')';
+          regressions++;
+        } else if (delta > 0) {
+          cls = 'progress';
+          icon = '✅';
+          label = 'Avancée : #' + c0 + ' → #' + c1 + ' (Δ+' + delta + ')';
+          progressions++;
+        } else {
+          cls = 'stable';
+          icon = '⏸';
+          label = 'Stable : #' + c0;
+          stables++;
+        }
+      } else {
+        cls = 'stable';
+        icon = '⏸';
+        label = 'Cycle absent dans une des 2 mesures';
+        stables++;
+      }
+    } else {
+      cls = 'stable';
+      icon = '⏸';
+      label = 'Absent à T0 et maintenant';
+      stables++;
+    }
+    
+    lines.push('<div class="diff-row ' + cls + '">' +
+      '<span class="src-name">' + icon + ' ' + escapeHTML(snow.name) + '</span>' +
+      '<span class="arrow">→</span>' +
+      '<span>' + escapeHTML(label) + '</span>' +
+      '</div>');
+  });
+  
+  // Bilan
+  lines.push('<div style="margin-top:12px;padding:8px;background:var(--card-hl);border-radius:6px;font-size:11px;">' +
+    '<b style="color:var(--ice);">Bilan :</b> ' +
+    '<span style="color:var(--down);">' + regressions + ' régression(s)</span> · ' +
+    '<span style="color:var(--up);">' + progressions + ' progression(s)</span> · ' +
+    '<span style="color:var(--t2);">' + stables + ' stable(s)</span> · ' +
+    '<span style="color:var(--gold);">' + gones + ' perdue(s)</span>' +
+    '</div>');
+  
+  if (regressions > 0) {
+    lines.push('<div style="margin-top:8px;padding:8px;background:rgba(255,61,107,.1);border:1px solid var(--down);border-radius:6px;font-size:11px;color:var(--down);">' +
+      '🚨 Des régressions détectées. Les sources marquées RÉGRESSION ont écrasé l\'état plus récent au reload.<br>' +
+      '<b>→ Click "Export rapport diff" et envoie le .txt dans la conv Claude pour analyse.</b>' +
+      '</div>');
+    log('audit', 'crit', '🚨 ' + regressions + ' régression(s) détectée(s) après reboot');
+  } else if (gones > 0) {
+    lines.push('<div style="margin-top:8px;padding:8px;background:rgba(255,184,48,.1);border:1px solid var(--gold);border-radius:6px;font-size:11px;color:var(--gold);">' +
+      '⚠ ' + gones + ' source(s) perdue(s). Données effacées entre T0 et maintenant.' +
+      '</div>');
+  }
+  
+  container.innerHTML = lines.join('');
+}
+
+function exportAuditReport() {
+  const t0 = loadT0();
+  const now = lastAudit;
+  
+  if (!now) {
+    alert('Audit pas encore lancé.');
+    return;
+  }
+  
+  const lines = [];
+  lines.push('═══════════════════════════════════════════════');
+  lines.push('  AURA GUARDIAN v1.1 · AUDIT PERSISTANCE 7 SOURCES');
+  lines.push('═══════════════════════════════════════════════');
+  lines.push('Date export : ' + new Date().toLocaleString());
+  lines.push('');
+  
+  if (t0) {
+    lines.push('--- SNAPSHOT T0 (' + new Date(t0.capturedAt).toLocaleString() + ') ---');
+    t0.sources.forEach(s => {
+      if (s.present) {
+        lines.push('  ' + s.name);
+        lines.push('    cycle=' + (s.cycle ?? '?') + ' | savedAt=' + (s.savedAt || 'ABSENT') + ' | size=' + fmtSize(s.size));
+      } else {
+        lines.push('  ' + s.name + ' : ABSENT' + (s.error ? ' (' + s.error + ')' : ''));
+      }
+    });
+    lines.push('');
+  } else {
+    lines.push('--- SNAPSHOT T0 : aucun ---');
+    lines.push('');
+  }
+  
+  lines.push('--- ÉTAT ACTUEL (' + new Date(now.capturedAt).toLocaleString() + ') ---');
+  now.sources.forEach(s => {
+    if (s.present) {
+      lines.push('  ' + s.name);
+      lines.push('    cycle=' + (s.cycle ?? '?') + ' | savedAt=' + (s.savedAt || 'ABSENT') + ' | size=' + fmtSize(s.size));
+    } else {
+      lines.push('  ' + s.name + ' : ABSENT' + (s.error ? ' (' + s.error + ')' : ''));
+    }
+  });
+  lines.push('');
+  
+  if (t0) {
+    lines.push('--- DIFF T0 → MAINTENANT ---');
+    const t0Map = {};
+    t0.sources.forEach(s => t0Map[s.id] = s);
+    
+    now.sources.forEach(snow => {
+      const t0src = t0Map[snow.id];
+      if (!t0src) return;
+      const c0 = t0src.present ? t0src.cycle : null;
+      const c1 = snow.present ? snow.cycle : null;
+      
+      if (t0src.present && !snow.present) {
+        lines.push('  ❌ PERDU  ' + snow.name);
+      } else if (!t0src.present && snow.present) {
+        lines.push('  ➕ NOUVEAU ' + snow.name + ' cycle=' + c1);
+      } else if (typeof c0 === 'number' && typeof c1 === 'number') {
+        const delta = c1 - c0;
+        if (delta < 0) {
+          lines.push('  🚨 RÉGRESSION ' + snow.name + ' : #' + c0 + ' → #' + c1 + ' (Δ' + delta + ')');
+        } else if (delta > 0) {
+          lines.push('  ✅ AVANCÉE    ' + snow.name + ' : #' + c0 + ' → #' + c1 + ' (Δ+' + delta + ')');
+        } else {
+          lines.push('  ⏸  STABLE    ' + snow.name + ' : #' + c0);
+        }
+      } else {
+        lines.push('  ⏸  N/A       ' + snow.name);
+      }
+    });
+    lines.push('');
+  }
+  
+  lines.push('═══════════════════════════════════════════════');
+  lines.push('  ANALYSE POUR CLAUDE');
+  lines.push('═══════════════════════════════════════════════');
+  lines.push('');
+  lines.push('Sources de vérité auditées (7) :');
+  lines.push('1. localStorage[' + SAVE_KEY + ']');
+  SESSION_SNAP_KEYS.forEach((k,i) => lines.push((i+2) + '. sessionStorage[' + k + ']'));
+  lines.push('6. IndexedDB[' + DB_NAME + '.state]');
+  lines.push('7. window._BACKUP_STATE (inline JS, non lisible depuis Guardian séparé)');
+  lines.push('');
+  lines.push('Si régression détectée : la source RÉGRESSION écrase l\'état plus récent au reboot.');
+  lines.push('Si aucun _savedAt présent : on ne peut pas comparer fiabilité des sources entre elles.');
+  lines.push('Si plusieurs cycles différents en T0 (même instant) : la persistance est déjà désynchronisée.');
+  
+  download(lines.join('\n'), 'aura-audit-persistance-' + stamp() + '.txt');
+}
+
+// ═══════════════════════════════════════════════════
+//  WATCHER 2 : ÉTAT DU BOT
 // ═══════════════════════════════════════════════════
 function watchState(snap) {
   if (!snap) {
@@ -874,11 +1450,9 @@ function watchState(snap) {
   
   setVal('st-auto', snap.botAutoMode ? 'AUTO ✓' : 'MAN', snap.botAutoMode ? 'ok' : 'warn');
   
-  // _simRunning n'est pas dans le snapshot, on ne peut pas le lire ici
   setVal('st-sim', 'voir log app', 'empty');
   setVal('st-net', 'voir log app', 'empty');
   
-  // Mode bunker — souvent stocké dans S.bunkerMode ou via flag
   const bunker = snap.bunkerMode || snap._bunkerActive || false;
   setVal('st-bunker', bunker ? 'ACTIF ⚠' : 'inactif', bunker ? 'warn' : 'ok');
   
@@ -887,7 +1461,6 @@ function watchState(snap) {
   
   setVal('st-cmax', snap.cycleMax || '—');
   
-  // Calcul du taux de cycle par minute
   if (prevState.appCycle !== null && snap.cycle !== prevState.appCycle) {
     prevState.cycleHistory.push({ cycle: snap.cycle, ts: Date.now() });
     if (prevState.cycleHistory.length > 30) prevState.cycleHistory.shift();
@@ -906,10 +1479,9 @@ function watchState(snap) {
   
   setVal('st-timer', 'voir cycleTimer dans pairStates');
   
-  // Détections événementielles
   if (tickCount > 1 && prevState.appCycle !== null) {
     if (snap.cycle !== undefined && prevState.appCycle !== snap.cycle) {
-      // Pas de log à chaque tick, sinon trop bruyant
+      // pas de log par tick
     }
   }
   prevState.appCycle = snap.cycle;
@@ -939,7 +1511,6 @@ function watchCapital(snap) {
   setVal('cap-start',     fmt$(snap._startPortfolio));
   setVal('cap-pnl24',     (snap.pnl24h >= 0 ? '+' : '') + fmt$(snap.pnl24h), snap.pnl24h >= 0 ? 'ok' : 'crit');
   
-  // Détection de fuite de capital
   if (tickCount > 1 && prevState.portfolio !== null && snap.portfolio !== undefined) {
     const delta = snap.portfolio - prevState.portfolio;
     if (Math.abs(delta) > 50 && (!snap.openPositions || snap.openPositions.length === 0)) {
@@ -969,7 +1540,6 @@ function watchPositions(snap) {
   setVal('pos-auto',  auto.length);
   setVal('pos-man',   man.length);
   
-  // Plus ancienne
   let oldest = null;
   let oldestAge = 0;
   const now = Date.now();
@@ -982,28 +1552,22 @@ function watchPositions(snap) {
   });
   setVal('pos-oldest', oldest ? oldest.pair + ' ' + (oldest.side||'').toUpperCase() + ' · ' + fmtAge(now - oldestAge) : '—');
   
-  // Fantômes (>2h)
   const TWO_H = 2 * 60 * 60 * 1000;
   const stale = positions.filter(p => (now - (p.entryTs || now)) > TWO_H);
   setVal('pos-stale', stale.length, stale.length > 0 ? 'warn' : 'ok');
   
-  // Sans TP/SL
   const noTp = positions.filter(p => !p.tp && !p.sl);
   setVal('pos-notp', noTp.length + '/' + positions.length, noTp.length > 0 ? 'warn' : 'ok');
   
-  // entryPrice invalide
   const bad = positions.filter(p => !isFinite(p.entryPrice) || p.entryPrice <= 0);
   setVal('pos-bad', bad.length, bad.length > 0 ? 'crit' : 'ok');
   
-  // P&L latent
   const pnlSum = positions.reduce((s, p) => s + (p.pnlUsdt || 0), 0);
   setVal('pos-pnl', (pnlSum >= 0 ? '+' : '') + fmt$(pnlSum), pnlSum >= 0 ? 'ok' : 'crit');
   
-  // Exposition
   const expo = positions.reduce((s, p) => s + (p.totalExposure || p.stakeUsdt || 0), 0);
   setVal('pos-expo', fmt$(expo));
   
-  // Trades clôturés
   let closed = 0, wins = 0;
   if (snap.pairStates) {
     Object.values(snap.pairStates).forEach(ps => {
@@ -1024,7 +1588,6 @@ function watchPositions(snap) {
   else if (stale.length > 0 || noTp.length > 0) status = 'warn';
   setStatus('positions', status);
   
-  // Événements
   if (tickCount > 1 && prevState.positions !== null && positions.length !== prevState.positions) {
     const delta = positions.length - prevState.positions;
     log('positions', delta > 0 ? 'ok' : 'info', '📊 Positions: ' + prevState.positions + ' → ' + positions.length + ' (Δ' + (delta > 0 ? '+' : '') + delta + ')');
@@ -1059,7 +1622,6 @@ function watchLearning(snap) {
   setVal('lrn-brain',   (snap.brainLog || []).length);
   setVal('lrn-lessons', (snap.agentLessons || []).length);
   
-  // Détection chute fitness
   if (tickCount > 1 && prevState.fitnessAvg !== null) {
     const drop = (prevState.fitnessAvg - avgFit) / prevState.fitnessAvg * 100;
     if (drop > 20) {
@@ -1083,7 +1645,6 @@ function watchLearning(snap) {
 //  WATCHER 6 : PERFORMANCE
 // ═══════════════════════════════════════════════════
 function watchPerf(snap) {
-  // Tick durations depuis S.perf si disponible (via window opener ou snap)
   const perf = snap?.perf || null;
   if (perf) {
     setVal('perf-avg', (perf.avgMs || 0).toFixed(1) + 'ms', (perf.avgMs || 0) > 500 ? 'crit' : (perf.avgMs || 0) > 200 ? 'warn' : 'ok');
@@ -1095,7 +1656,6 @@ function watchPerf(snap) {
   
   setVal('perf-errs', jsErrors.length, jsErrors.length > 0 ? 'crit' : 'ok');
   
-  // Memory (Chrome only)
   if (performance.memory) {
     const mb = (performance.memory.usedJSHeapSize / 1024 / 1024).toFixed(1);
     setVal('perf-mem', mb + ' MB');
@@ -1118,7 +1678,6 @@ function watchPerf(snap) {
 function watchUI(snap) {
   setVal('ui-online', navigator.onLine ? '✓ online' : '✗ offline', navigator.onLine ? 'ok' : 'crit');
   
-  // _netwatchState et autres sont dans S, pas dans le snap. On affiche ce qu'on peut.
   setVal('ui-netwatch', snap?._netPaused ? 'PAUSED' : 'normal', snap?._netPaused ? 'crit' : 'ok');
   
   setVal('ui-pricesrc', snap?.tradingMode === 'sim' ? 'Simulé' : 'Binance/CG');
@@ -1131,7 +1690,6 @@ function watchUI(snap) {
     setVal('ui-toasts', '—', 'empty');
   }
   
-  // Paires actives
   if (snap?.pairStates) {
     const total = Object.keys(snap.pairStates).length;
     const paused = Object.keys(snap._pausedPairs || {}).length;
@@ -1146,13 +1704,12 @@ function watchUI(snap) {
 }
 
 // ═══════════════════════════════════════════════════
-//  WATCHER 8 : INVARIANTS MATHÉMATIQUES
+//  WATCHER 8 : INVARIANTS
 // ═══════════════════════════════════════════════════
 function watchInvariants(snap) {
   const body = document.getElementById('invariants-body');
   if (!body) return;
   
-  // Garder le titre intro
   body.innerHTML = '<div style="font-size:10px;color:var(--t3);margin-bottom:6px;">Équations qui ne doivent JAMAIS être fausses. Si rouge → preuve mathématique d\'un bug.</div>';
   
   if (!snap) {
@@ -1163,131 +1720,58 @@ function watchInvariants(snap) {
   
   const inv = [];
   
-  // INV-1 : portfolio = cash + trading (en USDT)
   const cash = snap.cashAccount || 0;
   const trading = snap.tradingAccount || 0;
   const portfolio = snap.portfolio || 0;
   const expected = cash + trading;
   const diff1 = Math.abs(portfolio - expected);
-  inv.push({
-    id: 'I1',
-    label: 'Portfolio = Cash + Trading',
-    ok: diff1 < 0.01,
-    formula: portfolio.toFixed(2) + ' vs ' + expected.toFixed(2) + ' (Δ' + diff1.toFixed(2) + ')'
-  });
+  inv.push({ id: 'I1', label: 'Portfolio = Cash + Trading', ok: diff1 < 0.01, formula: portfolio.toFixed(2) + ' vs ' + expected.toFixed(2) + ' (Δ' + diff1.toFixed(2) + ')' });
   
-  // INV-2 : Cycle ne descend jamais (vs précédent tick)
-  inv.push({
-    id: 'I2',
-    label: 'Cycle monotone (≥ tick précédent)',
-    ok: prevState.appCycle === null || snap.cycle >= prevState.appCycle,
-    formula: (prevState.appCycle ?? '?') + ' → ' + (snap.cycle ?? '?')
-  });
+  inv.push({ id: 'I2', label: 'Cycle monotone (≥ tick précédent)', ok: prevState.appCycle === null || snap.cycle >= prevState.appCycle, formula: (prevState.appCycle ?? '?') + ' → ' + (snap.cycle ?? '?') });
   
-  // INV-3 : Levier emprunté ≤ levier réserve + lev_borrowed total
   const levRes = snap.leverageReserve || 0;
   const levBor = snap.leverageBorrowed || 0;
-  inv.push({
-    id: 'I3',
-    label: 'Levier emprunté ≤ Réserve + Emprunté (cohérence)',
-    ok: levBor >= 0 && levRes >= 0,
-    formula: 'borrowed=' + levBor.toFixed(2) + ' / reserve=' + levRes.toFixed(2)
-  });
+  inv.push({ id: 'I3', label: 'Levier emprunté ≤ Réserve + Emprunté (cohérence)', ok: levBor >= 0 && levRes >= 0, formula: 'borrowed=' + levBor.toFixed(2) + ' / reserve=' + levRes.toFixed(2) });
   
-  // INV-4 : Σ pos.levBorrowed === leverageBorrowed
   if (Array.isArray(snap.openPositions)) {
     const posSum = snap.openPositions.reduce((s, p) => s + (p.levBorrowed || 0), 0);
     const diff4 = Math.abs(posSum - levBor);
-    inv.push({
-      id: 'I4',
-      label: 'Σ pos.levBorrowed === leverageBorrowed',
-      ok: diff4 < 0.5 || (posSum === 0 && levBor === 0),
-      formula: 'positions: ' + posSum.toFixed(2) + ' / S: ' + levBor.toFixed(2)
-    });
+    inv.push({ id: 'I4', label: 'Σ pos.levBorrowed === leverageBorrowed', ok: diff4 < 0.5 || (posSum === 0 && levBor === 0), formula: 'positions: ' + posSum.toFixed(2) + ' / S: ' + levBor.toFixed(2) });
   }
   
-  // INV-5 : totalTrades >= winTrades
   const totalT = snap.totalTrades || 0;
   const winT = snap.winTrades || 0;
-  inv.push({
-    id: 'I5',
-    label: 'totalTrades ≥ winTrades',
-    ok: totalT >= winT,
-    formula: 'total=' + totalT + ' / wins=' + winT
-  });
+  inv.push({ id: 'I5', label: 'totalTrades ≥ winTrades', ok: totalT >= winT, formula: 'total=' + totalT + ' / wins=' + winT });
   
-  // INV-6 : ownFundsInjected ≥ 0
-  inv.push({
-    id: 'I6',
-    label: 'ownFundsInjected ≥ 0',
-    ok: (snap.ownFundsInjected || 0) >= 0,
-    formula: (snap.ownFundsInjected || 0).toFixed(2)
-  });
+  inv.push({ id: 'I6', label: 'ownFundsInjected ≥ 0', ok: (snap.ownFundsInjected || 0) >= 0, formula: (snap.ownFundsInjected || 0).toFixed(2) });
   
-  // INV-7 : Σ pos.stakeUsdt ≤ trading + leverageReserve initial
   if (Array.isArray(snap.openPositions)) {
     const expo = snap.openPositions.reduce((s, p) => s + (p.totalExposure || p.stakeUsdt || 0), 0);
     const maxAllowed = trading + levRes + levBor;
-    inv.push({
-      id: 'I7',
-      label: 'Exposition ouverte ≤ Trading + Lev réserve + emprunté',
-      ok: expo <= maxAllowed + 1,
-      formula: expo.toFixed(2) + ' ≤ ' + maxAllowed.toFixed(2)
-    });
+    inv.push({ id: 'I7', label: 'Exposition ouverte ≤ Trading + Lev réserve + emprunté', ok: expo <= maxAllowed + 1, formula: expo.toFixed(2) + ' ≤ ' + maxAllowed.toFixed(2) });
   }
   
-  // INV-8 : Tous les openPositions ont entryPrice valide
   if (Array.isArray(snap.openPositions)) {
     const bad = snap.openPositions.filter(p => !isFinite(p.entryPrice) || p.entryPrice <= 0);
-    inv.push({
-      id: 'I8',
-      label: 'Toutes positions ont entryPrice valide (>0, fini)',
-      ok: bad.length === 0,
-      formula: bad.length === 0 ? 'toutes OK' : bad.length + ' position(s) cassée(s)'
-    });
+    inv.push({ id: 'I8', label: 'Toutes positions ont entryPrice valide (>0, fini)', ok: bad.length === 0, formula: bad.length === 0 ? 'toutes OK' : bad.length + ' position(s) cassée(s)' });
   }
   
-  // INV-9 : Fitness des agents ≥ 0
   if (Array.isArray(snap.agents)) {
     const negFit = snap.agents.filter(a => (a.fitness || 0) < 0);
-    inv.push({
-      id: 'I9',
-      label: 'Tous les agents ont fitness ≥ 0',
-      ok: negFit.length === 0,
-      formula: negFit.length === 0 ? 'OK' : negFit.length + ' agent(s) avec fitness < 0'
-    });
+    inv.push({ id: 'I9', label: 'Tous les agents ont fitness ≥ 0', ok: negFit.length === 0, formula: negFit.length === 0 ? 'OK' : negFit.length + ' agent(s) avec fitness < 0' });
   }
   
-  // INV-10 : Cycle ne peut pas être < 0
-  inv.push({
-    id: 'I10',
-    label: 'Cycle ≥ 0',
-    ok: (snap.cycle || 0) >= 0,
-    formula: 'cycle = ' + (snap.cycle ?? '?')
-  });
+  inv.push({ id: 'I10', label: 'Cycle ≥ 0', ok: (snap.cycle || 0) >= 0, formula: 'cycle = ' + (snap.cycle ?? '?') });
   
-  // INV-11 : pairStates et S.openPositions cohérents (pas de double sur même paire)
   if (Array.isArray(snap.openPositions)) {
     const pairs = snap.openPositions.map(p => p.pair);
     const duplicates = pairs.filter((p, i) => pairs.indexOf(p) !== i);
-    inv.push({
-      id: 'I11',
-      label: 'Pas de doublons de paires dans openPositions',
-      ok: duplicates.length === 0,
-      formula: duplicates.length === 0 ? 'OK' : 'doublons: ' + duplicates.join(',')
-    });
+    inv.push({ id: 'I11', label: 'Pas de doublons de paires dans openPositions', ok: duplicates.length === 0, formula: duplicates.length === 0 ? 'OK' : 'doublons: ' + duplicates.join(',') });
   }
   
-  // INV-12 : tradingMode est l'une des 3 valeurs valides
   const validModes = ['sim', 'paperReal', 'real'];
-  inv.push({
-    id: 'I12',
-    label: 'tradingMode ∈ {sim, paperReal, real}',
-    ok: !snap.tradingMode || validModes.includes(snap.tradingMode),
-    formula: 'mode = ' + (snap.tradingMode || 'sim')
-  });
+  inv.push({ id: 'I12', label: 'tradingMode ∈ {sim, paperReal, real}', ok: !snap.tradingMode || validModes.includes(snap.tradingMode), formula: 'mode = ' + (snap.tradingMode || 'sim') });
   
-  // Render
   let crit = 0, warn = 0;
   inv.forEach(i => {
     const cls = i.ok ? 'ok' : 'crit';
@@ -1299,9 +1783,7 @@ function watchInvariants(snap) {
       '</div>';
     body.innerHTML += html;
     
-    // Log les violations
     if (!i.ok && tickCount > 1) {
-      // Log seulement tous les 30 ticks pour éviter spam
       if (tickCount % 30 === 1) {
         log('invariants', 'crit', '✗ ' + i.id + ' violé : ' + i.label + ' · ' + i.formula);
       }
@@ -1320,7 +1802,11 @@ async function tick() {
   try {
     const storage = await watchStorage();
     
-    // Le "snap" qu'on utilise pour les autres watchers = le plus récent des 2 storages
+    // ★ NOUVEAU v1.1 : audit 7 sources à chaque tick (lecture seule, léger)
+    const allSources = await readAll7Sources();
+    renderAuditTable(allSources);
+    
+    // Snap pour autres watchers = plus récent des 2 storages
     let snap = null;
     const lsTs = storage.ls?.ts ?? 0;
     const idbTs = storage.idb?.ts ?? 0;
@@ -1344,7 +1830,7 @@ async function tick() {
 }
 
 // ═══════════════════════════════════════════════════
-//  CAPTURE DES ERREURS JS DE LA PAGE
+//  CAPTURE DES ERREURS JS
 // ═══════════════════════════════════════════════════
 window.addEventListener('error', (e) => {
   jsErrors.push({ ts: Date.now(), msg: e.message, src: e.filename, line: e.lineno });
@@ -1384,12 +1870,12 @@ function togglePanel(id) {
 }
 
 // ═══════════════════════════════════════════════════
-//  EXPORT
+//  EXPORT (legacy)
 // ═══════════════════════════════════════════════════
 function exportLog() {
   const lines = [];
   lines.push('═══════════════════════════════════════════════');
-  lines.push('  AURA GUARDIAN v1 · EXPORT COMPLET');
+  lines.push('  AURA GUARDIAN v1.1 · EXPORT COMPLET');
   lines.push('═══════════════════════════════════════════════');
   lines.push('Date export : ' + new Date().toLocaleString());
   lines.push('Durée session : ' + Math.round((Date.now() - bootTime) / 1000) + 's');
@@ -1426,7 +1912,7 @@ function exportLog() {
 function exportForClaude() {
   const ls = readLS();
   const lines = [];
-  lines.push('# AURA Guardian · Diagnostic pour Claude');
+  lines.push('# AURA Guardian v1.1 · Diagnostic pour Claude');
   lines.push('Date: ' + new Date().toLocaleString());
   lines.push('Session: ' + Math.round((Date.now() - bootTime) / 1000) + 's, ' + tickCount + ' ticks');
   lines.push('');
@@ -1437,6 +1923,19 @@ function exportForClaude() {
     lines.push('  size: ' + fmtSize(ls.size));
   } else {
     lines.push('- localStorage: ABSENT');
+  }
+  lines.push('');
+  lines.push('## Audit 7 sources (dernier tick)');
+  if (lastAudit) {
+    lastAudit.sources.forEach(s => {
+      if (s.present) {
+        lines.push('- ' + s.name + ' : cycle=' + (s.cycle ?? '?') + ' savedAt=' + (s.savedAt || 'ABSENT') + ' size=' + fmtSize(s.size));
+      } else {
+        lines.push('- ' + s.name + ' : ABSENT' + (s.error ? ' (' + s.error + ')' : ''));
+      }
+    });
+  } else {
+    lines.push('Audit pas encore disponible.');
   }
   lines.push('');
   lines.push('## Anomalies détectées (' + anomalies.length + ')');
@@ -1481,7 +1980,6 @@ function clearLog() {
   log('system', 'event', '── Journal vidé manuellement ──');
 }
 
-// Filtres
 ['f-ok','f-info','f-event','f-warn','f-crit'].forEach(id => {
   setTimeout(() => {
     const el = document.getElementById(id);
@@ -1492,10 +1990,12 @@ function clearLog() {
 // ═══════════════════════════════════════════════════
 //  DÉMARRAGE
 // ═══════════════════════════════════════════════════
-log('system', 'event', '════ AURA GUARDIAN v1 DÉMARRÉ ════');
+log('system', 'event', '════ AURA GUARDIAN v1.1 DÉMARRÉ ════');
 log('system', 'info', 'Lecture seule · Aucune modification de l\'app');
 log('system', 'info', 'Refresh: ' + REFRESH_MS + 'ms');
+log('system', 'info', 'NOUVEAU v1.1 : Audit Persistance 7 sources actif');
 
+updateT0Banner();
 tick();
 setInterval(tick, REFRESH_MS);
 </script>
