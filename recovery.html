@@ -1,0 +1,408 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>AURA8 · Récupération cycles</title>
+<style>
+* { box-sizing: border-box; }
+body {
+  margin: 0; padding: 16px;
+  background: #050709; color: #e8eef5;
+  font-family: -apple-system,'Segoe UI',sans-serif;
+  font-size: 14px;
+}
+h1 { color: #f5b500; font-size: 20px; margin: 0 0 8px; }
+.sub { color: #7a8b9a; font-size: 12px; margin-bottom: 20px; }
+.btn {
+  display: block; width: 100%;
+  background: linear-gradient(135deg,#1d3756,#2a5079);
+  color: #fff; border: 1px solid #38d4f5;
+  padding: 14px; border-radius: 10px;
+  font-size: 15px; font-weight: 600;
+  margin: 10px 0; cursor: pointer;
+}
+.btn.gold { background: linear-gradient(135deg,#5e4204,#a07807); border-color: #f5b500; }
+.btn.green { background: linear-gradient(135deg,#0a4d2a,#118647); border-color: #00e87a; }
+.btn.red { background: linear-gradient(135deg,#5a1217,#8b1f28); border-color: #ff4d5a; }
+.btn:disabled { opacity: .4; cursor: not-allowed; }
+.box {
+  background: #0d1219; border: 1px solid #1d2935;
+  border-radius: 10px; padding: 14px; margin: 14px 0;
+  font-family: monospace; font-size: 12px;
+  white-space: pre-wrap; word-break: break-all;
+  max-height: 50vh; overflow-y: auto;
+}
+.found { color: #00e87a; }
+.empty { color: #7a8b9a; }
+.warn  { color: #f5b500; }
+.crit  { color: #ff4d5a; }
+.candidate {
+  background: #0a1f12; border: 1px solid #00e87a;
+  border-radius: 8px; padding: 10px; margin: 8px 0;
+}
+.candidate.best {
+  background: #1a3a08; border-color: #f5b500;
+}
+.candidate b { color: #fff; }
+.candidate .meta { font-size: 11px; color: #7a8b9a; margin-top: 4px; }
+</style>
+</head>
+<body>
+
+<h1>🛟 AURA8 · Récupération cycles</h1>
+<div class="sub">Scanne TOUTES les clés possibles, trouve le snapshot avec le cycle le plus haut, et le restaure dans <code>nexus_state_v2</code> + IndexedDB.</div>
+
+<button class="btn gold" id="btnScan">🔍 1. Scanner toutes les sources</button>
+
+<div id="results"></div>
+
+<button class="btn green" id="btnRestore" disabled>♻️ 2. Restaurer le meilleur snapshot</button>
+
+<button class="btn" id="btnExport" disabled>📥 3. Exporter le snapshot en JSON (backup)</button>
+
+<div class="box" id="log">Prêt. Clique sur "Scanner toutes les sources" pour commencer.</div>
+
+<script>
+'use strict';
+
+const SAVE_KEY = 'nexus_state_v2';
+const DB_NAME  = 'NEXUS_DB';
+const STORE    = 'state';
+
+// Clés candidates connues (d'après les conversations passées)
+const LS_KEYS = [
+  'nexus_state_v2',
+  'nexusSnap_A', 'nexusSnap_B', 'nexusSnap_C',
+  'nexusSnap_latest', 'nexusSnap_current',
+  'nexusInternal_1', 'nexusInternal_2',
+  'aura_autobackup_daily_0', 'aura_autobackup_daily_1', 'aura_autobackup_daily_2',
+  'aura_last_auto_backup_date',
+  'aura_backup_manual',
+];
+
+let bestSnap = null;
+let scanReport = '';
+
+const $log = document.getElementById('log');
+const $res = document.getElementById('results');
+const $btnRestore = document.getElementById('btnRestore');
+const $btnExport = document.getElementById('btnExport');
+
+function log(msg, cls) {
+  const line = cls ? '<span class="'+cls+'">'+msg+'</span>' : msg;
+  $log.innerHTML += '\n' + line;
+  $log.scrollTop = $log.scrollHeight;
+}
+function logClear() { $log.innerHTML = ''; }
+
+function parseSnap(raw) {
+  if (!raw) return null;
+  try {
+    const obj = typeof raw === 'string' ? JSON.parse(raw) : raw;
+    if (!obj || typeof obj !== 'object') return null;
+    return obj;
+  } catch(e) { return null; }
+}
+
+function snapInfo(snap) {
+  if (!snap) return null;
+  const cycle = (typeof snap.cycle === 'number') ? snap.cycle : null;
+  const savedAt = snap.savedAt || null;
+  const size = JSON.stringify(snap).length;
+  const portfolio = snap.portfolio;
+  const cash = snap.cashAccount;
+  const trading = snap.tradingAccount;
+  return { cycle, savedAt, size, portfolio, cash, trading };
+}
+
+function fmt(info) {
+  if (!info) return 'invalide';
+  const parts = [];
+  if (info.cycle != null) parts.push('cycle=#' + info.cycle);
+  if (info.savedAt) parts.push('savedAt=' + info.savedAt.slice(0,19).replace('T',' '));
+  if (info.portfolio != null) parts.push('portfolio=' + info.portfolio.toFixed(2));
+  parts.push('size=' + (info.size/1024).toFixed(1) + ' KB');
+  return parts.join(' · ');
+}
+
+// ── Scan localStorage ─────────────────────────────────────
+function scanLS() {
+  const results = [];
+  // Clés connues
+  for (const k of LS_KEYS) {
+    const raw = localStorage.getItem(k);
+    if (raw === null) {
+      results.push({ source: 'LS', key: k, present: false });
+      continue;
+    }
+    const snap = parseSnap(raw);
+    results.push({ source: 'LS', key: k, present: true, snap, info: snapInfo(snap), raw });
+  }
+  // Toutes les autres clés localStorage (au cas où on aurait raté quelque chose)
+  const knownSet = new Set(LS_KEYS);
+  for (let i = 0; i < localStorage.length; i++) {
+    const k = localStorage.key(i);
+    if (knownSet.has(k)) continue;
+    if (k.startsWith('nexus') || k.startsWith('aura')) {
+      const raw = localStorage.getItem(k);
+      const snap = parseSnap(raw);
+      results.push({ source: 'LS', key: k, present: true, snap, info: snapInfo(snap), raw, extra: true });
+    }
+  }
+  return results;
+}
+
+// ── Scan sessionStorage ───────────────────────────────────
+function scanSS() {
+  const results = [];
+  for (let i = 0; i < sessionStorage.length; i++) {
+    const k = sessionStorage.key(i);
+    if (k.startsWith('nexus') || k.startsWith('aura')) {
+      const raw = sessionStorage.getItem(k);
+      const snap = parseSnap(raw);
+      results.push({ source: 'SS', key: k, present: true, snap, info: snapInfo(snap), raw });
+    }
+  }
+  return results;
+}
+
+// ── Scan IndexedDB (toutes les bases) ─────────────────────
+function listDatabases() {
+  if (typeof indexedDB.databases === 'function') {
+    return indexedDB.databases();
+  }
+  // Fallback : essayer les noms connus
+  return Promise.resolve([{ name: 'NEXUS_DB' }, { name: 'aura_backups' }]);
+}
+
+function openDBNamed(name, version) {
+  return new Promise((resolve) => {
+    let req;
+    try { req = version ? indexedDB.open(name, version) : indexedDB.open(name); }
+    catch(e) { resolve(null); return; }
+    req.onsuccess = () => resolve(req.result);
+    req.onerror   = () => resolve(null);
+    req.onblocked = () => resolve(null);
+    setTimeout(() => resolve(null), 4000);
+  });
+}
+
+async function scanIDB() {
+  const results = [];
+  let dbs = [];
+  try { dbs = await listDatabases(); } catch(e) {}
+  if (!dbs || dbs.length === 0) dbs = [{ name: 'NEXUS_DB' }, { name: 'aura_backups' }];
+
+  for (const dbInfo of dbs) {
+    const name = dbInfo.name;
+    if (!name) continue;
+    const db = await openDBNamed(name);
+    if (!db) {
+      results.push({ source: 'IDB:'+name, key: '(ouverture échouée)', present: false });
+      continue;
+    }
+    const stores = Array.from(db.objectStoreNames);
+    for (const storeName of stores) {
+      try {
+        const tx = db.transaction(storeName, 'readonly');
+        const store = tx.objectStore(storeName);
+        const entries = await new Promise((resolve) => {
+          const out = [];
+          const req = store.openCursor();
+          let count = 0;
+          req.onsuccess = (e) => {
+            const cur = e.target.result;
+            if (cur && count < 20) {
+              count++;
+              out.push({ key: cur.key, value: cur.value });
+              cur.continue();
+            } else {
+              resolve(out);
+            }
+          };
+          req.onerror = () => resolve(out);
+          setTimeout(() => resolve(out), 3000);
+        });
+        if (entries.length === 0) {
+          results.push({ source: 'IDB:'+name, key: storeName+' (vide)', present: false });
+        } else {
+          for (const e of entries) {
+            const snap = parseSnap(e.value);
+            results.push({
+              source: 'IDB:'+name,
+              key: storeName + '[' + e.key + ']',
+              present: true,
+              snap,
+              info: snapInfo(snap),
+              raw: e.value
+            });
+          }
+        }
+      } catch(e) {
+        results.push({ source: 'IDB:'+name, key: storeName+' (erreur)', present: false });
+      }
+    }
+    try { db.close(); } catch(e) {}
+  }
+  return results;
+}
+
+// ── Scan principal ────────────────────────────────────────
+document.getElementById('btnScan').addEventListener('click', async () => {
+  logClear();
+  log('═══ SCAN COMPLET ═══', 'warn');
+  log('Patience, ouverture IndexedDB en cours...\n');
+
+  const ls = scanLS();
+  log('localStorage : ' + ls.filter(r => r.present).length + ' clés trouvées');
+  for (const r of ls) {
+    if (r.present) {
+      const info = r.info;
+      const cycleStr = info && info.cycle != null ? '#' + info.cycle : 'no-cycle';
+      log('  ✓ ' + r.key + ' → ' + cycleStr + (info ? ' (' + (info.size/1024).toFixed(1) + ' KB)' : ''), 'found');
+    } else {
+      log('  · ' + r.key + ' : absent', 'empty');
+    }
+  }
+
+  const ss = scanSS();
+  log('\nsessionStorage : ' + ss.length + ' clés trouvées');
+  for (const r of ss) {
+    const info = r.info;
+    const cycleStr = info && info.cycle != null ? '#' + info.cycle : 'no-cycle';
+    log('  ✓ ' + r.key + ' → ' + cycleStr, 'found');
+  }
+
+  log('\n[IndexedDB] Scan en cours...');
+  const idb = await scanIDB();
+  log('IndexedDB : ' + idb.filter(r => r.present).length + ' entrées trouvées');
+  for (const r of idb) {
+    if (r.present) {
+      const info = r.info;
+      const cycleStr = info && info.cycle != null ? '#' + info.cycle : 'no-cycle';
+      log('  ✓ ' + r.source + ' ' + r.key + ' → ' + cycleStr + (info ? ' (' + (info.size/1024).toFixed(1) + ' KB)' : ''), 'found');
+    } else {
+      log('  · ' + r.source + ' ' + r.key, 'empty');
+    }
+  }
+
+  // Regrouper tous les snapshots valides
+  const all = [...ls, ...ss, ...idb].filter(r => r.present && r.snap && r.info && r.info.cycle != null);
+
+  // Trier par cycle décroissant
+  all.sort((a, b) => b.info.cycle - a.info.cycle);
+
+  log('\n═══ RÉSULTAT ═══', 'warn');
+  log('Total snapshots avec cycle : ' + all.length);
+
+  $res.innerHTML = '<h3 style="color:#f5b500;margin:20px 0 10px;">Snapshots trouvés (triés par cycle ↓)</h3>';
+
+  if (all.length === 0) {
+    $res.innerHTML += '<div class="candidate"><b class="crit">Aucun snapshot avec un cycle trouvé.</b></div>';
+    log('AUCUN snapshot exploitable trouvé.', 'crit');
+    return;
+  }
+
+  bestSnap = all[0];
+  for (let i = 0; i < Math.min(10, all.length); i++) {
+    const r = all[i];
+    const isBest = (i === 0);
+    const info = r.info;
+    $res.innerHTML +=
+      '<div class="candidate' + (isBest ? ' best' : '') + '">' +
+        (isBest ? '<b>⭐ MEILLEUR </b>' : '') +
+        '<b>#' + info.cycle + '</b> dans <b>' + r.source + ' / ' + r.key + '</b>' +
+        '<div class="meta">' + fmt(info) + '</div>' +
+      '</div>';
+  }
+
+  log('\n✅ MEILLEUR CANDIDAT : cycle #' + bestSnap.info.cycle + ' dans ' + bestSnap.source + ' / ' + bestSnap.key, 'found');
+  log('   Portfolio: ' + (bestSnap.info.portfolio || 0).toFixed(2));
+  log('   Cash: ' + (bestSnap.info.cash || 0).toFixed(2));
+  log('   Trading: ' + (bestSnap.info.trading || 0).toFixed(2));
+  log('   SavedAt: ' + (bestSnap.info.savedAt || '?'));
+
+  // Construire le rapport pour export
+  scanReport = '# AURA8 Scan recovery — ' + new Date().toISOString() + '\n\n';
+  scanReport += '## Snapshots trouvés (triés par cycle décroissant)\n\n';
+  for (let i = 0; i < all.length; i++) {
+    const r = all[i];
+    scanReport += (i === 0 ? '⭐ ' : '   ') + r.source + ' / ' + r.key + '\n';
+    scanReport += '      ' + fmt(r.info) + '\n\n';
+  }
+  scanReport += '\n## Best snapshot (raw JSON)\n\n';
+  scanReport += JSON.stringify(bestSnap.snap, null, 2);
+
+  $btnRestore.disabled = false;
+  $btnExport.disabled = false;
+});
+
+// ── Restauration ──────────────────────────────────────────
+$btnRestore.addEventListener('click', async () => {
+  if (!bestSnap || !bestSnap.snap) {
+    log('Pas de snapshot à restaurer.', 'crit');
+    return;
+  }
+  if (!confirm('Restaurer cycle #' + bestSnap.info.cycle + ' dans nexus_state_v2 + IndexedDB ?\n\nÇa va écraser l\'état actuel (cycle ~#42).')) return;
+
+  log('\n═══ RESTAURATION ═══', 'warn');
+
+  const snap = bestSnap.snap;
+  // S'assurer que les métadonnées sont bonnes
+  if (!snap.savedAt) snap.savedAt = new Date().toISOString();
+  if (!snap.key) snap.key = SAVE_KEY;
+
+  // 1) localStorage
+  try {
+    localStorage.setItem(SAVE_KEY, JSON.stringify(snap));
+    log('✓ localStorage[' + SAVE_KEY + '] écrit (cycle #' + snap.cycle + ')', 'found');
+  } catch(e) {
+    log('✗ localStorage échoué : ' + e.message, 'crit');
+  }
+
+  // 2) IndexedDB
+  const db = await openDBNamed(DB_NAME, 3);
+  if (!db) {
+    log('✗ IndexedDB inaccessible — restauration LS uniquement', 'warn');
+  } else {
+    try {
+      const tx = db.transaction(STORE, 'readwrite');
+      const store = tx.objectStore(STORE);
+      // Sans keyPath → put(value, key)
+      const req = (store.keyPath) ? store.put(snap) : store.put(snap, SAVE_KEY);
+      await new Promise((resolve) => {
+        req.onsuccess = () => { log('✓ IndexedDB[' + DB_NAME + '.' + STORE + '] écrit', 'found'); resolve(); };
+        req.onerror   = () => { log('✗ IndexedDB put erreur : ' + (req.error && req.error.message), 'crit'); resolve(); };
+        tx.oncomplete = () => resolve();
+        tx.onerror    = () => resolve();
+        setTimeout(resolve, 4000);
+      });
+      db.close();
+    } catch(e) {
+      log('✗ IndexedDB erreur : ' + e.message, 'crit');
+    }
+  }
+
+  log('\n✅ RESTAURATION TERMINÉE', 'found');
+  log('Cycle #' + snap.cycle + ' est maintenant le state principal.');
+  log('\n⚠ FERME TOUS LES ONGLETS AURA8 puis rouvre.', 'warn');
+  log('Ne lance pas la sim tant que les nouveaux fichiers JS ne sont pas réparés.', 'warn');
+});
+
+// ── Export ────────────────────────────────────────────────
+$btnExport.addEventListener('click', () => {
+  if (!scanReport) return;
+  const blob = new Blob([scanReport], { type: 'text/plain' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'aura-recovery-' + new Date().toISOString().slice(0,19).replace(/[T:]/g,'-') + '.txt';
+  a.click();
+  URL.revokeObjectURL(url);
+  log('\n📥 Rapport exporté.', 'found');
+});
+</script>
+
+</body>
+</html>
