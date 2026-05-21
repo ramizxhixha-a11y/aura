@@ -204,8 +204,11 @@ async function init() {
 }
 window.init = init;
 
-
 // ════════════════════════════════════════════════════════════════════════
 // Démarrage de l'application
 // ════════════════════════════════════════════════════════════════════════
-init();
+// L'appel init() est délégué à 00b-persistance-override.js, qui doit
+// d'abord installer son override de loadState/saveState (cycle #16520
+// dual-storage) AVANT que init() ne lise les storages au démarrage.
+// Sans ce délai, init() utiliserait l'ancien loadState pré-override
+// et l'app démarrerait avec un état figé du 06/05.
