@@ -1,5 +1,5 @@
 // ════════════════════════════════════════════════════════════════════════
-// ▓▓▓ AURA8 · 00b-persistance-override.js · VERSION 120.4 · 21/05/2026 ▓▓▓
+// ▓▓▓ AURA8 · 00b-persistance-override.js · VERSION 120.5 · 21/05/2026 ▓▓▓
 // ════════════════════════════════════════════════════════════════════════
 //
 // OBJECTIF : remplacer saveState/loadState/importState par des versions
@@ -9,10 +9,12 @@
 //      (priorité au cycle le plus élevé, anti-régression)
 //   3. Suppriment le blob v105 hardcodé qui polluait importState
 //   4. Installent un autosave 5s autonome + hooks de fermeture
-//      (pas besoin du 11-persistance.js)
 //   5. Appellent init() en fin de fichier — APRÈS installation des overrides
-//      (sans cela, init() utiliserait l'ancien loadState et raterait les
-//      cycles dual-storage récents)
+//
+// ★ NOUVEAU v120.5 : GARDE-FOU ANTI-RÉGRESSION
+//   saveState et flushSyncOnExit refusent d'écrire un cycle inférieur de
+//   plus de 5 à celui déjà dans le storage. Protège contre le bug où
+//   l'app démarre avec un cycle=0 et écrase un cycle plus élevé sauvegardé.
 //
 // CHARGEMENT : doit être inclus dans le HTML APRÈS le runtime 09a→09k.
 //
@@ -221,6 +223,26 @@
     }
 
     if (!snap) return false;
+
+    // ════ GARDE-FOU ANTI-RÉGRESSION ════
+    // Refuser d'écrire un cycle inférieur à celui déjà dans le storage.
+    // Protection contre le bug où l'app démarre avec cycle=0 et écrase un
+    // cycle plus élevé déjà sauvegardé. Tant que S.cycle n'a pas rattrapé
+    // le storage, on n'écrit pas.
+    try {
+      const currentLS = _readLS();
+      const lsCycle = currentLS && typeof currentLS.cycle === 'number' ? currentLS.cycle : -1;
+      const snapCycle = typeof snap.cycle === 'number' ? snap.cycle : -1;
+      if (lsCycle > snapCycle + 5) {
+        // Régression détectée : le storage a un cycle bien plus haut.
+        // L'app n'a pas encore rechargé correctement. NE PAS écraser.
+        if (!silent) {
+          console.warn(TAG, 'saveState BLOQUÉ : tentative d\'écrire cycle #' + snapCycle +
+            ' alors que le storage a #' + lsCycle + ' (anti-régression)');
+        }
+        return false;
+      }
+    } catch(e) {}
 
     // S'assurer que savedAt est présent et frais (au cas où buildSnapshot l'oublierait)
     if (!snap.savedAt) snap.savedAt = new Date().toISOString();
@@ -541,6 +563,20 @@
       if (!_hasBuildSnapshot()) return;
       const snap = window.buildSnapshot();
       if (!snap) return;
+
+      // ════ GARDE-FOU ANTI-RÉGRESSION (flush) ════
+      // Même protection que saveState : ne pas écraser un cycle supérieur
+      try {
+        const currentLS = _readLS();
+        const lsCycle = currentLS && typeof currentLS.cycle === 'number' ? currentLS.cycle : -1;
+        const snapCycle = typeof snap.cycle === 'number' ? snap.cycle : -1;
+        if (lsCycle > snapCycle + 5) {
+          console.warn(TAG, 'flush ' + reason + ' BLOQUÉ : cycle #' + snapCycle +
+            ' < #' + lsCycle + ' (anti-régression)');
+          return;
+        }
+      } catch(e) {}
+
       if (!snap.savedAt) snap.savedAt = new Date().toISOString();
       if (!snap.key) snap.key = SAVE_KEY;
       _writeLS(snap); // synchrone, garanti
