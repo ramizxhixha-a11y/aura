@@ -1,5 +1,5 @@
 // ════════════════════════════════════════════════════════════════════════
-// ▓▓▓ AURA8 · 00b-persistance-override.js · VERSION 120.3 · 20/05/2026 ▓▓▓
+// ▓▓▓ AURA8 · 00b-persistance-override.js · VERSION 120.4 · 21/05/2026 ▓▓▓
 // ════════════════════════════════════════════════════════════════════════
 //
 // OBJECTIF : remplacer saveState/loadState/importState par des versions
@@ -10,10 +10,13 @@
 //   3. Suppriment le blob v105 hardcodé qui polluait importState
 //   4. Installent un autosave 5s autonome + hooks de fermeture
 //      (pas besoin du 11-persistance.js)
+//   5. Appellent init() en fin de fichier — APRÈS installation des overrides
+//      (sans cela, init() utiliserait l'ancien loadState et raterait les
+//      cycles dual-storage récents)
 //
-// CHARGEMENT : doit être inclus dans le HTML APRÈS 10-fin-bloc-restauration.
+// CHARGEMENT : doit être inclus dans le HTML APRÈS le runtime 09a→09k.
 //
-// NE TOUCHE PAS AU FICHIER 09. Override pur via window.saveState/loadState.
+// NE TOUCHE PAS AUX FICHIERS 09. Override pur via window.saveState/loadState.
 //
 // ════════════════════════════════════════════════════════════════════════
 
@@ -570,5 +573,33 @@
   window._persistance.startAutoSave = _startAutoSave;
   window._persistance.stopAutoSave  = _stopAutoSave;
   window._persistance.flushSync     = _flushSyncOnExit;
+
+
+  // ─────────────────────────────────────────────────────────────
+  // Démarrage de l'application
+  // ─────────────────────────────────────────────────────────────
+  // init() est défini dans 09k-init.js et exposé sur window.init.
+  // On l'appelle ICI (pas dans 09k) pour garantir que les overrides
+  // loadState / saveState sont DÉJÀ installés au moment où init()
+  // lit les storages. Sans ce délai, init() utiliserait l'ancien
+  // loadState pré-override et raterait les cycles dual-storage.
+  function _bootApp() {
+    if (typeof window.init !== 'function') {
+      console.warn(TAG, 'init() non disponible — démarrage différé de 50ms');
+      setTimeout(_bootApp, 50);
+      return;
+    }
+    try {
+      window.init();
+    } catch(e) {
+      console.error(TAG, 'init() a planté:', e);
+    }
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', _bootApp);
+  } else {
+    _bootApp();
+  }
 
 })();
