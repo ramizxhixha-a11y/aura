@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>AURA8 · Force Restore</title>
+<style>
+* { box-sizing: border-box; }
+body {
+  margin: 0; padding: 16px;
+  background: #050709; color: #e8eef5;
+  font-family: -apple-system,'Segoe UI',sans-serif;
+  font-size: 14px;
+  line-height: 1.5;
+}
+h1 { color: #f5b500; font-size: 22px; margin: 0 0 8px; }
+h2 { color: #38d4f5; font-size: 16px; margin: 24px 0 8px; }
+.sub { color: #7a8b9a; font-size: 12px; margin-bottom: 20px; }
+.step {
+  background: #0d1219; border: 1px solid #1d2935;
+  border-radius: 10px; padding: 14px; margin: 12px 0;
+}
+.step h3 { margin: 0 0 8px; color: #fff; font-size: 14px; }
+input[type=file] {
+  display: block; width: 100%; padding: 10px;
+  background: #050709; border: 1px solid #38d4f5; border-radius: 8px;
+  color: #fff; margin: 8px 0;
+}
+button {
+  display: block; width: 100%;
+  background: linear-gradient(135deg,#0a4d2a,#118647);
+  color: #fff; border: 1px solid #00e87a;
+  padding: 14px; border-radius: 10px;
+  font-size: 15px; font-weight: 600;
+  margin: 10px 0; cursor: pointer;
+}
+button:disabled { opacity: .4; cursor: not-allowed; }
+.box {
+  font-family: monospace; font-size: 11px;
+  background: #050709; border-radius: 6px; padding: 10px;
+  white-space: pre-wrap; word-break: break-all;
+  max-height: 200px; overflow-y: auto;
+}
+.ok { color: #00e87a; }
+.warn { color: #f5b500; }
+.crit { color: #ff4d5a; }
+.big { font-size: 20px; font-weight: 700; color: #fff; }
+</style>
+</head>
+<body>
+
+<h1>🛟 Force Restore</h1>
+<div class="sub">Restaure le snapshot #16520 dans les storages, depuis le fichier JSON.</div>
+
+<div class="step">
+  <h3>1️⃣ Choisir le fichier snapshot-16520.json</h3>
+  <input type="file" id="fileIn" accept=".json,.txt">
+  <div class="box" id="fileInfo">Aucun fichier sélectionné.</div>
+</div>
+
+<div class="step">
+  <h3>2️⃣ Restaurer dans les storages</h3>
+  <button id="btnRestore" disabled>♻️ Restaurer cycle dans LS + IDB</button>
+  <div class="box" id="restoreLog">En attente...</div>
+</div>
+
+<div class="step">
+  <h3>3️⃣ Vérifier</h3>
+  <button id="btnVerify" disabled>🔍 Lire ce qui est dans le storage maintenant</button>
+  <div class="box" id="verifyLog">En attente...</div>
+</div>
+
+<script>
+'use strict';
+
+const SAVE_KEY = 'nexus_state_v2';
+const DB_NAME = 'NEXUS_DB';
+const STORE = 'state';
+
+const $fileIn = document.getElementById('fileIn');
+const $fileInfo = document.getElementById('fileInfo');
+const $btnRestore = document.getElementById('btnRestore');
+const $btnVerify = document.getElementById('btnVerify');
+const $restoreLog = document.getElementById('restoreLog');
+const $verifyLog = document.getElementById('verifyLog');
+
+let loadedSnap = null;
+
+function logTo(el, msg, cls) {
+  const span = cls ? '<span class="'+cls+'">'+msg+'</span>' : msg;
+  el.innerHTML += '\n' + span;
+  el.scrollTop = el.scrollHeight;
+}
+
+$fileIn.addEventListener('change', async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  $fileInfo.innerHTML = '⏳ Lecture du fichier ' + file.name + ' (' + (file.size/1024).toFixed(1) + ' KB)...';
+
+  try {
+    const text = await file.text();
+    let snap;
+    try {
+      snap = JSON.parse(text);
+    } catch(e) {
+      // Peut-être qu'il y a un en-tête markdown avant le JSON
+      const idx = text.indexOf('{');
+      if (idx >= 0) {
+        snap = JSON.parse(text.slice(idx));
+      } else {
+        throw new Error('JSON non trouvé');
+      }
+    }
+
+    if (!snap || typeof snap !== 'object') throw new Error('Pas un objet JSON');
+    if (typeof snap.cycle !== 'number') throw new Error('Pas de cycle dans le JSON');
+
+    loadedSnap = snap;
+    $fileInfo.innerHTML = '<span class="ok">✓ Fichier chargé</span>\n' +
+      '  <span class="big">cycle #' + snap.cycle + '</span>\n' +
+      '  portfolio: ' + (snap.portfolio||0).toFixed(2) + '\n' +
+      '  cash: ' + (snap.cashAccount||0).toFixed(2) + '\n' +
+      '  trading: ' + (snap.tradingAccount||0).toFixed(2) + '\n' +
+      '  agents: ' + (snap.agents ? snap.agents.length : 0) + '\n' +
+      '  savedAt: ' + (snap.savedAt || '?') + '\n' +
+      '  taille: ' + (text.length/1024).toFixed(1) + ' KB';
+    $btnRestore.disabled = false;
+  } catch(err) {
+    $fileInfo.innerHTML = '<span class="crit">✗ Erreur: ' + err.message + '</span>';
+  }
+});
+
+function openDBSafe() {
+  return new Promise(resolve => {
+    let req;
+    try { req = indexedDB.open(DB_NAME, 3); }
+    catch(e) { return resolve(null); }
+    req.onupgradeneeded = (e) => {
+      const db = e.target.result;
+      if (!db.objectStoreNames.contains(STORE)) {
+        db.createObjectStore(STORE);
+      }
+      if (!db.objectStoreNames.contains('fees')) {
+        db.createObjectStore('fees', { autoIncrement: true });
+      }
+    };
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => resolve(null);
+    req.onblocked = () => resolve(null);
+    setTimeout(() => resolve(null), 5000);
+  });
+}
+
+$btnRestore.addEventListener('click', async () => {
+  if (!loadedSnap) return;
+  if (!confirm('Écrire cycle #' + loadedSnap.cycle + ' dans le storage ?\n\nÇa écrase l\'état actuel (cycle 42).')) return;
+
+  $btnRestore.disabled = true;
+  $restoreLog.innerHTML = '';
+  logTo($restoreLog, '═══ RESTAURATION ═══', 'warn');
+
+  // Préparer le snap
+  const snap = JSON.parse(JSON.stringify(loadedSnap));
+  if (!snap.savedAt) snap.savedAt = new Date().toISOString();
+  if (!snap.key) snap.key = SAVE_KEY;
+  if (typeof snap.version !== 'number') snap.version = 2;
+
+  // 1) localStorage
+  try {
+    const text = JSON.stringify(snap);
+    localStorage.setItem(SAVE_KEY, text);
+    logTo($restoreLog, '✓ localStorage[' + SAVE_KEY + '] écrit (' + (text.length/1024).toFixed(1) + ' KB)', 'ok');
+  } catch(e) {
+    logTo($restoreLog, '✗ localStorage erreur: ' + e.message, 'crit');
+  }
+
+  // 2) IndexedDB
+  logTo($restoreLog, 'Ouverture IndexedDB...');
+  const db = await openDBSafe();
+  if (!db) {
+    logTo($restoreLog, '✗ IndexedDB inaccessible', 'crit');
+  } else {
+    logTo($restoreLog, '✓ IDB ouverte (stores: ' + Array.from(db.objectStoreNames).join(',') + ')');
+    try {
+      const tx = db.transaction(STORE, 'readwrite');
+      const store = tx.objectStore(STORE);
+      const req = store.keyPath ? store.put(snap) : store.put(snap, SAVE_KEY);
+      await new Promise(resolve => {
+        req.onsuccess = () => { logTo($restoreLog, '✓ IDB.' + STORE + ' écrit', 'ok'); resolve(); };
+        req.onerror = () => { logTo($restoreLog, '✗ IDB put erreur: ' + (req.error && req.error.message), 'crit'); resolve(); };
+        tx.oncomplete = () => resolve();
+        tx.onerror = () => { logTo($restoreLog, '✗ IDB tx erreur', 'crit'); resolve(); };
+        setTimeout(resolve, 5000);
+      });
+      db.close();
+    } catch(e) {
+      logTo($restoreLog, '✗ IDB exception: ' + e.message, 'crit');
+    }
+  }
+
+  // 3) Backup secondaire dans nexusSnap_A (par sécurité)
+  try {
+    localStorage.setItem('nexusSnap_A', JSON.stringify(snap));
+    logTo($restoreLog, '✓ nexusSnap_A écrit (backup secondaire)', 'ok');
+  } catch(e) {}
+
+  logTo($restoreLog, '');
+  logTo($restoreLog, '✅ RESTAURATION TERMINÉE', 'ok');
+  logTo($restoreLog, '');
+  logTo($restoreLog, '⚠ FERME TOUS LES ONGLETS AURA8 maintenant.', 'warn');
+  logTo($restoreLog, 'Puis ouvre AURA8 dans un nouvel onglet.', 'warn');
+  logTo($restoreLog, '');
+  logTo($restoreLog, 'Si l\'app affiche cycle #' + snap.cycle + ' → succès.', 'ok');
+  logTo($restoreLog, 'Si elle affiche encore #42 → mon code 09 plante, je le fix.', 'warn');
+
+  $btnVerify.disabled = false;
+});
+
+$btnVerify.addEventListener('click', async () => {
+  $verifyLog.innerHTML = '';
+  logTo($verifyLog, '═══ VÉRIFICATION ═══', 'warn');
+
+  // localStorage
+  try {
+    const raw = localStorage.getItem(SAVE_KEY);
+    if (raw) {
+      const snap = JSON.parse(raw);
+      logTo($verifyLog, '✓ localStorage[' + SAVE_KEY + ']', 'ok');
+      logTo($verifyLog, '  cycle=#' + snap.cycle);
+      logTo($verifyLog, '  portfolio=' + (snap.portfolio||0).toFixed(2));
+      logTo($verifyLog, '  taille=' + (raw.length/1024).toFixed(1) + ' KB');
+    } else {
+      logTo($verifyLog, '✗ localStorage vide', 'crit');
+    }
+  } catch(e) {
+    logTo($verifyLog, '✗ LS read erreur: ' + e.message, 'crit');
+  }
+
+  // IndexedDB
+  const db = await openDBSafe();
+  if (db) {
+    try {
+      const tx = db.transaction(STORE, 'readonly');
+      const store = tx.objectStore(STORE);
+      const req = store.get(SAVE_KEY);
+      await new Promise(resolve => {
+        req.onsuccess = () => {
+          const snap = req.result;
+          if (snap) {
+            logTo($verifyLog, '✓ IDB.' + STORE + '[' + SAVE_KEY + ']', 'ok');
+            logTo($verifyLog, '  cycle=#' + snap.cycle);
+            logTo($verifyLog, '  portfolio=' + (snap.portfolio||0).toFixed(2));
+          } else {
+            logTo($verifyLog, '✗ IDB.state[' + SAVE_KEY + '] vide', 'crit');
+          }
+          resolve();
+        };
+        req.onerror = () => { logTo($verifyLog, '✗ IDB get erreur', 'crit'); resolve(); };
+        setTimeout(resolve, 4000);
+      });
+      db.close();
+    } catch(e) {
+      logTo($verifyLog, '✗ IDB tx erreur: ' + e.message, 'crit');
+    }
+  }
+});
+</script>
+
+</body>
+</html>
