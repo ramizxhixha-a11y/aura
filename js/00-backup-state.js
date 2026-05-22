@@ -1,17 +1,22 @@
 // ════════════════════════════════════════════════════════════════════════
-// ▓▓▓ AURA8 — 00-backup-state.js · VERSION 124 · 22/05/2026 ▓▓▓
+// ▓▓▓ AURA8 — 00-backup-state.js · VERSION 125 · 22/05/2026 ▓▓▓
 // ════════════════════════════════════════════════════════════════════════
 //
-// VERROU ULTIME ANTI-#42
+// FIX RACINE — accès à S via eval() au lieu de window.S
 //
-// Stratégie : on ne cherche plus QUI remet #42, on EMPÊCHE TOUT écriture
-// de #42 sur S.cycle, et on EMPÊCHE TOUT écriture cycle<1000 dans storage
-// pendant les 30 premières secondes (largement assez pour init complet).
+// Découverte v124 : window.S n'existe JAMAIS. S est déclaré en const dans
+// 02-state-init.js, donc accessible par son nom dans le scope global du
+// script principal mais PAS comme window.S.
 //
-// 1. Au démarrage, lire et patcher version=2 si manquant
-// 2. Bloquer setItem(SAVE_KEY) pendant 30s si snap.cycle < 1000
-// 3. Surveiller S.cycle toutes les 200ms pendant 30s ; si == 42, restaurer
-// 4. Object.defineProperty(S, 'cycle') refuse 42 et journalise l'appelant
+// Solution : (0, eval)('S') exécute eval dans le scope global et retourne
+// la référence vers l'objet S réel, qu'on peut ensuite muter directement.
+//
+// 1. Lire storage, patcher version=2
+// 2. Bloquer écriture cycle<1000 pendant 30s
+// 3. Toutes les 200ms pendant 30s :
+//    - Récupérer S via (0, eval)('S')
+//    - Si S.cycle == 42 ET storage cycle > 42 → restaurer S
+// 4. Quand restauration faite, forcer renderAll
 // ════════════════════════════════════════════════════════════════════════
 
 (function() {
@@ -26,6 +31,7 @@
   let cycle42Caught = 0;
   let storedCycle = null;
   let storedSnap = null;
+  let restored = false;
 
   function _toast(msg, color) {
     try {
@@ -47,15 +53,25 @@
         el.setAttribute('data-killer-toast', '1');
         el.style.top = (60 + existing.length * 36) + 'px';
         document.body.appendChild(el);
-        setTimeout(() => { try { el.remove(); } catch(e){} }, 20000);
+        setTimeout(() => { try { el.remove(); } catch(e){} }, 30000);
       };
       if (document.body) inject();
       else document.addEventListener('DOMContentLoaded', inject);
     } catch(e) {}
   }
 
+  // Accès à S via eval indirect (s'exécute dans le scope global)
+  function _getS() {
+    try {
+      // (0, eval)(...) force l'exécution en mode global, accède aux const/let du script
+      return (0, eval)('typeof S !== "undefined" ? S : null');
+    } catch(e) {
+      return null;
+    }
+  }
+
   // ──────────────────────────────────────────────────────────────
-  // ÉTAPE 1 — Lire ce qu'il y a dans LS et patcher version=2
+  // ÉTAPE 1 — Lire LS et patcher version=2
   // ──────────────────────────────────────────────────────────────
   try {
     const raw = localStorage.getItem(SAVE_KEY);
@@ -68,7 +84,7 @@
           snap.version = 2;
           if (!snap.savedAt) snap.savedAt = new Date().toISOString();
           localStorage.setItem(SAVE_KEY, JSON.stringify(snap));
-          console.log('[killer v124] patch version=2 LS, cycle=' + snap.cycle);
+          console.log('[killer v125] patch version=2 LS, cycle=' + snap.cycle);
         }
       }
     }
@@ -97,7 +113,7 @@
           getReq.onsuccess = () => {
             const snap = getReq.result;
             if (snap && typeof snap === 'object' && typeof snap.cycle === 'number') {
-              if (snap.cycle > (storedCycle || 0)) {
+              if (!storedCycle || snap.cycle > storedCycle) {
                 storedCycle = snap.cycle;
                 storedSnap = snap;
               }
@@ -105,7 +121,7 @@
                 snap.version = 2;
                 if (!snap.savedAt) snap.savedAt = new Date().toISOString();
                 store.put(snap, SAVE_KEY);
-                console.log('[killer v124] patch version=2 IDB, cycle=' + snap.cycle);
+                console.log('[killer v125] patch version=2 IDB, cycle=' + snap.cycle);
               }
             }
             db.close();
@@ -136,8 +152,7 @@
         try { parsed = JSON.parse(value); } catch(e) {}
         if (parsed && typeof parsed.cycle === 'number' && parsed.cycle < 1000) {
           blockedWrites++;
-          console.warn('[killer v124] BLOQUÉ écriture cycle=' + parsed.cycle + ' (' + blockedWrites + ')');
-          _toast('🛡 cycle=' + parsed.cycle + ' bloqué (' + blockedWrites + ')', '#5a1217');
+          console.warn('[killer v125] BLOQUÉ écriture cycle=' + parsed.cycle + ' (' + blockedWrites + ')');
           return; // refuser l'écriture
         }
       }
@@ -147,105 +162,99 @@
 
   setTimeout(() => {
     Storage.prototype.setItem = _origSetItem;
-    console.log('[killer v124] protection storage expirée · ' + blockedWrites + ' bloqué(s)');
+    console.log('[killer v125] protection storage expirée · ' + blockedWrites + ' bloqué(s)');
   }, PROTECT_MS);
 
   // ──────────────────────────────────────────────────────────────
-  // ÉTAPE 4 — Verrou sur S.cycle : interdit valeur 42, force depuis storage
+  // ÉTAPE 4 — Restaurer S depuis storage (accès via eval)
   // ──────────────────────────────────────────────────────────────
-  function _installCycleLock() {
-    if (!window.S || typeof window.S !== 'object') return false;
-    if (window.S._cycleLockInstalled) return true;
+  function _restoreS() {
+    const S = _getS();
+    if (!S) return false; // S pas encore défini
 
-    let _cycleValue = (typeof window.S.cycle === 'number') ? window.S.cycle : 0;
+    // Si on n'a pas de storage valide, on ne peut rien faire
+    if (!storedSnap || !storedCycle || storedCycle <= 42) return false;
 
-    // Si S.cycle est déjà 42 et storage a cycle>42, restaurer
-    if (_cycleValue === 42 && storedCycle && storedCycle > 42) {
-      _cycleValue = storedCycle;
-      cycle42Caught++;
-      console.log('[killer v124] init lock : S.cycle 42 → ' + storedCycle);
-    }
-
-    try {
-      Object.defineProperty(window.S, 'cycle', {
-        configurable: true,
-        enumerable: true,
-        get() { return _cycleValue; },
-        set(val) {
-          // Refuser 42 absolu
-          if (val === 42) {
-            cycle42Caught++;
-            const realCycle = storedCycle && storedCycle > 42 ? storedCycle : 0;
-            console.warn('[killer v124] BLOQUÉ S.cycle=42 #' + cycle42Caught + ', force=' + realCycle);
-            _cycleValue = realCycle;
-            return;
-          }
-          _cycleValue = val;
-        }
-      });
-      window.S._cycleLockInstalled = true;
-      console.log('[killer v124] cycle lock installé · valeur=' + _cycleValue);
-
-      // Forcer la restauration des autres champs critiques si on a un storedSnap
-      if (storedSnap && _cycleValue > 42) {
-        if (typeof storedSnap.portfolio === 'number' && storedSnap.portfolio > 0 && (!window.S.portfolio || window.S.portfolio < 1)) {
-          window.S.portfolio = storedSnap.portfolio;
-        }
-        if (typeof storedSnap.cashAccount === 'number' && (!window.S.cashAccount || window.S.cashAccount < 0.01)) {
-          window.S.cashAccount = storedSnap.cashAccount;
-        }
-        if (typeof storedSnap.tradingAccount === 'number' && (!window.S.tradingAccount || window.S.tradingAccount < 0.01)) {
-          window.S.tradingAccount = storedSnap.tradingAccount;
-        }
-        if (typeof storedSnap.totalTrades === 'number') window.S.totalTrades = storedSnap.totalTrades;
-        if (typeof storedSnap.winTrades === 'number') window.S.winTrades = storedSnap.winTrades;
+    // Si S.cycle est déjà bon, OK
+    if (S.cycle && S.cycle >= storedCycle) {
+      if (!restored) {
+        restored = true;
+        _toast('🔒 S déjà OK · #' + S.cycle, '#1a3d5c');
       }
-
       return true;
-    } catch(e) {
-      console.warn('[killer v124] cycle lock failed:', e.message);
-      return false;
     }
-  }
 
-  // Tenter l'install à chaque tick jusqu'à ce que S existe
-  let installAttempts = 0;
-  const installInterval = setInterval(() => {
-    installAttempts++;
-    if (_installCycleLock()) {
-      clearInterval(installInterval);
-      _toast('🔒 cycle lock #' + window.S.cycle, '#1a3d5c');
-      // Forcer un render
-      setTimeout(() => {
-        try { if (typeof window.renderAll === 'function') window.renderAll(); } catch(e) {}
-      }, 200);
+    // Restaurer tous les champs critiques
+    const fields = [
+      'cycle','cycleMax','cycleTimer','portfolio','cashAccount','tradingAccount',
+      'leverage','leverageReserve','leverageBorrowed','leverageTotalFees','leverageMaxMult',
+      'fiscalReserveAccount','fiscalReserveLog','ownFundsInjected','ownFundsLog',
+      'pnl24h','pnlHistory','totalTrades','winTrades','botAutoMode',
+      '_startPortfolio','vMajor','vMinor','agents','learningHistory','evoLog',
+      'pairStates','openPositions','fees','feeConfig','taxConfig','chainLog',
+      'tradingMode','realTimeframe','realActivePairs','realPairCycle',
+      'paperRealStats','paperRealActivePairs','paperRealTimeframe',
+      'usdEurRate','fiatRates','agentLessons','agentLessonsReal','agentLessonsPaperReal'
+    ];
+
+    let applied = 0;
+    for (const k of fields) {
+      if (storedSnap[k] !== undefined) {
+        try {
+          S[k] = storedSnap[k];
+          applied++;
+        } catch(e) {}
+      }
     }
-    if (installAttempts >= 100) { // 20 secondes max
-      clearInterval(installInterval);
-    }
-  }, 200);
+
+    console.log('[killer v125] S restauré · cycle=' + S.cycle + ' · ' + applied + ' champs');
+    restored = true;
+    _toast('✅ S restauré · #' + S.cycle + ' · ' + applied + ' champs', '#0a4d2a');
+
+    // Forcer un render après restauration
+    setTimeout(() => {
+      try {
+        if (typeof window.renderAll === 'function') window.renderAll();
+        else {
+          const renderAll_ref = (0, eval)('typeof renderAll !== "undefined" ? renderAll : null');
+          if (renderAll_ref) renderAll_ref();
+        }
+      } catch(e) {}
+    }, 100);
+
+    return true;
+  }
 
   // ──────────────────────────────────────────────────────────────
   // ÉTAPE 5 — Surveillance continue pendant 30s
   // ──────────────────────────────────────────────────────────────
   let watchAttempts = 0;
+  let sLastSeen = false;
   const watchInterval = setInterval(() => {
     watchAttempts++;
-    if (window.S && typeof window.S.cycle === 'number' && window.S.cycle === 42) {
-      if (storedCycle && storedCycle > 42) {
-        window.S.cycle = storedCycle;
-        cycle42Caught++;
-        console.warn('[killer v124] watch corrigé S.cycle 42 → ' + storedCycle);
-      }
+
+    const S = _getS();
+    if (S && !sLastSeen) {
+      sLastSeen = true;
+      console.log('[killer v125] S détecté à tick ' + watchAttempts + ' (' + (watchAttempts * 200) + 'ms)');
+      _toast('🎯 S détecté #' + (S.cycle || '?'), '#444');
     }
+
+    // Tenter restauration si nécessaire
+    if (S && (!S.cycle || S.cycle < 1000) && storedCycle && storedCycle > 1000) {
+      _restoreS();
+      cycle42Caught++;
+    }
+
     if (watchAttempts >= 150) { // 30 secondes
       clearInterval(watchInterval);
-      if (cycle42Caught > 0) {
-        _toast('🛡 ' + cycle42Caught + '× #42 bloqué', '#5a1217');
+      if (!sLastSeen) {
+        _toast('❌ S jamais détecté en 30s', '#5a1217');
       }
+      console.log('[killer v125] watch terminé · S vu=' + sLastSeen + ' · restoré=' + restored);
     }
   }, 200);
 
-  console.log('[killer v124] actif · storedCycle=' + storedCycle + ' protection ' + PROTECT_MS + 'ms');
+  console.log('[killer v125] actif · storedCycle=' + storedCycle + ' protection ' + PROTECT_MS + 'ms');
 
 })();
