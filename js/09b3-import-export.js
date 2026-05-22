@@ -1,12 +1,15 @@
 // ════════════════════════════════════════════════════════════════════════
-// ▓▓▓ AURA8 — 09b3-import-export.js ▓▓▓
+// ▓▓▓ AURA8 — 09b3-import-export.js · VERSION 121 · 21/05/2026 ▓▓▓
 // ════════════════════════════════════════════════════════════════════════
 // importState + exportState + saveFeeRecord — import/export utilisateur.
 //
-// Dépend de 09a-runtime-state.js (accès via window.RT).
+// v121 — Fixes :
+//   • importState : put avec CLÉ EXPLICITE (RT.SAVE_KEY)
+//   • importState : try/catch sur stopSim
+//   • saveFeeRecord : défensif sur S.taxConfig
+//
+// Dépend de 09a-runtime-state.js (accès via window.RT + window.openDB).
 // ════════════════════════════════════════════════════════════════════════
-
-
 
 
 function importState() {
@@ -22,8 +25,8 @@ function importState() {
       const text = await file.text();
       const snap = JSON.parse(text);
 
-      if (!snap || snap.version < 2) {
-        showToast('❌ Fichier invalide ou trop ancien', 4000, 'user');
+      if (!snap) {
+        if (typeof showToast === 'function') showToast('❌ Fichier invalide', 4000, 'user');
         return;
       }
 
@@ -37,39 +40,61 @@ function importState() {
       );
       if (!confirmed) return;
 
+      // Stop sim si elle tourne (avec try/catch)
       const wasRunning = RT._simRunning;
-      if (wasRunning) stopSim();
+      if (wasRunning) {
+        try { if (typeof stopSim === 'function') stopSim(); } catch(e) {}
+      }
 
-      // Écrire le snap dans IndexedDB/localStorage puis loadState()
+      // Écrire dans IDB + LS en parallèle
+      if (!snap.savedAt) snap.savedAt = new Date().toISOString();
+      if (!snap.key) snap.key = RT.SAVE_KEY;
+
       try {
         const db = await openDB();
         await new Promise(res => {
-          const tx = db.transaction(RT.STORE_STATE, 'readwrite');
-          tx.objectStore(RT.STORE_STATE).put(snap);
-          tx.oncomplete = res;
-          tx.onerror    = res;
+          try {
+            const tx  = db.transaction(RT.STORE_STATE, 'readwrite');
+            const req = tx.objectStore(RT.STORE_STATE).put(snap, RT.SAVE_KEY);
+            req.onsuccess = () => res(true);
+            req.onerror   = () => res(false);
+            tx.oncomplete = () => res(true);
+            tx.onerror    = () => res(false);
+          } catch(e) { res(false); }
         });
-      } catch (dbErr) {
-        try { localStorage.setItem(RT.SAVE_KEY, JSON.stringify(snap)); } catch (lsErr) {}
-      }
+      } catch (dbErr) {}
+
+      try {
+        localStorage.setItem(RT.SAVE_KEY, JSON.stringify(snap));
+      } catch (lsErr) {}
 
       const ok = await loadState();
 
       if (ok) {
-        if (typeof renderAll === 'function') renderAll();
-        showToast('✅ Session restaurée depuis fichier · cycle #' + S.cycle, 5000, 'user');
-        S.chainLog.push({
-          icon: '📥',
-          desc: 'Session importée depuis fichier · cycle #' + S.cycle,
-          hash: rndHash(),
-          time: nowStr()
-        });
+        try { if (typeof renderAll === 'function') renderAll(); } catch(e){}
+        if (typeof showToast === 'function') {
+          showToast('✅ Session restaurée depuis fichier · cycle #' + S.cycle, 5000, 'user');
+        }
+        try {
+          if (S.chainLog) {
+            S.chainLog.push({
+              icon: '📥',
+              desc: 'Session importée depuis fichier · cycle #' + S.cycle,
+              hash: (typeof rndHash === 'function') ? rndHash() : '0x' + Date.now().toString(16),
+              time: (typeof nowStr === 'function') ? nowStr() : new Date().toLocaleTimeString()
+            });
+          }
+        } catch(e) {}
       } else {
-        showToast('⚠ Restauration partielle', 4000, 'user');
+        if (typeof showToast === 'function') {
+          showToast('⚠ Restauration partielle', 4000, 'user');
+        }
       }
     } catch (err) {
       console.error('Import failed', err);
-      showToast('❌ Import échoué : fichier illisible', 4000, 'user');
+      if (typeof showToast === 'function') {
+        showToast('❌ Import échoué : fichier illisible', 4000, 'user');
+      }
     }
   };
 
@@ -81,8 +106,13 @@ window.importState = importState;
 function exportState(silent) {
   try {
     const snap = buildSnapshot();
+    if (!snap) {
+      if (typeof showToast === 'function') {
+        showToast('❌ Export impossible : état pas prêt', 3000, 'user');
+      }
+      return false;
+    }
 
-    // Métadonnées lisibles ajoutées à la racine du fichier exporté
     snap._export = {
       version:     S.vMajor + '.' + S.vMinor,
       exportedAt:  new Date().toISOString(),
@@ -109,15 +139,19 @@ function exportState(silent) {
     a.click();
 
     setTimeout(() => {
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
+      try { document.body.removeChild(a); } catch(e){}
+      try { URL.revokeObjectURL(url); } catch(e){}
     }, 100);
 
-    showToast('💾 Sauvegarde exportée : ' + a.download, 4000, 'user');
+    if (typeof showToast === 'function') {
+      showToast('💾 Sauvegarde exportée : ' + a.download, 4000, 'user');
+    }
     return true;
   } catch (e) {
     console.error('Export failed', e);
-    showToast('❌ Export échoué : ' + e.message, 4000, 'user');
+    if (typeof showToast === 'function') {
+      showToast('❌ Export échoué : ' + e.message, 4000, 'user');
+    }
     return false;
   }
 }
@@ -131,10 +165,8 @@ async function saveFeeRecord(feeRecord) {
     tx.objectStore(RT.STORE_FEES).add({
       ...feeRecord,
       savedAt: new Date().toISOString(),
-      region:  S.taxConfig.region
+      region:  (S && S.taxConfig) ? S.taxConfig.region : null
     });
-  } catch (e) {
-    // IndexedDB indisponible — on ne logge pas chaque fee individuel pour éviter le spam
-  }
+  } catch (e) {}
 }
 window.saveFeeRecord = saveFeeRecord;
