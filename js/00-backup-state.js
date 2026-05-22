@@ -1,25 +1,17 @@
 // ════════════════════════════════════════════════════════════════════════
-// ▓▓▓ AURA8 — 00-backup-state.js · VERSION 123 · 22/05/2026 ▓▓▓
+// ▓▓▓ AURA8 — 00-backup-state.js · VERSION 124 · 22/05/2026 ▓▓▓
 // ════════════════════════════════════════════════════════════════════════
-// CE FICHIER EST : KILLER + VERSION-PATCHER + FIXER #42
 //
-// CAUSE RACINE TROUVÉE :
-//   loadState() ligne 347 du 09-core-runtime.js fait :
-//     if (!snap || snap.version < 2) return false;
-//   Le snapshot #16520 restauré via force-restore n'a PAS de champ "version".
-//   Donc loadState renvoie FALSE sans rien restaurer.
-//   Résultat : S.cycle reste à 42 (hardcodé dans 02-state-init.js).
+// VERROU ULTIME ANTI-#42
 //
-// FIX :
-//   1. Au démarrage, lire le storage (LS + IDB)
-//   2. Si le snap n'a pas version OU version < 2 → INJECTER version: 2
-//   3. Réécrire dans LS + IDB
-//   4. loadState peut maintenant le restaurer correctement
+// Stratégie : on ne cherche plus QUI remet #42, on EMPÊCHE TOUT écriture
+// de #42 sur S.cycle, et on EMPÊCHE TOUT écriture cycle<1000 dans storage
+// pendant les 30 premières secondes (largement assez pour init complet).
 //
-// EN PLUS :
-//   - Détecte et purge le _BACKUP_STATE figé (#12383)
-//   - Bloque toute écriture de _BACKUP_STATE pendant 5 secondes
-//   - Surveille S.cycle après init et corrige le #42 si nécessaire
+// 1. Au démarrage, lire et patcher version=2 si manquant
+// 2. Bloquer setItem(SAVE_KEY) pendant 30s si snap.cycle < 1000
+// 3. Surveiller S.cycle toutes les 200ms pendant 30s ; si == 42, restaurer
+// 4. Object.defineProperty(S, 'cycle') refuse 42 et journalise l'appelant
 // ════════════════════════════════════════════════════════════════════════
 
 (function() {
@@ -28,21 +20,13 @@
   const SAVE_KEY = 'nexus_state_v2';
   const DB_NAME  = 'NEXUS_DB';
   const STORE    = 'state';
-  const BLOCK_DURATION_MS = 5000;
+  const PROTECT_MS = 30000;
   const startTime = Date.now();
-  let blockedCount = 0;
-  let patchedVersion = false;
+  let blockedWrites = 0;
+  let cycle42Caught = 0;
+  let storedCycle = null;
+  let storedSnap = null;
 
-  // ── Détection signature _BACKUP_STATE figé ───────────────────────────
-  function _isBackupSignature(parsed, rawLen) {
-    if (!parsed) return false;
-    if (parsed.cycle === 12383) return true;
-    if (!parsed.savedAt && rawLen > 500000) return true;
-    if (parsed.tradingAccount && Math.abs(parsed.tradingAccount - 1513.58) < 0.1) return true;
-    return false;
-  }
-
-  // ── Toast ────────────────────────────────────────────────────────────
   function _toast(msg, color) {
     try {
       const inject = () => {
@@ -63,207 +47,205 @@
         el.setAttribute('data-killer-toast', '1');
         el.style.top = (60 + existing.length * 36) + 'px';
         document.body.appendChild(el);
-        setTimeout(() => { try { el.remove(); } catch(e){} }, 15000);
+        setTimeout(() => { try { el.remove(); } catch(e){} }, 20000);
       };
       if (document.body) inject();
       else document.addEventListener('DOMContentLoaded', inject);
     } catch(e) {}
   }
 
-  // ══════════════════════════════════════════════════════════════════════
-  // ÉTAPE 1 — Lire ce qu'il y a dans LocalStorage
-  // ══════════════════════════════════════════════════════════════════════
-  let lsSnap = null;
-  let lsRaw = null;
+  // ──────────────────────────────────────────────────────────────
+  // ÉTAPE 1 — Lire ce qu'il y a dans LS et patcher version=2
+  // ──────────────────────────────────────────────────────────────
   try {
-    lsRaw = localStorage.getItem(SAVE_KEY);
-    if (lsRaw) lsSnap = JSON.parse(lsRaw);
-  } catch(e) {}
-
-  // ══════════════════════════════════════════════════════════════════════
-  // ÉTAPE 2 — Purger si _BACKUP_STATE détecté
-  // ══════════════════════════════════════════════════════════════════════
-  if (lsSnap && _isBackupSignature(lsSnap, lsRaw.length)) {
-    try { localStorage.removeItem(SAVE_KEY); } catch(e) {}
-    _toast('🛡 _BACKUP purgé (cycle=' + lsSnap.cycle + ')', '#5a1217');
-    // Restaurer depuis nexusSnap_A si possible
-    try {
-      const backupRaw = localStorage.getItem('nexusSnap_A');
-      if (backupRaw) {
-        const backup = JSON.parse(backupRaw);
-        if (backup && backup.cycle && !_isBackupSignature(backup, backupRaw.length)) {
-          localStorage.setItem(SAVE_KEY, backupRaw);
-          lsSnap = backup;
-          lsRaw = backupRaw;
-          _toast('✅ Restauré nexusSnap_A · #' + backup.cycle, '#0a4d2a');
+    const raw = localStorage.getItem(SAVE_KEY);
+    if (raw) {
+      const snap = JSON.parse(raw);
+      if (snap && typeof snap.cycle === 'number') {
+        storedCycle = snap.cycle;
+        storedSnap = snap;
+        if (typeof snap.version !== 'number' || snap.version < 2) {
+          snap.version = 2;
+          if (!snap.savedAt) snap.savedAt = new Date().toISOString();
+          localStorage.setItem(SAVE_KEY, JSON.stringify(snap));
+          console.log('[killer v124] patch version=2 LS, cycle=' + snap.cycle);
         }
       }
-    } catch(e) {}
-  }
-
-  // ══════════════════════════════════════════════════════════════════════
-  // ÉTAPE 3 — PATCH VERSION : si le snap existe mais n'a pas version: 2,
-  //           on lui ajoute version: 2 pour que loadState le restaure.
-  // ══════════════════════════════════════════════════════════════════════
-  // Re-lire après purge éventuelle
-  try {
-    lsRaw = localStorage.getItem(SAVE_KEY);
-    if (lsRaw) lsSnap = JSON.parse(lsRaw);
+    }
   } catch(e) {}
 
-  if (lsSnap && (typeof lsSnap.version !== 'number' || lsSnap.version < 2)) {
-    lsSnap.version = 2;
-    // Ajouter savedAt si absent (anti-régression bridge)
-    if (!lsSnap.savedAt) lsSnap.savedAt = new Date().toISOString();
-    try {
-      localStorage.setItem(SAVE_KEY, JSON.stringify(lsSnap));
-      patchedVersion = true;
-      console.log('[killer] PATCH version=2 sur snap LS (cycle=' + lsSnap.cycle + ')');
-      _toast('🔧 version=2 patché · #' + lsSnap.cycle, '#1a3d5c');
-    } catch(e) {
-      console.warn('[killer] patch LS échoué:', e);
-    }
-  }
-
-  // ══════════════════════════════════════════════════════════════════════
-  // ÉTAPE 4 — Faire pareil sur IndexedDB
-  // ══════════════════════════════════════════════════════════════════════
+  // ──────────────────────────────────────────────────────────────
+  // ÉTAPE 2 — Patch IDB version
+  // ──────────────────────────────────────────────────────────────
   function _patchIDB() {
     return new Promise((resolve) => {
       let req;
-      try {
-        req = indexedDB.open(DB_NAME);
-      } catch(e) {
-        resolve(false);
-        return;
-      }
-
-      req.onerror = () => resolve(false);
+      try { req = indexedDB.open(DB_NAME); }
+      catch(e) { resolve(); return; }
+      req.onerror = () => resolve();
       req.onupgradeneeded = (e) => {
         const db = e.target.result;
-        if (!db.objectStoreNames.contains(STORE)) {
-          db.createObjectStore(STORE);
-        }
+        if (!db.objectStoreNames.contains(STORE)) db.createObjectStore(STORE);
       };
       req.onsuccess = (e) => {
         const db = e.target.result;
-        if (!db.objectStoreNames.contains(STORE)) {
-          db.close();
-          resolve(false);
-          return;
-        }
+        if (!db.objectStoreNames.contains(STORE)) { db.close(); resolve(); return; }
         try {
           const tx = db.transaction(STORE, 'readwrite');
           const store = tx.objectStore(STORE);
           const getReq = store.get(SAVE_KEY);
           getReq.onsuccess = () => {
             const snap = getReq.result;
-            if (snap && typeof snap === 'object') {
-              // Purger _BACKUP_STATE si détecté
-              const rawLen = JSON.stringify(snap).length;
-              if (_isBackupSignature(snap, rawLen)) {
-                store.delete(SAVE_KEY);
-                _toast('🛡 IDB _BACKUP purgé', '#5a1217');
-                db.close();
-                resolve(true);
-                return;
+            if (snap && typeof snap === 'object' && typeof snap.cycle === 'number') {
+              if (snap.cycle > (storedCycle || 0)) {
+                storedCycle = snap.cycle;
+                storedSnap = snap;
               }
-              // Patch version
               if (typeof snap.version !== 'number' || snap.version < 2) {
                 snap.version = 2;
                 if (!snap.savedAt) snap.savedAt = new Date().toISOString();
                 store.put(snap, SAVE_KEY);
-                console.log('[killer] PATCH version=2 sur snap IDB (cycle=' + snap.cycle + ')');
-                _toast('🔧 IDB version=2 · #' + snap.cycle, '#1a3d5c');
+                console.log('[killer v124] patch version=2 IDB, cycle=' + snap.cycle);
               }
             }
             db.close();
-            resolve(true);
+            resolve();
           };
-          getReq.onerror = () => { db.close(); resolve(false); };
-        } catch(e) {
-          db.close();
-          resolve(false);
-        }
+          getReq.onerror = () => { db.close(); resolve(); };
+        } catch(e) { db.close(); resolve(); }
       };
     });
   }
 
-  _patchIDB().catch(() => {});
+  _patchIDB().then(() => {
+    if (storedCycle && storedCycle > 1000) {
+      _toast('🛡 storage trouvé · #' + storedCycle, '#0a4d2a');
+    }
+  });
 
-  // ══════════════════════════════════════════════════════════════════════
-  // ÉTAPE 5 — Intercepter écritures _BACKUP_STATE pendant 5s
-  // ══════════════════════════════════════════════════════════════════════
+  // ──────────────────────────────────────────────────────────────
+  // ÉTAPE 3 — Bloquer toute écriture cycle<1000 pendant 30s
+  // ──────────────────────────────────────────────────────────────
   const _origSetItem = Storage.prototype.setItem;
 
   Storage.prototype.setItem = function(key, value) {
     try {
       const now = Date.now();
-      const inBlockWindow = (now - startTime) < BLOCK_DURATION_MS;
-
-      if (inBlockWindow && key === SAVE_KEY && typeof value === 'string') {
+      if ((now - startTime) < PROTECT_MS && key === SAVE_KEY && typeof value === 'string') {
         let parsed = null;
         try { parsed = JSON.parse(value); } catch(e) {}
-
-        if (_isBackupSignature(parsed, value.length)) {
-          blockedCount++;
-          console.warn('[killer] BLOQUÉ _BACKUP #' + blockedCount);
-          _toast('🛡 ' + blockedCount + ' _BACKUP bloqué', '#5a1217');
-          return;
+        if (parsed && typeof parsed.cycle === 'number' && parsed.cycle < 1000) {
+          blockedWrites++;
+          console.warn('[killer v124] BLOQUÉ écriture cycle=' + parsed.cycle + ' (' + blockedWrites + ')');
+          _toast('🛡 cycle=' + parsed.cycle + ' bloqué (' + blockedWrites + ')', '#5a1217');
+          return; // refuser l'écriture
         }
       }
     } catch(e) {}
-
     return _origSetItem.call(this, key, value);
   };
 
   setTimeout(() => {
     Storage.prototype.setItem = _origSetItem;
-  }, BLOCK_DURATION_MS);
+    console.log('[killer v124] protection storage expirée · ' + blockedWrites + ' bloqué(s)');
+  }, PROTECT_MS);
 
-  // ══════════════════════════════════════════════════════════════════════
-  // ÉTAPE 6 — FIX #42 surveillance pendant 10 secondes
-  // ══════════════════════════════════════════════════════════════════════
-  let fixAttempts = 0;
-  const fixInterval = setInterval(() => {
-    fixAttempts++;
-    if (typeof window.S !== 'object' || !window.S) {
-      if (fixAttempts >= 20) clearInterval(fixInterval);
-      return;
+  // ──────────────────────────────────────────────────────────────
+  // ÉTAPE 4 — Verrou sur S.cycle : interdit valeur 42, force depuis storage
+  // ──────────────────────────────────────────────────────────────
+  function _installCycleLock() {
+    if (!window.S || typeof window.S !== 'object') return false;
+    if (window.S._cycleLockInstalled) return true;
+
+    let _cycleValue = (typeof window.S.cycle === 'number') ? window.S.cycle : 0;
+
+    // Si S.cycle est déjà 42 et storage a cycle>42, restaurer
+    if (_cycleValue === 42 && storedCycle && storedCycle > 42) {
+      _cycleValue = storedCycle;
+      cycle42Caught++;
+      console.log('[killer v124] init lock : S.cycle 42 → ' + storedCycle);
     }
 
-    if (window.S.cycle === 42) {
-      // Lire le storage pour trouver le vrai cycle
-      try {
-        const raw = localStorage.getItem(SAVE_KEY);
-        if (raw) {
-          const parsed = JSON.parse(raw);
-          if (parsed && typeof parsed.cycle === 'number' && parsed.cycle > 42) {
-            // Forcer la restauration manuelle
-            window.S.cycle = parsed.cycle;
-            if (typeof parsed.portfolio === 'number' && parsed.portfolio > 0) window.S.portfolio = parsed.portfolio;
-            if (typeof parsed.cashAccount === 'number' && parsed.cashAccount > 0) window.S.cashAccount = parsed.cashAccount;
-            if (typeof parsed.tradingAccount === 'number' && parsed.tradingAccount > 0) window.S.tradingAccount = parsed.tradingAccount;
-            if (typeof parsed.totalTrades === 'number') window.S.totalTrades = parsed.totalTrades;
-            if (typeof parsed.winTrades === 'number') window.S.winTrades = parsed.winTrades;
-            if (Array.isArray(parsed.agents)) window.S.agents = parsed.agents;
-            if (Array.isArray(parsed.pnlHistory)) window.S.pnlHistory = parsed.pnlHistory;
-            console.log('[killer] FIX #42 → #' + parsed.cycle + ' (force restore)');
-            _toast('🔧 #42 → #' + parsed.cycle, '#1a3d5c');
-            try { if (typeof window.renderAll === 'function') window.renderAll(); } catch(e) {}
-            clearInterval(fixInterval);
+    try {
+      Object.defineProperty(window.S, 'cycle', {
+        configurable: true,
+        enumerable: true,
+        get() { return _cycleValue; },
+        set(val) {
+          // Refuser 42 absolu
+          if (val === 42) {
+            cycle42Caught++;
+            const realCycle = storedCycle && storedCycle > 42 ? storedCycle : 0;
+            console.warn('[killer v124] BLOQUÉ S.cycle=42 #' + cycle42Caught + ', force=' + realCycle);
+            _cycleValue = realCycle;
             return;
           }
+          _cycleValue = val;
         }
-      } catch(e) {}
-    } else if (window.S.cycle > 42) {
-      console.log('[killer] cycle légitime #' + window.S.cycle);
-      clearInterval(fixInterval);
+      });
+      window.S._cycleLockInstalled = true;
+      console.log('[killer v124] cycle lock installé · valeur=' + _cycleValue);
+
+      // Forcer la restauration des autres champs critiques si on a un storedSnap
+      if (storedSnap && _cycleValue > 42) {
+        if (typeof storedSnap.portfolio === 'number' && storedSnap.portfolio > 0 && (!window.S.portfolio || window.S.portfolio < 1)) {
+          window.S.portfolio = storedSnap.portfolio;
+        }
+        if (typeof storedSnap.cashAccount === 'number' && (!window.S.cashAccount || window.S.cashAccount < 0.01)) {
+          window.S.cashAccount = storedSnap.cashAccount;
+        }
+        if (typeof storedSnap.tradingAccount === 'number' && (!window.S.tradingAccount || window.S.tradingAccount < 0.01)) {
+          window.S.tradingAccount = storedSnap.tradingAccount;
+        }
+        if (typeof storedSnap.totalTrades === 'number') window.S.totalTrades = storedSnap.totalTrades;
+        if (typeof storedSnap.winTrades === 'number') window.S.winTrades = storedSnap.winTrades;
+      }
+
+      return true;
+    } catch(e) {
+      console.warn('[killer v124] cycle lock failed:', e.message);
+      return false;
     }
+  }
 
-    if (fixAttempts >= 20) clearInterval(fixInterval);
-  }, 500);
+  // Tenter l'install à chaque tick jusqu'à ce que S existe
+  let installAttempts = 0;
+  const installInterval = setInterval(() => {
+    installAttempts++;
+    if (_installCycleLock()) {
+      clearInterval(installInterval);
+      _toast('🔒 cycle lock #' + window.S.cycle, '#1a3d5c');
+      // Forcer un render
+      setTimeout(() => {
+        try { if (typeof window.renderAll === 'function') window.renderAll(); } catch(e) {}
+      }, 200);
+    }
+    if (installAttempts >= 100) { // 20 secondes max
+      clearInterval(installInterval);
+    }
+  }, 200);
 
-  console.log('[killer v123] actif · patchedVersion=' + patchedVersion);
+  // ──────────────────────────────────────────────────────────────
+  // ÉTAPE 5 — Surveillance continue pendant 30s
+  // ──────────────────────────────────────────────────────────────
+  let watchAttempts = 0;
+  const watchInterval = setInterval(() => {
+    watchAttempts++;
+    if (window.S && typeof window.S.cycle === 'number' && window.S.cycle === 42) {
+      if (storedCycle && storedCycle > 42) {
+        window.S.cycle = storedCycle;
+        cycle42Caught++;
+        console.warn('[killer v124] watch corrigé S.cycle 42 → ' + storedCycle);
+      }
+    }
+    if (watchAttempts >= 150) { // 30 secondes
+      clearInterval(watchInterval);
+      if (cycle42Caught > 0) {
+        _toast('🛡 ' + cycle42Caught + '× #42 bloqué', '#5a1217');
+      }
+    }
+  }, 200);
+
+  console.log('[killer v124] actif · storedCycle=' + storedCycle + ' protection ' + PROTECT_MS + 'ms');
 
 })();
