@@ -1,22 +1,16 @@
 // ════════════════════════════════════════════════════════════════════════
-// ▓▓▓ AURA8 — 00-backup-state.js · VERSION 125 · 22/05/2026 ▓▓▓
+// ▓▓▓ AURA8 — 00-backup-state.js · VERSION 125.1 · 22/05/2026 ▓▓▓
 // ════════════════════════════════════════════════════════════════════════
 //
-// FIX RACINE — accès à S via eval() au lieu de window.S
+// RESTAURATION COMPLÈTE — tous les champs du snapshot
 //
-// Découverte v124 : window.S n'existe JAMAIS. S est déclaré en const dans
-// 02-state-init.js, donc accessible par son nom dans le scope global du
-// script principal mais PAS comme window.S.
+// v125 ne restaurait que 39 champs sur 80 → totalTrades=0, _genCount=0,
+// _totalCompounded=0 manquaient à l'affichage.
 //
-// Solution : (0, eval)('S') exécute eval dans le scope global et retourne
-// la référence vers l'objet S réel, qu'on peut ensuite muter directement.
+// v125.1 boucle sur TOUTES les clés du snap (sauf meta : key, savedAt,
+// version) et les applique sur S. Aucun champ oublié.
 //
-// 1. Lire storage, patcher version=2
-// 2. Bloquer écriture cycle<1000 pendant 30s
-// 3. Toutes les 200ms pendant 30s :
-//    - Récupérer S via (0, eval)('S')
-//    - Si S.cycle == 42 ET storage cycle > 42 → restaurer S
-// 4. Quand restauration faite, forcer renderAll
+// Accès à S via (0, eval)('S') car S est const dans 02-state-init.js.
 // ════════════════════════════════════════════════════════════════════════
 
 (function() {
@@ -27,8 +21,11 @@
   const STORE    = 'state';
   const PROTECT_MS = 30000;
   const startTime = Date.now();
+
+  // Champs meta du snap qu'on ne doit PAS copier sur S
+  const SKIP_META = new Set(['key', 'savedAt', 'version']);
+
   let blockedWrites = 0;
-  let cycle42Caught = 0;
   let storedCycle = null;
   let storedSnap = null;
   let restored = false;
@@ -63,7 +60,6 @@
   // Accès à S via eval indirect (s'exécute dans le scope global)
   function _getS() {
     try {
-      // (0, eval)(...) force l'exécution en mode global, accède aux const/let du script
       return (0, eval)('typeof S !== "undefined" ? S : null');
     } catch(e) {
       return null;
@@ -84,7 +80,7 @@
           snap.version = 2;
           if (!snap.savedAt) snap.savedAt = new Date().toISOString();
           localStorage.setItem(SAVE_KEY, JSON.stringify(snap));
-          console.log('[killer v125] patch version=2 LS, cycle=' + snap.cycle);
+          console.log('[killer v125.1] patch version=2 LS, cycle=' + snap.cycle);
         }
       }
     }
@@ -121,7 +117,7 @@
                 snap.version = 2;
                 if (!snap.savedAt) snap.savedAt = new Date().toISOString();
                 store.put(snap, SAVE_KEY);
-                console.log('[killer v125] patch version=2 IDB, cycle=' + snap.cycle);
+                console.log('[killer v125.1] patch version=2 IDB, cycle=' + snap.cycle);
               }
             }
             db.close();
@@ -152,7 +148,7 @@
         try { parsed = JSON.parse(value); } catch(e) {}
         if (parsed && typeof parsed.cycle === 'number' && parsed.cycle < 1000) {
           blockedWrites++;
-          console.warn('[killer v125] BLOQUÉ écriture cycle=' + parsed.cycle + ' (' + blockedWrites + ')');
+          console.warn('[killer v125.1] BLOQUÉ écriture cycle=' + parsed.cycle + ' (' + blockedWrites + ')');
           return; // refuser l'écriture
         }
       }
@@ -162,21 +158,20 @@
 
   setTimeout(() => {
     Storage.prototype.setItem = _origSetItem;
-    console.log('[killer v125] protection storage expirée · ' + blockedWrites + ' bloqué(s)');
+    console.log('[killer v125.1] protection storage expirée · ' + blockedWrites + ' bloqué(s)');
   }, PROTECT_MS);
 
   // ──────────────────────────────────────────────────────────────
-  // ÉTAPE 4 — Restaurer S depuis storage (accès via eval)
+  // ÉTAPE 4 — Restauration COMPLÈTE de tous les champs
   // ──────────────────────────────────────────────────────────────
   function _restoreS() {
     const S = _getS();
-    if (!S) return false; // S pas encore défini
+    if (!S) return false;
 
-    // Si on n'a pas de storage valide, on ne peut rien faire
     if (!storedSnap || !storedCycle || storedCycle <= 42) return false;
 
-    // Si S.cycle est déjà bon, OK
-    if (S.cycle && S.cycle >= storedCycle) {
+    // Déjà restauré et cycle OK ?
+    if (S.cycle && S.cycle >= storedCycle && S.totalTrades >= (storedSnap.totalTrades || 0)) {
       if (!restored) {
         restored = true;
         _toast('🔒 S déjà OK · #' + S.cycle, '#1a3d5c');
@@ -184,42 +179,41 @@
       return true;
     }
 
-    // Restaurer tous les champs critiques
-    const fields = [
-      'cycle','cycleMax','cycleTimer','portfolio','cashAccount','tradingAccount',
-      'leverage','leverageReserve','leverageBorrowed','leverageTotalFees','leverageMaxMult',
-      'fiscalReserveAccount','fiscalReserveLog','ownFundsInjected','ownFundsLog',
-      'pnl24h','pnlHistory','totalTrades','winTrades','botAutoMode',
-      '_startPortfolio','vMajor','vMinor','agents','learningHistory','evoLog',
-      'pairStates','openPositions','fees','feeConfig','taxConfig','chainLog',
-      'tradingMode','realTimeframe','realActivePairs','realPairCycle',
-      'paperRealStats','paperRealActivePairs','paperRealTimeframe',
-      'usdEurRate','fiatRates','agentLessons','agentLessonsReal','agentLessonsPaperReal'
-    ];
-
+    // BOUCLE COMPLÈTE : tous les champs du snap → S
     let applied = 0;
-    for (const k of fields) {
-      if (storedSnap[k] !== undefined) {
-        try {
-          S[k] = storedSnap[k];
-          applied++;
-        } catch(e) {}
+    let skipped = 0;
+    const errors = [];
+
+    for (const k in storedSnap) {
+      if (!storedSnap.hasOwnProperty(k)) continue;
+      if (SKIP_META.has(k)) { skipped++; continue; }
+      try {
+        S[k] = storedSnap[k];
+        applied++;
+      } catch(e) {
+        errors.push(k);
       }
     }
 
-    console.log('[killer v125] S restauré · cycle=' + S.cycle + ' · ' + applied + ' champs');
+    console.log('[killer v125.1] S restauré · cycle=' + S.cycle + ' · ' + applied + ' champs · ' + skipped + ' meta · ' + errors.length + ' erreurs');
+    if (errors.length > 0) {
+      console.warn('[killer v125.1] champs en erreur:', errors);
+    }
+
     restored = true;
-    _toast('✅ S restauré · #' + S.cycle + ' · ' + applied + ' champs', '#0a4d2a');
+    _toast('✅ S restauré · #' + S.cycle + ' · ' + applied + '/' + (applied + skipped + errors.length) + ' champs', '#0a4d2a');
 
     // Forcer un render après restauration
     setTimeout(() => {
       try {
-        if (typeof window.renderAll === 'function') window.renderAll();
-        else {
-          const renderAll_ref = (0, eval)('typeof renderAll !== "undefined" ? renderAll : null');
-          if (renderAll_ref) renderAll_ref();
+        const renderAll_ref = (0, eval)('typeof renderAll !== "undefined" ? renderAll : null');
+        if (renderAll_ref) {
+          renderAll_ref();
+          console.log('[killer v125.1] renderAll appelé');
         }
-      } catch(e) {}
+      } catch(e) {
+        console.warn('[killer v125.1] renderAll échoué:', e.message);
+      }
     }, 100);
 
     return true;
@@ -236,25 +230,30 @@
     const S = _getS();
     if (S && !sLastSeen) {
       sLastSeen = true;
-      console.log('[killer v125] S détecté à tick ' + watchAttempts + ' (' + (watchAttempts * 200) + 'ms)');
+      console.log('[killer v125.1] S détecté à tick ' + watchAttempts);
       _toast('🎯 S détecté #' + (S.cycle || '?'), '#444');
     }
 
     // Tenter restauration si nécessaire
-    if (S && (!S.cycle || S.cycle < 1000) && storedCycle && storedCycle > 1000) {
-      _restoreS();
-      cycle42Caught++;
+    if (S && !restored && storedCycle && storedCycle > 1000) {
+      // Restaurer si cycle bas OU si totalTrades manque
+      const needsRestore = (!S.cycle || S.cycle < 1000) ||
+                           (typeof storedSnap.totalTrades === 'number' &&
+                            (!S.totalTrades || S.totalTrades < storedSnap.totalTrades));
+      if (needsRestore) {
+        _restoreS();
+      }
     }
 
-    if (watchAttempts >= 150) { // 30 secondes
+    if (watchAttempts >= 150) {
       clearInterval(watchInterval);
       if (!sLastSeen) {
         _toast('❌ S jamais détecté en 30s', '#5a1217');
       }
-      console.log('[killer v125] watch terminé · S vu=' + sLastSeen + ' · restoré=' + restored);
+      console.log('[killer v125.1] watch terminé · S vu=' + sLastSeen + ' · restoré=' + restored);
     }
   }, 200);
 
-  console.log('[killer v125] actif · storedCycle=' + storedCycle + ' protection ' + PROTECT_MS + 'ms');
+  console.log('[killer v125.1] actif · storedCycle=' + storedCycle + ' protection ' + PROTECT_MS + 'ms');
 
 })();
