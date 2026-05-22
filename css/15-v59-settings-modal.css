@@ -1,12 +1,6 @@
 /* ═══════════════════════════════════════════════════════════
-   AURA8 v106 · 15-v59-settings-modal.css
-   reset counters, archives modal
-   Source: AURA8_v105.html lignes 1926 → 2267
-   ═══════════════════════════════════════════════════════════ */
-
-/* ═══════════════════════════════════════════════════════════
-   v5.9 — RESET COUNTERS + PERMANENT ARCHIVES
-   Minimalist design · chic · intuitive
+   AURA8 · 15-v59-settings-modal.css · FIX MODAL CENTREE
+   Fix : bottom sheet → modal centrée scrollable
    ═══════════════════════════════════════════════════════════ */
 
 /* ── MODAL BACKDROP ── */
@@ -24,27 +18,29 @@
   pointer-events: none;
   transition: opacity .25s ease;
   padding: 16px;
+  box-sizing: border-box;
 }
 .settings-backdrop.active {
   opacity: 1;
   pointer-events: auto;
 }
 
-/* ── MODAL SHEET ── */
+/* ── MODAL SHEET — centrée, scrollable ── */
 .settings-sheet {
   background: linear-gradient(175deg, var(--s1) 0%, var(--bg) 100%);
   border: 1px solid rgba(167,139,250,.25);
-  border-radius: 24px;
+  border-radius: 20px;
   width: 100%;
   max-width: 430px;
-  max-height: 85vh;
+  max-height: 82vh;
   overflow-y: auto;
   overflow-x: hidden;
   transform: translateY(20px);
   opacity: 0;
-  transition: transform .35s cubic-bezier(.22, 1, .36, 1), opacity .35s ease;
+  transition: transform .35s cubic-bezier(.22,1,.36,1), opacity .35s ease;
   padding: 14px 16px 24px;
-  box-shadow: 0 8px 40px rgba(0,0,0,.5);
+  box-shadow: 0 8px 40px rgba(0,0,0,.6);
+  box-sizing: border-box;
 }
 .settings-backdrop.active .settings-sheet {
   transform: translateY(0);
@@ -231,7 +227,7 @@
   font-size: 9px;
   line-height: 1.5;
   color: var(--t2);
-  max-height: 280px;
+  max-height: 200px;
   overflow-y: auto;
   white-space: pre-wrap;
   word-break: break-word;
