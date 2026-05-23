@@ -1,22 +1,10 @@
 // ════════════════════════════════════════════════════════════════════════
-// ▓▓▓ AURA8 — 09k-init.js · VERSION 121 · 21/05/2026 ▓▓▓
+// ▓▓▓ AURA8 — 09k-init.js · VERSION 121.1 · 23/05/2026 ▓▓▓
 // ════════════════════════════════════════════════════════════════════════
 // Init — démarrage de l'application.
-// Doit être le DERNIER sous-module chargé.
-//
-// v121 — Refonte complète :
-//   • CHAQUE section wrapper dans try/catch indépendant
-//   • Si loadState() throw, on continue quand même
-//   • renderAll() appelé en fin de toutes les sections
-//   • Bannière debug visuelle pour identifier où ça plante
-//   • Tous les appels de fonctions vérifient typeof === 'function'
-//
-// L'appel init() est délégué à 00b-persistance-override.js (en fin de
-// fichier de 00b, après installation des overrides loadState/saveState).
+// v121.1 — Fix affichage wallet cards ($0) + fix modale transfert clavier
 // ════════════════════════════════════════════════════════════════════════
 
-
-// ── Bannière debug init ────────────────────────────────────────────────
 function _showInitDebug(msg, bgColor) {
   try {
     const inject = () => {
@@ -42,21 +30,97 @@ function _showInitDebug(msg, bgColor) {
   } catch(e) {}
 }
 
+// ── Fix direct des IDs wallet cards ──────────────────────────────────
+function _renderWalletCards() {
+  try {
+    const fmt2 = (n) => '$' + (n||0).toLocaleString('fr-FR', {minimumFractionDigits:2, maximumFractionDigits:2});
+    const fmtEUR = (n) => (n||0).toLocaleString('fr-FR', {minimumFractionDigits:2, maximumFractionDigits:2}) + ' €';
+    const setEl = (id, val) => { const e = document.getElementById(id); if(e) e.textContent = val; };
+
+    // Caisse
+    setEl('cashVal', fmt2(S.cashAccount || 0));
+    setEl('cashPct', (S.portfolio > 0 ? ((S.cashAccount||0) / S.portfolio * 100) : 0).toFixed(0) + '%');
+
+    // Trading
+    setEl('tradVal', fmt2(S.tradingAccount || 0));
+    setEl('tradPct', (S.portfolio > 0 ? ((S.tradingAccount||0) / S.portfolio * 100) : 0).toFixed(0) + '%');
+
+    // Réserve levier
+    setEl('levReserveVal', fmt2(S.leverageReserve || 0));
+    const levBorSub = document.getElementById('levBorrowedSub');
+    if (levBorSub) levBorSub.textContent = 'Emprunté: $' + Math.floor(S.leverageBorrowed||0);
+
+    // Réserve fiscale
+    setEl('fiscalResVal', fmt2(S.fiscalReserveAccount || 0));
+    const fiscalSub = document.getElementById('fiscalResSub');
+    if (fiscalSub) fiscalSub.textContent = (S.fiscalReserveLog||[]).length + ' dépôts';
+
+    // Fonds propres
+    const ownEUR = ((S.ownFundsInjected||0) * (S.usdEurRate||0.92));
+    setEl('ownFundsVal', fmtEUR(ownEUR));
+    const ownSub = document.getElementById('ownFundsSub');
+    if (ownSub) ownSub.textContent = (S.ownFundsLog||[]).length + ' injection' + ((S.ownFundsLog||[]).length > 1 ? 's' : '');
+
+    // Portefeuille total
+    const totalEUR = ((S.cashAccount||0) + (S.tradingAccount||0) + (S.fiscalReserveAccount||0)) * (S.usdEurRate||0.92);
+    const ptEl = document.querySelector('.portfolio-total-value, #portfolioTotalVal, [data-portfolio-total]');
+    if (ptEl) ptEl.textContent = fmtEUR(totalEUR);
+  } catch(e) {
+    console.warn('[renderWalletCards]', e);
+  }
+}
+
+// ── Fix modale transfert : résiste au clavier Android ────────────────
+function _fixTransferModal() {
+  try {
+    const modal = document.getElementById('transferModal');
+    if (!modal) return;
+
+    // Intercepter l'ouverture de la modale
+    const origOpen = window.openTransferModal;
+    window.openTransferModal = function() {
+      if (typeof origOpen === 'function') origOpen.apply(this, arguments);
+      // Forcer le positionnement après ouverture
+      setTimeout(() => {
+        const m = document.getElementById('transferModal');
+        if (!m) return;
+        m.style.position = 'fixed';
+        m.style.top = '0';
+        m.style.left = '0';
+        m.style.right = '0';
+        m.style.bottom = '0';
+        m.style.display = 'flex';
+        m.style.alignItems = 'flex-start';
+        m.style.justifyContent = 'center';
+        m.style.overflowY = 'auto';
+        m.style.padding = '16px';
+        m.style.boxSizing = 'border-box';
+        const sheet = m.querySelector('.settings-sheet');
+        if (sheet) {
+          sheet.style.borderRadius = '20px';
+          sheet.style.maxHeight = 'none';
+          sheet.style.transform = 'none';
+          sheet.style.paddingBottom = '32px';
+          sheet.style.width = '100%';
+          sheet.style.boxSizing = 'border-box';
+          sheet.style.position = 'relative';
+        }
+      }, 50);
+    };
+  } catch(e) {}
+}
+
 
 async function init() {
   const sections = [];
 
-  // ── 0. Sync version + bouton mode ──
   try {
     const vd = document.getElementById('versionDisplay');
-    if (vd && typeof S !== 'undefined') {
-      vd.textContent = 'v' + (S.vMajor || 7) + '.' + (S.vMinor || '?');
-    }
+    if (vd && typeof S !== 'undefined') vd.textContent = 'v' + (S.vMajor || 7) + '.' + (S.vMinor || '?');
     if (typeof updateModeButton === 'function') updateModeButton();
     sections.push('v0');
   } catch (e) { sections.push('v0:err'); }
 
-  // ── 1. loadState ──
   let restored = false;
   try {
     restored = await loadState();
@@ -65,7 +129,6 @@ async function init() {
     sections.push('load:THROW=' + e.message.slice(0, 30));
   }
 
-  // ── 2. Seed chain log si nouvelle session ──
   try {
     if (!restored || !S.chainLog || S.chainLog.length === 0) {
       S.chainLog = S.chainLog || [];
@@ -86,12 +149,11 @@ async function init() {
     sections.push('seed:OK');
   } catch (e) { sections.push('seed:err'); }
 
-  // ── 3. Boutons mode AUTO/MAN ──
   try {
-    const _mBtn       = document.getElementById('modeToggleBtn');
-    const _mLbl       = document.getElementById('modeLabelText');
+    const _mBtn = document.getElementById('modeToggleBtn');
+    const _mLbl = document.getElementById('modeLabelText');
     const _isAutoInit = S.botAutoMode !== false;
-    if (_mBtn) _mBtn.className   = _isAutoInit ? 'auto' : 'manual';
+    if (_mBtn) _mBtn.className = _isAutoInit ? 'auto' : 'manual';
     if (_mLbl) _mLbl.textContent = _isAutoInit ? 'AUTO' : 'MAN';
     const _chip = document.getElementById('heroModeChip');
     if (_chip) {
@@ -101,9 +163,15 @@ async function init() {
     sections.push('btn:OK');
   } catch (e) { sections.push('btn:err'); }
 
-  // ── 4. Render initial — CHACUN dans son try/catch ──
   try { if (typeof renderAll === 'function') renderAll(); sections.push('rA:OK'); }
   catch(e) { sections.push('rA:err'); }
+
+  // ── Fix wallet cards directement ──
+  try { _renderWalletCards(); sections.push('wallet:OK'); }
+  catch(e) { sections.push('wallet:err'); }
+
+  // ── Fix modale transfert ──
+  try { _fixTransferModal(); } catch(e) {}
 
   try {
     if (typeof S !== 'undefined' && S.currentPage === 0) {
@@ -130,23 +198,21 @@ async function init() {
   try { if (typeof drawSparkline === 'function') drawSparkline(); } catch(e){}
   try { setTimeout(() => { try { if (typeof updatePairAnalysisPanels === 'function') updatePairAnalysisPanels(); } catch(e){} }, 300); } catch(e){}
 
-  // ── 5. Reconstruction agents si restored ──
   if (restored) {
     try { if (typeof buildAgentCards === 'function') buildAgentCards(); } catch(e){}
     try { if (typeof patchAgentCards === 'function') patchAgentCards(); } catch(e){}
     try { if (typeof renderAll === 'function') renderAll(); } catch(e){}
+    try { _renderWalletCards(); } catch(e){}
     try { if (typeof showToast === 'function') showToast('✅ Session restaurée · cycle #' + S.cycle); } catch(e){}
     sections.push('agents:OK');
   }
 
-  // ── 6. Sim button ──
   try { if (typeof updateSimBtn === 'function') updateSimBtn(); } catch(e){}
 
-  // ── 7. Prix live au démarrage ──
   try {
     const cached = localStorage.getItem('nexus_price_cache');
     if (cached) {
-      const pc  = JSON.parse(cached);
+      const pc = JSON.parse(cached);
       const now = Date.now();
       Object.entries(pc).forEach(([pair, d]) => {
         if (S.pairStates && S.pairStates[pair] && d.price && (now - (d.ts || 0)) < 600000) {
@@ -160,49 +226,30 @@ async function init() {
   try { if (typeof fetchLivePrices === 'function') fetchLivePrices(true); } catch(e){}
   try { if (typeof _priceWatchdog === 'function') setInterval(_priceWatchdog, 10000); } catch(e){}
   try { setTimeout(() => { try { if (typeof fetchLivePrices === 'function') fetchLivePrices(true); } catch(e){} }, 3000); } catch(e){}
-
-  // ── 8. Auto-save scheduling ──
   try { if (typeof scheduleAutoSave === 'function') scheduleAutoSave(); } catch(e){}
 
-  // ── 9. Sync version ──
   try {
     const verEl = document.getElementById('versionDisplay');
     if (verEl) verEl.textContent = 'v' + S.vMajor + '.' + S.vMinor;
-    const gBtn = document.getElementById('installGlobeBtn');
-    if (gBtn) gBtn.title = 'NEXUS v' + S.vMajor + '.' + S.vMinor + ' · Installer';
   } catch(e) {}
 
-  // ── 10. Réserve levier ──
   try {
     if (!S._sessionStart) S._sessionStart = Date.now();
-    if ((!S.leverageReserve || S.leverageReserve === 0) && typeof initLeverageReserve === 'function') {
-      initLeverageReserve();
-    }
+    if ((!S.leverageReserve || S.leverageReserve === 0) && typeof initLeverageReserve === 'function') initLeverageReserve();
     if (typeof syncLeverageReserve === 'function') syncLeverageReserve();
   } catch(e){}
 
-  // ── 11. Renders intel ──
   try { if (typeof updateIntelBanner === 'function') updateIntelBanner(); } catch(e){}
   try { if (typeof updateStreakBadge === 'function') updateStreakBadge(); } catch(e){}
 
   setTimeout(() => {
     try {
-      if (S.agents) {
-        S.agents.forEach(a => { if (!a.fitnessHistory) a.fitnessHistory = [a.fitness, a.fitness]; });
-      }
+      if (S.agents) S.agents.forEach(a => { if (!a.fitnessHistory) a.fitnessHistory = [a.fitness, a.fitness]; });
       if (typeof renderAgentHeatmap === 'function') renderAgentHeatmap();
       if (typeof renderCorrMatrix === 'function') renderCorrMatrix();
-
-      const corrWrap = document.getElementById('corrMatrixWrap');
-      if (corrWrap && window.ResizeObserver) {
-        new ResizeObserver(() => {
-          try { window._corrLastTick = -1; if (typeof renderCorrMatrix === 'function') renderCorrMatrix(); } catch(e){}
-        }).observe(corrWrap);
-      }
     } catch(e){}
   }, 150);
 
-  // ── 12. Resize global ──
   try {
     window.addEventListener('resize', () => {
       try { if (typeof drawSparkline === 'function') drawSparkline(); } catch(e){}
@@ -211,12 +258,12 @@ async function init() {
     });
   } catch(e){}
 
-  // ── Final render garanti ──
+  // ── Final render garanti avec wallet cards ──
   setTimeout(() => {
     try { if (typeof renderAll === 'function') renderAll(); } catch(e){}
+    try { _renderWalletCards(); } catch(e){}
   }, 500);
 
-  // ── Bannière debug succès ──
   _showInitDebug(
     'init OK · #' + (S && S.cycle) +
     ' · portfolio=' + (S && S.portfolio ? S.portfolio.toFixed(2) : '?') +
