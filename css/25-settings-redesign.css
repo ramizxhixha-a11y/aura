@@ -71,6 +71,8 @@
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
   padding: 14px;
+  min-height: 0;
+  color: var(--t1);
 }
 
 /* ═══ Pages ═══ */
