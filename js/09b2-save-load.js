@@ -1,7 +1,7 @@
 // ════════════════════════════════════════════════════════════════════════
-// ▓▓▓ AURA8 — 09b2-save-load.js · VERSION 122 · 31/05/2026 ▓▓▓
+// ▓▓▓ AURA8 — 09b2-save-load.js · VERSION 123 · 01/06/2026 ▓▓▓
 // ════════════════════════════════════════════════════════════════════════
-// saveState + loadState — écriture/lecture IndexedDB + localStorage.
+// saveState + loadState + hooks de fermeture — TOUTE la persistance ici.
 //
 // v121 — Refonte complète :
 //   • saveState : put avec CLÉ EXPLICITE (RT.SAVE_KEY) — sans cela, IDB
@@ -10,27 +10,28 @@
 //     ne bloque plus sur version absente, appel renderAll() à la fin,
 //     bannière debug visuelle visible à l'écran (pas besoin de console).
 //
-// ★★ v122 (31/05/2026) — VERROU _stateReady + GARDE-FOU ANTI-RÉGRESSION
-//   PROBLÈME RÉSOLU :
-//     Le storage régressait périodiquement (cycle 16520 → 12634 → 42).
-//     Cause : saveState() était appelé pendant le démarrage avant que
-//     loadState() ait fini de restaurer S. À ce moment-là, S était encore
-//     en valeurs par défaut (cycle=42), et saveState écrivait cycle=42
-//     par-dessus le vrai snapshot du storage.
+// v122 (31/05/2026) — VERROU _stateReady + GARDE-FOU ANTI-RÉGRESSION
+//   PROBLÈME : storage régressait (cycle 16520 → 12634 → 42). Cause :
+//   saveState appelé pendant le démarrage avant restauration de S.
+//   FIX : verrou _stateReady (false au démarrage, true après loadState).
+//   + garde-fou anti-régression dans saveState (refuse cycle < LS - 5).
 //
-//   SOLUTION (ceinture + bretelles) :
-//     1) VERROU _stateReady — window._stateReady = false au démarrage.
-//        saveState refuse d'écrire tant que _stateReady = false.
-//        loadState met _stateReady = true à la fin (TOUS chemins de sortie).
-//        → Empêche les sauvegardes prématurées AVANT restauration.
+// ★★ v123 (01/06/2026) — HOOKS DE FERMETURE SYNCHRONES
+//   PROBLÈME : quand l'app passe en arrière-plan, le cycle revenait à
+//   une vieille valeur au retour. Cause : aucun handler pagehide actif
+//   (00b-persistance-override.js qui les contenait avait été supprimé,
+//   et la fonction _installPackContinuite dans 10 n'était jamais appelée).
+//   Et même si saveState() async était appelé au pagehide, il n'avait
+//   pas le temps de finir avant que le browser gèle l'onglet.
 //
-//     2) GARDE-FOU ANTI-RÉGRESSION — saveState compare le cycle qu'il veut
-//        écrire avec celui déjà en LS. Si LS a un cycle plus élevé de >5,
-//        refuse d'écrire (filet de sécurité en cas de bug futur).
+//   FIX : hooks pagehide/freeze/beforeunload/visibilitychange installés
+//   ICI. Chaque hook fait une écriture SYNCHRONE de localStorage via
+//   _flushSyncOnExit(). IDB est tenté en fire-and-forget (best effort).
+//   L'écriture synchrone garantit que le storage est à jour AVANT que
+//   le browser gèle l'onglet.
 //
-//   ÇA REND OBSOLÈTE :
-//     00b-persistance-override.js (qui patchait via window.saveState).
-//     Ce fichier peut être supprimé du repo après validation.
+//   Code copié de 00b-persistance-override.js v120.5 qui fonctionnait,
+//   adapté pour respecter le verrou _stateReady de v122.
 //
 // Dépend de 09a-runtime-state.js (window.RT + window.openDB).
 // ════════════════════════════════════════════════════════════════════════
@@ -480,3 +481,74 @@ async function loadState() {
   return true;
 }
 window.loadState = loadState;
+
+
+// ════════════════════════════════════════════════════════════════════════
+// v123 — HOOKS DE FERMETURE SYNCHRONES
+// ════════════════════════════════════════════════════════════════════════
+// _flushSyncOnExit : appelée par les hooks pagehide/freeze/visibilitychange.
+// Construit le snapshot et écrit localStorage de manière SYNCHRONE pour
+// garantir l'écriture avant que le browser gèle l'onglet.
+// IDB tenté en fire-and-forget (best effort, peut échouer sans conséquence).
+// ════════════════════════════════════════════════════════════════════════
+function _flushSyncOnExit(reason) {
+  try {
+    // Verrou _stateReady : pas d'écriture pendant le démarrage avant loadState
+    if (typeof window !== 'undefined' && window._stateReady === false) return;
+    // Pas d'écriture pendant un factory reset
+    if (typeof window !== 'undefined' && window._resetInProgress) return;
+    try {
+      if (sessionStorage.getItem('nexus_factory_reset') === '1') return;
+    } catch (e) {}
+
+    if (typeof buildSnapshot !== 'function') return;
+    const snap = buildSnapshot();
+    if (!snap) return;
+
+    // Garde-fou anti-régression : refuse cycle < LS - 5
+    try {
+      const raw = localStorage.getItem(RT.SAVE_KEY);
+      if (raw) {
+        const currentLS = JSON.parse(raw);
+        const lsCycle   = (currentLS && typeof currentLS.cycle === 'number') ? currentLS.cycle : -1;
+        const snapCycle = (typeof snap.cycle === 'number') ? snap.cycle : -1;
+        if (lsCycle > snapCycle + 5) {
+          console.warn('[flush ' + reason + ' v123] BLOQUÉ anti-régression : cycle ' + snapCycle + ' < LS#' + lsCycle);
+          return;
+        }
+      }
+    } catch (e) {}
+
+    if (!snap.savedAt) snap.savedAt = new Date().toISOString();
+    if (!snap.key)     snap.key = RT.SAVE_KEY;
+
+    // Écriture SYNCHRONE de localStorage — termine AVANT que le browser gèle
+    try {
+      localStorage.setItem(RT.SAVE_KEY, JSON.stringify(snap));
+    } catch (e) {
+      console.warn('[flush ' + reason + ' v123] LS error:', e.message);
+    }
+
+    // IDB en fire-and-forget — best effort, peut être interrompu sans conséquence
+    try {
+      openDB().then(db => {
+        const tx  = db.transaction(RT.STORE_STATE, 'readwrite');
+        tx.objectStore(RT.STORE_STATE).put(snap, RT.SAVE_KEY);
+      }).catch(() => {});
+    } catch (e) {}
+
+    console.log('[flush v123] ' + reason + ' · cycle ' + (snap.cycle || '?'));
+  } catch (e) {
+    console.warn('[flush v123] ' + reason + ' a planté:', e);
+  }
+}
+
+// Installation des hooks — exécutée à l'évaluation du fichier (pas dans une fonction)
+window.addEventListener('pagehide',     () => _flushSyncOnExit('pagehide'));
+window.addEventListener('beforeunload', () => _flushSyncOnExit('beforeunload'));
+window.addEventListener('freeze',       () => _flushSyncOnExit('freeze'));
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'hidden') _flushSyncOnExit('visibility-hidden');
+});
+
+console.log('[09b2 v123] ✅ hooks pagehide/freeze/beforeunload/visibilitychange installés (écriture sync)');

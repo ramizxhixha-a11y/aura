@@ -1,6 +1,13 @@
 // ════════════════════════════════════════════════════════════
-// AURA8 — module consolidé 10/10
+// AURA8 — module consolidé 10/10 · VERSION 123 · 01/06/2026
 // Contient : fin-bloc-restauration-v93, bloc-restauration-v94, fin-bloc-restauration-v94
+//
+// ★ v123 (01/06/2026) — NETTOYAGE
+//   • Suppression de _installPackContinuite (56 lignes mortes, jamais appelée).
+//   • Suppression de _autoSaveInterval et _packContinuiteInstalled (variables
+//     utilisées uniquement par la fonction supprimée).
+//   • Les hooks de continuité (pagehide/freeze/beforeunload/visibilitychange)
+//     sont désormais dans 09b2-save-load.js v123 avec écriture SYNCHRONE.
 // ════════════════════════════════════════════════════════════
 // ════════════════════════════════════════════════════════════════════════
 // FIN BLOC RESTAURATION v93
@@ -62,12 +69,10 @@ const _SNAP_KEYS = ['nexusSnap_A'];
   obsoletes.forEach(k => { try { localStorage.removeItem(k); } catch(e) {} });
 })();
 
-let _autoSaveInterval = null;
 let _currentDetailPair = null;
 let   _db = null;
 let _lastAutoSnapTs = 0;
 let _p5LastAdaptiveSave = 0;
-let _packContinuiteInstalled = false;
 let _pendingClosePair = null;
 let _settingsPulseTimer = null;
 let _snapRotationIdx = 0;
@@ -1270,43 +1275,11 @@ function _initNetIndicator() {
 }
 if(typeof _initNetIndicator==='function') window._initNetIndicator = _initNetIndicator;
 
-function _installPackContinuite() {
-  if (_packContinuiteInstalled) return;
-  _packContinuiteInstalled = true;
-  
-  if (_autoSaveInterval) clearInterval(_autoSaveInterval);
-  _autoSaveInterval = setInterval(() => {
-    // v122 : respect du verrou _stateReady (défini par 09b2 v122)
-    // Empêche les sauvegardes pendant le démarrage avant que loadState ait fini.
-    if (window._stateReady === false) return;
-    if (typeof S !== 'undefined' && !window._resetInProgress) {
-      saveState(true);
-    }
-  }, 15000);
-  
-  window.addEventListener('pagehide', () => {
-    if (window._resetInProgress) return;
-    if (sessionStorage.getItem('nexus_factory_reset') === '1') return;
-    // v122 : respect du verrou _stateReady — sinon écrasement avec S par défaut
-    // quand on passe l'app en arrière-plan AVANT que loadState ait fini.
-    if (window._stateReady === false) return;
-    // v122 : SUPPRESSION de l'écriture directe localStorage.setItem qui
-    // contournait le garde-fou anti-régression de saveState. On passe
-    // maintenant uniquement par saveState qui a tous les verrous.
-    try { saveState(true); } catch(e) {}
-  });
-  
-  document.addEventListener('freeze', () => {
-    if (window._resetInProgress) return;
-    if (sessionStorage.getItem('nexus_factory_reset') === '1') return;
-    // v122 : même verrou que pagehide
-    if (window._stateReady === false) return;
-    try { saveState(true); } catch(e) {}
-  });
-  
-  console.log('[AURA] Pack Continuité v122 installé · autosave 15s + hooks pagehide/freeze · verrou _stateReady');
-}
-if(typeof _installPackContinuite==='function') window._installPackContinuite = _installPackContinuite;
+// v123 : la fonction _installPackContinuite a été supprimée d'ici.
+// Elle n'était jamais appelée (confirmé par multi-search sur tout le repo).
+// Les hooks de continuité (pagehide/freeze/beforeunload/visibilitychange)
+// sont désormais dans 09b2-save-load.js v123, avec écriture SYNCHRONE
+// (vs async ici qui ne finissait pas avant que le browser gèle).
 
 function _isPairManual(pair) {
   return !!(S._manualPairs && S._manualPairs[pair]);
