@@ -3,572 +3,616 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>AURA8 · Multi-Search v2</title>
+<title>AURA8 · Multi-Search</title>
 <style>
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  body {
-    background: #050709;
-    color: #e6ebf5;
-    font-family: -apple-system, system-ui, sans-serif;
-    padding: 16px;
-    min-height: 100vh;
-    font-size: 13px;
-  }
-  h1 {
-    font-size: 17px;
-    color: #a855f7;
-    letter-spacing: .06em;
-    margin-bottom: 4px;
-  }
-  .sub { font-size: 11px; color: #9aa0a6; margin-bottom: 18px; }
-  
-  label {
-    display: block;
-    font-size: 10px;
-    color: #9aa0a6;
-    margin: 12px 0 4px;
-    letter-spacing: .05em;
-    text-transform: uppercase;
-  }
-  
-  input[type=text] {
-    width: 100%;
-    padding: 10px 12px;
-    background: rgba(255,255,255,.04);
-    border: 1px solid rgba(255,255,255,.1);
-    border-radius: 8px;
-    color: #e6ebf5;
-    font-size: 13px;
-    font-family: 'SF Mono', monospace;
-  }
-  
-  .quick-row {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 6px;
-    margin-top: 6px;
-  }
-  
-  .quick-btn {
-    padding: 6px 10px;
-    background: rgba(168,85,247,.08);
-    border: 1px solid rgba(168,85,247,.3);
-    border-radius: 6px;
-    color: #a855f7;
-    font-size: 11px;
-    cursor: pointer;
-    font-family: 'SF Mono', monospace;
-  }
-  
-  .filter-row {
-    display: flex;
-    gap: 6px;
-    margin-top: 6px;
-  }
-  
-  .filter-btn {
-    flex: 1;
-    padding: 8px;
-    background: rgba(255,255,255,.04);
-    border: 1px solid rgba(255,255,255,.1);
-    border-radius: 6px;
-    color: #9aa0a6;
-    font-size: 12px;
-    cursor: pointer;
-    font-weight: 600;
-  }
-  .filter-btn.active {
-    background: rgba(168,85,247,.15);
-    border-color: rgba(168,85,247,.5);
-    color: #a855f7;
-  }
-  
-  .btn-search {
-    width: 100%;
-    padding: 14px;
-    margin: 16px 0;
-    border-radius: 10px;
-    border: 1.5px solid rgba(168,85,247,.5);
-    background: rgba(168,85,247,.12);
-    color: #a855f7;
-    font-size: 14px;
-    font-weight: 700;
-    cursor: pointer;
-    letter-spacing: .05em;
-  }
-  .btn-search:disabled { opacity: .4; }
-  
-  .btn-dl-all {
-    width: 100%;
-    padding: 12px;
-    margin: 8px 0;
-    border-radius: 10px;
-    border: 1.5px solid rgba(245,200,66,.6);
-    background: rgba(245,200,66,.12);
-    color: #f5c842;
-    font-size: 13px;
-    font-weight: 700;
-    cursor: pointer;
-  }
-  
-  #status {
-    padding: 10px;
-    background: rgba(255,255,255,.02);
-    border-radius: 6px;
-    margin-top: 12px;
-    font-size: 11px;
-    color: #9aa0a6;
-    font-family: 'SF Mono', monospace;
-  }
-  
-  .file-result {
-    margin: 10px 0;
-    background: rgba(255,255,255,.02);
-    border: 1px solid rgba(255,255,255,.06);
-    border-radius: 8px;
-    padding: 10px;
-  }
-  .file-result.has-matches { border-color: rgba(0,232,122,.4); background: rgba(0,232,122,.04); }
-  .file-result.no-matches { opacity: 0.4; }
-  .file-result.error { border-color: rgba(255,61,107,.3); background: rgba(255,61,107,.04); }
-  
-  .file-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    gap: 8px;
-    flex-wrap: wrap;
-  }
-  
-  .file-name {
-    font-size: 12px;
-    color: #38d4f5;
-    font-family: 'SF Mono', monospace;
-    font-weight: 600;
-  }
-  .file-name .type-badge {
-    display: inline-block;
-    padding: 1px 5px;
-    border-radius: 4px;
-    font-size: 9px;
-    margin-right: 4px;
-    font-weight: 700;
-  }
-  .badge-html { background: rgba(245,200,66,.2); color: #f5c842; }
-  .badge-js   { background: rgba(247,200,84,.18); color: #f7c854; }
-  .badge-css  { background: rgba(56,212,245,.18); color: #38d4f5; }
-  
-  .file-count {
-    font-size: 10px;
-    color: #00e87a;
-    font-weight: 700;
-  }
-  .file-count.zero { color: #666; }
-  .file-count.error { color: #ff3d6b; }
-  
-  .preview {
-    margin-top: 8px;
-    background: #000;
-    border-radius: 6px;
-    padding: 8px;
-    font-family: 'SF Mono', monospace;
-    font-size: 9.5px;
-    line-height: 1.5;
-    color: #c0c0c0;
-    max-height: 200px;
-    overflow-y: auto;
-    white-space: pre;
-    overflow-x: auto;
-  }
-  
-  .match-line {
-    background: rgba(245,200,66,.25);
-    color: #f5c842;
-    font-weight: 700;
-  }
-  
-  .action-btns {
-    display: flex;
-    gap: 6px;
-    margin-top: 8px;
-  }
-  
-  .action-btn {
-    padding: 5px 10px;
-    border-radius: 5px;
-    font-size: 10px;
-    font-weight: 700;
-    cursor: pointer;
-    font-family: inherit;
-    border: 1px solid;
-  }
-  .btn-dl-file {
-    background: rgba(0,232,122,.12);
-    border-color: rgba(0,232,122,.35);
-    color: #00e87a;
-  }
-  
-  .err { color: #ff3d6b; }
-  .ok  { color: #00e87a; }
-  .info { color: #38d4f5; }
-  
-  progress {
-    width: 100%;
-    height: 6px;
-    margin-top: 8px;
-  }
+:root {
+  --bg: #050709;
+  --bg-card: #0d1117;
+  --t1: #f0f4f8;
+  --t2: #8899bb;
+  --t3: #4a5568;
+  --ice: #38d4f5;
+  --up: #00e87a;
+  --down: #ff3d6b;
+  --gold: #f5c842;
+  --border: rgba(255,255,255,.08);
+  --mono: 'SF Mono', 'Fira Code', monospace;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+  background: var(--bg);
+  color: var(--t1);
+  padding: 16px;
+  font-size: 14px;
+  line-height: 1.5;
+}
+h1 {
+  font-family: var(--mono);
+  color: var(--ice);
+  font-size: 16px;
+  font-weight: 700;
+  margin-bottom: 6px;
+}
+.subtitle {
+  color: var(--t2);
+  font-size: 11px;
+  margin-bottom: 18px;
+}
+.section-label {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--t3);
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  margin: 14px 0 6px;
+}
+input[type="text"], textarea {
+  width: 100%;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px 14px;
+  color: var(--t1);
+  font-family: var(--mono);
+  font-size: 13px;
+  resize: vertical;
+}
+input[type="text"]:focus, textarea:focus {
+  outline: none;
+  border-color: var(--ice);
+}
+.chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 8px 0;
+}
+.chip {
+  background: rgba(56,212,245,.08);
+  border: 1px solid rgba(56,212,245,.25);
+  color: var(--ice);
+  padding: 5px 10px;
+  border-radius: 6px;
+  font-family: var(--mono);
+  font-size: 11px;
+  cursor: pointer;
+  user-select: none;
+}
+.chip:active { transform: scale(0.96); }
+.toggle-row {
+  display: flex;
+  gap: 10px;
+  margin: 10px 0;
+  flex-wrap: wrap;
+}
+.toggle {
+  flex: 1;
+  min-width: 90px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px;
+  color: var(--t2);
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  text-align: center;
+  user-select: none;
+}
+.toggle.on {
+  background: rgba(0,232,122,.12);
+  border-color: rgba(0,232,122,.5);
+  color: var(--up);
+}
+.btn-primary {
+  width: 100%;
+  background: rgba(0,232,122,.10);
+  border: 1.5px solid rgba(0,232,122,.5);
+  color: var(--up);
+  padding: 14px;
+  border-radius: 10px;
+  font-family: var(--mono);
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  margin-top: 16px;
+}
+.btn-primary:active { transform: scale(0.98); }
+.btn-secondary {
+  width: 100%;
+  background: rgba(56,212,245,.08);
+  border: 1px solid rgba(56,212,245,.3);
+  color: var(--ice);
+  padding: 12px;
+  border-radius: 10px;
+  font-family: var(--mono);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  margin-top: 8px;
+}
+.progress {
+  margin-top: 16px;
+  padding: 12px 14px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--t2);
+  display: none;
+}
+.progress.active { display: block; }
+.progress .bar {
+  height: 3px;
+  background: rgba(255,255,255,.05);
+  border-radius: 2px;
+  margin-top: 8px;
+  overflow: hidden;
+}
+.progress .bar-inner {
+  height: 100%;
+  background: var(--ice);
+  width: 0%;
+  transition: width .2s;
+}
+.summary {
+  margin-top: 16px;
+  padding: 12px 14px;
+  background: rgba(56,212,245,.05);
+  border: 1px solid rgba(56,212,245,.25);
+  border-radius: 10px;
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--ice);
+  display: none;
+}
+.summary.active { display: block; }
+.summary b { color: var(--up); }
+.summary .total-line { margin-bottom: 6px; }
+.results {
+  margin-top: 16px;
+  display: none;
+}
+.results.active { display: block; }
+.file-block {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  margin-bottom: 14px;
+  overflow: hidden;
+}
+.file-header {
+  background: rgba(56,212,245,.08);
+  padding: 10px 14px;
+  font-family: var(--mono);
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--ice);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.file-header .count {
+  background: rgba(0,232,122,.15);
+  color: var(--up);
+  padding: 2px 8px;
+  border-radius: 6px;
+  font-size: 10px;
+}
+.match {
+  padding: 10px 14px;
+  border-bottom: 1px dashed rgba(255,255,255,.04);
+  font-family: var(--mono);
+  font-size: 11px;
+  white-space: pre-wrap;
+  word-break: break-all;
+  line-height: 1.6;
+}
+.match:last-child { border-bottom: none; }
+.match .line-num {
+  color: var(--t3);
+  display: inline-block;
+  width: 50px;
+  text-align: right;
+  margin-right: 10px;
+  user-select: none;
+}
+.match .hit {
+  background: rgba(245,200,66,.25);
+  color: var(--gold);
+  font-weight: 700;
+  padding: 1px 2px;
+  border-radius: 2px;
+}
+.match .ctx {
+  color: var(--t3);
+  font-size: 10px;
+}
+.error {
+  color: var(--down);
+  padding: 8px;
+  font-family: var(--mono);
+  font-size: 11px;
+}
+.empty {
+  text-align: center;
+  padding: 30px;
+  color: var(--t3);
+  font-family: var(--mono);
+  font-size: 12px;
+}
+hr {
+  border: none;
+  border-top: 1px dashed var(--border);
+  margin: 18px 0;
+}
+.help {
+  font-size: 10px;
+  color: var(--t3);
+  line-height: 1.5;
+  margin-top: 6px;
+}
 </style>
 </head>
 <body>
 
-<h1>🔮 AURA8 · MULTI-SEARCH v2</h1>
-<div class="sub">JS + HTML + CSS · 38 fichiers · filtres + parallèle</div>
+<h1>🔎 AURA8 · MULTI-SEARCH</h1>
+<div class="subtitle">Recherche globale dans /js/, /css/, et le HTML racine. Téléchargement résultats en .txt.</div>
 
-<label>Mot-clé à chercher</label>
-<input type="text" id="keyword" value="toggleSim" placeholder="ex: toggleSim, renderAll, cashVal, .btn-play">
-<div class="quick-row">
-  <button class="quick-btn" onclick="setKw('toggleSim')">toggleSim</button>
-  <button class="quick-btn" onclick="setKw('renderAll')">renderAll</button>
-  <button class="quick-btn" onclick="setKw('simulationPaused')">simulationPaused</button>
-  <button class="quick-btn" onclick="setKw('loadState')">loadState</button>
-  <button class="quick-btn" onclick="setKw('mainTick')">mainTick</button>
-  <button class="quick-btn" onclick="setKw('cashVal')">cashVal</button>
-  <button class="quick-btn" onclick="setKw('.btn-play-pause')">.btn-play-pause</button>
+<div class="section-label">1. Mot-clé à chercher</div>
+<input type="text" id="keyword" placeholder="ex: showToast, .wc-account, S.portfolio, BTC chute, function init..." spellcheck="false" autocomplete="off">
+<div class="chip-row">
+  <div class="chip" onclick="setKw('showToast')">showToast</div>
+  <div class="chip" onclick="setKw('renderAll')">renderAll</div>
+  <div class="chip" onclick="setKw('window.S')">window.S</div>
+  <div class="chip" onclick="setKw('cashVal')">cashVal</div>
+  <div class="chip" onclick="setKw('saveState')">saveState</div>
+  <div class="chip" onclick="setKw('loadState')">loadState</div>
+  <div class="chip" onclick="setKw('buildSnapshot')">buildSnapshot</div>
+  <div class="chip" onclick="setKw('BTC chute')">BTC chute</div>
 </div>
 
-<label>Filtrer par type</label>
-<div class="filter-row">
-  <button class="filter-btn active" id="filter-all" onclick="setFilter('all')">Tout (38)</button>
-  <button class="filter-btn" id="filter-js" onclick="setFilter('js')">JS + HTML (13)</button>
-  <button class="filter-btn" id="filter-css" onclick="setFilter('css')">CSS (25)</button>
+<div class="section-label">2. Où chercher</div>
+<div class="toggle-row">
+  <div class="toggle on" id="tgHTML" onclick="toggleTg('tgHTML')">📄 HTML</div>
+  <div class="toggle on" id="tgCSS" onclick="toggleTg('tgCSS')">🎨 CSS (/css/)</div>
+  <div class="toggle on" id="tgJS" onclick="toggleTg('tgJS')">⚙️ JS (/js/)</div>
 </div>
 
-<label>Contexte (lignes autour de chaque match)</label>
-<input type="text" id="context" value="10">
+<div class="section-label">3. Lignes de contexte (avant + après)</div>
+<input type="text" id="contextLines" value="2" style="width:80px;">
+<div class="help">0 = aucun contexte, 2 = ligne avant + ligne après, 5 = 5 lignes avant + 5 après</div>
 
-<button class="btn-search" id="searchBtn" onclick="doSearch()">🔮 Chercher dans tous les fichiers</button>
-<button class="btn-dl-all" id="dlAllBtn" onclick="downloadAll()" style="display:none;">💾 Tout télécharger en .txt</button>
+<div class="section-label">4. Options</div>
+<div class="toggle-row">
+  <div class="toggle on" id="tgCase" onclick="toggleTg('tgCase')">Aa Insensible casse</div>
+  <div class="toggle" id="tgRegex" onclick="toggleTg('tgRegex')">.* Regex</div>
+</div>
 
-<div id="status">Prêt. Tape un mot-clé, choisis un filtre, et lance.</div>
-<progress id="progress" value="0" max="100" style="display:none;"></progress>
+<button class="btn-primary" onclick="runSearch()">🔎 Lancer la recherche globale</button>
 
-<div id="results"></div>
+<div class="progress" id="progress">
+  <div id="progressTxt">Préparation…</div>
+  <div class="bar"><div class="bar-inner" id="progressBar"></div></div>
+</div>
+
+<div class="summary" id="summary"></div>
+
+<button class="btn-secondary" id="dlBtn" onclick="downloadResults()" style="display:none;">⬇ Télécharger le résultat en .txt</button>
+
+<div class="results" id="results"></div>
 
 <script>
-// ─── Liste exhaustive des fichiers à scanner ───────────────
-const FILES_JS = [
-  './AURA8_v118.html',
-  './js/00-backup-state.js',
-  './js/01-chrono-network.js',
-  './js/02-state-init.js',
-  './js/03-per-pair-position-buttons-controls-bui.js',
-  './js/04-v8-0-livraison-35-mode-max-permissif-v.js',
-  './js/05-v37-19-indicateur-de-fatigue-bot.js',
-  './js/06-v63-patterns-chartistes.js',
-  './js/07-v90-mode-bunker-sos.js',
-  './js/08-learning-history-render.js',
-  './js/09-bloc-restauration-v93.js',
-  './js/10-fin-bloc-restauration-v93.js',
-];
-
-const FILES_CSS = [
-  './css/01-base.css',
-  './css/02-layout.css',
-  './css/03-utils.css',
-  './css/04-installer-bannière.css',
-  './css/05-action-cards-base.css',
-  './css/06-page-dashboard.css',
-  './css/07-page-agents.css',
-  './css/08-page-market.css',
-  './css/09-page-dao.css',
-  './css/10-page-chain.css',
-  './css/11-page-fiscal.css',
-  './css/12-page-positions.css',
-  './css/13-v8-mood-brain-ticker.css',
-  './css/14-v6-controls-pending.css',
-  './css/15-v59-settings-modal.css',
-  './css/16-v56-bot-fleet.css',
-  './css/17-v55-swarm-21agents.css',
-  './css/18-v54-dialogue-mirror.css',
-  './css/19-v4x-action-cards-rich.css',
-  './css/20-v712-stabilité.css',
-  './css/21a-v712-controls-charts.css',
-  './css/21b-v712-luminous-cards.css',
-  './css/22-features-v16-v69.css',
-  './css/23-circular-logo.css',
-  './css/24-header-l1.css',
-  './css/25-mode-trading.css',
-];
-
-// Noms alternatifs si tronqués/différents
-const ALT_NAMES = {
-  './js/03-per-pair-position-buttons-controls-bui.js': [
-    './js/03-per-pair-position-buttons-controls-buil.js',
-    './js/03-per-pair-position-buttons-controls-build.js',
-    './js/03-per-pair-position-buttons-controls.js',
+// ════════════════════════════════════════════════════
+// LISTE EXHAUSTIVE DES FICHIERS À FOUILLER
+// ════════════════════════════════════════════════════
+const FILES = {
+  html: ['AURA8_v118.html'],
+  css: [
+    '01-base.css', '02-layout.css', '03-utils.css', '04-install-banner.css',
+    '05-action-cards-base.css', '06-page-dashboard.css', '07-page-agents.css',
+    '08-page-market.css', '09-page-dao.css', '10-page-chain.css',
+    '11-page-fiscal.css', '12-page-positions.css',
+    '13-v8-mood-brain-ticker.css', '14-v6-controls-pending.css',
+    '15-v59-settings-modal.css', '16-v56-bot-fleet.css',
+    '17-v55-swarm-21agents.css', '18-v54-dialogue-mirror.css',
+    '19-v4x-action-cards-rich.css', '20-v712-stability.css',
+    '21a-v712-controls-charts.css', '21b-v712-luminous-cards.css',
+    '22-features-v16-v69.css', '23-circular-logo.css',
+    '24-header-l1.css', '25-mode-trading.css', '25-settings-redesign.css'
   ],
-  './js/04-v8-0-livraison-35-mode-max-permissif-v.js': [
-    './js/04-v8-0-livraison-35-mode-max-permissif.js',
-  ],
+  js: [
+    '00-backup-state.js', '00b-persistance-override.js',
+    '01-chrono-network.js', '02-state-init.js',
+    '03-per-pair-position-buttons-controls-buid.js',
+    '04-v8-0-livraison-35-mode-max-permissif-v.js',
+    '05-v37-19-indicateur-de-fatigue-bot.js',
+    '06-v63-patterns-chartistes.js', '07-v90-mode-bunker-sos.js',
+    '08-learning-history-render.js',
+    '09a-runtime-state.js', '09b1-build-snapshot.js',
+    '09b2-save-load.js', '09b3-import-export.js',
+    '09c-auto-open.js', '09d1-paper-real-core.js',
+    '09d2-paper-real-stats.js', '09e-guards.js',
+    '09f1-bricks-action.js', '09f2-bricks-man.js',
+    '09f3-bricks-pair.js', '09f4-bricks-utils.js',
+    '09g-modals.js', '09h-exports.js',
+    '09i-sim-control.js', '09j-helpers.js', '09k-init.js',
+    '09l-window-bridge.js',
+    '10-fin-bloc-restauration-v93.js'
+  ]
 };
 
-let _currentFilter = 'all';
-let _results = [];
+// ════════════════════════════════════════════════════
+// ÉTAT UI
+// ════════════════════════════════════════════════════
+let _lastResultText = '';
+let _lastKeyword = '';
 
-function setKw(kw) { document.getElementById('keyword').value = kw; }
-
-function setFilter(type) {
-  _currentFilter = type;
-  ['all', 'js', 'css'].forEach(t => {
-    const btn = document.getElementById('filter-' + t);
-    if (btn) btn.classList.toggle('active', t === type);
-  });
+function setKw(v) {
+  document.getElementById('keyword').value = v;
 }
 
-function getFiles() {
-  if (_currentFilter === 'js') return FILES_JS;
-  if (_currentFilter === 'css') return FILES_CSS;
-  return [...FILES_JS, ...FILES_CSS];
-}
-
-function getFileType(url) {
-  if (url.endsWith('.html')) return 'html';
-  if (url.endsWith('.js')) return 'js';
-  if (url.endsWith('.css')) return 'css';
-  return 'other';
-}
-
-async function fetchFile(url) {
-  // Encoder l'URL pour gérer les accents (ex: bannière, stabilité)
-  const encodedUrl = url.split('/').map((part, i, arr) => 
-    i === arr.length - 1 ? encodeURIComponent(part) : part
-  ).join('/');
-  
-  try {
-    const r = await fetch(encodedUrl, { cache: 'no-cache' });
-    if (!r.ok) {
-      // Essayer les noms alternatifs
-      if (ALT_NAMES[url]) {
-        for (const altUrl of ALT_NAMES[url]) {
-          try {
-            const r2 = await fetch(altUrl, { cache: 'no-cache' });
-            if (r2.ok) {
-              return { ok: true, content: await r2.text(), actualUrl: altUrl };
-            }
-          } catch(e) {}
-        }
-      }
-      return { ok: false, error: 'HTTP ' + r.status };
-    }
-    return { ok: true, content: await r.text(), actualUrl: url };
-  } catch(e) {
-    return { ok: false, error: e.message };
-  }
-}
-
-async function doSearch() {
-  const kw = document.getElementById('keyword').value.trim();
-  const ctx = parseInt(document.getElementById('context').value, 10) || 10;
-  const status = document.getElementById('status');
-  const results = document.getElementById('results');
-  const btn = document.getElementById('searchBtn');
-  const dlAllBtn = document.getElementById('dlAllBtn');
-  const progress = document.getElementById('progress');
-  
-  if (!kw) {
-    status.innerHTML = '<span class="err">⚠ Mot-clé requis</span>';
-    return;
-  }
-  
-  const files = getFiles();
-  
-  btn.disabled = true;
-  dlAllBtn.style.display = 'none';
-  results.innerHTML = '';
-  _results = [];
-  progress.style.display = 'block';
-  progress.value = 0;
-  progress.max = files.length;
-  status.textContent = '⏳ Scan parallèle de ' + files.length + ' fichiers...';
-  
-  // Lancer toutes les requêtes en parallèle
-  let completed = 0;
-  const promises = files.map(async (url) => {
-    const res = await fetchFile(url);
-    completed++;
-    progress.value = completed;
-    status.textContent = '⏳ [' + completed + '/' + files.length + '] traitement...';
-    return { url, res };
-  });
-  
-  const allResults = await Promise.all(promises);
-  
-  let totalMatches = 0;
-  let filesWithMatches = 0;
-  
-  // Trier : matches d'abord, puis pas de matches, puis erreurs
-  const sorted = allResults.map(({url, res}) => {
-    const shortName = url.split('/').pop();
-    const type = getFileType(url);
-    
-    if (!res.ok) {
-      return { url, shortName, type, status: 'error', error: res.error, matchCount: 0 };
-    }
-    
-    const lines = res.content.split('\n');
-    const matches = [];
-    for (let j = 0; j < lines.length; j++) {
-      if (lines[j].includes(kw)) matches.push(j);
-    }
-    
-    if (matches.length === 0) {
-      return { url, shortName, type, status: 'no-matches', matchCount: 0 };
-    }
-    
-    // Build preview (1er match)
-    const firstMatch = matches[0];
-    const start = Math.max(0, firstMatch - ctx);
-    const end = Math.min(lines.length, firstMatch + ctx + 1);
-    const blockLines = lines.slice(start, end);
-    const previewHtml = blockLines.map((line, idx) => {
-      const lineNum = start + idx + 1;
-      const numStr = String(lineNum).padStart(5, ' ');
-      let displayLine = escapeHtml(line);
-      const reg = new RegExp(escapeRegex(kw), 'g');
-      displayLine = displayLine.replace(reg, '<span class="match-line">' + escapeHtml(kw) + '</span>');
-      return '<span style="color:#666;">' + numStr + '</span>  ' + displayLine;
-    }).join('\n');
-    
-    // Build full text for download
-    let fullText = '';
-    for (let m of matches) {
-      const s = Math.max(0, m - ctx);
-      const e = Math.min(lines.length, m + ctx + 1);
-      const bl = lines.slice(s, e);
-      fullText += '\n━━━ Match line ' + (m+1) + ' ━━━\n\n';
-      fullText += bl.map((l, idx) => String(s + idx + 1).padStart(5, ' ') + '  ' + l).join('\n');
-      fullText += '\n';
-    }
-    
-    return {
-      url, shortName, type, status: 'has-matches',
-      matchCount: matches.length, firstMatchLine: firstMatch + 1,
-      previewHtml, fullText
-    };
-  });
-  
-  // Trier : has-matches > no-matches > error
-  const order = { 'has-matches': 0, 'no-matches': 1, 'error': 2 };
-  sorted.sort((a, b) => order[a.status] - order[b.status]);
-  
-  // Render
-  sorted.forEach((r) => {
-    const div = document.createElement('div');
-    const badgeClass = 'badge-' + r.type;
-    const badgeText = r.type.toUpperCase();
-    
-    if (r.status === 'has-matches') {
-      _results.push(r);
-      filesWithMatches++;
-      totalMatches += r.matchCount;
-      
-      div.className = 'file-result has-matches';
-      div.innerHTML = '<div class="file-header">' +
-        '<div class="file-name"><span class="type-badge ' + badgeClass + '">' + badgeText + '</span>' + escapeHtml(r.shortName) + '</div>' +
-        '<div class="file-count">✓ ' + r.matchCount + ' match(es)</div>' +
-        '</div>' +
-        '<div class="preview">' + r.previewHtml + '</div>' +
-        '<div class="action-btns">' +
-        '<button class="action-btn btn-dl-file" onclick="downloadOne(' + (_results.length-1) + ')">💾 .txt</button>' +
-        '</div>';
-    } else if (r.status === 'error') {
-      div.className = 'file-result error';
-      div.innerHTML = '<div class="file-header">' +
-        '<div class="file-name"><span class="type-badge ' + badgeClass + '">' + badgeText + '</span>' + escapeHtml(r.shortName) + '</div>' +
-        '<div class="file-count error">⚠ ' + escapeHtml(r.error) + '</div>' +
-        '</div>';
-    } else {
-      div.className = 'file-result no-matches';
-      div.innerHTML = '<div class="file-header">' +
-        '<div class="file-name"><span class="type-badge ' + badgeClass + '">' + badgeText + '</span>' + escapeHtml(r.shortName) + '</div>' +
-        '<div class="file-count zero">0 match</div>' +
-        '</div>';
-    }
-    results.appendChild(div);
-  });
-  
-  progress.style.display = 'none';
-  
-  if (filesWithMatches === 0) {
-    status.innerHTML = '<span class="err">❌ Aucun fichier ne contient "' + escapeHtml(kw) + '"</span>';
-  } else {
-    status.innerHTML = '<span class="ok">✓ ' + filesWithMatches + ' fichier(s) · ' + 
-                       totalMatches + ' match(es) au total pour "' + escapeHtml(kw) + '"</span>';
-    dlAllBtn.style.display = 'block';
-  }
-  
-  btn.disabled = false;
-}
-
-function downloadOne(idx) {
-  const r = _results[idx];
-  if (!r) return;
-  const kw = document.getElementById('keyword').value.trim();
-  const filename = (kw + '_in_' + r.shortName).replace(/[^\w.]/g, '_') + '.txt';
-  const content = 
-    '═══ AURA8 MULTI-SEARCH RESULT ═══\n' +
-    'File: ' + r.url + '\n' +
-    'Keyword: ' + kw + '\n' +
-    'Type: ' + r.type.toUpperCase() + '\n' +
-    'Matches: ' + r.matchCount + '\n' +
-    'Date: ' + new Date().toISOString() + '\n' +
-    '═════════════════════════════════\n' +
-    r.fullText;
-  downloadTxt(content, filename);
-}
-
-function downloadAll() {
-  if (_results.length === 0) return;
-  const kw = document.getElementById('keyword').value.trim();
-  const filename = 'multisearch_' + kw.replace(/[^\w]/g, '_') + '.txt';
-  let content = 
-    '═══ AURA8 MULTI-SEARCH · ALL FILES ═══\n' +
-    'Keyword: ' + kw + '\n' +
-    'Filter: ' + _currentFilter + '\n' +
-    'Total files with matches: ' + _results.length + '\n' +
-    'Total matches: ' + _results.reduce((s,r) => s + r.matchCount, 0) + '\n' +
-    'Date: ' + new Date().toISOString() + '\n' +
-    '══════════════════════════════════════\n\n';
-  
-  _results.forEach(r => {
-    content += '\n\n████████████████████████████████\n';
-    content += '█ [' + r.type.toUpperCase() + '] ' + r.shortName + ' · ' + r.matchCount + ' match(es)\n';
-    content += '████████████████████████████████\n';
-    content += r.fullText;
-  });
-  
-  downloadTxt(content, filename);
-}
-
-function downloadTxt(content, filename) {
-  const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = filename;
-  document.body.appendChild(a);
-  a.click();
-  setTimeout(() => {
-    URL.revokeObjectURL(url);
-    document.body.removeChild(a);
-  }, 100);
+function toggleTg(id) {
+  document.getElementById(id).classList.toggle('on');
 }
 
 function escapeHtml(s) {
-  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  return s.replace(/[&<>"']/g, m => ({
+    '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
+  })[m]);
 }
-function escapeRegex(s) {
-  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+function highlightLine(line, keyword, opts) {
+  const escaped = escapeHtml(line);
+  if (!keyword) return escaped;
+  try {
+    let pattern;
+    if (opts.regex) {
+      pattern = new RegExp('(' + keyword + ')', opts.insensitive ? 'gi' : 'g');
+    } else {
+      const escKey = keyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      pattern = new RegExp('(' + escKey + ')', opts.insensitive ? 'gi' : 'g');
+    }
+    return escaped.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(pattern, '<span class="hit">$1</span>')
+      .replace(/</g, (m, idx, str) => {
+        // Re-escape les < qui ne sont pas dans <span class="hit"> ou </span>
+        return m;
+      });
+  } catch(e) {
+    return escaped;
+  }
+}
+
+// ════════════════════════════════════════════════════
+// FETCH UN FICHIER (URL relative)
+// ════════════════════════════════════════════════════
+async function fetchFile(path) {
+  try {
+    const r = await fetch(path, { cache: 'no-store' });
+    if (!r.ok) return null;
+    return await r.text();
+  } catch(e) {
+    return null;
+  }
+}
+
+// ════════════════════════════════════════════════════
+// CHERCHER DANS UN TEXTE
+// ════════════════════════════════════════════════════
+function searchInText(text, keyword, opts) {
+  const lines = text.split('\n');
+  const matches = [];
+  let pattern;
+  try {
+    if (opts.regex) {
+      pattern = new RegExp(keyword, opts.insensitive ? 'i' : '');
+    } else {
+      const esc = keyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      pattern = new RegExp(esc, opts.insensitive ? 'i' : '');
+    }
+  } catch(e) {
+    return { error: 'Regex invalide: ' + e.message, matches: [] };
+  }
+  for (let i = 0; i < lines.length; i++) {
+    if (pattern.test(lines[i])) {
+      matches.push({
+        line: i + 1,
+        content: lines[i],
+        contextBefore: lines.slice(Math.max(0, i - opts.contextLines), i),
+        contextAfter: lines.slice(i + 1, Math.min(lines.length, i + 1 + opts.contextLines))
+      });
+    }
+  }
+  return { matches };
+}
+
+// ════════════════════════════════════════════════════
+// LANCER LA RECHERCHE GLOBALE
+// ════════════════════════════════════════════════════
+async function runSearch() {
+  const kw = document.getElementById('keyword').value.trim();
+  if (!kw) {
+    alert('Indique un mot-clé à chercher');
+    return;
+  }
+
+  const opts = {
+    contextLines: Math.max(0, Math.min(20, parseInt(document.getElementById('contextLines').value) || 0)),
+    insensitive: document.getElementById('tgCase').classList.contains('on'),
+    regex: document.getElementById('tgRegex').classList.contains('on')
+  };
+
+  const include = {
+    html: document.getElementById('tgHTML').classList.contains('on'),
+    css: document.getElementById('tgCSS').classList.contains('on'),
+    js: document.getElementById('tgJS').classList.contains('on')
+  };
+
+  // Construire la liste des fichiers à scanner
+  const filesToScan = [];
+  if (include.html) FILES.html.forEach(f => filesToScan.push({ path: './' + f, kind: 'html' }));
+  if (include.css)  FILES.css.forEach(f => filesToScan.push({ path: './css/' + f, kind: 'css' }));
+  if (include.js)   FILES.js.forEach(f => filesToScan.push({ path: './js/' + f, kind: 'js' }));
+
+  if (filesToScan.length === 0) {
+    alert('Active au moins une catégorie (HTML, CSS ou JS)');
+    return;
+  }
+
+  // UI : reset + progress
+  _lastKeyword = kw;
+  const progress = document.getElementById('progress');
+  const progressTxt = document.getElementById('progressTxt');
+  const progressBar = document.getElementById('progressBar');
+  const summary = document.getElementById('summary');
+  const results = document.getElementById('results');
+  const dlBtn = document.getElementById('dlBtn');
+  progress.classList.add('active');
+  summary.classList.remove('active');
+  results.classList.remove('active');
+  results.innerHTML = '';
+  dlBtn.style.display = 'none';
+
+  // Stats
+  let totalMatches = 0;
+  let filesWithMatches = 0;
+  let filesScanned = 0;
+  let filesNotFound = 0;
+  const fileResults = []; // [{ path, kind, matches: [...] }]
+  const startedAt = Date.now();
+
+  // Fetch en parallèle par lots de 5 (pour ne pas saturer)
+  const BATCH_SIZE = 5;
+  for (let batchStart = 0; batchStart < filesToScan.length; batchStart += BATCH_SIZE) {
+    const batch = filesToScan.slice(batchStart, batchStart + BATCH_SIZE);
+    const batchResults = await Promise.all(batch.map(async f => {
+      const text = await fetchFile(f.path);
+      if (text === null) return { ...f, notFound: true };
+      const r = searchInText(text, kw, opts);
+      return { ...f, ...r };
+    }));
+
+    for (const fr of batchResults) {
+      filesScanned++;
+      if (fr.notFound) {
+        filesNotFound++;
+      } else if (fr.matches && fr.matches.length > 0) {
+        totalMatches += fr.matches.length;
+        filesWithMatches++;
+        fileResults.push(fr);
+      }
+    }
+
+    // Update progress UI
+    const pct = Math.round((filesScanned / filesToScan.length) * 100);
+    progressBar.style.width = pct + '%';
+    progressTxt.textContent = 'Scan ' + filesScanned + ' / ' + filesToScan.length +
+      ' · ' + totalMatches + ' matchs · ' + filesWithMatches + ' fichiers';
+  }
+
+  const elapsed = ((Date.now() - startedAt) / 1000).toFixed(1);
+
+  // Hide progress
+  progress.classList.remove('active');
+
+  // Build summary
+  summary.innerHTML =
+    '<div class="total-line"><b>' + totalMatches + '</b> matchs dans <b>' + filesWithMatches + '</b> fichier(s) ' +
+    '· scanné ' + filesScanned + ' fichiers' +
+    (filesNotFound > 0 ? ' · ' + filesNotFound + ' inaccessibles' : '') +
+    ' · ' + elapsed + 's</div>' +
+    '<div style="color:var(--t3);font-size:10px;">Mot-clé: "' + escapeHtml(kw) + '"' +
+    (opts.regex ? ' · regex' : '') +
+    (opts.insensitive ? ' · insensible casse' : ' · sensible casse') + '</div>';
+  summary.classList.add('active');
+
+  // Build results UI
+  if (fileResults.length === 0) {
+    results.innerHTML = '<div class="empty">Aucun match.<br>Essaie en mode insensible casse, ou avec un autre mot-clé.</div>';
+    results.classList.add('active');
+    return;
+  }
+
+  // Trier : HTML d'abord, puis CSS, puis JS, et par ordre alpha
+  fileResults.sort((a, b) => {
+    const order = { html: 1, css: 2, js: 3 };
+    if (order[a.kind] !== order[b.kind]) return order[a.kind] - order[b.kind];
+    return a.path.localeCompare(b.path);
+  });
+
+  let html = '';
+  for (const fr of fileResults) {
+    const fileName = fr.path.replace(/^\.\//, '');
+    html += '<div class="file-block">';
+    html += '<div class="file-header">';
+    html += '<span>' + (fr.kind === 'html' ? '📄' : fr.kind === 'css' ? '🎨' : '⚙️') + ' ' + fileName + '</span>';
+    html += '<span class="count">' + fr.matches.length + '</span>';
+    html += '</div>';
+    for (const m of fr.matches) {
+      html += '<div class="match">';
+      for (const c of m.contextBefore) {
+        html += '<span class="line-num ctx">·</span><span class="ctx">' + escapeHtml(c) + '</span>\n';
+      }
+      html += '<span class="line-num">' + m.line + '</span>' + highlightLine(m.content, kw, opts) + '\n';
+      for (const c of m.contextAfter) {
+        html += '<span class="line-num ctx">·</span><span class="ctx">' + escapeHtml(c) + '</span>\n';
+      }
+      html += '</div>';
+    }
+    html += '</div>';
+  }
+  results.innerHTML = html;
+  results.classList.add('active');
+
+  // Build .txt for download
+  let txt = '═══════════════════════════════════════════════════\n';
+  txt += '  AURA8 · MULTI-SEARCH RESULTS\n';
+  txt += '═══════════════════════════════════════════════════\n';
+  txt += 'Keyword: ' + kw + '\n';
+  txt += 'Options: ' + (opts.regex ? 'regex · ' : '') + (opts.insensitive ? 'insensitive' : 'case-sensitive') + ' · context=' + opts.contextLines + '\n';
+  txt += 'Total: ' + totalMatches + ' matches in ' + filesWithMatches + ' file(s)\n';
+  txt += 'Scanned: ' + filesScanned + ' files · Elapsed: ' + elapsed + 's\n';
+  txt += 'Date: ' + new Date().toISOString() + '\n';
+  txt += '═══════════════════════════════════════════════════\n\n';
+  for (const fr of fileResults) {
+    const fileName = fr.path.replace(/^\.\//, '');
+    txt += '\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n';
+    txt += '  ' + fileName + ' (' + fr.matches.length + ' match' + (fr.matches.length > 1 ? 'es' : '') + ')\n';
+    txt += '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n';
+    for (const m of fr.matches) {
+      txt += '\n';
+      for (const c of m.contextBefore) {
+        txt += '       · ' + c + '\n';
+      }
+      txt += String(m.line).padStart(6, ' ') + ' > ' + m.content + '\n';
+      for (const c of m.contextAfter) {
+        txt += '       · ' + c + '\n';
+      }
+    }
+  }
+  _lastResultText = txt;
+  dlBtn.style.display = 'block';
+}
+
+// ════════════════════════════════════════════════════
+// DOWNLOAD
+// ════════════════════════════════════════════════════
+function downloadResults() {
+  if (!_lastResultText) return;
+  const blob = new Blob([_lastResultText], { type: 'text/plain;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  const safeKw = _lastKeyword.replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 40);
+  a.href = url;
+  a.download = 'aura-search-' + safeKw + '-' + Date.now() + '.txt';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 </script>
 
