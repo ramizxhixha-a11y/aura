@@ -1402,7 +1402,7 @@ function btcImpactTick() {
     const oldest  = recent[0].price;
     const latest  = recent[recent.length-1].price;
     const pct     = (latest-oldest)/oldest*100;
-    if(pct < -3 && !_btcLastAlertTs || (Date.now()-(_btcLastAlertTs||0)) > 600000) {
+    if(pct < -3 && (!_btcLastAlertTs || (Date.now()-(_btcLastAlertTs||0)) > 600000)) {
       _btcLastAlertTs = Date.now();
       showToast(`⚠️ BTC chute de ${pct.toFixed(1)}% — surveille les alts !`, 5000, 'warn');
     }
