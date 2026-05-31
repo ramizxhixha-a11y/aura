@@ -1,5 +1,5 @@
 // ════════════════════════════════════════════════════════════════════════
-// ▓▓▓ AURA8 · 00b-persistance-override.js · VERSION 120.5 · 21/05/2026 ▓▓▓
+// ▓▓▓ AURA8 · 00b-persistance-override.js · VERSION 120.6 · 31/05/2026 ▓▓▓
 // ════════════════════════════════════════════════════════════════════════
 //
 // OBJECTIF : remplacer saveState/loadState/importState par des versions
@@ -16,7 +16,20 @@
 //   plus de 5 à celui déjà dans le storage. Protège contre le bug où
 //   l'app démarre avec un cycle=0 et écrase un cycle plus élevé sauvegardé.
 //
+// ★★ NOUVEAU v120.6 (31/05/2026) : _applySnapMinimal COMPLÈTE
+//    Avant cette version, 49 champs étaient sauvegardés par buildSnapshot()
+//    mais ignorés par _applySnapMinimal() à la restauration. Conséquences :
+//      - Compteur de générations (_genCount) toujours à 0 au reload
+//      - Mémoires d'agents perdues (agentMemories, globalMemoryPool)
+//      - Rêves perdus (dreams, dreamJournal)
+//      - Heatmap, cascades, résonances, archives perdus
+//      - Tout l'état des modes paperReal/real perdu
+//      - Bougies temps réel perdues
+//    Cette version restaure TOUS les champs présents dans le snapshot.
+//
 // CHARGEMENT : doit être inclus dans le HTML APRÈS le runtime 09a→09k.
+// REQUIERT : 09l-window-bridge.js doit être chargé AVANT pour exposer
+//            window.S, window.openDB, window.buildSnapshot, etc.
 //
 // NE TOUCHE PAS AUX FICHIERS 09. Override pur via window.saveState/loadState.
 //
@@ -28,7 +41,7 @@
   // Garde-fou : ne s'installe que si l'environnement AURA8 est prêt
   if (typeof window === 'undefined') return;
 
-  const TAG = '[persistance v120.1]';
+  const TAG = '[persistance v120.6]';
 
   // Constantes locales (mêmes valeurs que dans 09)
   const SAVE_KEY    = 'nexus_state_v2';
@@ -318,37 +331,125 @@
     return true;
   }
 
+  // ─────────────────────────────────────────────────────────────
+  // _applySnapMinimal v120.6 — RESTAURATION COMPLÈTE
+  // ─────────────────────────────────────────────────────────────
+  // Restaure TOUS les champs sauvegardés par buildSnapshot() (09b1).
+  // Synchronisé avec 09b1-build-snapshot.js v121.
+  // ─────────────────────────────────────────────────────────────
+
   function _applySnapMinimal(snap) {
     if (!_hasS() || !snap) return;
     const S = window.S;
 
-    if (typeof snap.portfolio        === 'number') S.portfolio        = snap.portfolio;
-    if (typeof snap.cashAccount      === 'number') S.cashAccount      = snap.cashAccount;
-    if (typeof snap.tradingAccount   === 'number') S.tradingAccount   = snap.tradingAccount;
-    if (typeof snap.leverage         === 'number') S.leverage         = snap.leverage;
-    if (typeof snap.botAutoMode      === 'boolean')S.botAutoMode      = snap.botAutoMode;
-    if (typeof snap.cycle            === 'number') S.cycle            = snap.cycle;
-    if (typeof snap.cycleMax         === 'number') S.cycleMax         = snap.cycleMax;
-    if (typeof snap.fiscalReserveAccount === 'number') S.fiscalReserveAccount = snap.fiscalReserveAccount;
-    if (typeof snap.ownFundsInjected === 'number') S.ownFundsInjected = snap.ownFundsInjected;
-    if (typeof snap.leverageReserve  === 'number') S.leverageReserve  = snap.leverageReserve;
-    if (typeof snap.leverageBorrowed === 'number') S.leverageBorrowed = snap.leverageBorrowed;
+    // ── Helpers internes ─────────────────────────────────
+    const setNum   = k => { if (typeof snap[k] === 'number')  S[k] = snap[k]; };
+    const setBool  = k => { if (typeof snap[k] === 'boolean') S[k] = snap[k]; };
+    const setStr   = k => { if (typeof snap[k] === 'string')  S[k] = snap[k]; };
+    const setObj   = k => { if (snap[k] && typeof snap[k] === 'object' && !Array.isArray(snap[k])) S[k] = snap[k]; };
+    const setArr   = k => { if (Array.isArray(snap[k]))       S[k] = snap[k].slice(); };
+    const setAny   = k => { if (snap[k] !== undefined && snap[k] !== null) S[k] = snap[k]; };
 
-    if (snap.tradingMode)      S.tradingMode      = snap.tradingMode;
-    if (snap.realTimeframe)    S.realTimeframe    = snap.realTimeframe;
-    if (snap.paperRealTimeframe) S.paperRealTimeframe = snap.paperRealTimeframe;
+    // ─── PORTEFEUILLE ──────────────────────────────────────────
+    setNum('portfolio');
+    setNum('cashAccount');
+    setNum('tradingAccount');
+    setNum('leverage');
+    setBool('botAutoMode');
+    setNum('_startPortfolio');
 
-    if (typeof snap.totalTrades === 'number') S.totalTrades = snap.totalTrades;
-    if (typeof snap.winTrades   === 'number') S.winTrades   = snap.winTrades;
-    if (typeof snap.pnl24h      === 'number') S.pnl24h      = snap.pnl24h;
-    if (Array.isArray(snap.pnlHistory)) S.pnlHistory = snap.pnlHistory.slice();
+    // ─── CYCLE ─────────────────────────────────────────────────
+    setNum('cycle');
+    setNum('cycleMax');
 
-    if (Array.isArray(snap.openPositions))   S.openPositions   = snap.openPositions.slice();
-    if (Array.isArray(snap.chainLog))        S.chainLog        = snap.chainLog.slice();
-    if (Array.isArray(snap.learningHistory)) S.learningHistory = snap.learningHistory.slice();
-    if (Array.isArray(snap.evoLog))          S.evoLog          = snap.evoLog.slice();
-    if (Array.isArray(snap.agentLessons))    S.agentLessons    = snap.agentLessons.slice();
+    // ─── VERSION ───────────────────────────────────────────────
+    setAny('vMajor');
+    setAny('vMinor');
 
+    // ─── COMPOUNDING & GÉNÉRATIONS ─────────────────────────────
+    setNum('_totalCompounded');
+    setNum('_genCount');
+
+    // ─── STATS GLOBALES ────────────────────────────────────────
+    setNum('totalTrades');
+    setNum('winTrades');
+    setNum('pnl24h');
+    setArr('pnlHistory');
+
+    // ─── MODE TRADING ──────────────────────────────────────────
+    setStr('tradingMode');
+    setStr('realTimeframe');
+    setStr('paperRealTimeframe');
+
+    // ─── RÉSERVE LEVIER ────────────────────────────────────────
+    setNum('leverageReserve');
+    setNum('leverageBorrowed');
+    setNum('leverageTotalFees');
+    setNum('_autoLevBase');
+    setNum('_autoLevBorrowed');
+
+    // ─── COMPTES FIAT / FISCAL / FONDS PROPRES ─────────────────
+    setNum('fiscalReserveAccount');
+    setArr('fiscalReserveLog');
+    setNum('ownFundsInjected');
+    setArr('ownFundsLog');
+    setNum('fiatConvFeePct');
+
+    // ─── HISTORIQUES & LOGS ────────────────────────────────────
+    setArr('openPositions');
+    setArr('chainLog');
+    setArr('learningHistory');
+    setArr('evoLog');
+    setArr('agentLessons');
+    setArr('agentLessonsReal');
+    setArr('agentLessonsPaperReal');
+    setArr('brainLog');
+    setArr('pendingActions');
+    setArr('dreams');
+    setArr('dreamJournal');
+    setArr('decisionCascade');
+    setArr('resonanceHistory');
+    setArr('globalMemoryPool');
+    setArr('tradeContextMemory');
+    setArr('pairCandidates');
+    setArr('proposals');
+    setArr('mutedAgents');
+    setArr('dynamicPairKeys');
+
+    // ─── FRAIS & TAXES ─────────────────────────────────────────
+    setObj('fees');
+    setObj('feeConfig');
+    setObj('taxConfig');
+
+    // ─── INTELLIGENCE & ANALYTICS ──────────────────────────────
+    setObj('heatmap');
+    setObj('shadow');
+    setObj('archives');
+    setObj('botFleet');
+    setObj('pnlPeriod');
+    setObj('abTesting');
+    setObj('adaptiveState');
+
+    // ─── MODE RÉEL ─────────────────────────────────────────────
+    setObj('realActivePairs');
+    setObj('realKillSwitch');
+    setNum('realModeStartedAt');
+    setObj('realStatsByPair');
+    setAny('preRealSnapshot');
+    setObj('realCandles');
+
+    // ─── MODE PAPER-REAL ───────────────────────────────────────
+    setObj('paperRealStats');
+    setObj('paperRealActivePairs');
+    setNum('paperRealStartedAt');
+    setObj('paperRealKillSwitch');
+    setObj('paperRealLastClose');
+    setNum('paperRealConsecLosses');
+    setNum('paperRealGlobalPauseUntil');
+    setObj('paperRealConfig');
+    setAny('preRealSnapshotPaperReal');
+
+    // ─── AGENTS : merge granulaire (ne pas écraser les .think etc.) ──
     if (Array.isArray(snap.agents) && Array.isArray(S.agents)) {
       snap.agents.forEach(savedAg => {
         const live = S.agents.find(a => a.id === savedAg.id);
@@ -361,9 +462,24 @@
         if (savedAg.regimeFitness) live.regimeFitness = savedAg.regimeFitness;
         if (typeof savedAg.learningEvents === 'number') live.learningEvents = savedAg.learningEvents;
         if (typeof savedAg.totalReward    === 'number') live.totalReward    = savedAg.totalReward;
+        if (typeof savedAg.errors      === 'number') live.errors      = savedAg.errors;
+        if (typeof savedAg.corrections === 'number') live.corrections = savedAg.corrections;
+        if (typeof savedAg.streak      === 'number') live.streak      = savedAg.streak;
+        if (typeof savedAg.lastPnl     === 'number') live.lastPnl     = savedAg.lastPnl;
       });
     }
 
+    // ─── AGENT MEMORIES (snap.agentMemories : { agentId: [...] }) ──
+    if (snap.agentMemories && typeof snap.agentMemories === 'object' && Array.isArray(S.agents)) {
+      Object.entries(snap.agentMemories).forEach(([agentId, mem]) => {
+        const live = S.agents.find(a => a.id === agentId);
+        if (live && Array.isArray(mem)) {
+          live.memory = mem.slice();
+        }
+      });
+    }
+
+    // ─── PAIRSTATES : merge granulaire ─────────────────────────
     if (snap.pairStates && S.pairStates) {
       Object.entries(snap.pairStates).forEach(([pair, ps]) => {
         if (!S.pairStates[pair]) return;
@@ -373,19 +489,32 @@
         if (typeof ps.qNo === 'number')    live.qNo = ps.qNo;
         if (typeof ps.stake === 'number')  live.stake = ps.stake;
         if (typeof ps.capital === 'number')live.capital = ps.capital;
+        if (typeof ps.cycleMax === 'number')   live.cycleMax = ps.cycleMax;
+        if (typeof ps.cycleTimer === 'number') live.cycleTimer = ps.cycleTimer;
         if (typeof ps.totalTrades === 'number') live.totalTrades = ps.totalTrades;
         if (typeof ps.winTrades === 'number')   live.winTrades = ps.winTrades;
         if (typeof ps.totalPnlPct === 'number') live.totalPnlPct = ps.totalPnlPct;
         if (typeof ps.totalPnlUsd === 'number') live.totalPnlUsd = ps.totalPnlUsd;
         if (typeof ps.pnl24h === 'number')      live.pnl24h = ps.pnl24h;
+        if (typeof ps.pairLeverage === 'number') live.pairLeverage = ps.pairLeverage;
+        if (typeof ps.threshold === 'number')   live.threshold = ps.threshold;
+        if (typeof ps.userStake === 'boolean')  live.userStake = ps.userStake;
+        if (typeof ps.userCycleSet === 'boolean') live.userCycleSet = ps.userCycleSet;
+        if (typeof ps.lastAction === 'string')  live.lastAction = ps.lastAction;
+        if (typeof ps.holdStartTs === 'number') live.holdStartTs = ps.holdStartTs;
         if (Array.isArray(ps.trades))  live.trades  = ps.trades.slice();
         if (Array.isArray(ps.candles)) live.candles = ps.candles.slice();
       });
     }
 
-    if (snap.fees)      S.fees      = snap.fees;
-    if (snap.feeConfig) S.feeConfig = snap.feeConfig;
-    if (snap.taxConfig) S.taxConfig = snap.taxConfig;
+    // ─── PAIRSTATES BEST/WORST (snap.pairBestWorst) ────────────
+    if (snap.pairBestWorst && S.pairStates) {
+      Object.entries(snap.pairBestWorst).forEach(([pair, bw]) => {
+        if (!S.pairStates[pair]) return;
+        if (bw.bestTrade)  S.pairStates[pair].bestTrade  = bw.bestTrade;
+        if (bw.worstTrade) S.pairStates[pair].worstTrade = bw.worstTrade;
+      });
+    }
   }
 
   // ─────────────────────────────────────────────────────────────
@@ -461,14 +590,15 @@
   window.importState = importState;
 
   window._persistance = {
-    version: '120.3',
+    version: '120.6',
     readIDB: _readIDB,
     readLS: _readLS,
     writeIDB: _writeIDB,
     writeLS: _writeLS,
     pickFreshest: _pickFreshest,
     saveState: saveState,
-    loadState: loadState
+    loadState: loadState,
+    applySnapMinimal: _applySnapMinimal
   };
 
   console.log(TAG, '✅ overrides installés · saveState/loadState/importState');
