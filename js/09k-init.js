@@ -1,5 +1,5 @@
 // ════════════════════════════════════════════════════════════════════════
-// ▓▓▓ AURA8 — 09k-init.js · VERSION 122 · 31/05/2026 ▓▓▓
+// ▓▓▓ AURA8 — 09k-init.js · VERSION 122.1 · 31/05/2026 ▓▓▓
 // ════════════════════════════════════════════════════════════════════════
 // Init — démarrage de l'application.
 // v121.1 — Fix affichage wallet cards ($0) + fix modale transfert clavier
@@ -7,6 +7,9 @@
 //          même si loadState() throw une exception non-capturée. Sans ce
 //          finally, l'app resterait bloquée en lecture seule (saveState
 //          refuserait d'écrire à cause du verrou _stateReady=false).
+// v122.1 — BOOT AUTOMATIQUE en fin de fichier. Sans ce bloc, init() n'est
+//          jamais appelée (auparavant 00b-persistance-override.js le faisait
+//          mais on l'a supprimé). Conséquence : storage jamais restauré.
 // ════════════════════════════════════════════════════════════════════════
 
 function _showInitDebug(msg, bgColor) {
@@ -280,3 +283,31 @@ async function init() {
   );
 }
 window.init = init;
+
+
+// ════════════════════════════════════════════════════════════════════════
+// v122.1 (31/05/2026) — BOOT AUTOMATIQUE
+// ════════════════════════════════════════════════════════════════════════
+// Auparavant, 00b-persistance-override.js appelait window.init() à la fin
+// de son IIFE. En supprimant 00b (devenu obsolète avec v122 de 09b2),
+// on a aussi supprimé cet appel CRITIQUE.
+//
+// Résultat : init() jamais appelée → loadState() jamais appelée →
+// storage jamais restauré → app démarre à cycle=42 sans bannière.
+//
+// Fix : ce bloc reprend le bootApp() qui était dans 00b. Il attend que
+// window.init soit définie (au cas où l'ordre de chargement varie) puis
+// l'exécute. C'est la dernière chose qui s'exécute dans toute l'app.
+// ════════════════════════════════════════════════════════════════════════
+(function _bootApp() {
+  if (typeof window.init !== 'function') {
+    console.warn('[09k-init v122.1] init() pas encore définie, retry dans 50ms');
+    setTimeout(_bootApp, 50);
+    return;
+  }
+  try {
+    window.init();
+  } catch(e) {
+    console.error('[09k-init v122.1] init() a planté:', e);
+  }
+})();
