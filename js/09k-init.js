@@ -1,8 +1,12 @@
 // ════════════════════════════════════════════════════════════════════════
-// ▓▓▓ AURA8 — 09k-init.js · VERSION 121.1 · 23/05/2026 ▓▓▓
+// ▓▓▓ AURA8 — 09k-init.js · VERSION 122 · 31/05/2026 ▓▓▓
 // ════════════════════════════════════════════════════════════════════════
 // Init — démarrage de l'application.
 // v121.1 — Fix affichage wallet cards ($0) + fix modale transfert clavier
+// v122   — try/finally autour de loadState : garantit window._stateReady=true
+//          même si loadState() throw une exception non-capturée. Sans ce
+//          finally, l'app resterait bloquée en lecture seule (saveState
+//          refuserait d'écrire à cause du verrou _stateReady=false).
 // ════════════════════════════════════════════════════════════════════════
 
 function _showInitDebug(msg, bgColor) {
@@ -127,6 +131,10 @@ async function init() {
     sections.push('load:' + (restored ? 'OK' : 'vide'));
   } catch (e) {
     sections.push('load:THROW=' + e.message.slice(0, 30));
+  } finally {
+    // v122 : garantit que saveState pourra écrire même si loadState a planté.
+    // Sans ce finally, l'app resterait bloquée en lecture seule.
+    if (typeof window !== 'undefined') window._stateReady = true;
   }
 
   try {

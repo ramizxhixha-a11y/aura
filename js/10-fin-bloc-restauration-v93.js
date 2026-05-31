@@ -1276,6 +1276,9 @@ function _installPackContinuite() {
   
   if (_autoSaveInterval) clearInterval(_autoSaveInterval);
   _autoSaveInterval = setInterval(() => {
+    // v122 : respect du verrou _stateReady (défini par 09b2 v122)
+    // Empêche les sauvegardes pendant le démarrage avant que loadState ait fini.
+    if (window._stateReady === false) return;
     if (typeof S !== 'undefined' && !window._resetInProgress) {
       saveState(true);
     }
@@ -1284,20 +1287,24 @@ function _installPackContinuite() {
   window.addEventListener('pagehide', () => {
     if (window._resetInProgress) return;
     if (sessionStorage.getItem('nexus_factory_reset') === '1') return;
-    try {
-      const snap = buildSnapshot();
-      try { localStorage.setItem(SAVE_KEY, JSON.stringify(snap)); } catch(e) {}
-      saveState(true);
-    } catch(e) {}
+    // v122 : respect du verrou _stateReady — sinon écrasement avec S par défaut
+    // quand on passe l'app en arrière-plan AVANT que loadState ait fini.
+    if (window._stateReady === false) return;
+    // v122 : SUPPRESSION de l'écriture directe localStorage.setItem qui
+    // contournait le garde-fou anti-régression de saveState. On passe
+    // maintenant uniquement par saveState qui a tous les verrous.
+    try { saveState(true); } catch(e) {}
   });
   
   document.addEventListener('freeze', () => {
     if (window._resetInProgress) return;
     if (sessionStorage.getItem('nexus_factory_reset') === '1') return;
+    // v122 : même verrou que pagehide
+    if (window._stateReady === false) return;
     try { saveState(true); } catch(e) {}
   });
   
-  console.log('[NEXUS] Pack Continuité installé · autosave 15s + hooks pagehide/freeze');
+  console.log('[AURA] Pack Continuité v122 installé · autosave 15s + hooks pagehide/freeze · verrou _stateReady');
 }
 if(typeof _installPackContinuite==='function') window._installPackContinuite = _installPackContinuite;
 

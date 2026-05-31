@@ -1,5 +1,5 @@
 // ════════════════════════════════════════════════════════════════════════
-// ▓▓▓ AURA8 — 09b2-save-load.js · VERSION 121 · 21/05/2026 ▓▓▓
+// ▓▓▓ AURA8 — 09b2-save-load.js · VERSION 122 · 31/05/2026 ▓▓▓
 // ════════════════════════════════════════════════════════════════════════
 // saveState + loadState — écriture/lecture IndexedDB + localStorage.
 //
@@ -10,10 +10,38 @@
 //     ne bloque plus sur version absente, appel renderAll() à la fin,
 //     bannière debug visuelle visible à l'écran (pas besoin de console).
 //
-// Override v120.5 dans 00b-persistance-override.js prend le relais après.
+// ★★ v122 (31/05/2026) — VERROU _stateReady + GARDE-FOU ANTI-RÉGRESSION
+//   PROBLÈME RÉSOLU :
+//     Le storage régressait périodiquement (cycle 16520 → 12634 → 42).
+//     Cause : saveState() était appelé pendant le démarrage avant que
+//     loadState() ait fini de restaurer S. À ce moment-là, S était encore
+//     en valeurs par défaut (cycle=42), et saveState écrivait cycle=42
+//     par-dessus le vrai snapshot du storage.
+//
+//   SOLUTION (ceinture + bretelles) :
+//     1) VERROU _stateReady — window._stateReady = false au démarrage.
+//        saveState refuse d'écrire tant que _stateReady = false.
+//        loadState met _stateReady = true à la fin (TOUS chemins de sortie).
+//        → Empêche les sauvegardes prématurées AVANT restauration.
+//
+//     2) GARDE-FOU ANTI-RÉGRESSION — saveState compare le cycle qu'il veut
+//        écrire avec celui déjà en LS. Si LS a un cycle plus élevé de >5,
+//        refuse d'écrire (filet de sécurité en cas de bug futur).
+//
+//   ÇA REND OBSOLÈTE :
+//     00b-persistance-override.js (qui patchait via window.saveState).
+//     Ce fichier peut être supprimé du repo après validation.
 //
 // Dépend de 09a-runtime-state.js (window.RT + window.openDB).
 // ════════════════════════════════════════════════════════════════════════
+
+// ── VERROU GLOBAL : _stateReady ─────────────────────────────────────────
+// false par défaut → saveState refuse d'écrire au démarrage tant que
+// loadState n'a pas terminé. Mis à true par loadState() (3 chemins de
+// sortie) ou par 09k-init.js si loadState plante (try/finally).
+if (typeof window !== 'undefined' && typeof window._stateReady === 'undefined') {
+  window._stateReady = false;
+}
 
 
 // ── Bannière debug visuelle ─────────────────────────────────────────────
@@ -47,8 +75,17 @@ function _showLoadDebug(msg, bgColor) {
 
 // ════════════════════════════════════════════════════════════════════════
 // saveState — écrit dans IDB ET localStorage en parallèle
+// v122 : VERROU _stateReady + GARDE-FOU anti-régression
 // ════════════════════════════════════════════════════════════════════════
 async function saveState(silent = false) {
+  // ─── VERROU 1 : _stateReady (empêche saveState pendant le démarrage) ──
+  // Tant que loadState n'a pas terminé, on refuse d'écrire pour éviter
+  // d'écraser le storage avec un S encore en valeurs par défaut.
+  if (typeof window !== 'undefined' && window._stateReady === false) {
+    if (!silent) console.warn('[saveState v122] BLOQUÉ : _stateReady=false (démarrage en cours)');
+    return false;
+  }
+
   let snap;
   try {
     snap = buildSnapshot();
@@ -57,6 +94,24 @@ async function saveState(silent = false) {
     return false;
   }
   if (!snap) return false;
+
+  // ─── VERROU 2 : GARDE-FOU ANTI-RÉGRESSION ───────────────────────────
+  // Filet de sécurité : refuse d'écrire un cycle bien inférieur à celui
+  // déjà en localStorage. Tolérance de 5 cycles pour les cas légitimes.
+  try {
+    const raw = localStorage.getItem(RT.SAVE_KEY);
+    if (raw) {
+      const currentLS = JSON.parse(raw);
+      const lsCycle   = (currentLS && typeof currentLS.cycle === 'number') ? currentLS.cycle : -1;
+      const snapCycle = (typeof snap.cycle === 'number') ? snap.cycle : -1;
+      if (lsCycle > snapCycle + 5) {
+        if (!silent) {
+          console.warn('[saveState v122] BLOQUÉ anti-régression : cycle ' + snapCycle + ' < LS#' + lsCycle);
+        }
+        return false;
+      }
+    }
+  } catch (e) {}
 
   if (!snap.savedAt) snap.savedAt = new Date().toISOString();
   if (!snap.key)     snap.key = RT.SAVE_KEY;
@@ -109,6 +164,8 @@ async function loadState() {
       sessionStorage.removeItem('nexus_factory_reset');
       try { indexedDB.deleteDatabase(RT.DB_NAME); } catch (e) {}
       _showLoadDebug('factoryReset · démarrage à blanc', '#5a1217');
+      // v122 : factory_reset = état neuf voulu. On débloque saveState.
+      if (typeof window !== 'undefined') window._stateReady = true;
       return false;
     }
   } catch (e) {}
@@ -148,6 +205,8 @@ async function loadState() {
   const cLS  = snapLS  && typeof snapLS.cycle  === 'number' ? snapLS.cycle  : -1;
   if (cIDB === -1 && cLS === -1) {
     _showLoadDebug('loadState: aucun snapshot · ' + dbg.join(' | '), '#5a1217');
+    // v122 : pas de snapshot = premier démarrage légitime. On débloque saveState.
+    if (typeof window !== 'undefined') window._stateReady = true;
     return false;
   }
   snap = (cIDB >= cLS) ? snapIDB : snapLS;
@@ -416,6 +475,8 @@ async function loadState() {
     '#0a4d2a'
   );
 
+  // v122 : restauration réussie. On débloque saveState.
+  if (typeof window !== 'undefined') window._stateReady = true;
   return true;
 }
 window.loadState = loadState;
