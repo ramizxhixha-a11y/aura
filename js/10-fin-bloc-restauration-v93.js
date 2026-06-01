@@ -24,8 +24,6 @@
 // ════════════════════════════════════════════════════════════════════════
 
 // ── Variables module-level supplémentaires ──
-const DB_VERSION   = 3;
-const STORE_TRADES = 'trades';
 const _AUTO_SNAP_INTERVAL = 30 * 60 * 1000;
 const _LT_PHRASES = {
   champion_win: [
@@ -70,7 +68,6 @@ const _SNAP_KEYS = ['nexusSnap_A'];
 })();
 
 let _currentDetailPair = null;
-let   _db = null;
 let _lastAutoSnapTs = 0;
 let _p5LastAdaptiveSave = 0;
 let _pendingClosePair = null;
@@ -2252,38 +2249,13 @@ async function loadAllTrades() {
   try {
     const db = await openDB();
     return new Promise((res) => {
-      const req = db.transaction(STORE_TRADES, 'readonly').objectStore(STORE_TRADES).getAll();
+      const req = db.transaction(RT.STORE_TRADES, 'readonly').objectStore(RT.STORE_TRADES).getAll();
       req.onsuccess = e => res(e.target.result || []);
       req.onerror   = () => res([]);
     });
   } catch(e) { return []; }
 }
 if(typeof loadAllTrades==='function') window.loadAllTrades = loadAllTrades;
-
-function openDB() {
-  return new Promise((res, rej) => {
-    if(_db) { res(_db); return; }
-    const req = indexedDB.open(DB_NAME, DB_VERSION);
-    req.onupgradeneeded = e => {
-      const db = e.target.result;
-      if(!db.objectStoreNames.contains(STORE_TRADES)) {
-        const ts = db.createObjectStore(STORE_TRADES, { keyPath:'id', autoIncrement:true });
-        ts.createIndex('pair',   'pair',   { unique:false });
-        ts.createIndex('time',   'time',   { unique:false });
-        ts.createIndex('region', 'region', { unique:false });
-      }
-      if(!db.objectStoreNames.contains(STORE_FEES)) {
-        db.createObjectStore(STORE_FEES, { keyPath:'id', autoIncrement:true });
-      }
-      if(!db.objectStoreNames.contains(STORE_STATE)) {
-        db.createObjectStore(STORE_STATE, { keyPath:'key' });
-      }
-    };
-    req.onsuccess = e => { _db = e.target.result; res(_db); };
-    req.onerror   = e => { console.warn('IndexedDB error', e); rej(e); };
-  });
-}
-if(typeof openDB==='function') window.openDB = openDB;
 
 function openManDetail(pair) {
   const overlay = document.getElementById('pairDetailOverlay');
@@ -2525,12 +2497,3 @@ function restoreInternalSnapshot(slot) {
   return { ok:false, reason:'no_loadState' };
 }
 if(typeof restoreInternalSnapshot==='function') window.restoreInternalSnapshot = restoreInternalSnapshot;
-
-async function saveTrade(tradeRecord) {
-  try {
-    const db = await openDB();
-    const tx = db.transaction(STORE_TRADES, 'readwrite');
-    tx.objectStore(STORE_TRADES).add({ ...tradeRecord, savedAt: new Date().toISOString(), region: S.taxConfig.region });
-  } catch(e) { /* silent */ }
-}
-if(typeof saveTrade==='function') window.saveTrade = saveTrade;

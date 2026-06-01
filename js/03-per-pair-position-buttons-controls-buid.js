@@ -4713,17 +4713,15 @@ async function factoryReset() {
     // pour bloquer le pagehide/freeze qui arrivera pendant le reload
     try { sessionStorage.setItem('nexus_factory_reset', '1'); } catch(e) {}
     
-    try { if(typeof stopSim === 'function' && _simRunning) stopSim(); } catch(e) {}
-    try { if(_simInterval) { clearInterval(_simInterval); _simInterval = null; } } catch(e) {}
-    // 3. Arrêter l'auto-save (sinon il réécrit une nouvelle DB entre deleteDatabase et reload)
-    try { if(_autoSaveInterval) { clearInterval(_autoSaveInterval); _autoSaveInterval = null; } } catch(e) {}
-    // 4. Fermer la DB
-    try { if(_db) { _db.close(); _db = null; } } catch(e) {}
+    try { if(typeof stopSim === 'function' && RT._simRunning) stopSim(); } catch(e) {}
+    try { if(RT._simInterval) { clearInterval(RT._simInterval); RT._simInterval = null; } } catch(e) {}
+    // 3. (autoSaveInterval géré désormais par 09b2 — pas besoin ici)
+    // 4. (la connexion IDB n'est plus mise en cache — chaque openDB ouvre une nouvelle co)
     // 5. Effacer localStorage (toutes les clés NEXUS possibles)
     try {
-      localStorage.removeItem(SAVE_KEY);
+      localStorage.removeItem(RT.SAVE_KEY);
       Object.keys(localStorage).forEach(k => {
-        if(k && (k.toLowerCase().startsWith('nexus') || k === SAVE_KEY)) localStorage.removeItem(k);
+        if(k && (k.toLowerCase().startsWith('nexus') || k === RT.SAVE_KEY)) localStorage.removeItem(k);
       });
     } catch(e) { console.warn('localStorage clear:', e); }
     // 6. Flag déjà posé en étape 1 — on ne le repose pas ici pour ne pas l'écraser
@@ -4732,7 +4730,7 @@ async function factoryReset() {
       let done = false;
       const finish = () => { if(!done) { done = true; resolve(); } };
       try {
-        const req = indexedDB.deleteDatabase(DB_NAME);
+        const req = indexedDB.deleteDatabase(RT.DB_NAME);
         req.onsuccess = finish;
         req.onerror   = finish;
         req.onblocked = () => {

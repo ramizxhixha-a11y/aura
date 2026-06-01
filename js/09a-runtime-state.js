@@ -24,6 +24,7 @@ RT.LONG_PRESS_MS = 600;
 RT.SAVE_KEY      = 'nexus_state_v2';     // clé localStorage / IndexedDB
 RT.STORE_FEES    = 'fees';
 RT.STORE_STATE   = 'state';              // snapshot complet pour reprise
+RT.STORE_TRADES  = 'trades';             // historique trades pour export CSV
 
 // ── Variables mutables ────────────────────────────────────────────────
 RT._freshPricesInRow    = 0;             // compteur pour reprise après retour réseau
@@ -42,13 +43,17 @@ RT._simRunning          = false;
 // ════════════════════════════════════════════════════════════════════════
 // openDB() — helper IndexedDB partagé
 // ════════════════════════════════════════════════════════════════════════
-// Ouvre NEXUS_DB en version 3, crée les stores 'state' et 'fees'
-// s'ils n'existent pas (sans keyPath → on passe la clé en 2e arg du put).
+// Ouvre NEXUS_DB en version 3, crée les stores 'state', 'fees' et 'trades'
+// s'ils n'existent pas.
+//   • 'state'  : sans keyPath → clé externe SAVE_KEY au put
+//   • 'fees'   : autoIncrement → append-only
+//   • 'trades' : keyPath:'id' autoIncrement + index pair/time/region
+//                pour export CSV via loadAllTrades (10).
 // Renvoie une Promise<IDBDatabase>.
 //
-// Cette fonction était dans l'ancien 10-fin-bloc-restauration-v93.js.
-// Elle est ré-exposée ici via window.openDB pour que tous les modules
-// du runtime (09b2, 09b3) et 00b-persistance-override y aient accès.
+// Cette fonction était autrefois dupliquée dans 10-fin-bloc-restauration-v93.js
+// avec une config différente (keyPath:'key' sur 'state'), ce qui plantait
+// silencieusement (ReferenceError sur DB_NAME) — fix 01/06/2026.
 // ════════════════════════════════════════════════════════════════════════
 
 function openDB() {
@@ -69,6 +74,13 @@ function openDB() {
       // Store 'fees' — autoIncrement pour append-only
       if (!db.objectStoreNames.contains(RT.STORE_FEES)) {
         db.createObjectStore(RT.STORE_FEES, { autoIncrement: true });
+      }
+      // Store 'trades' — historique trades, indexé par pair/time/region
+      if (!db.objectStoreNames.contains(RT.STORE_TRADES)) {
+        const ts = db.createObjectStore(RT.STORE_TRADES, { keyPath: 'id', autoIncrement: true });
+        ts.createIndex('pair',   'pair',   { unique: false });
+        ts.createIndex('time',   'time',   { unique: false });
+        ts.createIndex('region', 'region', { unique: false });
       }
     };
 
