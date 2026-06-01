@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>AURA · Test IDB Write</title>
+<style>
+  :root {
+    --bg: #0a0e14;
+    --bg2: #11151c;
+    --bg3: #161b25;
+    --fg: #d8e0ec;
+    --muted: #6b7682;
+    --green: #00e87a;
+    --red: #ff3d6b;
+    --yellow: #ffd23f;
+    --blue: #38d4f5;
+    --border: #1f2630;
+  }
+  * { box-sizing: border-box; }
+  body {
+    background: var(--bg);
+    color: var(--fg);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    margin: 0;
+    padding: 16px;
+    min-height: 100vh;
+    font-size: 14px;
+  }
+  h1 {
+    color: var(--blue);
+    font-size: 1.3rem;
+    margin: 0 0 16px;
+    text-align: center;
+  }
+  .card {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 16px;
+    margin-bottom: 12px;
+  }
+  .step {
+    padding: 10px 12px;
+    margin: 6px 0;
+    border-radius: 8px;
+    background: var(--bg3);
+    border-left: 3px solid var(--muted);
+    font-family: 'Courier New', monospace;
+    font-size: 0.85rem;
+  }
+  .step.ok { border-left-color: var(--green); }
+  .step.err { border-left-color: var(--red); background: rgba(255,61,107,0.08); }
+  .step .ttl { font-weight: 600; color: var(--blue); }
+  .step .msg { color: var(--muted); margin-top: 4px; font-size: 0.8rem; }
+  .step.err .msg { color: var(--red); }
+  .step .err-name {
+    display: inline-block;
+    background: rgba(255,61,107,0.15);
+    color: var(--red);
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-weight: 600;
+    margin-top: 4px;
+  }
+  button {
+    width: 100%;
+    padding: 14px;
+    border-radius: 8px;
+    border: none;
+    font-size: 1rem;
+    font-weight: 600;
+    cursor: pointer;
+    margin-top: 8px;
+  }
+  button.primary { background: var(--blue); color: #0a0e14; }
+  button.ghost { background: transparent; border: 1px solid var(--border); color: var(--fg); }
+  button:disabled { opacity: 0.4; cursor: not-allowed; }
+  .conclusion {
+    padding: 14px;
+    border-radius: 10px;
+    margin-top: 12px;
+    font-weight: 600;
+    text-align: center;
+  }
+  .conclusion.ok { background: rgba(0,232,122,0.15); color: var(--green); }
+  .conclusion.err { background: rgba(255,61,107,0.15); color: var(--red); }
+</style>
+</head>
+<body>
+
+<h1>🧪 AURA · Test d'écriture IDB</h1>
+
+<div class="card">
+  <p style="font-size:0.85rem;color:var(--muted);margin:0">
+    Simule ce que <code>saveState</code> d'AURA essaie de faire : ouvrir NEXUS_DB,
+    écrire un snapshot test, vérifier, puis <strong>supprimer l'entrée test</strong>.
+  </p>
+  <p style="font-size:0.8rem;color:var(--yellow);margin:8px 0 0">
+    ⚠️ Une seule clé test (<code>__aura_idb_test__</code>) écrite puis supprimée.
+    Base intacte à la fin.
+  </p>
+</div>
+
+<button id="btn-run" class="primary">Lancer le test</button>
+
+<div id="steps"></div>
+<div id="conclusion"></div>
+
+<button id="btn-copy" class="ghost" style="display:none">Copier le rapport</button>
+
+<script>
+'use strict';
+const DB_NAME = 'NEXUS_DB';
+const STORE_NAME = 'state';
+const TEST_KEY = '__aura_idb_test__';
+const stepsEl = document.getElementById('steps');
+const concEl = document.getElementById('conclusion');
+const btnRun = document.getElementById('btn-run');
+const btnCopy = document.getElementById('btn-copy');
+let report = [];
+
+function logStep(title, status, detail, errObj) {
+  const div = document.createElement('div');
+  div.className = 'step ' + status;
+  const ttl = document.createElement('div');
+  ttl.className = 'ttl';
+  ttl.textContent = (status === 'ok' ? 'OK ' : 'FAIL ') + title;
+  div.appendChild(ttl);
+  if (detail) {
+    const m = document.createElement('div');
+    m.className = 'msg';
+    m.textContent = detail;
+    div.appendChild(m);
+  }
+  if (errObj) {
+    const en = document.createElement('div');
+    en.className = 'err-name';
+    en.textContent = (errObj.name || 'Error') + ': ' + (errObj.message || String(errObj));
+    div.appendChild(en);
+  }
+  stepsEl.appendChild(div);
+  let line = (status === 'ok' ? '[OK] ' : '[FAIL] ') + title;
+  if (detail) line += '  | ' + detail;
+  if (errObj) line += '  | ' + (errObj.name || 'Error') + ': ' + (errObj.message || errObj);
+  report.push(line);
+}
+
+function openDB() {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(DB_NAME);
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error || new Error('open error'));
+    req.onblocked = () => reject(new Error('blocked'));
+  });
+}
+
+function showConclusion(type, msg) {
+  concEl.className = 'conclusion ' + type;
+  concEl.textContent = msg;
+  report.push('');
+  report.push('CONCLUSION: ' + msg);
+}
+
+async function runTest() {
+  btnRun.disabled = true;
+  stepsEl.innerHTML = '';
+  concEl.innerHTML = '';
+  btnCopy.style.display = 'none';
+  report = ['AURA IDB Write Test ' + new Date().toISOString()];
+
+  let db;
+
+  try {
+    db = await openDB();
+    logStep('1. Ouverture NEXUS_DB', 'ok',
+      'v' + db.version + ', stores: [' + Array.from(db.objectStoreNames).join(', ') + ']');
+  } catch (e) {
+    logStep('1. Ouverture NEXUS_DB', 'err', null, e);
+    showConclusion('err', 'Impossible d\'ouvrir la base.');
+    finish(); return;
+  }
+
+  if (!db.objectStoreNames.contains(STORE_NAME)) {
+    logStep('2. Verifier store state', 'err', 'Store absent');
+    showConclusion('err', 'Store state absent.');
+    db.close(); finish(); return;
+  }
+  logStep('2. Verifier store state', 'ok', 'present');
+
+  let keyPath, autoInc;
+  try {
+    const tx = db.transaction(STORE_NAME, 'readonly');
+    const store = tx.objectStore(STORE_NAME);
+    keyPath = store.keyPath;
+    autoInc = store.autoIncrement;
+    logStep('3. Examiner store', 'ok',
+      'keyPath: ' + (keyPath ? '"' + keyPath + '"' : '(null)') +
+      ', autoIncrement: ' + autoInc);
+  } catch (e) {
+    logStep('3. Examiner store', 'err', null, e);
+    showConclusion('err', 'Examen impossible.');
+    db.close(); finish(); return;
+  }
+
+  const testSnap = {
+    cycle: 99999,
+    tradingMode: 'test',
+    savedAt: new Date().toISOString(),
+    portfolio: 0,
+    __test: true
+  };
+  if (keyPath) testSnap[keyPath] = TEST_KEY;
+
+  try {
+    await new Promise((resolve, reject) => {
+      const tx = db.transaction(STORE_NAME, 'readwrite');
+      const store = tx.objectStore(STORE_NAME);
+      let req;
+      try {
+        if (keyPath) req = store.put(testSnap);
+        else req = store.put(testSnap, TEST_KEY);
+      } catch (e) { reject(e); return; }
+      req.onsuccess = () => resolve();
+      req.onerror = () => reject(req.error || new Error('req.onerror'));
+      tx.onerror = () => reject(tx.error || new Error('tx.onerror'));
+      tx.onabort = () => reject(tx.error || new Error('tx.onabort'));
+    });
+    logStep('4. Ecriture (.put)', 'ok',
+      'Methode: ' + (keyPath ? '.put(snap)' : '.put(snap, key)'));
+  } catch (e) {
+    logStep('4. Ecriture (.put)', 'err',
+      'Methode: ' + (keyPath ? '.put(snap)' : '.put(snap, key)'), e);
+    showConclusion('err',
+      'Ecriture plante. C\'est la cause du bug AURA.');
+    db.close(); finish(); return;
+  }
+
+  try {
+    const readBack = await new Promise((resolve, reject) => {
+      const tx = db.transaction(STORE_NAME, 'readonly');
+      const req = tx.objectStore(STORE_NAME).get(TEST_KEY);
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => reject(req.error);
+    });
+    if (readBack && readBack.cycle === 99999) {
+      logStep('5. Relecture .get', 'ok',
+        'cycle=' + readBack.cycle + ', mode=' + readBack.tradingMode);
+    } else {
+      logStep('5. Relecture .get', 'err',
+        'Ecrit mais introuvable avec get(' + TEST_KEY + ')');
+      showConclusion('err', 'Probleme de cle.');
+      db.close(); finish(); return;
+    }
+  } catch (e) {
+    logStep('5. Relecture .get', 'err', null, e);
+    showConclusion('err', 'Lecture impossible.');
+    db.close(); finish(); return;
+  }
+
+  try {
+    await new Promise((resolve, reject) => {
+      const tx = db.transaction(STORE_NAME, 'readwrite');
+      const req = tx.objectStore(STORE_NAME).delete(TEST_KEY);
+      req.onsuccess = () => resolve();
+      req.onerror = () => reject(req.error);
+    });
+    logStep('6. Nettoyage (delete)', 'ok', 'Entree test supprimee');
+  } catch (e) {
+    logStep('6. Nettoyage (delete)', 'err',
+      'Entree test reste, mais test principal fait', e);
+  }
+
+  db.close();
+
+  showConclusion('ok',
+    'L\'ecriture IDB fonctionne. Le bug AURA n\'est pas IDB lui-meme. ' +
+    'Cause probable : timing/transaction async, ou _db en cache invalide.');
+  finish();
+}
+
+function finish() {
+  btnRun.disabled = false;
+  btnCopy.style.display = 'block';
+}
+
+btnRun.addEventListener('click', runTest);
+btnCopy.addEventListener('click', async () => {
+  const text = report.join('\n');
+  try {
+    await navigator.clipboard.writeText(text);
+    alert('Rapport copie.');
+  } catch (e) {
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.position = 'fixed';
+    ta.style.top = '0';
+    ta.style.left = '0';
+    ta.style.width = '100%';
+    ta.style.height = '50%';
+    ta.style.zIndex = 9999;
+    document.body.appendChild(ta);
+    ta.select();
+    alert('Selectionne tout et copie.');
+  }
+});
+</script>
+
+</body>
+</html>
