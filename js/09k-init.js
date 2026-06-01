@@ -1,41 +1,10 @@
 // ════════════════════════════════════════════════════════════════════════
-// ▓▓▓ AURA8 — 09k-init.js · VERSION 122.1 · 31/05/2026 ▓▓▓
+// ▓▓▓ AURA8 — 09k-init.js · VERSION 122 · 01/06/2026 ▓▓▓
 // ════════════════════════════════════════════════════════════════════════
 // Init — démarrage de l'application.
 // v121.1 — Fix affichage wallet cards ($0) + fix modale transfert clavier
-// v122   — try/finally autour de loadState : garantit window._stateReady=true
-//          même si loadState() throw une exception non-capturée. Sans ce
-//          finally, l'app resterait bloquée en lecture seule (saveState
-//          refuserait d'écrire à cause du verrou _stateReady=false).
-// v122.1 — BOOT AUTOMATIQUE en fin de fichier. Sans ce bloc, init() n'est
-//          jamais appelée (auparavant 00b-persistance-override.js le faisait
-//          mais on l'a supprimé). Conséquence : storage jamais restauré.
+// v122   — Suppression bannière debug visuelle (à reprendre par Guardian v2)
 // ════════════════════════════════════════════════════════════════════════
-
-function _showInitDebug(msg, bgColor) {
-  try {
-    const inject = () => {
-      let el = document.getElementById('_initDebug');
-      if (el) el.remove();
-      el = document.createElement('div');
-      el.id = '_initDebug';
-      el.style.cssText = [
-        'position:fixed','top:30px','left:0','right:0',
-        'z-index:999998','padding:10px 14px',
-        'font:bold 11px ui-monospace,monospace',
-        'text-align:center','color:#fff','cursor:pointer',
-        'line-height:1.4','white-space:pre-wrap','word-break:break-all'
-      ].join(';');
-      el.style.background = bgColor || '#3a2a4d';
-      el.textContent = msg;
-      el.onclick = () => el.remove();
-      document.body.appendChild(el);
-      setTimeout(() => { try { el.remove(); } catch(e){} }, 15000);
-    };
-    if (document.body) inject();
-    else document.addEventListener('DOMContentLoaded', inject);
-  } catch(e) {}
-}
 
 // ── Fix direct des IDs wallet cards ──────────────────────────────────
 function _renderWalletCards() {
@@ -119,26 +88,16 @@ function _fixTransferModal() {
 
 
 async function init() {
-  const sections = [];
-
   try {
     const vd = document.getElementById('versionDisplay');
     if (vd && typeof S !== 'undefined') vd.textContent = 'v' + (S.vMajor || 7) + '.' + (S.vMinor || '?');
     if (typeof updateModeButton === 'function') updateModeButton();
-    sections.push('v0');
-  } catch (e) { sections.push('v0:err'); }
+  } catch (e) {}
 
   let restored = false;
   try {
     restored = await loadState();
-    sections.push('load:' + (restored ? 'OK' : 'vide'));
-  } catch (e) {
-    sections.push('load:THROW=' + e.message.slice(0, 30));
-  } finally {
-    // v122 : garantit que saveState pourra écrire même si loadState a planté.
-    // Sans ce finally, l'app resterait bloquée en lecture seule.
-    if (typeof window !== 'undefined') window._stateReady = true;
-  }
+  } catch (e) {}
 
   try {
     if (!restored || !S.chainLog || S.chainLog.length === 0) {
@@ -157,8 +116,7 @@ async function init() {
         time: (typeof nowStr==='function'?nowStr():'')
       });
     }
-    sections.push('seed:OK');
-  } catch (e) { sections.push('seed:err'); }
+  } catch (e) {}
 
   try {
     const _mBtn = document.getElementById('modeToggleBtn');
@@ -171,15 +129,12 @@ async function init() {
       _chip.className = 'mode-indicator-chip ' + (_isAutoInit ? 'auto' : 'manual');
       _chip.innerHTML = _isAutoInit ? '🤖 AUTO' : '🎛️ MAN';
     }
-    sections.push('btn:OK');
-  } catch (e) { sections.push('btn:err'); }
+  } catch (e) {}
 
-  try { if (typeof renderAll === 'function') renderAll(); sections.push('rA:OK'); }
-  catch(e) { sections.push('rA:err'); }
+  try { if (typeof renderAll === 'function') renderAll(); } catch(e) {}
 
   // ── Fix wallet cards directement ──
-  try { _renderWalletCards(); sections.push('wallet:OK'); }
-  catch(e) { sections.push('wallet:err'); }
+  try { _renderWalletCards(); } catch(e) {}
 
   // ── Fix modale transfert ──
   try { _fixTransferModal(); } catch(e) {}
@@ -215,7 +170,6 @@ async function init() {
     try { if (typeof renderAll === 'function') renderAll(); } catch(e){}
     try { _renderWalletCards(); } catch(e){}
     try { if (typeof showToast === 'function') showToast('✅ Session restaurée · cycle #' + S.cycle); } catch(e){}
-    sections.push('agents:OK');
   }
 
   try { if (typeof updateSimBtn === 'function') updateSimBtn(); } catch(e){}
@@ -274,40 +228,5 @@ async function init() {
     try { if (typeof renderAll === 'function') renderAll(); } catch(e){}
     try { _renderWalletCards(); } catch(e){}
   }, 500);
-
-  _showInitDebug(
-    'init OK · #' + (S && S.cycle) +
-    ' · portfolio=' + (S && S.portfolio ? S.portfolio.toFixed(2) : '?') +
-    ' · sections: ' + sections.join(' '),
-    '#0a4d2a'
-  );
 }
 window.init = init;
-
-
-// ════════════════════════════════════════════════════════════════════════
-// v122.1 (31/05/2026) — BOOT AUTOMATIQUE
-// ════════════════════════════════════════════════════════════════════════
-// Auparavant, 00b-persistance-override.js appelait window.init() à la fin
-// de son IIFE. En supprimant 00b (devenu obsolète avec v122 de 09b2),
-// on a aussi supprimé cet appel CRITIQUE.
-//
-// Résultat : init() jamais appelée → loadState() jamais appelée →
-// storage jamais restauré → app démarre à cycle=42 sans bannière.
-//
-// Fix : ce bloc reprend le bootApp() qui était dans 00b. Il attend que
-// window.init soit définie (au cas où l'ordre de chargement varie) puis
-// l'exécute. C'est la dernière chose qui s'exécute dans toute l'app.
-// ════════════════════════════════════════════════════════════════════════
-(function _bootApp() {
-  if (typeof window.init !== 'function') {
-    console.warn('[09k-init v122.1] init() pas encore définie, retry dans 50ms');
-    setTimeout(_bootApp, 50);
-    return;
-  }
-  try {
-    window.init();
-  } catch(e) {
-    console.error('[09k-init v122.1] init() a planté:', e);
-  }
-})();

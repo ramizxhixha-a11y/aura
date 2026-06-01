@@ -48,35 +48,6 @@ if (typeof window !== 'undefined' && typeof window._stateReady === 'undefined') 
 }
 
 
-// ── Bannière debug visuelle ─────────────────────────────────────────────
-// Affiche un toast en haut de l'écran avec le résultat de loadState.
-// Disparaît après 15 secondes. Tap dessus pour fermer.
-function _showLoadDebug(msg, bgColor) {
-  try {
-    const inject = () => {
-      let el = document.getElementById('_loadDebug');
-      if (el) el.remove();
-      el = document.createElement('div');
-      el.id = '_loadDebug';
-      el.style.cssText = [
-        'position:fixed', 'top:0', 'left:0', 'right:0',
-        'z-index:999999', 'padding:10px 14px',
-        'font:bold 11px ui-monospace,monospace',
-        'text-align:center', 'color:#fff', 'cursor:pointer',
-        'line-height:1.4', 'white-space:pre-wrap', 'word-break:break-all'
-      ].join(';');
-      el.style.background = bgColor || '#1d3756';
-      el.textContent = msg;
-      el.onclick = () => el.remove();
-      document.body.appendChild(el);
-      setTimeout(() => { try { el.remove(); } catch(e){} }, 15000);
-    };
-    if (document.body) inject();
-    else document.addEventListener('DOMContentLoaded', inject);
-  } catch(e) {}
-}
-
-
 // ════════════════════════════════════════════════════════════════════════
 // saveState — écrit dans IDB ET localStorage en parallèle
 // v122 : VERROU _stateReady + GARDE-FOU anti-régression
@@ -179,7 +150,6 @@ async function loadState() {
     if (sessionStorage.getItem('nexus_factory_reset') === '1') {
       sessionStorage.removeItem('nexus_factory_reset');
       try { indexedDB.deleteDatabase(RT.DB_NAME); } catch (e) {}
-      _showLoadDebug('factoryReset · démarrage à blanc', '#5a1217');
       // v122 : factory_reset = état neuf voulu. On débloque saveState.
       if (typeof window !== 'undefined') window._stateReady = true;
       return false;
@@ -220,7 +190,6 @@ async function loadState() {
   const cIDB = snapIDB && typeof snapIDB.cycle === 'number' ? snapIDB.cycle : -1;
   const cLS  = snapLS  && typeof snapLS.cycle  === 'number' ? snapLS.cycle  : -1;
   if (cIDB === -1 && cLS === -1) {
-    _showLoadDebug('loadState: aucun snapshot · ' + dbg.join(' | '), '#5a1217');
     // v122 : pas de snapshot = premier démarrage légitime. On débloque saveState.
     if (typeof window !== 'undefined') window._stateReady = true;
     return false;
@@ -482,14 +451,6 @@ async function loadState() {
   setTimeout(() => {
     try { if (typeof renderAll === 'function') renderAll(); } catch(e){}
   }, 50);
-
-  // ── Bannière succès ─────────────────────────────────────────────────
-  _showLoadDebug(
-    '✅ loadState OK · #' + S.cycle +
-    ' · portfolio=' + (S.portfolio||0).toFixed(2) +
-    ' · ' + dbg.join(' | '),
-    '#0a4d2a'
-  );
 
   // v122 : restauration réussie. On débloque saveState.
   if (typeof window !== 'undefined') window._stateReady = true;
