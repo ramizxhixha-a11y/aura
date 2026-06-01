@@ -230,3 +230,30 @@ async function init() {
   }, 500);
 }
 window.init = init;
+
+
+// ════════════════════════════════════════════════════════════════════════
+// _bootApp() — démarrage de l'application au chargement du script
+// ════════════════════════════════════════════════════════════════════════
+// Remplace l'ancien appel à init() qui était dans 00b-persistance-override.js
+// (supprimé du HTML le 24/05). Sans cet IIFE, init() n'est jamais appelée
+// et S reste aux valeurs par défaut → cycle 42, portfolio 0.
+// ════════════════════════════════════════════════════════════════════════
+(function _bootApp() {
+  function start() {
+    try {
+      if (typeof window.init === 'function') {
+        window.init().catch(e => console.error('[bootApp] init() failed:', e));
+      } else {
+        console.error('[bootApp] window.init not defined');
+      }
+    } catch (e) {
+      console.error('[bootApp] start() exception:', e);
+    }
+  }
+  if (document.readyState === 'complete' || document.readyState === 'interactive') {
+    setTimeout(start, 0);
+  } else {
+    document.addEventListener('DOMContentLoaded', start);
+  }
+})();
