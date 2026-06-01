@@ -1,47 +1,32 @@
-// ════════════════════════════════════════════════════════════════════════
-// ▓▓▓ AURA8 — 00z-idb-debug.js · DEBUG TEMPORAIRE · 01/06/2026 ▓▓▓
-// ════════════════════════════════════════════════════════════════════════
-// MODULE DE DIAGNOSTIC PONCTUEL — À RETIRER APRÈS USAGE
-//
-// Intercepte saveState() pour tracer pourquoi l'écriture IndexedDB
-// ne fonctionne pas (alors que les tests isolés montrent qu'elle marche).
-//
-// USAGE :
-//   1. Charger ce fichier dans AURA8_v118.html EN DERNIER (après 10-...)
-//   2. Attendre 30s qu'un saveState se déclenche
-//   3. Lire la clé localStorage 'aura_idb_debug' avec inspect-idb.html
-//      ou n'importe quel outil qui liste les clés LS
-//   4. RETIRER ce script du HTML après diagnostic
-//
-// CE QUE LE MODULE FAIT :
-//   - Au chargement, wrap window.openDB pour tracer chaque appel
-//   - Wrap saveState pour tracer chaque tentative d'écriture IDB
-//   - Écrit les 20 dernières tentatives dans localStorage.aura_idb_debug
-//   - N'AFFECTE PAS le comportement d'AURA (juste de l'observation)
-// ════════════════════════════════════════════════════════════════════════
+// ============================================================
+// AURA8 - 00z-idb-debug.js - TEMPORARY DEBUG MODULE - 2026-06-01
+// ============================================================
+// DO NOT TRANSLATE - this is JavaScript source code.
+// Wraps window.openDB and window.saveState to trace IDB writes.
+// Writes events to localStorage key 'aura_idb_debug'.
+// Remove from HTML after diagnostic complete.
+// ============================================================
 
 (function() {
   'use strict';
-  const DEBUG_KEY = 'aura_idb_debug';
-  const MAX_EVENTS = 30;
+  var DEBUG_KEY = 'aura_idb_debug';
+  var MAX_EVENTS = 30;
 
   function log(event) {
     try {
-      const raw = localStorage.getItem(DEBUG_KEY);
-      let events = [];
+      var raw = localStorage.getItem(DEBUG_KEY);
+      var events = [];
       if (raw) {
         try { events = JSON.parse(raw); } catch(e) { events = []; }
       }
       if (!Array.isArray(events)) events = [];
       event.ts = new Date().toISOString();
       events.push(event);
-      // Garder uniquement les MAX_EVENTS derniers
       if (events.length > MAX_EVENTS) {
         events = events.slice(-MAX_EVENTS);
       }
       localStorage.setItem(DEBUG_KEY, JSON.stringify(events));
     } catch(e) {
-      // Si LS plein, on ne peut pas tracer
     }
   }
 
@@ -54,7 +39,6 @@
     };
   }
 
-  // Attendre que window.openDB et window.saveState soient définis
   function waitFor(name, callback, attempts) {
     attempts = attempts || 0;
     if (typeof window[name] === 'function') {
@@ -62,29 +46,28 @@
       return;
     }
     if (attempts > 100) {
-      log({ type: 'ERROR', msg: 'window.' + name + ' jamais défini après 5s' });
+      log({ type: 'ERROR', msg: 'window.' + name + ' never defined after 5s' });
       return;
     }
-    setTimeout(() => waitFor(name, callback, attempts + 1), 50);
+    setTimeout(function() { waitFor(name, callback, attempts + 1); }, 50);
   }
 
-  log({ type: 'INIT', msg: '00z-idb-debug chargé' });
+  log({ type: 'INIT', msg: '00z-idb-debug loaded' });
 
-  // ─── Wrap window.openDB ───
-  waitFor('openDB', () => {
-    const origOpenDB = window.openDB;
+  waitFor('openDB', function() {
+    var origOpenDB = window.openDB;
     log({
       type: 'WRAP_OPENDB',
-      msg: 'window.openDB wrappé',
-      origFn: origOpenDB.name || '(anonyme)',
+      msg: 'window.openDB wrapped',
+      origFn: origOpenDB.name || '(anon)',
       origLength: String(origOpenDB).length
     });
 
     window.openDB = function() {
-      const callId = Math.random().toString(36).substring(2, 8);
-      log({ type: 'OPENDB_CALL', callId: callId, msg: 'appel openDB()' });
+      var callId = Math.random().toString(36).substring(2, 8);
+      log({ type: 'OPENDB_CALL', callId: callId });
 
-      let promise;
+      var promise;
       try {
         promise = origOpenDB.apply(this, arguments);
       } catch(e) {
@@ -96,7 +79,6 @@
         log({
           type: 'OPENDB_BAD_RETURN',
           callId: callId,
-          msg: 'openDB n\'a pas retourné une Promise',
           returned: typeof promise
         });
         return promise;
@@ -104,13 +86,13 @@
 
       return promise.then(
         function(db) {
-          let storeKeyPath = '(unknown)';
-          let storesList = '(unknown)';
+          var storeKeyPath = '(unknown)';
+          var storesList = '(unknown)';
           try {
             storesList = Array.from(db.objectStoreNames).join(',');
             if (db.objectStoreNames.contains('state')) {
-              const tx = db.transaction('state', 'readonly');
-              const store = tx.objectStore('state');
+              var tx = db.transaction('state', 'readonly');
+              var store = tx.objectStore('state');
               storeKeyPath = store.keyPath === null ? '(null)' : ('"' + store.keyPath + '"');
             }
           } catch(e) {}
@@ -135,19 +117,18 @@
     };
   });
 
-  // ─── Wrap window.saveState ───
-  waitFor('saveState', () => {
-    const origSaveState = window.saveState;
+  waitFor('saveState', function() {
+    var origSaveState = window.saveState;
     log({
       type: 'WRAP_SAVESTATE',
-      msg: 'window.saveState wrappé',
-      origFn: origSaveState.name || '(anonyme)',
+      msg: 'window.saveState wrapped',
+      origFn: origSaveState.name || '(anon)',
       origLength: String(origSaveState).length
     });
 
     window.saveState = function(silent) {
-      const callId = Math.random().toString(36).substring(2, 8);
-      const stateReady = (typeof window._stateReady !== 'undefined') ? window._stateReady : '(undefined)';
+      var callId = Math.random().toString(36).substring(2, 8);
+      var stateReady = (typeof window._stateReady !== 'undefined') ? window._stateReady : '(undefined)';
       log({
         type: 'SAVESTATE_CALL',
         callId: callId,
@@ -156,7 +137,7 @@
         cycle: (typeof S !== 'undefined' && S && typeof S.cycle === 'number') ? S.cycle : '?'
       });
 
-      let result;
+      var result;
       try {
         result = origSaveState.apply(this, arguments);
       } catch(e) {
@@ -176,23 +157,22 @@
 
       return result.then(
         function(ok) {
-          // Lire l'état IDB juste après pour vérifier si l'écriture a pris
-          let idbCheckPromise;
+          var idbCheckPromise;
           try {
-            const cdb = indexedDB.open('NEXUS_DB');
-            idbCheckPromise = new Promise((resolve) => {
-              cdb.onsuccess = (e) => {
+            var cdb = indexedDB.open('NEXUS_DB');
+            idbCheckPromise = new Promise(function(resolve) {
+              cdb.onsuccess = function(e) {
                 try {
-                  const db = e.target.result;
+                  var db = e.target.result;
                   if (!db.objectStoreNames.contains('state')) {
                     db.close();
                     resolve({ stateExists: false });
                     return;
                   }
-                  const tx = db.transaction('state', 'readonly');
-                  const req = tx.objectStore('state').get('nexus_state_v2');
-                  req.onsuccess = (e2) => {
-                    const snap = e2.target.result;
+                  var tx = db.transaction('state', 'readonly');
+                  var req = tx.objectStore('state').get('nexus_state_v2');
+                  req.onsuccess = function(e2) {
+                    var snap = e2.target.result;
                     db.close();
                     resolve({
                       stateExists: true,
@@ -200,19 +180,19 @@
                       cycle: snap ? snap.cycle : null
                     });
                   };
-                  req.onerror = () => { db.close(); resolve({ readError: true }); };
+                  req.onerror = function() { db.close(); resolve({ readError: true }); };
                 } catch(err) {
                   resolve({ checkErr: err.message });
                 }
               };
-              cdb.onerror = () => resolve({ openErr: true });
-              setTimeout(() => resolve({ timeout: true }), 2000);
+              cdb.onerror = function() { resolve({ openErr: true }); };
+              setTimeout(function() { resolve({ timeout: true }); }, 2000);
             });
           } catch(e) {
             idbCheckPromise = Promise.resolve({ wrapErr: e.message });
           }
 
-          idbCheckPromise.then(check => {
+          idbCheckPromise.then(function(check) {
             log({
               type: 'SAVESTATE_RESOLVED',
               callId: callId,
@@ -235,13 +215,12 @@
     };
   });
 
-  // ─── Listener supplémentaire : transactions IDB qui plantent globalement ───
   if (typeof window.addEventListener === 'function') {
-    window.addEventListener('unhandledrejection', (e) => {
+    window.addEventListener('unhandledrejection', function(e) {
       if (e.reason && e.reason.message &&
-          (e.reason.message.includes('IDB') ||
-           e.reason.message.includes('IndexedDB') ||
-           e.reason.message.includes('transaction'))) {
+          (e.reason.message.indexOf('IDB') >= 0 ||
+           e.reason.message.indexOf('IndexedDB') >= 0 ||
+           e.reason.message.indexOf('transaction') >= 0)) {
         log({
           type: 'UNHANDLED_IDB_REJECTION',
           error: serializeError(e.reason)
@@ -250,5 +229,5 @@
     });
   }
 
-  console.log('[00z-idb-debug] Module chargé · trace écrite dans localStorage.aura_idb_debug');
+  console.log('[00z-idb-debug] loaded - trace in localStorage.aura_idb_debug');
 })();
