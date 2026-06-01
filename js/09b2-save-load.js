@@ -1,5 +1,5 @@
 // ════════════════════════════════════════════════════════════════════════
-// ▓▓▓ AURA8 — 09b2-save-load.js · VERSION 123 · 01/06/2026 ▓▓▓
+// ▓▓▓ AURA8 — 09b2-save-load.js · VERSION 123.1 · 01/06/2026 ▓▓▓
 // ════════════════════════════════════════════════════════════════════════
 // saveState + loadState + hooks de fermeture — TOUTE la persistance ici.
 //
@@ -16,22 +16,25 @@
 //   FIX : verrou _stateReady (false au démarrage, true après loadState).
 //   + garde-fou anti-régression dans saveState (refuse cycle < LS - 5).
 //
-// ★★ v123 (01/06/2026) — HOOKS DE FERMETURE SYNCHRONES
+// v123 (01/06/2026) — HOOKS DE FERMETURE SYNCHRONES
 //   PROBLÈME : quand l'app passe en arrière-plan, le cycle revenait à
-//   une vieille valeur au retour. Cause : aucun handler pagehide actif
-//   (00b-persistance-override.js qui les contenait avait été supprimé,
-//   et la fonction _installPackContinuite dans 10 n'était jamais appelée).
-//   Et même si saveState() async était appelé au pagehide, il n'avait
-//   pas le temps de finir avant que le browser gèle l'onglet.
-//
+//   une vieille valeur au retour. Cause : aucun handler pagehide actif.
 //   FIX : hooks pagehide/freeze/beforeunload/visibilitychange installés
-//   ICI. Chaque hook fait une écriture SYNCHRONE de localStorage via
-//   _flushSyncOnExit(). IDB est tenté en fire-and-forget (best effort).
-//   L'écriture synchrone garantit que le storage est à jour AVANT que
-//   le browser gèle l'onglet.
+//   ICI avec écriture localStorage SYNCHRONE via _flushSyncOnExit().
 //
-//   Code copié de 00b-persistance-override.js v120.5 qui fonctionnait,
-//   adapté pour respecter le verrou _stateReady de v122.
+// ★★ v123.1 (01/06/2026) — FIX IDB SILENCIEUSEMENT MUET
+//   PROBLÈME : IndexedDB.state restait VIDE même avec saveState qui
+//   tournait. Cause : conflit entre 2 définitions de openDB() :
+//     - 09a-runtime-state.js crée le store SANS keyPath
+//     - 10-fin-bloc-restauration-v93.js crée le store AVEC keyPath:'key'
+//   La 2e écrase la 1re (chargée après). Donc le store final a keyPath.
+//   Mais saveState faisait .put(snap, RT.SAVE_KEY) → invalide quand le
+//   store a un keyPath → erreur silencieuse (avalée par try/catch).
+//
+//   FIX : détection runtime du keyPath du store, et appel adapté :
+//     - Si keyPath → snap.key = RT.SAVE_KEY puis .put(snap)
+//     - Sinon → .put(snap, RT.SAVE_KEY)
+//   Appliqué dans saveState() ET dans _flushSyncOnExit().
 //
 // Dépend de 09a-runtime-state.js (window.RT + window.openDB).
 // ════════════════════════════════════════════════════════════════════════
@@ -120,13 +123,25 @@ async function saveState(silent = false) {
   let idbOk = false;
   let lsOk  = false;
 
-  // IndexedDB — PUT AVEC CLÉ EXPLICITE (store sans keyPath)
+  // IndexedDB — détection keyPath du store
+  // Le store peut être créé avec ou sans keyPath selon le module qui a
+  // ouvert IDB en premier (conflit historique entre 09a et 10). On gère
+  // les deux cas pour ne pas planter silencieusement.
   try {
     const db = await openDB();
     idbOk = await new Promise(res => {
       try {
-        const tx  = db.transaction(RT.STORE_STATE, 'readwrite');
-        const req = tx.objectStore(RT.STORE_STATE).put(snap, RT.SAVE_KEY);
+        const tx    = db.transaction(RT.STORE_STATE, 'readwrite');
+        const store = tx.objectStore(RT.STORE_STATE);
+        let req;
+        if (store.keyPath) {
+          // Store avec keyPath : la clé est dans snap[keyPath]
+          if (!snap.key) snap.key = RT.SAVE_KEY;
+          req = store.put(snap);
+        } else {
+          // Store sans keyPath : la clé est passée en 2e argument
+          req = store.put(snap, RT.SAVE_KEY);
+        }
         req.onsuccess = () => res(true);
         req.onerror   = () => res(false);
         tx.onerror    = () => res(false);
@@ -530,10 +545,17 @@ function _flushSyncOnExit(reason) {
     }
 
     // IDB en fire-and-forget — best effort, peut être interrompu sans conséquence
+    // Détection keyPath comme dans saveState
     try {
       openDB().then(db => {
-        const tx  = db.transaction(RT.STORE_STATE, 'readwrite');
-        tx.objectStore(RT.STORE_STATE).put(snap, RT.SAVE_KEY);
+        const tx    = db.transaction(RT.STORE_STATE, 'readwrite');
+        const store = tx.objectStore(RT.STORE_STATE);
+        if (store.keyPath) {
+          if (!snap.key) snap.key = RT.SAVE_KEY;
+          store.put(snap);
+        } else {
+          store.put(snap, RT.SAVE_KEY);
+        }
       }).catch(() => {});
     } catch (e) {}
 
