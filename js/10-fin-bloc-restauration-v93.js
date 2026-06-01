@@ -52,24 +52,24 @@ const _LT_PHRASES = {
   ],
 };
 
-// ═══ FIX STORAGE v119 ═══
-// 1 seul slot snap + 1 seul slot internal (au lieu de 3+5)
-// Libère ~2000 Ko de doublons inutiles
+// ═══ Constantes snapshots manuels (utilisateur) ═══
+// nexusInternal_1 = snapshot manuel utilisateur (créé via UI ou auto sur trade/leverage)
 const _SNAP_INTERNAL_KEYS = ['nexusInternal_1'];
-const _SNAP_KEYS = ['nexusSnap_A'];
 
-// Purge des anciens doublons au premier chargement
+// Purge des anciens doublons et clés obsolètes au premier chargement
+// Inclut nexusSnap_A et nexusSnap_latest (écritures redondantes supprimées en v124 —
+// saveState dans 09b2 fait déjà le job dans nexus_state_v2 + IDB).
 (function _purgeStorageDoublons() {
   const obsoletes = [
-    'nexusSnap_B','nexusSnap_C',
+    'nexusSnap_A','nexusSnap_B','nexusSnap_C','nexusSnap_latest',
     'nexusInternal_2','nexusInternal_3','nexusInternal_4','nexusInternal_5'
   ];
   obsoletes.forEach(k => { try { localStorage.removeItem(k); } catch(e) {} });
+  try { sessionStorage.removeItem('nexusSnap_current'); } catch(e) {}
 })();
 
 let _currentDetailPair = null;
 let _lastAutoSnapTs = 0;
-let _p5LastAdaptiveSave = 0;
 let _pendingClosePair = null;
 let _settingsPulseTimer = null;
 let _snapRotationIdx = 0;
@@ -1347,7 +1347,6 @@ function _netwatchTick() {
     _net10sSaveTriggered = true;
     try {
       if (typeof saveState === 'function') saveState(true);
-      if (typeof _p5MultiStorageSave === 'function') _p5MultiStorageSave();
       if (typeof createInternalSnapshot === 'function') createInternalSnapshot();
       S.chainLog.push({ icon: '💾', desc: 'Coupure > 10s · sauvegarde interne forcée (pas de fichier)', hash: rndHash(), time: nowStr() });
     } catch(e) { console.warn('netwatch 10s save failed:', e); }
@@ -1439,26 +1438,6 @@ function _p4AntiDetteWatchdog() {
 }
 if(typeof _p4AntiDetteWatchdog==='function') window._p4AntiDetteWatchdog = _p4AntiDetteWatchdog;
 
-function _p5AdaptiveInterval() {
-  const nOpen = (S && S.openPositions) ? S.openPositions.length : 0;
-  if (nOpen >= 3) return 3000;
-  if (nOpen >= 1) return 10000;
-  return 30000;
-}
-if(typeof _p5AdaptiveInterval==='function') window._p5AdaptiveInterval = _p5AdaptiveInterval;
-
-function _p5AdaptiveLoop() {
-  const now = Date.now();
-  const interval = _p5AdaptiveInterval();
-  if (now - _p5LastAdaptiveSave >= interval) {
-    _p5LastAdaptiveSave = now;
-    if (typeof S !== 'undefined' && !window._resetInProgress) {
-      _p5MultiStorageSave();
-    }
-  }
-}
-if(typeof _p5AdaptiveLoop==='function') window._p5AdaptiveLoop = _p5AdaptiveLoop;
-
 function _p5InvariantCheck() {
   if (typeof S === 'undefined' || !S) return;
   
@@ -1480,38 +1459,6 @@ function _p5InvariantCheck() {
   }
 }
 if(typeof _p5InvariantCheck==='function') window._p5InvariantCheck = _p5InvariantCheck;
-
-function _p5MultiStorageSave() {
-  if (typeof buildSnapshot !== 'function') return false;
-  try { if (typeof _pulseSettingsBtn === 'function') _pulseSettingsBtn(); } catch(e) {}
-  let snap;
-  try { snap = buildSnapshot(); } catch(e) { return false; }
-  if (!snap) return false;
-  
-  const snapStr = JSON.stringify(snap);
-  // ═══ FIX v119 : 1 seul slot (nexusSnap_A) au lieu de rotation 3 slots ═══
-  const keyThisTime = _SNAP_KEYS[0];
-
-  // Storage 1 : IndexedDB via saveState
-  try { if (typeof saveState === 'function') saveState(true); } catch(e) {}
-  
-  // Storage 2 : localStorage (1 seul slot)
-  try {
-    localStorage.setItem(keyThisTime, snapStr);
-    localStorage.setItem('nexusSnap_latest', keyThisTime);
-  } catch(e) {
-    // localStorage plein → on ne fait rien de plus (les doublons ont déjà été supprimés)
-    console.warn('[AURA] localStorage plein, snap ignoré');
-  }
-  
-  // Storage 3 : sessionStorage
-  try {
-    sessionStorage.setItem('nexusSnap_current', snapStr);
-  } catch(e) {}
-  
-  return true;
-}
-if(typeof _p5MultiStorageSave==='function') window._p5MultiStorageSave = _p5MultiStorageSave;
 
 function _pearsonCorrelation(returnsA, returnsB) {
   const n = Math.min(returnsA.length, returnsB.length);
