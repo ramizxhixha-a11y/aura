@@ -1,6 +1,24 @@
 // ════════════════════════════════════════════════════════════
-// AURA8 — module consolidé 10/10 · VERSION 123 · 01/06/2026
+// AURA8 — module consolidé 10/10 · VERSION 125 · 01/06/2026
 // Contient : fin-bloc-restauration-v93, bloc-restauration-v94, fin-bloc-restauration-v94
+//
+// ★ v125 (01/06/2026) — SUPPRESSION SYSTÈME nexusInternal_*
+//   • Système de snapshots manuels en localStorage entièrement supprimé.
+//   • Le vrai backup historique est dans aura_backups (IndexedDB, géré par 03).
+//   • Le snapshot vivant est dans nexus_state_v2 (LS+IDB, géré par 09b2).
+//   • Économie : 3 Mo de localStorage libérés en permanence.
+//   • Supprimé : createInternalSnapshot, listInternalSnapshots,
+//     restoreInternalSnapshot, _maybeCreateAutoSnapshot, _refreshSnapshotsList,
+//     _snapshotActionCreate, _snapshotActionRestore, _SNAP_INTERNAL_KEYS,
+//     _AUTO_SNAP_INTERVAL, _lastAutoSnapTs, _snapRotationIdx.
+//   • Appel createInternalSnapshot dans _netwatchTick remplacé par saveState.
+//   • Purge automatique au démarrage : nexusInternal_1 ajouté à la liste.
+//
+// ★ v124 (01/06/2026) — SUPPRESSION SYSTÈME _p5MultiStorageSave
+//   • Suppression de _p5MultiStorageSave, _p5AdaptiveLoop, _p5AdaptiveInterval
+//     (écrivaient nexusSnap_A en doublon avec saveState).
+//   • Suppression de _p5LastAdaptiveSave et _SNAP_KEYS (orphelines).
+//   • Économie : ~1.5 Mo de localStorage.
 //
 // ★ v123 (01/06/2026) — NETTOYAGE
 //   • Suppression de _installPackContinuite (56 lignes mortes, jamais appelée).
@@ -24,7 +42,6 @@
 // ════════════════════════════════════════════════════════════════════════
 
 // ── Variables module-level supplémentaires ──
-const _AUTO_SNAP_INTERVAL = 30 * 60 * 1000;
 const _LT_PHRASES = {
   champion_win: [
     "Ce mois a été le mien. {wr}% de trades gagnants, et je ne compte pas m'arrêter là.",
@@ -52,27 +69,21 @@ const _LT_PHRASES = {
   ],
 };
 
-// ═══ Constantes snapshots manuels (utilisateur) ═══
-// nexusInternal_1 = snapshot manuel utilisateur (créé via UI ou auto sur trade/leverage)
-const _SNAP_INTERNAL_KEYS = ['nexusInternal_1'];
-
-// Purge des anciens doublons et clés obsolètes au premier chargement
-// Inclut nexusSnap_A et nexusSnap_latest (écritures redondantes supprimées en v124 —
-// saveState dans 09b2 fait déjà le job dans nexus_state_v2 + IDB).
+// Purge des anciennes clés obsolètes au premier chargement
+// v125 : système nexusInternal_* supprimé entièrement (le vrai backup est aura_backups en IDB,
+// le snapshot vivant est nexus_state_v2). nexusInternal_1 prenait 3 Mo de localStorage pour rien.
 (function _purgeStorageDoublons() {
   const obsoletes = [
     'nexusSnap_A','nexusSnap_B','nexusSnap_C','nexusSnap_latest',
-    'nexusInternal_2','nexusInternal_3','nexusInternal_4','nexusInternal_5'
+    'nexusInternal_1','nexusInternal_2','nexusInternal_3','nexusInternal_4','nexusInternal_5'
   ];
   obsoletes.forEach(k => { try { localStorage.removeItem(k); } catch(e) {} });
   try { sessionStorage.removeItem('nexusSnap_current'); } catch(e) {}
 })();
 
 let _currentDetailPair = null;
-let _lastAutoSnapTs = 0;
 let _pendingClosePair = null;
 let _settingsPulseTimer = null;
-let _snapRotationIdx = 0;
 
 // ── 9 fonctions depuis v91 ──
 
@@ -1296,17 +1307,6 @@ if(typeof _maybeAskNotifPermission==='function') window._maybeAskNotifPermission
 function _maybeAutoExport() { /* désactivé · Q1:B */ }
 if(typeof _maybeAutoExport==='function') window._maybeAutoExport = _maybeAutoExport;
 
-function _maybeCreateAutoSnapshot(reason) {
-  const now = Date.now();
-  if (reason === 'trade_close' && now - _lastAutoSnapTs < 2 * 60 * 1000) return;
-  if (reason === 'periodic' && now - _lastAutoSnapTs < _AUTO_SNAP_INTERVAL) return;
-  try {
-    createInternalSnapshot();
-    _lastAutoSnapTs = now;
-  } catch(e) { console.warn('[auto-snap]', e); }
-}
-if(typeof _maybeCreateAutoSnapshot==='function') window._maybeCreateAutoSnapshot = _maybeCreateAutoSnapshot;
-
 function _mutateValue(value, strength, min, max) {
   const u1 = Math.random();
   const u2 = Math.random();
@@ -1347,8 +1347,7 @@ function _netwatchTick() {
     _net10sSaveTriggered = true;
     try {
       if (typeof saveState === 'function') saveState(true);
-      if (typeof createInternalSnapshot === 'function') createInternalSnapshot();
-      S.chainLog.push({ icon: '💾', desc: 'Coupure > 10s · sauvegarde interne forcée (pas de fichier)', hash: rndHash(), time: nowStr() });
+      S.chainLog.push({ icon: '💾', desc: 'Coupure > 10s · sauvegarde forcée', hash: rndHash(), time: nowStr() });
     } catch(e) { console.warn('netwatch 10s save failed:', e); }
   }
   
@@ -1507,29 +1506,6 @@ function _recomputeAllAgentBoosts() {
 }
 window._recomputeAllAgentBoosts = _recomputeAllAgentBoosts;
 if(typeof _recomputeAllAgentBoosts==='function') window._recomputeAllAgentBoosts = _recomputeAllAgentBoosts;
-
-function _refreshSnapshotsList() {
-  const list = document.getElementById('snapshotsList');
-  if (!list) return;
-  const snaps = listInternalSnapshots();
-  if (snaps.length === 0) {
-    list.innerHTML = '<div style="color:var(--t3);font-size:11px;padding:12px;text-align:center;">Aucun snapshot · créez-en un</div>';
-    return;
-  }
-  list.innerHTML = snaps.map((s, i) => `
-    <div style="background:rgba(20,22,26,.6);border:1px solid rgba(56,212,245,.15);border-radius:10px;padding:12px;">
-      <div style="display:flex;justify-content:space-between;align-items:start;gap:8px;">
-        <div style="flex:1;">
-          <div style="font-family:var(--font-mono);font-size:12px;color:var(--t1);font-weight:700;">${i===0?'🟢 Dernier':'📸 Snapshot '+(i+1)}</div>
-          <div style="font-family:var(--font-mono);font-size:10px;color:var(--t2);margin-top:3px;">${s.label}</div>
-          <div style="font-family:var(--font-mono);font-size:11px;color:var(--up);margin-top:4px;">${s.portfolio.toFixed(0)}€ · ${s.trades} trades</div>
-        </div>
-        <button onclick="window._snapshotActionRestore(${s.slot})" style="background:rgba(0,232,122,.12);border:1px solid rgba(0,232,122,.35);border-radius:8px;color:var(--up);padding:8px 14px;font-family:var(--font-mono);font-size:11px;font-weight:700;cursor:pointer;">↩ RESTAURER</button>
-      </div>
-    </div>
-  `).join('');
-}
-if(typeof _refreshSnapshotsList==='function') window._refreshSnapshotsList = _refreshSnapshotsList;
 
 function _requestNotifPermission() { return Promise.resolve(false); }
 if(typeof _requestNotifPermission==='function') window._requestNotifPermission = _requestNotifPermission;
@@ -1879,45 +1855,6 @@ function _showForceCloseConfirm(pair) {
 window._showForceCloseConfirm = _showForceCloseConfirm;
 if(typeof _showForceCloseConfirm==='function') window._showForceCloseConfirm = _showForceCloseConfirm;
 
-window._snapshotActionCreate = function() {
-  const res = createInternalSnapshot();
-  if (res) { _refreshSnapshotsList(); }
-  else { if (typeof showToast === 'function') showToast('Échec création snapshot', 2500, 'critical'); }
-};
-if(typeof _snapshotActionCreate==='function') window._snapshotActionCreate = _snapshotActionCreate;
-
-window._snapshotActionRestore = function(slot) {
-  const btn = event && event.target ? event.target : null;
-  if (btn && !btn._armedRestore) {
-    btn._armedRestore = true;
-    const origText = btn.textContent;
-    const origBg = btn.style.background;
-    btn.textContent = '⚠ TAP ENCORE POUR CONFIRMER';
-    btn.style.background = 'rgba(255,61,107,.25)';
-    btn.style.borderColor = 'var(--down)';
-    btn.style.color = 'var(--down)';
-    setTimeout(() => {
-      if (btn._armedRestore) {
-        btn._armedRestore = false;
-        btn.textContent = origText;
-        btn.style.background = origBg;
-        btn.style.borderColor = 'rgba(0,232,122,.35)';
-        btn.style.color = 'var(--up)';
-      }
-    }, 3000);
-    return;
-  }
-  if (btn) btn._armedRestore = false;
-  const res = restoreInternalSnapshot(slot);
-  if (res.ok) {
-    const modal = document.getElementById('snapshotsModal');
-    if (modal) modal.remove();
-  } else {
-    if (typeof showToast === 'function') showToast('Restauration échouée · ' + res.reason, 3000, 'critical');
-  }
-};
-if(typeof _snapshotActionRestore==='function') window._snapshotActionRestore = _snapshotActionRestore;
-
 function _takeControl(pair) {
   if (!S._manualPairs) S._manualPairs = {};
   S._manualPairs[pair] = true;
@@ -2099,29 +2036,6 @@ function closeWhyModal() {
 window.closeWhyModal = closeWhyModal;
 if(typeof closeWhyModal==='function') window.closeWhyModal = closeWhyModal;
 
-function createInternalSnapshot() {
-  if (typeof buildSnapshot !== 'function') return null;
-  try { if (typeof _pulseSettingsBtn === 'function') _pulseSettingsBtn(); } catch(e) {}
-  let snap;
-  try { snap = buildSnapshot(); } catch(e) { return null; }
-  if (!snap) return null;
-  
-  // ═══ FIX v119 : 1 seul slot internal (au lieu de 5) ═══
-  snap._snapTs = Date.now();
-  snap._snapLabel = new Date().toLocaleString('fr-BE', { day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit' });
-  snap._snapPortfolio = S.portfolio || 0;
-  snap._snapTrades = S.totalTrades || 0;
-  
-  try {
-    localStorage.setItem(_SNAP_INTERNAL_KEYS[0], JSON.stringify(snap));
-    return { slot: 0, label: snap._snapLabel };
-  } catch(e) {
-    console.warn('[snapshot] localStorage plein:', e);
-    return null;
-  }
-}
-if(typeof createInternalSnapshot==='function') window.createInternalSnapshot = createInternalSnapshot;
-
 function disableFullPowerMode() {
   if (!S) return;
   S.fullPowerMode = false;
@@ -2175,22 +2089,6 @@ function enableFullPowerMode() {
 }
 window.enableFullPowerMode = enableFullPowerMode;
 if(typeof enableFullPowerMode==='function') window.enableFullPowerMode = enableFullPowerMode;
-
-function listInternalSnapshots() {
-  const snaps = [];
-  // ═══ FIX v119 : 1 seul slot ═══
-  for (let i = 0; i < _SNAP_INTERNAL_KEYS.length; i++) {
-    const raw = localStorage.getItem(_SNAP_INTERNAL_KEYS[i]);
-    if (!raw) continue;
-    try {
-      const obj = JSON.parse(raw);
-      snaps.push({ slot: i, ts: obj._snapTs || 0, label: obj._snapLabel || '—', portfolio: obj._snapPortfolio || 0, trades: obj._snapTrades || 0 });
-    } catch(e) {}
-  }
-  snaps.sort((a, b) => b.ts - a.ts);
-  return snaps;
-}
-if(typeof listInternalSnapshots==='function') window.listInternalSnapshots = listInternalSnapshots;
 
 async function loadAllTrades() {
   try {
@@ -2427,20 +2325,3 @@ function renderActionBricks() {
 }
 window.renderActionBricks = renderActionBricks;
 if(typeof renderActionBricks==='function') window.renderActionBricks = renderActionBricks;
-
-function restoreInternalSnapshot(slot) {
-  const raw = localStorage.getItem(_SNAP_INTERNAL_KEYS[slot]);
-  if (!raw) return { ok:false, reason:'not_found' };
-  try {
-    const snap = JSON.parse(raw);
-    if (typeof loadState === 'function') {
-      loadState(snap);
-      if (typeof showToast === 'function') { showToast('↩ Snapshot restauré · ' + (snap._snapLabel || '—'), 3000, 'user'); }
-      S.chainLog.push({ icon: '↩', desc: `Snapshot restauré · ${snap._snapLabel || '—'} · portefeuille ${(snap._snapPortfolio||0).toFixed(0)}€`, hash: rndHash(), time: nowStr() });
-      if (S.chainLog.length > 100) S.chainLog.splice(0, S.chainLog.length - 100);
-      return { ok:true, label: snap._snapLabel };
-    }
-  } catch(e) { return { ok:false, reason:'parse_error', error: e.message }; }
-  return { ok:false, reason:'no_loadState' };
-}
-if(typeof restoreInternalSnapshot==='function') window.restoreInternalSnapshot = restoreInternalSnapshot;
