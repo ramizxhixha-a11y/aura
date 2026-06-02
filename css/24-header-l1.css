@@ -30,12 +30,11 @@
 .header-buttons {
   display: flex;
   align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
+  gap: 6px;
+  flex-wrap: nowrap;
   flex: 1;
-  justify-content: center;
+  justify-content: space-evenly;
   min-width: 0;
-  align-content: center;
 }
 .header-right {
   display: flex;
@@ -270,18 +269,18 @@
 }
 .mode-badge.mode-paper {
   color: var(--mode-paper);
-  background: rgba(245,166,35,.10);
-  border: 1px solid rgba(245,166,35,.25);
+  background: rgba(0,232,122,.10);
+  border: 1px solid rgba(0,232,122,.25);
 }
 .mode-badge.mode-real {
   color: var(--mode-real);
-  background: rgba(0,232,122,.10);
-  border: 1px solid rgba(0,232,122,.30);
+  background: rgba(255,61,107,.10);
+  border: 1px solid rgba(255,61,107,.30);
   animation: real-pulse 2s infinite;
 }
 @keyframes real-pulse {
-  0%,100% { box-shadow: 0 0 0 0 rgba(0,232,122,.4); }
-  50%      { box-shadow: 0 0 6px 2px rgba(0,232,122,.12); }
+  0%,100% { box-shadow: 0 0 0 0 rgba(255,61,107,.4); }
+  50%      { box-shadow: 0 0 6px 2px rgba(255,61,107,.12); }
 }
 
 /* ═══ RESPONSIVE ═══ */
@@ -330,3 +329,65 @@
     height: 36px; padding: 0 14px; font-size: 11px;
   }
 }
+
+/* ═══════════════════════════════════════════════════════════
+   BOUTON TRADES EN COURS (closeAllBtn)
+   · 0 trade  → croix ⊗ centrée, cercle neutre (gris)
+   · n trades → chiffre blanc centré (plus grand), cercle rouge
+   ═══════════════════════════════════════════════════════════ */
+.btn-close-trades {
+  position: relative;
+  border: 1px solid;
+  transition: background .25s, border-color .25s, color .25s, box-shadow .25s;
+}
+.btn-close-trades .cat-glyph {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 15px;
+  line-height: 1;
+}
+.btn-close-trades .cat-count {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-mono);
+  font-size: 14px;
+  font-weight: 800;
+  line-height: 1;
+  color: #fff;
+}
+/* état vide : croix, neutre */
+.btn-close-trades.empty {
+  border-color: rgba(138,150,168,.4);
+  background: rgba(138,150,168,.08);
+  color: var(--t2);
+}
+/* état actif : chiffre blanc, cercle rouge */
+.btn-close-trades.active {
+  border-color: rgba(255,61,107,.6);
+  background: rgba(255,61,107,.15);
+  box-shadow: 0 0 8px rgba(255,61,107,.3);
+}
+
+/* ═══════════════════════════════════════════════════════════
+   COULEUR DU HEADER PAR MODE TRADING (hdr-sim / paper / real)
+   Posées par 01-chrono-network.js → updateButtonVisual()
+   Colore : bordure du header + cercle du logo + halo
+   (le mot AURA, le ∞, le numéro restent fixes — gérés par 23-circular-logo.css)
+   ═══════════════════════════════════════════════════════════ */
+#statusBar.hdr-sim   { border-bottom-color: rgba(56,212,245,.35); }
+#statusBar.hdr-paper { border-bottom-color: rgba(0,232,122,.35); }
+#statusBar.hdr-real  { border-bottom-color: rgba(255,61,107,.40); }
+
+/* cercle du logo suit le mode (cible le fond + halo du logo circulaire) */
+#statusBar.hdr-sim   .aura-circular-bg { border-color: rgba(56,212,245,.45); box-shadow: 0 0 12px rgba(56,212,245,.22), inset 0 0 8px rgba(56,212,245,.05); }
+#statusBar.hdr-paper .aura-circular-bg { border-color: rgba(0,232,122,.45); box-shadow: 0 0 12px rgba(0,232,122,.22), inset 0 0 8px rgba(0,232,122,.05); }
+#statusBar.hdr-real  .aura-circular-bg { border-color: rgba(255,61,107,.5); box-shadow: 0 0 12px rgba(255,61,107,.25), inset 0 0 8px rgba(255,61,107,.05); }
+#statusBar.hdr-sim   .aura-circular-pulse { border-color: rgba(56,212,245,.35); }
+#statusBar.hdr-paper .aura-circular-pulse { border-color: rgba(0,232,122,.35); }
+#statusBar.hdr-real  .aura-circular-pulse { border-color: rgba(255,61,107,.4); }
+/* le texte circulaire (acronyme) suit aussi */
+#statusBar.hdr-sim   .aura-circular-svg text { fill: var(--mode-sim); }
+#statusBar.hdr-paper .aura-circular-svg text { fill: var(--mode-paper); }
+#statusBar.hdr-real  .aura-circular-svg text { fill: var(--mode-real); }

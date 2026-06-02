@@ -32,8 +32,8 @@
 
   /* ═══ COULEURS MODES TRADING ═══ */
   --mode-sim:   #38d4f5;   /* Auto-apprentissage → cyan  */
-  --mode-paper: #f5a623;   /* Évaluation         → ambre */
-  --mode-real:  #00e87a;   /* Mode Réel          → vert  */
+  --mode-paper: #00e87a;   /* Évaluation         → vert  */
+  --mode-real:  #ff3d6b;   /* Mode Réel          → rouge */
 }
 
 html, body {
