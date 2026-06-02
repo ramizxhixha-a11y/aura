@@ -5767,14 +5767,22 @@ function confirmCloseAll() {
 }
 
 function _updateCloseAllBadge() {
-  const badge = document.getElementById('closeAllBadge');
-  if(!badge) return;
+  const btn = document.getElementById('closeAllBtn');
+  const glyph = document.getElementById('closeAllGlyph');
+  const count = document.getElementById('closeAllBadge');
+  if(!btn || !glyph || !count) return;
   const n = (S.openPositions || []).length;
   if(n > 0) {
-    badge.textContent = n;
-    badge.style.display = 'flex';
+    count.textContent = n;
+    count.style.display = 'flex';
+    glyph.style.display = 'none';
+    btn.classList.remove('empty');
+    btn.classList.add('active');
   } else {
-    badge.style.display = 'none';
+    glyph.style.display = 'flex';
+    count.style.display = 'none';
+    btn.classList.remove('active');
+    btn.classList.add('empty');
   }
 }
 
