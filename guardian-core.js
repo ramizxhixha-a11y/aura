@@ -736,7 +736,12 @@ Core.drive = {
   getMeta: drvGetMeta,
   // envoi de test interactif (bouton "envoyer maintenant")
   uploadNow: async () => {
-    const snap = abGrabState();
+    let snap = abGrabState();
+    // si pas d'état live (page Guardian séparée), prendre le dernier backup IDB
+    if(!snap){
+      try { const list = await abList(); if(list && list.length){ const rec = await abGet(list[0].id); if(rec && rec.snapshot) snap = rec.snapshot; } } catch(e){}
+    }
+    if(!snap) return { ok:false, reason:'aucun état ni backup disponible' };
     let r = await drvUpload(snap, false);
     if(!r.ok && /autoris/.test(r.reason||'')) r = await drvUpload(snap, true);
     return r;
@@ -745,7 +750,11 @@ Core.drive = {
   autoPush: async () => {
     const m = drvGetMeta();
     if(!m.enabled) return { ok:false, reason:'Drive désactivé' };
-    const snap = abGrabState();
+    let snap = abGrabState();
+    if(!snap){
+      try { const list = await abList(); if(list && list.length){ const rec = await abGet(list[0].id); if(rec && rec.snapshot) snap = rec.snapshot; } } catch(e){}
+    }
+    if(!snap) return { ok:false, reason:'aucun état' };
     return await drvUpload(snap, false);
   }
 };
