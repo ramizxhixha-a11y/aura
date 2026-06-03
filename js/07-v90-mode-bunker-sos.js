@@ -4308,6 +4308,7 @@ function renderOpenPosSummary() {
 }
 
 // ── Fast price-only update (every tick) ─────────────────
+let _homePricesFirstRender = true;
 function renderHomePrices() {
   // Portfolio total
   const total = S.cashAccount + S.tradingAccount;
@@ -4317,7 +4318,12 @@ function renderHomePrices() {
   computePortfolioTotal();
   setEl('heroVal', fmtEUR(S.portfolioTotal));
   // v5 · hero beat + tone on significant change
-  if(_prevTotal && Math.abs(total - _prevTotal) > 15) {
+  // FIX flash boot : au tout premier rendu, l'écart entre le portfolio sauvegardé et le
+  // total recalculé n'est PAS un vrai gain/perte (juste un recalage au chargement) → on n'anime pas.
+  if(_homePricesFirstRender) {
+    _homePricesFirstRender = false;
+    _lastHeroVal = total;
+  } else if(_prevTotal && Math.abs(total - _prevTotal) > 15) {
     animateHeroValue(total);
     const d = total - _prevTotal;
     if(d > 50) playTone(660, 80, 0.04, 'sine');
