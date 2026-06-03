@@ -4847,6 +4847,7 @@ function openPosition(pair, side) {
                     .slice(0,5)
                     .map(a => ({ emoji:a.emoji, name:a.name.split(' ')[0].split('·')[0].trim(), score:a.score||0 }))
   });
+  if (typeof _updateCloseAllBadge === 'function') _updateCloseAllBadge();
 
   ps.trades.push({
     side:          side === 'long' ? 'buy' : 'sell',
@@ -5260,6 +5261,7 @@ function closePosition(id, botClose = false) {
   learnFromOutcome('position', realisedPct, pos.pair);
 
   S.openPositions = S.openPositions.filter(p=>p.id!==id);
+  if (typeof _updateCloseAllBadge === 'function') _updateCloseAllBadge();
   const pnlStr  = (realisedPct>=0?'+':'')+realisedPct.toFixed(2)+'%';
   const usdtStr = (realisedUsd>=0?'+':'−')+'$'+Math.abs(realisedUsd).toFixed(1);
   if(S.chainLog.length > 100) S.chainLog.splice(0, S.chainLog.length - 100);
@@ -5767,22 +5769,14 @@ function confirmCloseAll() {
 }
 
 function _updateCloseAllBadge() {
-  const btn = document.getElementById('closeAllBtn');
-  const glyph = document.getElementById('closeAllGlyph');
-  const count = document.getElementById('closeAllBadge');
-  if(!btn || !glyph || !count) return;
+  const badge = document.getElementById('closeAllBadge');
+  if(!badge) return;
   const n = (S.openPositions || []).length;
   if(n > 0) {
-    count.textContent = n;
-    count.style.display = 'flex';
-    glyph.style.display = 'none';
-    btn.classList.remove('empty');
-    btn.classList.add('active');
+    badge.textContent = n;
+    badge.style.display = 'flex';
   } else {
-    glyph.style.display = 'flex';
-    count.style.display = 'none';
-    btn.classList.remove('active');
-    btn.classList.add('empty');
+    badge.style.display = 'none';
   }
 }
 
