@@ -266,13 +266,14 @@ async function probeFunctions(declared){
     try { const r=await fetch(u.split('?')[0],{cache:'no-store'}); if(r.ok){ const t=await r.text(); perFile[u]=t; allCode+='\n'+t; } } catch(e){}
   }
   if(!allCode){ return out; }
+  function strip(src){ return src.replace(/\/\*[\s\S]*?\*\//g,' ').replace(/\/\/[^\n]*/g,' ').replace(/`(?:\\[\s\S]|[^`\\])*`/g,' ').replace(/'(?:\\.|[^'\\])*'/g,' ').replace(/"(?:\\.|[^"\\])*"/g,' '); }
+  const cleanCode = strip(allCode);
   for(const fn of (CFG.criticalFunctions||[])){
     const defRe = new RegExp('(function\\s+'+fn+'\\b|\\b'+fn+'\\s*[=:]\\s*function|\\b'+fn+'\\s*[=:]\\s*\\()');
-    const defined = defRe.test(allCode);
-    // appels = occurrences de fn( hors définition
+    const defined = defRe.test(cleanCode);
     const callRe = new RegExp('\\b'+fn+'\\s*\\(','g');
-    const calls = (allCode.match(callRe)||[]).length;
-    if(defined && calls>1){ /* ok, silencieux pour ne pas noyer */ }
+    const calls = (cleanCode.match(callRe)||[]).length;
+    if(defined && calls>1){ /* ok */ }
     else if(!defined && calls>0){
       out.push(R('crit','Fonctions','⚠ '+fn+'() appelée mais jamais définie',
         'Appelée '+calls+'× dans le code chargé mais aucune définition trouvée → ReferenceError au runtime.',
@@ -292,25 +293,36 @@ async function probeFunctions(declared){
 function probeUndefinedVars(perFile){
   const out=[];
   if(!perFile){ return out; }
-  // pour chaque fichier, repérer les identifiants en MAJUSCULES (constantes) utilisés mais non déclarés dans CE fichier
   const known = new Set(CFG.knownGlobals || []);
-  for(const file of Object.keys(perFile)){
-    const code = perFile[file];
-    // constantes candidates : MOTS_MAJUSCULES de 3+ lettres
+  // retire commentaires (// et /* */) et chaînes pour ne garder que le code exécutable
+  function stripNonCode(src){
+    let s = src;
+    s = s.replace(/\/\*[\s\S]*?\*\//g, ' ');   // /* ... */
+    s = s.replace(/\/\/[^\n]*/g, ' ');          // // ...
+    s = s.replace(/`(?:\\[\s\S]|[^`\\])*`/g, ' ');// templates
+    s = s.replace(/'(?:\\.|[^'\\])*'/g, ' ');    // '...'
+    s = s.replace(/"(?:\\.|[^"\\])*"/g, ' ');    // "..."
+    return s;
+  }
+  // concat de TOUT le code (pour savoir si une const est définie dans un AUTRE fichier)
+  let allCode=''; const codeByFile={};
+  for(const f of Object.keys(perFile)){ const c=stripNonCode(perFile[f]); codeByFile[f]=c; allCode+='\n'+c; }
+  for(const file of Object.keys(codeByFile)){
+    const code = codeByFile[file];
     const used = new Set((code.match(/\b[A-Z][A-Z0-9_]{2,}\b/g)||[]));
     for(const v of used){
       if(known.has(v)) continue;
-      // déclarée dans ce fichier ?
-      const declRe = new RegExp('(const|let|var)\\s+'+v+'\\b|\\b'+v+'\\s*=|\\.'+v+'\\b|[\'"]'+v+'[\'"]');
-      if(declRe.test(code)) continue;
-      // sinon : utilisée mais non déclarée localement → suspect
-      const m = code.match(new RegExp('.*\\b'+v+'\\b.*'));
+      // doit être utilisé COMME variable : suivi de . ( [ ou opérateur/espace+usage, pas juste un mot isolé
+      const usedAsVar = new RegExp('\\b'+v+'\\s*(\\.|\\(|\\[|\\)|;|,|\\+|-|\\*|/|<|>|=|\\|\\||&&|\\?)').test(code);
+      if(!usedAsVar) continue;
+      // déclaré quelque part dans l'ENSEMBLE du code ? (const/let/var/function/param/objet.X / X:)
+      const declAnywhere = new RegExp('(const|let|var|function)\\s+'+v+'\\b|\\b'+v+'\\s*=|\\.'+v+'\\b|\\b'+v+'\\s*:').test(allCode);
+      if(declAnywhere) continue;
       out.push(R('warn','Variables','Possible variable non définie : '+v,
-        'Utilisée dans '+file.split('/').pop()+' sans déclaration locale (ni const/let/var, ni objet.'+v+'). Si ce n\'est pas une globale d\'un autre fichier → ReferenceError (comme le bug DB_NAME).',
+        'Utilisée comme variable dans '+file.split('/').pop()+' mais déclarée nulle part dans le code chargé → ReferenceError possible (comme le bug DB_NAME).',
         'Dans '+file.split('/').pop()+', définir '+v+' ou la préfixer (ex. RT.'+v+').'));
     }
   }
-  // limiter le bruit
   return out.slice(0,15);
 }
 
@@ -318,10 +330,16 @@ function probeUndefinedVars(perFile){
 function probeDuplicates(perFile){
   const out=[];
   if(!perFile) return out;
+  function strip(src){
+    return src.replace(/\/\*[\s\S]*?\*\//g,' ').replace(/\/\/[^\n]*/g,' ')
+      .replace(/`(?:\\[\s\S]|[^`\\])*`/g,' ').replace(/'(?:\\.|[^'\\])*'/g,' ').replace(/"(?:\\.|[^"\\])*"/g,' ');
+  }
   for(const fn of (CFG.criticalFunctions||[])){
     const files=[];
     for(const f of Object.keys(perFile)){
-      if(new RegExp('function\\s+'+fn+'\\b').test(perFile[f])) files.push(f.split('/').pop());
+      const code = strip(perFile[f]);
+      // vraie définition : function X(  ou  X = function  ou  X: function
+      if(new RegExp('function\\s+'+fn+'\\s*\\(|\\b'+fn+'\\s*=\\s*function|\\b'+fn+'\\s*:\\s*function').test(code)) files.push(f.split('/').pop());
     }
     if(files.length>1){
       out.push(R('warn','Doublons','⚠ '+fn+'() définie dans '+files.length+' fichiers',
