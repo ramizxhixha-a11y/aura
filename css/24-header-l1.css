@@ -376,17 +376,17 @@
    Colore : bordure du header + cercle du logo + halo
    (le mot AURA, le ∞, le numéro restent fixes — gérés par 23-circular-logo.css)
    ═══════════════════════════════════════════════════════════ */
-#statusBar.hdr-sim   { border-bottom-color: rgba(56,212,245,.35); }
-#statusBar.hdr-paper { border-bottom-color: rgba(0,232,122,.35); }
-#statusBar.hdr-real  { border-bottom-color: rgba(255,61,107,.40); }
+#statusBar.hdr-sim   { border-bottom-color: rgba(56,212,245,.7); }
+#statusBar.hdr-paper { border-bottom-color: rgba(0,232,122,.85); }
+#statusBar.hdr-real  { border-bottom-color: rgba(255,61,107,.75); }
 
 /* cercle du logo suit le mode (cible le fond + halo du logo circulaire) */
-#statusBar.hdr-sim   .aura-circular-bg { border-color: rgba(56,212,245,.45); box-shadow: 0 0 12px rgba(56,212,245,.22), inset 0 0 8px rgba(56,212,245,.05); }
-#statusBar.hdr-paper .aura-circular-bg { border-color: rgba(0,232,122,.45); box-shadow: 0 0 12px rgba(0,232,122,.22), inset 0 0 8px rgba(0,232,122,.05); }
-#statusBar.hdr-real  .aura-circular-bg { border-color: rgba(255,61,107,.5); box-shadow: 0 0 12px rgba(255,61,107,.25), inset 0 0 8px rgba(255,61,107,.05); }
-#statusBar.hdr-sim   .aura-circular-pulse { border-color: rgba(56,212,245,.35); }
-#statusBar.hdr-paper .aura-circular-pulse { border-color: rgba(0,232,122,.35); }
-#statusBar.hdr-real  .aura-circular-pulse { border-color: rgba(255,61,107,.4); }
+#statusBar.hdr-sim   .aura-circular-bg { border-color: rgba(56,212,245,.8); box-shadow: 0 0 16px rgba(56,212,245,.45), inset 0 0 10px rgba(56,212,245,.12); }
+#statusBar.hdr-paper .aura-circular-bg { border-color: rgba(0,232,122,.9); box-shadow: 0 0 18px rgba(0,232,122,.6), inset 0 0 10px rgba(0,232,122,.16); }
+#statusBar.hdr-real  .aura-circular-bg { border-color: rgba(255,61,107,.85); box-shadow: 0 0 16px rgba(255,61,107,.5), inset 0 0 10px rgba(255,61,107,.12); }
+#statusBar.hdr-sim   .aura-circular-pulse { border-color: rgba(56,212,245,.6); }
+#statusBar.hdr-paper .aura-circular-pulse { border-color: rgba(0,232,122,.7); }
+#statusBar.hdr-real  .aura-circular-pulse { border-color: rgba(255,61,107,.65); }
 /* le texte circulaire (acronyme) suit aussi */
 #statusBar.hdr-sim   .aura-circular-svg text { fill: var(--mode-sim); }
 #statusBar.hdr-paper .aura-circular-svg text { fill: var(--mode-paper); }
