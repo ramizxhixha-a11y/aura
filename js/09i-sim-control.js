@@ -68,16 +68,10 @@ window.toggleFullPower = function () {
 
   if (S.fullPowerMode) {
     disableFullPowerMode();
-    if (btn) {
-      btn.classList.remove('active');
-      btn.querySelector('span:last-child').textContent = 'Plein régime';
-    }
+    if (btn) btn.classList.remove('active');
   } else {
-    const n = enableFullPowerMode();
-    if (btn) {
-      btn.classList.add('active');
-      btn.querySelector('span:last-child').textContent = '100% · ' + n;
-    }
+    enableFullPowerMode();
+    if (btn) btn.classList.add('active');
   }
 };
 
