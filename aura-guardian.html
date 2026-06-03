@@ -1149,7 +1149,8 @@ VIEWS.autobackup=function(){
   let h='<div class="hint">Sauvegardes automatiques de l\'état AURA dans une base IDB dédiée. Tournent en arrière-plan quand AURA est ouverte. Rotation : les plus vieux sont supprimés au-delà du nombre gardé.</div>';
   h+='<div class="sect-label">Réglages</div><div id="abCfg"></div>';
   h+='<div class="controls" style="margin-top:8px"><button class="btn green" id="abNow">💾 Backup maintenant</button></div>';
-  h+='<div class="sect-label">Backups enregistrés</div><div id="abList"><div class="hint">Chargement…</div></div>';
+  h+='<div class="sect-label">☁ Google Drive</div><div class="hint">Envoi automatique des backups sur ton Drive (hors navigateur : survit à une réinstallation). Une autorisation unique au départ.</div><div id="drvBox"></div>';
+  h+='<div class="sect-label">Backups enregistrés (local)</div><div id="abList"><div class="hint">Chargement…</div></div>';
   return h;
 };
 VIEW_INIT.autobackup=function(){
@@ -1168,6 +1169,25 @@ VIEW_INIT.autobackup=function(){
     btn.textContent= r.ok ? '✓ Backup #'+r.cycle : '✗ '+(r.reason||'échec'); 
     setTimeout(()=>switchTab('autobackup'),1200);
   };
+  // section Drive
+  const D = GC().drive;
+  const drvBox = document.getElementById('drvBox');
+  if(D && drvBox){
+    const dm = D.getMeta();
+    if(dm.enabled){
+      const last = dm.lastUpload ? new Date(dm.lastUpload).toLocaleString('fr-FR') : 'jamais';
+      drvBox.innerHTML = '<div class="item"><span class="nm">✅ Drive connecté · dernier envoi : '+last+'</span></div>'
+        +'<div class="controls" style="margin-top:6px"><button class="btn green" id="drvTest">☁ Envoyer sur Drive maintenant</button><button class="btn" id="drvOff">Déconnecter</button></div>';
+    } else {
+      drvBox.innerHTML = '<div class="controls"><button class="btn green" id="drvOn">🔗 Connecter Google Drive</button></div>';
+    }
+    const onBtn = document.getElementById('drvOn');
+    if(onBtn) onBtn.onclick = async()=>{ onBtn.textContent='⏳ autorisation…'; const r=await D.connect(); onBtn.textContent = r.ok ? '✓ connecté' : '✗ '+(r.reason||'échec'); setTimeout(()=>switchTab('autobackup'),1500); };
+    const testBtn = document.getElementById('drvTest');
+    if(testBtn) testBtn.onclick = async()=>{ testBtn.textContent='⏳ envoi…'; const r=await D.uploadNow().catch(()=>({ok:false,reason:'erreur'})); testBtn.textContent = r.ok ? '✓ '+r.name : '✗ '+(r.reason||'échec'); setTimeout(()=>switchTab('autobackup'),2000); };
+    const offBtn = document.getElementById('drvOff');
+    if(offBtn) offBtn.onclick = ()=>{ D.disconnect(); switchTab('autobackup'); };
+  }
   // liste
   A.list().then(list=>{
     const el=document.getElementById('abList'); if(!el) return;

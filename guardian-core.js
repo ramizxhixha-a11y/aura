@@ -613,6 +613,133 @@ Core.autoBackup = {
   tick: () => abRun(false)
 };
 
+/* ============================================================
+   GOOGLE DRIVE (v1) — envoie les backups sur Drive automatiquement.
+   Utilise Google Identity Services (token client). Le token d'accès
+   est gardé en mémoire ; le refresh se fait silencieusement.
+   Tout est en lecture de l'état AURA (jamais de modification).
+   ============================================================ */
+const DRIVE = {
+  CLIENT_ID: '792224208719-968u8bss0teh529c04vsr72bcbkuarfb.apps.googleusercontent.com',
+  SCOPE: 'https://www.googleapis.com/auth/drive.file',
+  META_KEY: 'guardian_drive_meta',   // {enabled, folderId, lastUpload, email}
+  GIS_SRC: 'https://accounts.google.com/gsi/client'
+};
+let _gisLoaded = false, _tokenClient = null, _accessToken = null, _tokenExp = 0;
+
+function drvGetMeta(){
+  try { const m = JSON.parse(localStorage.getItem(DRIVE.META_KEY)); if(m) return m; } catch(e){}
+  return { enabled:false, folderId:null, lastUpload:0, email:null };
+}
+function drvSetMeta(m){ try { localStorage.setItem(DRIVE.META_KEY, JSON.stringify(m)); } catch(e){} }
+
+// charge la lib Google Identity Services une fois
+function drvLoadGIS(){
+  return new Promise((resolve,reject)=>{
+    if(_gisLoaded && window.google && window.google.accounts){ return resolve(); }
+    const s = document.createElement('script');
+    s.src = DRIVE.GIS_SRC; s.async = true; s.defer = true;
+    s.onload = () => { _gisLoaded = true; resolve(); };
+    s.onerror = () => reject(new Error('GIS non chargé'));
+    document.head.appendChild(s);
+  });
+}
+// demande / renouvelle un token. interactive=true affiche la popup de consentement.
+function drvGetToken(interactive){
+  return new Promise(async(resolve,reject)=>{
+    try {
+      await drvLoadGIS();
+      if(_accessToken && Date.now() < _tokenExp - 60000){ return resolve(_accessToken); }
+      if(!_tokenClient){
+        _tokenClient = window.google.accounts.oauth2.initTokenClient({
+          client_id: DRIVE.CLIENT_ID,
+          scope: DRIVE.SCOPE,
+          callback: (resp) => {
+            if(resp && resp.access_token){
+              _accessToken = resp.access_token;
+              _tokenExp = Date.now() + (resp.expires_in||3600)*1000;
+              resolve(_accessToken);
+            } else { reject(new Error('pas de token')); }
+          }
+        });
+      } else {
+        _tokenClient.callback = (resp) => {
+          if(resp && resp.access_token){ _accessToken = resp.access_token; _tokenExp = Date.now()+(resp.expires_in||3600)*1000; resolve(_accessToken); }
+          else reject(new Error('pas de token'));
+        };
+      }
+      _tokenClient.requestAccessToken({ prompt: interactive ? 'consent' : '' });
+    } catch(e){ reject(e); }
+  });
+}
+// trouve (ou crée) le dossier "AURA Guardian Backups" sur Drive
+async function drvEnsureFolder(token){
+  const meta = drvGetMeta();
+  if(meta.folderId){ return meta.folderId; }
+  // chercher
+  const q = encodeURIComponent("name='AURA Guardian Backups' and mimeType='application/vnd.google-apps.folder' and trashed=false");
+  let r = await fetch('https://www.googleapis.com/drive/v3/files?q='+q+'&fields=files(id,name)', { headers:{ Authorization:'Bearer '+token } });
+  let j = await r.json();
+  if(j.files && j.files.length){ meta.folderId = j.files[0].id; drvSetMeta(meta); return meta.folderId; }
+  // créer
+  r = await fetch('https://www.googleapis.com/drive/v3/files', {
+    method:'POST', headers:{ Authorization:'Bearer '+token, 'Content-Type':'application/json' },
+    body: JSON.stringify({ name:'AURA Guardian Backups', mimeType:'application/vnd.google-apps.folder' })
+  });
+  j = await r.json();
+  meta.folderId = j.id; drvSetMeta(meta); return meta.folderId;
+}
+// upload un snapshot sur Drive
+async function drvUpload(snap, interactive){
+  if(!snap || typeof snap.cycle !== 'number') return { ok:false, reason:'état indisponible' };
+  let token;
+  try { token = await drvGetToken(!!interactive); } catch(e){ return { ok:false, reason:'non autorisé ('+e.message+')' }; }
+  let folderId;
+  try { folderId = await drvEnsureFolder(token); } catch(e){ return { ok:false, reason:'dossier Drive: '+e.message }; }
+  const name = 'aura-backup-' + snap.cycle + '-' + new Date().toISOString().slice(0,16).replace(/[:T]/g,'') + '.json';
+  const meta = { name, parents:[folderId] };
+  const boundary = 'aura'+Date.now();
+  const body =
+    '--'+boundary+'\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n'+JSON.stringify(meta)+
+    '\r\n--'+boundary+'\r\nContent-Type: application/json\r\n\r\n'+JSON.stringify(snap)+
+    '\r\n--'+boundary+'--';
+  try {
+    const r = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart', {
+      method:'POST', headers:{ Authorization:'Bearer '+token, 'Content-Type':'multipart/related; boundary='+boundary }, body
+    });
+    if(!r.ok){ return { ok:false, reason:'upload HTTP '+r.status }; }
+    const j = await r.json();
+    const dm = drvGetMeta(); dm.lastUpload = Date.now(); drvSetMeta(dm);
+    return { ok:true, fileId:j.id, name };
+  } catch(e){ return { ok:false, reason:e.message }; }
+}
+// connexion interactive (1er clic) : demande l'autorisation + test
+async function drvConnect(){
+  try {
+    const token = await drvGetToken(true);
+    await drvEnsureFolder(token);
+    const m = drvGetMeta(); m.enabled = true; drvSetMeta(m);
+    return { ok:true };
+  } catch(e){ return { ok:false, reason:e.message }; }
+}
+function drvDisconnect(){ const m = drvGetMeta(); m.enabled = false; drvSetMeta(m); _accessToken=null; _tokenExp=0; }
+
+Core.drive = {
+  connect: drvConnect,
+  disconnect: drvDisconnect,
+  upload: drvUpload,
+  getMeta: drvGetMeta,
+  // envoi de test interactif (bouton "envoyer maintenant")
+  uploadNow: async () => { const snap = abGrabState(); return await drvUpload(snap, true); },
+  // backup auto vers Drive : appelé après abRun, silencieux
+  autoPush: async () => {
+    const m = drvGetMeta();
+    if(!m.enabled) return { ok:false, reason:'Drive désactivé' };
+    const snap = abGrabState();
+    return await drvUpload(snap, false);
+  }
+};
+
 Core.version = GUARDIAN_VERSION;
 Core.getLiveS = getLiveS;
 Core.detectMode = detectMode;

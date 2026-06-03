@@ -130,7 +130,13 @@ ready(function(){
      backup est dû (selon l'intervalle réglé, 6h par défaut). abRun ne sauvegarde que
      si l'intervalle est écoulé → sûr de tourner souvent. */
   if(window.GuardianCore.autoBackup){
-    const tick = () => { try { window.GuardianCore.autoBackup.tick().then(r=>{ if(r&&r.ok) console.log('[Guardian] backup auto · cycle #'+r.cycle); }).catch(()=>{}); } catch(e){} };
+    const tick = () => { try { window.GuardianCore.autoBackup.tick().then(r=>{
+      if(r&&r.ok){
+        console.log('[Guardian] backup auto · cycle #'+r.cycle);
+        // si Drive activé, pousser aussi sur Drive (silencieux)
+        if(window.GuardianCore.drive){ window.GuardianCore.drive.autoPush().then(d=>{ if(d&&d.ok) console.log('[Guardian] backup Drive · '+d.name); }).catch(()=>{}); }
+      }
+    }).catch(()=>{}); } catch(e){} };
     setTimeout(tick, 8000);
     setInterval(tick, 30*60*1000);
   }
