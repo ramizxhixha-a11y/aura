@@ -85,11 +85,23 @@ window.GUARDIAN_CONFIG = {
     {
       id: 'portfolio',
       label: 'Portfolio affiché',
-      stateRead: s => s && typeof s.portfolio==='number' ? Math.round(s.portfolio) : null,
-      uiRead: () => { const e = document.getElementById('heroVal'); if(!e) return null; const n = parseFloat(String(e.textContent).replace(/[^0-9.-]/g,'')); return isNaN(n)?null:Math.round(n); },
+      stateRead: s => {
+        if(!s) return null;
+        // #heroVal affiche S.portfolioTotal (EUR converti), PAS S.portfolio (USD interne)
+        const v = (typeof s.portfolioTotal==='number') ? s.portfolioTotal : null;
+        return v==null ? null : Math.round(v);
+      },
+      uiRead: () => {
+        const e = document.getElementById('heroVal'); if(!e) return null;
+        // prendre le PREMIER nombre décimal de l'affichage (évite de coller les chiffres)
+        const m = String(e.textContent).replace(/\s/g,'').match(/-?\d+(?:[.,]\d+)?/);
+        if(!m) return null;
+        const n = parseFloat(m[0].replace(',','.'));
+        return isNaN(n)?null:Math.round(n);
+      },
       file: '07-v90-mode-bunker-sos.js',
       tolerance: 2,
-      fix: "Le portfolio affiché (#heroVal) doit suivre S.portfolio. Vérifier renderHomePrices() / renderAll()."
+      fix: "Le portfolio affiché (#heroVal = S.portfolioTotal en EUR) doit suivre l'état. Vérifier renderHomePrices() / computePortfolioTotal()."
     }
   ],
 
