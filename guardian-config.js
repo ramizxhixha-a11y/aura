@@ -138,5 +138,8 @@ window.GUARDIAN_CONFIG = {
   ],
 
   /* --- Variables globales connues (pour la détection de "non définie") --- */
-  knownGlobals: ['S','PAIRS','RT','window','document','localStorage','indexedDB','Math','JSON','Date','console']
+  knownGlobals: ['S','PAIRS','RT','window','document','localStorage','indexedDB','Math','JSON','Date','console'],
+
+  /* --- Constantes système critiques à surveiller (détection type bug DB_NAME) --- */
+  watchedConstants: ['DB_NAME','SAVE_KEY','STORE','DB_VERSION','STORE_STATE','STORE_TRADES','STORE_FEES']
 };

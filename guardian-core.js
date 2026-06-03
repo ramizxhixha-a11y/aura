@@ -266,13 +266,14 @@ async function probeFunctions(declared){
     try { const r=await fetch(u.split('?')[0],{cache:'no-store'}); if(r.ok){ const t=await r.text(); perFile[u]=t; allCode+='\n'+t; } } catch(e){}
   }
   if(!allCode){ return out; }
-  function strip(src){ return src.replace(/\/\*[\s\S]*?\*\//g,' ').replace(/\/\/[^\n]*/g,' ').replace(/`(?:\\[\s\S]|[^`\\])*`/g,' ').replace(/'(?:\\.|[^'\\])*'/g,' ').replace(/"(?:\\.|[^"\\])*"/g,' '); }
-  const cleanCode = strip(allCode);
+  // Détection robuste : on cherche sur le code BRUT (le strip de chaînes sur du gros JS
+  // est trop fragile et avalait des portions de code). Une vraie définition "function X("
+  // dans un commentaire est rarissime et sans conséquence.
   for(const fn of (CFG.criticalFunctions||[])){
-    const defRe = new RegExp('(function\\s+'+fn+'\\b|\\b'+fn+'\\s*[=:]\\s*function|\\b'+fn+'\\s*[=:]\\s*\\()');
-    const defined = defRe.test(cleanCode);
+    const defRe = new RegExp('(function\\s+'+fn+'\\b|\\b'+fn+'\\s*=\\s*function|\\b'+fn+'\\s*=\\s*async\\s+function|\\b'+fn+'\\s*:\\s*function|window\\.'+fn+'\\s*=)');
+    const defined = defRe.test(allCode);
     const callRe = new RegExp('\\b'+fn+'\\s*\\(','g');
-    const calls = (cleanCode.match(callRe)||[]).length;
+    const calls = (allCode.match(callRe)||[]).length;
     if(defined && calls>1){ /* ok */ }
     else if(!defined && calls>0){
       out.push(R('crit','Fonctions','⚠ '+fn+'() appelée mais jamais définie',
@@ -293,37 +294,30 @@ async function probeFunctions(declared){
 function probeUndefinedVars(perFile){
   const out=[];
   if(!perFile){ return out; }
-  const known = new Set(CFG.knownGlobals || []);
-  // retire commentaires (// et /* */) et chaînes pour ne garder que le code exécutable
-  function stripNonCode(src){
-    let s = src;
-    s = s.replace(/\/\*[\s\S]*?\*\//g, ' ');   // /* ... */
-    s = s.replace(/\/\/[^\n]*/g, ' ');          // // ...
-    s = s.replace(/`(?:\\[\s\S]|[^`\\])*`/g, ' ');// templates
-    s = s.replace(/'(?:\\.|[^'\\])*'/g, ' ');    // '...'
-    s = s.replace(/"(?:\\.|[^"\\])*"/g, ' ');    // "..."
-    return s;
-  }
-  // concat de TOUT le code (pour savoir si une const est définie dans un AUTRE fichier)
-  let allCode=''; const codeByFile={};
-  for(const f of Object.keys(perFile)){ const c=stripNonCode(perFile[f]); codeByFile[f]=c; allCode+='\n'+c; }
-  for(const file of Object.keys(codeByFile)){
-    const code = codeByFile[file];
-    const used = new Set((code.match(/\b[A-Z][A-Z0-9_]{2,}\b/g)||[]));
-    for(const v of used){
-      if(known.has(v)) continue;
-      // doit être utilisé COMME variable : suivi de . ( [ ou opérateur/espace+usage, pas juste un mot isolé
-      const usedAsVar = new RegExp('\\b'+v+'\\s*(\\.|\\(|\\[|\\)|;|,|\\+|-|\\*|/|<|>|=|\\|\\||&&|\\?)').test(code);
-      if(!usedAsVar) continue;
-      // déclaré quelque part dans l'ENSEMBLE du code ? (const/let/var/function/param/objet.X / X:)
-      const declAnywhere = new RegExp('(const|let|var|function)\\s+'+v+'\\b|\\b'+v+'\\s*=|\\.'+v+'\\b|\\b'+v+'\\s*:').test(allCode);
-      if(declAnywhere) continue;
-      out.push(R('warn','Variables','Possible variable non définie : '+v,
-        'Utilisée comme variable dans '+file.split('/').pop()+' mais déclarée nulle part dans le code chargé → ReferenceError possible (comme le bug DB_NAME).',
-        'Dans '+file.split('/').pop()+', définir '+v+' ou la préfixer (ex. RT.'+v+').'));
+  // Approche CIBLÉE et fiable : on ne scanne pas tous les mots majuscules (trop de bruit
+  // avec les chaînes), on vérifie une liste précise de constantes système critiques —
+  // exactement le type de bug qu'on veut attraper (ex. DB_NAME is not defined).
+  const WATCH = (CFG.watchedConstants || ['DB_NAME','SAVE_KEY','STORE','DB_VERSION','STORE_STATE','STORE_TRADES','STORE_FEES']);
+  let allCode=''; for(const f of Object.keys(perFile)){ allCode+='\n'+perFile[f]; }
+  for(const f of Object.keys(perFile)){
+    const code = perFile[f];
+    for(const v of WATCH){
+      // utilisée dans CE fichier comme variable (pas en chaîne/clé) : open(DB_NAME, X) etc.
+      const usedRe = new RegExp('[^\\w\'"\\.]'+v+'\\s*(\\)|,|;|\\.|\\]|\\s*[=<>+])');
+      if(!usedRe.test(code)) continue;
+      // définie/importée dans CE fichier ? (const/let/var/RT.X/window.X/= X)
+      const declHere = new RegExp('(const|let|var)\\s+'+v+'\\b|(RT|window)\\.'+v+'\\b|'+v+'\\s*=\\s*[\'"]').test(code);
+      if(declHere) continue;
+      // définie ailleurs ET exposée globalement (window./RT.) ?
+      const globalElsewhere = new RegExp('(window|RT|globalThis)\\.'+v+'\\s*=').test(allCode);
+      if(globalElsewhere) continue;
+      // sinon : utilisée mais pas définie localement ni exposée → vrai risque type DB_NAME
+      out.push(R('warn','Variables','Constante possiblement non définie : '+v,
+        'Utilisée dans '+f.split('/').pop()+' mais ni déclarée localement, ni exposée globalement (window./RT.). Risque de ReferenceError (comme le bug DB_NAME du 01/06).',
+        'Dans '+f.split('/').pop()+' : déclarer '+v+' localement, ou utiliser RT.'+v+' si elle vient de 09a-runtime-state.'));
     }
   }
-  return out.slice(0,15);
+  return out;
 }
 
 /* SONDE 11 — Doublons de fonctions (définie dans 2 fichiers) */
@@ -331,8 +325,7 @@ function probeDuplicates(perFile){
   const out=[];
   if(!perFile) return out;
   function strip(src){
-    return src.replace(/\/\*[\s\S]*?\*\//g,' ').replace(/\/\/[^\n]*/g,' ')
-      .replace(/`(?:\\[\s\S]|[^`\\])*`/g,' ').replace(/'(?:\\.|[^'\\])*'/g,' ').replace(/"(?:\\.|[^"\\])*"/g,' ');
+    return src.replace(/\/\*[\s\S]*?\*\//g,' ').replace(/\/\/[^\n]*/g,' ');
   }
   for(const fn of (CFG.criticalFunctions||[])){
     const files=[];
