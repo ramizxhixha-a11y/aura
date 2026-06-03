@@ -4189,7 +4189,7 @@ function drawSparkline() {
   const lineColor = isUp ? '#00e87a' : '#ff3d6b';
 
   const grad = ctx.createLinearGradient(0,0,0,H);
-  grad.addColorStop(0, isUp ? 'rgba(0,232,122,.18)' : 'rgba(255,61,107,.18)');
+  grad.addColorStop(0, isUp ? 'rgba(0,232,122,.35)' : 'rgba(255,61,107,.32)');
   grad.addColorStop(1, 'rgba(0,0,0,0)');
 
   // Smooth bezier fill
@@ -4208,7 +4208,7 @@ function drawSparkline() {
     const cx=(pts[i-1].x+pts[i].x)/2;
     ctx.bezierCurveTo(cx,pts[i-1].y,cx,pts[i].y,pts[i].x,pts[i].y);
   }
-  ctx.strokeStyle=lineColor; ctx.lineWidth=1.5; ctx.stroke();
+  ctx.strokeStyle=lineColor; ctx.lineWidth=2.5; ctx.stroke();
 
   // Last point dot
   const last = pts[pts.length-1];
@@ -5769,14 +5769,22 @@ function confirmCloseAll() {
 }
 
 function _updateCloseAllBadge() {
+  const btn   = document.getElementById('closeAllBtn');
+  const glyph = document.getElementById('closeAllGlyph');
   const badge = document.getElementById('closeAllBadge');
   if(!badge) return;
   const n = (S.openPositions || []).length;
   if(n > 0) {
+    // positions ouvertes : chiffre blanc centré + cercle rouge (classe active)
     badge.textContent = n;
     badge.style.display = 'flex';
+    if(glyph) glyph.style.display = 'none';
+    if(btn) { btn.classList.remove('empty'); btn.classList.add('active'); }
   } else {
+    // aucune position : croix grise neutre (classe empty)
     badge.style.display = 'none';
+    if(glyph) glyph.style.display = 'flex';
+    if(btn) { btn.classList.remove('active'); btn.classList.add('empty'); }
   }
 }
 
