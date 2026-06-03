@@ -2485,6 +2485,11 @@ function emitLossParticles(count) {
 function showMilestone(icon, text, isLoss, duration) {
   isLoss = !!isLoss;
   duration = duration || 3200;
+  // FIX toast collé : si un milestone est déjà affiché, on ignore les nouveaux pendant son
+  // affichage (sinon des milestones qui s'enchaînent réarment le timer en boucle → banner figé).
+  const now = Date.now();
+  if (window._msShownUntil && now < window._msShownUntil) return;
+  window._msShownUntil = now + duration;
   let banner = document.querySelector('.milestone-banner');
   if(!banner) {
     banner = document.createElement('div');
@@ -2497,6 +2502,7 @@ function showMilestone(icon, text, isLoss, duration) {
   clearTimeout(window._msTimeout);
   window._msTimeout = setTimeout(() => {
     banner.classList.remove('show');
+    window._msShownUntil = 0;
   }, duration);
   try { navigator.vibrate && navigator.vibrate(isLoss ? [20,40,20] : [15,30,15,30,15]); } catch(e) {}
   if(!isLoss) {
@@ -4314,6 +4320,9 @@ function renderHomePrices() {
   const total = S.cashAccount + S.tradingAccount;
   const _prevTotal = S.portfolio;
   S.portfolio = total;
+  // FIX badge positions : resync à chaque rendu, peu importe qui modifie openPositions
+  // (bot, fermeture manuelle, reset, chargement) → le badge ⊗ reste toujours synchrone.
+  if (typeof _updateCloseAllBadge === 'function') _updateCloseAllBadge();
   // v7.1 P1: affichage = (caisse + réserve fiscale) × USD/EUR. S.portfolio reste interne = cash+trading.
   computePortfolioTotal();
   setEl('heroVal', fmtEUR(S.portfolioTotal));
