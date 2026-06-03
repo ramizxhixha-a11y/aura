@@ -691,26 +691,31 @@ async function drvEnsureFolder(token){
 }
 // upload un snapshot sur Drive
 async function drvUpload(snap, interactive){
-  if(!snap || typeof snap.cycle !== 'number') return { ok:false, reason:'état indisponible' };
+  if(!snap) return { ok:false, reason:'état indisponible' };
+  const cyc = (typeof snap.cycle === 'number') ? snap.cycle : (snap.state && snap.state.cycle) || 0;
   let token;
   try { token = await drvGetToken(!!interactive); } catch(e){ return { ok:false, reason:'non autorisé ('+e.message+')' }; }
   let folderId;
-  try { folderId = await drvEnsureFolder(token); } catch(e){ return { ok:false, reason:'dossier Drive: '+e.message }; }
-  const name = 'aura-backup-' + snap.cycle + '-' + new Date().toISOString().slice(0,16).replace(/[:T]/g,'') + '.json';
-  const meta = { name, parents:[folderId] };
+  try { folderId = await drvEnsureFolder(token); } catch(e){ return { ok:false, reason:'dossier: '+e.message }; }
+  const name = 'aura-backup-' + cyc + '-' + new Date().toISOString().slice(0,16).replace(/[:T]/g,'') + '.json';
+  const meta = { name, parents:[folderId], mimeType:'application/json' };
   const boundary = 'aura'+Date.now();
-  const body =
+  const parts =
     '--'+boundary+'\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n'+JSON.stringify(meta)+
     '\r\n--'+boundary+'\r\nContent-Type: application/json\r\n\r\n'+JSON.stringify(snap)+
     '\r\n--'+boundary+'--';
+  const blob = new Blob([parts], { type:'multipart/related; boundary='+boundary });
   try {
-    const r = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart', {
-      method:'POST', headers:{ Authorization:'Bearer '+token, 'Content-Type':'multipart/related; boundary='+boundary }, body
+    const r = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name', {
+      method:'POST', headers:{ Authorization:'Bearer '+token }, body: blob
     });
-    if(!r.ok){ return { ok:false, reason:'upload HTTP '+r.status }; }
+    if(!r.ok){
+      let txt=''; try{ txt = await r.text(); }catch(e){}
+      return { ok:false, reason:'HTTP '+r.status+' '+txt.slice(0,80) };
+    }
     const j = await r.json();
     const dm = drvGetMeta(); dm.lastUpload = Date.now(); drvSetMeta(dm);
-    return { ok:true, fileId:j.id, name };
+    return { ok:true, fileId:j.id, name:j.name||name };
   } catch(e){ return { ok:false, reason:e.message }; }
 }
 // connexion interactive (1er clic) : demande l'autorisation + test
@@ -730,7 +735,12 @@ Core.drive = {
   upload: drvUpload,
   getMeta: drvGetMeta,
   // envoi de test interactif (bouton "envoyer maintenant")
-  uploadNow: async () => { const snap = abGrabState(); return await drvUpload(snap, true); },
+  uploadNow: async () => {
+    const snap = abGrabState();
+    let r = await drvUpload(snap, false);
+    if(!r.ok && /autoris/.test(r.reason||'')) r = await drvUpload(snap, true);
+    return r;
+  },
   // backup auto vers Drive : appelé après abRun, silencieux
   autoPush: async () => {
     const m = drvGetMeta();
