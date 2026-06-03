@@ -1,0 +1,1194 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AURA Guardian</title>
+<style>
+  :root{
+    --bg:#050709;--card:#0a0f15;--card-hl:#0f161e;
+    --border:rgba(56,212,245,.2);--border-h:rgba(56,212,245,.5);
+    --ice:#38d4f5;--gold:#ffb830;--up:#00e87a;--down:#ff3d6b;
+    --purple:#c084fc;--t1:#e8ecf1;--t2:#8a96a8;--t3:#4a5668;
+    --mono:'Menlo','Monaco','SF Mono',monospace;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  body{margin:0;padding:12px;font-family:-apple-system,system-ui,sans-serif;background:var(--bg);color:var(--t1);font-size:14px;line-height:1.5}
+  header{background:linear-gradient(135deg,#0a0f15,#0f161e);border:1px solid var(--border);border-radius:12px;padding:14px;margin-bottom:12px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px}
+  h1{color:var(--ice);font-size:18px;margin:0;display:flex;align-items:center;gap:8px}
+  .header-stats{display:flex;gap:12px;font-family:var(--mono);font-size:11px}
+  .header-stats div{color:var(--t2)}.header-stats b{color:var(--ice)}
+  .pulse{display:inline-block;width:10px;height:10px;border-radius:50%;background:var(--up);animation:pulse 1.5s infinite}
+  @keyframes pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.4;transform:scale(1.2)}}
+  .spinner{display:inline-block;width:11px;height:11px;border:2px solid var(--t3);border-top-color:var(--ice);border-radius:50%;animation:spin .7s linear infinite;vertical-align:middle}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  .alert-bar{background:rgba(255,61,107,.1);border:1px solid var(--down);border-radius:8px;padding:10px 12px;margin-bottom:12px;display:none;font-size:12px}
+  .alert-bar.show{display:block}.alert-bar .count{color:var(--down);font-weight:700}
+  .panels{display:grid;grid-template-columns:1fr;gap:10px}
+  @media(min-width:900px){.panels{grid-template-columns:1fr 1fr}}
+  .panel{background:var(--card);border:1px solid var(--border);border-radius:10px;overflow:hidden}
+  .panel.alert{border-color:var(--down)}.panel.warn{border-color:var(--gold)}
+  .panel.full{grid-column:1/-1}
+  .panel-head{padding:10px 12px;background:var(--card-hl);border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
+  .panel-title{color:var(--gold);font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px}
+  .panel.alert .panel-title{color:var(--down)}.panel.warn .panel-title{color:var(--gold)}
+  .panel-body{padding:10px 12px}
+  .row{display:flex;justify-content:space-between;align-items:center;padding:3px 0;font-family:var(--mono);font-size:11px;border-bottom:1px dashed rgba(74,86,104,.15);gap:8px}
+  .row:last-child{border-bottom:none}.label{color:var(--t2)}.val{color:var(--t1);font-weight:700;text-align:right;word-break:break-all}
+  .val.ok{color:var(--up)}.val.warn{color:var(--gold)}.val.crit{color:var(--down)}
+  .val.empty,.val.muted{color:var(--t3);font-style:italic}.val.purple{color:var(--purple)}.val.info{color:var(--ice)}
+  .item{padding:6px 8px;border-radius:6px;font-size:11px;margin:3px 0;display:flex;align-items:center;gap:8px;background:rgba(74,86,104,.08)}
+  .item.ok{background:rgba(0,232,122,.06)}.item.warn{background:rgba(255,184,48,.08)}
+  .item.crit{background:rgba(255,61,107,.1);border:1px solid var(--down)}
+  .item .ic{flex:0 0 auto;font-size:13px}.item .nm{flex:1 1 auto;font-family:var(--mono);word-break:break-all}
+  .item .tg{flex:0 0 auto;font-size:9px;color:var(--t3);font-family:var(--mono)}
+  .item.ok .tg{color:var(--up)}.item.warn .tg{color:var(--gold)}.item.crit .tg{color:var(--down)}
+  .sect-label{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--t2);margin:12px 0 4px}
+  .sect-label:first-child{margin-top:0}
+  .outbox{background:#000;border:1px solid var(--border);border-radius:8px;padding:10px;font-family:var(--mono);font-size:10px;max-height:50vh;overflow-y:auto;white-space:pre-wrap;word-break:break-all;margin-top:8px}
+  .log-entry{padding:2px 0}.log-time{color:var(--t3)}.log-ok{color:var(--up)}.log-warn{color:var(--gold)}
+  .log-crit{color:var(--down)}.log-event{color:var(--ice)}.log-info{color:var(--t1)}.log-muted{color:var(--t3)}
+  .log-tag{display:inline-block;padding:0 4px;border-radius:3px;font-size:9px;font-weight:700;margin-right:4px;background:rgba(74,86,104,.3);color:var(--t2)}
+  .hit{background:rgba(255,184,48,.25);color:var(--gold);font-weight:700;border-radius:2px}
+  .controls{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:8px}
+  .controls.c3{grid-template-columns:1fr 1fr 1fr}
+  .btn{background:rgba(56,212,245,.1);border:1px solid var(--ice);color:var(--ice);padding:9px 8px;border-radius:7px;font-size:11px;font-weight:700;cursor:pointer;transition:all .15s;font-family:inherit}
+  .btn:hover{background:rgba(56,212,245,.2)}.btn:active{transform:scale(.97)}
+  .btn.danger{background:rgba(255,61,107,.1);border-color:var(--down);color:var(--down)}
+  .btn.danger:hover{background:rgba(255,61,107,.2)}
+  .btn.gold{background:rgba(255,184,48,.1);border-color:var(--gold);color:var(--gold)}
+  .btn.green{background:rgba(0,232,122,.1);border-color:var(--up);color:var(--up)}
+  .btn.wide{grid-column:1/-1}
+  .btn:disabled{opacity:.4;cursor:not-allowed}
+  input.gi,textarea.gi{width:100%;padding:9px 10px;background:#000;border:1px solid var(--border);border-radius:7px;color:var(--t1);font-family:var(--mono);font-size:12px;margin-top:6px}
+  input.gi:focus,textarea.gi:focus{outline:none;border-color:var(--ice)}
+  .toggle-row{display:flex;gap:6px;margin-top:6px;flex-wrap:wrap}
+  .toggle{flex:1;min-width:70px;background:var(--card-hl);border:1px solid var(--border);border-radius:7px;padding:8px;color:var(--t2);font-family:var(--mono);font-size:11px;font-weight:700;cursor:pointer;text-align:center;user-select:none}
+  .toggle.on{background:rgba(0,232,122,.12);border-color:rgba(0,232,122,.5);color:var(--up)}
+  /* Home : grandes tuiles */
+  .home-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;margin-bottom:12px}
+  @media(min-width:700px){.home-grid{grid-template-columns:repeat(auto-fill,minmax(180px,1fr))}}
+  .tile{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:14px;cursor:pointer;transition:all .15s;position:relative;display:flex;flex-direction:column;gap:6px;min-height:96px}
+  .tile:hover{border-color:var(--ice);background:rgba(56,212,245,.05)}
+  .tile:active{transform:scale(.98)}
+  .tile .tile-ic{font-size:24px;line-height:1}
+  .tile .tile-nm{font-size:13px;font-weight:700;color:var(--t1)}
+  .tile .tile-desc{font-size:10px;color:var(--t3);line-height:1.4}
+  .tile .tile-badge{position:absolute;top:8px;right:8px;font-size:9px;font-weight:700;min-width:16px;line-height:16px;text-align:center;border-radius:8px;padding:0 4px}
+  .tile .tile-badge.crit{background:var(--down);color:#fff}
+  .tile .tile-badge.warn{background:var(--gold);color:#000}
+  /* page ouverte */
+  .page-head{display:flex;align-items:center;gap:10px;margin-bottom:12px}
+  .back-btn{background:rgba(56,212,245,.1);border:1px solid var(--ice);color:var(--ice);padding:8px 14px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap}
+  .back-btn:active{transform:scale(.97)}
+  .page-title{font-size:15px;font-weight:700;color:var(--ice)}
+  /* barre d'actions bas de page */
+  .action-bar{display:flex;flex-wrap:wrap;gap:6px;margin-top:14px;padding-top:12px;border-top:1px solid var(--border)}
+  .action-bar .ab-label{width:100%;font-size:9px;text-transform:uppercase;letter-spacing:.08em;color:var(--t3);margin-bottom:2px}
+  .action-bar .btn{flex:1;min-width:90px}
+  .hidden{display:none !important}
+  .tab{padding:8px 6px;background:var(--card);border:1px solid var(--border);border-radius:8px;color:var(--t2);font-size:10.5px;font-weight:700;cursor:pointer;transition:all .15s;text-align:center;display:flex;flex-direction:column;align-items:center;gap:3px;line-height:1.2;min-height:46px;justify-content:center}
+  .tab.active{color:var(--ice);border-color:var(--ice);background:rgba(56,212,245,.08)}
+
+  .tab.has-alert .count{background:var(--down);color:#fff}.tab.has-warn .count{background:var(--gold);color:#000}
+  .summary-bar{display:flex;gap:8px;margin:8px 0;flex-wrap:wrap}
+  .chip{padding:4px 10px;border-radius:20px;font-size:11px;font-weight:700;font-family:var(--mono)}
+  .chip.ok{background:rgba(0,232,122,.12);color:var(--up)}.chip.warn{background:rgba(255,184,48,.12);color:var(--gold)}
+  .chip.crit{background:rgba(255,61,107,.12);color:var(--down)}
+  .kwchip{display:inline-block;background:rgba(56,212,245,.08);border:1px solid rgba(56,212,245,.25);color:var(--ice);padding:4px 9px;border-radius:6px;font-family:var(--mono);font-size:10px;cursor:pointer;margin:3px 3px 0 0}
+  .kwchip:active{transform:scale(.96)}
+  .hint{font-size:10px;color:var(--t3);margin:4px 0 8px;line-height:1.4}
+  details{margin-top:6px;background:rgba(74,86,104,.05);border-radius:6px;padding:6px 8px}
+  details summary{cursor:pointer;color:var(--t2);font-size:10px;font-weight:700}
+  details[open] summary{color:var(--ice)}
+  details pre{margin:6px 0 0;font-size:9px;color:var(--t2);white-space:pre-wrap;word-break:break-all;max-height:240px;overflow-y:auto}
+  .footer{margin-top:16px;padding-top:10px;border-top:1px solid var(--border);color:var(--t3);font-size:10px;text-align:center}
+  .bar{height:3px;background:rgba(255,255,255,.05);border-radius:2px;margin-top:8px;overflow:hidden}
+  .bar-inner{height:100%;background:var(--ice);width:0;transition:width .2s}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>&#128737; AURA Guardian <span style="font-size:10px;color:var(--t3);font-weight:400">unifi&eacute;</span></h1>
+  <div class="header-stats">
+    <div>Mode: <b id="hs-mode">&mdash;</b></div>
+    <div>Sant&eacute;: <b id="hs-health">&mdash;</b></div>
+    <div><span class="pulse" id="hs-pulse"></span></div>
+  </div>
+</header>
+
+<div class="alert-bar" id="alertBar">
+  <span class="count" id="alertCount">0</span> probl&egrave;me(s) d&eacute;tect&eacute;(s) &mdash; voir les onglets marqu&eacute;s
+</div>
+
+<div id="home">
+  <div class="home-grid" id="homeGrid"></div>
+</div>
+<div id="page" class="hidden"></div>
+
+<div class="footer">
+  AURA Guardian &middot; lecture seule par d&eacute;faut &middot; les actions destructrices demandent confirmation
+</div>
+
+<script src="guardian-config.js"></script>
+<script src="guardian-core.js"></script>
+<script>
+'use strict';
+/* ============================================================
+   AURA GUARDIAN — outil unifié complet
+   Intègre la logique réelle et entière de :
+   multi-search, code-search, inspect-idb, idb-debug-viewer,
+   test-idb-v3/write, clean-storage, restore-tool, recovery,
+   force-restore, clear-sw, unregister-sw.
+   + 3 modules : Inventaire & cohérence, Bugs connus, Déploiement.
+   ============================================================ */
+
+/* ---- Constantes système (vérifiées dans le repo) ---- */
+const SAVE_KEY    = 'nexus_state_v2';
+const DB_NAME     = 'NEXUS_DB';
+const DB_VERSION  = 3;
+const STORE       = 'state';
+const STORE_TRADES= 'trades';
+const STORE_FEES  = 'fees';
+const APP_URL     = 'AURA8_v118.html';
+const IDB_DEBUG_KEY = 'aura_idb_debug';
+
+/* ---- Listes de fichiers (depuis le HTML, exhaustives) ---- */
+const FILES = {
+  html: ['AURA8_v118.html'],
+  css: [
+    '01-base.css','02-layout.css','03-utils.css','04-install-banner.css',
+    '05-action-cards-base.css','06-page-dashboard.css','07-page-agents.css',
+    '08-page-market.css','09-page-dao.css','10-page-chain.css',
+    '11-page-fiscal.css','12-page-positions.css','13-v8-mood-brain-ticker.css',
+    '14-v6-controls-pending.css','15-v59-settings-modal.css','16-v56-bot-fleet.css',
+    '17-v55-swarm-21agents.css','18-v54-dialogue-mirror.css','19-v4x-action-cards-rich.css',
+    '20-v712-stability.css','21a-v712-controls-charts.css','21b-v712-luminous-cards.css',
+    '22-features-v16-v69.css','23-circular-logo.css','24-header-l1.css',
+    '25-mode-trading.css','25-settings-redesign.css'
+  ],
+  js: [
+    '00-backup-state.js','00b-persistance-override.js','01-chrono-network.js','02-state-init.js',
+    '03-per-pair-position-buttons-controls-buid.js','04-v8-0-livraison-35-mode-max-permissif-v.js',
+    '05-v37-19-indicateur-de-fatigue-bot.js','06-v63-patterns-chartistes.js','07-v90-mode-bunker-sos.js',
+    '08-learning-history-render.js','09a-runtime-state.js','09b1-build-snapshot.js','09b2-save-load.js',
+    '09b3-import-export.js','09c-auto-open.js','09d1-paper-real-core.js','09d2-paper-real-stats.js',
+    '09e-guards.js','09f1-bricks-action.js','09f2-bricks-man.js','09f3-bricks-pair.js','09f4-bricks-utils.js',
+    '09g-modals.js','09h-exports.js','09i-sim-control.js','09j-helpers.js','09k-init.js',
+    '09l-window-bridge.js','10-fin-bloc-restauration-v93.js'
+  ]
+};
+
+/* ---- Clés candidates pour la récupération (recovery.html) ---- */
+const LS_CANDIDATE_KEYS = [
+  'nexus_state_v2','nexus_state','nexusSnap_A','nexusSnap_B','nexusSnap_C',
+  'nexusSnap_a','nexusSnap_b','nexusSnap_latest','nexusSnap_current',
+  'nexusInternal_1','nexusInternal_2',
+  'aura_autobackup_daily_0','aura_autobackup_daily_1','aura_autobackup_daily_2',
+  'aura_last_auto_backup_date','aura_backup_manual'
+];
+const OBSOLETE_KEYS = ['nexusInternal_1','nexusSnap_A'];
+
+/* ---- Fonctions critiques (référence -> fichier) ---- */
+const REF_FUNCTIONS = [
+  {fn:'loadState',file:'09b2-save-load.js'},{fn:'saveState',file:'09b2-save-load.js'},
+  {fn:'buildSnapshot',file:'09b1-build-snapshot.js'},{fn:'renderAll',file:'02-state-init.js'},
+  {fn:'renderHome',file:'07-v90-mode-bunker-sos.js'},{fn:'renderHomePrices',file:'07-v90-mode-bunker-sos.js'},
+  {fn:'simTick',file:'08-learning-history-render.js'},{fn:'openPosition',file:'02-state-init.js'},
+  {fn:'closePosition',file:'02-state-init.js'},{fn:'triggerEvolution',file:'07-v90-mode-bunker-sos.js'},
+  {fn:'_checkAndRotatePeriods',file:'10-fin-bloc-restauration-v93.js'},{fn:'activateBunker',file:'07-v90-mode-bunker-sos.js'},
+  {fn:'enableFullPowerMode',file:'04-v8-0-livraison-35-mode-max-permissif-v.js'},{fn:'confirmSwitchToReal',file:'02-state-init.js'}
+];
+const REF_DOM = ['heroVal','cashVal','cashPct','tradVal','tradPct','tradHealthSub','levReserveVal','fiscalResVal','ownFundsVal','cyclePhase'];
+const REF_CAPABILITIES = [
+  {key:'bunker',label:'Mode Bunker SOS',path:s=>s&&s._bunker&&s._bunker.active},
+  {key:'fullpower',label:'Plein R\u00e9gime',path:s=>s&&s.fullPowerMode===true},
+  {key:'realmode',label:'Mode R\u00e9el actif',path:s=>s&&s.tradingMode==='real'},
+  {key:'abtesting',label:'A/B Testing',path:s=>s&&s.abTesting&&((s.abTesting.armA&&s.abTesting.armA.trades>0)||(s.abTesting.armB&&s.abTesting.armB.trades>0))}
+];
+
+/* ---- Catalogue des bugs connus + détection live ---- */
+const REF_BUGS = [
+  {id:'BUG-001',nom:'R\u00e9gression cycle au reload',statut:'r\u00e9solu',fichier:'00b-persistance-override.js',prio:'\u2014',
+   desc:'L\'app perdait des cycles apr\u00e8s fermeture/r\u00e9ouverture. R\u00e9solu par anti-r\u00e9gression au load.',
+   detect:c=>{if(c.lsCycle!=null&&c.idbCycle!=null){const d=Math.abs(c.lsCycle-c.idbCycle);if(d>20)return{hit:true,info:'\u00e9cart LS/IDB = '+d+' cycles'};}return{hit:false,info:'\u00e9cart LS/IDB faible, pas de r\u00e9gression'};}},
+  {id:'BUG-002',nom:'Plein R\u00e9gime : d\u00e9sactivation incompl\u00e8te',statut:'en attente',fichier:'04-v8-0-livraison-35-mode-max-permissif-v.js',prio:'P2',
+   desc:'D\u00e9sactivation incompl\u00e8te : snapshot agents non restaur\u00e9, flags non reset, botAutoMode non touch\u00e9.',
+   detect:c=>{if(c.S&&c.S.fullPowerMode===true)return{hit:true,info:'fullPowerMode=true actuellement actif'};return{hit:false,info:'Plein R\u00e9gime inactif'};}},
+  {id:'BUG-003',nom:'D\u00e9sync mode UI/storage',statut:'r\u00e9solu',fichier:'00b-persistance-override.js',prio:'\u2014',
+   desc:'Sympt\u00f4me du BUG-001 (mode affich\u00e9 \u2260 mode stock\u00e9). R\u00e9solu indirectement.',
+   detect:c=>({hit:false,info:'r\u00e9solu avec BUG-001'})},
+  {id:'BUG-004',nom:'renderAll() manquant dans loadState()',statut:'en attente',fichier:'02-state-init.js',prio:'P3',
+   desc:'loadState() n\'appelle pas renderAll() \u00e0 la fin \u2192 cartes \u00e0 $0 au boot. Contournement v118.3 dans 01-chrono-network.js.',
+   detect:c=>({hit:true,info:'fix structurel non appliqu\u00e9 (contournement actif)'})},
+  {id:'BUG-005',nom:'Bunker SOS force MANU',statut:'en attente',fichier:'07-v90-mode-bunker-sos.js',prio:'P4',
+   desc:'L\'activation du Bunker force MANU sans demande \u2014 viole la r\u00e8gle d\'axe (seul l\'utilisateur change botAutoMode).',
+   detect:c=>{if(c.S&&c.S._bunker&&c.S._bunker.active&&c.S.botAutoMode===false)return{hit:true,info:'bunker actif + MANU \u2014 for\u00e7age possible'};return{hit:false,info:'bunker inactif ou mode non for\u00e7\u00e9'};}},
+  {id:'OBS-A',nom:'Flash gain/perte au d\u00e9marrage',statut:'observ\u00e9',fichier:'07-v90-mode-bunker-sos.js',prio:'UX',
+   desc:'animateHeroValue d\u00e9clench\u00e9 \u00e0 tort au 1er rendu : portfolio restaur\u00e9 vs recalcul\u00e9 diff\u00e8re de >15$. Dur\u00e9e 800ms \u00e0 passer \u00e0 2s + animation distincte de la vraie cl\u00f4ture.',
+   detect:c=>{if(c.S&&typeof c.S.portfolio==='number'&&typeof c.S._startPortfolio==='number'){const d=Math.abs(c.S.portfolio-c.S._startPortfolio);if(d>15)return{hit:true,info:'\u00e9cart portfolio/_startPortfolio = $'+d.toFixed(2)+' (>15 \u2192 flash au boot)'};}return{hit:false,info:'\u00e9cart sous le seuil de flash'};}},
+  {id:'OBS-B',nom:'_startPortfolio jamais recal\u00e9 au load',statut:'observ\u00e9',fichier:'09b2-save-load.js',prio:'UX',
+   desc:'_startPortfolio est restaur\u00e9 tel quel ; seul _checkAndRotatePeriods le recale au changement de date. Cause d\'OBS-A.',
+   detect:c=>({hit:false,info:'li\u00e9 \u00e0 OBS-A ; observation, pas un blocage'})},
+  {id:'OBS-C',nom:'Phase COLLECTE fig\u00e9e',statut:'cosm\u00e9tique',fichier:'08-learning-history-render.js',prio:'\u2014',
+   desc:'phasePct (1 - cycleTimer/cycleMax) reste fig\u00e9 si simTick ne tourne pas (MANU/pause). Purement cosm\u00e9tique, aucune d\u00e9cision ne le lit.',
+   detect:c=>({hit:false,info:'cosm\u00e9tique, non bloquant'})}
+];
+
+/* ---- Journal interne ---- */
+const _journal = [];
+function jlog(level,tag,msg){_journal.push({t:Date.now(),level,tag,msg});if(_journal.length>800)_journal.shift();if(document.getElementById('journalBox'))renderJournal();}
+
+/* ---- Helpers communs ---- */
+function lsGet(k){try{return localStorage.getItem(k);}catch(e){return null;}}
+function lsKeys(){try{return Object.keys(localStorage);}catch(e){return [];}}
+function ssGet(k){try{return sessionStorage.getItem(k);}catch(e){return null;}}
+function safeParse(s){try{return JSON.parse(s);}catch(e){return null;}}
+function fmtBytes(n){if(n==null)return '\u2014';if(n<1024)return n+' o';if(n<1048576)return (n/1024).toFixed(1)+' Ko';return (n/1048576).toFixed(2)+' Mo';}
+function fmtDate(ts){if(!ts)return '\u2014';try{return new Date(ts).toLocaleString('fr-FR');}catch(e){return String(ts);}}
+function escapeHtml(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+function escapeRegex(s){return s.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');}
+function getKeySize(k){try{const v=localStorage.getItem(k);if(!v)return 0;return (k.length+v.length)*2;}catch(e){return 0;}}
+function downloadTxt(content,filename){const b=new Blob([content],{type:'text/plain;charset=utf-8'});const u=URL.createObjectURL(b);const a=document.createElement('a');a.href=u;a.download=filename;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(u);document.body.removeChild(a);},200);}
+function rowKV(label,val,cls){return '<div class="row"><span class="label">'+label+'</span><span class="val '+(cls||'')+'">'+val+'</span></div>';}
+function itemRow(level,name,tag){const ic=level==='ok'?'\u2705':level==='warn'?'\ud83d\udfe1':'\ud83d\udd34';return '<div class="item '+level+'"><span class="ic">'+ic+'</span><span class="nm">'+name+'</span><span class="tg">'+tag+'</span></div>';}
+
+/* ---- IDB helpers (ouverture fidèle v3 avec les 3 stores) ---- */
+function openDBNamed(name,version){
+  return new Promise((resolve)=>{
+    let req;
+    try{req=version?indexedDB.open(name,version):indexedDB.open(name);}catch(e){return resolve(null);}
+    req.onsuccess=()=>resolve(req.result);
+    req.onerror=()=>resolve(null);
+    req.onblocked=()=>resolve(null);
+    req.onupgradeneeded=e=>{
+      const db=e.target.result;
+      if(!db.objectStoreNames.contains(STORE_TRADES)){const ts=db.createObjectStore(STORE_TRADES,{keyPath:'id',autoIncrement:true});try{ts.createIndex('pair','pair',{unique:false});ts.createIndex('time','time',{unique:false});}catch(x){}}
+      if(!db.objectStoreNames.contains(STORE_FEES))db.createObjectStore(STORE_FEES,{autoIncrement:true});
+      if(!db.objectStoreNames.contains(STORE))db.createObjectStore(STORE,{keyPath:'key'});
+    };
+    setTimeout(()=>resolve(null),4000);
+  });
+}
+function idbGet(db,store,key){
+  return new Promise((resolve)=>{
+    let tx;try{tx=db.transaction(store,'readonly');}catch(e){return resolve(null);}
+    const r=tx.objectStore(store).get(key);
+    r.onsuccess=()=>resolve(r.result);r.onerror=()=>resolve(null);
+  });
+}
+function listDatabases(){
+  if(typeof indexedDB.databases==='function'){return indexedDB.databases().catch(()=>[{name:DB_NAME}]);}
+  return Promise.resolve([{name:DB_NAME},{name:'aura_backups'}]);
+}
+/* ============================================================
+   COLLECTEUR D'ÉTAT (LS + IDB), partagé par tous les modules
+   ============================================================ */
+const CTX={loaded:false,lsRaw:null,idbRaw:null,lsSnap:null,idbSnap:null,S:null,lsCycle:null,idbCycle:null,lsSavedAt:null,idbSavedAt:null,lsSize:null,idbSize:null,source:null};
+async function collectState(){
+  CTX.loaded=false;
+  CTX.lsRaw=lsGet(SAVE_KEY);CTX.lsSnap=CTX.lsRaw?safeParse(CTX.lsRaw):null;
+  CTX.lsSize=CTX.lsRaw?CTX.lsRaw.length:null;
+  CTX.lsCycle=CTX.lsSnap&&typeof CTX.lsSnap.cycle==='number'?CTX.lsSnap.cycle:null;
+  CTX.lsSavedAt=CTX.lsSnap&&CTX.lsSnap.savedAt?CTX.lsSnap.savedAt:null;
+  try{
+    const db=await openDBNamed(DB_NAME,DB_VERSION);
+    if(db){const v=await idbGet(db,STORE,SAVE_KEY);
+      if(v){CTX.idbSnap=(typeof v==='string')?safeParse(v):v;CTX.idbRaw=(typeof v==='string')?v:JSON.stringify(v);
+        CTX.idbSize=CTX.idbRaw?CTX.idbRaw.length:null;
+        CTX.idbCycle=CTX.idbSnap&&typeof CTX.idbSnap.cycle==='number'?CTX.idbSnap.cycle:null;
+        CTX.idbSavedAt=CTX.idbSnap&&CTX.idbSnap.savedAt?CTX.idbSnap.savedAt:null;}
+      try{db.close();}catch(e){}}
+  }catch(e){jlog('warn','IDB','collect: '+(e&&e.message||e));}
+  const lc=CTX.lsCycle!=null?CTX.lsCycle:-1, ic=CTX.idbCycle!=null?CTX.idbCycle:-1;
+  if(ic>=lc&&CTX.idbSnap){CTX.S=CTX.idbSnap;CTX.source='IndexedDB';}
+  else if(CTX.lsSnap){CTX.S=CTX.lsSnap;CTX.source='localStorage';}
+  else{CTX.S=null;CTX.source='aucune';}
+  CTX.loaded=true;return CTX;
+}
+
+/* ============================================================
+   NAVIGATION : HOME (tuiles) ↔ PAGES
+   ============================================================ */
+const VIEWS={},VIEW_INIT={};
+let _activeTab=null;
+const _badges={};
+
+/* Métadonnées des pages : icône, nom, description, actions de la barre.
+   actions: tableau parmi 'reload','json','text','backup','import' (+ handlers spécifiques posés par chaque page via PAGE_ACTIONS) */
+const PAGES = [
+  {id:'analyse',   ic:'🧠', nm:'Analyse',       desc:'Détection intelligente : incohérences UI↔état, erreurs, fichiers…', actions:['reload','json','text','backup']},
+  {id:'capacites', ic:'💡', nm:'Capacités',     desc:'Tout ce que Guardian sait détecter', actions:['json','text']},
+  {id:'historique',ic:'📈', nm:'Historique',    desc:'Mémoire persistante des scans', actions:['json','text','reload']},
+  {id:'dashboard', ic:'📊', nm:'Tableau de bord',desc:'Synthèse état, cycle, portfolio', actions:['reload','json']},
+  {id:'inventory', ic:'📝', nm:'Inventaire',    desc:'Fichiers, capacités, DOM', actions:['reload','json','text']},
+  {id:'bugs',      ic:'🐛', nm:'Bugs connus',   desc:'Catalogue + détection live', actions:['reload','json','text']},
+  {id:'deploy',    ic:'🚀', nm:'Déploiement',   desc:'Cohérence HTML ↔ repo', actions:['reload','json']},
+  {id:'storage',   ic:'💾', nm:'Storage',       desc:'localStorage + IndexedDB', actions:['reload','json']},
+  {id:'idb',       ic:'🔍', nm:'Inspecteur IDB',desc:'Toutes les bases, stores, clés', actions:['reload','text']},
+  {id:'idbtest',   ic:'🧪', nm:'Test IDB',      desc:'Écriture/lecture diagnostic', actions:['reload','text']},
+  {id:'idbdebug',  ic:'📋', nm:'Traces IDB',    desc:'Journaux openDB / saveState', actions:['reload','text']},
+  {id:'restore',   ic:'🔄', nm:'Restauration',  desc:'Récupération multi-sources', actions:['reload']},
+  {id:'clean',     ic:'🧹', nm:'Nettoyage',     desc:'Purge des clés obsolètes', actions:['reload']},
+  {id:'search',    ic:'🔎', nm:'Recherche',     desc:'Mot-clé dans tout le code', actions:[]},
+  {id:'sw',        ic:'⚙️', nm:'Service Worker', desc:'Désinscrire + vider caches', actions:['reload']},
+  {id:'journal',   ic:'📓', nm:'Journal',       desc:'Événements internes Guardian', actions:['text']},
+  {id:'export',    ic:'📦', nm:'Export / Import',desc:'Backup global, JSON, texte, import', actions:[]},
+  {id:'autobackup',ic:'⏰', nm:'Backup auto',    desc:'Sauvegardes automatiques toutes les 6h (rotation 30)', actions:['reload']}
+];
+/* handlers d'actions spécifiques par page (json/text/backup) — posés par chaque page */
+const PAGE_ACTIONS = {};
+
+function renderHome(){
+  const grid=document.getElementById('homeGrid');
+  grid.innerHTML = PAGES.map(p=>{
+    const b=_badges[p.id];
+    const badge = b ? '<span class="tile-badge '+b.level+'">'+b.n+'</span>' : '';
+    return '<div class="tile" data-page="'+p.id+'">'+badge
+      +'<div class="tile-ic">'+p.ic+'</div>'
+      +'<div class="tile-nm">'+p.nm+'</div>'
+      +'<div class="tile-desc">'+p.desc+'</div></div>';
+  }).join('');
+}
+function goHome(){
+  _activeTab=null;
+  document.getElementById('page').classList.add('hidden');
+  document.getElementById('home').classList.remove('hidden');
+  renderHome();
+}
+function openPage(id){
+  const meta = PAGES.find(p=>p.id===id);
+  if(!meta) return;
+  _activeTab=id;
+  document.getElementById('home').classList.add('hidden');
+  const page=document.getElementById('page');
+  page.classList.remove('hidden');
+  // header avec retour Home
+  let h='<div class="page-head"><button class="back-btn" id="backHome">← Home</button><span class="page-title">'+meta.ic+' '+meta.nm+'</span></div>';
+  h+='<div id="pageBody">'+(VIEWS[id]?VIEWS[id]():'<div class="hint">Module indisponible.</div>')+'</div>';
+  // barre d'actions adaptée
+  if(meta.actions && meta.actions.length){
+    h+='<div class="action-bar"><span class="ab-label">Actions</span>';
+    meta.actions.forEach(a=>{
+      const lbl={reload:'↻ Recharger',json:'⬇ JSON',text:'⬇ Texte',backup:'⬇ Backup',import:'⬆ Importer'}[a];
+      const cls=a==='backup'?'btn green':a==='reload'?'btn':'btn';
+      h+='<button class="'+cls+'" data-act="'+a+'">'+lbl+'</button>';
+    });
+    h+='</div>';
+  }
+  page.innerHTML=h;
+  document.getElementById('backHome').onclick=goHome;
+  if(VIEW_INIT[id]){try{VIEW_INIT[id]();}catch(e){jlog&&jlog('crit','UI','init '+id+': '+(e&&e.message||e));}}
+  // brancher les actions
+  page.querySelectorAll('.action-bar [data-act]').forEach(btn=>{
+    btn.onclick=()=>runPageAction(id, btn.getAttribute('data-act'));
+  });
+}
+function runPageAction(id, act){
+  if(act==='reload'){ openPage(id); return; }
+  const pa = PAGE_ACTIONS[id] || {};
+  if(act==='json' && pa.json){ const d=pa.json(); dlFile(d.content, d.name, 'application/json'); return; }
+  if(act==='text' && pa.text){ const d=pa.text(); dlFile(d.content, d.name, 'text/plain'); return; }
+  if(act==='backup' && pa.backup){ const d=pa.backup(); dlFile(d.content, d.name, 'application/json'); return; }
+  // fallback générique : exporter ce que la page a produit
+  alert('Aucune donnée à exporter pour cette action sur cette page (lance d\'abord l\'outil).');
+}
+function dlFile(content, filename, type){
+  const blob=new Blob([typeof content==='string'?content:JSON.stringify(content,null,2)],{type:type||'text/plain;charset=utf-8'});
+  const u=URL.createObjectURL(blob);const a=document.createElement('a');a.href=u;a.download=filename;document.body.appendChild(a);a.click();
+  setTimeout(()=>{URL.revokeObjectURL(u);document.body.removeChild(a);},200);
+}
+/* compat : les anciens outils appellent switchTab(id) → on ouvre la page */
+function switchTab(id){ openPage(id); }
+/* badges sur les tuiles (depuis les scans) */
+function setTabBadge(tab,level,count){
+  if(!count){ delete _badges[tab]; } else { _badges[tab]={level:level||'crit',n:count}; }
+  if(!document.getElementById('home').classList.contains('hidden')) renderHome();
+}
+/* clic sur une tuile */
+document.getElementById('homeGrid').addEventListener('click',e=>{
+  const t=e.target.closest('.tile'); if(t) openPage(t.getAttribute('data-page'));
+});
+function renderJournal(){
+  const box=document.getElementById('journalBox');if(!box)return;
+  box.innerHTML=_journal.slice().reverse().map(e=>{const time=new Date(e.t).toLocaleTimeString('fr-FR');
+    return '<div class="log-entry"><span class="log-time">'+time+'</span> <span class="log-tag">'+e.tag+'</span><span class="log-'+e.level+'">'+escapeHtml(e.msg)+'</span></div>';
+  }).join('')||'<div class="hint">Aucun \u00e9v\u00e9nement.</div>';
+}
+/* ============================================================
+   TABLEAU DE BORD + détection du contexte d'exécution
+   ============================================================ */
+VIEWS.dashboard=function(){
+  const S=CTX.S;let h='<div class="panels">';
+  h+='<div class="panel full" id="ctxPanel"><div class="panel-body" style="padding:10px 12px"><div id="ctxBanner" class="hint">D\u00e9tection du contexte...</div></div></div>';
+  h+='<div class="panel full"><div class="panel-head"><span class="panel-title">&#128202; \u00c9tat global</span></div><div class="panel-body">';
+  if(!CTX.loaded){h+='<div class="hint">Chargement...</div>';}
+  else if(!S){h+='<div class="item crit"><span class="ic">\ud83d\udd34</span><span class="nm">Aucun \u00e9tat dans localStorage ni IndexedDB</span></div>';}
+  else{
+    h+=rowKV('Source la plus r\u00e9cente',CTX.source,'ok');
+    h+=rowKV('Cycle',S.cycle!=null?'#'+S.cycle:'\u2014');
+    h+=rowKV('Mode trading',S.tradingMode||'\u2014');
+    h+=rowKV('botAutoMode',S.botAutoMode===false?'MANU':(S.botAutoMode?'AUTO':'\u2014'));
+    h+=rowKV('Portfolio',typeof S.portfolio==='number'?('$'+S.portfolio.toFixed(2)):'\u2014');
+    h+=rowKV('Cash',typeof S.cashAccount==='number'?('$'+S.cashAccount.toFixed(2)):'\u2014');
+    h+=rowKV('Trading',typeof S.tradingAccount==='number'?('$'+S.tradingAccount.toFixed(2)):'\u2014');
+    h+=rowKV('Positions ouvertes',(S.openPositions||[]).length);
+    h+=rowKV('Agents',(S.agents||[]).length);
+    const learn=(S.agents||[]).reduce((a,x)=>a+(x.learningEvents||0),0);
+    h+=rowKV('Cycles d\'apprentissage',learn.toLocaleString('fr-FR'),'purple');
+    h+=rowKV('_genCount',S._genCount!=null?S._genCount:'\u2014');
+    h+=rowKV('Sauvegard\u00e9 le',fmtDate(S.savedAt));
+  }
+  h+='</div></div>';
+  h+='<div class="panel"><div class="panel-head"><span class="panel-title">&#128190; Coh\u00e9rence stockage</span></div><div class="panel-body">';
+  h+=rowKV('LS cycle',CTX.lsCycle!=null?'#'+CTX.lsCycle:'absent',CTX.lsCycle!=null?'':'warn');
+  h+=rowKV('IDB cycle',CTX.idbCycle!=null?'#'+CTX.idbCycle:'absent',CTX.idbCycle!=null?'':'warn');
+  if(CTX.lsCycle!=null&&CTX.idbCycle!=null){const d=Math.abs(CTX.lsCycle-CTX.idbCycle);h+=rowKV('\u00c9cart',d+' cycles',d>20?'crit':(d>0?'warn':'ok'));}
+  h+=rowKV('Taille LS',fmtBytes(CTX.lsSize));h+=rowKV('Taille IDB',fmtBytes(CTX.idbSize));
+  h+='</div></div>';
+  h+='<div class="panel"><div class="panel-head"><span class="panel-title">&#9889; Actions rapides</span></div><div class="panel-body"><div class="controls">';
+  h+='<button class="btn" id="dRefresh">&#8635; Rafra\u00eechir</button>';
+  h+='<button class="btn" id="dInv">&#128221; Inventaire</button>';
+  h+='<button class="btn" id="dBugs">&#128027; Bugs</button>';
+  h+='<button class="btn" id="dDeploy">&#128640; D\u00e9ploiement</button>';
+  h+='<button class="btn wide" id="dOpen">&#9654; Ouvrir AURA8</button>';
+  h+='</div></div></div></div>';
+  return h;
+};
+VIEW_INIT.dashboard=function(){
+  const bind=(id,fn)=>{const e=document.getElementById(id);if(e)e.onclick=fn;};
+  bind('dRefresh',async()=>{await collectState();runBugScan();refreshHeader();switchTab('dashboard');});
+  bind('dInv',()=>switchTab('inventory'));bind('dBugs',()=>switchTab('bugs'));
+  bind('dDeploy',()=>switchTab('deploy'));bind('dOpen',()=>{window.location.href=APP_URL;});
+  detectContext();
+};
+async function detectContext(){
+  const banner=document.getElementById('ctxBanner');if(!banner)return;
+  const hasState=!!CTX.S;let canFetch=false;
+  try{const r=await fetch('js/02-state-init.js',{cache:'no-store'});canFetch=r.ok;}catch(e){canFetch=false;}
+  const panel=document.getElementById('ctxPanel');
+  if(canFetch&&hasState){banner.innerHTML='<span style="color:var(--up)">\u2705 Contexte complet</span> &mdash; fichiers du repo accessibles et \u00e9tat AURA d\u00e9tect\u00e9. Tous les modules sont op\u00e9rationnels.';if(panel)panel.classList.remove('warn');}
+  else if(canFetch&&!hasState){banner.innerHTML='<span style="color:var(--gold)">\u26a0 Fichiers OK mais aucun \u00e9tat AURA</span> &mdash; ouvre d\'abord AURA8 une fois sur ce navigateur. Inventaire/D\u00e9ploiement/Recherche fonctionnent d\u00e9j\u00e0.';if(panel)panel.classList.add('warn');}
+  else{banner.innerHTML='<span style="color:var(--gold)">\u26a0 Mode aper\u00e7u</span> &mdash; page non servie depuis le repo : fichiers, IndexedDB et localStorage d\'AURA inaccessibles ici. <b>Upload \u00e0 la racine du repo</b> et ouvre via GitHub Pages pour tout activer.';if(panel)panel.classList.add('warn');}
+}
+
+/* ============================================================
+   INVENTAIRE & COHÉRENCE
+   ============================================================ */
+let _invResults=null;
+function fetchHead(url){return fetch(url,{method:'GET',cache:'no-store'}).then(r=>({ok:r.ok,status:r.status})).catch(()=>({ok:false,status:0}));}
+async function runInventory(){
+  jlog('event','INV','Lancement inventaire complet');
+  const res={css:[],js:[],fn:[],dom:[],cap:[],ts:Date.now()};
+  const testFile=async(name,dir)=>{const r=await fetchHead(dir+'/'+name);return {name,ok:r.ok,status:r.status};};
+  res.css=await Promise.all(FILES.css.map(n=>testFile(n,'css')));
+  res.js=await Promise.all(FILES.js.map(n=>testFile(n,'js')));
+  res.fn=REF_FUNCTIONS.map(f=>({fn:f.fn,file:f.file}));
+  res.dom=REF_DOM.map(id=>({id,present:!!document.getElementById(id)}));
+  const S=CTX.S;
+  res.cap=REF_CAPABILITIES.map(c=>{let a=false;try{a=!!c.path(S);}catch(e){a=false;}return {key:c.key,label:c.label,active:a};});
+  _invResults=res;
+  const missing=res.css.filter(x=>!x.ok).length+res.js.filter(x=>!x.ok).length;
+  setTabBadge('inventory',missing>0?'crit':null,missing||0);
+  jlog(missing>0?'crit':'ok','INV',missing>0?(missing+' fichier(s) manquant(s)'):'Tous les fichiers r\u00e9pondent');
+  switchTab('inventory');
+}
+VIEWS.inventory=function(){
+  let h='<div class="panels"><div class="panel full"><div class="panel-head"><span class="panel-title">&#128221; Inventaire &amp; coh\u00e9rence</span></div><div class="panel-body">';
+  h+='<div class="hint">V\u00e9rifie que tout ce qu\'AURA8 d\u00e9clare r\u00e9pond bien. Lance le scan depuis la page servie au m\u00eame endroit que l\'app.</div>';
+  h+='<div class="controls"><button class="btn wide" id="invRun">&#9654; Lancer le scan complet</button></div>';
+  if(_invResults){const r=_invResults;
+    const cssMiss=r.css.filter(x=>!x.ok),jsMiss=r.js.filter(x=>!x.ok);
+    h+='<div class="summary-bar">';
+    h+='<span class="chip '+(cssMiss.length?'crit':'ok')+'">CSS '+(r.css.length-cssMiss.length)+'/'+r.css.length+'</span>';
+    h+='<span class="chip '+(jsMiss.length?'crit':'ok')+'">JS '+(r.js.length-jsMiss.length)+'/'+r.js.length+'</span>';
+    h+='<span class="chip ok">Capacit\u00e9s '+r.cap.filter(c=>c.active).length+'/'+r.cap.length+'</span>';
+    h+='<span class="chip '+(r.dom.filter(d=>d.present).length?'ok':'warn')+'">DOM '+r.dom.filter(d=>d.present).length+'/'+r.dom.length+'</span>';
+    h+='</div>';
+    h+='<div class="sect-label">Modules JS ('+r.js.length+')</div>'+r.js.map(x=>itemRow(x.ok?'ok':'crit',x.name,x.ok?('HTTP '+x.status):('MANQUANT '+(x.status||0)))).join('');
+    h+='<div class="sect-label">Modules CSS ('+r.css.length+')</div>'+r.css.map(x=>itemRow(x.ok?'ok':'crit',x.name,x.ok?('HTTP '+x.status):('MANQUANT '+(x.status||0)))).join('');
+    h+='<div class="sect-label">Capacit\u00e9s (\u00e9tat actuel)</div>'+r.cap.map(c=>itemRow(c.active?'ok':'warn',c.label,c.active?'\ud83d\udfe2 actif':'\u26aa en veille')).join('');
+    h+='<div class="sect-label">Fonctions critiques (r\u00e9f\u00e9rence \u2192 fichier)</div>';
+    h+='<div class="hint">V\u00e9rifiables en direct seulement depuis l\'app. Ici = liste de contr\u00f4le.</div>';
+    h+=r.fn.map(f=>itemRow('ok',f.fn+'()',f.file)).join('');
+    h+='<div class="sect-label">DOM critiques (dans cette page)</div>'+r.dom.map(d=>itemRow(d.present?'ok':'warn','#'+d.id,d.present?'pr\u00e9sent':'absent (normal hors app)')).join('');
+  }
+  h+='</div></div></div>';return h;
+};
+VIEW_INIT.inventory=function(){const b=document.getElementById('invRun');if(b)b.onclick=()=>{b.innerHTML='<span class="spinner"></span> scan...';b.disabled=true;runInventory();};};
+
+/* ============================================================
+   BUGS CONNUS + détection live
+   ============================================================ */
+let _bugResults=null;
+function runBugScan(){
+  const ctx={S:CTX.S,lsCycle:CTX.lsCycle,idbCycle:CTX.idbCycle};
+  _bugResults=REF_BUGS.map(b=>{let d={hit:false,info:''};try{d=b.detect(ctx);}catch(e){d={hit:false,info:'err'};}return Object.assign({},b,{det:d});});
+  const active=_bugResults.filter(b=>b.det.hit&&b.statut!=='r\u00e9solu').length;
+  setTabBadge('bugs',active>0?'warn':null,active||0);
+  jlog(active>0?'warn':'ok','BUG',active>0?(active+' bug(s) connu(s) actif(s)'):'Aucun bug connu actif');
+}
+VIEWS.bugs=function(){
+  if(!_bugResults)runBugScan();
+  let h='<div class="panels"><div class="panel full"><div class="panel-head"><span class="panel-title">&#128027; Bugs connus &amp; d\u00e9tection</span></div><div class="panel-body">';
+  h+='<div class="hint">Catalogue des bugs r\u00e9pertori\u00e9s. Le voyant indique si le sympt\u00f4me est <b>d\u00e9tectable maintenant</b> dans l\'\u00e9tat charg\u00e9. Chaque entr\u00e9e pointe le fichier \u00e0 corriger.</div>';
+  h+='<div class="controls"><button class="btn wide" id="bugRun">&#8635; Relancer la d\u00e9tection</button></div>';
+  h+=(_bugResults||[]).map(b=>{
+    const resolved=b.statut==='r\u00e9solu'||b.statut==='cosm\u00e9tique';
+    const level=resolved?'ok':(b.det.hit?'warn':'ok');
+    const ic=resolved?'\u2705':(b.det.hit?'\ud83d\udfe1':'\u2705');
+    let x='<div class="item '+level+'" style="flex-direction:column;align-items:stretch;gap:4px">';
+    x+='<div style="display:flex;align-items:center;gap:8px"><span class="ic">'+ic+'</span><span class="nm" style="font-weight:700">'+b.id+' \u2014 '+b.nom+'</span><span class="tg">'+(resolved?b.statut:b.prio)+'</span></div>';
+    x+='<div style="font-size:10px;color:var(--t2);line-height:1.4">'+b.desc+'</div>';
+    x+='<div style="font-size:10px;color:var(--t3)">Fichier : <b style="color:var(--ice)">'+b.fichier+'</b></div>';
+    x+='<div style="font-size:10px;color:'+(b.det.hit&&!resolved?'var(--gold)':'var(--t3)')+'">D\u00e9tection : '+b.det.info+'</div></div>';
+    return x;
+  }).join('');
+  h+='</div></div></div>';return h;
+};
+VIEW_INIT.bugs=function(){const b=document.getElementById('bugRun');if(b)b.onclick=()=>{runBugScan();switchTab('bugs');};};
+
+/* ============================================================
+   DÉPLOIEMENT
+   ============================================================ */
+let _deployResults=null;
+async function runDeployCheck(){
+  jlog('event','DEPLOY','V\u00e9rification du d\u00e9ploiement');
+  const out={ts:Date.now(),app:null,files:[],note:''};
+  const appR=await fetchHead(APP_URL);out.app={ok:appR.ok,status:appR.status};
+  if(!_invResults)await runInventory();
+  if(_invResults){out.files=[].concat(_invResults.js.map(x=>({name:'js/'+x.name,ok:x.ok,status:x.status}))).concat(_invResults.css.map(x=>({name:'css/'+x.name,ok:x.ok,status:x.status})));}
+  const miss=out.files.filter(f=>!f.ok);
+  if(miss.length===0&&out.app.ok)out.note='D\u00e9ploiement sain. La croix rouge GitHub vient probablement de d\u00e9ploiements <b>annul\u00e9s</b> (commits rapproch\u00e9s) \u2014 sans impact si l\'app charge.';
+  else if(miss.length>0)out.note=miss.length+' fichier(s) d\u00e9clar\u00e9(s) mais absent(s) \u2014 cause probable d\'\u00e9chec de build.';
+  else out.note='L\'app ne r\u00e9pond pas (HTTP '+out.app.status+').';
+  _deployResults=out;
+  setTabBadge('deploy',(miss.length>0||!out.app.ok)?'crit':null,miss.length||(!out.app.ok?1:0));
+  jlog(miss.length>0?'crit':'ok','DEPLOY',out.note.replace(/<[^>]+>/g,''));
+  switchTab('deploy');
+}
+VIEWS.deploy=function(){
+  let h='<div class="panels"><div class="panel full"><div class="panel-head"><span class="panel-title">&#128640; D\u00e9ploiement</span></div><div class="panel-body">';
+  h+='<div class="hint">Compare ce que le HTML d\u00e9clare avec ce qui r\u00e9pond. \u00c0 lancer depuis l\'URL GitHub Pages.</div>';
+  h+='<div class="controls"><button class="btn wide" id="depRun">&#9654; V\u00e9rifier le d\u00e9ploiement</button></div>';
+  if(_deployResults){const r=_deployResults;
+    h+='<div class="summary-bar"><span class="chip '+(r.app.ok?'ok':'crit')+'">App '+(r.app.ok?'OK':('HTTP '+r.app.status))+'</span>';
+    const miss=r.files.filter(f=>!f.ok).length;
+    h+='<span class="chip '+(miss?'crit':'ok')+'">'+(r.files.length-miss)+'/'+r.files.length+' fichiers</span></div>';
+    h+='<div class="item '+(miss?'crit':'ok')+'" style="line-height:1.5">'+r.note+'</div>';
+    if(miss){h+='<div class="sect-label">Fichiers manquants</div>'+r.files.filter(f=>!f.ok).map(f=>itemRow('crit',f.name,'HTTP '+(f.status||0))).join('');}
+  }
+  h+='</div></div></div>';return h;
+};
+VIEW_INIT.deploy=function(){const b=document.getElementById('depRun');if(b)b.onclick=()=>{b.innerHTML='<span class="spinner"></span> v\u00e9rif...';b.disabled=true;runDeployCheck();};};
+/* ============================================================
+   STORAGE (vue détail LS + IDB)
+   ============================================================ */
+VIEWS.storage=function(){
+  let h='<div class="panels">';
+  h+='<div class="panel"><div class="panel-head"><span class="panel-title">localStorage</span></div><div class="panel-body">';
+  h+=rowKV('Cl\u00e9 '+SAVE_KEY,CTX.lsRaw?'pr\u00e9sente':'absente',CTX.lsRaw?'ok':'warn');
+  h+=rowKV('Taille',fmtBytes(CTX.lsSize));h+=rowKV('Cycle',CTX.lsCycle!=null?'#'+CTX.lsCycle:'\u2014');
+  h+=rowKV('savedAt',fmtDate(CTX.lsSavedAt));h+=rowKV('Total cl\u00e9s LS',lsKeys().length);
+  h+='</div></div>';
+  h+='<div class="panel"><div class="panel-head"><span class="panel-title">IndexedDB ('+DB_NAME+')</span></div><div class="panel-body">';
+  h+=rowKV('Cl\u00e9 '+SAVE_KEY,CTX.idbRaw?'pr\u00e9sente':'absente',CTX.idbRaw?'ok':'warn');
+  h+=rowKV('Taille',fmtBytes(CTX.idbSize));h+=rowKV('Cycle',CTX.idbCycle!=null?'#'+CTX.idbCycle:'\u2014');
+  h+=rowKV('savedAt',fmtDate(CTX.idbSavedAt));h+=rowKV('Store',STORE);
+  h+='</div></div>';
+  h+='<div class="panel full"><div class="panel-head"><span class="panel-title">Toutes les cl\u00e9s localStorage (tri\u00e9es par taille)</span></div><div class="panel-body"><div class="outbox" id="lsKeysBox"></div></div></div>';
+  h+='</div>';return h;
+};
+VIEW_INIT.storage=function(){
+  const box=document.getElementById('lsKeysBox');if(!box)return;
+  const keys=lsKeys().map(k=>({k,sz:getKeySize(k)})).sort((a,b)=>b.sz-a.sz);
+  box.innerHTML=keys.length?keys.map(o=>'<div class="log-entry"><span class="log-event">'+escapeHtml(o.k)+'</span> <span class="log-time">'+fmtBytes(o.sz)+'</span></div>').join(''):'<div class="hint">Aucune cl\u00e9.</div>';
+};
+
+/* ============================================================
+   INSPECTEUR IDB (logique complète de inspect-idb.html)
+   ============================================================ */
+async function inspectStoreFull(db,storeName){
+  const info={name:storeName,keyPath:null,autoIncrement:false,count:0,keys:[],samples:[],error:null};
+  try{
+    const tx=db.transaction(storeName,'readonly');const store=tx.objectStore(storeName);
+    info.keyPath=store.keyPath;info.autoIncrement=store.autoIncrement;
+    info.count=await new Promise((res,rej)=>{const r=store.count();r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error);});
+    info.keys=await new Promise((res,rej)=>{const r=store.getAllKeys();r.onsuccess=()=>res((r.result||[]).slice(0,20).map(k=>typeof k==='string'?k:JSON.stringify(k)));r.onerror=()=>rej(r.error);});
+    info.samples=await new Promise((res,rej)=>{const r=store.getAll(undefined,3);r.onsuccess=()=>res((r.result||[]).map(item=>{
+      if(item&&typeof item==='object'){const s={__type:'object'};['key','cycle','tradingMode','botAutoMode','savedAt','portfolio','cashAccount','tradingAccount','version','id','pair','time'].forEach(k=>{if(k in item)s[k]=item[k];});s.__totalKeys=Object.keys(item).length;return s;}return item;}));r.onerror=()=>rej(r.error);});
+  }catch(e){info.error=e.message;}
+  return info;
+}
+VIEWS.idb=function(){
+  let h='<div class="panels"><div class="panel full"><div class="panel-head"><span class="panel-title">&#128269; Inspecteur IndexedDB</span></div><div class="panel-body">';
+  h+='<div class="hint">Inspecte TOUTES les bases IDB, tous les stores : keyPath, autoIncrement, count, cl\u00e9s, \u00e9chantillons. V\u00e9rifie la pr\u00e9sence de '+SAVE_KEY+'.</div>';
+  h+='<div class="controls"><button class="btn" id="idbScan">&#9654; Inspecter</button><button class="btn gold" id="idbCopy" disabled>&#11015; Rapport .txt</button></div>';
+  h+='<div id="idbContent" style="margin-top:8px"></div>';
+  h+='</div></div></div>';return h;
+};
+VIEW_INIT.idb=function(){
+  let lastReport='';
+  const scan=async()=>{
+    const content=document.getElementById('idbContent');content.innerHTML='<div class="hint"><span class="spinner"></span> inspection...</div>';
+    const lines=['=== AURA \u00b7 Inspect IDB \u00b7 '+new Date().toISOString()+' ==='];let html='';
+    let dbs=[];try{dbs=await listDatabases();}catch(e){}
+    if(!dbs||!dbs.length)dbs=[{name:DB_NAME}];
+    html+='<div class="sect-label">Bases trouv\u00e9es</div>';
+    html+=dbs.map(b=>itemRow('ok',b.name||'?','v'+(b.version||'?'))).join('');
+    lines.push('Bases: '+dbs.map(b=>b.name+' (v'+(b.version||'?')+')').join(', '),'');
+    const names=[DB_NAME];dbs.forEach(b=>{if(b.name&&b.name!==DB_NAME&&!String(b.name).startsWith('('))names.push(b.name);});
+    for(const name of names){
+      html+='<div class="sect-label">Base : '+name+'</div>';
+      const db=await openDBNamed(name);
+      if(!db){html+=itemRow('crit',name,'ouverture \u00e9chou\u00e9e');lines.push('['+name+'] ouverture \u00e9chou\u00e9e');continue;}
+      html+=rowKV('Version','v'+db.version,'info');
+      const stores=Array.from(db.objectStoreNames);
+      html+=rowKV('Stores',stores.join(', ')||'(aucun)','info');
+      lines.push('===== '+name+' (v'+db.version+') stores: '+stores.join(', '));
+      for(const sn of stores){
+        const si=await inspectStoreFull(db,sn);
+        let lvl=si.error?'crit':(si.count===0?'warn':'ok');
+        html+='<div class="item '+lvl+'" style="flex-direction:column;align-items:stretch;gap:3px">';
+        html+='<div style="display:flex;gap:8px"><span class="nm" style="font-weight:700">\ud83d\udce6 '+sn+'</span><span class="tg">'+(si.keyPath?('keyPath:'+si.keyPath):'sans keyPath')+'</span></div>';
+        html+='<div style="font-size:10px;color:var(--t2)">count='+si.count+' \u00b7 autoIncrement='+si.autoIncrement+(si.error?(' \u00b7 ERREUR: '+si.error):'')+'</div>';
+        if(sn===STORE){const has=si.keys.includes(SAVE_KEY);html+='<div style="font-size:10px;color:'+(has?'var(--up)':'var(--down)')+'">contient "'+SAVE_KEY+'" : '+(has?'OUI':'NON')+'</div>';}
+        if(si.keys.length)html+='<details><summary>\ud83d\udd11 '+si.keys.length+' cl\u00e9(s)</summary><pre>'+escapeHtml(si.keys.join('\n'))+'</pre></details>';
+        if(si.samples.length)html+='<details><summary>\ud83d\udcc4 '+si.samples.length+' \u00e9chantillon(s)</summary><pre>'+escapeHtml(JSON.stringify(si.samples,null,2))+'</pre></details>';
+        html+='</div>';
+        lines.push('  --- '+sn+' --- keyPath='+(si.keyPath||'(null)')+' count='+si.count+(sn===STORE?(' contient '+SAVE_KEY+'='+(si.keys.includes(SAVE_KEY)?'OUI':'NON')):''));
+      }
+      try{db.close();}catch(e){}
+    }
+    content.innerHTML=html;lastReport=lines.join('\n');
+    document.getElementById('idbCopy').disabled=false;
+    jlog('ok','IDB','Inspection termin\u00e9e');
+  };
+  const b=document.getElementById('idbScan');if(b)b.onclick=scan;
+  const c=document.getElementById('idbCopy');if(c)c.onclick=()=>{if(lastReport)downloadTxt(lastReport,'aura_inspect_idb.txt');};
+};
+
+/* ============================================================
+   TEST IDB (reproduit test-idb-v3 : écriture/lecture/cleanup)
+   ============================================================ */
+VIEWS.idbtest=function(){
+  let h='<div class="panels"><div class="panel full"><div class="panel-head"><span class="panel-title">&#129514; Test IDB (\u00e9criture r\u00e9elle)</span></div><div class="panel-body">';
+  h+='<div class="hint">Reproduit l\'ouverture v'+DB_VERSION+' + une \u00e9criture/lecture/suppression de test dans le store '+STORE+'. Sert \u00e0 prouver si IDB fonctionne (cl\u00e9 de test temporaire, nettoy\u00e9e \u00e0 la fin).</div>';
+  h+='<div class="controls"><button class="btn green wide" id="itRun">&#9654; Lancer le test</button></div>';
+  h+='<div id="itSteps" style="margin-top:8px"></div><div id="itConc"></div>';
+  h+='</div></div></div>';return h;
+};
+VIEW_INIT.idbtest=function(){
+  const TEST_KEY='__aura_idb_test2__';
+  const stepsEl=()=>document.getElementById('itSteps');const concEl=()=>document.getElementById('itConc');
+  let report=[];
+  function step(title,status,detail,err){
+    const lvl=status==='ok'?'ok':'crit';const ic=status==='ok'?'\u2705':'\ud83d\udd34';
+    let x='<div class="item '+lvl+'" style="flex-direction:column;align-items:stretch;gap:2px"><div style="display:flex;gap:8px"><span class="ic">'+ic+'</span><span class="nm">'+title+'</span></div>';
+    if(detail)x+='<div style="font-size:10px;color:var(--t2)">'+escapeHtml(detail)+'</div>';
+    if(err)x+='<div style="font-size:10px;color:var(--down)">'+escapeHtml((err.name||'Error')+': '+(err.message||err))+'</div>';
+    x+='</div>';stepsEl().innerHTML+=x;
+    let l=(status==='ok'?'[OK] ':'[FAIL] ')+title;if(detail)l+=' | '+detail;if(err)l+=' | '+(err.name||'Error')+': '+(err.message||err);report.push(l);
+  }
+  function conclusion(type,msg){concEl().innerHTML='<div class="item '+(type==='ok'?'ok':'crit')+'" style="line-height:1.5;margin-top:8px">'+escapeHtml(msg)+'</div>';report.push('','CONCLUSION: '+msg);jlog(type==='ok'?'ok':'crit','IDBTEST',msg);}
+  async function run(){
+    stepsEl().innerHTML='';concEl().innerHTML='';report=['AURA IDB Test '+new Date().toISOString()];
+    let db,keyPath;
+    db=await openDBNamed(DB_NAME,DB_VERSION);
+    if(!db){step('1. Ouverture v'+DB_VERSION,'err',null,new Error('open failed'));return conclusion('err','\u00c9chec ouverture IDB.');}
+    step('1. Ouverture v'+DB_VERSION,'ok','v'+db.version+', stores: ['+Array.from(db.objectStoreNames).join(', ')+']');
+    try{const tx=db.transaction(STORE,'readonly');const s=tx.objectStore(STORE);keyPath=s.keyPath;step('2. Examiner store state','ok','keyPath: '+(keyPath?('"'+keyPath+'"'):'(null)')+', autoIncrement: '+s.autoIncrement);}
+    catch(e){step('2. Examiner store state','err',null,e);try{db.close();}catch(x){}return conclusion('err','Examen impossible.');}
+    const snap={cycle:99998,tradingMode:'test',savedAt:new Date().toISOString(),portfolio:0,__test:true};
+    let methode;if(keyPath){if(!snap.key)snap.key=TEST_KEY;methode='.put(snap)';}else methode='.put(snap,"'+TEST_KEY+'")';
+    try{await new Promise((res,rej)=>{const tx=db.transaction(STORE,'readwrite');const s=tx.objectStore(STORE);let r;try{r=keyPath?s.put(snap):s.put(snap,TEST_KEY);}catch(e){return rej(e);}r.onsuccess=()=>res();r.onerror=()=>rej(r.error);tx.onerror=()=>rej(tx.error);tx.onabort=()=>rej(tx.error);});step('3. \u00c9criture (.put)','ok','M\u00e9thode: '+methode);}
+    catch(e){step('3. \u00c9criture (.put)','err','M\u00e9thode: '+methode,e);try{db.close();}catch(x){}return conclusion('err','\u00c9criture plante : '+(e.name||'Error'));}
+    try{const rb=await new Promise((res,rej)=>{const tx=db.transaction(STORE,'readonly');const r=tx.objectStore(STORE).get(TEST_KEY);r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error);});
+      if(rb)step('4. Relecture .get','ok','cycle='+rb.cycle+', mode='+rb.tradingMode);else{step('4. Relecture .get','err','get('+TEST_KEY+') retourne null');try{db.close();}catch(x){}return conclusion('err','\u00c9crit mais get null : probl\u00e8me de cl\u00e9.');}}
+    catch(e){step('4. Relecture .get','err',null,e);try{db.close();}catch(x){}return conclusion('err','Lecture \u00e9choue.');}
+    try{await new Promise((res,rej)=>{const tx=db.transaction(STORE,'readwrite');tx.objectStore(STORE).delete(TEST_KEY);tx.oncomplete=()=>res();tx.onerror=()=>rej(tx.error);});step('5. Nettoyage','ok','Entr\u00e9e test supprim\u00e9e');}
+    catch(e){step('5. Nettoyage','err','Entr\u00e9e test reste',e);}
+    try{db.close();}catch(x){}
+    conclusion('ok','\u00c9criture/lecture IDB v'+DB_VERSION+' fonctionnent. Si AURA \u00e9choue \u00e0 sauvegarder, le probl\u00e8me est dans 09b2.saveState ou window.openDB, pas dans IDB lui-m\u00eame.');
+  }
+  const b=document.getElementById('itRun');if(b)b.onclick=run;
+};
+
+/* ============================================================
+   TRACES IDB (lit aura_idb_debug — 00z-idb-debug.js)
+   ============================================================ */
+VIEWS.idbdebug=function(){
+  let h='<div class="panels"><div class="panel full"><div class="panel-head"><span class="panel-title">&#128203; Traces IDB</span></div><div class="panel-body">';
+  h+='<div class="hint">Lit les traces enregistr\u00e9es dans localStorage["'+IDB_DEBUG_KEY+'"] par 00z-idb-debug.js (appels openDB / saveState, succ\u00e8s/\u00e9checs).</div>';
+  h+='<div class="controls c3"><button class="btn" id="idRefresh">&#8635; Rafra\u00eechir</button><button class="btn gold" id="idCopy">&#11015; .txt</button><button class="btn danger" id="idClear">Vider</button></div>';
+  h+='<div id="idSummary" style="margin-top:8px"></div><div class="outbox" id="idEvents"></div>';
+  h+='</div></div></div>';return h;
+};
+VIEW_INIT.idbdebug=function(){
+  let lastReport='';
+  function loadEvents(){const raw=lsGet(IDB_DEBUG_KEY);if(!raw)return [];const p=safeParse(raw);return Array.isArray(p)?p:[];}
+  function render(){
+    const events=loadEvents();const sum=document.getElementById('idSummary');const cont=document.getElementById('idEvents');
+    if(!events.length){sum.innerHTML='';cont.innerHTML='<div class="hint">Aucune trace. V\u00e9rifie que 00z-idb-debug.js est charg\u00e9 dans AURA8.</div>';lastReport='Aucune trace.';return;}
+    const c={};events.forEach(e=>c[e.type]=(c[e.type]||0)+1);
+    sum.innerHTML=rowKV('Total \u00e9v\u00e9nements',events.length)
+      +rowKV('openDB appel\u00e9e',(c.OPENDB_CALL||0)+' fois')
+      +rowKV('openDB succ\u00e8s',(c.OPENDB_OK||0),(c.OPENDB_OK||0)>0?'ok':'')
+      +rowKV('openDB \u00e9checs',((c.OPENDB_REJECT||0)+(c.OPENDB_THROW||0)),((c.OPENDB_REJECT||0)+(c.OPENDB_THROW||0))>0?'crit':'')
+      +rowKV('saveState appel\u00e9e',(c.SAVESTATE_CALL||0)+' fois')
+      +rowKV('saveState succ\u00e8s',(c.SAVESTATE_RESOLVED||0),(c.SAVESTATE_RESOLVED||0)>0?'ok':'')
+      +rowKV('saveState \u00e9checs',((c.SAVESTATE_REJECT||0)+(c.SAVESTATE_THROW||0)),((c.SAVESTATE_REJECT||0)+(c.SAVESTATE_THROW||0))>0?'crit':'');
+    cont.innerHTML=events.slice().reverse().map(ev=>{
+      let det='';for(const k of Object.keys(ev)){if(k==='type'||k==='ts')continue;const v=ev[k];if(k==='error'&&v&&typeof v==='object')det+='error: '+(v.name||'Error')+': '+(v.message||'?')+'\n';else if(typeof v==='object'&&v!==null)det+=k+': '+JSON.stringify(v)+'\n';else det+=k+': '+String(v)+'\n';}
+      let time='';try{time=new Date(ev.ts).toLocaleTimeString('fr-FR');}catch(e){time=ev.ts||'';}
+      return '<div class="log-entry"><span class="log-event">'+(ev.type||'?')+'</span> <span class="log-time">'+time+'</span>\n'+escapeHtml(det)+'</div>';
+    }).join('');
+    lastReport='AURA IDB Debug '+new Date().toISOString()+'\nTotal: '+events.length+'\n\n'+events.map(ev=>{let l='['+(ev.ts||'?')+'] '+(ev.type||'?');for(const k of Object.keys(ev)){if(k==='type'||k==='ts')continue;const v=ev[k];l+=' | '+k+'='+(typeof v==='object'?JSON.stringify(v):String(v));}return l;}).join('\n');
+  }
+  const bind=(id,fn)=>{const e=document.getElementById(id);if(e)e.onclick=fn;};
+  bind('idRefresh',render);
+  bind('idCopy',()=>{if(lastReport)downloadTxt(lastReport,'aura_idb_traces.txt');});
+  bind('idClear',()=>{if(confirm('Vider toutes les traces IDB ?')){try{localStorage.removeItem(IDB_DEBUG_KEY);}catch(e){}render();}});
+  render();
+};
+/* ============================================================
+   RESTAURATION (recovery + restore-tool, logique complète)
+   ============================================================ */
+let _bestSnap=null,_scanReport='';
+VIEWS.restore=function(){
+  let h='<div class="panels"><div class="panel full"><div class="panel-head"><span class="panel-title">&#128260; Restauration &amp; r\u00e9cup\u00e9ration</span></div><div class="panel-body">';
+  h+='<div class="hint">Scanne TOUTES les sources (clés candidates LS, sessionStorage, toutes les bases IDB), trouve le snapshot au cycle le plus haut, et permet de le restaurer dans '+SAVE_KEY+' + IndexedDB. On ne garde jamais le cycle le plus bas.</div>';
+  h+='<div class="controls c3">';
+  h+='<button class="btn gold" id="reScan">&#128269; Scanner</button>';
+  h+='<button class="btn" id="reDiag">\ud83e\ude7a Diagnostic</button>';
+  h+='<button class="btn" id="reCopy">LS \u2192 IDB</button>';
+  h+='</div>';
+  h+='<div class="controls"><button class="btn green" id="reRestore" disabled>\u267b\ufe0f Restaurer le meilleur</button><button class="btn gold" id="reExport" disabled>&#11015; Export JSON</button></div>';
+  h+='<div id="reCandidates" style="margin-top:8px"></div>';
+  h+='<div class="outbox" id="reLog">Pr\u00eat. \u00ab Scanner \u00bb pour chercher tous les snapshots, ou \u00ab Diagnostic \u00bb pour un \u00e9tat d\u00e9taill\u00e9.</div>';
+  h+='</div></div></div>';return h;
+};
+VIEW_INIT.restore=function(){
+  const logEl=()=>document.getElementById('reLog');
+  function log(msg,cls){const e=logEl();if(!e)return;e.innerHTML+='\n'+(cls?'<span class="log-'+cls+'">'+escapeHtml(msg)+'</span>':escapeHtml(msg));e.scrollTop=e.scrollHeight;}
+  function logClear(){const e=logEl();if(e)e.innerHTML='';}
+  function snapInfo(s){if(!s)return null;return {cycle:typeof s.cycle==='number'?s.cycle:null,savedAt:s.savedAt||null,size:JSON.stringify(s).length,portfolio:s.portfolio,cash:s.cashAccount,trading:s.tradingAccount};}
+  function fmtInfo(i){if(!i)return 'invalide';const p=[];if(i.cycle!=null)p.push('cycle=#'+i.cycle);if(i.savedAt)p.push('savedAt='+String(i.savedAt).slice(0,19).replace('T',' '));if(i.portfolio!=null)p.push('portfolio='+Number(i.portfolio).toFixed(2));p.push('size='+(i.size/1024).toFixed(1)+' Ko');return p.join(' \u00b7 ');}
+
+  async function scan(){
+    logClear();_bestSnap=null;
+    document.getElementById('reRestore').disabled=true;document.getElementById('reExport').disabled=true;
+    document.getElementById('reCandidates').innerHTML='';
+    log('\u2550\u2550\u2550 SCAN TOUTES SOURCES \u2550\u2550\u2550','event');
+    const all=[];
+    // localStorage clés candidates
+    log('\n\u25b6 localStorage (cl\u00e9s candidates)','info');
+    const known=new Set(LS_CANDIDATE_KEYS);
+    for(const k of LS_CANDIDATE_KEYS){const raw=lsGet(k);if(raw===null){log('  \u00b7 '+k+' VIDE','muted');continue;}const s=safeParse(raw);if(s){const info=snapInfo(s);log('  \u2713 '+k+' \u2014 '+fmtInfo(info),'ok');if(info.cycle!=null)all.push({source:'LS',key:k,snap:s,info});}else log('  \u26a0 '+k+' corrompu','warn');}
+    // autres clés nexus*/aura*
+    for(const k of lsKeys()){if(known.has(k))continue;if(k.startsWith('nexus')||k.startsWith('aura')){const raw=lsGet(k);const s=safeParse(raw);if(s&&typeof s.cycle==='number'){const info=snapInfo(s);log('  \u2713 (extra) '+k+' \u2014 '+fmtInfo(info),'ok');all.push({source:'LS',key:k,snap:s,info});}}}
+    // sessionStorage
+    log('\n\u25b6 sessionStorage','info');
+    try{for(let i=0;i<sessionStorage.length;i++){const k=sessionStorage.key(i);if(k&&(k.startsWith('nexus')||k.startsWith('aura'))){const s=safeParse(ssGet(k));if(s&&typeof s.cycle==='number'){const info=snapInfo(s);log('  \u2713 '+k+' \u2014 '+fmtInfo(info),'ok');all.push({source:'SS',key:k,snap:s,info});}}}}catch(e){}
+    // toutes les bases IDB
+    log('\n\u25b6 IndexedDB (toutes bases)','info');
+    let dbs=[];try{dbs=await listDatabases();}catch(e){}if(!dbs||!dbs.length)dbs=[{name:DB_NAME},{name:'aura_backups'}];
+    for(const dbInfo of dbs){const name=dbInfo.name;if(!name)continue;const db=await openDBNamed(name);if(!db){log('  \u00b7 '+name+' (ouverture \u00e9chou\u00e9e)','muted');continue;}
+      const stores=Array.from(db.objectStoreNames);
+      for(const sn of stores){try{const tx=db.transaction(sn,'readonly');const store=tx.objectStore(sn);
+        const entries=await new Promise((res)=>{const out=[];const r=store.openCursor();let n=0;r.onsuccess=e=>{const cur=e.target.result;if(cur&&n<20){n++;out.push({key:cur.key,value:cur.value});cur.continue();}else res(out);};r.onerror=()=>res(out);});
+        for(const en of entries){const s=(typeof en.value==='string')?safeParse(en.value):en.value;if(s&&typeof s.cycle==='number'){const info=snapInfo(s);log('  \u2713 IDB:'+name+'/'+sn+'['+en.key+'] \u2014 '+fmtInfo(info),'ok');all.push({source:'IDB:'+name+'/'+sn,key:en.key,snap:s,info});}}
+      }catch(e){}}
+      try{db.close();}catch(e){}}
+    // tri
+    all.sort((a,b)=>(b.info.cycle||0)-(a.info.cycle||0));
+    if(!all.length){log('\nAUCUN snapshot exploitable trouv\u00e9.','crit');document.getElementById('reCandidates').innerHTML='<div class="item crit"><span class="nm">Aucun snapshot avec un cycle.</span></div>';return;}
+    _bestSnap=all[0];
+    let ch='<div class="sect-label">Candidats (tri\u00e9s par cycle d\u00e9croissant)</div>';
+    all.slice(0,10).forEach((r,i)=>{ch+='<div class="item '+(i===0?'ok':'')+'" style="flex-direction:column;align-items:stretch;gap:2px"><div style="display:flex;gap:8px"><span class="nm" style="font-weight:700">'+(i===0?'\u2b50 ':'')+'#'+r.info.cycle+'</span><span class="tg">'+r.source+' / '+r.key+'</span></div><div style="font-size:10px;color:var(--t2)">'+fmtInfo(r.info)+'</div></div>';});
+    document.getElementById('reCandidates').innerHTML=ch;
+    log('\n\u2705 MEILLEUR : cycle #'+_bestSnap.info.cycle+' dans '+_bestSnap.source+' / '+_bestSnap.key,'ok');
+    _scanReport='# AURA Recovery scan '+new Date().toISOString()+'\n\n'+all.map((r,i)=>(i===0?'\u2b50 ':'   ')+r.source+' / '+r.key+'\n      '+fmtInfo(r.info)).join('\n\n')+'\n\n## Best (raw)\n\n'+JSON.stringify(_bestSnap.snap,null,2);
+    document.getElementById('reRestore').disabled=false;document.getElementById('reExport').disabled=false;
+    jlog('ok','RECOVERY','Meilleur cycle #'+_bestSnap.info.cycle+' ('+_bestSnap.source+')');
+  }
+
+  async function diagnose(){
+    logClear();log('\u2550\u2550\u2550 DIAGNOSTIC STORAGE \u2550\u2550\u2550','event');
+    log('\n\u25b6 localStorage','info');
+    ['nexus_state_v2','nexus_state','nexusSnap_a','nexusSnap_latest','nexusSnap_current'].forEach(k=>{const v=lsGet(k);if(v){const p=safeParse(v);if(p)log('  \u2713 '+k+' ('+v.length.toLocaleString()+' chars) cycle='+p.cycle+' cash='+p.cashAccount+' trading='+p.tradingAccount,'ok');else log('  \u26a0 '+k+' corrompu','warn');}else log('  \u00b7 '+k+' VIDE','muted');});
+    log('\n\u25b6 IndexedDB '+DB_NAME,'info');
+    const db=await openDBNamed(DB_NAME,DB_VERSION);
+    if(db){log('  \u2713 Base ouverte (v'+db.version+')','ok');if(db.objectStoreNames.contains(STORE)){const r=await idbGet(db,STORE,SAVE_KEY);if(r)log('  \u2713 State : cycle='+r.cycle+' cash='+r.cashAccount+' trading='+r.tradingAccount,'ok');else log('  \u00b7 '+STORE+' VIDE','muted');}else log('  \u00b7 store '+STORE+' inexistant','muted');try{db.close();}catch(e){}}
+    else log('  \u26a0 IDB inaccessible','warn');
+    log('\n\u25b6 sessionStorage','info');
+    const ss=ssGet('nexusSnap_current');log(ss?'  \u2713 nexusSnap_current ('+ss.length+' chars)':'  \u00b7 nexusSnap_current VIDE',ss?'ok':'muted');
+    const fr=ssGet('nexus_factory_reset');log(fr?'  \u26a0 FLAG factory_reset pr\u00e9sent: "'+fr+'"':'  \u00b7 factory_reset absent (bon)',fr?'crit':'muted');
+    log('\n\u2550\u2550\u2550 FIN \u2550\u2550\u2550','event');
+  }
+
+  async function copyLsToIdb(){
+    logClear();log('\u2550\u2550\u2550 COPIE localStorage \u2192 IndexedDB \u2550\u2550\u2550','event');
+    log('Pr\u00e9serve TOUTES les donn\u00e9es existantes (chainLog, pnlHistory...)','muted');
+    const raw=lsGet(SAVE_KEY);
+    if(!raw){log('  \u274c localStorage.'+SAVE_KEY+' VIDE. Utilise \u00ab Scanner \u00bb + \u00ab Restaurer le meilleur \u00bb.','crit');return;}
+    const parsed=safeParse(raw);if(!parsed){log('  \u274c JSON invalide','crit');return;}
+    log('  \u2713 '+raw.length.toLocaleString()+' chars, cycle='+parsed.cycle,'ok');
+    try{sessionStorage.removeItem('nexus_factory_reset');}catch(e){}
+    const db=await openDBNamed(DB_NAME,DB_VERSION);
+    if(!db){log('  \u274c IDB inaccessible','crit');return;}
+    try{await new Promise((res,rej)=>{const tx=db.transaction(STORE,'readwrite');const s=tx.objectStore(STORE);const req=s.keyPath?s.put(parsed):s.put(parsed,SAVE_KEY);req.onsuccess=()=>res();req.onerror=()=>rej(req.error);});log('  \u2713 IDB.'+STORE+'.'+SAVE_KEY+' \u00e9crit','ok');}
+    catch(e){log('  \u274c \u00e9criture: '+(e&&e.message),'crit');try{db.close();}catch(x){}return;}
+    const verify=await idbGet(db,STORE,SAVE_KEY);try{db.close();}catch(e){}
+    if(verify&&verify.cycle===parsed.cycle){log('  \u2713 Relecture OK : cycle='+verify.cycle,'ok');log('\n\u2705 COPIE COMPL\u00c8TE. Recharge AURA8.','ok');jlog('event','RECOVERY','LS\u2192IDB copi\u00e9 (cycle '+parsed.cycle+')');await collectState();}
+    else log('  \u274c V\u00e9rification \u00e9chou\u00e9e','crit');
+  }
+
+  async function restoreBest(){
+    if(!_bestSnap||!_bestSnap.snap){log('Pas de snapshot \u00e0 restaurer. Lance \u00ab Scanner \u00bb d\'abord.','crit');return;}
+    if(!confirm('Restaurer cycle #'+_bestSnap.info.cycle+' dans '+SAVE_KEY+' + IndexedDB ?\n\n\u00c7a \u00e9crase l\'\u00e9tat actuel.'))return;
+    log('\n\u2550\u2550\u2550 RESTAURATION \u2550\u2550\u2550','warn');
+    const snap=_bestSnap.snap;if(!snap.savedAt)snap.savedAt=new Date().toISOString();if(!snap.key)snap.key=SAVE_KEY;
+    try{localStorage.setItem(SAVE_KEY,JSON.stringify(snap));log('  \u2713 localStorage['+SAVE_KEY+'] \u00e9crit (cycle #'+snap.cycle+')','ok');}catch(e){log('  \u274c localStorage: '+e.message,'crit');}
+    const db=await openDBNamed(DB_NAME,DB_VERSION);
+    if(!db)log('  \u26a0 IDB inaccessible \u2014 restauration LS uniquement','warn');
+    else{try{await new Promise((res,rej)=>{const tx=db.transaction(STORE,'readwrite');const s=tx.objectStore(STORE);const req=s.keyPath?s.put(snap):s.put(snap,SAVE_KEY);req.onsuccess=()=>res();req.onerror=()=>rej(req.error);tx.oncomplete=()=>res();});log('  \u2713 IDB['+DB_NAME+'.'+STORE+'] \u00e9crit','ok');}catch(e){log('  \u274c IDB: '+(e&&e.message),'crit');}try{db.close();}catch(e){}}
+    log('\n\u2705 RESTAUR\u00c9. Recharge AURA8 pour v\u00e9rifier.','ok');jlog('event','RECOVERY','Restaur\u00e9 cycle #'+snap.cycle);await collectState();
+  }
+
+  const bind=(id,fn)=>{const e=document.getElementById(id);if(e)e.onclick=fn;};
+  bind('reScan',scan);bind('reDiag',diagnose);bind('reCopy',copyLsToIdb);bind('reRestore',restoreBest);
+  bind('reExport',()=>{if(_scanReport)downloadTxt(_scanReport,'aura_recovery_'+(_bestSnap?_bestSnap.info.cycle:'scan')+'.txt');});
+};
+
+/* ============================================================
+   NETTOYAGE (clean-storage : clés obsolètes ciblées)
+   ============================================================ */
+VIEWS.clean=function(){
+  let h='<div class="panels"><div class="panel full"><div class="panel-head"><span class="panel-title">&#129529; Nettoyage storage</span></div><div class="panel-body">';
+  h+='<div class="hint">Analyse la taille de toutes les cl\u00e9s et supprime les cl\u00e9s obsolètes ('+OBSOLETE_KEYS.join(', ')+'). Lib\u00e8re de l\'espace localStorage sans toucher \u00e0 l\'\u00e9tat actif.</div>';
+  h+='<div id="clState"></div>';
+  h+='<div class="controls"><button class="btn" id="clRefresh">&#8635; Analyser</button><button class="btn danger" id="clClean" disabled>\ud83d\uddd1 Nettoyer obsol\u00e8tes</button></div>';
+  h+='<div class="outbox" id="clLog" style="display:none"></div>';
+  h+='</div></div></div>';return h;
+};
+VIEW_INIT.clean=function(){
+  function analyze(){let total=0;const keys=[];for(const k of lsKeys()){const sz=getKeySize(k);total+=sz;keys.push({key:k,size:sz});}keys.sort((a,b)=>b.size-a.size);return {total,keys};}
+  function render(){
+    const a=analyze();const limit=10*1024*1024;
+    let obsoleteTotal=0;OBSOLETE_KEYS.forEach(k=>obsoleteTotal+=getKeySize(k));
+    let h=rowKV('Total localStorage',fmtBytes(a.total)+' / ~'+fmtBytes(limit),a.total>limit*0.9?'crit':'');
+    h+=rowKV('Cl\u00e9s stock\u00e9es',a.keys.length);
+    OBSOLETE_KEYS.forEach(k=>{const s=getKeySize(k);h+=rowKV(k,s>0?fmtBytes(s):'absent',s>100*1024?'crit':(s>0?'warn':'muted'));});
+    h+=rowKV('Obsol\u00e8tes \u00e0 lib\u00e9rer',fmtBytes(obsoleteTotal),obsoleteTotal>0?'warn':'');
+    h+=rowKV('\u2192 Apr\u00e8s nettoyage',fmtBytes(a.total-obsoleteTotal),'ok');
+    document.getElementById('clState').innerHTML=h;
+    document.getElementById('clClean').disabled=(obsoleteTotal===0);
+  }
+  function cleanup(){
+    if(!confirm('Supprimer '+OBSOLETE_KEYS.length+' cl\u00e9s obsol\u00e8tes ?\n\nAction irr\u00e9versible.'))return;
+    const log=[];let freed=0,errors=0;
+    for(const k of OBSOLETE_KEYS){const sz=getKeySize(k);if(sz>0){try{localStorage.removeItem(k);if(lsGet(k)===null){log.push('\u2713 '+k+' supprim\u00e9e ('+fmtBytes(sz)+')');freed+=sz;}else{log.push('\u2717 '+k+' non supprim\u00e9e');errors++;}}catch(e){log.push('\u2717 '+k+' '+e.message);errors++;}}else log.push('- '+k+' d\u00e9j\u00e0 absente');}
+    log.push('','\u2550\u2550\u2550','Espace lib\u00e9r\u00e9 : '+fmtBytes(freed),'Erreurs : '+errors);
+    const lb=document.getElementById('clLog');lb.style.display='block';lb.textContent=log.join('\n');
+    jlog(errors?'warn':'event','CLEAN','Nettoyage : '+fmtBytes(freed)+' lib\u00e9r\u00e9s, '+errors+' erreurs');
+    render();
+  }
+  const bind=(id,fn)=>{const e=document.getElementById(id);if(e)e.onclick=fn;};
+  bind('clRefresh',render);bind('clClean',cleanup);render();
+};
+/* ============================================================
+   RECHERCHE CODE (multi-search complet : HTML/CSS/JS,
+   contexte configurable, casse, regex, progression, export)
+   ============================================================ */
+let _searchResultText='',_searchKeyword='';
+VIEWS.search=function(){
+  let h='<div class="panels"><div class="panel full"><div class="panel-head"><span class="panel-title">&#128270; Recherche code (multi-fichiers)</span></div><div class="panel-body">';
+  h+='<div class="hint">Recherche globale dans HTML + /css/ + /js/. Contexte configurable, casse, regex, export .txt. \u00c0 lancer depuis la m\u00eame origine que le repo.</div>';
+  h+='<div class="sect-label">1. Mot-cl\u00e9</div><input class="gi" id="sQuery" placeholder="ex: showToast, renderAll, S.portfolio, function init" spellcheck="false" autocomplete="off">';
+  h+='<div style="margin-top:4px">';
+  ['showToast','renderAll','window.S','cashVal','saveState','loadState','buildSnapshot','triggerEvolution'].forEach(k=>{h+='<span class="kwchip" data-kw="'+k+'">'+k+'</span>';});
+  h+='</div>';
+  h+='<div class="sect-label">2. O\u00f9 chercher</div><div class="toggle-row"><div class="toggle on" id="tgHTML">\ud83d\udcc4 HTML</div><div class="toggle on" id="tgCSS">\ud83c\udfa8 CSS</div><div class="toggle on" id="tgJS">\u2699\ufe0f JS</div></div>';
+  h+='<div class="sect-label">3. Lignes de contexte</div><input class="gi" id="sCtx" value="2" style="width:80px">';
+  h+='<div class="sect-label">4. Options</div><div class="toggle-row"><div class="toggle on" id="tgCase">Aa Insensible</div><div class="toggle" id="tgRegex">.* Regex</div></div>';
+  h+='<div class="controls"><button class="btn green wide" id="sRun">&#128270; Lancer la recherche globale</button></div>';
+  h+='<div class="progress" id="sProgress" style="display:none;margin-top:10px"><div id="sProgressTxt" class="hint"></div><div class="bar"><div class="bar-inner" id="sBar"></div></div></div>';
+  h+='<div id="sSummary" style="margin-top:8px"></div>';
+  h+='<div class="controls"><button class="btn gold wide" id="sDl" style="display:none">&#11015; T\u00e9l\u00e9charger .txt</button></div>';
+  h+='<div class="outbox" id="sResults" style="display:none"></div>';
+  h+='</div></div></div>';return h;
+};
+VIEW_INIT.search=function(){
+  document.querySelectorAll('.kwchip').forEach(c=>c.onclick=()=>{document.getElementById('sQuery').value=c.getAttribute('data-kw');});
+  ['tgHTML','tgCSS','tgJS','tgCase','tgRegex'].forEach(id=>{const e=document.getElementById(id);if(e)e.onclick=()=>e.classList.toggle('on');});
+  async function fetchFile(path){try{const r=await fetch(path,{cache:'no-store'});if(!r.ok)return null;return await r.text();}catch(e){return null;}}
+  function searchInText(text,kw,opts){
+    const lines=text.split('\n');const matches=[];let pat;
+    try{if(opts.regex)pat=new RegExp(kw,opts.insensitive?'i':'');else pat=new RegExp(escapeRegex(kw),opts.insensitive?'i':'');}
+    catch(e){return {error:'regex invalide: '+e.message,matches:[]};}
+    for(let i=0;i<lines.length;i++){if(pat.test(lines[i]))matches.push({line:i+1,content:lines[i],before:lines.slice(Math.max(0,i-opts.ctx),i),after:lines.slice(i+1,Math.min(lines.length,i+1+opts.ctx))});}
+    return {matches};
+  }
+  function hl(line,kw,opts){const e=escapeHtml(line);if(!kw)return e;try{let pat;if(opts.regex)pat=new RegExp('('+kw+')',opts.insensitive?'gi':'g');else pat=new RegExp('('+escapeRegex(kw)+')',opts.insensitive?'gi':'g');return e.replace(pat,'<span class="hit">$1</span>');}catch(x){return e;}}
+  async function run(){
+    const kw=document.getElementById('sQuery').value.trim();if(!kw){alert('Indique un mot-cl\u00e9');return;}
+    const opts={ctx:Math.max(0,Math.min(20,parseInt(document.getElementById('sCtx').value)||0)),insensitive:document.getElementById('tgCase').classList.contains('on'),regex:document.getElementById('tgRegex').classList.contains('on')};
+    const inc={html:document.getElementById('tgHTML').classList.contains('on'),css:document.getElementById('tgCSS').classList.contains('on'),js:document.getElementById('tgJS').classList.contains('on')};
+    const files=[];if(inc.html)FILES.html.forEach(f=>files.push({path:'./'+f,kind:'html'}));if(inc.css)FILES.css.forEach(f=>files.push({path:'./css/'+f,kind:'css'}));if(inc.js)FILES.js.forEach(f=>files.push({path:'./js/'+f,kind:'js'}));
+    if(!files.length){alert('Active au moins une cat\u00e9gorie');return;}
+    _searchKeyword=kw;
+    const prog=document.getElementById('sProgress'),progTxt=document.getElementById('sProgressTxt'),bar=document.getElementById('sBar');
+    const sum=document.getElementById('sSummary'),res=document.getElementById('sResults'),dl=document.getElementById('sDl');
+    prog.style.display='block';sum.innerHTML='';res.style.display='none';res.innerHTML='';dl.style.display='none';
+    let total=0,withMatch=0,scanned=0,notFound=0;const fileResults=[];const t0=Date.now();
+    const BATCH=5;
+    for(let b=0;b<files.length;b+=BATCH){
+      const batch=files.slice(b,b+BATCH);
+      const br=await Promise.all(batch.map(async f=>{const text=await fetchFile(f.path);if(text===null)return Object.assign({},f,{notFound:true});return Object.assign({},f,searchInText(text,kw,opts));}));
+      for(const fr of br){scanned++;if(fr.notFound)notFound++;else if(fr.matches&&fr.matches.length){total+=fr.matches.length;withMatch++;fileResults.push(fr);}}
+      const pct=Math.round(scanned/files.length*100);bar.style.width=pct+'%';progTxt.textContent='Scan '+scanned+'/'+files.length+' \u00b7 '+total+' matchs \u00b7 '+withMatch+' fichiers';
+    }
+    const elapsed=((Date.now()-t0)/1000).toFixed(1);prog.style.display='none';
+    sum.innerHTML='<div class="item ok"><span class="nm"><b>'+total+'</b> matchs dans <b>'+withMatch+'</b> fichier(s) \u00b7 scann\u00e9 '+scanned+(notFound?(' \u00b7 '+notFound+' inaccessibles'):'')+' \u00b7 '+elapsed+'s</span></div>';
+    if(!fileResults.length){res.style.display='block';res.innerHTML='<div class="hint">Aucun match. Essaie insensible casse ou autre mot-cl\u00e9.</div>';jlog('warn','SEARCH',kw+' : 0 match');return;}
+    const order={html:1,css:2,js:3};fileResults.sort((a,b)=>order[a.kind]!==order[b.kind]?order[a.kind]-order[b.kind]:a.path.localeCompare(b.path));
+    let html='';let txt='\u2550\u2550\u2550 AURA MULTI-SEARCH \u2550\u2550\u2550\nKeyword: '+kw+'\nOptions: '+(opts.regex?'regex \u00b7 ':'')+(opts.insensitive?'insensible':'sensible')+' \u00b7 context='+opts.ctx+'\nTotal: '+total+' dans '+withMatch+' fichier(s) \u00b7 '+elapsed+'s\nDate: '+new Date().toISOString()+'\n\n';
+    for(const fr of fileResults){const fn=fr.path.replace(/^\.\//,'');
+      html+='<div class="log-entry"><span class="log-event">'+(fr.kind==='html'?'\ud83d\udcc4':fr.kind==='css'?'\ud83c\udfa8':'\u2699\ufe0f')+' '+fn+'</span> <span class="log-time">'+fr.matches.length+' match(s)</span></div>';
+      txt+='\n\u2501\u2501\u2501 '+fn+' ('+fr.matches.length+') \u2501\u2501\u2501\n';
+      for(const m of fr.matches){
+        for(const c of m.before){html+='<div class="log-muted" style="padding-left:10px">  '+escapeHtml(c.slice(0,160))+'</div>';txt+='       \u00b7 '+c+'\n';}
+        html+='<div style="padding-left:10px;color:var(--t1)">'+m.line+': '+hl(m.content.slice(0,200),kw,opts)+'</div>';txt+=String(m.line).padStart(6)+' > '+m.content+'\n';
+        for(const c of m.after){html+='<div class="log-muted" style="padding-left:10px">  '+escapeHtml(c.slice(0,160))+'</div>';txt+='       \u00b7 '+c+'\n';}
+        html+='<div style="height:4px"></div>';
+      }
+    }
+    res.style.display='block';res.innerHTML=html;_searchResultText=txt;dl.style.display='block';
+    jlog('ok','SEARCH',kw+' : '+total+' match(s) dans '+withMatch+' fichier(s)');
+  }
+  const b=document.getElementById('sRun');if(b)b.onclick=run;
+  const d=document.getElementById('sDl');if(d)d.onclick=()=>{if(_searchResultText){const safe=_searchKeyword.replace(/[^a-zA-Z0-9_-]/g,'_').slice(0,40);downloadTxt(_searchResultText,'aura-search-'+safe+'.txt');}};
+};
+
+/* ============================================================
+   SERVICE WORKER (unregister + clear caches, storage préservé)
+   ============================================================ */
+VIEWS.sw=function(){
+  let h='<div class="panels"><div class="panel full"><div class="panel-head"><span class="panel-title">&#9881; Service Worker &amp; caches</span></div><div class="panel-body">';
+  h+='<div class="hint">D\u00e9sinscrit le service worker et vide les caches (utile quand l\'app charge du vieux code). <b>Ne touche pas</b> \u00e0 localStorage ni IndexedDB.</div>';
+  h+='<div id="swStatus"></div>';
+  h+='<div class="controls"><button class="btn" id="swList">&#128269; \u00c9tat SW</button><button class="btn danger" id="swClear">\ud83d\uddd1 Unregister + vider caches</button></div>';
+  h+='<div class="outbox" id="swLog" style="display:none"></div>';
+  h+='</div></div></div>';return h;
+};
+VIEW_INIT.sw=function(){
+  const status=document.getElementById('swStatus');
+  async function showState(){
+    let h='';
+    if('serviceWorker' in navigator){const regs=await navigator.serviceWorker.getRegistrations();h+=rowKV('Service workers',regs.length);regs.forEach(r=>h+='<div class="item"><span class="nm">'+(r.scope||'?')+'</span></div>');}
+    else h+=rowKV('Service Worker','non support\u00e9','warn');
+    if('caches' in window){const keys=await caches.keys();h+=rowKV('Caches',keys.length);keys.forEach(k=>h+='<div class="item"><span class="nm">'+escapeHtml(k)+'</span></div>');}
+    status.innerHTML=h;
+  }
+  async function clearAll(){
+    if(!confirm('D\u00e9sinscrire le SW et vider tous les caches ?\n\nlocalStorage et IndexedDB ne seront PAS touch\u00e9s.'))return;
+    const log=document.getElementById('swLog');log.style.display='block';log.innerHTML='';
+    const add=(m,c)=>{log.innerHTML+=(c?'<span class="log-'+c+'">'+escapeHtml(m)+'</span>':escapeHtml(m))+'\n';};
+    add('\u2550\u2550\u2550 NETTOYAGE \u2550\u2550\u2550','event');
+    add('\u25bc [1/2] Service Workers','info');
+    if('serviceWorker' in navigator){try{const regs=await navigator.serviceWorker.getRegistrations();if(!regs.length)add('  \u00b7 aucun SW','muted');for(const r of regs){const ok=await r.unregister();add('  '+(ok?'\u2713':'\u2717')+' '+(r.scope||'?'),ok?'ok':'crit');}}catch(e){add('  \u2717 '+e.message,'crit');}}else add('  \u2717 non support\u00e9','crit');
+    add('\u25bc [2/2] Caches','info');
+    if('caches' in window){try{const keys=await caches.keys();if(!keys.length)add('  \u00b7 aucun cache','muted');for(const k of keys){const ok=await caches.delete(k);add('  '+(ok?'\u2713':'\u26a0')+' '+k,ok?'ok':'warn');}}catch(e){add('  \u2717 '+e.message,'crit');}}else add('  \u2717 non support\u00e9','crit');
+    try{add('  \u2713 localStorage : '+Object.keys(localStorage).length+' cl\u00e9s pr\u00e9serv\u00e9es','ok');}catch(e){}
+    add('\u2550\u2550\u2550 TERMIN\u00c9. Recharge AURA8. \u2550\u2550\u2550','ok');
+    jlog('event','SW','SW d\u00e9sinscrit + caches vid\u00e9s');showState();
+  }
+  const bind=(id,fn)=>{const e=document.getElementById(id);if(e)e.onclick=fn;};
+  bind('swList',showState);bind('swClear',clearAll);showState();
+};
+
+/* ============================================================
+   JOURNAL
+   ============================================================ */
+VIEWS.journal=function(){
+  let h='<div class="panels"><div class="panel full"><div class="panel-head"><span class="panel-title">&#128220; Journal</span></div><div class="panel-body">';
+  h+='<div class="controls"><button class="btn" id="jClear">Vider</button><button class="btn gold" id="jDl">&#11015; Export .txt</button></div>';
+  h+='<div class="outbox" id="journalBox" style="margin-top:8px"></div></div></div></div>';return h;
+};
+VIEW_INIT.journal=function(){
+  renderJournal();
+  const bind=(id,fn)=>{const e=document.getElementById(id);if(e)e.onclick=fn;};
+  bind('jClear',()=>{_journal.length=0;renderJournal();});
+  bind('jDl',()=>{const txt=_journal.map(e=>new Date(e.t).toISOString()+' ['+e.tag+'] '+e.level+': '+e.msg).join('\n');downloadTxt(txt||'(vide)','aura_guardian_journal.txt');});
+};
+
+/* ============================================================
+   BOOTSTRAP
+   ============================================================ */
+function refreshHeader(){
+  const S=CTX.S;
+  document.getElementById('hs-mode').textContent=S&&S.tradingMode?S.tradingMode:'\u2014';
+  let alerts=0;
+  if(CTX.lsCycle!=null&&CTX.idbCycle!=null&&Math.abs(CTX.lsCycle-CTX.idbCycle)>20)alerts++;
+  if(_bugResults)alerts+=_bugResults.filter(b=>b.det.hit&&b.statut!=='r\u00e9solu'&&b.statut!=='cosm\u00e9tique').length;
+  const he=document.getElementById('hs-health');
+  he.textContent=alerts>0?(alerts+' alerte(s)'):'OK';he.style.color=alerts>0?'var(--gold)':'var(--up)';
+  const bar=document.getElementById('alertBar');
+  if(alerts>0){bar.classList.add('show');document.getElementById('alertCount').textContent=alerts;}else bar.classList.remove('show');
+}
+/* ============================================================
+   PAGES INTELLIGENTES (moteur de sondes GuardianCore)
+   ============================================================ */
+let _coreLast=null;
+const GC = ()=> window.GuardianCore;
+
+VIEWS.analyse=function(){
+  let h='<div class="hint">Lance les sondes intelligentes : incohérences UI↔état, valeurs, stockage, erreurs JS, fichiers, fonctions, variables non définies… Chaque problème indique le chemin de correction.</div>';
+  if(!GC()){ h+='<div class="item crit"><span class="nm">guardian-core.js non chargé. Place les 3 fichiers dans le même dossier.</span></div>'; return h; }
+  h+='<button class="btn green wide" id="anaRun" style="width:100%">▶ Lancer l\'analyse complète</button><div id="anaOut" style="margin-top:10px"></div>';
+  return h;
+};
+VIEW_INIT.analyse=function(){
+  if(_coreLast) renderAnalyse(_coreLast);
+  const b=document.getElementById('anaRun');
+  if(b) b.onclick=async()=>{
+    b.innerHTML='<span class="spinner"></span> analyse…';b.disabled=true;
+    try{ _coreLast=await GC().runAll(); renderAnalyse(_coreLast); updateCoreBadges(_coreLast); }
+    catch(e){ document.getElementById('anaOut').innerHTML='<div class="item crit"><span class="nm">Erreur: '+(e&&e.message)+'</span></div>'; }
+    b.innerHTML='▶ Relancer';b.disabled=false;
+  };
+};
+function renderAnalyse(rep){
+  const out=document.getElementById('anaOut'); if(!out) return;
+  const crit=rep.results.filter(r=>r.level==='crit').length, warn=rep.results.filter(r=>r.level==='warn').length, ok=rep.results.filter(r=>r.level==='ok').length;
+  let h='<div class="summary-bar"><span class="chip crit">'+crit+' critique(s)</span><span class="chip warn">'+warn+' avert.</span><span class="chip ok">'+ok+' OK</span></div>';
+  if(rep.mode!=='embedded') h+='<div class="hint">⚠ Page séparée : UI↔état et erreurs JS live ne sont actives qu\'intégré dans AURA.</div>';
+  const groups={}; rep.results.forEach(r=>{(groups[r.group]=groups[r.group]||[]).push(r);});
+  Object.keys(groups).forEach(g=>{
+    h+='<div class="sect-label">'+g+'</div>';
+    groups[g].sort((a,b)=>({crit:0,warn:1,info:2,ok:3}[a.level]-{crit:0,warn:1,info:2,ok:3}[b.level]));
+    groups[g].forEach(r=>{
+      const ic=r.level==='ok'?'✅':r.level==='warn'?'🟡':r.level==='crit'?'🔴':'ℹ️';
+      h+='<div class="item '+r.level+'" style="flex-direction:column;align-items:stretch;gap:3px">';
+      h+='<div style="display:flex;gap:6px"><span class="ic">'+ic+'</span><span class="nm" style="font-weight:700">'+escAna(r.title)+'</span></div>';
+      if(r.detail) h+='<div style="font-size:10px;color:var(--t2);line-height:1.5">'+escAna(r.detail)+'</div>';
+      if(r.fix) h+='<div style="font-size:10px;color:var(--ice);line-height:1.5;padding:5px 7px;background:rgba(56,212,245,.06);border-radius:5px"><b style="color:var(--gold)">→ Correction :</b> '+escAna(r.fix)+'</div>';
+      h+='</div>';
+    });
+  });
+  out.innerHTML=h;
+}
+function escAna(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+function updateCoreBadges(rep){
+  const crit=rep.results.filter(r=>r.level==='crit').length;
+  const warn=rep.results.filter(r=>r.level==='warn').length;
+  setTabBadge('analyse', crit>0?'crit':'warn', crit||warn||0);
+}
+PAGE_ACTIONS.analyse={
+  json:()=>({content:GC().export.resultsJSON(),name:'guardian-analyse.json'}),
+  text:()=>({content:GC().export.resultsText(),name:'guardian-analyse.txt'}),
+  backup:()=>({content:GC().export.fullBackup(),name:'guardian-backup.json'})
+};
+
+VIEWS.capacites=function(){
+  if(!GC()) return '<div class="hint">core non chargé.</div>';
+  const c=GC().describeCapabilities();
+  let h='<div class="hint">Auto-description : '+c.probes.length+' sondes.</div>';
+  c.probes.forEach(p=>{ h+='<div class="item"><span class="nm"><b>'+p.nom+'</b> <span style="font-size:9px;color:var(--t3)">['+p.niveau+']</span><div style="font-size:10px;color:var(--t2);margin-top:2px">'+p.detecte+'</div></span></div>'; });
+  return h;
+};
+PAGE_ACTIONS.capacites={
+  json:()=>({content:GC().export.capabilitiesJSON(),name:'guardian-capacites.json'}),
+  text:()=>({content:GC().export.capabilitiesText(),name:'guardian-capacites.txt'})
+};
+
+VIEWS.historique=function(){
+  if(!GC()) return '<div class="hint">core non chargé.</div>';
+  const hist=GC().history||[];
+  let h='<div class="hint">Mémoire persistante des scans (entre sessions).</div>';
+  if(!hist.length) h+='<div class="hint">Aucun scan. Lance une analyse.</div>';
+  else hist.slice().reverse().forEach(x=>{ const lvl=x.crit>0?'crit':x.warn>0?'warn':'ok'; h+='<div class="item '+lvl+'"><span class="nm">'+new Date(x.ts).toLocaleString('fr-FR')+' — '+x.crit+' crit · '+x.warn+' warn ('+x.mode+')</span></div>'; });
+  return h;
+};
+PAGE_ACTIONS.historique={
+  json:()=>({content:GC().export.historyJSON(),name:'guardian-historique.json'}),
+  text:()=>({content:GC().export.historyText(),name:'guardian-historique.txt'})
+};
+
+VIEWS.export=function(){
+  if(!GC()) return '<div class="hint">core non chargé.</div>';
+  let h='<div class="hint">Tout Guardian est exportable (JSON + texte) et réimportable. Le backup global contient config + historique + résultats + capacités.</div>';
+  h+='<div class="sect-label">Backup global</div><div class="controls"><button class="btn green" id="exBk">⬇ Backup JSON</button><button class="btn green" id="imBk">⬆ Importer backup</button></div>';
+  h+='<div class="sect-label">Configuration</div><div class="controls"><button class="btn gold" id="exCfg">⬇ Config JSON</button><button class="btn gold" id="imCfg">⬆ Importer config</button></div>';
+  h+='<div class="sect-label">Résultats du dernier scan</div><div class="controls"><button class="btn" id="exRj">JSON</button><button class="btn" id="exRt">Texte</button></div>';
+  h+='<input type="file" id="impFile" accept="application/json" style="display:none">';
+  h+='<div id="impMsg" class="hint" style="margin-top:10px"></div>';
+  return h;
+};
+VIEW_INIT.export=function(){
+  const C=GC(); if(!C) return;
+  const stamp=()=>new Date().toISOString().slice(0,19).replace(/[:T]/g,'-');
+  const bind=(id,fn)=>{const e=document.getElementById(id);if(e)e.onclick=fn;};
+  bind('exBk',()=>dlFile(C.export.fullBackup(),'guardian-backup-'+stamp()+'.json','application/json'));
+  bind('exCfg',()=>dlFile(C.export.configJSON(),'guardian-config-'+stamp()+'.json','application/json'));
+  bind('exRj',()=>dlFile(C.export.resultsJSON(),'guardian-results-'+stamp()+'.json','application/json'));
+  bind('exRt',()=>dlFile(C.export.resultsText(),'guardian-results-'+stamp()+'.txt'));
+  const f=document.getElementById('impFile'); let kind=null;
+  const trig=k=>{kind=k;f.value='';f.click();};
+  bind('imBk',()=>trig('backup')); bind('imCfg',()=>trig('config'));
+  f.onchange=()=>{ const file=f.files[0]; if(!file)return; const rd=new FileReader();
+    rd.onload=()=>{ let o=null; try{o=JSON.parse(rd.result);}catch(e){document.getElementById('impMsg').innerHTML='<span style="color:var(--down)">JSON invalide.</span>';return;}
+      const res=C.import.fromObject(o); document.getElementById('impMsg').innerHTML='<span style="color:'+(res.ok?'var(--up)':'var(--down)')+'">'+res.msg+'</span>'; };
+    rd.readAsText(file); };
+};
+
+VIEWS.autobackup=function(){
+  if(!GC()||!GC().autoBackup) return '<div class="hint">Module backup auto indisponible (core non chargé).</div>';
+  let h='<div class="hint">Sauvegardes automatiques de l\'état AURA dans une base IDB dédiée. Tournent en arrière-plan quand AURA est ouverte. Rotation : les plus vieux sont supprimés au-delà du nombre gardé.</div>';
+  h+='<div class="sect-label">Réglages</div><div id="abCfg"></div>';
+  h+='<div class="controls" style="margin-top:8px"><button class="btn green" id="abNow">💾 Backup maintenant</button></div>';
+  h+='<div class="sect-label">Backups enregistrés</div><div id="abList"><div class="hint">Chargement…</div></div>';
+  return h;
+};
+VIEW_INIT.autobackup=function(){
+  const A=GC().autoBackup;
+  // réglages
+  const meta=A.getMeta();
+  const cfg=document.getElementById('abCfg');
+  cfg.innerHTML='<div class="item"><span class="nm">Fréquence : <b>'+meta.intervalH+'h</b> · Garder : <b>'+meta.keep+'</b> backups · '+(meta.enabled?'<span style="color:var(--up)">activé</span>':'<span style="color:var(--down)">désactivé</span>')+'</span></div>'
+    +'<div class="controls c3" style="margin-top:6px">'
+    +'<button class="btn" data-h="3">3h</button><button class="btn" data-h="6">6h</button><button class="btn" data-h="12">12h</button></div>';
+  cfg.querySelectorAll('[data-h]').forEach(b=>{ b.onclick=()=>{ const m=A.getMeta(); m.intervalH=parseInt(b.getAttribute('data-h')); A.setMeta(m); switchTab('autobackup'); }; });
+  // backup manuel
+  document.getElementById('abNow').onclick=async()=>{
+    const btn=document.getElementById('abNow'); btn.textContent='⏳…'; btn.disabled=true;
+    const r=await A.run(true);
+    btn.textContent= r.ok ? '✓ Backup #'+r.cycle : '✗ '+(r.reason||'échec'); 
+    setTimeout(()=>switchTab('autobackup'),1200);
+  };
+  // liste
+  A.list().then(list=>{
+    const el=document.getElementById('abList'); if(!el) return;
+    if(!list.length){ el.innerHTML='<div class="hint">Aucun backup auto pour l\'instant. Le premier se fera bientôt (ou clique « Backup maintenant »).</div>'; return; }
+    let h='<div class="hint">'+list.length+' backup(s) · du plus récent au plus ancien</div>';
+    list.forEach(b=>{
+      h+='<div class="item"><span class="nm">#'+b.cycle+' · '+new Date(b.ts).toLocaleString('fr-FR')+' · '+(typeof b.portfolio==='number'?Math.round(b.portfolio):'?')+'</span>'
+        +'<button class="btn" data-id="'+b.id+'" style="flex:0 0 auto;padding:6px 10px">⬇ JSON</button></div>';
+    });
+    el.innerHTML=h;
+    el.querySelectorAll('[data-id]').forEach(btn=>{
+      btn.onclick=async()=>{ const rec=await A.get(parseInt(btn.getAttribute('data-id'))); if(rec&&rec.snapshot){ const obj=Object.assign({},rec.snapshot); if(!obj.key)obj.key='nexus_state_v2'; dlFile(obj,'aura-autobackup-'+rec.cycle+'.json','application/json'); } };
+    });
+  });
+};
+
+(function init(){
+  jlog && jlog('info','INIT','Guardian tout-en-un démarré');
+  collectState && collectState().then(()=>{ runBugScan&&runBugScan(); refreshHeader&&refreshHeader(); });
+  goHome();
+})();
+</script>
+</body>
+</html>
