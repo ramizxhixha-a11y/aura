@@ -501,6 +501,118 @@ Core.import = {
 const _origRunAll = Core.runAll;
 Core.runAll = async function(){ const r = await _origRunAll.apply(this, arguments); saveHistory(); return r; };
 
+/* ============================================================
+   BACKUP AUTO (v1.1) — sauvegarde l'état AURA dans une base IDB
+   dédiée, toutes les N heures, avec rotation. Lit l'état, ne le
+   modifie JAMAIS. Base séparée → aucun risque pour AURA.
+   ============================================================ */
+const AB = {
+  DB: 'aura_auto_backups',
+  STORE: 'backups',
+  META_KEY: 'guardian_autobackup_meta',   // localStorage : {lastRun, intervalH, keep, enabled}
+  defaults: { enabled: true, intervalH: 3, keep: 240 }
+};
+function abGetMeta(){
+  try { const m = JSON.parse(localStorage.getItem(AB.META_KEY)); if(m && typeof m==='object') return Object.assign({}, AB.defaults, m); } catch(e){}
+  return Object.assign({}, AB.defaults);
+}
+function abSetMeta(m){ try { localStorage.setItem(AB.META_KEY, JSON.stringify(m)); } catch(e){} }
+
+function abOpen(){
+  return new Promise(resolve=>{
+    let req; try { req = indexedDB.open(AB.DB, 1); } catch(e){ return resolve(null); }
+    if(!req) return resolve(null);
+    req.onupgradeneeded = e => {
+      const db = e.target.result;
+      if(!db.objectStoreNames.contains(AB.STORE)) db.createObjectStore(AB.STORE, { keyPath:'id', autoIncrement:true });
+    };
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => resolve(null);
+    setTimeout(()=>resolve(null), 4000);
+  });
+}
+// récupère un snapshot complet d'AURA (buildSnapshot si dispo, sinon copie de S)
+function abGrabState(){
+  try { if(typeof window.buildSnapshot === 'function'){ const s = window.buildSnapshot(); if(s) return s; } } catch(e){}
+  const S = getLiveS();
+  if(!S) return null;
+  try { return JSON.parse(JSON.stringify(S)); } catch(e){ return null; }
+}
+// fait un backup maintenant (force=true ignore l'intervalle)
+async function abRun(force){
+  const meta = abGetMeta();
+  if(!meta.enabled && !force) return { ok:false, reason:'désactivé' };
+  const now = Date.now();
+  if(!force && meta.lastRun && (now - meta.lastRun) < meta.intervalH*3600000){
+    return { ok:false, reason:'intervalle non écoulé' };
+  }
+  const snap = abGrabState();
+  if(!snap || typeof snap.cycle !== 'number'){ return { ok:false, reason:'état AURA indisponible' }; }
+  const db = await abOpen();
+  if(!db){ return { ok:false, reason:'IDB inaccessible' }; }
+  const rec = { ts: now, date: new Date().toISOString(), cycle: snap.cycle,
+                portfolio: snap.portfolio, snapshot: snap };
+  // écrire + rotation
+  return await new Promise(resolve=>{
+    try {
+      const tx = db.transaction(AB.STORE, 'readwrite');
+      const store = tx.objectStore(AB.STORE);
+      store.add(rec);
+      // rotation : compter et supprimer les plus vieux au-delà de keep
+      const all = store.getAllKeys();
+      all.onsuccess = () => {
+        const keys = all.result || [];
+        const excess = keys.length - meta.keep;  // keys triées croissant = plus vieux d'abord
+        for(let i=0; i<excess; i++){ try { store.delete(keys[i]); } catch(e){} }
+      };
+      tx.oncomplete = () => {
+        meta.lastRun = now; abSetMeta(meta);
+        try{db.close();}catch(e){}
+        resolve({ ok:true, cycle: snap.cycle });
+      };
+      tx.onerror = () => { try{db.close();}catch(e){} resolve({ ok:false, reason:'écriture échouée' }); };
+    } catch(e){ try{db.close();}catch(x){} resolve({ ok:false, reason:e.message }); }
+  });
+}
+// liste les backups (métadonnées, sans le gros snapshot)
+async function abList(){
+  const db = await abOpen(); if(!db) return [];
+  return await new Promise(resolve=>{
+    try {
+      const tx = db.transaction(AB.STORE, 'readonly');
+      const r = tx.objectStore(AB.STORE).getAll();
+      r.onsuccess = () => {
+        const list = (r.result||[]).map(x=>({ id:x.id, ts:x.ts, date:x.date, cycle:x.cycle, portfolio:x.portfolio }));
+        list.sort((a,b)=>b.ts-a.ts);
+        try{db.close();}catch(e){}
+        resolve(list);
+      };
+      r.onerror = () => { try{db.close();}catch(e){} resolve([]); };
+    } catch(e){ resolve([]); }
+  });
+}
+// récupère le snapshot complet d'un backup par id
+async function abGet(id){
+  const db = await abOpen(); if(!db) return null;
+  return await new Promise(resolve=>{
+    try {
+      const r = db.transaction(AB.STORE,'readonly').objectStore(AB.STORE).get(id);
+      r.onsuccess = () => { try{db.close();}catch(e){} resolve(r.result || null); };
+      r.onerror = () => { try{db.close();}catch(e){} resolve(null); };
+    } catch(e){ resolve(null); }
+  });
+}
+
+Core.autoBackup = {
+  run: abRun,
+  list: abList,
+  get: abGet,
+  getMeta: abGetMeta,
+  setMeta: abSetMeta,
+  // à appeler périodiquement (depuis l'embed/la page) : fait un backup si l'intervalle est écoulé
+  tick: () => abRun(false)
+};
+
 Core.version = GUARDIAN_VERSION;
 Core.getLiveS = getLiveS;
 Core.detectMode = detectMode;
