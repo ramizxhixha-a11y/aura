@@ -47,6 +47,22 @@ if (typeof window !== 'undefined' && typeof window._stateReady === 'undefined') 
   window._stateReady = false;
 }
 
+// ── MIGRATION QUOTA (v124) : grosses clés stockées en IDB seulement ──────
+// localStorage sature (~5-10 Mo). On y écrit une version ALLÉGÉE du snapshot
+// (sans les grosses clés). IDB garde TOUJOURS le snapshot complet.
+// loadState privilégie IDB ; si seul le LS léger est dispo, il complète les
+// clés manquantes depuis IDB. Le flush de sortie garde le snapshot COMPLET en
+// LS (sécurité maximale au moment le plus risqué).
+const _HEAVY_KEYS = ['agents','agentMemories','realCandles','learningHistory','pairStates','globalMemoryPool','dreamJournal'];
+function _lightSnap(snap) {
+  if (!snap || typeof snap !== 'object') return snap;
+  const light = {};
+  for (const k in snap) { if (!_HEAVY_KEYS.includes(k)) light[k] = snap[k]; }
+  light._lightened = true;        // marqueur : ce snapshot LS est allégé
+  light._heavyInIDB = true;       // les grosses clés sont dans IDB
+  return light;
+}
+
 
 // ════════════════════════════════════════════════════════════════════════
 // saveState — écrit dans IDB ET localStorage en parallèle
@@ -121,9 +137,10 @@ async function saveState(silent = false) {
     });
   } catch (e) {}
 
-  // localStorage en parallèle (pas en fallback)
+  // localStorage en parallèle (pas en fallback) — VERSION ALLÉGÉE (v124)
+  // IDB garde le snapshot complet ; LS ne reçoit que les petites données.
   try {
-    localStorage.setItem(RT.SAVE_KEY, JSON.stringify(snap));
+    localStorage.setItem(RT.SAVE_KEY, JSON.stringify(_lightSnap(snap)));
     lsOk = true;
   } catch (e) {
     console.warn('[saveState] localStorage error:', e.message);
@@ -196,6 +213,21 @@ async function loadState() {
   }
   snap = (cIDB >= cLS) ? snapIDB : snapLS;
   dbg.push('→ choix: #' + snap.cycle);
+
+  // ── MIGRATION QUOTA (v124) : si le snapshot choisi est ALLÉGÉ (vient du LS),
+  // compléter les grosses clés depuis le snapshot IDB complet. Garde-fou anti-perte :
+  // on ne valide jamais un état amputé de ses agents/mémoires/candles.
+  if (snap && snap._lightened) {
+    const heavySrc = snapIDB && !snapIDB._lightened ? snapIDB : null;
+    if (heavySrc) {
+      for (const k of _HEAVY_KEYS) {
+        if (snap[k] === undefined && heavySrc[k] !== undefined) snap[k] = heavySrc[k];
+      }
+      dbg.push('fusion: grosses clés depuis IDB#' + heavySrc.cycle);
+    } else {
+      dbg.push('⚠ snapshot allégé sans source IDB complète');
+    }
+  }
 
   // ── Restauration section par section (try/catch indépendants) ───────
   // safeNum corrigé : accepte zéro et nombres positifs/négatifs
