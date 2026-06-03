@@ -117,9 +117,17 @@ window.GUARDIAN_CONFIG = {
     { id:'nan', label:'Valeur NaN',
       test: s => s && [s.portfolio,s.cashAccount,s.tradingAccount].some(v=>typeof v==='number'&&isNaN(v)),
       msg: 'une valeur monétaire est NaN', file:'02-state-init.js' },
-    { id:'startPf', label:'_startPortfolio aberrant (flash boot)',
-      test: s => s && typeof s.portfolio==='number' && typeof s._startPortfolio==='number' && Math.abs(s.portfolio-s._startPortfolio)>15,
-      msg: 'écart portfolio/_startPortfolio > 15$ → flash gain/perte au démarrage',
+    { id:'startPf', label:'_startPortfolio aberrant',
+      test: s => {
+        if(!s || typeof s.portfolio!=='number' || typeof s._startPortfolio!=='number') return false;
+        // un écart portfolio/_startPortfolio est NORMAL (= P&L de session). On n'alerte que sur
+        // un _startPortfolio vraiment corrompu : nul/négatif avec portfolio positif,
+        // ou écart démesuré (>50% du portfolio) qui trahit une corruption, pas un gain de session.
+        if(s.portfolio>0 && s._startPortfolio<=0) return true;
+        const ecart = Math.abs(s.portfolio - s._startPortfolio);
+        return s.portfolio>0 && ecart > s.portfolio*0.5;
+      },
+      msg: '_startPortfolio incohérent (nul/négatif ou écart > 50% du portfolio) → P&L de session faussé',
       file:'07-v90-mode-bunker-sos.js' }
   ],
 
