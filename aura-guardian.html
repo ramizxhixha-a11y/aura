@@ -334,7 +334,8 @@ const PAGES = [
   {id:'search',    ic:'🔎', nm:'Recherche',     desc:'Mot-clé dans tout le code', actions:[]},
   {id:'sw',        ic:'⚙️', nm:'Service Worker', desc:'Désinscrire + vider caches', actions:['reload']},
   {id:'journal',   ic:'📓', nm:'Journal',       desc:'Événements internes Guardian', actions:['text']},
-  {id:'export',    ic:'📦', nm:'Export / Import',desc:'Backup global, JSON, texte, import', actions:[]}
+  {id:'export',    ic:'📦', nm:'Export / Import',desc:'Backup global, JSON, texte, import', actions:[]},
+  {id:'autobackup',ic:'⏰', nm:'Backup auto',    desc:'Sauvegardes automatiques toutes les 6h (rotation 30)', actions:['reload']}
 ];
 /* handlers d'actions spécifiques par page (json/text/backup) — posés par chaque page */
 const PAGE_ACTIONS = {};
@@ -1141,6 +1142,46 @@ VIEW_INIT.export=function(){
     rd.onload=()=>{ let o=null; try{o=JSON.parse(rd.result);}catch(e){document.getElementById('impMsg').innerHTML='<span style="color:var(--down)">JSON invalide.</span>';return;}
       const res=C.import.fromObject(o); document.getElementById('impMsg').innerHTML='<span style="color:'+(res.ok?'var(--up)':'var(--down)')+'">'+res.msg+'</span>'; };
     rd.readAsText(file); };
+};
+
+VIEWS.autobackup=function(){
+  if(!GC()||!GC().autoBackup) return '<div class="hint">Module backup auto indisponible (core non chargé).</div>';
+  let h='<div class="hint">Sauvegardes automatiques de l\'état AURA dans une base IDB dédiée. Tournent en arrière-plan quand AURA est ouverte. Rotation : les plus vieux sont supprimés au-delà du nombre gardé.</div>';
+  h+='<div class="sect-label">Réglages</div><div id="abCfg"></div>';
+  h+='<div class="controls" style="margin-top:8px"><button class="btn green" id="abNow">💾 Backup maintenant</button></div>';
+  h+='<div class="sect-label">Backups enregistrés</div><div id="abList"><div class="hint">Chargement…</div></div>';
+  return h;
+};
+VIEW_INIT.autobackup=function(){
+  const A=GC().autoBackup;
+  // réglages
+  const meta=A.getMeta();
+  const cfg=document.getElementById('abCfg');
+  cfg.innerHTML='<div class="item"><span class="nm">Fréquence : <b>'+meta.intervalH+'h</b> · Garder : <b>'+meta.keep+'</b> backups · '+(meta.enabled?'<span style="color:var(--up)">activé</span>':'<span style="color:var(--down)">désactivé</span>')+'</span></div>'
+    +'<div class="controls c3" style="margin-top:6px">'
+    +'<button class="btn" data-h="3">3h</button><button class="btn" data-h="6">6h</button><button class="btn" data-h="12">12h</button></div>';
+  cfg.querySelectorAll('[data-h]').forEach(b=>{ b.onclick=()=>{ const m=A.getMeta(); m.intervalH=parseInt(b.getAttribute('data-h')); A.setMeta(m); switchTab('autobackup'); }; });
+  // backup manuel
+  document.getElementById('abNow').onclick=async()=>{
+    const btn=document.getElementById('abNow'); btn.textContent='⏳…'; btn.disabled=true;
+    const r=await A.run(true);
+    btn.textContent= r.ok ? '✓ Backup #'+r.cycle : '✗ '+(r.reason||'échec'); 
+    setTimeout(()=>switchTab('autobackup'),1200);
+  };
+  // liste
+  A.list().then(list=>{
+    const el=document.getElementById('abList'); if(!el) return;
+    if(!list.length){ el.innerHTML='<div class="hint">Aucun backup auto pour l\'instant. Le premier se fera bientôt (ou clique « Backup maintenant »).</div>'; return; }
+    let h='<div class="hint">'+list.length+' backup(s) · du plus récent au plus ancien</div>';
+    list.forEach(b=>{
+      h+='<div class="item"><span class="nm">#'+b.cycle+' · '+new Date(b.ts).toLocaleString('fr-FR')+' · '+(typeof b.portfolio==='number'?Math.round(b.portfolio):'?')+'</span>'
+        +'<button class="btn" data-id="'+b.id+'" style="flex:0 0 auto;padding:6px 10px">⬇ JSON</button></div>';
+    });
+    el.innerHTML=h;
+    el.querySelectorAll('[data-id]').forEach(btn=>{
+      btn.onclick=async()=>{ const rec=await A.get(parseInt(btn.getAttribute('data-id'))); if(rec&&rec.snapshot){ const obj=Object.assign({},rec.snapshot); if(!obj.key)obj.key='nexus_state_v2'; dlFile(obj,'aura-autobackup-'+rec.cycle+'.json','application/json'); } };
+    });
+  });
 };
 
 (function init(){
