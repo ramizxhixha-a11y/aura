@@ -135,8 +135,12 @@ window._auraGetGlobalS = _auraGetGlobalS;
     const chronoEl = document.getElementById('chronoEl');
     if (chronoEl) {
       chronoEl.textContent = formatChrono(state.chronoSeconds[state.currentMode]);
-      chronoEl.className = 'chrono-display mode-' + state.currentMode;
+      chronoEl.className = 'chrono-display';
       if (state.running) chronoEl.classList.add('running');
+      const _mc = state.currentMode === 'real' ? '#ff3d6b' : (state.currentMode === 'paperReal' ? '#00e87a' : '#38d4f5');
+      chronoEl.style.color = _mc;
+      const _hdr = document.getElementById('statusBar');
+      if (_hdr) _hdr.style.borderColor = _mc;
     }
 
     const netEl = document.getElementById('netIndicator');
@@ -418,31 +422,19 @@ window._auraGetGlobalS = _auraGetGlobalS;
   }
 
   function updateButtonVisual(mode) {
-    const cfg = MODES[mode] || MODES['sim'];
     const btn = document.getElementById('tradeModeBtn');
-    if (btn) {
-      btn.textContent = cfg.label;
-      btn.classList.remove('mode-AA', 'mode-EV', 'mode-RE');
-      btn.classList.add(cfg.cssClass);
-      btn.title = 'Mode: ' + cfg.name + ' (tape pour cycler)';
-    }
-    // Badge sous le chrono
-    const badge = document.getElementById('modeBadge');
-    if (badge) {
-      badge.textContent = cfg.label;
-      badge.classList.remove('mode-sim', 'mode-paper', 'mode-real');
-      badge.classList.add('mode-' + mode);
-    }
-    // Couleur du mode appliquée au header entier (logo, bordure, AUTO, chrono)
-    const bar = document.getElementById('statusBar');
-    if (bar) {
-      bar.classList.remove('hdr-sim', 'hdr-paper', 'hdr-real');
-      bar.classList.add('hdr-' + mode);
-    }
-    const chrono = document.getElementById('chronoEl');
-    if (chrono) {
-      chrono.classList.remove('mode-sim', 'mode-paper', 'mode-real');
-      chrono.classList.add('mode-' + mode);
+    if (!btn) return;
+    const cfg = MODES[mode] || MODES['sim'];
+    btn.textContent = cfg.label;
+    btn.classList.remove('mode-AA', 'mode-EV', 'mode-RE');
+    btn.classList.add(cfg.cssClass);
+    btn.title = 'Mode: ' + cfg.name + ' (tape pour cycler)';
+    // Colorer l'EN-TÊTE selon le mode (bordure + logo + halo via CSS hdr-*)
+    const hdr = document.getElementById('statusBar');
+    if (hdr) {
+      hdr.classList.remove('hdr-sim', 'hdr-paper', 'hdr-real');
+      const hdrClass = mode === 'real' ? 'hdr-real' : (mode === 'paperReal' ? 'hdr-paper' : 'hdr-sim');
+      hdr.classList.add(hdrClass);
     }
   }
 
