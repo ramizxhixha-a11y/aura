@@ -65,8 +65,28 @@
   .toggle-row{display:flex;gap:6px;margin-top:6px;flex-wrap:wrap}
   .toggle{flex:1;min-width:70px;background:var(--card-hl);border:1px solid var(--border);border-radius:7px;padding:8px;color:var(--t2);font-family:var(--mono);font-size:11px;font-weight:700;cursor:pointer;text-align:center;user-select:none}
   .toggle.on{background:rgba(0,232,122,.12);border-color:rgba(0,232,122,.5);color:var(--up)}
-  .tab-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(88px,1fr));gap:5px;margin-bottom:12px}
-  @media(min-width:600px){.tab-grid{grid-template-columns:repeat(auto-fill,minmax(110px,1fr))}}
+  /* Home : grandes tuiles */
+  .home-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;margin-bottom:12px}
+  @media(min-width:700px){.home-grid{grid-template-columns:repeat(auto-fill,minmax(180px,1fr))}}
+  .tile{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:14px;cursor:pointer;transition:all .15s;position:relative;display:flex;flex-direction:column;gap:6px;min-height:96px}
+  .tile:hover{border-color:var(--ice);background:rgba(56,212,245,.05)}
+  .tile:active{transform:scale(.98)}
+  .tile .tile-ic{font-size:24px;line-height:1}
+  .tile .tile-nm{font-size:13px;font-weight:700;color:var(--t1)}
+  .tile .tile-desc{font-size:10px;color:var(--t3);line-height:1.4}
+  .tile .tile-badge{position:absolute;top:8px;right:8px;font-size:9px;font-weight:700;min-width:16px;line-height:16px;text-align:center;border-radius:8px;padding:0 4px}
+  .tile .tile-badge.crit{background:var(--down);color:#fff}
+  .tile .tile-badge.warn{background:var(--gold);color:#000}
+  /* page ouverte */
+  .page-head{display:flex;align-items:center;gap:10px;margin-bottom:12px}
+  .back-btn{background:rgba(56,212,245,.1);border:1px solid var(--ice);color:var(--ice);padding:8px 14px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap}
+  .back-btn:active{transform:scale(.97)}
+  .page-title{font-size:15px;font-weight:700;color:var(--ice)}
+  /* barre d'actions bas de page */
+  .action-bar{display:flex;flex-wrap:wrap;gap:6px;margin-top:14px;padding-top:12px;border-top:1px solid var(--border)}
+  .action-bar .ab-label{width:100%;font-size:9px;text-transform:uppercase;letter-spacing:.08em;color:var(--t3);margin-bottom:2px}
+  .action-bar .btn{flex:1;min-width:90px}
+  .hidden{display:none !important}
   .tab{padding:8px 6px;background:var(--card);border:1px solid var(--border);border-radius:8px;color:var(--t2);font-size:10.5px;font-weight:700;cursor:pointer;transition:all .15s;text-align:center;display:flex;flex-direction:column;align-items:center;gap:3px;line-height:1.2;min-height:46px;justify-content:center}
   .tab.active{color:var(--ice);border-color:var(--ice);background:rgba(56,212,245,.08)}
 
@@ -102,28 +122,17 @@
   <span class="count" id="alertCount">0</span> probl&egrave;me(s) d&eacute;tect&eacute;(s) &mdash; voir les onglets marqu&eacute;s
 </div>
 
-<div class="tab-grid" id="tabBar">
-  <div class="tab active" data-tab="dashboard">&#128202;<span>Bord</span></div>
-  <div class="tab" data-tab="inventory">&#128221;<span>Inventaire</span></div>
-  <div class="tab" data-tab="bugs">&#128027;<span>Bugs</span></div>
-  <div class="tab" data-tab="deploy">&#128640;<span>D&eacute;ploiement</span></div>
-  <div class="tab" data-tab="storage">&#128190;<span>Storage</span></div>
-  <div class="tab" data-tab="idb">&#128269;<span>Inspecteur IDB</span></div>
-  <div class="tab" data-tab="idbtest">&#129514;<span>Test IDB</span></div>
-  <div class="tab" data-tab="idbdebug">&#128203;<span>Traces IDB</span></div>
-  <div class="tab" data-tab="restore">&#128260;<span>Restauration</span></div>
-  <div class="tab" data-tab="clean">&#129529;<span>Nettoyage</span></div>
-  <div class="tab" data-tab="search">&#128270;<span>Recherche</span></div>
-  <div class="tab" data-tab="sw">&#9881;<span>Service Worker</span></div>
-  <div class="tab" data-tab="journal">&#128220;<span>Journal</span></div>
+<div id="home">
+  <div class="home-grid" id="homeGrid"></div>
 </div>
-
-<div id="views"></div>
+<div id="page" class="hidden"></div>
 
 <div class="footer">
   AURA Guardian &middot; lecture seule par d&eacute;faut &middot; les actions destructrices demandent confirmation
 </div>
 
+<script src="guardian-config.js"></script>
+<script src="guardian-core.js"></script>
 <script>
 'use strict';
 /* ============================================================
@@ -300,27 +309,106 @@ async function collectState(){
 }
 
 /* ============================================================
-   SYSTÈME D'ONGLETS
+   NAVIGATION : HOME (tuiles) ↔ PAGES
    ============================================================ */
 const VIEWS={},VIEW_INIT={};
-let _activeTab='dashboard';
-function switchTab(tab){
-  _activeTab=tab;
-  document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('active',t.getAttribute('data-tab')===tab));
-  const host=document.getElementById('views');
-  host.innerHTML=VIEWS[tab]?VIEWS[tab]():'<div class="hint">Module indisponible.</div>';
-  if(VIEW_INIT[tab]){try{VIEW_INIT[tab]();}catch(e){jlog('crit','UI','init '+tab+': '+(e&&e.message||e));}}
+let _activeTab=null;
+const _badges={};
+
+/* Métadonnées des pages : icône, nom, description, actions de la barre.
+   actions: tableau parmi 'reload','json','text','backup','import' (+ handlers spécifiques posés par chaque page via PAGE_ACTIONS) */
+const PAGES = [
+  {id:'analyse',   ic:'🧠', nm:'Analyse',       desc:'Détection intelligente : incohérences UI↔état, erreurs, fichiers…', actions:['reload','json','text','backup']},
+  {id:'capacites', ic:'💡', nm:'Capacités',     desc:'Tout ce que Guardian sait détecter', actions:['json','text']},
+  {id:'historique',ic:'📈', nm:'Historique',    desc:'Mémoire persistante des scans', actions:['json','text','reload']},
+  {id:'dashboard', ic:'📊', nm:'Tableau de bord',desc:'Synthèse état, cycle, portfolio', actions:['reload','json']},
+  {id:'inventory', ic:'📝', nm:'Inventaire',    desc:'Fichiers, capacités, DOM', actions:['reload','json','text']},
+  {id:'bugs',      ic:'🐛', nm:'Bugs connus',   desc:'Catalogue + détection live', actions:['reload','json','text']},
+  {id:'deploy',    ic:'🚀', nm:'Déploiement',   desc:'Cohérence HTML ↔ repo', actions:['reload','json']},
+  {id:'storage',   ic:'💾', nm:'Storage',       desc:'localStorage + IndexedDB', actions:['reload','json']},
+  {id:'idb',       ic:'🔍', nm:'Inspecteur IDB',desc:'Toutes les bases, stores, clés', actions:['reload','text']},
+  {id:'idbtest',   ic:'🧪', nm:'Test IDB',      desc:'Écriture/lecture diagnostic', actions:['reload','text']},
+  {id:'idbdebug',  ic:'📋', nm:'Traces IDB',    desc:'Journaux openDB / saveState', actions:['reload','text']},
+  {id:'restore',   ic:'🔄', nm:'Restauration',  desc:'Récupération multi-sources', actions:['reload']},
+  {id:'clean',     ic:'🧹', nm:'Nettoyage',     desc:'Purge des clés obsolètes', actions:['reload']},
+  {id:'search',    ic:'🔎', nm:'Recherche',     desc:'Mot-clé dans tout le code', actions:[]},
+  {id:'sw',        ic:'⚙️', nm:'Service Worker', desc:'Désinscrire + vider caches', actions:['reload']},
+  {id:'journal',   ic:'📓', nm:'Journal',       desc:'Événements internes Guardian', actions:['text']},
+  {id:'export',    ic:'📦', nm:'Export / Import',desc:'Backup global, JSON, texte, import', actions:[]}
+];
+/* handlers d'actions spécifiques par page (json/text/backup) — posés par chaque page */
+const PAGE_ACTIONS = {};
+
+function renderHome(){
+  const grid=document.getElementById('homeGrid');
+  grid.innerHTML = PAGES.map(p=>{
+    const b=_badges[p.id];
+    const badge = b ? '<span class="tile-badge '+b.level+'">'+b.n+'</span>' : '';
+    return '<div class="tile" data-page="'+p.id+'">'+badge
+      +'<div class="tile-ic">'+p.ic+'</div>'
+      +'<div class="tile-nm">'+p.nm+'</div>'
+      +'<div class="tile-desc">'+p.desc+'</div></div>';
+  }).join('');
 }
-document.getElementById('tabBar').addEventListener('click',e=>{const t=e.target.closest('.tab');if(t)switchTab(t.getAttribute('data-tab'));});
+function goHome(){
+  _activeTab=null;
+  document.getElementById('page').classList.add('hidden');
+  document.getElementById('home').classList.remove('hidden');
+  renderHome();
+}
+function openPage(id){
+  const meta = PAGES.find(p=>p.id===id);
+  if(!meta) return;
+  _activeTab=id;
+  document.getElementById('home').classList.add('hidden');
+  const page=document.getElementById('page');
+  page.classList.remove('hidden');
+  // header avec retour Home
+  let h='<div class="page-head"><button class="back-btn" id="backHome">← Home</button><span class="page-title">'+meta.ic+' '+meta.nm+'</span></div>';
+  h+='<div id="pageBody">'+(VIEWS[id]?VIEWS[id]():'<div class="hint">Module indisponible.</div>')+'</div>';
+  // barre d'actions adaptée
+  if(meta.actions && meta.actions.length){
+    h+='<div class="action-bar"><span class="ab-label">Actions</span>';
+    meta.actions.forEach(a=>{
+      const lbl={reload:'↻ Recharger',json:'⬇ JSON',text:'⬇ Texte',backup:'⬇ Backup',import:'⬆ Importer'}[a];
+      const cls=a==='backup'?'btn green':a==='reload'?'btn':'btn';
+      h+='<button class="'+cls+'" data-act="'+a+'">'+lbl+'</button>';
+    });
+    h+='</div>';
+  }
+  page.innerHTML=h;
+  document.getElementById('backHome').onclick=goHome;
+  if(VIEW_INIT[id]){try{VIEW_INIT[id]();}catch(e){jlog&&jlog('crit','UI','init '+id+': '+(e&&e.message||e));}}
+  // brancher les actions
+  page.querySelectorAll('.action-bar [data-act]').forEach(btn=>{
+    btn.onclick=()=>runPageAction(id, btn.getAttribute('data-act'));
+  });
+}
+function runPageAction(id, act){
+  if(act==='reload'){ openPage(id); return; }
+  const pa = PAGE_ACTIONS[id] || {};
+  if(act==='json' && pa.json){ const d=pa.json(); dlFile(d.content, d.name, 'application/json'); return; }
+  if(act==='text' && pa.text){ const d=pa.text(); dlFile(d.content, d.name, 'text/plain'); return; }
+  if(act==='backup' && pa.backup){ const d=pa.backup(); dlFile(d.content, d.name, 'application/json'); return; }
+  // fallback générique : exporter ce que la page a produit
+  alert('Aucune donnée à exporter pour cette action sur cette page (lance d\'abord l\'outil).');
+}
+function dlFile(content, filename, type){
+  const blob=new Blob([typeof content==='string'?content:JSON.stringify(content,null,2)],{type:type||'text/plain;charset=utf-8'});
+  const u=URL.createObjectURL(blob);const a=document.createElement('a');a.href=u;a.download=filename;document.body.appendChild(a);a.click();
+  setTimeout(()=>{URL.revokeObjectURL(u);document.body.removeChild(a);},200);
+}
+/* compat : les anciens outils appellent switchTab(id) → on ouvre la page */
+function switchTab(id){ openPage(id); }
+/* badges sur les tuiles (depuis les scans) */
 function setTabBadge(tab,level,count){
-  const el=document.querySelector('.tab[data-tab="'+tab+'"]');if(!el)return;
-  el.classList.remove('has-alert','has-warn');
-  let c=el.querySelector('.count');
-  if(!count){if(c)c.remove();return;}
-  if(!c){c=document.createElement('span');c.className='count';el.appendChild(c);}
-  c.textContent=count;
-  if(level==='crit')el.classList.add('has-alert');else if(level==='warn')el.classList.add('has-warn');
+  if(!count){ delete _badges[tab]; } else { _badges[tab]={level:level||'crit',n:count}; }
+  if(!document.getElementById('home').classList.contains('hidden')) renderHome();
 }
+/* clic sur une tuile */
+document.getElementById('homeGrid').addEventListener('click',e=>{
+  const t=e.target.closest('.tile'); if(t) openPage(t.getAttribute('data-page'));
+});
 function renderJournal(){
   const box=document.getElementById('journalBox');if(!box)return;
   box.innerHTML=_journal.slice().reverse().map(e=>{const time=new Date(e.t).toLocaleTimeString('fr-FR');
@@ -949,9 +1037,116 @@ function refreshHeader(){
   const bar=document.getElementById('alertBar');
   if(alerts>0){bar.classList.add('show');document.getElementById('alertCount').textContent=alerts;}else bar.classList.remove('show');
 }
-(async function init(){
-  jlog('info','INIT','Guardian d\u00e9marr\u00e9');
-  await collectState();runBugScan();refreshHeader();switchTab('dashboard');
+/* ============================================================
+   PAGES INTELLIGENTES (moteur de sondes GuardianCore)
+   ============================================================ */
+let _coreLast=null;
+const GC = ()=> window.GuardianCore;
+
+VIEWS.analyse=function(){
+  let h='<div class="hint">Lance les sondes intelligentes : incohérences UI↔état, valeurs, stockage, erreurs JS, fichiers, fonctions, variables non définies… Chaque problème indique le chemin de correction.</div>';
+  if(!GC()){ h+='<div class="item crit"><span class="nm">guardian-core.js non chargé. Place les 3 fichiers dans le même dossier.</span></div>'; return h; }
+  h+='<button class="btn green wide" id="anaRun" style="width:100%">▶ Lancer l\'analyse complète</button><div id="anaOut" style="margin-top:10px"></div>';
+  return h;
+};
+VIEW_INIT.analyse=function(){
+  if(_coreLast) renderAnalyse(_coreLast);
+  const b=document.getElementById('anaRun');
+  if(b) b.onclick=async()=>{
+    b.innerHTML='<span class="spinner"></span> analyse…';b.disabled=true;
+    try{ _coreLast=await GC().runAll(); renderAnalyse(_coreLast); updateCoreBadges(_coreLast); }
+    catch(e){ document.getElementById('anaOut').innerHTML='<div class="item crit"><span class="nm">Erreur: '+(e&&e.message)+'</span></div>'; }
+    b.innerHTML='▶ Relancer';b.disabled=false;
+  };
+};
+function renderAnalyse(rep){
+  const out=document.getElementById('anaOut'); if(!out) return;
+  const crit=rep.results.filter(r=>r.level==='crit').length, warn=rep.results.filter(r=>r.level==='warn').length, ok=rep.results.filter(r=>r.level==='ok').length;
+  let h='<div class="summary-bar"><span class="chip crit">'+crit+' critique(s)</span><span class="chip warn">'+warn+' avert.</span><span class="chip ok">'+ok+' OK</span></div>';
+  if(rep.mode!=='embedded') h+='<div class="hint">⚠ Page séparée : UI↔état et erreurs JS live ne sont actives qu\'intégré dans AURA.</div>';
+  const groups={}; rep.results.forEach(r=>{(groups[r.group]=groups[r.group]||[]).push(r);});
+  Object.keys(groups).forEach(g=>{
+    h+='<div class="sect-label">'+g+'</div>';
+    groups[g].sort((a,b)=>({crit:0,warn:1,info:2,ok:3}[a.level]-{crit:0,warn:1,info:2,ok:3}[b.level]));
+    groups[g].forEach(r=>{
+      const ic=r.level==='ok'?'✅':r.level==='warn'?'🟡':r.level==='crit'?'🔴':'ℹ️';
+      h+='<div class="item '+r.level+'" style="flex-direction:column;align-items:stretch;gap:3px">';
+      h+='<div style="display:flex;gap:6px"><span class="ic">'+ic+'</span><span class="nm" style="font-weight:700">'+escAna(r.title)+'</span></div>';
+      if(r.detail) h+='<div style="font-size:10px;color:var(--t2);line-height:1.5">'+escAna(r.detail)+'</div>';
+      if(r.fix) h+='<div style="font-size:10px;color:var(--ice);line-height:1.5;padding:5px 7px;background:rgba(56,212,245,.06);border-radius:5px"><b style="color:var(--gold)">→ Correction :</b> '+escAna(r.fix)+'</div>';
+      h+='</div>';
+    });
+  });
+  out.innerHTML=h;
+}
+function escAna(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+function updateCoreBadges(rep){
+  const crit=rep.results.filter(r=>r.level==='crit').length;
+  const warn=rep.results.filter(r=>r.level==='warn').length;
+  setTabBadge('analyse', crit>0?'crit':'warn', crit||warn||0);
+}
+PAGE_ACTIONS.analyse={
+  json:()=>({content:GC().export.resultsJSON(),name:'guardian-analyse.json'}),
+  text:()=>({content:GC().export.resultsText(),name:'guardian-analyse.txt'}),
+  backup:()=>({content:GC().export.fullBackup(),name:'guardian-backup.json'})
+};
+
+VIEWS.capacites=function(){
+  if(!GC()) return '<div class="hint">core non chargé.</div>';
+  const c=GC().describeCapabilities();
+  let h='<div class="hint">Auto-description : '+c.probes.length+' sondes.</div>';
+  c.probes.forEach(p=>{ h+='<div class="item"><span class="nm"><b>'+p.nom+'</b> <span style="font-size:9px;color:var(--t3)">['+p.niveau+']</span><div style="font-size:10px;color:var(--t2);margin-top:2px">'+p.detecte+'</div></span></div>'; });
+  return h;
+};
+PAGE_ACTIONS.capacites={
+  json:()=>({content:GC().export.capabilitiesJSON(),name:'guardian-capacites.json'}),
+  text:()=>({content:GC().export.capabilitiesText(),name:'guardian-capacites.txt'})
+};
+
+VIEWS.historique=function(){
+  if(!GC()) return '<div class="hint">core non chargé.</div>';
+  const hist=GC().history||[];
+  let h='<div class="hint">Mémoire persistante des scans (entre sessions).</div>';
+  if(!hist.length) h+='<div class="hint">Aucun scan. Lance une analyse.</div>';
+  else hist.slice().reverse().forEach(x=>{ const lvl=x.crit>0?'crit':x.warn>0?'warn':'ok'; h+='<div class="item '+lvl+'"><span class="nm">'+new Date(x.ts).toLocaleString('fr-FR')+' — '+x.crit+' crit · '+x.warn+' warn ('+x.mode+')</span></div>'; });
+  return h;
+};
+PAGE_ACTIONS.historique={
+  json:()=>({content:GC().export.historyJSON(),name:'guardian-historique.json'}),
+  text:()=>({content:GC().export.historyText(),name:'guardian-historique.txt'})
+};
+
+VIEWS.export=function(){
+  if(!GC()) return '<div class="hint">core non chargé.</div>';
+  let h='<div class="hint">Tout Guardian est exportable (JSON + texte) et réimportable. Le backup global contient config + historique + résultats + capacités.</div>';
+  h+='<div class="sect-label">Backup global</div><div class="controls"><button class="btn green" id="exBk">⬇ Backup JSON</button><button class="btn green" id="imBk">⬆ Importer backup</button></div>';
+  h+='<div class="sect-label">Configuration</div><div class="controls"><button class="btn gold" id="exCfg">⬇ Config JSON</button><button class="btn gold" id="imCfg">⬆ Importer config</button></div>';
+  h+='<div class="sect-label">Résultats du dernier scan</div><div class="controls"><button class="btn" id="exRj">JSON</button><button class="btn" id="exRt">Texte</button></div>';
+  h+='<input type="file" id="impFile" accept="application/json" style="display:none">';
+  h+='<div id="impMsg" class="hint" style="margin-top:10px"></div>';
+  return h;
+};
+VIEW_INIT.export=function(){
+  const C=GC(); if(!C) return;
+  const stamp=()=>new Date().toISOString().slice(0,19).replace(/[:T]/g,'-');
+  const bind=(id,fn)=>{const e=document.getElementById(id);if(e)e.onclick=fn;};
+  bind('exBk',()=>dlFile(C.export.fullBackup(),'guardian-backup-'+stamp()+'.json','application/json'));
+  bind('exCfg',()=>dlFile(C.export.configJSON(),'guardian-config-'+stamp()+'.json','application/json'));
+  bind('exRj',()=>dlFile(C.export.resultsJSON(),'guardian-results-'+stamp()+'.json','application/json'));
+  bind('exRt',()=>dlFile(C.export.resultsText(),'guardian-results-'+stamp()+'.txt'));
+  const f=document.getElementById('impFile'); let kind=null;
+  const trig=k=>{kind=k;f.value='';f.click();};
+  bind('imBk',()=>trig('backup')); bind('imCfg',()=>trig('config'));
+  f.onchange=()=>{ const file=f.files[0]; if(!file)return; const rd=new FileReader();
+    rd.onload=()=>{ let o=null; try{o=JSON.parse(rd.result);}catch(e){document.getElementById('impMsg').innerHTML='<span style="color:var(--down)">JSON invalide.</span>';return;}
+      const res=C.import.fromObject(o); document.getElementById('impMsg').innerHTML='<span style="color:'+(res.ok?'var(--up)':'var(--down)')+'">'+res.msg+'</span>'; };
+    rd.readAsText(file); };
+};
+
+(function init(){
+  jlog && jlog('info','INIT','Guardian tout-en-un démarré');
+  collectState && collectState().then(()=>{ runBugScan&&runBugScan(); refreshHeader&&refreshHeader(); });
+  goHome();
 })();
 </script>
 </body>
