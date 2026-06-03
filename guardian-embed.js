@@ -126,6 +126,15 @@ ready(function(){
   /* analyse silencieuse au démarrage (après 4s) pour colorer le bouton si souci */
   setTimeout(()=>{ window.GuardianCore.runAll().then(rep=>{ last=rep; updateFab(rep); }).catch(()=>{}); }, 4000);
 
+  /* BACKUP AUTO : au démarrage (après 8s) puis toutes les 30 min, on vérifie si un
+     backup est dû (selon l'intervalle réglé, 6h par défaut). abRun ne sauvegarde que
+     si l'intervalle est écoulé → sûr de tourner souvent. */
+  if(window.GuardianCore.autoBackup){
+    const tick = () => { try { window.GuardianCore.autoBackup.tick().then(r=>{ if(r&&r.ok) console.log('[Guardian] backup auto · cycle #'+r.cycle); }).catch(()=>{}); } catch(e){} };
+    setTimeout(tick, 8000);
+    setInterval(tick, 30*60*1000);
+  }
+
   console.log('[Guardian] embed prêt · mode', window.GuardianCore.detectMode());
 });
 })();
