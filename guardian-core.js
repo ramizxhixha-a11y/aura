@@ -647,29 +647,32 @@ function drvLoadGIS(){
 // demande / renouvelle un token. interactive=true affiche la popup de consentement.
 function drvGetToken(interactive){
   return new Promise(async(resolve,reject)=>{
+    let done = false;
+    const finish = (fn,arg)=>{ if(!done){ done=true; fn(arg); } };
     try {
       await drvLoadGIS();
-      if(_accessToken && Date.now() < _tokenExp - 60000){ return resolve(_accessToken); }
+      if(_accessToken && Date.now() < _tokenExp - 60000){ return finish(resolve,_accessToken); }
+      const cb = (resp) => {
+        if(resp && resp.access_token){
+          _accessToken = resp.access_token;
+          _tokenExp = Date.now() + (resp.expires_in||3600)*1000;
+          finish(resolve,_accessToken);
+        } else { finish(reject,new Error('pas de token')); }
+      };
+      const errcb = (err) => { finish(reject,new Error('token refusé: '+(err&&err.type||'silencieux échoué'))); };
       if(!_tokenClient){
         _tokenClient = window.google.accounts.oauth2.initTokenClient({
-          client_id: DRIVE.CLIENT_ID,
-          scope: DRIVE.SCOPE,
-          callback: (resp) => {
-            if(resp && resp.access_token){
-              _accessToken = resp.access_token;
-              _tokenExp = Date.now() + (resp.expires_in||3600)*1000;
-              resolve(_accessToken);
-            } else { reject(new Error('pas de token')); }
-          }
+          client_id: DRIVE.CLIENT_ID, scope: DRIVE.SCOPE,
+          callback: cb, error_callback: errcb
         });
       } else {
-        _tokenClient.callback = (resp) => {
-          if(resp && resp.access_token){ _accessToken = resp.access_token; _tokenExp = Date.now()+(resp.expires_in||3600)*1000; resolve(_accessToken); }
-          else reject(new Error('pas de token'));
-        };
+        _tokenClient.callback = cb;
+        if('error_callback' in _tokenClient) _tokenClient.error_callback = errcb;
       }
+      // timeout de sécurité : si rien ne revient (popup bloquée, pas de session), on abandonne
+      setTimeout(()=>finish(reject,new Error('timeout token')), 12000);
       _tokenClient.requestAccessToken({ prompt: interactive ? 'consent' : '' });
-    } catch(e){ reject(e); }
+    } catch(e){ finish(reject,e); }
   });
 }
 // trouve (ou crée) le dossier "AURA Guardian Backups" sur Drive
@@ -734,6 +737,8 @@ Core.drive = {
   disconnect: drvDisconnect,
   upload: drvUpload,
   getMeta: drvGetMeta,
+  // pré-charge le token au boot (silencieux), pour que les push auto réussissent
+  warmup: async () => { try { await drvGetToken(false); return {ok:true}; } catch(e){ return {ok:false,reason:e.message}; } },
   // envoi de test interactif (bouton "envoyer maintenant")
   uploadNow: async () => {
     let snap = abGrabState();

@@ -133,12 +133,15 @@ ready(function(){
     const tick = () => { try { window.GuardianCore.autoBackup.tick().then(r=>{
       if(r&&r.ok){
         console.log('[Guardian] backup auto · cycle #'+r.cycle);
-        // si Drive activé, pousser aussi sur Drive (silencieux)
-        if(window.GuardianCore.drive){ window.GuardianCore.drive.autoPush().then(d=>{ if(d&&d.ok) console.log('[Guardian] backup Drive · '+d.name); }).catch(()=>{}); }
+        if(window.GuardianCore.drive){ window.GuardianCore.drive.autoPush().then(d=>{ if(d&&d.ok) console.log('[Guardian] backup Drive · '+d.name); else if(d) console.log('[Guardian] Drive non envoyé: '+d.reason); }).catch(()=>{}); }
       }
     }).catch(()=>{}); } catch(e){} };
     setTimeout(tick, 8000);
     setInterval(tick, 30*60*1000);
+    // pré-charger le token Drive au boot (silencieux) pour que les push suivants réussissent
+    if(window.GuardianCore.drive){
+      setTimeout(()=>{ try { const m=window.GuardianCore.drive.getMeta(); if(m&&m.enabled){ window.GuardianCore.drive.warmup&&window.GuardianCore.drive.warmup(); } } catch(e){} }, 5000);
+    }
   }
 
   console.log('[Guardian] embed prêt · mode', window.GuardianCore.detectMode());
