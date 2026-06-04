@@ -56,11 +56,12 @@ ready(function(){
   const st=document.createElement('style'); st.textContent=css; document.head.appendChild(st);
 
   /* ---- DOM ---- */
-  const fab=document.createElement('div'); fab.id='gdnFab'; fab.innerHTML='🛡️<span class="gdnDot" id="gdnDot">0</span>';
+  const _gdnLogo='<svg viewBox="0 0 100 100" width="1em" height="1em" style="vertical-align:-0.15em;display:inline-block" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="gdnShE" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#38d4f5"/><stop offset="100%" stop-color="#00e87a"/></linearGradient></defs><path d="M50 8 L84 22 V52 C84 72 68 86 50 92 C32 86 16 72 16 52 V22 Z" fill="none" stroke="url(#gdnShE)" stroke-width="7"/><path d="M34 50 L46 62 L68 36" fill="none" stroke="url(#gdnShE)" stroke-width="9" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+  const fab=document.createElement('div'); fab.id='gdnFab'; fab.innerHTML=_gdnLogo+'<span class="gdnDot" id="gdnDot">0</span>';
   document.body.appendChild(fab);
   const ov=document.createElement('div'); ov.id='gdnOverlay';
   ov.innerHTML='<div id="gdnPanel">'
-    +'<div class="gdnHead"><b>🛡️ Guardian</b><button id="gdnClose">Fermer ✕</button></div>'
+    +'<div class="gdnHead"><b>'+_gdnLogo+' Guardian</b><button id="gdnClose">Fermer ✕</button></div>'
     +'<div id="gdnBody"><button id="gdnRun">▶ Lancer l\'analyse</button><div id="gdnOut" style="margin-top:10px"></div></div>'
     +'<div class="gdnActions">'
     +'<button data-a="json">⬇ JSON</button><button data-a="text">⬇ Texte</button>'
@@ -137,7 +138,7 @@ ready(function(){
       }
     }).catch(()=>{}); } catch(e){} };
     setTimeout(tick, 8000);
-    setInterval(tick, 30*60*1000);
+    setInterval(tick, 2*60*1000);
     // pré-charger le token Drive au boot (silencieux) pour que les push suivants réussissent
     if(window.GuardianCore.drive){
       setTimeout(()=>{ try { const m=window.GuardianCore.drive.getMeta(); if(m&&m.enabled){ window.GuardianCore.drive.warmup&&window.GuardianCore.drive.warmup(); } } catch(e){} }, 5000);

@@ -543,7 +543,8 @@ async function abRun(force){
   const meta = abGetMeta();
   if(!meta.enabled && !force) return { ok:false, reason:'désactivé' };
   const now = Date.now();
-  if(!force && meta.lastRun && (now - meta.lastRun) < meta.intervalH*3600000){
+  const intervalMs = meta.intervalMin ? meta.intervalMin*60000 : (meta.intervalH||3)*3600000;
+  if(!force && meta.lastRun && (now - meta.lastRun) < intervalMs){
     return { ok:false, reason:'intervalle non écoulé' };
   }
   const snap = abGrabState();

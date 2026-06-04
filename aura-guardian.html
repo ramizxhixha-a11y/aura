@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>AURA Guardian</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='0' y2='1'%3E%3Cstop offset='0%25' stop-color='%2338d4f5'/%3E%3Cstop offset='100%25' stop-color='%2300e87a'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='100' height='100' rx='22' fill='%230a0f18'/%3E%3Cpath d='M50 14 L80 26 V52 C80 70 66 82 50 88 C34 82 20 70 20 52 V26 Z' fill='none' stroke='url(%23g)' stroke-width='6'/%3E%3Cpath d='M36 51 L46 61 L66 39' fill='none' stroke='url(%23g)' stroke-width='8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
 <style>
   :root{
     --bg:#050709;--card:#0a0f15;--card-hl:#0f161e;
@@ -110,7 +111,7 @@
 <body>
 
 <header>
-  <h1>&#128737; AURA Guardian <span style="font-size:10px;color:var(--t3);font-weight:400">unifi&eacute;</span></h1>
+  <h1><svg viewBox="0 0 100 100" width="1em" height="1em" style="vertical-align:-0.15em;display:inline-block" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="gdnSh" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#38d4f5"/><stop offset="100%" stop-color="#00e87a"/></linearGradient></defs><path d="M50 8 L84 22 V52 C84 72 68 86 50 92 C32 86 16 72 16 52 V22 Z" fill="none" stroke="url(#gdnSh)" stroke-width="7"/><path d="M34 50 L46 62 L68 36" fill="none" stroke="url(#gdnSh)" stroke-width="9" stroke-linecap="round" stroke-linejoin="round"/></svg> AURA Guardian <span style="font-size:10px;color:var(--t3);font-weight:400">unifi&eacute;</span></h1>
   <div class="header-stats">
     <div>Mode: <b id="hs-mode">&mdash;</b></div>
     <div>Sant&eacute;: <b id="hs-health">&mdash;</b></div>
@@ -1158,10 +1159,11 @@ VIEW_INIT.autobackup=function(){
   // réglages
   const meta=A.getMeta();
   const cfg=document.getElementById('abCfg');
-  cfg.innerHTML='<div class="item"><span class="nm">Fréquence : <b>'+meta.intervalH+'h</b> · Garder : <b>'+meta.keep+'</b> backups · '+(meta.enabled?'<span style="color:var(--up)">activé</span>':'<span style="color:var(--down)">désactivé</span>')+'</span></div>'
+  cfg.innerHTML='<div class="item"><span class="nm">Fréquence : <b>'+(meta.intervalMin?meta.intervalMin+' min':meta.intervalH+'h')+'</b> · Garder : <b>'+meta.keep+'</b> backups · '+(meta.enabled?'<span style="color:var(--up)">activé</span>':'<span style="color:var(--down)">désactivé</span>')+'</span></div>'
     +'<div class="controls c3" style="margin-top:6px">'
-    +'<button class="btn" data-h="3">3h</button><button class="btn" data-h="6">6h</button><button class="btn" data-h="12">12h</button></div>';
-  cfg.querySelectorAll('[data-h]').forEach(b=>{ b.onclick=()=>{ const m=A.getMeta(); m.intervalH=parseInt(b.getAttribute('data-h')); A.setMeta(m); switchTab('autobackup'); }; });
+    +'<button class="btn" data-min="5">5 min (test)</button><button class="btn" data-h="3">3h</button><button class="btn" data-h="6">6h</button><button class="btn" data-h="12">12h</button></div>';
+  cfg.querySelectorAll('[data-h]').forEach(b=>{ b.onclick=()=>{ const m=A.getMeta(); m.intervalH=parseInt(b.getAttribute('data-h')); delete m.intervalMin; A.setMeta(m); switchTab('autobackup'); }; });
+  cfg.querySelectorAll('[data-min]').forEach(b=>{ b.onclick=()=>{ const m=A.getMeta(); m.intervalMin=parseInt(b.getAttribute('data-min')); A.setMeta(m); switchTab('autobackup'); }; });
   // backup manuel
   document.getElementById('abNow').onclick=async()=>{
     const btn=document.getElementById('abNow'); btn.textContent='⏳…'; btn.disabled=true;
@@ -1208,6 +1210,16 @@ VIEW_INIT.autobackup=function(){
   jlog && jlog('info','INIT','Guardian tout-en-un démarré');
   collectState && collectState().then(()=>{ runBugScan&&runBugScan(); refreshHeader&&refreshHeader(); });
   goHome();
+  // tick backup auto (utile pour tester depuis cette page) : warmup Drive puis vérif toutes les 2 min
+  try {
+    const C = window.GuardianCore;
+    if(C && C.autoBackup){
+      const tick = () => { C.autoBackup.tick().then(r=>{ if(r&&r.ok && C.drive){ C.drive.autoPush().catch(()=>{}); } }).catch(()=>{}); };
+      if(C.drive){ const m=C.drive.getMeta(); if(m&&m.enabled && C.drive.warmup) setTimeout(()=>C.drive.warmup().catch(()=>{}),3000); }
+      setTimeout(tick, 6000);
+      setInterval(tick, 2*60*1000);
+    }
+  } catch(e){}
 })();
 </script>
 </body>
