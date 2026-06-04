@@ -622,7 +622,7 @@ Core.autoBackup = {
    ============================================================ */
 const DRIVE = {
   CLIENT_ID: '792224208719-968u8bss0teh529c04vsr72bcbkuarfb.apps.googleusercontent.com',
-  SCOPE: 'https://www.googleapis.com/auth/drive.file',
+  SCOPE: 'https://www.googleapis.com/auth/drive.file email',
   META_KEY: 'guardian_drive_meta',   // {enabled, folderId, lastUpload, email}
   GIS_SRC: 'https://accounts.google.com/gsi/client'
 };
@@ -672,7 +672,12 @@ function drvGetToken(interactive){
       }
       // timeout de sécurité : si rien ne revient (popup bloquée, pas de session), on abandonne
       setTimeout(()=>finish(reject,new Error('timeout token')), 12000);
-      _tokenClient.requestAccessToken({ prompt: interactive ? 'consent' : '' });
+      // si on connaît déjà le compte, le passer en hint → Google ne redemande
+      // plus "sélectionnez un compte", il réutilise directement le bon.
+      const dm = drvGetMeta();
+      const opts = { prompt: interactive ? 'consent' : '' };
+      if(dm && dm.email){ opts.hint = dm.email; }
+      _tokenClient.requestAccessToken(opts);
     } catch(e){ finish(reject,e); }
   });
 }
@@ -727,7 +732,13 @@ async function drvConnect(){
   try {
     const token = await drvGetToken(true);
     await drvEnsureFolder(token);
-    const m = drvGetMeta(); m.enabled = true; drvSetMeta(m);
+    const m = drvGetMeta(); m.enabled = true;
+    // mémoriser l'email du compte → permet la reconnexion silencieuse (login_hint)
+    try {
+      const r = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', { headers:{ Authorization:'Bearer '+token } });
+      if(r.ok){ const u = await r.json(); if(u && u.email) m.email = u.email; }
+    } catch(e){}
+    drvSetMeta(m);
     return { ok:true };
   } catch(e){ return { ok:false, reason:e.message }; }
 }
