@@ -128,7 +128,65 @@ window.GUARDIAN_CONFIG = {
         return s.portfolio>0 && ecart > s.portfolio*0.5;
       },
       msg: '_startPortfolio incohérent (nul/négatif ou écart > 50% du portfolio) → P&L de session faussé',
-      file:'07-v90-mode-bunker-sos.js' }
+      file:'07-v90-mode-bunker-sos.js' },
+
+    /* ── INVARIANTS GÉNÉRIQUES : détectent l'ANORMAL même sur un bug jamais vu.
+       Ces règles doivent TOUJOURS être vraies dans un système sain. Calibrées
+       large pour éviter le bruit (un changement légitime ne doit pas alerter). ── */
+
+    { id:'anyNeg', label:'Compte négatif (hors cash)',
+      test: s => s && ['tradingAccount','fiscalReserveAccount','leverageReserve','portfolio','ownFundsInjected']
+        .some(k => typeof s[k]==='number' && s[k] < -0.01),
+      msg: 'un compte (trading/fiscal/levier/portfolio/fonds propres) est négatif → calcul corrompu',
+      file:'02-state-init.js' },
+
+    { id:'anyNaNInf', label:'Valeur NaN ou infinie (tout champ monétaire)',
+      test: s => s && ['portfolio','portfolioTotal','cashAccount','tradingAccount','fiscalReserveAccount','leverageReserve','leverageBorrowed','ownFundsInjected']
+        .some(k => typeof s[k]==='number' && (isNaN(s[k]) || !isFinite(s[k]))),
+      msg: 'un champ monétaire est NaN ou Infinity → opération mathématique cassée',
+      file:'02-state-init.js' },
+
+    { id:'cycleType', label:'Cycle absent ou invalide',
+      test: s => s && (typeof s.cycle!=='number' || isNaN(s.cycle) || s.cycle < 0),
+      msg: 'S.cycle manquant, NaN ou négatif → état corrompu ou non initialisé',
+      file:'02-state-init.js' },
+
+    { id:'missingCore', label:'Champ vital manquant',
+      test: s => s && ['portfolio','cashAccount','tradingAccount'].some(k => typeof s[k]==='undefined'),
+      msg: 'un champ vital (portfolio/cash/trading) est absent de S → état incomplet',
+      file:'02-state-init.js' },
+
+    { id:'noAgents', label:'Aucun agent',
+      test: s => s && Array.isArray(s.agents) && s.agents.length===0,
+      msg: 'la flotte d\'agents est vide → perte du cerveau du bot',
+      file:'02-state-init.js' },
+
+    { id:'posCorrupt', label:'Positions ouvertes corrompues',
+      test: s => {
+        if(!s || !Array.isArray(s.openPositions)) return false;
+        return s.openPositions.some(p => !p || typeof p!=='object' || (p.entryPrice!=null && (isNaN(p.entryPrice)||!isFinite(p.entryPrice))));
+      },
+      msg: 'une position ouverte a des données corrompues (objet vide ou prix NaN/Infini)',
+      file:'02-state-init.js' },
+
+    { id:'futureSave', label:'Date de sauvegarde dans le futur',
+      test: s => {
+        if(!s || !s.savedAt) return false;
+        const t = new Date(s.savedAt).getTime();
+        return !isNaN(t) && t > Date.now() + 3600000; // >1h dans le futur = horloge/corruption
+      },
+      msg: 'savedAt est dans le futur → horloge faussée ou snapshot corrompu',
+      file:'09b2-save-load.js' },
+
+    { id:'pfExplosion', label:'Portfolio absurdement élevé',
+      test: s => s && typeof s.portfolio==='number' && isFinite(s.portfolio) && s.portfolio > 1e12,
+      msg: 'portfolio > 1000 milliards → débordement ou multiplication erronée',
+      file:'02-state-init.js' },
+
+    { id:'rateZero', label:'Taux de change nul ou aberrant',
+      test: s => s && typeof s.usdEurRate==='number' && (s.usdEurRate<=0 || s.usdEurRate>5),
+      msg: 'usdEurRate hors plage plausible (≤0 ou >5) → conversions EUR faussées',
+      file:'02-state-init.js' }
   ],
 
   /* --- Seuils --- */
