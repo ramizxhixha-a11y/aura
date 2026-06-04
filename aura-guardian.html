@@ -1230,7 +1230,7 @@ VIEW_INIT.autobackup=function(){
     const onBtn = document.getElementById('drvOn');
     if(onBtn) onBtn.onclick = async()=>{ onBtn.textContent='⏳ autorisation…'; const r=await D.connect(); onBtn.textContent = r.ok ? '✓ connecté' : '✗ '+(r.reason||'échec'); setTimeout(()=>switchTab('autobackup'),1500); };
     const testBtn = document.getElementById('drvTest');
-    if(testBtn) testBtn.onclick = async()=>{ testBtn.textContent='⏳ envoi…'; const r=await D.uploadNow().catch(()=>({ok:false,reason:'erreur'})); testBtn.textContent = r.ok ? '✓ '+r.name : '✗ '+(r.reason||'échec'); setTimeout(()=>switchTab('autobackup'),2000); };
+    if(testBtn) testBtn.onclick = async()=>{ testBtn.textContent='⏳ envoi…'; const r=await D.uploadNow().catch(()=>({ok:false,reason:'erreur'})); testBtn.textContent = r.ok ? '✓ '+r.name : '✗ '+(r.reason||'échec'); setTimeout(()=>switchTab('autobackup'), r.ok?2500:7000); };
     const offBtn = document.getElementById('drvOff');
     if(offBtn) offBtn.onclick = ()=>{ D.disconnect(); switchTab('autobackup'); };
   }

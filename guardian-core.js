@@ -702,30 +702,43 @@ async function drvEnsureFolder(token){
 async function drvUpload(snap, interactive){
   if(!snap) return { ok:false, reason:'état indisponible' };
   const cyc = (typeof snap.cycle === 'number') ? snap.cycle : (snap.state && snap.state.cycle) || 0;
+  const name = 'aura-backup-' + cyc + '-' + new Date().toISOString().slice(0,16).replace(/[:T]/g,'') + '.json';
+
+  // envoie avec un token donné ; renvoie {ok, status, ...}
+  async function _send(token){
+    let folderId;
+    try { folderId = await drvEnsureFolder(token); } catch(e){ return { ok:false, status:0, reason:'dossier: '+e.message }; }
+    const meta = { name, parents:[folderId], mimeType:'application/json' };
+    const boundary = 'aura'+Date.now();
+    const parts =
+      '--'+boundary+'\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n'+JSON.stringify(meta)+
+      '\r\n--'+boundary+'\r\nContent-Type: application/json\r\n\r\n'+JSON.stringify(snap)+
+      '\r\n--'+boundary+'--';
+    const blob = new Blob([parts], { type:'multipart/related; boundary='+boundary });
+    try {
+      const r = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name', {
+        method:'POST', headers:{ Authorization:'Bearer '+token }, body: blob
+      });
+      if(!r.ok){ let txt=''; try{ txt = await r.text(); }catch(e){} return { ok:false, status:r.status, reason:'HTTP '+r.status+' '+txt.slice(0,80) }; }
+      const j = await r.json();
+      return { ok:true, fileId:j.id, name:j.name||name };
+    } catch(e){ return { ok:false, status:0, reason:e.message }; }
+  }
+
   let token;
   try { token = await drvGetToken(!!interactive); } catch(e){ return { ok:false, reason:'non autorisé ('+e.message+')' }; }
-  let folderId;
-  try { folderId = await drvEnsureFolder(token); } catch(e){ return { ok:false, reason:'dossier: '+e.message }; }
-  const name = 'aura-backup-' + cyc + '-' + new Date().toISOString().slice(0,16).replace(/[:T]/g,'') + '.json';
-  const meta = { name, parents:[folderId], mimeType:'application/json' };
-  const boundary = 'aura'+Date.now();
-  const parts =
-    '--'+boundary+'\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n'+JSON.stringify(meta)+
-    '\r\n--'+boundary+'\r\nContent-Type: application/json\r\n\r\n'+JSON.stringify(snap)+
-    '\r\n--'+boundary+'--';
-  const blob = new Blob([parts], { type:'multipart/related; boundary='+boundary });
-  try {
-    const r = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name', {
-      method:'POST', headers:{ Authorization:'Bearer '+token }, body: blob
-    });
-    if(!r.ok){
-      let txt=''; try{ txt = await r.text(); }catch(e){}
-      return { ok:false, reason:'HTTP '+r.status+' '+txt.slice(0,80) };
-    }
-    const j = await r.json();
-    const dm = drvGetMeta(); dm.lastUpload = Date.now(); drvSetMeta(dm);
-    return { ok:true, fileId:j.id, name:j.name||name };
-  } catch(e){ return { ok:false, reason:e.message }; }
+  let res = await _send(token);
+
+  // 401 = token périmé : on l'invalide, on en force un neuf, et on réessaie une fois.
+  if(!res.ok && res.status === 401){
+    _accessToken = null; _tokenExp = 0;
+    let fresh;
+    try { fresh = await drvGetToken(false); } catch(e){ try { fresh = await drvGetToken(true); } catch(e2){ return { ok:false, reason:'reconnexion impossible' }; } }
+    res = await _send(fresh);
+  }
+
+  if(res.ok){ const dm = drvGetMeta(); dm.lastUpload = Date.now(); drvSetMeta(dm); }
+  return res;
 }
 // connexion interactive (1er clic) : demande l'autorisation + test
 async function drvConnect(){
