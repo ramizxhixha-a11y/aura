@@ -183,6 +183,11 @@ let FILES = {
     '09l-window-bridge.js','10-fin-bloc-restauration-v93.js'
   ]
 };
+// Normalise le fallback en CHEMINS COMPLETS (cohérent avec syncFilesFromHTML).
+// Si le HTML est injoignable, on teste les fichiers au bon endroit (css/ et js/).
+FILES.css = FILES.css.map(f => /^\.?\//.test(f) ? f : './css/'+f);
+FILES.js  = FILES.js.map(f => /^\.?\//.test(f) ? f : './js/'+f);
+FILES.html = FILES.html.map(f => /^\.?\//.test(f) ? f : './'+f);
 
 // Synchronise FILES avec la VRAIE liste chargée par AURA (source de vérité = le HTML).
 // Lit le HTML d'AURA, extrait les <script src> et <link href>, et reconstruit FILES.
@@ -194,10 +199,11 @@ async function syncFilesFromHTML(){
     const html = await r.text();
     const scripts = [...html.matchAll(/<script[^>]+src=["']([^"']+\.js)["']/gi)].map(m=>m[1]);
     const links   = [...html.matchAll(/<link[^>]+href=["']([^"']+\.css)["']/gi)].map(m=>m[1]);
-    // garder seulement les chemins locaux, ne prendre que le nom de fichier
-    const baseName = u => u.split('?')[0].split('/').pop();
-    const js  = scripts.filter(u=>!/^https?:/.test(u)).map(baseName);
-    const css = links.filter(u=>!/^https?:/.test(u)).map(baseName);
+    // garder le CHEMIN COMPLET réel tel que déclaré dans le HTML (racine, js/, css/…),
+    // normalisé en './xxx'. C'est ce que l'app charge vraiment → on teste exactement ça.
+    const norm = u => { u=u.split('?')[0]; if(/^\.?\//.test(u)) return u.replace(/^\.?\//,'./'); return './'+u; };
+    const js  = scripts.filter(u=>!/^https?:/.test(u)).map(norm);
+    const css = links.filter(u=>!/^https?:/.test(u)).map(norm);
     if(js.length){ FILES.js = js; }
     if(css.length){ FILES.css = css; }
     jlog && jlog('ok','SYNC','Liste fichiers synchronisée avec AURA : '+FILES.js.length+' JS · '+FILES.css.length+' CSS');
@@ -519,9 +525,9 @@ function fetchHead(url){return fetch(url,{method:'GET',cache:'no-store'}).then(r
 async function runInventory(){
   jlog('event','INV','Lancement inventaire complet');
   const res={css:[],js:[],fn:[],dom:[],cap:[],ts:Date.now()};
-  const testFile=async(name,dir)=>{const r=await fetchHead(dir+'/'+name);return {name,ok:r.ok,status:r.status};};
-  res.css=await Promise.all(FILES.css.map(n=>testFile(n,'css')));
-  res.js=await Promise.all(FILES.js.map(n=>testFile(n,'js')));
+  const testFile=async(path)=>{const r=await fetchHead(path);return {name:path.replace(/^\.\//,'').replace(/^(css|js)\//,''),path,ok:r.ok,status:r.status};};
+  res.css=await Promise.all(FILES.css.map(p=>testFile(p)));
+  res.js=await Promise.all(FILES.js.map(p=>testFile(p)));
   res.fn=REF_FUNCTIONS.map(f=>({fn:f.fn,file:f.file}));
   res.dom=REF_DOM.map(id=>({id,present:!!document.getElementById(id)}));
   const S=CTX.S;
@@ -975,7 +981,7 @@ VIEW_INIT.search=function(){
     const kw=document.getElementById('sQuery').value.trim();if(!kw){alert('Indique un mot-cl\u00e9');return;}
     const opts={ctx:Math.max(0,Math.min(20,parseInt(document.getElementById('sCtx').value)||0)),insensitive:document.getElementById('tgCase').classList.contains('on'),regex:document.getElementById('tgRegex').classList.contains('on')};
     const inc={html:document.getElementById('tgHTML').classList.contains('on'),css:document.getElementById('tgCSS').classList.contains('on'),js:document.getElementById('tgJS').classList.contains('on')};
-    const files=[];if(inc.html)FILES.html.forEach(f=>files.push({path:'./'+f,kind:'html'}));if(inc.css)FILES.css.forEach(f=>files.push({path:'./css/'+f,kind:'css'}));if(inc.js)FILES.js.forEach(f=>files.push({path:'./js/'+f,kind:'js'}));
+    const files=[];if(inc.html)FILES.html.forEach(f=>files.push({path:f,kind:'html'}));if(inc.css)FILES.css.forEach(f=>files.push({path:f,kind:'css'}));if(inc.js)FILES.js.forEach(f=>files.push({path:f,kind:'js'}));
     if(!files.length){alert('Active au moins une cat\u00e9gorie');return;}
     _searchKeyword=kw;
     const prog=document.getElementById('sProgress'),progTxt=document.getElementById('sProgressTxt'),bar=document.getElementById('sBar');
