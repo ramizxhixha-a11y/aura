@@ -1061,14 +1061,13 @@ function _abInit() {
 
 // Vérifier si un backup automatique doit s'exécuter
 function _abCheck() {
-  _abInit();
-  if(!S.autoBackup.enabled) return;
-  const now  = new Date();
-  const h    = now.getHours();
-  const today= now.toDateString();
-  if(h === (S.autoBackup.hour||3) && S.autoBackup.lastRun !== today) {
-    _abExecute('auto');
-  }
+  // Daily backups localStorage DÉSACTIVÉS : le backup est désormais géré par
+  // Guardian (IndexedDB toutes les 3h + Google Drive). Ces 3 slots LS pesaient
+  // ~4,5 Mo et causaient le QuotaExceededError + ralentissaient les saves.
+  // On purge les anciens une seule fois pour libérer le localStorage.
+  try {
+    ['daily_0','daily_1','daily_2'].forEach(s => localStorage.removeItem(_AB_KEY_PREFIX + s));
+  } catch(_) {}
 }
 
 // Exécuter le backup
@@ -1220,10 +1219,10 @@ function setAbHour(h) {
 }
 window.setAbHour = setAbHour;
 
-// Timer de vérification — check toutes les minutes
+// Purge unique des anciens daily backups localStorage au démarrage
+// (le backup est géré par Guardian : IDB toutes les 3h + Drive)
 if(_abTimer) clearInterval(_abTimer);
-_abTimer = setInterval(_abCheck, 60000);
-_abCheck(); // vérification immédiate au démarrage
+_abCheck();
 
 // ════════════════════════════════════════════════════════════
 // v117 DIAG TEMPORAIRE · panneau de diagnostic robuste.
