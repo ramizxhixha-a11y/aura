@@ -47,22 +47,6 @@ if (typeof window !== 'undefined' && typeof window._stateReady === 'undefined') 
   window._stateReady = false;
 }
 
-// ── MIGRATION QUOTA (v124) : grosses clés stockées en IDB seulement ──────
-// localStorage sature (~5-10 Mo). On y écrit une version ALLÉGÉE du snapshot
-// (sans les grosses clés). IDB garde TOUJOURS le snapshot complet.
-// loadState privilégie IDB ; si seul le LS léger est dispo, il complète les
-// clés manquantes depuis IDB. Le flush de sortie garde le snapshot COMPLET en
-// LS (sécurité maximale au moment le plus risqué).
-const _HEAVY_KEYS = ['agents','agentMemories','realCandles','learningHistory','pairStates','globalMemoryPool','dreamJournal'];
-function _lightSnap(snap) {
-  if (!snap || typeof snap !== 'object') return snap;
-  const light = {};
-  for (const k in snap) { if (!_HEAVY_KEYS.includes(k)) light[k] = snap[k]; }
-  light._lightened = true;        // marqueur : ce snapshot LS est allégé
-  light._heavyInIDB = true;       // les grosses clés sont dans IDB
-  return light;
-}
-
 
 // ════════════════════════════════════════════════════════════════════════
 // saveState — écrit dans IDB ET localStorage en parallèle
@@ -86,22 +70,48 @@ async function saveState(silent = false) {
   }
   if (!snap) return false;
 
-  // ─── VERROU 2 : GARDE-FOU ANTI-RÉGRESSION ───────────────────────────
-  // Filet de sécurité : refuse d'écrire un cycle bien inférieur à celui
-  // déjà en localStorage. Tolérance de 5 cycles pour les cas légitimes.
+  // ─── VERROU 2 : GARDE-FOU ANTI-RÉGRESSION (renforcé) ────────────────
+  // Filet de sécurité contre l'écrasement d'un bon état par un état
+  // vide/neuf. Compare à PLUSIEURS références pour ne pas dépendre du seul
+  // localStorage (qui disparaît si on vide le navigateur — c'était la faille).
   try {
-    const raw = localStorage.getItem(RT.SAVE_KEY);
-    if (raw) {
-      const currentLS = JSON.parse(raw);
-      const lsCycle   = (currentLS && typeof currentLS.cycle === 'number') ? currentLS.cycle : -1;
-      const snapCycle = (typeof snap.cycle === 'number') ? snap.cycle : -1;
-      if (lsCycle > snapCycle + 5) {
-        if (!silent) {
-          console.warn('[saveState v122] BLOQUÉ anti-régression : cycle ' + snapCycle + ' < LS#' + lsCycle);
-        }
-        return false;
-      }
+    const snapCycle = (typeof snap.cycle === 'number') ? snap.cycle : -1;
+    const snapPf    = (typeof snap.portfolio === 'number') ? snap.portfolio : -1;
+
+    // Référence 1 : cycle dans localStorage
+    let refCycle = -1;
+    try { const raw = localStorage.getItem(RT.SAVE_KEY); if (raw) { const c = JSON.parse(raw); if (c && typeof c.cycle === 'number') refCycle = c.cycle; } } catch(e){}
+
+    // Référence 2 : plus haut cycle jamais vu, gardé dans une clé séparée qui
+    // sert UNIQUEMENT de témoin (résiste mieux, et sert même si SAVE_KEY est absent).
+    let highWater = -1;
+    try { const hw = localStorage.getItem('aura_highwater_cycle'); if (hw) highWater = parseInt(hw, 10) || -1; } catch(e){}
+
+    // Référence 3 : cycle de l'état actuellement en mémoire vive (S), via buildSnapshot précédent
+    let liveCycle = -1;
+    try { if (typeof S !== 'undefined' && S && typeof S.cycle === 'number') liveCycle = S.cycle; } catch(e){}
+
+    const knownMax = Math.max(refCycle, highWater, liveCycle);
+
+    // BLOCAGE ABSOLU : un état manifestement neuf/vide (cycle ≤ 100 ET portfolio ≤ 0)
+    // ne peut JAMAIS écraser automatiquement un état avancé connu (cycle > 500).
+    // Pour repartir de zéro volontairement, il faut poser window._auraAllowReset = true.
+    const looksEmpty = (snapCycle <= 100 && snapPf <= 0);
+    const allowReset = (typeof window !== 'undefined' && window._auraAllowReset === true);
+    if (looksEmpty && knownMax > 500 && !allowReset) {
+      if (!silent) console.warn('[saveState] BLOQUÉ : état vide (cycle ' + snapCycle + ', pf ' + snapPf + ') refusé — un état avancé existe (cycle ' + knownMax + '). Pour reset volontaire : window._auraAllowReset=true');
+      try { if (typeof window !== 'undefined') window._auraSaveBlocked = { at: Date.now(), snapCycle: snapCycle, knownMax: knownMax }; } catch(e){}
+      return false;
     }
+
+    // BLOCAGE anti-régression classique : cycle nettement inférieur au connu.
+    if (knownMax > snapCycle + 5 && !allowReset) {
+      if (!silent) console.warn('[saveState] BLOQUÉ anti-régression : cycle ' + snapCycle + ' < connu#' + knownMax);
+      return false;
+    }
+
+    // Mettre à jour le témoin high-water si ce snapshot est plus avancé.
+    if (snapCycle > highWater) { try { localStorage.setItem('aura_highwater_cycle', String(snapCycle)); } catch(e){} }
   } catch (e) {}
 
   if (!snap.savedAt) snap.savedAt = new Date().toISOString();
@@ -137,10 +147,9 @@ async function saveState(silent = false) {
     });
   } catch (e) {}
 
-  // localStorage en parallèle (pas en fallback) — VERSION ALLÉGÉE (v124)
-  // IDB garde le snapshot complet ; LS ne reçoit que les petites données.
+  // localStorage en parallèle (pas en fallback)
   try {
-    localStorage.setItem(RT.SAVE_KEY, JSON.stringify(_lightSnap(snap)));
+    localStorage.setItem(RT.SAVE_KEY, JSON.stringify(snap));
     lsOk = true;
   } catch (e) {
     console.warn('[saveState] localStorage error:', e.message);
@@ -149,6 +158,28 @@ async function saveState(silent = false) {
   if ((idbOk || lsOk) && !silent && typeof updateSaveIndicator === 'function') {
     try { updateSaveIndicator('saved'); } catch(e) {}
   }
+
+  // ─── PROTECTION HORS-NAVIGATEUR ─────────────────────────────────────
+  // À chaque sauvegarde d'un bon état (cycle avancé), on confie une copie à
+  // Guardian : backup IDB dédié + push Drive si connecté. Ces copies vivent
+  // HORS du localStorage/IDB principal, donc survivent à un vidage du cache.
+  // Throttle : au plus une fois par 2 min pour ne pas surcharger.
+  try {
+    if ((idbOk || lsOk) && typeof snap.cycle === 'number' && snap.cycle > 100) {
+      const now = Date.now();
+      if (typeof window !== 'undefined' && (!window._auraLastOffsiteBk || (now - window._auraLastOffsiteBk) > 120000)) {
+        window._auraLastOffsiteBk = now;
+        if (window.GuardianCore && window.GuardianCore.autoBackup) {
+          window.GuardianCore.autoBackup.run(true).then(r => {
+            if (r && r.ok && window.GuardianCore.drive) {
+              window.GuardianCore.drive.autoPush().catch(()=>{});
+            }
+          }).catch(()=>{});
+        }
+      }
+    }
+  } catch (e) {}
+
   return idbOk || lsOk;
 }
 window.saveState = saveState;
@@ -212,22 +243,39 @@ async function loadState() {
     return false;
   }
   snap = (cIDB >= cLS) ? snapIDB : snapLS;
-  dbg.push('→ choix: #' + snap.cycle);
 
-  // ── MIGRATION QUOTA (v124) : si le snapshot choisi est ALLÉGÉ (vient du LS),
-  // compléter les grosses clés depuis le snapshot IDB complet. Garde-fou anti-perte :
-  // on ne valide jamais un état amputé de ses agents/mémoires/candles.
-  if (snap && snap._lightened) {
-    const heavySrc = snapIDB && !snapIDB._lightened ? snapIDB : null;
-    if (heavySrc) {
-      for (const k of _HEAVY_KEYS) {
-        if (snap[k] === undefined && heavySrc[k] !== undefined) snap[k] = heavySrc[k];
+  // ─── RESTAURATION AUTOMATIQUE AU BOOT ───────────────────────────────
+  // Si le meilleur snapshot trouvé est vide/bas (cycle ≤ 100) ALORS qu'un
+  // backup Guardian bien plus avancé existe (hors localStorage/IDB principal,
+  // donc survivant à un vidage du navigateur), on récupère ce backup à la
+  // place. C'est le filet ultime : même cache vidé, AURA se répare seule.
+  try {
+    const bestCycle = snap && typeof snap.cycle === 'number' ? snap.cycle : -1;
+    // témoin du plus haut cycle jamais atteint (clé séparée, écrite par saveState)
+    let highWater = -1;
+    try { const hw = localStorage.getItem('aura_highwater_cycle'); if (hw) highWater = parseInt(hw, 10) || -1; } catch(e){}
+    const looksEmpty = bestCycle <= 100;
+    const knewBetter = highWater > 500 || bestCycle < 0;
+
+    if (looksEmpty && knewBetter && window.GuardianCore && window.GuardianCore.autoBackup) {
+      const list = await window.GuardianCore.autoBackup.list().catch(() => []);
+      if (list && list.length) {
+        // prendre le backup Guardian au cycle le plus élevé
+        let best = null;
+        for (const meta of list) {
+          const rec = await window.GuardianCore.autoBackup.get(meta.id).catch(() => null);
+          const s = rec && rec.snapshot ? rec.snapshot : null;
+          if (s && typeof s.cycle === 'number' && (!best || s.cycle > best.cycle)) best = s;
+        }
+        if (best && typeof best.cycle === 'number' && best.cycle > bestCycle + 5) {
+          snap = best;
+          dbg.push('AUTO-RESTORE Guardian #' + best.cycle);
+          try { localStorage.setItem('aura_highwater_cycle', String(best.cycle)); } catch(e){}
+        }
       }
-      dbg.push('fusion: grosses clés depuis IDB#' + heavySrc.cycle);
-    } else {
-      dbg.push('⚠ snapshot allégé sans source IDB complète');
     }
-  }
+  } catch (e) { dbg.push('auto-restore:err'); }
+  dbg.push('→ choix: #' + snap.cycle);
 
   // ── Restauration section par section (try/catch indépendants) ───────
   // safeNum corrigé : accepte zéro et nombres positifs/négatifs
@@ -558,12 +606,40 @@ function _flushSyncOnExit(reason) {
   }
 }
 
+// ════════════════════════════════════════════════════════════════════════
+// _closeTradesOnExit : ferme les positions ouvertes quand le navigateur va
+// VRAIMENT couper l'onglet (pagehide/freeze), pour ne jamais laisser un trade
+// ouvert sans surveillance pendant l'absence. closePosition() est synchrone,
+// donc faisable dans le temps imparti par le navigateur.
+// IMPORTANT : seulement sur pagehide/freeze (vraie coupure), JAMAIS sur
+// visibilitychange (simple passage en arrière-plan = AURA continue de tourner).
+// ════════════════════════════════════════════════════════════════════════
+function _closeTradesOnExit(reason) {
+  try {
+    if (typeof window !== 'undefined' && window._stateReady === false) return;
+    if (typeof window !== 'undefined' && window._resetInProgress) return;
+    let St; try { St = (0, eval)('S'); } catch(e){ return; }
+    if (!St || !Array.isArray(St.openPositions) || St.openPositions.length === 0) return;
+    let closeFn; try { closeFn = (0, eval)('closePosition'); } catch(e){ return; }
+    if (typeof closeFn !== 'function') return;
+    // copie des ids (closePosition modifie openPositions pendant l'itération)
+    const ids = St.openPositions.map(p => p.id);
+    for (const id of ids) {
+      try { closeFn(id, true); } catch(e){}   // botClose=true : fermeture système
+    }
+    console.log('[closeTradesOnExit] ' + reason + ' · ' + ids.length + ' position(s) fermée(s)');
+  } catch (e) {}
+}
+
 // Installation des hooks — exécutée à l'évaluation du fichier (pas dans une fonction)
-window.addEventListener('pagehide',     () => _flushSyncOnExit('pagehide'));
-window.addEventListener('beforeunload', () => _flushSyncOnExit('beforeunload'));
-window.addEventListener('freeze',       () => _flushSyncOnExit('freeze'));
+// Ordre à la vraie coupure : fermer les trades PUIS sauvegarder l'état.
+window.addEventListener('pagehide',     () => { _closeTradesOnExit('pagehide'); _flushSyncOnExit('pagehide'); });
+window.addEventListener('beforeunload', () => { _closeTradesOnExit('beforeunload'); _flushSyncOnExit('beforeunload'); });
+window.addEventListener('freeze',       () => { _closeTradesOnExit('freeze'); _flushSyncOnExit('freeze'); });
+// visibilitychange : AURA passe juste en arrière-plan, elle CONTINUE de tourner.
+// On sauvegarde par sécurité, mais on NE FERME PAS les trades ici.
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'hidden') _flushSyncOnExit('visibility-hidden');
 });
 
-console.log('[09b2 v123] ✅ hooks pagehide/freeze/beforeunload/visibilitychange installés (écriture sync)');
+console.log('[09b2] ✅ hooks installés · trades fermés à la coupure (pagehide/freeze), sauvegarde sync sur tous');
