@@ -1195,6 +1195,7 @@ VIEWS.autobackup=function(){
   h+='<div class="sect-label">Réglages</div><div id="abCfg"></div>';
   h+='<div class="controls" style="margin-top:8px"><button class="btn green" id="abNow">💾 Backup maintenant</button></div>';
   h+='<div class="sect-label">☁ Google Drive</div><div class="hint">Envoi automatique des backups sur ton Drive (hors navigateur : survit à une réinstallation). Une autorisation unique au départ.</div><div id="drvBox"></div>';
+  h+='<div class="sect-label">💾 Données Guardian (hors-navigateur)</div><div class="hint">Télécharge les données propres de Guardian (historique santé, contrôles) en rotation 3 fichiers. Une synchro Android peut les envoyer sur les mêmes Drive qu\'AURA.</div><div id="gdlBox"></div>';
   h+='<div class="sect-label">Backups enregistrés (local)</div><div id="abList"><div class="hint">Chargement…</div></div>';
   return h;
 };
@@ -1204,10 +1205,25 @@ VIEW_INIT.autobackup=function(){
   const meta=A.getMeta();
   const cfg=document.getElementById('abCfg');
   cfg.innerHTML='<div class="item"><span class="nm">Fréquence : <b>'+(meta.intervalMin?meta.intervalMin+' min':meta.intervalH+'h')+'</b> · Garder : <b>'+meta.keep+'</b> backups · '+(meta.enabled?'<span style="color:var(--up)">activé</span>':'<span style="color:var(--down)">désactivé</span>')+'</span></div>'
+    +'<div class="item"><span class="nm">⏳ Prochain backup dans : <b id="abCountdown" style="color:var(--accent)">…</b></span></div>'
     +'<div class="controls c3" style="margin-top:6px">'
     +'<button class="btn" data-min="5">5 min (test)</button><button class="btn" data-h="3">3h</button><button class="btn" data-h="6">6h</button><button class="btn" data-h="12">12h</button></div>';
   cfg.querySelectorAll('[data-h]').forEach(b=>{ b.onclick=()=>{ const m=A.getMeta(); m.intervalH=parseInt(b.getAttribute('data-h')); delete m.intervalMin; A.setMeta(m); switchTab('autobackup'); }; });
   cfg.querySelectorAll('[data-min]').forEach(b=>{ b.onclick=()=>{ const m=A.getMeta(); m.intervalMin=parseInt(b.getAttribute('data-min')); A.setMeta(m); switchTab('autobackup'); }; });
+  // compte à rebours du prochain backup (mis à jour chaque seconde)
+  if(window._abCountdownTimer) clearInterval(window._abCountdownTimer);
+  const tickCountdown=()=>{
+    const el=document.getElementById('abCountdown'); if(!el){ if(window._abCountdownTimer) clearInterval(window._abCountdownTimer); return; }
+    const m=A.getMeta();
+    const intervalMs = m.intervalMin ? m.intervalMin*60000 : (m.intervalH||3)*3600000;
+    if(!m.lastRun){ el.textContent='au prochain tick'; return; }
+    let reste = m.lastRun + intervalMs - Date.now();
+    if(reste<=0){ el.textContent='imminent…'; return; }
+    const h=Math.floor(reste/3600000), min=Math.floor((reste%3600000)/60000), s=Math.floor((reste%60000)/1000);
+    el.textContent = (h>0?h+'h ':'')+(min<10&&h>0?'0':'')+min+'min '+(s<10?'0':'')+s+'s';
+  };
+  tickCountdown();
+  window._abCountdownTimer=setInterval(tickCountdown,1000);
   // backup manuel
   document.getElementById('abNow').onclick=async()=>{
     const btn=document.getElementById('abNow'); btn.textContent='⏳…'; btn.disabled=true;
@@ -1233,6 +1249,32 @@ VIEW_INIT.autobackup=function(){
     if(testBtn) testBtn.onclick = async()=>{ testBtn.textContent='⏳ envoi…'; const r=await D.uploadNow().catch(()=>({ok:false,reason:'erreur'})); testBtn.textContent = r.ok ? '✓ '+r.name : '✗ '+(r.reason||'échec'); setTimeout(()=>switchTab('autobackup'), r.ok?2500:7000); };
     const offBtn = document.getElementById('drvOff');
     if(offBtn) offBtn.onclick = ()=>{ D.disconnect(); switchTab('autobackup'); };
+  }
+  // section Données Guardian (téléchargement hors-navigateur de SES données)
+  const DD = GC().dataDownload;
+  const gdlBox = document.getElementById('gdlBox');
+  if(DD && gdlBox){
+    const gm = DD.getMeta();
+    const freqLbl = gm.everyMin < 60 ? gm.everyMin+' min' : (gm.everyMin/60)+'h';
+    let cd = '—';
+    if(gm.enabled){ if(!gm.last) cd='au prochain cycle'; else { let r=gm.last+gm.everyMin*60000-Date.now(); if(r<=0) cd='imminent…'; else { const hh=Math.floor(r/3600000),mn=Math.floor((r%3600000)/60000),s=Math.floor((r%60000)/1000); cd=(hh>0?hh+'h ':'')+mn+'min '+(s<10?'0':'')+s+'s'; } } }
+    gdlBox.innerHTML = '<div class="item"><span class="nm">'+(gm.enabled?'Auto '+freqLbl+' · ⏳ <b id="gdlCd" style="color:var(--up)">'+cd+'</b>':'désactivé')+'</span>'
+      +'<button class="btn" id="gdlToggle" style="flex:0 0 auto;padding:6px 12px">'+(gm.enabled?'ON':'OFF')+'</button></div>'
+      +'<div class="controls c4" style="margin-top:6px"><button class="btn" data-gmin="5">5min</button><button class="btn" data-gh="3">3h</button><button class="btn" data-gh="6">6h</button><button class="btn" data-gh="12">12h</button></div>'
+      +'<div class="controls" style="margin-top:6px"><button class="btn green" id="gdlNow">⬇ Télécharger maintenant</button></div>';
+    document.getElementById('gdlToggle').onclick=()=>{ if(gm.enabled)DD.disable(); else DD.enable(180); switchTab('autobackup'); };
+    gdlBox.querySelectorAll('[data-gh]').forEach(b=>{ b.onclick=()=>{ DD.enable(parseInt(b.getAttribute('data-gh'))*60); switchTab('autobackup'); }; });
+    gdlBox.querySelectorAll('[data-gmin]').forEach(b=>{ b.onclick=()=>{ DD.enable(parseInt(b.getAttribute('data-gmin'))); switchTab('autobackup'); }; });
+    document.getElementById('gdlNow').onclick=()=>{ const btn=document.getElementById('gdlNow'); DD.now(); btn.textContent='✓ téléchargé'; setTimeout(()=>switchTab('autobackup'),1200); };
+    // compte à rebours vivant
+    if(window._gdlCdTimer) clearInterval(window._gdlCdTimer);
+    window._gdlCdTimer=setInterval(()=>{
+      const el=document.getElementById('gdlCd'); if(!el){ if(window._gdlCdTimer)clearInterval(window._gdlCdTimer); return; }
+      const m=DD.getMeta(); if(!m.enabled||!m.last) return;
+      let r=m.last+m.everyMin*60000-Date.now(); if(r<=0){el.textContent='imminent…';return;}
+      const hh=Math.floor(r/3600000),mn=Math.floor((r%3600000)/60000),s=Math.floor((r%60000)/1000);
+      el.textContent=(hh>0?hh+'h ':'')+mn+'min '+(s<10?'0':'')+s+'s';
+    },1000);
   }
   // liste
   A.list().then(list=>{

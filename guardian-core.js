@@ -784,5 +784,59 @@ Core.version = GUARDIAN_VERSION;
 Core.getLiveS = getLiveS;
 Core.detectMode = detectMode;
 Core.describeCapabilities = describeCapabilities;
+
+/* ════════════════════════════════════════════════════════════════════
+   TÉLÉCHARGEMENT AUTO DES DONNÉES PROPRES DE GUARDIAN
+   Guardian sauvegarde SES données (historique santé, contrôles, config) —
+   pas l'état d'AURA. Fichiers guardian_data_A/B/C.json dans Téléchargements,
+   en rotation. Survit au vidage du cache. Une synchro Android peut les
+   envoyer sur les mêmes Drive qu'AURA. Indépendant, propre à Guardian.
+   ════════════════════════════════════════════════════════════════════ */
+(function(){
+  const GDL_KEY = 'guardian_datadl_meta';
+  const SLOTS = ['A','B','C'];
+  function getMeta(){ try { const m = JSON.parse(localStorage.getItem(GDL_KEY)); if(m) return m; } catch(e){} return { enabled:false, everyMin:180, last:0, slot:0 }; }
+  function setMeta(m){ try { localStorage.setItem(GDL_KEY, JSON.stringify(m)); } catch(e){} }
+  // assemble les données propres de Guardian
+  function grabData(){
+    const data = { _type:'guardian_data', version:GUARDIAN_VERSION, savedAt:new Date().toISOString() };
+    try { data.history = Core.history || []; } catch(e){ data.history = []; }
+    try { data.lastResults = Core.results || []; } catch(e){ data.lastResults = []; }
+    try { data.lastRun = Core.lastRun || null; } catch(e){}
+    try { const cfg = localStorage.getItem('guardian_config_override'); if(cfg) data.configOverride = JSON.parse(cfg); } catch(e){}
+    return data;
+  }
+  function download(slotIndex){
+    try {
+      const data = grabData();
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type:'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = 'guardian_data_' + SLOTS[slotIndex] + '.json';
+      document.body.appendChild(a); a.click();
+      setTimeout(()=>{ try{document.body.removeChild(a);}catch(e){} try{URL.revokeObjectURL(url);}catch(e){} }, 100);
+      return true;
+    } catch(e){ return false; }
+  }
+  function tick(){
+    try {
+      const m = getMeta();
+      if(!m.enabled) return;
+      const now = Date.now();
+      if(m.last && (now - m.last) < m.everyMin*60000) return;
+      const slot = m.slot || 0;
+      if(download(slot)){ m.slot = (slot+1)%SLOTS.length; m.last = now; setMeta(m); }
+    } catch(e){}
+  }
+  if(window._gdlTimer) clearInterval(window._gdlTimer);
+  window._gdlTimer = setInterval(tick, 60000);
+  Core.dataDownload = {
+    getMeta, setMeta, tick,
+    enable: (everyMin)=>{ const m=getMeta(); m.enabled=true; m.everyMin=everyMin||180; setMeta(m); },
+    disable: ()=>{ const m=getMeta(); m.enabled=false; setMeta(m); },
+    now: ()=>{ const m=getMeta(); return download(m.slot||0); }
+  };
+})();
+
 window.GuardianCore = Core;
 })();
