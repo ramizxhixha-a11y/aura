@@ -609,6 +609,35 @@ function renderSettingsPanel() {
 
 
   el.innerHTML = `
+    <!-- Section Sauvegarde : téléchargement auto hors-navigateur + récupération -->
+    <div class="pref-section" style="margin:0 0 14px 0;padding:12px;background:var(--s1);border:1px solid var(--border);border-radius:12px;">
+      <div style="font-size:10px;font-weight:700;color:var(--t2);text-transform:uppercase;letter-spacing:.08em;margin-bottom:10px;">💾 Sauvegarde hors-navigateur</div>
+      <div style="font-size:9px;color:var(--t3);line-height:1.5;margin-bottom:10px;">Télécharge un fichier de l'état dans tes Téléchargements, en rotation sur 3 fichiers (A/B/C) qui s'écrasent. Survit au vidage du cache. Une synchro Android peut l'envoyer sur Drive.</div>
+      ${(() => {
+        const ad = (window.autoDownload ? window.autoDownload.getMeta() : { enabled:false, everyMin:180, last:0 });
+        const freqLabel = ad.everyMin < 60 ? ad.everyMin + ' min' : (ad.everyMin/60) + 'h';
+        let countdown = '—';
+        if (ad.enabled) {
+          if (!ad.last) countdown = 'au prochain cycle';
+          else { let r = ad.last + ad.everyMin*60000 - Date.now(); if (r<=0) countdown='imminent…'; else { const h=Math.floor(r/3600000),mn=Math.floor((r%3600000)/60000),s=Math.floor((r%60000)/1000); countdown=(h>0?h+'h ':'')+mn+'min '+(s<10?'0':'')+s+'s'; } }
+        }
+        const mkBtn = (min,lbl) => `<button onclick="if(window.autoDownload){window.autoDownload.enable(${min});renderSettingsPanel();}" style="flex:1;min-width:52px;height:30px;border-radius:8px;border:1px solid ${ad.enabled&&ad.everyMin===min?'rgba(0,232,122,.5)':'var(--border)'};background:${ad.enabled&&ad.everyMin===min?'rgba(0,232,122,.15)':'var(--s2)'};color:${ad.enabled&&ad.everyMin===min?'var(--up)':'var(--t2)'};font-size:10px;font-weight:700;cursor:pointer;">${lbl}</button>`;
+        return `
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:10px;">
+          <div style="flex:1;">
+            <div style="font-size:12px;font-weight:600;color:var(--t1);">Téléchargement auto ${ad.enabled?'· '+freqLabel:''}</div>
+            <div style="font-size:9px;color:var(--t3);margin-top:2px;">${ad.enabled?'⏳ Prochain dans : <b id="savCountdown" style="color:var(--up)">'+countdown+'</b>':'désactivé'}</div>
+          </div>
+          <button onclick="if(window.autoDownload){if(${ad.enabled}){window.autoDownload.disable();}else{window.autoDownload.enable(180);}renderSettingsPanel();}" style="min-width:54px;height:28px;border-radius:14px;border:1px solid ${ad.enabled?'rgba(0,232,122,.4)':'var(--border)'};background:${ad.enabled?'rgba(0,232,122,.15)':'var(--s2)'};color:${ad.enabled?'var(--up)':'var(--t3)'};font-size:10px;font-weight:700;cursor:pointer;">${ad.enabled?'ON':'OFF'}</button>
+        </div>
+        <div style="display:flex;gap:6px;margin-bottom:10px;">${mkBtn(5,'5min')}${mkBtn(180,'3h')}${mkBtn(360,'6h')}${mkBtn(720,'12h')}</div>
+        <div style="display:flex;gap:6px;">
+          <button onclick="if(window.autoDownload)window.autoDownload.now();" style="flex:1;height:32px;border-radius:8px;border:1px solid var(--border);background:var(--s2);color:var(--t1);font-size:11px;font-weight:700;cursor:pointer;">⬇ Télécharger maintenant</button>
+          <button onclick="if(window.recoverFromFiles)window.recoverFromFiles();" style="flex:1;height:32px;border-radius:8px;border:1px solid rgba(0,232,122,.4);background:rgba(0,232,122,.12);color:var(--up);font-size:11px;font-weight:700;cursor:pointer;">📂 Récupérer un backup</button>
+        </div>`;
+      })()}
+    </div>
+
     <!-- v7.0: Préférences utilisateur -->
     <div class="pref-section" style="margin:0 0 14px 0;padding:12px;background:var(--s1);border:1px solid var(--border);border-radius:12px;">
       <div style="font-size:10px;font-weight:700;color:var(--t2);text-transform:uppercase;letter-spacing:.08em;margin-bottom:10px;">🔔 Préférences</div>
@@ -1606,6 +1635,22 @@ function renderSettingsPanel() {
     </div>`;
   // v19 · #38 Notifications push
   try { if(typeof renderNotifSettings === 'function') renderNotifSettings(); } catch(e) {}
+
+  // Compte à rebours vivant de la sauvegarde auto (tant que la modal est ouverte)
+  try {
+    if (window._savCountdownTimer) clearInterval(window._savCountdownTimer);
+    window._savCountdownTimer = setInterval(() => {
+      const cd = document.getElementById('savCountdown');
+      if (!cd || !window.autoDownload) { if (window._savCountdownTimer) clearInterval(window._savCountdownTimer); return; }
+      const ad = window.autoDownload.getMeta();
+      if (!ad.enabled) { cd.textContent = 'désactivé'; return; }
+      if (!ad.last) { cd.textContent = 'au prochain cycle'; return; }
+      let r = ad.last + ad.everyMin*60000 - Date.now();
+      if (r <= 0) { cd.textContent = 'imminent…'; return; }
+      const h = Math.floor(r/3600000), mn = Math.floor((r%3600000)/60000), s = Math.floor((r%60000)/1000);
+      cd.textContent = (h>0?h+'h ':'') + mn + 'min ' + (s<10?'0':'') + s + 's';
+    }, 1000);
+  } catch(e) {}
 }
 
 // Expose globally
