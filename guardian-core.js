@@ -622,33 +622,50 @@ Core.describeCapabilities = describeCapabilities;
 
 /* ════════════════════════════════════════════════════════════════════
    TÉLÉCHARGEMENT AUTO DES DONNÉES PROPRES DE GUARDIAN
-   Guardian sauvegarde SES données (historique santé, contrôles, config) —
-   pas l'état d'AURA. Fichiers guardian_data_cX_date.json (noms uniques) dans Téléchargements,
-   en rotation. Survit au vidage du cache. Une synchro Android peut les
-   envoyer sur les mêmes Drive qu'AURA. Indépendant, propre à Guardian.
+   Guardian télécharge UN SEUL fichier complet : état d'AURA (snapshot live ou
+   dernier backup IDB) + données propres de Guardian (santé, contrôles, config).
+   Fichier aura_guardian_full_AAAAMMJJ-HHMMSS.json (nom unique) dans Téléchargements.
+   Survit au vidage du cache. La synchro Android (DriveSync) l'envoie vers le Drive.
+   AURA et Guardian doivent tourner dans le même navigateur (Chrome).
    ════════════════════════════════════════════════════════════════════ */
 (function(){
   const GDL_KEY = 'guardian_datadl_meta';
-  function getMeta(){ try { const m = JSON.parse(localStorage.getItem(GDL_KEY)); if(m) return m; } catch(e){} return { enabled:false, everyMin:180, last:0 }; }
+  // défaut : ACTIVÉ, toutes les 3h
+  function getMeta(){ try { const m = JSON.parse(localStorage.getItem(GDL_KEY)); if(m) return m; } catch(e){} return { enabled:true, everyMin:180, last:0 }; }
   function setMeta(m){ try { localStorage.setItem(GDL_KEY, JSON.stringify(m)); } catch(e){} }
-  // assemble les données propres de Guardian
-  function grabData(){
-    const data = { _type:'guardian_data', version:GUARDIAN_VERSION, savedAt:new Date().toISOString() };
-    try { data.history = Core.history || []; } catch(e){ data.history = []; }
-    try { data.lastResults = Core.results || []; } catch(e){ data.lastResults = []; }
-    try { data.lastRun = Core.lastRun || null; } catch(e){}
-    try { const cfg = localStorage.getItem('guardian_config_override'); if(cfg) data.configOverride = JSON.parse(cfg); } catch(e){}
-    return data;
+  // données propres de Guardian
+  function grabGuardianData(){
+    const g = {};
+    try { g.history = Core.history || []; } catch(e){ g.history = []; }
+    try { g.lastResults = Core.results || []; } catch(e){ g.lastResults = []; }
+    try { g.lastRun = Core.lastRun || null; } catch(e){}
+    try { const cfg = localStorage.getItem('guardian_config_override'); if(cfg) g.configOverride = JSON.parse(cfg); } catch(e){}
+    return g;
+  }
+  // assemble le backup complet : AURA + Guardian
+  function grabFull(){
+    let auraSnap = null;
+    try { if(typeof abGrabState === 'function') auraSnap = abGrabState(); } catch(e){}
+    const cyc = auraSnap && typeof auraSnap.cycle === 'number' ? auraSnap.cycle
+              : (auraSnap && auraSnap.state && auraSnap.state.cycle) || null;
+    return {
+      _type: 'aura_guardian_full',
+      version: GUARDIAN_VERSION,
+      savedAt: new Date().toISOString(),
+      auraCycle: cyc,
+      aura: auraSnap,            // état complet d'AURA (null si AURA jamais ouverte dans ce navigateur)
+      guardian: grabGuardianData()
+    };
   }
   function download(){
     try {
-      const data = grabData();
-      const blob = new Blob([JSON.stringify(data, null, 2)], { type:'application/json' });
+      const data = grabFull();
+      const blob = new Blob([JSON.stringify(data)], { type:'application/json' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       const dt = new Date(); const pad = n => (n<10?'0':'')+n;
       const stamp = dt.getFullYear()+pad(dt.getMonth()+1)+pad(dt.getDate())+'-'+pad(dt.getHours())+pad(dt.getMinutes())+pad(dt.getSeconds());
-      a.href = url; a.download = 'guardian_data_' + stamp + '.json';
+      a.href = url; a.download = 'aura_guardian_full_' + stamp + '.json';
       document.body.appendChild(a); a.click();
       setTimeout(()=>{ try{document.body.removeChild(a);}catch(e){} try{URL.revokeObjectURL(url);}catch(e){} }, 100);
       return true;
@@ -659,7 +676,10 @@ Core.describeCapabilities = describeCapabilities;
       const m = getMeta();
       if(!m.enabled) return;
       const now = Date.now();
-      if(m.last && (now - m.last) < m.everyMin*60000) return;
+      // premier passage (last=0) : on amorce le compteur sans télécharger,
+      // pour ne PAS déclencher un téléchargement dès l'ouverture de Guardian.
+      if(!m.last){ m.last = now; setMeta(m); return; }
+      if((now - m.last) < m.everyMin*60000) return;
       if(download()){ m.last = now; setMeta(m); }
     } catch(e){}
   }

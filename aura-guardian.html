@@ -4,7 +4,34 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>AURA Guardian</title>
+<meta name="theme-color" content="#050709">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Guardian">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='0' y2='1'%3E%3Cstop offset='0%25' stop-color='%2338d4f5'/%3E%3Cstop offset='100%25' stop-color='%2300e87a'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='100' height='100' rx='22' fill='%230a0f18'/%3E%3Cpath d='M50 14 L80 26 V52 C80 70 66 82 50 88 C34 82 20 70 20 52 V26 Z' fill='none' stroke='url(%23g)' stroke-width='6'/%3E%3Cpath d='M36 51 L46 61 L66 39' fill='none' stroke='url(%23g)' stroke-width='8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+<link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='0' y2='1'%3E%3Cstop offset='0%25' stop-color='%2338d4f5'/%3E%3Cstop offset='100%25' stop-color='%2300e87a'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='100' height='100' rx='22' fill='%230a0f18'/%3E%3Cpath d='M50 14 L80 26 V52 C80 70 66 82 50 88 C34 82 20 70 20 52 V26 Z' fill='none' stroke='url(%23g)' stroke-width='6'/%3E%3Cpath d='M36 51 L46 61 L66 39' fill='none' stroke='url(%23g)' stroke-width='8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+<link rel="manifest" id="pwaManifest">
+<script>
+/* Manifest PWA embarqué (aucun fichier séparé à uploader). Logo bouclier cyan→vert. */
+(function(){
+  var icon = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='0' y2='1'%3E%3Cstop offset='0%25' stop-color='%2338d4f5'/%3E%3Cstop offset='100%25' stop-color='%2300e87a'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='100' height='100' rx='22' fill='%230a0f18'/%3E%3Cpath d='M50 14 L80 26 V52 C80 70 66 82 50 88 C34 82 20 70 20 52 V26 Z' fill='none' stroke='url(%23g)' stroke-width='6'/%3E%3Cpath d='M36 51 L46 61 L66 39' fill='none' stroke='url(%23g)' stroke-width='8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E";
+  var manifest = {
+    name: "AURA Guardian", short_name: "Guardian",
+    description: "Diagnostic et sauvegarde AURA",
+    start_url: "./aura-guardian.html", scope: "./", display: "standalone",
+    background_color: "#050709", theme_color: "#050709",
+    icons: [
+      { src: icon, sizes: "192x192", type: "image/svg+xml", purpose: "any maskable" },
+      { src: icon, sizes: "512x512", type: "image/svg+xml", purpose: "any maskable" }
+    ]
+  };
+  try {
+    var blob = new Blob([JSON.stringify(manifest)], { type: "application/json" });
+    document.getElementById('pwaManifest').setAttribute('href', URL.createObjectURL(blob));
+  } catch(e){}
+})();
+</script>
 <style>
   :root{
     --bg:#050709;--card:#0a0f15;--card-hl:#0f161e;
@@ -122,6 +149,12 @@
     <div><span class="pulse" id="hs-pulse"></span></div>
   </div>
 </header>
+
+<div id="installBar" class="hidden" style="background:linear-gradient(135deg,rgba(56,212,245,.12),rgba(0,232,122,.12));border:1px solid var(--up);border-radius:10px;padding:12px;margin-bottom:12px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+  <span style="flex:1 1 auto;font-size:12px;color:var(--t1)">📲 Installer Guardian sur l'écran d'accueil</span>
+  <button class="btn green" id="installBtn" style="flex:0 0 auto;padding:8px 16px">Installer</button>
+  <button class="btn" id="installDismiss" style="flex:0 0 auto;padding:8px 12px">Plus tard</button>
+</div>
 
 <div class="alert-bar" id="alertBar">
   <span class="count" id="alertCount">0</span> probl&egrave;me(s) d&eacute;tect&eacute;(s) &mdash; voir les onglets marqu&eacute;s
@@ -1207,11 +1240,11 @@ VIEW_INIT.export=function(){
 
 VIEWS.autobackup=function(){
   if(!GC()||!GC().autoBackup) return '<div class="hint">Module backup auto indisponible (core non chargé).</div>';
-  let h='<div class="hint">Sauvegardes automatiques de l\'état AURA dans une base IDB dédiée. Tournent en arrière-plan quand AURA est ouverte. Rotation : les plus vieux sont supprimés au-delà du nombre gardé.</div>';
-  h+='<div class="sect-label">Réglages</div><div id="abCfg"></div>';
-  h+='<div class="controls" style="margin-top:8px"><button class="btn green" id="abNow">💾 Sauvegarder maintenant</button></div>';
-  h+='<div class="sect-label">📁 Données Guardian → Téléchargements</div><div class="hint">Télécharge les données propres de Guardian (santé, contrôles) dans le dossier Téléchargements. La synchro Android (DriveSync) les envoie ensuite vers ton Drive.</div><div id="gdlBox"></div>';
-  h+='<div class="sect-label">🗂 Backups enregistrés (local)</div><div id="abList"><div class="hint">Chargement…</div></div>';
+  let h='<div class="hint">Deux protections complémentaires : (1) une copie rapide gardée <b>dans le navigateur</b>, (2) un <b>fichier complet</b> envoyé vers ton Drive via DriveSync.</div>';
+  h+='<div class="sect-label">🔒 Copie rapide (dans le navigateur)</div><div class="hint">Sauvegarde l\'état d\'AURA dans une base interne. Rapide, mais ne quitte pas le navigateur — filet anti-plantage.</div><div id="abCfg"></div>';
+  h+='<div class="controls" style="margin-top:8px"><button class="btn green" id="abNow">💾 Copie rapide maintenant</button></div>';
+  h+='<div class="sect-label">☁ Backup complet (AURA + Guardian) → Drive</div><div class="hint">Télécharge UN fichier <code>aura_guardian_full_*.json</code> (état d\'AURA + données Guardian) dans Téléchargements. DriveSync l\'envoie vers ton Drive. C\'est le vrai filet anti-catastrophe : survit à tout.</div><div id="gdlBox"></div>';
+  h+='<div class="sect-label">🗂 Copies rapides enregistrées (navigateur)</div><div id="abList"><div class="hint">Chargement…</div></div>';
   return h;
 };
 VIEW_INIT.autobackup=function(){
@@ -1264,7 +1297,7 @@ VIEW_INIT.autobackup=function(){
       +'<button class="btn'+(gm.enabled&&gm.everyMin===180?' gold':'')+'" data-gh="3">3h</button>'
       +'<button class="btn'+(gm.enabled&&gm.everyMin===360?' gold':'')+'" data-gh="6">6h</button>'
       +'<button class="btn'+(gm.enabled&&gm.everyMin===720?' gold':'')+'" data-gh="12">12h</button></div>'
-      +'<div class="controls" style="margin-top:6px"><button class="btn" id="gdlNow">⬇ Télécharger maintenant</button></div>';
+      +'<div class="controls" style="margin-top:6px"><button class="btn green" id="gdlNow">⬇ Télécharger le backup complet</button></div>';
     document.getElementById('gdlToggle').onclick=()=>{ if(gm.enabled)DD.disable(); else DD.enable(180); switchTab('autobackup'); };
     gdlBox.querySelectorAll('[data-gh]').forEach(b=>{ b.onclick=()=>{ DD.enable(parseInt(b.getAttribute('data-gh'))*60); switchTab('autobackup'); }; });
     gdlBox.querySelectorAll('[data-gmin]').forEach(b=>{ b.onclick=()=>{ DD.enable(parseInt(b.getAttribute('data-gmin'))); switchTab('autobackup'); }; });
@@ -1308,7 +1341,33 @@ VIEW_INIT.autobackup=function(){
       setTimeout(tick, 6000);
       setInterval(tick, 2*60*1000);
     }
+    // tick téléchargement complet AURA+Guardian (le core gère l'intervalle ; ne déclenche pas au boot)
+    if(C && C.dataDownload){
+      const dtick = () => { try { C.dataDownload.tick(); } catch(e){} };
+      setTimeout(dtick, 8000);
+      setInterval(dtick, 60*1000);
+    }
   } catch(e){}
+  // PWA : installation sur l'écran d'accueil
+  (function(){
+    let deferredPrompt = null;
+    const bar = document.getElementById('installBar');
+    const btn = document.getElementById('installBtn');
+    const dismiss = document.getElementById('installDismiss');
+    const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone;
+    window.addEventListener('beforeinstallprompt', (e) => {
+      e.preventDefault(); deferredPrompt = e;
+      if(bar && !isStandalone && localStorage.getItem('guardian_install_dismissed')!=='1') bar.classList.remove('hidden');
+    });
+    if(btn) btn.onclick = async () => {
+      if(!deferredPrompt) return;
+      deferredPrompt.prompt();
+      try { await deferredPrompt.userChoice; } catch(e){}
+      deferredPrompt = null; if(bar) bar.classList.add('hidden');
+    };
+    if(dismiss) dismiss.onclick = () => { if(bar) bar.classList.add('hidden'); try{localStorage.setItem('guardian_install_dismissed','1');}catch(e){} };
+    window.addEventListener('appinstalled', () => { if(bar) bar.classList.add('hidden'); });
+  })();
 })();
 </script>
 </body>
