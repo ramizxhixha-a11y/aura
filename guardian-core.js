@@ -509,8 +509,8 @@ Core.runAll = async function(){ const r = await _origRunAll.apply(this, argument
 const AB = {
   DB: 'aura_auto_backups',
   STORE: 'backups',
-  META_KEY: 'guardian_autobackup_meta',   // localStorage : {lastRun, intervalH, keep, enabled}
-  defaults: { enabled: true, intervalH: 3, keep: 240 }
+  META_KEY: 'guardian_autobackup_meta',   // localStorage : {lastRun, intervalH, maxAgeH, enabled}
+  defaults: { enabled: true, intervalH: 3, maxAgeH: 24 }
 };
 function abGetMeta(){
   try { const m = JSON.parse(localStorage.getItem(AB.META_KEY)); if(m && typeof m==='object') return Object.assign({}, AB.defaults, m); } catch(e){}
@@ -559,12 +559,14 @@ async function abRun(force){
       const tx = db.transaction(AB.STORE, 'readwrite');
       const store = tx.objectStore(AB.STORE);
       store.add(rec);
-      // rotation : compter et supprimer les plus vieux au-delà de keep
-      const all = store.getAllKeys();
-      all.onsuccess = () => {
-        const keys = all.result || [];
-        const excess = keys.length - meta.keep;  // keys triées croissant = plus vieux d'abord
-        for(let i=0; i<excess; i++){ try { store.delete(keys[i]); } catch(e){} }
+      // rotation par âge : supprimer tout backup plus vieux que maxAgeH (défaut 24h)
+      const maxAgeMs = (meta.maxAgeH || 24) * 3600000;
+      const cutoff = now - maxAgeMs;
+      const allRec = store.getAll();
+      allRec.onsuccess = () => {
+        (allRec.result || []).forEach(r => {
+          if(r && r.ts && r.ts < cutoff){ try { store.delete(r.id); } catch(e){} }
+        });
       };
       tx.oncomplete = () => {
         meta.lastRun = now; abSetMeta(meta);
@@ -603,11 +605,24 @@ async function abGet(id){
     } catch(e){ resolve(null); }
   });
 }
+// vide TOUS les backups locaux (le Drive garde l'historique)
+async function abClear(){
+  const db = await abOpen(); if(!db) return { ok:false, reason:'IDB inaccessible' };
+  return await new Promise(resolve=>{
+    try {
+      const tx = db.transaction(AB.STORE,'readwrite');
+      tx.objectStore(AB.STORE).clear();
+      tx.oncomplete = () => { try{db.close();}catch(e){} resolve({ ok:true }); };
+      tx.onerror = () => { try{db.close();}catch(e){} resolve({ ok:false, reason:'échec' }); };
+    } catch(e){ try{db.close();}catch(x){} resolve({ ok:false, reason:e.message }); }
+  });
+}
 
 Core.autoBackup = {
   run: abRun,
   list: abList,
   get: abGet,
+  clear: abClear,
   getMeta: abGetMeta,
   setMeta: abSetMeta,
   // à appeler périodiquement (depuis l'embed/la page) : fait un backup si l'intervalle est écoulé

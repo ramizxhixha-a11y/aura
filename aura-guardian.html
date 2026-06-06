@@ -1252,7 +1252,7 @@ VIEW_INIT.autobackup=function(){
   // réglages
   const meta=A.getMeta();
   const cfg=document.getElementById('abCfg');
-  cfg.innerHTML='<div class="item"><span class="nm">Fréquence : <b>'+(meta.intervalMin?meta.intervalMin+' min':meta.intervalH+'h')+'</b> · Garder : <b>'+meta.keep+'</b> backups · '+(meta.enabled?'<span style="color:var(--up)">activé</span>':'<span style="color:var(--down)">désactivé</span>')+'</span></div>'
+  cfg.innerHTML='<div class="item"><span class="nm">Fréquence : <b>'+(meta.intervalMin?meta.intervalMin+' min':meta.intervalH+'h')+'</b> · Conservation : <b>'+(meta.maxAgeH||24)+'h max</b> · '+(meta.enabled?'<span style="color:var(--up)">activé</span>':'<span style="color:var(--down)">désactivé</span>')+'</span></div>'
     +'<div class="item"><span class="nm">⏳ Prochain backup dans : <b id="abCountdown" style="color:var(--ice)">…</b></span></div>'
     +'<div class="controls c3" style="margin-top:6px">'
     +'<button class="btn'+(meta.intervalMin===5?' gold':'')+'" data-min="5">5 min (test)</button>'
@@ -1315,16 +1315,19 @@ VIEW_INIT.autobackup=function(){
   // liste
   A.list().then(list=>{
     const el=document.getElementById('abList'); if(!el) return;
-    if(!list.length){ el.innerHTML='<div class="hint">Aucun backup auto pour l\'instant. Le premier se fera bientôt (ou clique « Backup maintenant »).</div>'; return; }
-    let h='<div class="hint">'+list.length+' backup(s) · du plus récent au plus ancien</div>';
+    if(!list.length){ el.innerHTML='<div class="hint">Aucune copie pour l\'instant. La première se fera bientôt (ou clique « Copie rapide maintenant »).</div>'; return; }
+    let h='<div class="hint">'+list.length+' copie(s) · du plus récent au plus ancien · effacées automatiquement après 24h</div>';
     list.forEach(b=>{
       h+='<div class="item"><span class="nm">#'+b.cycle+' · '+new Date(b.ts).toLocaleString('fr-FR')+' · '+(typeof b.portfolio==='number'?Math.round(b.portfolio):'?')+'</span>'
         +'<button class="btn" data-id="'+b.id+'" style="flex:0 0 auto;padding:6px 10px">⬇ JSON</button></div>';
     });
+    h+='<div class="controls" style="margin-top:8px"><button class="btn danger" id="abClear">🗑 Vider toutes les copies</button></div>';
     el.innerHTML=h;
     el.querySelectorAll('[data-id]').forEach(btn=>{
       btn.onclick=async()=>{ const rec=await A.get(parseInt(btn.getAttribute('data-id'))); if(rec&&rec.snapshot){ const obj=Object.assign({},rec.snapshot); if(!obj.key)obj.key='nexus_state_v2'; dlFile(obj,'aura-autobackup-'+rec.cycle+'.json','application/json'); } };
     });
+    const clr=document.getElementById('abClear');
+    if(clr) clr.onclick=async()=>{ if(!confirm('Vider toutes les copies locales ? (Le Drive garde l\'historique.)')) return; clr.textContent='⏳…'; clr.disabled=true; await A.clear(); switchTab('autobackup'); };
   });
 };
 
