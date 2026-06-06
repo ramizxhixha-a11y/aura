@@ -242,19 +242,21 @@ async function loadState() {
   snap = (cIDB >= cLS) ? snapIDB : snapLS;
 
   // ─── RESTAURATION AUTOMATIQUE AU BOOT ───────────────────────────────
-  // Si le meilleur snapshot trouvé est vide/bas (cycle ≤ 100) ALORS qu'un
-  // backup Guardian bien plus avancé existe (hors localStorage/IDB principal,
-  // donc survivant à un vidage du navigateur), on récupère ce backup à la
-  // place. C'est le filet ultime : même cache vidé, AURA se répare seule.
+  // Si l'état chargé a RÉGRESSÉ de plus de 2000 cycles sous le plus haut
+  // cycle jamais atteint (aura_highwater_cycle), c'est une régression
+  // anormale (mauvais save, corruption…). On récupère le meilleur backup
+  // Guardian disponible. NB : la base Guardian vit dans le navigateur, donc
+  // ce filet ne couvre PAS un vidage de cache (→ bannière de secours plus bas).
+  const REGRESSION_MARGIN = 2000;
   try {
     const bestCycle = snap && typeof snap.cycle === 'number' ? snap.cycle : -1;
     // témoin du plus haut cycle jamais atteint (clé séparée, écrite par saveState)
     let highWater = -1;
     try { const hw = localStorage.getItem('aura_highwater_cycle'); if (hw) highWater = parseInt(hw, 10) || -1; } catch(e){}
-    const looksEmpty = bestCycle <= 100;
-    const knewBetter = highWater > 500 || bestCycle < 0;
+    // régression détectée : on connaissait un cycle bien plus haut que l'état actuel
+    const regressed = highWater > 0 && bestCycle < (highWater - REGRESSION_MARGIN);
 
-    if (looksEmpty && knewBetter && window.GuardianCore && window.GuardianCore.autoBackup) {
+    if (regressed && window.GuardianCore && window.GuardianCore.autoBackup) {
       const list = await window.GuardianCore.autoBackup.list().catch(() => []);
       if (list && list.length) {
         // prendre le backup Guardian au cycle le plus élevé
@@ -271,6 +273,9 @@ async function loadState() {
         }
       }
     }
+    // mémorise s'il reste une régression non corrigée (pour la bannière de secours)
+    window._auraRegressionPending = regressed && (!snap || typeof snap.cycle !== 'number' || snap.cycle < (highWater - REGRESSION_MARGIN));
+    window._auraHighWaterSeen = highWater;
   } catch (e) { dbg.push('auto-restore:err'); }
   dbg.push('→ choix: #' + snap.cycle);
 
@@ -529,11 +534,85 @@ async function loadState() {
     try { if (typeof renderAll === 'function') renderAll(); } catch(e){}
   }, 50);
 
+  // ── Bannière de secours : régression non corrigée (ex. cache vidé) ──
+  // Si une régression de plus de 2000 cycles a été détectée ET qu'aucun
+  // backup local n'a pu la corriger, on propose à l'utilisateur de
+  // restaurer manuellement depuis un fichier (Drive / Téléchargements).
+  try {
+    if (window._auraRegressionPending) {
+      setTimeout(() => { try { _showRecoveryBanner(window._auraHighWaterSeen, snap && snap.cycle); } catch(e){} }, 1500);
+    }
+  } catch(e){}
+
   // v122 : restauration réussie. On débloque saveState.
   if (typeof window !== 'undefined') window._stateReady = true;
   return true;
 }
 window.loadState = loadState;
+
+// ════════════════════════════════════════════════════════════════════════
+// BANNIÈRE DE RÉCUPÉRATION — affichée si régression > 2000 cycles non corrigée
+// (typiquement après un vidage de cache : la base Guardian locale est vide,
+//  donc seul un fichier backup du Drive peut restaurer l'état).
+// 1 clic → ouvre le sélecteur de fichiers → l'utilisateur choisit son
+// aura_guardian_full_*.json ou aura_backup_*.json depuis le Drive.
+// ════════════════════════════════════════════════════════════════════════
+function _showRecoveryBanner(highWater, currentCycle) {
+  if (document.getElementById('auraRecoveryBanner')) return;  // déjà affichée
+  const bar = document.createElement('div');
+  bar.id = 'auraRecoveryBanner';
+  bar.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:99999;background:linear-gradient(135deg,#7a0c1e,#b3122c);color:#fff;padding:14px 16px;box-shadow:0 4px 20px rgba(0,0,0,.5);font-family:-apple-system,system-ui,sans-serif;display:flex;align-items:center;gap:12px;flex-wrap:wrap';
+  bar.innerHTML =
+    '<div style="flex:1 1 auto;min-width:200px">'
+    + '<div style="font-weight:800;font-size:15px;margin-bottom:2px">⚠️ État régressé détecté</div>'
+    + '<div style="font-size:12px;opacity:.95">Cycle actuel <b>#' + (currentCycle != null ? currentCycle : '?') + '</b> · dernier connu <b>#' + (highWater != null ? highWater : '?') + '</b>. Restaure ton dernier backup depuis le Drive.</div>'
+    + '</div>'
+    + '<button id="auraRecBtn" style="flex:0 0 auto;background:#fff;color:#b3122c;border:none;border-radius:8px;padding:10px 18px;font-weight:800;font-size:13px;cursor:pointer">📂 Restaurer un backup</button>'
+    + '<button id="auraRecDismiss" style="flex:0 0 auto;background:rgba(255,255,255,.18);color:#fff;border:1px solid rgba(255,255,255,.4);border-radius:8px;padding:10px 14px;font-weight:700;font-size:12px;cursor:pointer">Ignorer</button>';
+  document.body.appendChild(bar);
+
+  const fileInput = document.createElement('input');
+  fileInput.type = 'file';
+  fileInput.accept = 'application/json,.json';
+  fileInput.style.display = 'none';
+  document.body.appendChild(fileInput);
+
+  document.getElementById('auraRecBtn').onclick = () => fileInput.click();
+  document.getElementById('auraRecDismiss').onclick = () => { try { bar.remove(); fileInput.remove(); } catch(e){} };
+
+  fileInput.onchange = () => {
+    const f = fileInput.files && fileInput.files[0];
+    if (!f) return;
+    const rd = new FileReader();
+    rd.onload = () => {
+      let obj = null;
+      try { obj = JSON.parse(rd.result); } catch(e){ alert('Fichier JSON invalide.'); return; }
+      // un backup complet (aura_guardian_full) range l'état AURA sous .aura
+      let snapObj = obj;
+      if (obj && obj._type === 'aura_guardian_full' && obj.aura) snapObj = obj.aura;
+      const cyc = snapObj && typeof snapObj.cycle === 'number' ? snapObj.cycle : null;
+      if (cyc == null) { alert('Ce fichier ne contient pas d\'état AURA valide.'); return; }
+      if (!confirm('Restaurer le cycle #' + cyc + ' ? L\'état actuel sera remplacé.')) return;
+      try {
+        // Clé de sauvegarde AURA (nexus_state_v2 via RT.SAVE_KEY)
+        let saveKey = 'nexus_state_v2';
+        try { if (typeof RT !== 'undefined' && RT.SAVE_KEY) saveKey = RT.SAVE_KEY; } catch(e){}
+        // poser la clé interne attendue par loadState/saveState
+        if (!snapObj.key) snapObj.key = saveKey;
+        if (!snapObj.savedAt) snapObj.savedAt = new Date().toISOString();
+        // écrire le snapshot dans localStorage : loadState le relira au prochain boot
+        localStorage.setItem(saveKey, JSON.stringify(snapObj));
+        // relever le témoin high-water pour que la restauration soit acceptée
+        localStorage.setItem('aura_highwater_cycle', String(cyc));
+        bar.remove(); fileInput.remove();
+        // recharger : loadState va lire le snapshot restauré
+        setTimeout(() => location.reload(), 400);
+      } catch(e){ alert('Échec de la restauration : ' + e.message); }
+    };
+    rd.readAsText(f);
+  };
+}
+window._showRecoveryBanner = _showRecoveryBanner;
 
 
 // ════════════════════════════════════════════════════════════════════════
