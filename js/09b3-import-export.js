@@ -179,19 +179,18 @@ window.saveFeeRecord = saveFeeRecord;
    (aura_backup_A/B/C.json) → s'écrasent en boucle, pas d'accumulation.
    Ces fichiers vivent HORS du navigateur → survivent au vidage du cache.
    Une synchro Android (Autosync/FolderSync) peut les envoyer sur Drive.
-   Réglage localStorage : aura_autodl_meta {enabled, everyMin, last, slot}
+   Réglage localStorage : aura_autodl_meta {enabled, everyMin, last}
    ════════════════════════════════════════════════════════════════════ */
 const AUTODL_KEY  = 'aura_autodl_meta';
-const AUTODL_SLOTS = ['A', 'B', 'C'];   // rotation sur 3 fichiers
 
 function autoDlGetMeta() {
   try { const m = JSON.parse(localStorage.getItem(AUTODL_KEY)); if (m) return m; } catch(e){}
-  return { enabled: false, everyMin: 180, last: 0, slot: 0 };   // défaut : 3h, désactivé
+  return { enabled: false, everyMin: 180, last: 0 };   // défaut : 3h, désactivé
 }
 function autoDlSetMeta(m) { try { localStorage.setItem(AUTODL_KEY, JSON.stringify(m)); } catch(e){} }
 
-// Télécharge l'état dans le slot de rotation courant (nom fixe → s'écrase).
-function autoDlDownload(slotIndex) {
+// Télécharge l'état avec un nom unique (cycle + horodatage → jamais de conflit).
+function autoDlDownload() {
   try {
     if (typeof buildSnapshot !== 'function') return false;
     const snap = buildSnapshot();
@@ -202,7 +201,13 @@ function autoDlDownload(slotIndex) {
     const url  = URL.createObjectURL(blob);
     const a    = document.createElement('a');
     a.href     = url;
-    a.download = 'aura_backup_' + AUTODL_SLOTS[slotIndex] + '.json';
+    // nom UNIQUE (cycle + date-heure) → jamais de conflit, jamais de popup Chrome.
+    // L'app de synchro Android fait le ménage (garde les X derniers).
+    const d = new Date();
+    const pad = n => (n<10?'0':'')+n;
+    const stamp = d.getFullYear() + pad(d.getMonth()+1) + pad(d.getDate()) + '-' + pad(d.getHours()) + pad(d.getMinutes()) + pad(d.getSeconds());
+    const cyc = (snap && typeof snap.cycle === 'number') ? snap.cycle : 0;
+    a.download = 'aura_backup_c' + cyc + '_' + stamp + '.json';
     document.body.appendChild(a);
     a.click();
     setTimeout(() => { try { document.body.removeChild(a); } catch(e){} try { URL.revokeObjectURL(url); } catch(e){} }, 100);
@@ -221,9 +226,7 @@ function autoDlTick() {
     let cyc = -1;
     try { const St = (0, eval)('S'); if (St && typeof St.cycle === 'number') cyc = St.cycle; } catch(e){}
     if (cyc <= 100) return;
-    const slot = m.slot || 0;
-    if (autoDlDownload(slot)) {
-      m.slot = (slot + 1) % AUTODL_SLOTS.length;   // rotation A→B→C→A
+    if (autoDlDownload()) {
       m.last = now;
       autoDlSetMeta(m);
     }
@@ -241,8 +244,8 @@ window.autoDownload = {
   // active avec fréquence en minutes (5=test, 180=3h, 360=6h, 720=12h)
   enable:  (everyMin) => { const m = autoDlGetMeta(); m.enabled = true; m.everyMin = everyMin || 180; autoDlSetMeta(m); },
   disable: () => { const m = autoDlGetMeta(); m.enabled = false; autoDlSetMeta(m); },
-  // téléchargement immédiat dans le slot courant
-  now:     () => { const m = autoDlGetMeta(); return autoDlDownload(m.slot || 0); }
+  // téléchargement immédiat (nom unique)
+  now:     () => { return autoDlDownload(); }
 };
 
 /* ════════════════════════════════════════════════════════════════════
