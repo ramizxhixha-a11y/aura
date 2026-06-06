@@ -53,6 +53,7 @@
   .hit{background:rgba(255,184,48,.25);color:var(--gold);font-weight:700;border-radius:2px}
   .controls{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:8px}
   .controls.c3{grid-template-columns:1fr 1fr 1fr}
+  .controls.c4{grid-template-columns:1fr 1fr 1fr 1fr}
   .btn{background:rgba(56,212,245,.1);border:1px solid var(--ice);color:var(--ice);padding:9px 8px;border-radius:7px;font-size:11px;font-weight:700;cursor:pointer;transition:all .15s;font-family:inherit}
   .btn:hover{background:rgba(56,212,245,.2)}.btn:active{transform:scale(.97)}
   .btn.danger{background:rgba(255,61,107,.1);border-color:var(--down);color:var(--down)}
@@ -67,8 +68,11 @@
   .toggle{flex:1;min-width:70px;background:var(--card-hl);border:1px solid var(--border);border-radius:7px;padding:8px;color:var(--t2);font-family:var(--mono);font-size:11px;font-weight:700;cursor:pointer;text-align:center;user-select:none}
   .toggle.on{background:rgba(0,232,122,.12);border-color:rgba(0,232,122,.5);color:var(--up)}
   /* Home : grandes tuiles */
-  .home-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;margin-bottom:12px}
-  @media(min-width:700px){.home-grid{grid-template-columns:repeat(auto-fill,minmax(180px,1fr))}}
+  .home-grid{display:block;margin-bottom:12px}
+  .grp-title{font-size:12px;font-weight:800;letter-spacing:.04em;color:var(--ice);margin:18px 0 8px;padding-bottom:6px;border-bottom:1px solid var(--border)}
+  .grp-title:first-child{margin-top:0}
+  .grp-tiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px}
+  @media(min-width:700px){.grp-tiles{grid-template-columns:repeat(auto-fill,minmax(180px,1fr))}}
   .tile{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:14px;cursor:pointer;transition:all .15s;position:relative;display:flex;flex-direction:column;gap:6px;min-height:96px}
   .tile:hover{border-color:var(--ice);background:rgba(56,212,245,.05)}
   .tile:active{transform:scale(.98)}
@@ -362,37 +366,49 @@ const _badges={};
 /* Métadonnées des pages : icône, nom, description, actions de la barre.
    actions: tableau parmi 'reload','json','text','backup','import' (+ handlers spécifiques posés par chaque page via PAGE_ACTIONS) */
 const PAGES = [
-  {id:'analyse',   ic:'🧠', nm:'Analyse',       desc:'Détection intelligente : incohérences UI↔état, erreurs, fichiers…', actions:['reload','json','text','backup']},
-  {id:'capacites', ic:'💡', nm:'Capacités',     desc:'Tout ce que Guardian sait détecter', actions:['json','text']},
-  {id:'historique',ic:'📈', nm:'Historique',    desc:'Mémoire persistante des scans', actions:['json','text','reload']},
-  {id:'dashboard', ic:'📊', nm:'Tableau de bord',desc:'Synthèse état, cycle, portfolio', actions:['reload','json']},
-  {id:'inventory', ic:'📝', nm:'Inventaire',    desc:'Fichiers, capacités, DOM', actions:['reload','json','text']},
-  {id:'bugs',      ic:'🐛', nm:'Bugs connus',   desc:'Catalogue + détection live', actions:['reload','json','text']},
-  {id:'deploy',    ic:'🚀', nm:'Déploiement',   desc:'Cohérence HTML ↔ repo', actions:['reload','json']},
-  {id:'storage',   ic:'💾', nm:'Storage',       desc:'localStorage + IndexedDB', actions:['reload','json']},
-  {id:'idb',       ic:'🔍', nm:'Inspecteur IDB',desc:'Toutes les bases, stores, clés', actions:['reload','text']},
-  {id:'idbtest',   ic:'🧪', nm:'Test IDB',      desc:'Écriture/lecture diagnostic', actions:['reload','text']},
-  {id:'idbdebug',  ic:'📋', nm:'Traces IDB',    desc:'Journaux openDB / saveState', actions:['reload','text']},
-  {id:'restore',   ic:'🔄', nm:'Restauration',  desc:'Récupération multi-sources', actions:['reload']},
-  {id:'clean',     ic:'🧹', nm:'Nettoyage',     desc:'Purge des clés obsolètes', actions:['reload']},
-  {id:'search',    ic:'🔎', nm:'Recherche',     desc:'Mot-clé dans tout le code', actions:[]},
-  {id:'sw',        ic:'⚙️', nm:'Service Worker', desc:'Désinscrire + vider caches', actions:['reload']},
-  {id:'journal',   ic:'📓', nm:'Journal',       desc:'Événements internes Guardian', actions:['text']},
-  {id:'export',    ic:'📦', nm:'Export / Import',desc:'Backup global, JSON, texte, import', actions:[]},
-  {id:'autobackup',ic:'⏰', nm:'Backup auto',    desc:'Sauvegardes automatiques toutes les 6h (rotation 30)', actions:['reload']}
+  {id:'autobackup',ic:'⏰', nm:'Backup auto',    desc:'Sauvegardes automatiques de l\'état AURA (réglage + données Guardian)', actions:['reload'], grp:'save'},
+  {id:'export',    ic:'📦', nm:'Export / Import',desc:'Sauvegarder ou réimporter tout Guardian (config + historique)', actions:[], grp:'save'},
+  {id:'restore',   ic:'🔄', nm:'Restauration',  desc:'Récupération multi-sources de l\'état AURA', actions:['reload'], grp:'save'},
+  {id:'analyse',   ic:'🧠', nm:'Analyse',       desc:'Détection intelligente : incohérences UI↔état, erreurs, fichiers…', actions:['reload','json','text','backup'], grp:'diag'},
+  {id:'dashboard', ic:'📊', nm:'Tableau de bord',desc:'Synthèse état, cycle, portfolio', actions:['reload','json'], grp:'diag'},
+  {id:'bugs',      ic:'🐛', nm:'Bugs connus',   desc:'Catalogue + détection live', actions:['reload','json','text'], grp:'diag'},
+  {id:'historique',ic:'📈', nm:'Historique',    desc:'Mémoire persistante des scans', actions:['json','text','reload'], grp:'diag'},
+  {id:'storage',   ic:'💾', nm:'Storage',       desc:'localStorage + IndexedDB', actions:['reload','json'], grp:'stock'},
+  {id:'idb',       ic:'🔍', nm:'Inspecteur IDB',desc:'Toutes les bases, stores, clés', actions:['reload','text'], grp:'stock'},
+  {id:'idbtest',   ic:'🧪', nm:'Test IDB',      desc:'Écriture/lecture diagnostic', actions:['reload','text'], grp:'stock'},
+  {id:'idbdebug',  ic:'📋', nm:'Traces IDB',    desc:'Journaux openDB / saveState', actions:['reload','text'], grp:'stock'},
+  {id:'clean',     ic:'🧹', nm:'Nettoyage',     desc:'Purge des clés obsolètes', actions:['reload'], grp:'stock'},
+  {id:'inventory', ic:'📝', nm:'Inventaire',    desc:'Fichiers, capacités, DOM', actions:['reload','json','text'], grp:'sys'},
+  {id:'deploy',    ic:'🚀', nm:'Déploiement',   desc:'Cohérence HTML ↔ repo', actions:['reload','json'], grp:'sys'},
+  {id:'capacites', ic:'💡', nm:'Capacités',     desc:'Tout ce que Guardian sait détecter', actions:['json','text'], grp:'sys'},
+  {id:'search',    ic:'🔎', nm:'Recherche',     desc:'Mot-clé dans tout le code', actions:[], grp:'sys'},
+  {id:'sw',        ic:'⚙️', nm:'Service Worker', desc:'Désinscrire + vider caches', actions:['reload'], grp:'sys'},
+  {id:'journal',   ic:'📓', nm:'Journal',       desc:'Événements internes Guardian', actions:['text'], grp:'sys'}
+];
+const GROUPS = [
+  {id:'save',  nm:'🛡️ Sauvegarde & récupération'},
+  {id:'diag',  nm:'🔍 Diagnostic'},
+  {id:'stock', nm:'💾 Stockage'},
+  {id:'sys',   nm:'⚙️ Système & outils'}
 ];
 /* handlers d'actions spécifiques par page (json/text/backup) — posés par chaque page */
 const PAGE_ACTIONS = {};
 
 function renderHome(){
   const grid=document.getElementById('homeGrid');
-  grid.innerHTML = PAGES.map(p=>{
+  const tile=p=>{
     const b=_badges[p.id];
     const badge = b ? '<span class="tile-badge '+b.level+'">'+b.n+'</span>' : '';
     return '<div class="tile" data-page="'+p.id+'">'+badge
       +'<div class="tile-ic">'+p.ic+'</div>'
       +'<div class="tile-nm">'+p.nm+'</div>'
       +'<div class="tile-desc">'+p.desc+'</div></div>';
+  };
+  grid.innerHTML = GROUPS.map(g=>{
+    const pgs=PAGES.filter(p=>p.grp===g.id);
+    if(!pgs.length) return '';
+    return '<div class="grp-title">'+g.nm+'</div>'
+      +'<div class="grp-tiles">'+pgs.map(tile).join('')+'</div>';
   }).join('');
 }
 function goHome(){
@@ -1193,10 +1209,9 @@ VIEWS.autobackup=function(){
   if(!GC()||!GC().autoBackup) return '<div class="hint">Module backup auto indisponible (core non chargé).</div>';
   let h='<div class="hint">Sauvegardes automatiques de l\'état AURA dans une base IDB dédiée. Tournent en arrière-plan quand AURA est ouverte. Rotation : les plus vieux sont supprimés au-delà du nombre gardé.</div>';
   h+='<div class="sect-label">Réglages</div><div id="abCfg"></div>';
-  h+='<div class="controls" style="margin-top:8px"><button class="btn green" id="abNow">💾 Backup maintenant</button></div>';
-  h+='<div class="sect-label">☁ Google Drive</div><div class="hint">Envoi automatique des backups sur ton Drive (hors navigateur : survit à une réinstallation). Une autorisation unique au départ.</div><div id="drvBox"></div>';
-  h+='<div class="sect-label">💾 Données Guardian (hors-navigateur)</div><div class="hint">Télécharge les données propres de Guardian (historique santé, contrôles) en rotation 3 fichiers. Une synchro Android peut les envoyer sur les mêmes Drive qu\'AURA.</div><div id="gdlBox"></div>';
-  h+='<div class="sect-label">Backups enregistrés (local)</div><div id="abList"><div class="hint">Chargement…</div></div>';
+  h+='<div class="controls" style="margin-top:8px"><button class="btn green" id="abNow">💾 Sauvegarder maintenant</button></div>';
+  h+='<div class="sect-label">📁 Données Guardian → Téléchargements</div><div class="hint">Télécharge les données propres de Guardian (santé, contrôles) dans le dossier Téléchargements. La synchro Android (DriveSync) les envoie ensuite vers ton Drive.</div><div id="gdlBox"></div>';
+  h+='<div class="sect-label">🗂 Backups enregistrés (local)</div><div id="abList"><div class="hint">Chargement…</div></div>';
   return h;
 };
 VIEW_INIT.autobackup=function(){
@@ -1205,9 +1220,12 @@ VIEW_INIT.autobackup=function(){
   const meta=A.getMeta();
   const cfg=document.getElementById('abCfg');
   cfg.innerHTML='<div class="item"><span class="nm">Fréquence : <b>'+(meta.intervalMin?meta.intervalMin+' min':meta.intervalH+'h')+'</b> · Garder : <b>'+meta.keep+'</b> backups · '+(meta.enabled?'<span style="color:var(--up)">activé</span>':'<span style="color:var(--down)">désactivé</span>')+'</span></div>'
-    +'<div class="item"><span class="nm">⏳ Prochain backup dans : <b id="abCountdown" style="color:var(--accent)">…</b></span></div>'
+    +'<div class="item"><span class="nm">⏳ Prochain backup dans : <b id="abCountdown" style="color:var(--ice)">…</b></span></div>'
     +'<div class="controls c3" style="margin-top:6px">'
-    +'<button class="btn" data-min="5">5 min (test)</button><button class="btn" data-h="3">3h</button><button class="btn" data-h="6">6h</button><button class="btn" data-h="12">12h</button></div>';
+    +'<button class="btn'+(meta.intervalMin===5?' gold':'')+'" data-min="5">5 min (test)</button>'
+    +'<button class="btn'+(!meta.intervalMin&&meta.intervalH===3?' gold':'')+'" data-h="3">3h</button>'
+    +'<button class="btn'+(!meta.intervalMin&&meta.intervalH===6?' gold':'')+'" data-h="6">6h</button>'
+    +'<button class="btn'+(!meta.intervalMin&&meta.intervalH===12?' gold':'')+'" data-h="12">12h</button></div>';
   cfg.querySelectorAll('[data-h]').forEach(b=>{ b.onclick=()=>{ const m=A.getMeta(); m.intervalH=parseInt(b.getAttribute('data-h')); delete m.intervalMin; A.setMeta(m); switchTab('autobackup'); }; });
   cfg.querySelectorAll('[data-min]').forEach(b=>{ b.onclick=()=>{ const m=A.getMeta(); m.intervalMin=parseInt(b.getAttribute('data-min')); A.setMeta(m); switchTab('autobackup'); }; });
   // compte à rebours du prochain backup (mis à jour chaque seconde)
@@ -1231,25 +1249,6 @@ VIEW_INIT.autobackup=function(){
     btn.textContent= r.ok ? '✓ Backup #'+r.cycle : '✗ '+(r.reason||'échec'); 
     setTimeout(()=>switchTab('autobackup'),1200);
   };
-  // section Drive
-  const D = GC().drive;
-  const drvBox = document.getElementById('drvBox');
-  if(D && drvBox){
-    const dm = D.getMeta();
-    if(dm.enabled){
-      const last = dm.lastUpload ? new Date(dm.lastUpload).toLocaleString('fr-FR') : 'jamais';
-      drvBox.innerHTML = '<div class="item"><span class="nm">✅ Drive connecté · dernier envoi : '+last+'</span></div>'
-        +'<div class="controls" style="margin-top:6px"><button class="btn green" id="drvTest">☁ Envoyer sur Drive maintenant</button><button class="btn" id="drvOff">Déconnecter</button></div>';
-    } else {
-      drvBox.innerHTML = '<div class="controls"><button class="btn green" id="drvOn">🔗 Connecter Google Drive</button></div>';
-    }
-    const onBtn = document.getElementById('drvOn');
-    if(onBtn) onBtn.onclick = async()=>{ onBtn.textContent='⏳ autorisation…'; const r=await D.connect(); onBtn.textContent = r.ok ? '✓ connecté' : '✗ '+(r.reason||'échec'); setTimeout(()=>switchTab('autobackup'),1500); };
-    const testBtn = document.getElementById('drvTest');
-    if(testBtn) testBtn.onclick = async()=>{ testBtn.textContent='⏳ envoi…'; const r=await D.uploadNow().catch(()=>({ok:false,reason:'erreur'})); testBtn.textContent = r.ok ? '✓ '+r.name : '✗ '+(r.reason||'échec'); setTimeout(()=>switchTab('autobackup'), r.ok?2500:7000); };
-    const offBtn = document.getElementById('drvOff');
-    if(offBtn) offBtn.onclick = ()=>{ D.disconnect(); switchTab('autobackup'); };
-  }
   // section Données Guardian (téléchargement hors-navigateur de SES données)
   const DD = GC().dataDownload;
   const gdlBox = document.getElementById('gdlBox');
@@ -1259,9 +1258,13 @@ VIEW_INIT.autobackup=function(){
     let cd = '—';
     if(gm.enabled){ if(!gm.last) cd='au prochain cycle'; else { let r=gm.last+gm.everyMin*60000-Date.now(); if(r<=0) cd='imminent…'; else { const hh=Math.floor(r/3600000),mn=Math.floor((r%3600000)/60000),s=Math.floor((r%60000)/1000); cd=(hh>0?hh+'h ':'')+mn+'min '+(s<10?'0':'')+s+'s'; } } }
     gdlBox.innerHTML = '<div class="item"><span class="nm">'+(gm.enabled?'Auto '+freqLbl+' · ⏳ <b id="gdlCd" style="color:var(--up)">'+cd+'</b>':'désactivé')+'</span>'
-      +'<button class="btn" id="gdlToggle" style="flex:0 0 auto;padding:6px 12px">'+(gm.enabled?'ON':'OFF')+'</button></div>'
-      +'<div class="controls c4" style="margin-top:6px"><button class="btn" data-gmin="5">5min</button><button class="btn" data-gh="3">3h</button><button class="btn" data-gh="6">6h</button><button class="btn" data-gh="12">12h</button></div>'
-      +'<div class="controls" style="margin-top:6px"><button class="btn green" id="gdlNow">⬇ Télécharger maintenant</button></div>';
+      +'<button class="btn'+(gm.enabled?' green':'')+'" id="gdlToggle" style="flex:0 0 auto;padding:6px 12px">'+(gm.enabled?'ON':'OFF')+'</button></div>'
+      +'<div class="controls c4" style="margin-top:6px">'
+      +'<button class="btn'+(gm.enabled&&gm.everyMin===5?' gold':'')+'" data-gmin="5">5min</button>'
+      +'<button class="btn'+(gm.enabled&&gm.everyMin===180?' gold':'')+'" data-gh="3">3h</button>'
+      +'<button class="btn'+(gm.enabled&&gm.everyMin===360?' gold':'')+'" data-gh="6">6h</button>'
+      +'<button class="btn'+(gm.enabled&&gm.everyMin===720?' gold':'')+'" data-gh="12">12h</button></div>'
+      +'<div class="controls" style="margin-top:6px"><button class="btn" id="gdlNow">⬇ Télécharger maintenant</button></div>';
     document.getElementById('gdlToggle').onclick=()=>{ if(gm.enabled)DD.disable(); else DD.enable(180); switchTab('autobackup'); };
     gdlBox.querySelectorAll('[data-gh]').forEach(b=>{ b.onclick=()=>{ DD.enable(parseInt(b.getAttribute('data-gh'))*60); switchTab('autobackup'); }; });
     gdlBox.querySelectorAll('[data-gmin]').forEach(b=>{ b.onclick=()=>{ DD.enable(parseInt(b.getAttribute('data-gmin'))); switchTab('autobackup'); }; });
@@ -1297,12 +1300,11 @@ VIEW_INIT.autobackup=function(){
   // synchroniser la liste de fichiers avec le HTML réel d'AURA (source de vérité)
   syncFilesFromHTML().then(()=>{ collectState && collectState().then(()=>{ runBugScan&&runBugScan(); refreshHeader&&refreshHeader(); }); });
   goHome();
-  // tick backup auto (utile pour tester depuis cette page) : warmup Drive puis vérif toutes les 2 min
+  // tick backup auto (utile pour tester depuis cette page) : vérif toutes les 2 min
   try {
     const C = window.GuardianCore;
     if(C && C.autoBackup){
-      const tick = () => { C.autoBackup.tick().then(r=>{ if(r&&r.ok && C.drive){ C.drive.autoPush().catch(()=>{}); } }).catch(()=>{}); };
-      if(C.drive){ const m=C.drive.getMeta(); if(m&&m.enabled && C.drive.warmup) setTimeout(()=>C.drive.warmup().catch(()=>{}),3000); }
+      const tick = () => { C.autoBackup.tick().catch(()=>{}); };
       setTimeout(tick, 6000);
       setInterval(tick, 2*60*1000);
     }
