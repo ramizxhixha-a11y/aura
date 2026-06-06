@@ -788,14 +788,13 @@ Core.describeCapabilities = describeCapabilities;
 /* ════════════════════════════════════════════════════════════════════
    TÉLÉCHARGEMENT AUTO DES DONNÉES PROPRES DE GUARDIAN
    Guardian sauvegarde SES données (historique santé, contrôles, config) —
-   pas l'état d'AURA. Fichiers guardian_data_A/B/C.json dans Téléchargements,
+   pas l'état d'AURA. Fichiers guardian_data_cX_date.json (noms uniques) dans Téléchargements,
    en rotation. Survit au vidage du cache. Une synchro Android peut les
    envoyer sur les mêmes Drive qu'AURA. Indépendant, propre à Guardian.
    ════════════════════════════════════════════════════════════════════ */
 (function(){
   const GDL_KEY = 'guardian_datadl_meta';
-  const SLOTS = ['A','B','C'];
-  function getMeta(){ try { const m = JSON.parse(localStorage.getItem(GDL_KEY)); if(m) return m; } catch(e){} return { enabled:false, everyMin:180, last:0, slot:0 }; }
+  function getMeta(){ try { const m = JSON.parse(localStorage.getItem(GDL_KEY)); if(m) return m; } catch(e){} return { enabled:false, everyMin:180, last:0 }; }
   function setMeta(m){ try { localStorage.setItem(GDL_KEY, JSON.stringify(m)); } catch(e){} }
   // assemble les données propres de Guardian
   function grabData(){
@@ -806,13 +805,15 @@ Core.describeCapabilities = describeCapabilities;
     try { const cfg = localStorage.getItem('guardian_config_override'); if(cfg) data.configOverride = JSON.parse(cfg); } catch(e){}
     return data;
   }
-  function download(slotIndex){
+  function download(){
     try {
       const data = grabData();
       const blob = new Blob([JSON.stringify(data, null, 2)], { type:'application/json' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
-      a.href = url; a.download = 'guardian_data_' + SLOTS[slotIndex] + '.json';
+      const dt = new Date(); const pad = n => (n<10?'0':'')+n;
+      const stamp = dt.getFullYear()+pad(dt.getMonth()+1)+pad(dt.getDate())+'-'+pad(dt.getHours())+pad(dt.getMinutes())+pad(dt.getSeconds());
+      a.href = url; a.download = 'guardian_data_' + stamp + '.json';
       document.body.appendChild(a); a.click();
       setTimeout(()=>{ try{document.body.removeChild(a);}catch(e){} try{URL.revokeObjectURL(url);}catch(e){} }, 100);
       return true;
@@ -824,8 +825,7 @@ Core.describeCapabilities = describeCapabilities;
       if(!m.enabled) return;
       const now = Date.now();
       if(m.last && (now - m.last) < m.everyMin*60000) return;
-      const slot = m.slot || 0;
-      if(download(slot)){ m.slot = (slot+1)%SLOTS.length; m.last = now; setMeta(m); }
+      if(download()){ m.last = now; setMeta(m); }
     } catch(e){}
   }
   if(window._gdlTimer) clearInterval(window._gdlTimer);
@@ -834,7 +834,7 @@ Core.describeCapabilities = describeCapabilities;
     getMeta, setMeta, tick,
     enable: (everyMin)=>{ const m=getMeta(); m.enabled=true; m.everyMin=everyMin||180; setMeta(m); },
     disable: ()=>{ const m=getMeta(); m.enabled=false; setMeta(m); },
-    now: ()=>{ const m=getMeta(); return download(m.slot||0); }
+    now: ()=>{ return download(); }
   };
 })();
 
