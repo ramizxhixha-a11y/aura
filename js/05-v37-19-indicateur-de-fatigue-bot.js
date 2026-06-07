@@ -1,6 +1,8 @@
 // ════════════════════════════════════════════════════════════
 // AURA8 — module consolidé 05/10
 // Contient : v37-19-indicateur-de-fatigue-bot, v43-13-export-rapport-pdf-mensuel, v47-mode-zen, v55-picture-in-picture
+// ── 07/06/2026 : multi-compte allégé (aura_mc_slots ne stocke plus pairStates/
+//    agents — anti-saturation localStorage ; migration auto des slots lourds).
 // ════════════════════════════════════════════════════════════
 // ═══ v37 · #19 INDICATEUR DE FATIGUE BOT ═══
 // Score de "fatigue" 0-100 calculé sur 6 facteurs :
@@ -1612,8 +1614,8 @@ function _buildReportHTML() {
 </table>
 
 <div class="disclaimer">
-  ⚠ Ce rapport est généré automatiquement par AURA pour information personnelle. 
-  Les performances passées ne garantissent pas les résultats futurs. 
+  ⚠ Ce rapport est généré automatiquement par AURA pour information personnelle.
+  Les performances passées ne garantissent pas les résultats futurs.
   Ce document n'est pas un conseil financier ou fiscal.
 </div>
 
@@ -2552,16 +2554,45 @@ const _MC_KEY   = 'aura_mc_slots';
 const _MC_MAX   = 5;
 const _MC_EMOJIS= ['🔵','🟢','🟡','🔴','🟣'];
 
-// Lire tous les slots depuis localStorage
+// Champs LEGERS conserves par slot (le reste = etat complet, vit dans le state principal).
+const _MC_LIGHT_FIELDS = ['idx','name','portfolio','tradingAccount','totalTrades','winTrades','tradingMode','savedAt'];
+
+// Retire les grosses cles (pairStates, agents, fees, openPositions...) d'un slot.
+function _mcStripHeavy(slot) {
+  if (!slot || typeof slot !== 'object') return slot;
+  const light = {};
+  for (const f of _MC_LIGHT_FIELDS) if (slot[f] !== undefined) light[f] = slot[f];
+  return light;
+}
+
+// Lire tous les slots depuis localStorage (+ migration : purge des slots lourds hérités).
 function _mcLoadSlots() {
-  try { return JSON.parse(localStorage.getItem(_MC_KEY)||'[]'); } catch(e) { return []; }
+  try {
+    const slots = JSON.parse(localStorage.getItem(_MC_KEY)||'[]');
+    let dirty = false;
+    for (let i=0;i<slots.length;i++) {
+      if (slots[i] && (slots[i].pairStates || slots[i].agents)) {
+        slots[i] = _mcStripHeavy(slots[i]); dirty = true;
+      }
+    }
+    if (dirty) { try { localStorage.setItem(_MC_KEY, JSON.stringify(slots)); } catch(e){} }
+    return slots;
+  } catch(e) { return []; }
 }
 function _mcSaveSlots(slots) {
-  try { localStorage.setItem(_MC_KEY, JSON.stringify(slots)); } catch(e) {}
+  // Securite : on ne persiste jamais de grosses cles dans aura_mc_slots.
+  try {
+    const lean = (slots||[]).map(s => s ? _mcStripHeavy(s) : s);
+    localStorage.setItem(_MC_KEY, JSON.stringify(lean));
+  } catch(e) {}
 }
 
 // Sauvegarder le compte actuel dans le slot actif
 function _mcSaveCurrent() {
+  // RESUME LEGER uniquement. L'etat complet (pairStates, agents, fees...) du
+  // compte actif vit deja dans le state principal (nexus_state_v2 / IndexedDB) ;
+  // le dupliquer ici saturait le localStorage (~680 Ko). On ne garde donc que
+  // les petites valeurs affichees par la liste des comptes.
   const slots = _mcLoadSlots();
   const idx   = S._mcActiveSlot ?? 0;
   const snap  = {
@@ -2570,10 +2601,6 @@ function _mcSaveCurrent() {
     tradingAccount: S.tradingAccount||0,
     totalTrades: S.totalTrades||0,
     winTrades: S.winTrades||0,
-    pairStates: S.pairStates,
-    agents: S.agents,
-    fees: S.fees,
-    openPositions: S.openPositions,
     tradingMode: S.tradingMode,
     savedAt: Date.now(),
   };
@@ -3655,11 +3682,6 @@ function _initPipDrag() {
 }
 
 // Afficher le bouton PiP quand on est sur une page différente
-function _pipShowBtn() {
-  const btn = document.getElementById('pipBtnOpen');
-  if(btn && !_pipOpen) btn.classList.add('show');
-}
-
 function renderPipSection() {
   const el = document.getElementById('pipSection');
   if(!el) return;
@@ -3947,7 +3969,7 @@ function _generateAppsScript() {
 
 function importAuraData() {
   const ss  = SpreadsheetApp.getActiveSpreadsheet();
-  
+
   // ── Onglet RÉSUMÉ ──
   let sheet = ss.getSheetByName('AURA Résumé') || ss.insertSheet('AURA Résumé');
   sheet.clearContents();
@@ -3967,7 +3989,7 @@ function importAuraData() {
     ['','',''],
   ]);
   sheet.getRange(1,1,1,3).setBackground('#0b0e14').setFontColor('#38d4f5').setFontWeight('bold');
-  
+
   // ── Onglet TRADES RÉCENTS ──
   let tSheet = ss.getSheetByName('AURA Trades') || ss.insertSheet('AURA Trades');
   tSheet.clearContents();
@@ -3979,7 +4001,7 @@ function importAuraData() {
     tSheet.getRange(1,1,trades.length,5).setValues(trades);
     tSheet.getRange(1,1,1,5).setBackground('#0b0e14').setFontColor('#38d4f5').setFontWeight('bold');
   }
-  
+
   SpreadsheetApp.getUi().alert('✅ AURA data importée dans ' + ss.getName());
 }
 

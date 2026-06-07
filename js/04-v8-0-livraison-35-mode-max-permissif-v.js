@@ -1,6 +1,9 @@
 // ════════════════════════════════════════════════════════════
 // AURA8 — module consolidé 04/10
 // Contient : v8-0-livraison-35-mode-max-permissif-valid, v6-0-user-controls-pending-actions-agent-m, v29-26-coach-ia-integre
+// ── 07/06/2026 : 3 ecritures corrigees — sauvegardaient dans la cle morte
+//    'nexus_state' (jamais relue) au lieu de nexus_state_v2 ; remplacees par
+//    saveState() (cle correcte, allegee, + IndexedDB). Anti-saturation + coherence.
 // ════════════════════════════════════════════════════════════
 // ═══════════════════════════════════════════════════════════════════════════
 // v8.0 LIVRAISON 35 · MODE MAX PERMISSIF + VALIDATEUR DE COHÉRENCE
@@ -35,42 +38,42 @@ const AURA_PROTECTED_FIELDS = [
 // Validateur de cohérence : retourne {ok, warnings}
 function _validateBackupCoherence(state) {
   const warnings = [];
-  
+
   // Levier dangereux
   const lev = state.leverage || 0;
   if (lev > 5) warnings.push('⚠ Levier élevé : ×' + lev + ' (max 10)');
-  
+
   // Stake max élevé
   const prc = state.paperRealConfig || {};
   if (prc.maxStakePct && prc.maxStakePct > 20) {
     warnings.push('⚠ maxStakePct élevé : ' + prc.maxStakePct + '% (>20% risqué)');
   }
-  
+
   // maxOpenPositions excessif
   if (prc.maxConcurrentPos && prc.maxConcurrentPos > 10) {
     warnings.push('⚠ Trop de positions concurrentes : ' + prc.maxConcurrentPos);
   }
-  
+
   // Mode REAL activé sans confirmation
   if (state.tradingMode === 'real') {
     warnings.push('🔴 MODE RÉEL ACTIVÉ - argent réel en jeu');
   }
-  
+
   // Phase 5 active mais pas Phase 4 (cohérence dépendances)
   if (state.phase5Enabled && !state.phase4Enabled) {
     warnings.push('⚠ Phase 5 active sans Phase 4 (incohérence dépendance)');
   }
-  
+
   // Bonus multiplier excessif
   if (prc.bonusMultiplierMax && prc.bonusMultiplierMax > 3) {
     warnings.push('⚠ bonusMultiplierMax élevé : ×' + prc.bonusMultiplierMax);
   }
-  
+
   // Cooldown très court (risque overtrading)
   if (prc.cooldownMs && prc.cooldownMs < 5 * 60 * 1000) {
     warnings.push('⚠ Cooldown très court : ' + Math.round(prc.cooldownMs/60000) + 'min');
   }
-  
+
   return { ok: warnings.length === 0, warnings: warnings };
 }
 
@@ -103,24 +106,24 @@ async function importBackupMaxPermissive(file) {
     } catch(e) {
       throw new Error('Fichier JSON invalide');
     }
-    
+
     if (!backup || !backup.meta || !backup.state) {
       throw new Error('Format de backup non reconnu');
     }
     if (backup.meta.app !== 'AURA') {
       throw new Error('Ce fichier n\'est pas un backup AURA');
     }
-    
+
     // Construire la liste des champs à appliquer (tout sauf protégés)
     const allFields = Object.keys(backup.state);
     const fieldsToApply = allFields.filter(f => !AURA_PROTECTED_FIELDS.includes(f));
-    
+
     // Compter les changements
     const changeInfo = _countBackupChanges(S, backup.state, fieldsToApply);
-    
+
     // Validateur de cohérence
     const validation = _validateBackupCoherence(backup.state);
-    
+
     // Lecture du journal de modifications
     let modLog = '';
     if (backup.meta._modifications_log && Array.isArray(backup.meta._modifications_log)) {
@@ -129,41 +132,41 @@ async function importBackupMaxPermissive(file) {
         modLog += '  ' + (i+1) + '. ' + (mod.label || 'Modification') + ' · ' + (new Date(mod.date)).toLocaleString('fr-FR') + '\n';
       });
     }
-    
+
     // Construire le message de confirmation
     let confirmMsg = '🔴 IMPORT MAX PERMISSIF\n\n';
     confirmMsg += 'Date backup : ' + new Date(backup.meta.date).toLocaleString('fr-FR') + '\n';
     confirmMsg += 'Label       : ' + (backup.meta.label || '?') + '\n\n';
     confirmMsg += 'Champs à modifier : ' + changeInfo.changes + '\n';
-    
+
     if (changeInfo.changes > 30) {
       confirmMsg += '⚠ Beaucoup de changements (>30) - vérifie bien la source\n';
     }
-    
+
     if (validation.warnings.length > 0) {
       confirmMsg += '\n⚠ AVERTISSEMENTS DE COHÉRENCE :\n';
       validation.warnings.forEach(w => {
         confirmMsg += '  ' + w + '\n';
       });
     }
-    
+
     confirmMsg += modLog;
-    
+
     confirmMsg += '\n\nLes données HISTORIQUES (capital, trades, archives) sont protégées.\n';
     confirmMsg += 'Un backup auto sera créé avant l\'import.\n\n';
     confirmMsg += 'Continuer l\'import MAX PERMISSIF ?';
-    
+
     if (!confirm(confirmMsg)) return;
-    
+
     // Backup auto AVANT import
     const safetyBackup = _buildFullBackup('Avant import MAX · ' + new Date().toLocaleString('fr-FR'), 'pre-import');
     await _saveBackupToDB(safetyBackup);
-    
+
     // Appliquer TOUS les champs autorisés
     let applied = 0;
     let skipped = 0;
     let protectedSkipped = 0;
-    
+
     for (const field of allFields) {
       if (AURA_PROTECTED_FIELDS.includes(field)) {
         protectedSkipped++;
@@ -211,22 +214,23 @@ async function importBackupMaxPermissive(file) {
         skipped++;
       }
     }
-    
+
     // Sauvegarder le nouvel état
     try {
-      const snap = buildSnapshot();
-      localStorage.setItem('nexus_state', JSON.stringify(snap));
+      // Sauvegarde via la fonction officielle (ecrit nexus_state_v2 allege + IDB).
+      if (typeof saveState === 'function') saveState();
+      else { const snap = buildSnapshot(); localStorage.setItem('nexus_state_v2', JSON.stringify(snap)); }
     } catch(e) {}
-    
+
     // Refresh UI
     if (typeof renderSettingsPanel === 'function') {
       try { renderSettingsPanel(); } catch(e) {}
     }
-    
+
     if (typeof showToast === 'function') {
       showToast('✅ Import MAX terminé · ' + applied + ' champs appliqués', 4000, 'win');
     }
-    
+
     alert(
       '✅ Import MAX PERMISSIF réussi\n\n' +
       '• ' + applied + ' champs appliqués\n' +
@@ -259,7 +263,7 @@ async function importBackup(file) {
     } catch(e) {
       throw new Error('Fichier JSON invalide');
     }
-    
+
     // Validation du format
     if (!backup || !backup.meta || !backup.state) {
       throw new Error('Format de backup non reconnu');
@@ -267,7 +271,7 @@ async function importBackup(file) {
     if (backup.meta.app !== 'AURA') {
       throw new Error('Ce fichier n\'est pas un backup AURA');
     }
-    
+
     // Confirmer
     const ok = confirm(
       'Importer ce backup ?\n\n' +
@@ -279,11 +283,11 @@ async function importBackup(file) {
       'Un backup auto sera créé avant l\'import (sécurité).'
     );
     if (!ok) return;
-    
+
     // Backup auto AVANT import (Q3=A)
     const safetyBackup = _buildFullBackup('Avant import · ' + new Date().toLocaleString('fr-FR'), 'pre-import');
     await _saveBackupToDB(safetyBackup);
-    
+
     // Appliquer SEULEMENT les champs autorisés
     let applied = 0;
     let skipped = 0;
@@ -298,26 +302,26 @@ async function importBackup(file) {
         }
       }
     }
-    
+
     // Sauvegarder le nouvel état
     if (typeof saveState === 'function') {
       try { saveState(); } catch(e) {}
     } else if (typeof buildSnapshot === 'function') {
       try {
         const snap = buildSnapshot();
-        localStorage.setItem('nexus_state', JSON.stringify(snap));
+        localStorage.setItem('nexus_state_v2', JSON.stringify(snap));
       } catch(e) {}
     }
-    
+
     // Refresh UI
     if (typeof renderSettingsPanel === 'function') {
       try { renderSettingsPanel(); } catch(e) {}
     }
-    
+
     if (typeof showToast === 'function') {
       showToast('✅ Import terminé · ' + applied + ' configs appliquées', 4000, 'win');
     }
-    
+
     alert(
       '✅ Import réussi\n\n' +
       '• ' + applied + ' configurations appliquées\n' +
@@ -341,7 +345,7 @@ async function restoreBackup(id) {
       alert('Backup introuvable');
       return;
     }
-    
+
     const ok = confirm(
       '⚠ RESTAURATION COMPLÈTE\n\n' +
       '• Date : ' + new Date(backup.meta.date).toLocaleString('fr-FR') + '\n' +
@@ -353,11 +357,11 @@ async function restoreBackup(id) {
       'Continuer ?'
     );
     if (!ok) return;
-    
+
     // Backup de sécurité avant restauration
     const safetyBackup = _buildFullBackup('Avant restore · ' + new Date().toLocaleString('fr-FR'), 'pre-import');
     await _saveBackupToDB(safetyBackup);
-    
+
     // Restaurer TOUT l'état (différent de l'import qui est sélectif)
     try {
       const restored = backup.state;
@@ -371,17 +375,18 @@ async function restoreBackup(id) {
       alert('❌ Erreur lors de la restauration : ' + e.message);
       return;
     }
-    
+
     // Sauvegarder l'état restauré
     try {
-      const snap = buildSnapshot();
-      localStorage.setItem('nexus_state', JSON.stringify(snap));
+      // Sauvegarde via la fonction officielle (ecrit nexus_state_v2 allege + IDB).
+      if (typeof saveState === 'function') saveState();
+      else { const snap = buildSnapshot(); localStorage.setItem('nexus_state_v2', JSON.stringify(snap)); }
     } catch(e) {}
-    
+
     if (typeof showToast === 'function') {
       showToast('✅ Backup restauré', 3000, 'win');
     }
-    
+
     alert('✅ Backup restauré.\nL\'application va se recharger.');
     setTimeout(() => location.reload(), 800);
   } catch(e) {
@@ -521,7 +526,7 @@ function renderSettingsPanel() {
   }
 
   // v8.0 LIVRAISON 33 · Helpers HTML pour la nouvelle organisation
-  
+
   // Helper : historique des backups (Q2=B : par catégorie avec séparateurs)
   let HISTORIQUE_HTML = '';
   if (!_cachedBackupsList || _cachedBackupsList.length === 0) {
@@ -556,7 +561,7 @@ function renderSettingsPanel() {
     html += '</div>';
     HISTORIQUE_HTML = html;
   }
-  
+
   // Helper : déblocages (compteurs live)
   let DEBLOCAGES_HTML = '';
   {
@@ -579,7 +584,7 @@ function renderSettingsPanel() {
       '<button onclick="window._revigorBrokenAgents()" style="' + btnStyle(broken>0) + '"><span>🔄 Revigorer agents cassés</span>' + badge(broken, broken>0) + '</button>' +
     '</div>';
   }
-  
+
   // Helper : long-press buttons (5 comptes)
   const _longpressAccounts = [
     { id:'caisse', label:'Caisse (USDT)', color:'var(--ice)' },
@@ -590,7 +595,7 @@ function renderSettingsPanel() {
   ];
   // v8.0 LIVRAISON 36 · Boutons long-press avec les IDs requis par _lpTick (FIX)
   const LONGPRESS_HTML = '<div style="display:flex;flex-direction:column;gap:6px;">' +
-    _longpressAccounts.map(acc => 
+    _longpressAccounts.map(acc =>
       '<button class="nexus-longpress-btn" data-acc="' + acc.id + '"' +
       ' ontouchstart="_longPressStart(event,\'' + acc.id + '\')"' +
       ' ontouchend="_longPressEnd(event,\'' + acc.id + '\')"' +
@@ -681,7 +686,7 @@ function renderSettingsPanel() {
       const globalPaused = (S.paperRealGlobalPauseUntil || 0) > now;
       const remainingMs = globalPaused ? S.paperRealGlobalPauseUntil - now : 0;
       const remainingMin = Math.ceil(remainingMs / 60000);
-      
+
       // Liste des paires
       const pairsHTML = Object.keys(PAIRS || {}).map(pair => {
         const isActive = !!activePairs[pair];
@@ -707,17 +712,17 @@ function renderSettingsPanel() {
               <span style="color:${cfgPair.color || 'var(--t1)'};font-weight:800;font-size:11px;font-family:ui-monospace,monospace;">${pair.split('/')[0]}</span>
               <span style="color:${stateCol};font-size:9px;font-weight:600;">${stateLbl}</span>
             </div>
-            
+
           </div>
         `;
       }).join('');
-      
+
       // Sélecteur timeframe
       const tfButtons = ['5m','15m','1h','4h','1j'].map(t => {
         const sel = (t === tf);
         return ``;
       }).join('');
-      
+
       // Bouton master
       const masterBtn = isPaperReal ? `
         ` : (S.tradingMode === 'real' ? `
@@ -725,12 +730,12 @@ function renderSettingsPanel() {
           <span>Mode RÉEL actif · désactive-le d'abord</span>
         </button>` : `
         `);
-      
+
       const headerCol = isPaperReal ? 'var(--gold)' : 'var(--t2)';
       const headerBg = isPaperReal ? 'rgba(245,166,35,.07)' : 'rgba(245,166,35,.02)';
       const headerBorder = isPaperReal ? 'rgba(245,166,35,.35)' : 'rgba(245,166,35,.15)';
-      
-      
+
+
       const stats = S.paperRealStats || {};
       const tradedPairs = Object.keys(stats).filter(p => stats[p].trades > 0);
       const statsHTML = tradedPairs.length > 0 ? `
@@ -769,13 +774,13 @@ function renderSettingsPanel() {
             </div>
           `;
         }).join('')}</div>` : '';
-      
+
       // Bandeau pause globale si actif
       const globalPauseBanner = globalPaused ? `
         <div style="background:rgba(255,61,107,.1);border:1px solid rgba(255,61,107,.4);border-radius:8px;padding:8px 10px;margin-bottom:12px;font-size:10px;color:var(--down);font-weight:700;text-align:center;">
           🛑 Pause globale active · ${remainingMin} min restantes (3 pertes consécutives)
         </div>` : '';
-      
+
       return `
       <div style="margin:16px 0 8px;padding:14px;background:${headerBg};border:1px solid ${headerBorder};border-radius:12px;">
         <div style="font-size:12px;font-weight:700;color:${headerCol};text-transform:uppercase;letter-spacing:.08em;margin-bottom:10px;display:flex;justify-content:space-between;align-items:center;">
@@ -783,14 +788,14 @@ function renderSettingsPanel() {
           <span style="font-size:9px;font-weight:600;opacity:.7;letter-spacing:0;text-transform:none;">${isPaperReal?'test sécurisé':'option intermédiaire'}</span>
         </div>
         <div style="font-size:9.5px;color:var(--t2);line-height:1.5;margin-bottom:12px;">
-          ${isPaperReal 
+          ${isPaperReal
             ? '<b style="color:var(--gold)">Mode Réel actif.</b> Vraies bougies Binance · règles strictes : 1 position max, arrêt -3%, gain +2%, pause 30min après perte, arrêt global après 3 pertes.'
             : 'Mode trading réel. Utilise vraies bougies Binance avec règles de protection strictes pour tester la stratégie sans gros risque.'}
         </div>
         ${globalPauseBanner}
-        
+
         ${statsHTML}
-        
+
         <!-- Règles affichées -->
         <div style="font-size:9px;color:var(--t3);font-weight:700;text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;">Règles actives</div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:14px;font-size:9.5px;font-family:ui-monospace,monospace;color:var(--t2);">
@@ -801,15 +806,15 @@ function renderSettingsPanel() {
           <div style="padding:5px 8px;background:rgba(20,25,35,.5);border:1px solid var(--border);border-radius:6px;">Cooldown : <b style="color:var(--gold);">${Math.round((cfg.cooldownMs||1800000)/60000)}min</b></div>
           <div style="padding:5px 8px;background:rgba(20,25,35,.5);border:1px solid var(--border);border-radius:6px;">Stop : <b style="color:var(--down);">${cfg.maxConsecLosses||3} pertes</b></div>
         </div>
-        
+
         <!-- Timeframe -->
         <div style="font-size:9px;color:var(--t3);font-weight:700;text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;">Timeframe décisions bot</div>
         <div style="display:flex;gap:4px;margin-bottom:14px;flex-wrap:wrap;">${tfButtons}</div>
-        
+
         <!-- Paires -->
         <div style="font-size:9px;color:var(--t3);font-weight:700;text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;">Paires actives en Réel</div>
         <div style="margin-bottom:14px;">${pairsHTML}</div>
-        
+
         <!-- Bouton master -->
         ${masterBtn}
       </div>
@@ -840,27 +845,27 @@ function renderSettingsPanel() {
         const m = bonuses[p];
         return `<span style="display:inline-block;background:rgba(0,232,122,.10);color:var(--up);border:1px solid rgba(0,232,122,.3);border-radius:6px;padding:3px 8px;font-size:9px;font-weight:700;font-family:ui-monospace,monospace;margin:2px;">${sym} × ${m.toFixed(2)}</span>`;
       }).join('') : '<span style="color:var(--t3);font-size:9.5px;">Aucun bonus actif · paires en cours d&apos;évaluation</span>';
-      
+
       return `
       <!-- v8.0 LIVRAISON 25 · PANNEAU P&L PAR PÉRIODE + BOUTON RESET -->
       ${(function(){
         const periods = (typeof _computePnlByPeriod === 'function') ? _computePnlByPeriod() : null;
         if (!periods) return '';
-        
+
         const formatPnl = function(p) {
           if (!p.hasData) return '<span style="color:var(--t3);">— pas de donnée</span>';
           const cls = p.pct >= 0 ? 'var(--up)' : 'var(--down)';
           const sign = p.pct >= 0 ? '+' : '';
           return '<span style="color:' + cls + ';font-weight:700;">' + sign + p.pct.toFixed(2) + '% · ' + sign + '$' + p.usd.toFixed(2) + '</span>';
         };
-        
+
         // Stats sur l'historique (jours suivis)
         const history = (S.pnlPeriod && S.pnlPeriod.history) || [];
         const winDays = history.filter(h => h.pnlPct > 0).length;
         const totalDays = history.length;
         const winRate = totalDays > 0 ? Math.round((winDays / totalDays) * 100) : 0;
         const totalPnl = history.reduce((sum, h) => sum + (h.pnlUsd || 0), 0);
-        
+
         return '' +
         '<div style="margin:16px 0 8px;padding:14px;background:rgba(245,200,66,.04);border:1px solid rgba(245,200,66,.2);border-radius:12px;">' +
           '<div style="font-size:12px;font-weight:700;color:var(--gold);text-transform:uppercase;letter-spacing:.08em;margin-bottom:10px;display:flex;justify-content:space-between;align-items:center;">' +
@@ -870,7 +875,7 @@ function renderSettingsPanel() {
           '<div style="font-size:9.5px;color:var(--t2);line-height:1.5;margin-bottom:12px;">' +
             'Reset automatique tous les jours à minuit. Tu vois ce qui se passe vraiment, pas un cumul absurde.' +
           '</div>' +
-          
+
           '<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 12px;background:rgba(20,25,35,.5);border:1px solid var(--border);border-radius:8px;margin-bottom:6px;font-size:10.5px;font-family:ui-monospace,monospace;">' +
             '<span style="color:var(--t2);font-weight:700;">📅 Aujourd&apos;hui</span>' +
             formatPnl(periods.today) +
@@ -883,8 +888,8 @@ function renderSettingsPanel() {
             '<span style="color:var(--t2);font-weight:700;">🗓️ Mois en cours</span>' +
             formatPnl(periods.month) +
           '</div>' +
-          
-          (totalDays > 0 ? 
+
+          (totalDays > 0 ?
             '<div style="padding:8px 12px;background:rgba(167,139,250,.04);border:1px solid rgba(167,139,250,.2);border-radius:8px;margin-bottom:10px;font-size:9.5px;font-family:ui-monospace,monospace;">' +
               '<div style="display:flex;justify-content:space-between;margin-bottom:3px;">' +
                 '<span style="color:var(--t2);">Historique cumulé</span>' +
@@ -895,15 +900,15 @@ function renderSettingsPanel() {
                 '<span style="color:var(--t3);">Total : <b style="color:' + (totalPnl >= 0 ? 'var(--up)' : 'var(--down)') + ';">' + (totalPnl >= 0 ? '+' : '') + '$' + totalPnl.toFixed(2) + '</b></span>' +
               '</div>' +
             '</div>' : '') +
-          
+
           '<button onclick="resetPnlSession()" style="width:100%;padding:10px 14px;background:rgba(245,200,66,.10);border:1px solid rgba(245,200,66,.4);color:var(--gold);border-radius:8px;font-weight:700;font-size:11px;letter-spacing:.04em;cursor:pointer;-webkit-user-select:none;font-family:inherit;">🔄 Recalibrer la session manuellement</button>' +
-          
+
           '<div style="font-size:8.5px;color:var(--t3);margin-top:8px;text-align:center;line-height:1.4;">' +
             'Apprentissage du bot, mémoire, agents : <b>tout est préservé</b>. Seuls les compteurs P&L sont remis à zéro.' +
           '</div>' +
         '</div>';
       })()}
-      
+
       <div style="margin:16px 0 8px;padding:14px;background:rgba(167,139,250,.04);border:1px solid rgba(167,139,250,.2);border-radius:12px;">
         <div style="font-size:12px;font-weight:700;color:var(--pur);text-transform:uppercase;letter-spacing:.08em;margin-bottom:10px;display:flex;justify-content:space-between;align-items:center;">
           <span>🧠 Diagnostic intelligence · Phase 1</span>
@@ -912,7 +917,7 @@ function renderSettingsPanel() {
         <div style="font-size:9.5px;color:var(--t2);line-height:1.5;margin-bottom:12px;">
           Le bot ajuste ces paramètres en temps réel selon ses observations. Bornes de sécurité actives.
         </div>
-        
+
         <!-- 1.1 Seuil pertes consécutives -->
         <div style="display:flex;justify-content:space-between;align-items:center;padding:7px 10px;background:rgba(20,25,35,.5);border:1px solid var(--border);border-radius:6px;margin-bottom:5px;font-size:10px;font-family:ui-monospace,monospace;">
           <span style="color:var(--t2);">1.1 · Pause après pertes consécutives</span>
@@ -921,7 +926,7 @@ function renderSettingsPanel() {
         <div style="font-size:8.5px;color:var(--t3);padding:0 10px;margin-bottom:8px;">
           WR effectif : <span style="color:${wrColor};font-weight:700;">${wrLabel}</span> · borné [3, 6]
         </div>
-        
+
         <!-- 1.2 Cooldown -->
         <div style="display:flex;justify-content:space-between;align-items:center;padding:7px 10px;background:rgba(20,25,35,.5);border:1px solid var(--border);border-radius:6px;margin-bottom:5px;font-size:10px;font-family:ui-monospace,monospace;">
           <span style="color:var(--t2);">1.2 · Cooldown après perte</span>
@@ -930,7 +935,7 @@ function renderSettingsPanel() {
         <div style="font-size:8.5px;color:var(--t3);padding:0 10px;margin-bottom:8px;">
           Volatilité médiane marché : <span style="color:var(--t1);font-weight:700;">${medianLabel}</span> · borné [15, 90] min
         </div>
-        
+
         <!-- 1.3 TP/SL utilisés -->
         <div style="display:flex;justify-content:space-between;align-items:center;padding:7px 10px;background:rgba(20,25,35,.5);border:1px solid var(--border);border-radius:6px;margin-bottom:5px;font-size:10px;font-family:ui-monospace,monospace;">
           <span style="color:var(--t2);">1.3 · TP / SL méthode</span>
@@ -939,7 +944,7 @@ function renderSettingsPanel() {
         <div style="font-size:8.5px;color:var(--t3);padding:0 10px;margin-bottom:8px;">
           Multiple ATR par défaut : SL=${cfg.slAtrMultiplier || 2}× · TP=${cfg.tpAtrMultiplier || 1.5}×
         </div>
-        
+
         <!-- 1.4 Bonus paires gagnantes -->
         <div style="padding:7px 10px;background:rgba(20,25,35,.5);border:1px solid var(--border);border-radius:6px;margin-bottom:5px;font-size:10px;font-family:ui-monospace,monospace;">
           <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
@@ -951,7 +956,7 @@ function renderSettingsPanel() {
         <div style="font-size:8.5px;color:var(--t3);padding:0 10px;margin-bottom:4px;">
           Activé sur paires WR>60% & P&L>0 (10+ trades) · borné [1.0, 1.5]×
         </div>
-        
+
         <!-- v8.0 PHASE 2 · MÉMOIRE DES CONTEXTES -->
         ${(function(){
           const mem = S.tradeContextMemory || [];
@@ -980,12 +985,12 @@ function renderSettingsPanel() {
             const tot = s.w + s.l;
             return { regime: r, wr: tot > 0 ? Math.round(s.w/tot*100) : 0, n: tot };
           }).filter(r => r.n >= 3).sort((a,b) => b.wr - a.wr);
-          
+
           const regimeHTML = regimeStats.length > 0 ? regimeStats.slice(0, 4).map(r => {
             const cls = r.wr >= 60 ? 'var(--up)' : r.wr >= 45 ? 'var(--gold)' : 'var(--down)';
             return `<span style="display:inline-block;background:rgba(20,25,35,.7);color:${cls};border:1px solid var(--border);border-radius:6px;padding:3px 8px;font-size:9px;font-weight:700;font-family:ui-monospace,monospace;margin:2px;">${r.regime} ${r.wr}% (${r.n})</span>`;
           }).join('') : '<span style="color:var(--t3);font-size:9.5px;">Pas encore assez de données</span>';
-          
+
           return `
           <div style="padding:7px 10px;background:rgba(20,25,35,.5);border:1px solid var(--border);border-radius:6px;margin-bottom:5px;font-size:10px;font-family:ui-monospace,monospace;margin-top:14px;">
             <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
@@ -1003,14 +1008,14 @@ function renderSettingsPanel() {
           <div style="font-size:8.5px;color:var(--t3);padding:0 10px;margin-bottom:4px;">
             Le bot mémorise contexte + résultat de chaque trade. Phase 3 utilise cette mémoire.
           </div>
-          
+
           <!-- v8.0 PHASE 3 · APPRENTISSAGE ACTIF -->
           ${(function(){
             const refusalCount = (S.adaptiveState || {}).lastContextRefusalCount || 0;
             const refusalReason = (S.adaptiveState || {}).lastContextRefusalReason;
             const agentBoosts = (S.adaptiveState || {}).lastAgentBoosts || {};
             const boostKeys = Object.keys(agentBoosts);
-            
+
             // Identifier les contextes refusés (signature + stats)
             const refusedContexts = [];
             const seenSigs = new Set();
@@ -1024,14 +1029,14 @@ function renderSettingsPanel() {
                 if (stats.refused) refusedContexts.push({ sig, ...stats });
               }
             }
-            
+
             const refusedHTML = refusedContexts.length > 0 ? refusedContexts.slice(0, 5).map(r => {
               return '<div style="background:rgba(255,61,107,.06);color:var(--down);border:1px solid rgba(255,61,107,.25);border-radius:6px;padding:5px 8px;font-size:9px;font-family:ui-monospace,monospace;margin-bottom:4px;display:flex;justify-content:space-between;">' +
                 '<span>' + r.sig + '</span>' +
                 '<span style="font-weight:700;">' + Math.round(r.wr * 100) + '% (' + r.trades + ')</span>' +
               '</div>';
             }).join('') : '<span style="color:var(--t3);font-size:9.5px;">Aucun contexte bloqué actuellement</span>';
-            
+
             // Top boosts agents (positifs et négatifs)
             const sortedBoosts = boostKeys.map(name => ({ name, mult: agentBoosts[name] }))
               .sort((a, b) => Math.abs(b.mult - 1) - Math.abs(a.mult - 1));
@@ -1042,7 +1047,7 @@ function renderSettingsPanel() {
               const border = isPositive ? 'rgba(0,232,122,.25)' : 'rgba(255,61,107,.25)';
               return '<span style="display:inline-block;background:' + bg + ';color:' + cls + ';border:1px solid ' + border + ';border-radius:6px;padding:3px 8px;font-size:9px;font-weight:700;font-family:ui-monospace,monospace;margin:2px;">' + b.name + ' × ' + b.mult.toFixed(2) + '</span>';
             }).join('') : '<span style="color:var(--t3);font-size:9.5px;">En cours d&apos;analyse (5+ trades requis par agent)</span>';
-            
+
             return '' +
             '<div style="padding:7px 10px;background:rgba(167,139,250,.05);border:1px solid rgba(167,139,250,.25);border-radius:6px;margin-bottom:5px;font-size:10px;font-family:ui-monospace,monospace;margin-top:14px;">' +
               '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">' +
@@ -1058,7 +1063,7 @@ function renderSettingsPanel() {
               'Le bot refuse les contextes systématiquement perdants et amplifie les agents qui prédisent bien.' +
             '</div>';
           })()}
-          
+
           <!-- v8.0 PHASE 4a · A/B TESTING AUTOMATIQUE -->
           ${(function(){
             const ab = S.abTesting;
@@ -1072,14 +1077,14 @@ function renderSettingsPanel() {
             const progressA = Math.min(100, Math.round((A.trades / threshold) * 100));
             const progressB = Math.min(100, Math.round((B.trades / threshold) * 100));
             const lastV = ab.lastVerdict;
-            
-            const verdictHTML = lastV ? 
+
+            const verdictHTML = lastV ?
               '<div style="background:rgba(0,232,122,.06);color:var(--up);border:1px solid rgba(0,232,122,.25);border-radius:6px;padding:6px 8px;font-size:9px;font-family:ui-monospace,monospace;margin-bottom:8px;">' +
                 '<div style="font-weight:700;margin-bottom:3px;">Gen ' + lastV.generation + ' · ' + lastV.winner + ' a gagné</div>' +
                 '<div style="color:var(--t2);">WR ' + lastV.winnerWR + '% · P&L $' + lastV.winnerPnl + '</div>' +
               '</div>' :
               '<div style="font-size:9px;color:var(--t3);margin-bottom:8px;">Aucun verdict encore (premier cycle en cours)</div>';
-            
+
             const armHTML = function(arm, label, color, progress, wr) {
               const winsLabel = arm.wins || 0;
               const lossesLabel = arm.losses || 0;
@@ -1103,7 +1108,7 @@ function renderSettingsPanel() {
                 '</div>' +
               '</div>';
             };
-            
+
             return '' +
             '<div style="padding:7px 10px;background:rgba(56,212,245,.05);border:1px solid rgba(56,212,245,.25);border-radius:6px;margin-bottom:5px;font-size:10px;font-family:ui-monospace,monospace;margin-top:14px;">' +
               '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">' +
@@ -1118,7 +1123,7 @@ function renderSettingsPanel() {
               '2 variantes testées en parallèle. Au bout de ' + threshold + ' trades chacune, le gagnant devient référence et le perdant est muté.' +
             '</div>';
           })()}
-          
+
           <!-- v8.0 PHASE 6b · ALLOCATION DYNAMIQUE + HEDGING -->
           ${(function(){
             const adapt = S.adaptiveState || {};
@@ -1128,13 +1133,13 @@ function renderSettingsPanel() {
             const bearStreak = adapt.bearStreak || 0;
             const hedgingEnabled = cfg.hedgingEnabled || false;
             const lastHedge = adapt.lastHedgeAction;
-            
+
             // Top 5 paires par Sharpe
             const sharpeList = Object.entries(sharpes)
               .map(([pair, s]) => ({ pair: pair.split('/')[0], sharpe: s, alloc: allocs[pair] || 1.0 }))
               .sort((a, b) => b.sharpe - a.sharpe)
               .slice(0, 6);
-            
+
             const sharpeHTML = sharpeList.length > 0 ? sharpeList.map(s => {
               const cls = s.sharpe > 0.5 ? 'var(--up)' : s.sharpe > 0 ? 'var(--gold)' : 'var(--down)';
               const allocCls = s.alloc > 1.1 ? 'var(--up)' : s.alloc < 0.9 ? 'var(--down)' : 'var(--t2)';
@@ -1146,20 +1151,20 @@ function renderSettingsPanel() {
                 '</span>' +
               '</div>';
             }).join('') : '<span style="color:var(--t3);font-size:9.5px;">Pas encore de Sharpe (5+ trades par paire requis)</span>';
-            
-            const hedgeStatus = hedgingEnabled ? 
+
+            const hedgeStatus = hedgingEnabled ?
               '<span style="color:var(--up);font-weight:700;">Activé</span>' :
               '<span style="color:var(--t3);font-weight:700;">Désactivé (opt-in)</span>';
-            
+
             const hedgeStreakColor = bearStreak >= 3 ? 'var(--down)' : bearStreak >= 1 ? 'var(--gold)' : 'var(--t2)';
-            
-            const hedgeActionHTML = lastHedge ? 
+
+            const hedgeActionHTML = lastHedge ?
               '<div style="background:rgba(245,200,66,.06);color:var(--gold);border:1px solid rgba(245,200,66,.25);border-radius:6px;padding:6px 8px;font-size:9px;font-family:ui-monospace,monospace;margin-bottom:6px;">' +
                 '<div style="font-weight:700;margin-bottom:2px;">🛡️ ' + lastHedge.candidate.split("/")[0] + ' SHORT · $' + lastHedge.stake + '</div>' +
                 '<div style="color:var(--t2);">' + lastHedge.reason + ' · régime ' + lastHedge.regime + '</div>' +
               '</div>' :
               '<div style="font-size:9px;color:var(--t3);margin-bottom:6px;">Aucune action récente</div>';
-            
+
             return '' +
             '<div style="padding:7px 10px;background:rgba(0,232,122,.04);border:1px solid rgba(0,232,122,.2);border-radius:6px;margin-bottom:5px;font-size:10px;font-family:ui-monospace,monospace;margin-top:14px;">' +
               '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">' +
@@ -1182,14 +1187,14 @@ function renderSettingsPanel() {
               'Capital alloué proportionnellement au Sharpe de chaque paire (×0.4 → ×1.5). Hedging suggéré si 3 régimes BEAR consécutifs.' +
             '</div>';
           })()}
-          
+
           <!-- v8.0 PHASE 6a · CORRÉLATION ENTRE PAIRES -->
           ${(function(){
             const adapt = S.adaptiveState || {};
             const matrix = adapt.correlationMatrix || {};
             const lastDecision = adapt.lastCorrelationDecision;
             const limitActions = adapt.correlationLimitActions || 0;
-            
+
             // Top 5 corrélations les plus fortes (en valeur absolue)
             const corrList = Object.entries(matrix)
               .map(([key, val]) => {
@@ -1198,7 +1203,7 @@ function renderSettingsPanel() {
               })
               .sort((a, b) => Math.abs(b.val) - Math.abs(a.val))
               .slice(0, 6);
-            
+
             const corrHTML = corrList.length > 0 ? corrList.map(c => {
               const absVal = Math.abs(c.val);
               const cls = absVal > 0.7 ? 'var(--down)' : absVal > 0.4 ? 'var(--gold)' : 'var(--t2)';
@@ -1208,14 +1213,14 @@ function renderSettingsPanel() {
                 '<span style="color:' + cls + ';font-weight:700;">' + sign + c.val.toFixed(2) + '</span>' +
               '</div>';
             }).join('') : '<span style="color:var(--t3);font-size:9.5px;">Pas encore de matrice (30+ bougies par paire requises)</span>';
-            
-            const decisionHTML = lastDecision ? 
+
+            const decisionHTML = lastDecision ?
               '<div style="background:rgba(245,200,66,.06);color:var(--gold);border:1px solid rgba(245,200,66,.25);border-radius:6px;padding:6px 8px;font-size:9px;font-family:ui-monospace,monospace;margin-bottom:6px;">' +
                 '<div style="font-weight:700;margin-bottom:2px;">' + lastDecision.pair.split("/")[0] + ' ↔ ' + lastDecision.correlatedWith.split("/")[0] + ' · corr ' + (lastDecision.value >= 0 ? '+' : '') + lastDecision.value.toFixed(2) + '</div>' +
                 '<div style="color:var(--t2);">Mise réduite à 50% (cumul de risque évité)</div>' +
               '</div>' :
               '<div style="font-size:9px;color:var(--t3);margin-bottom:6px;">Aucune réduction récente</div>';
-            
+
             return '' +
             '<div style="padding:7px 10px;background:rgba(56,212,245,.04);border:1px solid rgba(56,212,245,.2);border-radius:6px;margin-bottom:5px;font-size:10px;font-family:ui-monospace,monospace;margin-top:14px;">' +
               '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">' +
@@ -1232,7 +1237,7 @@ function renderSettingsPanel() {
               'Si corrélation > 0.7 entre 2 paires et même direction → mise réduite à 50% pour éviter la fausse diversification.' +
             '</div>';
           })()}
-          
+
           <!-- v8.0 PHASE 5 · INTELLIGENCE PRÉDICTIVE -->
           ${(function(){
             const adapt = S.adaptiveState || {};
@@ -1240,21 +1245,21 @@ function renderSettingsPanel() {
             const lastRev = adapt.lastReversalDetection;
             const blocks = adapt.volForecastBlocks || 0;
             const earlyCloses = adapt.reversalEarlyCloses || 0;
-            
-            const vfHTML = lastVF ? 
+
+            const vfHTML = lastVF ?
               '<div style="background:rgba(245,200,66,.06);color:var(--gold);border:1px solid rgba(245,200,66,.25);border-radius:6px;padding:6px 8px;font-size:9px;font-family:ui-monospace,monospace;margin-bottom:6px;">' +
                 '<div style="font-weight:700;margin-bottom:2px;">' + (lastVF.blocked ? '⚠ Pic prévu · ' : '') + lastVF.pair.split("/")[0] + '</div>' +
                 '<div style="color:var(--t2);">' + lastVF.currentVol + '% → <b style="color:var(--down);">' + lastVF.forecastVol + '%</b> (×' + lastVF.ratio + ')</div>' +
               '</div>' :
               '<div style="font-size:9px;color:var(--t3);margin-bottom:6px;">Aucune prévision récente</div>';
-            
-            const revHTML = lastRev ? 
+
+            const revHTML = lastRev ?
               '<div style="background:rgba(167,139,250,.06);color:var(--pur);border:1px solid rgba(167,139,250,.25);border-radius:6px;padding:6px 8px;font-size:9px;font-family:ui-monospace,monospace;margin-bottom:6px;">' +
                 '<div style="font-weight:700;margin-bottom:2px;">' + lastRev.pair.split("/")[0] + ' · ' + lastRev.type + '</div>' +
                 '<div style="color:var(--t2);">' + (lastRev.action === "early_close" ? "Fermé en profit +" + lastRev.pnlPct + "%" : lastRev.action) + ' · confiance ' + lastRev.confidence + '</div>' +
               '</div>' :
               '<div style="font-size:9px;color:var(--t3);margin-bottom:6px;">Aucun retournement détecté récemment</div>';
-            
+
             return '' +
             '<div style="padding:7px 10px;background:rgba(245,200,66,.04);border:1px solid rgba(245,200,66,.2);border-radius:6px;margin-bottom:5px;font-size:10px;font-family:ui-monospace,monospace;margin-top:14px;">' +
               '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">' +
@@ -1271,7 +1276,7 @@ function renderSettingsPanel() {
               'Le bot anticipe les pics de volatilité (refus d&apos;ouverture) et les retournements (fermeture préventive en profit).' +
             '</div>';
           })()}
-          
+
           <!-- v8.0 PHASE 4b · ÉVOLUTION GÉNÉTIQUE & TRANSFER LEARNING -->
           ${(function(){
             // Évolution génétique : compter les Hybrid Gen et la dernière génération
@@ -1286,7 +1291,7 @@ function renderSettingsPanel() {
               }
             });
             const currentGenCount = S._genCount || 0;
-            
+
             // Top 3 hybrid les plus performants
             const topHybrids = hybrids
               .filter(a => (a.fitness || 0) > 200)
@@ -1297,12 +1302,12 @@ function renderSettingsPanel() {
               const cls = fit >= 1000 ? 'var(--up)' : fit >= 500 ? 'var(--gold)' : 'var(--t2)';
               return '<span style="display:inline-block;background:rgba(20,25,35,.7);color:' + cls + ';border:1px solid var(--border);border-radius:6px;padding:3px 8px;font-size:9px;font-weight:700;font-family:ui-monospace,monospace;margin:2px;">' + (a.name || '?').replace('Hybrid Gen-', 'G') + ' · fit ' + fit + '</span>';
             }).join('') : '<span style="color:var(--t3);font-size:9.5px;">Pas encore d&apos;hybrides matures</span>';
-            
+
             // Transfer learning : stats par mode
             const memStats = (typeof _getMultiModeMemoryStats === 'function') ? _getMultiModeMemoryStats() : null;
             const memCombined = memStats && (typeof _combineMultiModeStats === 'function') ? _combineMultiModeStats(memStats) : null;
             const currentMode = S.tradingMode || 'sim';
-            
+
             const modeRowHTML = function(mode, label, color) {
               const s = memStats ? memStats[mode] : null;
               const total = s ? (s.wins + s.losses) : 0;
@@ -1323,7 +1328,7 @@ function renderSettingsPanel() {
                 '</span>' +
               '</div>';
             };
-            
+
             return '' +
             '<div style="padding:7px 10px;background:rgba(0,232,122,.04);border:1px solid rgba(0,232,122,.2);border-radius:6px;margin-bottom:5px;font-size:10px;font-family:ui-monospace,monospace;margin-top:14px;">' +
               '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">' +
@@ -1333,9 +1338,9 @@ function renderSettingsPanel() {
               '<div style="font-size:9px;color:var(--t3);margin-bottom:5px;text-transform:uppercase;letter-spacing:.05em;font-weight:700;">3.2 · Top hybrides survivants</div>' +
               '<div style="display:flex;flex-wrap:wrap;margin-bottom:10px;">' + topHybridsHTML + '</div>' +
               '<div style="font-size:9px;color:var(--t3);margin-bottom:5px;text-transform:uppercase;letter-spacing:.05em;font-weight:700;">3.3 · Mémoire multi-modes</div>' +
-              
+
               modeRowHTML('real', 'Mode Réel', 'var(--down)') +
-              (memCombined && memCombined.wr !== null ? 
+              (memCombined && memCombined.wr !== null ?
                 '<div style="font-size:9px;color:var(--t3);margin-top:6px;text-align:center;">' +
                   'WR consolidé : <b style="color:' + (memCombined.wr >= 0.55 ? 'var(--up)' : memCombined.wr >= 0.45 ? 'var(--gold)' : 'var(--down)') + ';">' + Math.round(memCombined.wr * 100) + '%</b>' +
                   ' · ' + memCombined.sourcesUsed + ' source(s) actives' +
@@ -1384,13 +1389,13 @@ function renderSettingsPanel() {
           </div>
         `;
       }).join('');
-      
+
       // Sélecteur timeframe
       const tfButtons = ['5m','15m','1h','4h','1j'].map(t => {
         const sel = (t === tf);
         return `<button onclick="setRealTimeframe('${t}')" style="padding:6px 10px;font-size:9.5px;font-weight:700;border-radius:6px;cursor:pointer;background:${sel?'rgba(56,212,245,.15)':'var(--s2)'};color:${sel?'var(--ice)':'var(--t2)'};border:1px solid ${sel?'rgba(56,212,245,.4)':'var(--border)'};">${t.toUpperCase()}</button>`;
       }).join('');
-      
+
       // Bouton master sim ↔ real
       const masterBtn = isReal ? `
         <button onclick="confirmSwitchMode()" style="background:rgba(0,232,122,.10);color:var(--up);border:1px solid rgba(0,232,122,.4);border-radius:10px;padding:12px 14px;font-size:12px;font-weight:800;cursor:pointer;letter-spacing:.05em;width:100%;display:flex;justify-content:space-between;align-items:center;">
@@ -1401,11 +1406,11 @@ function renderSettingsPanel() {
           <span>⚠ Activer le MODE RÉEL</span>
           <span style="opacity:.6;font-size:10px;">→ Binance live</span>
         </button>`;
-      
+
       const headerCol = isReal ? 'var(--down)' : 'var(--ice)';
       const headerBg  = isReal ? 'rgba(255,61,107,.05)' : 'rgba(56,212,245,.05)';
       const headerBorder = isReal ? 'rgba(255,61,107,.2)' : 'rgba(56,212,245,.2)';
-      
+
       return `
       <div style="margin:16px 0 8px;padding:14px;background:${headerBg};border:1px solid ${headerBorder};border-radius:12px;">
         <div style="font-size:12px;font-weight:700;color:${headerCol};text-transform:uppercase;letter-spacing:.08em;margin-bottom:10px;display:flex;justify-content:space-between;align-items:center;">
@@ -1413,15 +1418,15 @@ function renderSettingsPanel() {
           <span style="font-size:9px;font-weight:600;opacity:.7;letter-spacing:0;text-transform:none;">${isReal?'live Binance':'simulé'}</span>
         </div>
         <div style="font-size:9.5px;color:var(--t2);line-height:1.5;margin-bottom:12px;">
-          ${isReal 
+          ${isReal
             ? '<b style="color:var(--down)">Mode réel actif.</b> Le bot prend ses décisions sur les bougies Binance live de la paire/timeframe sélectionnés. Les agents apprennent dans une mémoire séparée. Trades restent simulés (trading).'
             : 'Mode trading. Le bot tourne sur le moteur GBM rapide. Avant d\'activer le mode réel, choisis les paires et le timeframe ci-dessous.'}
         </div>
-        
+
         <!-- Timeframe -->
         <div style="font-size:9px;color:var(--t3);font-weight:700;text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;">Timeframe décisions bot</div>
         <div style="display:flex;gap:4px;margin-bottom:14px;flex-wrap:wrap;">${tfButtons}</div>
-        
+
         <!-- v7.12 LIVRAISON 6 · Stats par paire en mode real -->
         ${(function() {
           const stats = S.realStatsByPair || {};
@@ -1472,7 +1477,7 @@ function renderSettingsPanel() {
         <!-- Paires -->
         <div style="font-size:9px;color:var(--t3);font-weight:700;text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;">Paires actives en réel</div>
         <div style="margin-bottom:14px;">${pairsHTML}</div>
-        
+
         <!-- v7.12 LIVRAISON 6 · Bouton rollback si snapshot disponible -->
         ${(function(){
           const ps = S.preRealSnapshot;
@@ -1496,7 +1501,7 @@ function renderSettingsPanel() {
       </div>
       `;
     })()}
-    
+
     <!-- ════════════════════════════════════════════════════════════════ -->
     <!-- v19 · #38 NOTIFICATIONS PUSH ANDROID                           -->
     <!-- ════════════════════════════════════════════════════════════════ -->
@@ -1991,7 +1996,7 @@ function _updateWakeLockButton() {
   let storedState = '0';
   try { storedState = localStorage.getItem('aura_wakelock') || '0'; } catch(e) {}
   const isOn = (storedState === '1') || (_wakeLockEnabled && _wakeLockSentinel);
-  
+
   if (isOn) {
     // ACTIF : SOLEIL ☀ - cercle 28px (comme ⚙)
     btn.textContent = '';
@@ -2014,7 +2019,7 @@ async function toggleWakeLock() {
   let storedState = '0';
   try { storedState = localStorage.getItem('aura_wakelock') || '0'; } catch(e) {}
   const isCurrentlyOn = (storedState === '1') || (_wakeLockEnabled && _wakeLockSentinel);
-  
+
   if (isCurrentlyOn) {
     // ── DÉSACTIVER ──
     _wakeLockEnabled = false;

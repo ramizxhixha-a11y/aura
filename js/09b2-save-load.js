@@ -1,5 +1,5 @@
 // ════════════════════════════════════════════════════════════════════════
-// ▓▓▓ AURA8 — 09b2-save-load.js · VERSION 124 · 07/06/2026 ▓▓▓
+// ▓▓▓ AURA8 — 09b2-save-load.js · VERSION 125 · 07/06/2026 ▓▓▓
 // ════════════════════════════════════════════════════════════════════════
 // saveState + loadState + hooks de fermeture — TOUTE la persistance ici.
 //
@@ -30,25 +30,41 @@ if (typeof window !== 'undefined' && typeof window._stateReady === 'undefined') 
 }
 
 // ── Liste des grosses clés exclues du localStorage (gardées en IDB) ──────
-// Mesurées (06/06) : agents 257Ko + agentMemories 212Ko + realCandles 199Ko
-// + learningHistory 132Ko + pairStates 112Ko + globalMemoryPool ~30Ko
-// + dreamJournal ~28Ko ≈ 970 Ko retirés du localStorage.
-const _HEAVY_KEYS = ['agents','agentMemories','realCandles','learningHistory','pairStates','globalMemoryPool','dreamJournal'];
+// STRATEGIE LISTE-BLANCHE (durable, zero maintenance) :
+// Le localStorage ne garde QUE les petites valeurs vitales necessaires au
+// tout premier instant du boot. TOUT le reste (agents, memoires, historiques,
+// bougies, archives, et tout champ ajoute au state a l'avenir) vit dans l'IDB
+// uniquement et est recharge au boot par fusion. Aucune liste de grosses cles
+// a maintenir : une cle inconnue est LOURDE par defaut -> IDB. LS reste petit.
+const _LIGHT_KEYS = [
+  'key','version','vMajor','vMinor','savedAt',
+  'cycle','cycleMax','cycleTimer','userCycleSet',
+  'portfolio','portfolioTotal','pnl24h','cashAccount','tradingAccount',
+  'fiscalReserveAccount','ownFundsInjected','leverage','leverageReserve',
+  'leverageMaxMult','leverageBorrowRate','leverageBorrowed','leverageTotalFees',
+  '_autoLevBase','_autoLevBorrowed','_marginCallFired',
+  'usdEurRate','_usdEurLastFetch','fiatRates','fiatConvFeePct',
+  'tradingMode','botAutoMode','_mcActiveSlot',
+  'totalTrades','winTrades','_genCount','_totalCompounded','_startPortfolio',
+  'taxConfig','feeConfig','region','regions','toastVerbose','suggestionsEnabled',
+  'b','userStake','realTimeframe'
+];
 
-// Construit une copie allégée du snapshot (sans les grosses clés) pour le LS.
+// Copie allegee pour le LS : UNIQUEMENT les cles de la liste blanche.
 function _lightSnapshot(snap) {
   const light = {};
-  for (const k in snap) {
-    if (!_HEAVY_KEYS.includes(k)) light[k] = snap[k];
+  for (const k of _LIGHT_KEYS) {
+    if (snap[k] !== undefined) light[k] = snap[k];
   }
-  light._lightened = true;   // marqueur : signale que les grosses clés sont absentes
+  light._lightened = true;
   return light;
 }
 
-// Complète un snapshot allégé avec les grosses clés prises dans une source complète.
+// Complete un snapshot allege en reprenant depuis l'IDB TOUTE cle absente
+// (sans liste fixe -> valable pour tout champ present ET futur).
 function _mergeHeavyFrom(target, heavySrc) {
   if (!target || !heavySrc) return target;
-  for (const k of _HEAVY_KEYS) {
+  for (const k in heavySrc) {
     if (target[k] === undefined && heavySrc[k] !== undefined) target[k] = heavySrc[k];
   }
   if (target._lightened) delete target._lightened;
@@ -502,6 +518,27 @@ async function loadState() {
     }
   } catch(e) { dbg.push('props:err'); }
 
+  // ─── RECALAGE _startPortfolio (fin OBS-A/OBS-B) ─────────────────────
+  // Au redemarrage, une NOUVELLE session commence. _startPortfolio restaure
+  // depuis le snapshot porte la valeur d'une session ancienne -> la P&L de
+  // session afficherait un ecart enorme et faux ("flash" au boot). On verse
+  // la session ecoulee dans le cumul (_totalCompounded, zero perte) puis on
+  // recale _startPortfolio sur le portefeuille courant : la P&L de session
+  // repart de 0, la P&L totale reste identique.
+  try {
+    const _pf = (typeof S.portfolio === 'number') ? S.portfolio : null;
+    if (_pf !== null && typeof S._startPortfolio === 'number' && S._startPortfolio > 0) {
+      const _sessionElapsed = _pf - S._startPortfolio;
+      if (Math.abs(_sessionElapsed) > 0.01) {
+        S._totalCompounded = (S._totalCompounded || 0) + _sessionElapsed;
+      }
+    }
+    if (_pf !== null) {
+      S._startPortfolio = _pf;
+      if (S.pnlPeriod && typeof S.pnlPeriod === 'object') S.pnlPeriod.todayStartPortfolio = _pf;
+    }
+  } catch(e) { dbg.push('startPf-recal:err'); }
+
   setTimeout(() => {
     try { if (typeof renderAll === 'function') renderAll(); } catch(e){}
   }, 50);
@@ -620,16 +657,13 @@ function _flushSyncOnExit(reason) {
       }).catch(() => {});
     } catch (e) {}
 
-    // localStorage SYNCHRONE — à la fermeture on tente le COMPLET (sécurité max).
-    // Si le quota refuse, on retombe sur la version allégée (le complet est en IDB).
+    // localStorage SYNCHRONE — version ALLEGEE (liste blanche). Le snapshot
+    // complet vient d'etre ecrit dans l'IDB juste au-dessus, donc le LS n'a
+    // pas besoin du complet : ecrire l'allege evite de re-saturer le quota.
     try {
-      localStorage.setItem(RT.SAVE_KEY, JSON.stringify(snap));
+      localStorage.setItem(RT.SAVE_KEY, JSON.stringify(_lightSnapshot(snap)));
     } catch (e) {
-      try {
-        localStorage.setItem(RT.SAVE_KEY, JSON.stringify(_lightSnapshot(snap)));
-      } catch (e2) {
-        console.warn('[flush ' + reason + ' v124] LS error:', e2.message);
-      }
+      console.warn('[flush ' + reason + '] LS error:', e.message);
     }
 
     console.log('[flush v124] ' + reason + ' · cycle ' + (snap.cycle || '?'));

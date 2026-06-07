@@ -1631,7 +1631,6 @@ function setTpSl(posId, type, pct) {
 function _closes(candles){ return candles.map(c=>c.c); }
 function _highs(candles) { return candles.map(c=>c.h); }
 function _lows(candles)  { return candles.map(c=>c.l); }
-function _tp(candles)    { return candles.map(c=>(c.h+c.l+c.c)/3); } // typical price
 function _mean(arr)      { return arr.reduce((a,b)=>a+b,0)/arr.length; }
 
 // ── 1. MM — Moyenne Mobile Simple ───────────────────────────
@@ -2071,7 +2070,7 @@ function getFundamentalSignals(pair) {
   const volAvg  = ps.candles && ps.candles.length>1
     ? ps.candles.slice(-20).reduce((s,c)=>s+c.v,0)/20 : 1;
 
-  
+
   // Dans une vraie intégration : fetch FRED, Bloomberg, Alpha Vantage, etc.
   // Ici chaque indicateur est calculé/estimé à partir des données disponibles
 
@@ -2924,8 +2923,8 @@ function simTick() {
 // On ne trade que si la conviction justifie au moins 3× les frais
 // v7.3 OPT · constantes obsolètes supprimées (CONV_THRESHOLD, DIR_THRESHOLD, TRADE_THRESHOLD,
 // STOP_LOSS_X, BREAKEVEN_PCT) — elles n'étaient jamais lues. Les vrais seuils sont inline :
-//   - Entrée trade : ligne ~8568 (shouldTrade = conviction > minMoveNeeded * 2.0 && |composite| > 0.24)
-//   - TP/SL bot :    ligne ~17910-17911 (tpPct/slPct dérivés de conviction et volCV)
+//   - Entrée trade (voir 03-...buid.js) : shouldTrade = conviction > minMoveNeeded * 2.0 && |composite| > 0.28
+//   - TP/SL bot :    tpPct/slPct dérivés de conviction et volCV (plus bas dans ce module)
 
 // Résoudre UN cycle pour UNE paire — appelé par simTick quand ps.cycleTimer atteint 0
 // ════════════════════════════════════════════════════════════════════

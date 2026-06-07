@@ -1,4 +1,5 @@
 // ════════════════════════════════════════════════════════════
+// ── 07/06/2026 : nettoyage — logs [DIAGNOSTIC closePosition] + _scheduleBgRetry (morte) retirés.
 // AURA8 — module consolidé 02/10
 // Contient : state-init, v7-12-livraison-3-calcul-des-indicateurs-a, v7-12-livraison-8-mode-reel-utilitaires, moteur-de-frais-taxes, open-positions-render
 // ════════════════════════════════════════════════════════════
@@ -135,7 +136,7 @@ const S = {
   // v7.12 LIVRAISON 6 · SAFETY · snapshot pris automatiquement avant chaque activation
   // du mode réel. Permet de rollback en 1 clic si quelque chose tourne mal.
   preRealSnapshot: null,        // { snap:{...}, takenAt: timestamp, mode: 'auto-pre-real' }
-  
+
   // Utilise vraies bougies Binance MAIS avec règles de sécurité strictes
   agentLessonsPaperReal: [],    // mémoire séparée pour ce mode
   paperRealStats: {},           // { 'BTC/USDT': { wins, losses, pnlNet, trades, lastTrades:[] } }
@@ -174,7 +175,7 @@ const S = {
     abTestingMutationStrength: 0.3, // Amplitude de mutation lors d'une nouvelle variante (±30%)
     // v8.0 PHASE 4b · Mémoire transférable entre modes
     transferLearningEnabled: true,  // 3.3 · Active le transfert de mémoire entre modes
-    transferWeightSim: 0.3,         
+    transferWeightSim: 0.3,
     transferWeightPaperReal: 0.7,   // Poids de la mémoire Réel (réelle mais sans risque)
     transferWeightReal: 1.0,        // Poids de la mémoire réelle (référence absolue)
     // v8.0 PHASE 5 · Intelligence prédictive
@@ -208,7 +209,7 @@ const S = {
     monthStart: null,             // 'YYYY-MM' courant
     history: []                   // [{ date: 'YYYY-MM-DD', start, end, pnlPct, pnlUsd }]
   },
-  
+
   // v8.0 PHASE 4a · A/B TESTING AUTOMATIQUE
   // Le bot teste 2 variantes de paramètres en parallèle.
   // Chaque trade est étiqueté 'A' ou 'B' (alterné).
@@ -229,7 +230,7 @@ const S = {
     history: [],               // log des verdicts passés
     lastVerdict: null          // { winner, loser, params, ts }
   },
-  
+
   // v8.0 PHASE 2 · MÉMOIRE DES CONTEXTES DE TRADES
   // Pour chaque trade fermé en mode Réel, stocke un snapshot complet :
   // - Conditions de marché à l'ouverture
@@ -238,7 +239,7 @@ const S = {
   // - Résultat (gain/perte) — enrichi à la fermeture
   // Limite : 500 entrées (FIFO), suffisant pour identifier des patterns
   tradeContextMemory: [],
-  
+
   // v7.12 LIVRAISON 17 · MÉMOIRE DES PARAMÈTRES AUTO-AJUSTÉS (pour panneau diagnostic)
   adaptiveState: {
     lastTpUsed: null,           // dernier TP calculé (pour traçabilité)
@@ -603,7 +604,7 @@ async function fetchBinancePrices() {
     if(!resp.ok) throw new Error('Binance HTTP '+resp.status);
     const data = await resp.json();
     if(!Array.isArray(data)) throw new Error('Binance malformed response');
-    
+
     let updated = 0;
     const symToPair = Object.fromEntries(Object.entries(BINANCE_SYMBOLS).map(([p,s])=>[s,p]));
     data.forEach(item => {
@@ -615,24 +616,24 @@ async function fetchBinancePrices() {
       const realPrice = parseFloat(item.lastPrice);
       const change24h = parseFloat(item.priceChangePercent);
       if(!realPrice || isNaN(realPrice)) return;
-      
+
       if(!ps._targetPrice && Math.abs(realPrice - ps.price) / ps.price > 0.005) {
         ps.price = realPrice;
         if(ps.candles.length > 0) ps.candles[ps.candles.length-1].c = realPrice;
       }
       ps._targetPrice = realPrice;
       ps.pnl24h = change24h;
-      
+
       // v7.12 LIVRAISON 1 · agrège dans les bougies temps réel (5m/15m/1h)
       try { _aggregateRealPrice(pair, realPrice); } catch(e) { /* silent */ }
-      
+
       cfg.minP = realPrice * 0.65;
       cfg.maxP = realPrice * 1.55;
       const dailyRange = realPrice * Math.abs(change24h) / 100;
       cfg.vol = Math.max(cfg.vol * 0.3, dailyRange / 9.8);
       updated++;
     });
-    
+
     if(updated > 0) {
       _lastPriceFetch = Date.now();
       if (typeof markRealPriceReceived === 'function') markRealPriceReceived();
@@ -723,7 +724,7 @@ let _realCandlesState = {
 
 function openRealCandlesModal() {
   _ensureRealCandlesStruct();
-  
+
   // ═══ AMORCE IMMÉDIATE ═══
   // Pour que tu voies la bougie en cours dès l'ouverture du modal sans attendre
   // un nouveau fetch (qui n'arrive que toutes les ~15s), on injecte le prix
@@ -740,11 +741,11 @@ function openRealCandlesModal() {
       });
     }
   } catch(e) { /* silent */ }
-  
+
   // Construire le modal
   const existing = document.getElementById('realCandlesModal');
   if (existing) existing.remove();
-  
+
   const modal = document.createElement('div');
   modal.id = 'realCandlesModal';
   modal.style.cssText = `
@@ -752,26 +753,26 @@ function openRealCandlesModal() {
     display:flex;align-items:center;justify-content:center;padding:12px;
   `;
   modal.onclick = (e) => { if (e.target === modal) closeRealCandlesModal(); };
-  
+
   const pairList = Object.keys(PAIRS || {});
   const intervals = ['5m', '15m', '1h', '4h', '1j'];
-  
+
   modal.innerHTML = `
     <div style="background:var(--s1);border:1px solid var(--border);border-radius:16px;
                 width:100%;max-width:420px;max-height:92vh;overflow-y:auto;display:flex;flex-direction:column;">
-      
+
       <!-- Header -->
       <div style="display:flex;justify-content:space-between;align-items:center;padding:14px 14px 8px;border-bottom:1px solid var(--border);">
         <div style="font-size:14px;font-weight:800;color:var(--up);">📊 Bougies temps réel</div>
         <button onclick="closeRealCandlesModal()" style="background:var(--s3);border:1px solid var(--border);border-radius:8px;color:var(--t2);padding:4px 12px;font-size:13px;cursor:pointer;">✕</button>
       </div>
-      
+
       <!-- Sélecteur Paire -->
       <div style="padding:10px 14px 6px;">
         <div style="font-size:9px;color:var(--t3);letter-spacing:.08em;text-transform:uppercase;margin-bottom:6px;">Paire</div>
         <div style="display:flex;flex-wrap:wrap;gap:5px;">
           ${pairList.map(p => `
-            <button onclick="_selectRealCandlesPair('${p}')" data-rc-pair="${p}" 
+            <button onclick="_selectRealCandlesPair('${p}')" data-rc-pair="${p}"
                     style="padding:6px 9px;font-size:10px;font-weight:700;font-family:var(--font-mono);
                            background:${p === _realCandlesState.selectedPair ? 'rgba(0,232,122,.15)' : 'var(--s2)'};
                            color:${p === _realCandlesState.selectedPair ? 'var(--up)' : 'var(--t2)'};
@@ -782,7 +783,7 @@ function openRealCandlesModal() {
           `).join('')}
         </div>
       </div>
-      
+
       <!-- Sélecteur Intervalle -->
       <div style="padding:6px 14px 10px;">
         <div style="font-size:9px;color:var(--t3);letter-spacing:.08em;text-transform:uppercase;margin-bottom:6px;">Intervalle</div>
@@ -799,13 +800,13 @@ function openRealCandlesModal() {
           `).join('')}
         </div>
       </div>
-      
+
       <!-- Info prix actuel -->
       <div id="rcInfoBar" style="margin:0 14px;padding:8px 10px;background:var(--s2);border:1px solid var(--border);border-radius:8px;display:flex;justify-content:space-between;align-items:center;font-family:var(--font-mono);font-size:11px;">
         <span id="rcCurrentPrice" style="color:var(--t1);font-weight:700;">— $—</span>
         <span id="rcLastUpdate" style="color:var(--t3);font-size:9px;">MAJ il y a —</span>
       </div>
-      
+
       <!-- Contrôles zoom et scroll -->
       <div style="padding:6px 14px 0;display:flex;justify-content:space-between;align-items:center;gap:6px;flex-wrap:wrap;">
         <div style="display:flex;gap:4px;">
@@ -834,21 +835,21 @@ function openRealCandlesModal() {
         </div>
       </div>
       <div style="padding:2px 14px 0;font-size:8.5px;color:var(--t3);text-align:center;">Glisse ←→ pour explorer · tap pour détails</div>
-      
+
       <!-- Canvas -->
       <div style="padding:6px 14px 0;">
-        <canvas id="realCandlesCanvas" width="380" height="260" 
+        <canvas id="realCandlesCanvas" width="380" height="260"
                 style="width:100%;height:260px;background:var(--s2);border:1px solid var(--border);border-radius:10px;touch-action:pan-y;cursor:grab;"
                 onmousedown="_rcDragStart(event)" onmousemove="_rcDragMove(event)" onmouseup="_rcDragEnd()" onmouseleave="_rcMouseLeave()"
                 ontouchstart="_rcDragStart(event)" ontouchmove="_rcDragMove(event)" ontouchend="_rcDragEnd()"></canvas>
       </div>
-      
+
       <!-- Stats -->
       <div id="rcStats" style="padding:0 14px 10px;display:flex;justify-content:space-between;font-size:10px;color:var(--t3);font-family:var(--font-mono);">
         <span id="rcCount">— bougies</span>
         <span id="rcOldest">—</span>
       </div>
-      
+
       <!-- Footer note -->
       <div style="padding:8px 14px 14px;font-size:9px;color:var(--t3);line-height:1.5;border-top:1px solid var(--border);">
         💡 Les bougies se construisent au fil du temps. Une bougie 5m est complète après 5 minutes de collecte.
@@ -856,14 +857,14 @@ function openRealCandlesModal() {
       </div>
     </div>
   `;
-  
+
   document.body.appendChild(modal);
   _renderRealCandles();
-  
+
   // Démarrer l'animation pulse continue (Q1:A · bougie live qui pulse)
   if (_realCandlesState.animFrameId) cancelAnimationFrame(_realCandlesState.animFrameId);
   _rcAnimateLive();
-  
+
   // v7.12 LIVRAISON 3 · charger les toggles persistés et appliquer visuels
   _rcLoadToggles();
   setTimeout(_rcApplyTogglesVisuals, 0);  // après que le DOM des boutons soit prêt
@@ -2171,11 +2172,11 @@ function _rcDebugDump() {
   const fmt = (v) => v == null ? '—' : (typeof v === 'number' ? v.toFixed(2) : String(v));
   const fmtTs = (t) => t ? new Date(t).toLocaleTimeString('fr') : '—';
   const dec = (PAIRS[pair] || {}).dec || 2;
-  
+
   // Vérifier la cohérence : la bougie en cours doit avoir close ≈ ps.price
   const drift = (last && ps.price) ? ((last.c - ps.price) / ps.price * 100).toFixed(2) : '?';
-  
-  const text = 
+
+  const text =
     'PAIRE : ' + pair + ' · ' + iv + '\n' +
     '──────────────────────\n' +
     'ps.price (state) : ' + fmt(ps.price) + '\n' +
@@ -2469,7 +2470,7 @@ function _updateRealModeBanner() {
   if (!banner) return;
   const isReal = S.tradingMode === 'real';
   const isPaperReal = S.tradingMode === 'paperReal';
-  
+
   if (isReal || isPaperReal) {
     banner.style.display = 'block';
     document.body.classList.add('real-mode-active');
@@ -2609,13 +2610,13 @@ async function confirmSwitchToPaperReal() {
     'Avant le démarrage : 200 bougies vont être téléchargées par paire.\n\n' +
     'Continuer ?';
   if (!confirm(msg)) return;
-  
+
   if (typeof showToast === 'function') showToast('📡 Préparation Réel · backfill…', 4000, 'info');
   const activePairs = Object.keys(S.paperRealActivePairs || {}).filter(p => S.paperRealActivePairs[p]);
   for (const pair of activePairs) {
     try { await _backfillRealCandles(pair, tf, 200); } catch(e) {}
   }
-  
+
   // Auto-snapshot avant activation (pour rollback)
   try {
     const snap = (typeof buildSnapshot === 'function') ? buildSnapshot() : null;
@@ -2634,7 +2635,7 @@ async function confirmSwitchToPaperReal() {
       };
     }
   } catch(e) {}
-  
+
   // Activer
   S.tradingMode = 'paperReal';
   S.paperRealStartedAt = Date.now();
@@ -2643,7 +2644,7 @@ async function confirmSwitchToPaperReal() {
   // Reset kill switches
   S.paperRealKillSwitch = {};
   activePairs.forEach(p => { S.paperRealKillSwitch[p] = { paused:false, lossStreak:0, reason:'' }; });
-  
+
   if (typeof _updateRealModeBanner === 'function') _updateRealModeBanner();
   if (typeof renderSettingsPanel === 'function') renderSettingsPanel();
   try { _startBgCollector(); } catch(e) {}
@@ -2760,7 +2761,7 @@ function confirmRollbackPreReal() {
     // 2. Restaurer SEULEMENT les champs d'apprentissage et de mode trading
     // (PAS les champs financiers qui peuvent être corrompus dans le snapshot)
     const SAFE_FIELDS_TO_RESTORE = [
-      'agentLessons',          
+      'agentLessons',
       'agents',                // état des agents (fitness, etc.)
       'cycle',                 // cycle bot
       'pnlHistory',            // historique pnl
@@ -2961,10 +2962,10 @@ window._backfillRealCandles = _backfillRealCandles;
 // (données OHLCV officielles Binance, plus précises que l'agrégation depuis @trade)
 function _upsertKlineCandle(pair, interval, k) {
   if (!pair || !interval || !k) return;
-  
+
   // v7.12 LIVRAISON 11 · Signaler au watchdog réseau (kline est un prix réel reçu)
   if (typeof markRealPriceReceived === 'function') markRealPriceReceived();
-  
+
   _ensureRealCandlesStruct();
   if (!S.realCandles[pair] || !S.realCandles[pair][interval]) return;
   const arr = S.realCandles[pair][interval];
@@ -3008,10 +3009,10 @@ window._upsertKlineCandle = _upsertKlineCandle;
 function _aggregateRealPriceOtherIntervals(pair, price, ts) {
   if (!pair || !isFinite(price) || price <= 0) return;
   if (!ts) ts = Date.now();
-  
+
   // v7.12 LIVRAISON 11 · Signaler au watchdog (couvre les WS multi-paires en BG)
   if (typeof markRealPriceReceived === 'function') markRealPriceReceived();
-  
+
   _ensureRealCandlesStruct();
   if (!S.realCandles[pair]) return;
   const skipInterval = (typeof _realCandlesState !== 'undefined') ? _realCandlesState.selectedInterval : null;
@@ -3040,15 +3041,15 @@ window._aggregateRealPriceOtherIntervals = _aggregateRealPriceOtherIntervals;
 function _aggregateRealPrice(pair, price, ts) {
   if (!pair || !isFinite(price) || price <= 0) return;
   if (!ts) ts = Date.now();
-  
+
   // v7.12 LIVRAISON 11 · Signaler au watchdog réseau qu'on reçoit un prix réel
   // (sinon le watchdog déclenche "Connexion instable · bot en pause" à tort
   //  car en mode Réel les prix viennent du WS, pas de CoinGecko)
   if (typeof markRealPriceReceived === 'function') markRealPriceReceived();
-  
+
   _ensureRealCandlesStruct();
   if (!S.realCandles[pair]) return;
-  
+
   // ═══ v7.12 LIVRAISON 5 · FILTRE OUTLIERS ═══
   // Si la dernière bougie en cours existe et que le prix s'écarte de >2% de son close,
   // c'est presque certainement un trade corrompu (mauvais feed, mauvais marché, parsing bug).
@@ -3066,14 +3067,14 @@ function _aggregateRealPrice(pair, price, ts) {
       }
     }
   } catch(e) {}
-  
+
   Object.entries(REAL_CANDLE_INTERVALS).forEach(([interval, intervalMs]) => {
     const arr = S.realCandles[pair][interval];
     if (!arr) return;
-    
+
     const candleStart = _candleStartTs(ts, intervalMs);
     const lastCandle = arr[arr.length - 1];
-    
+
     if (!lastCandle || lastCandle.ts < candleStart) {
       // ═══ v7.12 LIVRAISON 5 · GAP-FILL ═══
       // Si plusieurs bougies se sont écoulées sans trade (ex: WS coupé 15min sur 5m),
@@ -3124,7 +3125,7 @@ function _aggregateRealPrice(pair, price, ts) {
       lastCandle.v = lastCandle.n;
     }
   });
-  
+
   // ═══ Redessin instantané si modal ouvert et que ça concerne la paire affichée ═══
   if (typeof _realCandlesState !== 'undefined' && _realCandlesState.selectedPair === pair) {
     const modal = document.getElementById('realCandlesModal');
@@ -3211,7 +3212,7 @@ async function fetchLivePrices(force = false) {
       }
       ps._targetPrice   = realPrice;
       ps.pnl24h         = change24h;
-      
+
       // v7.12 LIVRAISON 1 · agrège dans les bougies temps réel (5m/15m/1h)
       try { _aggregateRealPrice(pair, realPrice); } catch(e) { /* silent */ }
 
@@ -3219,7 +3220,7 @@ async function fetchLivePrices(force = false) {
       cfg.minP          = realPrice * 0.65;
       cfg.maxP          = realPrice * 1.55;
 
-      
+
       // vol = typical tick-move ≈ daily_range / sqrt(96) tick_periods
       const dailyRange  = realPrice * Math.abs(change24h) / 100;
       cfg.vol           = Math.max(cfg.vol * 0.3, dailyRange / 9.8);
@@ -3254,13 +3255,13 @@ async function fetchLivePrices(force = false) {
     }
 
   } catch(err) {
-    
+
     _cgFailCount++;
     // Log silencieux : seulement après 3 échecs consécutifs (évite spam console sur échecs passagers)
     if (_cgFailCount >= 3 && _cgFailCount % 5 === 3) {
       console.info('[CoinGecko] temporarily unavailable · using fallback · err#' + _cgFailCount);
     }
-    
+
     if(_cgFailCount >= _CG_FAIL_THRESHOLD) {
       // Try Binance backup
       _setLiveIndicator('fetching');
@@ -3268,13 +3269,13 @@ async function fetchLivePrices(force = false) {
       if(bnOk) {
         // Binance worked — stay on tier 1
       } else {
-        
+
         _simulationTickAll();
       }
     } else {
       _setLiveIndicator('stale');
     }
-    
+
     // Schedule retry with backoff (will try CG again)
     setTimeout(() => {
       if(!_fetchInProgress) fetchLivePrices(true);
@@ -3377,7 +3378,7 @@ function applyAutoLeverageBorrow(newIndex, prevIndex) {
       S.tradingAccount   = Math.max(0, S.tradingAccount - canRepay);
       S.leverageBorrowed = Math.max(0, (S.leverageBorrowed || 0) - canRepay);
       S._autoLevBorrowed = Math.max(0, toRepay - canRepay);
-      
+
       // v7.12 · Si dette résiduelle, marquer explicitement (pour les watchdogs)
       if (S._autoLevBorrowed > 0) {
         S._orphanDebtSince = Date.now();
@@ -3385,7 +3386,7 @@ function applyAutoLeverageBorrow(newIndex, prevIndex) {
       } else {
         S._orphanDebtSince = 0;
       }
-      
+
       S.chainLog.push({
         icon:'↩',
         desc:`Levier désactivé · réserve retirée de trading: ${fmt$2(canRepay)}${S._autoLevBorrowed>0?' (reste dû '+fmt$2(S._autoLevBorrowed)+' · auto-résorption activée)':''}`,
@@ -3460,7 +3461,7 @@ function setLeverageByBot(newIndex, reason) {
   newIndex = Math.max(0, Math.min(S.leverageMaxMult || 10, Math.floor(newIndex || 0)));
   const prevIndex = S.leverage || 0;
   if(newIndex === prevIndex) return { ok:true, action:'noop', prevIndex, newIndex };
-  
+
   // ═══ v7.12 · PROTECTION P6 · Bot ne peut pas créer de dette orpheline ═══
   // Même logique que P1 mais appliquée aux actions du bot
   if (newIndex < prevIndex) {
@@ -3493,7 +3494,7 @@ function setLeverageByBot(newIndex, reason) {
       }
     }
   }
-  
+
   const result = applyAutoLeverageBorrow(newIndex, prevIndex);
   S.leverage = newIndex;
   if(typeof syncLeverageReserve === 'function') syncLeverageReserve();
@@ -3535,7 +3536,7 @@ function ensureLeverageCoverForTrade(neededStake, pair) {
   const base = (S._autoLevBase && S._autoLevBase > 0) ? S._autoLevBase : (S.tradingAccount || 0);
   const maxBorrow = base * (S.leverageMaxMult || 10) * index - (S.leverageBorrowed || 0);
   if(maxBorrow <= 0) return { ok:false, action:'capped', shortfall, reason:'reserve_empty' };
-  
+
   // ═══ v7.12 · PROTECTION P9 · Q1:D · Auto-stop emprunt si capacité > 95% ═══
   // Empêche de dépasser 95% de la capacité totale (garde-fou avant liquidation)
   const maxCapacityAbs = base * (S.leverageMaxMult || 10);  // capacité absolue (tous les niveaux confondus)
@@ -3553,7 +3554,7 @@ function ensureLeverageCoverForTrade(neededStake, pair) {
     }
     return { ok:false, action:'blocked_by_P9', shortfall, reason:'capacity_exceeded', currentUsagePct };
   }
-  
+
   // Emprunter ce qu'il faut pour couvrir le shortfall, capé par la réserve disponible
   const actualBorrow = Math.min(shortfall, maxBorrow);
   // Snapshot base si 1ère activation effective (cohérent avec applyAutoLeverageBorrow)
@@ -4194,8 +4195,8 @@ function goPage(idx, tabEl, navEl) {
     try { buildGovCards(); renderDAO(); } catch(e) {}
   }, 50); }
   if(idx === 5) { setTimeout(()=>{ renderFiscal('global'); }, 30); }
-  if(idx === 0) { setTimeout(()=>{ 
-    try { 
+  if(idx === 0) { setTimeout(()=>{
+    try {
       buildPairPosButtons(); buildPairBricks(); buildActionBricks(); buildManBricks();
       updatePairBricks(); updateActionBricks(); updateManBricks();
       if (typeof _restoreAutoBarState === 'function') _restoreAutoBarState();
@@ -4374,17 +4375,12 @@ async function _fetchAndBootstrapRealCandles(pair, tf) {
 }
 window._fetchAndBootstrapRealCandles = _fetchAndBootstrapRealCandles;
 
-function _scheduleBgRetry() {
-  setTimeout(_startBgCollector, _bgCollectorRetryDelay);
-  _bgCollectorRetryDelay = Math.min(60000, _bgCollectorRetryDelay * 2);
-}
-
 // v7.12 LIVRAISON 10 · HEALTH CHECK ACTIF DES WEBSOCKETS DE FOND
 // Vérifie toutes les 10 secondes que les WS sont en état OPEN (readyState=1)
 // Si un WS est dans un autre état (CONNECTING=0, CLOSING=2, CLOSED=3) depuis trop
 // longtemps, on le force à se reconnecter. Évite les WS "endormis" sur Android.
 function _bgCollectorHealthCheck() {
-  if (!_isRealLike()) return;  
+  if (!_isRealLike()) return;
   let pairsToWatch = [];
   if (S.tradingMode === 'real') {
     pairsToWatch = Object.keys(S.realActivePairs || {}).filter(p => S.realActivePairs[p]);
@@ -4449,15 +4445,15 @@ setInterval(function() {
     if (wsCount === 0) return;
     // Fermer tous les WS proprement
     Object.keys(_bgCollectorWSMap).forEach(p => {
-      try { 
-        _bgCollectorWSMap[p].onclose = null; 
-        _bgCollectorWSMap[p].close(); 
+      try {
+        _bgCollectorWSMap[p].onclose = null;
+        _bgCollectorWSMap[p].close();
       } catch(e) {}
     });
     _bgCollectorWSMap = {};
     // Redémarrer tout de suite
-    setTimeout(function() { 
-      try { _startBgCollector(); } catch(e) {} 
+    setTimeout(function() {
+      try { _startBgCollector(); } catch(e) {}
     }, 500);
     if (typeof showToast === 'function') {
       showToast('🔄 Refresh préventif WS Binance', 1500, 'info');
@@ -4515,7 +4511,7 @@ function genCandles(n){ return genCandlesFor(67000,400,n); }
 // L'ancien seed injectait 40 valeurs random ~490000 qui polluaient le calcul
 // du Sharpe et du drawdown. Maintenant pnlHistory commence vide et se remplit
 // avec les vraies valeurs au fur et à mesure des trades.
-// Sharpe affichera '—' tant qu'il n'y a pas 15 valeurs réelles (cf. ligne 22794).
+// Sharpe affichera '—' tant qu'il n'y a pas 15 valeurs réelles.
 // loadState() restaure pnlHistory depuis le snapshot si disponible.
 
 // ============================================================
@@ -4691,7 +4687,7 @@ function computeTradingHealth() {
   //   - intérêts levier à régler = leverageBorrowed × leverageBorrowRate (1 cycle futur)
   //     Approximation conservatrice: on prend les intérêts cumulés non encore transférés au fisc.
   //     leverageTotalFees est le cumul historique (déjà réglé). Donc la "dette courante" levier =
-  
+
   let taxDue = 0;
   try {
     // calcTaxProvision donne la provision fiscale courante (impôt dû sur P&L brut cumulé).
@@ -5059,7 +5055,7 @@ function _checkPaperRealStakeLimit(stakeUsdt, pair, side) {
   }
   const maxStake = totalCapital * maxPct / 100;
   let finalStake = Math.min(stakeUsdt, maxStake);
-  
+
   // v8.0 PHASE 6a · Si corrélation forte avec position ouverte → réduire la mise
   if (pair && side && typeof _checkCorrelationLimit === 'function') {
     const corrCheck = _checkCorrelationLimit(pair, side);
@@ -5067,7 +5063,7 @@ function _checkPaperRealStakeLimit(stakeUsdt, pair, side) {
       finalStake *= corrCheck.decimate;
     }
   }
-  
+
   // v8.0 PHASE 6b · Modulation par Sharpe (alloc dynamique selon performance historique)
   if (pair && typeof _getSharpeAllocMult === 'function') {
     const sharpeMult = _getSharpeAllocMult(pair);
@@ -5075,7 +5071,7 @@ function _checkPaperRealStakeLimit(stakeUsdt, pair, side) {
       finalStake *= sharpeMult;
     }
   }
-  
+
   return finalStake;
 }
 window._checkPaperRealStakeLimit = _checkPaperRealStakeLimit;
@@ -5101,7 +5097,7 @@ function openPosition(pair, side) {
         return;
       }
     }
-    
+
     // v8.0 PHASE 5 · 4.1 · Refus si pic de volatilité prévu
     const cfg5 = S.paperRealConfig || {};
     if (cfg5.volatilityForecastEnabled && cfg5.volatilityForecastBlockSpike && typeof _forecastVolatility === 'function') {
@@ -5234,20 +5230,15 @@ function openPosition(pair, side) {
 
 // botClose=true means called from bot — MUST NOT close manual positions
 function closePosition(id, botClose = false) {
-  // v8.0 LIVRAISON 37 · DIAGNOSTIC : log dans la console + toast pour comprendre
-  console.log('[DIAGNOSTIC closePosition] Appelé avec id=' + id + ' botClose=' + botClose);
-  
   // v7.12 · PACK RÉSILIENCE · sauvegarde avant fermeture
   try { if (typeof _p5PreActionSave === 'function') _p5PreActionSave('close'); } catch(e) {}
 
   const pos = S.openPositions.find(p=>p.id===id);
   if(!pos) {
-    console.error('[DIAGNOSTIC closePosition] Position non trouvée pour id=' + id);
+    console.error('[closePosition] Position non trouvée pour id=' + id);
     if (typeof showToast === 'function') showToast('❌ Position introuvable: ' + id, 4000, 'critical');
     return;
   }
-  
-  console.log('[DIAGNOSTIC closePosition] Position trouvée: ' + pos.pair + ' ' + pos.side + ' stake=$' + pos.stakeUsdt);
 
   // ABSOLUTE RULE: bot cannot close a manual position
   if(botClose && pos.auto !== true) return;
@@ -5255,7 +5246,7 @@ function closePosition(id, botClose = false) {
   const ps  = S.pairStates[pos.pair];
   const cfg = PAIRS[pos.pair];
   const cur = ps ? ps.price : pos.entryPrice;
-  
+
   // ═══ v7.12 · QUANTFURY B · Règle "liquidation nette" ═══
   // - Clamp : une perte ne peut JAMAIS dépasser -100% (impossible de devoir plus que la marge)
   // - Cap haut : +500% max (protège contre bugs de prix irréalistes)
@@ -5317,7 +5308,7 @@ function closePosition(id, botClose = false) {
       // Reset au moindre trade gagnant
       S.paperRealConsecLosses = 0;
     }
-    
+
     // v8.0 PHASE 2 · Enrichir le contexte mémorisé avec le résultat du trade
     if (pos._contextId && typeof _enrichTradeContextOnClose === 'function') {
       try {
@@ -5325,7 +5316,7 @@ function closePosition(id, botClose = false) {
         _enrichTradeContextOnClose(pos._contextId, realisedPct, realisedUsd, holdMs);
       } catch(e) {}
     }
-    
+
     // v8.0 PHASE 4a · A/B testing : enregistrer le résultat dans l'arm correspondant
     if (pos._abArm && typeof _abRecordResult === 'function') {
       try {
@@ -5407,21 +5398,21 @@ function closePosition(id, botClose = false) {
     ps.totalPnlUsd += realisedUsd;
     ps.totalTrades++;
     if(realisedPct > 0) ps.winTrades++;
-    
+
     // v7.12 MOD 5+ · Track loss streak + fenêtre glissante pour blacklist
     if (pos.auto === true) {
       if (!S._lossStreaks) S._lossStreaks = {};
-      const streak = S._lossStreaks[pos.pair] || { 
+      const streak = S._lossStreaks[pos.pair] || {
         count: 0, pausedAt: 0,
         recentTrades: [],   // fenêtre glissante des 15 derniers résultats (true=win, false=loss)
         blacklistedUntil: 0 // timestamp fin de blacklist
       };
-      
+
       // Fenêtre glissante des derniers résultats
       if (!streak.recentTrades) streak.recentTrades = [];
       streak.recentTrades.push(realisedPct > 0);
       if (streak.recentTrades.length > 15) streak.recentTrades.shift();
-      
+
       // Streak classique
       if (realisedPct <= 0) {
         streak.count = (streak.count || 0) + 1;
@@ -5438,7 +5429,7 @@ function closePosition(id, botClose = false) {
         streak.count = 0;
         streak.pausedAt = 0;
       }
-      
+
       // v7.12 BLACKLIST DYNAMIQUE · si < 30% WR sur 10+ trades récents → blacklist 2h
       if (streak.recentTrades.length >= 10) {
         const wins = streak.recentTrades.filter(w => w).length;
@@ -5456,7 +5447,7 @@ function closePosition(id, botClose = false) {
           }
         }
       }
-      
+
       S._lossStreaks[pos.pair] = streak;
     }
     // Return original stake to trading account, then apply net P&L
@@ -5477,7 +5468,7 @@ function closePosition(id, botClose = false) {
         S._autoLevBorrowed = Math.max(0, S._autoLevBorrowed - autoRepay);
       }
     }
-    
+
     // ═══ v7.12 · PROTECTION P2 · Auto-remboursement dette orpheline ═══
     // Si levier = 0 ET dette orpheline > 0 ET trading vient d'être libéré,
     // rembourser automatiquement ce qu'on peut depuis trading.
@@ -5493,7 +5484,7 @@ function closePosition(id, botClose = false) {
 
     // Restituer la mise propre au tradingAccount (toujours)
     S.tradingAccount = Math.max(0, S.tradingAccount + pos.stakeUsdt);
-    
+
     // ═══ v7.12 · PRIORITÉ 1 · SPLIT BÉNÉFICES (Option B — net d'impôts/taxes) ═══
     // Si trade gagnant : split du net (après frais + taxes)
     // Si trade perdant : perte absorbée par tradingAccount (comportement normal)
@@ -5504,21 +5495,21 @@ function closePosition(id, botClose = false) {
       const _taxReg = S.taxConfig?.regions?.[S.taxConfig?.region];
       const _taxAmount = _taxReg ? (netPnl * (_taxReg.inclusion || 0) * (_taxReg.rate || 0)) : 0;
       const _trulyNet = Math.max(0, netPnl - _exitFee - _taxAmount);
-      
+
       // Envoyer les taxes vers fiscalReserveAccount (option B — comptabilité propre)
       if (_taxAmount > 0) {
         S.fiscalReserveAccount = (S.fiscalReserveAccount || 0) + _taxAmount;
       }
-      
+
       // Split du net restant
       const _splitPct = (typeof S.profitSplitCaissePct === 'number' ? S.profitSplitCaissePct : 30) / 100;
       const _toCaisse = _trulyNet * _splitPct;
       const _toTrading = _trulyNet - _toCaisse;
-      
+
       // Appliquer les mouvements
       S.cashAccount = (S.cashAccount || 0) + _toCaisse;
       S.tradingAccount += _toTrading;
-      
+
       // Log discret dans chainLog
       S.chainLog.push({
         icon: '💰',
@@ -5530,9 +5521,9 @@ function closePosition(id, botClose = false) {
       // Trade perdant : tout reste dans tradingAccount (déjà fait via stakeUsdt, on ajoute le netPnl négatif)
       S.tradingAccount = Math.max(0, S.tradingAccount + netPnl);
     }
-    
+
     S.portfolio      = S.cashAccount + S.tradingAccount;
-    
+
     // ═══ v7.12 · PROTECTION P2 · Appliquer le remboursement dette orpheline ═══
     if (pos._p2RepayPending && pos._p2RepayPending > 0) {
       const repay = Math.min(pos._p2RepayPending, S.tradingAccount || 0, S._autoLevBorrowed || 0);
@@ -5550,7 +5541,7 @@ function closePosition(id, botClose = false) {
       }
       delete pos._p2RepayPending;
     }
-    
+
     syncLeverageReserve();  // recalculer la réserve disponible
     // Auto-compound: reinvest profits back into trading capital
     if(realisedUsd > 0 && pos.auto === true) {
@@ -5874,7 +5865,7 @@ function changeLeverage(delta) {
   const prevIndex = S.leverage || 0;
   const newIndex  = Math.max(0, Math.min(10, prevIndex + delta));
   if(newIndex === prevIndex) return;
-  
+
   // ═══════════════════════════════════════════════════════════════
   // v7.12 · PROTECTION P1 : Bloquer la baisse du levier si positions avec emprunt
   // ═══════════════════════════════════════════════════════════════
@@ -5913,7 +5904,7 @@ function changeLeverage(delta) {
       }
     }
   }
-  
+
   // Appliquer le transfert AVANT de mettre à jour S.leverage (la fonction compare les deux)
   try { applyAutoLeverageBorrow(newIndex, prevIndex); } catch(e) { console.warn('auto-lev:', e); }
   S.leverage = newIndex;

@@ -3,7 +3,7 @@
    ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓
    ▓                   VERSION  v118.16                      ▓
    ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓
-   
+
    v118.16 : BUG CRITIQUE RÉSOLU
    - Type 'info' est MASQUÉ par défaut dans showToast() de l'app !
    - C'est pour ça que les notifs AA n'apparaissaient pas
@@ -11,7 +11,7 @@
      • sim       → 'ice'  (bleu cyan, var(--ice), visible)
      • paperReal → 'win'  (vert)
      • real      → 'loss' (rouge)
-   - Appliqué aux 2 endroits : cycleTradeMode + startSim/stopSim
+   - Appliqué à cycleTradeMode et startSim/stopSim
    ═══════════════════════════════════════════════════════════ */
 
 function _auraGetGlobalS() {
@@ -32,7 +32,7 @@ window._auraGetGlobalS = _auraGetGlobalS;
   const K_REAL_SEC  = 'aura_chrono_real_seconds';
   const K_MODE      = 'aura_current_trade_mode';
   const K_RUNNING   = 'aura_system_running';
-  
+
   const K_OLD_AUTO  = 'aura_chrono_auto_seconds';
   const K_OLD_MANU  = 'aura_chrono_manu_seconds';
 
@@ -55,7 +55,7 @@ window._auraGetGlobalS = _auraGetGlobalS;
   function _getInitialMode() {
     const stored = localStorage.getItem(K_MODE);
     if (stored && ['sim', 'paperReal', 'real'].includes(stored)) return stored;
-    
+
     const S = window._auraGetGlobalS();
     if (S && S.tradingMode && ['sim', 'paperReal', 'real'].includes(S.tradingMode)) {
       return S.tradingMode;
@@ -201,7 +201,9 @@ window._auraGetGlobalS = _auraGetGlobalS;
 
 
 /* ═══════════════════════════════════════════════════════════
-   ░░ PATCH v118.7 · FIX startSim() MANQUANTE ░░
+   ░░ CONTRÔLE DE SIMULATION · startSim / stopSim / toggleSim ░░
+   Pilote le setInterval de simTick (1000ms) et synchronise l'état
+   _auraSimState avec le système _simRunning des autres modules.
    ═══════════════════════════════════════════════════════════ */
 (function _auraStartSimFix() {
   'use strict';
@@ -291,7 +293,9 @@ window._auraGetGlobalS = _auraGetGlobalS;
 })();
 
 /* ═══════════════════════════════════════════════════════════
-   ░░ PATCH v118.14 · MAQUETTE v119 PHASE 1 · BOUTON AA/EV/RE ░░
+   ░░ BOUTON MODE DE TRADING · AA / EV / RE ░░
+   Gère l'affichage et le cycle du mode de trading (sim/paperReal/real)
+   avec sa couleur. Ne touche jamais botAutoMode (axe utilisateur seul).
    ═══════════════════════════════════════════════════════════ */
 (function _auraTradeModeFix() {
   'use strict';
@@ -357,18 +361,18 @@ window._auraGetGlobalS = _auraGetGlobalS;
   }
 
   window.cycleTradeMode = function cycleTradeMode() {
-    const currentMode = (window.AuraChrono && window.AuraChrono.getCurrentMode) 
+    const currentMode = (window.AuraChrono && window.AuraChrono.getCurrentMode)
       ? window.AuraChrono.getCurrentMode() : 'sim';
-    
+
     const currentIdx = CYCLE_ORDER.indexOf(currentMode);
     const nextIdx = (currentIdx + 1) % CYCLE_ORDER.length;
     const nextMode = CYCLE_ORDER[nextIdx];
-    
+
     // 1. Chrono interne
     if (window.AuraChrono && window.AuraChrono.setMode) {
       window.AuraChrono.setMode(nextMode);
     }
-    
+
     // 2. S.tradingMode pour le reste de l'app
     const S = window._auraGetGlobalS();
     if (S) { S.tradingMode = nextMode; }
@@ -376,10 +380,10 @@ window._auraGetGlobalS = _auraGetGlobalS;
       const setFn = new Function('mode', 'try{S.tradingMode=mode}catch(e){}');
       setFn(nextMode);
     } catch(e) {}
-    
+
     // 3. Mise à jour visuelle bouton
     updateButtonVisual(nextMode);
-    
+
     // 4. ★ NOTIFICATION v118.16 : type natif de showToast pour vraie couleur app ★
     //    ATTENTION : 'info' est MASQUÉ par défaut → utiliser 'ice' pour AA
     //    sim → 'ice' (bleu cyan) · paperReal → 'win' (vert) · real → 'loss' (rouge)
@@ -391,7 +395,7 @@ window._auraGetGlobalS = _auraGetGlobalS;
         window.showToast(msg, 2500, type);
       }
     } catch(e) {}
-    
+
     // 5. Save app state
     try { if (typeof window.saveState === 'function') window.saveState(false); } catch(e) {}
   };
@@ -402,11 +406,11 @@ window._auraGetGlobalS = _auraGetGlobalS;
     const btn = document.getElementById('tradeModeBtn');
     if (!btn) return;
     btn.onclick = window.cycleTradeMode;
-    
-    const initMode = (window.AuraChrono && window.AuraChrono.getCurrentMode) 
+
+    const initMode = (window.AuraChrono && window.AuraChrono.getCurrentMode)
       ? window.AuraChrono.getCurrentMode() : 'sim';
     updateButtonVisual(initMode);
-    
+
     const S = window._auraGetGlobalS();
     if (S && S.tradingMode !== initMode) {
       S.tradingMode = initMode;
