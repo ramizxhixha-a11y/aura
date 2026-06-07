@@ -1701,6 +1701,11 @@ function _resolvePairCycleCore(pair, ps) {
   // Taux fiscal réellement applicable (régime normal/spéculatif détecté) — cohérent recordFees
   const _frBE = (typeof detectFiscalRegime === 'function') ? detectFiscalRegime() : { rate:(_reg?.rate||0), inclusion:(_reg?.inclusion||0) };
   const _taxPct  = (_frBE.inclusion||0) * (_frBE.rate||0);
+  // RENTABILITÉ RÉELLE : la taxe frappe le GAIN, pas la conviction.
+  // On estime le gain visé (TP), on retire les frais (aller-retour, sur le notionnel)
+  // puis l'impôt sur le gain restant, et on exige un gain NET minimum.
+  // (L'ancien _breakEven = _feePct + _taxPct comparait une conviction 0-1 à un taux
+  //  d'imposition, ce qui bloquait quasi tout trade en régime spéculatif.)
   const _breakEven = _feePct + _taxPct;
   // ── BOT FISCAL · avis d'optimisation des frais PAR PAIRE (consulté par le décisionnaire) ──
   // Estime le TP visé pour évaluer le poids des frais+taxes ; durcit le seuil si défavorable.
@@ -1717,7 +1722,16 @@ function _resolvePairCycleCore(pair, ps) {
       }
     }
   } catch(e) {}
-  if(effectiveConviction < _breakEven * 1.5 * _fiscalSeuilFactor) {
+  // Gain visé (même formule que le TP réel tpPctE plus bas), en fraction.
+  const _tpFrac     = Math.max(0.7, effectiveConviction * 3.2 * (1 + volCV * 9)) / 100;
+  // Gain net espéré = gain - frais aller-retour - impôt sur le gain net de frais.
+  const _gainAfterFees = _tpFrac - _feePct;
+  const _gainNet       = _gainAfterFees - Math.max(0, _gainAfterFees) * _taxPct;
+  // Seuil de gain net minimum, durci par l'avis du bot fiscal (optimise sans interdire).
+  const _minNetGain    = 0.0015 * _fiscalSeuilFactor;   // 0.15% net de base
+  // On s'abstient si le gain net réel ne couvre pas le minimum, OU si la conviction
+  // est trop faible pour fier le signal (fiabilité minimale).
+  if(_gainNet < _minNetGain || effectiveConviction < 0.20) {
     learnFromOutcome('cycle', 0, pair);
     ps.qYes = Math.max(20, 100 + (ps.qYes - 100) * 0.95);
     ps.qNo  = Math.max(20, 100 + (ps.qNo  - 100) * 0.95);

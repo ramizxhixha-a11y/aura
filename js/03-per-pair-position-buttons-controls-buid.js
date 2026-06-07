@@ -499,12 +499,17 @@ function updatePairAnalysisPanels() {
     const rawStake    = baseAlloc * (1 + conviction * 1.5);
     const fc          = S.feeConfig;
     const reg         = S.taxConfig.regions[S.taxConfig.region];
-    // Round-trip break-even: need move > entry+exit fees + tax
+    // Rentabilité réelle : la taxe frappe le GAIN, pas la conviction. On estime le
+    // gain visé (TP ~ conviction), on retire les frais (aller-retour) puis l'impôt
+    // sur le gain restant, et on exige un gain NET minimum + un signal de qualité.
     const feePct      = (fc.takerRate + fc.slippage) * 2 + fc.fundingRate * 3;
     const taxPct      = (reg?.inclusion||0) * (reg?.rate||0);
-    const minMoveNeeded = feePct + taxPct;
-    // Only trade if expected move > 1.5× break-even
-    const shouldTrade = conviction > minMoveNeeded * 2.0 && Math.abs(composite) > 0.28;  // v7.12 BALANCED · raised 0.24→0.28 for higher win rate
+    const minMoveNeeded = feePct + taxPct;   // conservé pour l'affichage break-even
+    const _tpFrac        = Math.max(0.007, conviction * 0.032);          // gain visé (fraction)
+    const _gainAfterFees = _tpFrac - feePct;
+    const _gainNet       = _gainAfterFees - Math.max(0, _gainAfterFees) * taxPct;
+    // On trade si le gain NET réel couvre un minimum (0.15%) ET le signal est de qualité.
+    const shouldTrade = _gainNet > 0.0015 && Math.abs(composite) > 0.28;
     const suggestStake= Math.round(Math.min(
       rawStake,
       tradingCap * 0.15,

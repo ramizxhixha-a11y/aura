@@ -2813,7 +2813,13 @@ function simTick() {
       // Apply price — no hard min/max clamp when real prices are live (they set the range)
       // Always use live price — no clamp when real data available
       ps.price = _pricesFetched ? c : Math.max(cfg.minP, Math.min(cfg.maxP, c));
-      ps.pnl24h = Math.max(-40, Math.min(40, ps.pnl24h + (Math.random()-0.5)*0.06));
+      // pnl24h reflète la VRAIE variation du prix simulé sur la fenêtre de bougies
+      // (avant : marche aléatoire déconnectée du prix, sans rappel → régime figé en
+      //  BULL/BEAR en permanence). Désormais le régime suit réellement le marché simulé.
+      if (ps.candles.length >= 2) {
+        const _oldC = ps.candles[0].c;
+        ps.pnl24h = (_oldC > 0) ? Math.max(-40, Math.min(40, ((c - _oldC) / _oldC) * 100)) : 0;
+      }
     });
   }
 
