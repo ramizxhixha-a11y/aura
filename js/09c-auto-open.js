@@ -36,6 +36,20 @@ function autoOpenPosition(pair, side, stakeOverride) {
     return;
   }
 
+  // Gate Bunker : si le mode Bunker est actif et configuré pour pauser le bot,
+  // on s'abstient d'ouvrir (protection d'urgence). Ne touche pas botAutoMode.
+  if (S.bunkerCfg && S.bunkerCfg.active === true && S.bunkerCfg.pausedByBunker === true) {
+    if (Math.random() < 0.05) {
+      S.chainLog.push({
+        icon: '🚨',
+        desc: `Ouverture bloquée · Bunker actif · ${pair} ${side.toUpperCase()}`,
+        hash: rndHash(), time: nowStr()
+      });
+      if (S.chainLog.length > 100) S.chainLog.splice(0, S.chainLog.length - 100);
+    }
+    return;
+  }
+
   // ──────────────────────────────────────────────────────────────
   // Veille Marché — ajustement et blocage selon sentiment global
   // ──────────────────────────────────────────────────────────────

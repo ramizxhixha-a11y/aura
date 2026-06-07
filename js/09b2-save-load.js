@@ -8,18 +8,23 @@
 // v123 — Hooks de fermeture synchrones (pagehide/freeze/beforeunload/visibility).
 // v123.1 — Fix IDB muet (détection runtime du keyPath du store).
 //
-// ★★ v124 (07/06/2026) — ALLÈGEMENT localStorage (anti-saturation quota)
+// ★★ v125 (07/06/2026) — ANTI-SATURATION localStorage par LISTE-BLANCHE
 //   PROBLÈME : nexus_state_v2 pesait ~1.82 Mo en localStorage (limite ~5 Mo
-//   sur mobile). Le snapshot complet était écrit À LA FOIS en IDB et en LS.
-//   Les 7 grosses clés (agents, agentMemories, realCandles, learningHistory,
-//   pairStates, globalMemoryPool, dreamJournal) représentent ~970 Ko.
-//   FIX : IndexedDB garde le snapshot COMPLET (plusieurs Go dispo).
-//         localStorage ne reçoit qu'une version ALLÉGÉE (sans les 7 grosses
-//         clés), marquée _lightened:true. → LS tombe à ~250-350 Ko.
-//   loadState : si le snapshot retenu est la version allégée du LS, on
-//   COMPLÈTE automatiquement les grosses clés depuis l'IDB (fusion), pour
-//   ne JAMAIS perdre agents/mémoires/candles. Le flush de sortie garde le
-//   snapshot COMPLET en LS (sécurité maximale au moment le plus risqué).
+//   sur mobile). Le snapshot complet était écrit à la fois en IDB et en LS.
+//   FIX (durable, zéro maintenance) : le localStorage ne garde QUE les petites
+//   valeurs vitales listées dans _LIGHT_KEYS (comptes, cycle, modes, taux,
+//   config légère). TOUT le reste — agents, mémoires, historiques, bougies,
+//   archives, ET tout champ ajouté au state à l'avenir — vit dans l'IndexedDB
+//   uniquement (plusieurs Go dispo). Une clé inconnue est LOURDE par défaut,
+//   donc le LS reste petit définitivement, sans liste de grosses clés à tenir.
+//   La version LS porte le marqueur _lightened:true. → LS ~150-250 Ko.
+//   loadState : si le snapshot retenu est la version allégée du LS, _mergeHeavyFrom
+//   recharge depuis l'IDB TOUTE clé absente (sans liste fixe), zéro perte. Les
+//   trois écritures LS (save, fallback, flush de sortie) sont toutes allégées ;
+//   l'IDB garde toujours le snapshot complet.
+//
+//   v125 corrige aussi _startPortfolio au boot (P&L de session repart de 0,
+//   P&L totale préservée via _totalCompounded) — fin du faux flash au démarrage.
 //
 // Dépend de 09a-runtime-state.js (window.RT + window.openDB).
 // ════════════════════════════════════════════════════════════════════════
@@ -77,7 +82,7 @@ function _mergeHeavyFrom(target, heavySrc) {
 // ════════════════════════════════════════════════════════════════════════
 async function saveState(silent = false) {
   if (typeof window !== 'undefined' && window._stateReady === false) {
-    if (!silent) console.warn('[saveState v124] BLOQUÉ : _stateReady=false (démarrage en cours)');
+    if (!silent) console.warn('[saveState] BLOQUÉ : _stateReady=false (démarrage en cours)');
     return false;
   }
 
@@ -192,7 +197,7 @@ window.saveState = saveState;
 
 // ════════════════════════════════════════════════════════════════════════
 // loadState — lit IDB + LS, garde le cycle le plus élevé, applique à S
-// v124 : si le snapshot retenu est allégé (LS), complète depuis l'IDB.
+// Si le snapshot retenu est allégé (LS), complète depuis l'IDB.
 // ════════════════════════════════════════════════════════════════════════
 async function loadState() {
   const dbg = [];
@@ -244,7 +249,7 @@ async function loadState() {
   }
   snap = (cIDB >= cLS) ? snapIDB : snapLS;
 
-  // ─── v124 : FUSION ANTI-PERTE ───────────────────────────────────────
+  // ─── FUSION ANTI-PERTE ───────────────────────────────────────
   // Si le snapshot retenu est la version ALLÉGÉE du localStorage, ses grosses
   // clés sont absentes. On les complète depuis l'IDB (qui est complet).
   // Garde-fou absolu : agents/mémoires/candles ne peuvent jamais disparaître.
@@ -610,10 +615,9 @@ window._showRecoveryBanner = _showRecoveryBanner;
 
 
 // ════════════════════════════════════════════════════════════════════════
-// v123 — HOOKS DE FERMETURE SYNCHRONES
-// v124 : le flush de sortie garde le snapshot COMPLET en LS (sécurité max au
-//        moment le plus risqué — quitte à dépasser brièvement, la fiabilité
-//        prime à la fermeture). L'autosave courant, lui, reste allégé.
+// HOOKS DE FERMETURE SYNCHRONES
+// Le flush de sortie écrit la version ALLÉGÉE en LS (l'IDB synchrone garde le
+// complet juste avant), ce qui évite de re-saturer le quota à la fermeture.
 // ════════════════════════════════════════════════════════════════════════
 function _flushSyncOnExit(reason) {
   try {
@@ -634,7 +638,7 @@ function _flushSyncOnExit(reason) {
         const lsCycle   = (currentLS && typeof currentLS.cycle === 'number') ? currentLS.cycle : -1;
         const snapCycle = (typeof snap.cycle === 'number') ? snap.cycle : -1;
         if (lsCycle > snapCycle + 5) {
-          console.warn('[flush ' + reason + ' v124] BLOQUÉ anti-régression : cycle ' + snapCycle + ' < LS#' + lsCycle);
+          console.warn('[flush ' + reason + '] BLOQUÉ anti-régression : cycle ' + snapCycle + ' < LS#' + lsCycle);
           return;
         }
       }
@@ -666,9 +670,9 @@ function _flushSyncOnExit(reason) {
       console.warn('[flush ' + reason + '] LS error:', e.message);
     }
 
-    console.log('[flush v124] ' + reason + ' · cycle ' + (snap.cycle || '?'));
+    console.log('[flush] ' + reason + ' · cycle ' + (snap.cycle || '?'));
   } catch (e) {
-    console.warn('[flush v124] ' + reason + ' a planté:', e);
+    console.warn('[flush] ' + reason + ' a planté:', e);
   }
 }
 
@@ -695,4 +699,23 @@ document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'hidden') _flushSyncOnExit('visibility-hidden');
 });
 
-console.log('[09b2 v124] ✅ hooks installés · LS allégé (anti-saturation) · IDB complet · fusion anti-perte au load');
+// ─── AUTOSAVE PÉRIODIQUE ────────────────────────────────────────────
+// scheduleAutoSave est appelé au boot par 09k-init mais n'était défini nulle
+// part → l'autosave périodique n'existait pas, le localStorage n'était réécrit
+// (en version allégée) que sur événements rares (changement de mode, coupure
+// réseau). On installe ici un autosave toutes les 10 s, anti-empilement.
+let _autoSaveTimer = null;
+function scheduleAutoSave() {
+  if (_autoSaveTimer) return;           // déjà installé : pas de doublon
+  _autoSaveTimer = setInterval(function () {
+    try {
+      if (typeof window !== 'undefined' && window._stateReady === true
+          && typeof saveState === 'function') {
+        saveState(true);                // silent : pas de toast
+      }
+    } catch (e) {}
+  }, 10000);
+}
+window.scheduleAutoSave = scheduleAutoSave;
+
+console.log('[09b2 v125] ✅ hooks + autosave 10s installés · LS allégé · IDB complet · fusion au load');

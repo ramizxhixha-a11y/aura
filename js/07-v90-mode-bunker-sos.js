@@ -76,9 +76,9 @@ function activateBunker(dropPct) {
 
   // Actions immédiates
   if(cfg.actions.pauseBot) {
-  // S.botAutoMode = false;
-  // S.mode = 'manual';
-  // (S.agents||[]).forEach(a=>{ a._bunkerPaused=true; });
+    // Pause du bot via un flag DÉDIÉ au bunker — ne touche JAMAIS botAutoMode
+    // (axe utilisateur seul). autoOpenPosition consulte ce flag pour s'abstenir.
+    cfg.pausedByBunker = true;
   }
   if(cfg.actions.reduceMises) {
     const prevStake = S.stakeConfig?.defaultStake||S.stakeUsdt||20;
@@ -153,6 +153,7 @@ function exitBunker() {
   if(cap>0) localStorage.setItem(_BK_CAP_REF_KEY, cap.toString());
 
   cfg.active = false;
+  cfg.pausedByBunker = false;
   document.getElementById('bunkerBanner')?.classList.remove('show');
   document.getElementById('pages')?.style.removeProperty('padding-top');
   showToast('🏳️ Mode Bunker levé — Capital référence réinitialisé', 3000, 'win');
@@ -634,13 +635,6 @@ window.showMotivationalQuote = showMotivationalQuote;
 
 // Afficher une citation après chaque trade gagnant
 const _origCheckBadges = typeof checkBadges==='function' ? checkBadges : null;
-function _maybeShowQuote() {
-  const lastT = Object.values(S.pairStates||{}).flatMap(ps=>ps.trades||[]).filter(t=>t.type==='position').sort((a,b)=>(b.ts||0)-(a.ts||0))[0];
-  if(lastT&&(lastT.pnlUsdt||0)>0&&(Date.now()-(lastT.ts||0))<5000) {
-    setTimeout(showMotivationalQuote, 1500);
-  }
-}
-
 function renderCitationSection() {
   const el = document.getElementById('citationSection');
   if(!el) return;
@@ -1099,16 +1093,20 @@ function _renderOutilsTab() {
         // Mapper les IDs de section vers les bons éléments
         const el = document.getElementById(s.id);
         if(el) {
-          // Hack : temporairement renommer l'ID si besoin
+          // Sections avec suffixe '2' (ex: alertsSection2) qui partagent une
+          // fonction de rendu cherchant l'ID sans suffixe : on prête l'ID le temps
+          // du rendu. try/finally garantit la restauration même si le rendu plante.
           const origId = s.id.replace(/2$/, '');
           if(origId !== s.id) {
-            // section avec ID modifié (alertsSection2 etc)
             const orig = document.getElementById(origId);
-            if(orig) orig.id = s.id + '_bak';
-            el.id = origId;
-            window[s.render]();
-            el.id = s.id;
-            if(orig) orig.id = origId;
+            try {
+              if(orig) orig.id = s.id + '_bak';
+              el.id = origId;
+              window[s.render]();
+            } finally {
+              el.id = s.id;
+              if(orig) orig.id = origId;
+            }
           } else {
             window[s.render]();
           }
@@ -2204,11 +2202,6 @@ function _calcBotTpSl(pair, side) {
 window._calcBotTpSl = _calcBotTpSl;
 
 // Formater prix selon la paire
-function _fmtTpSlPrice(pair, price) {
-  const cfg = PAIRS[pair];
-  if(!cfg) return price.toFixed(2);
-  return cfg.dec >= 4 ? price.toFixed(cfg.dec) : '$'+Math.floor(price).toLocaleString();
-}
 
 // Renforcer position existante (augmenter la mise de 20%)
 function manuReinforce(pair) {
@@ -2819,7 +2812,7 @@ function proposeDynamicPair() {
   S.activePairProposal = chosen.sym;
   _pairProposalCooldown = S.cycle + 120;
 
-  
+
   const totalFit = S.agents.reduce((s,a)=>s+(a.fitness||1),0);
   const forVotes = Math.round(
     S.agents.filter(a => a.score > 0 || a.role === 'fundamental')
@@ -2950,16 +2943,16 @@ function learnFromOpenPositions() {
 
     // ═══ v7.12 · PACK RÉSILIENCE · 3 nouvelles stratégies de sortie ═══
     // Applicables à TOUTES les positions (auto et manuelles)
-    
+
     // Calculer le P&L % courant
     const _cExitPct = pos.side === 'long'
       ? ((cur - pos.entryPrice) / pos.entryPrice) * 100
       : ((pos.entryPrice - cur) / pos.entryPrice) * 100;
-    
+
     // Mémoriser le peak P&L pour trailing stop
     if (!pos._peakPct) pos._peakPct = 0;
     if (_cExitPct > pos._peakPct) pos._peakPct = _cExitPct;
-    
+
     // ── A. TRAILING STOP ──
     // Si on a atteint un pic de +1% min et qu'on retombe de 0.5 points par rapport au pic,
     // on ferme pour verrouiller le gain.
@@ -2978,7 +2971,7 @@ function learnFromOpenPositions() {
         return;
       }
     }
-    
+
     // ── C. TIMER ANTI-ZOMBIE ──
     // Si position ouverte > 30 min ET P&L entre -0.3% et +0.3% (flat) → fermer
     const posAgeMs = Date.now() - (pos.openedAt || Date.now());
@@ -2993,7 +2986,7 @@ function learnFromOpenPositions() {
       if (typeof showToast === 'function') showToast('⏱ ' + pos.pair + ' fermé (30min flat)', 2500, 'user');
       return;
     }
-    
+
     // ── D. CONSENSUS SWITCH ──
     // Si le consensus du Brain bascule à l'opposé de notre side
     // (LONG détient, Brain vote SHORT fortement → fermer)
@@ -3211,7 +3204,7 @@ function _confirmFactoryReset() {
 }
 window._confirmFactoryReset = _confirmFactoryReset;
 
-// v8.0 LIVRAISON 41 · Wrapper RESET COMPLET COHÉRENT 
+// v8.0 LIVRAISON 41 · Wrapper RESET COMPLET COHÉRENT
 
 function _confirmFullCoherentReset() {
   const msg = 'RESET COMPLET COHÉRENT ?\n\n' +
@@ -3226,28 +3219,28 @@ function _confirmFullCoherentReset() {
     'NE TOUCHE PAS À : portfolio, agents, bots, paramètres.\n\n' +
     'Continuer ?';
   if (!confirm(msg)) return;
-  
+
   try {
-    
+
     S.paperRealStats = {};
-    
+
     // v8.0 LIVRAISON 41 FIX · heatmap structure réelle byHour + byWeekday
     S.heatmap = { byHour: {}, byWeekday: {} };
-    
+
     // Reset loss streaks
     S._lossStreaks = {};
-    
+
     // Reset kill switches
     S.paperRealKillSwitch = {};
-    
+
     // v8.0 LIVRAISON 41 FIX · tradeContextMemory est un ARRAY (pas un objet)
     S.tradeContextMemory = [];
-    
+
     // Reset compteurs globaux
     S.totalTrades = 0;
     S.winTrades = 0;
     S.paperRealConsecLosses = 0;
-    
+
     // Reset fees byPair ET totaux (v11quinquies FIX)
     if (S.fees && S.fees.byPair) {
       Object.keys(S.fees.byPair).forEach(pair => {
@@ -3257,7 +3250,7 @@ function _confirmFullCoherentReset() {
     S.fees.totalFees    = 0;
     S.fees.totalPnlGross = 0;
     S.fees.totalPnlNet  = 0;
-    
+
     // v11quinquies FIX : reset pnlHistory + recalibrer _startPortfolio
     S.pnlHistory = [];
     const _now = (S.cashAccount||0) + (S.tradingAccount||0);
@@ -3266,7 +3259,7 @@ function _confirmFullCoherentReset() {
       S.pnlPeriod.todayStartPortfolio = _now;
       S.pnlPeriod.weekStartPortfolio  = _now;
     }
-    
+
     // Reset pairStates.trades (la liste des trades par paire)
     Object.keys(S.pairStates || {}).forEach(pair => {
       if (S.pairStates[pair].trades) S.pairStates[pair].trades = [];
@@ -3274,14 +3267,14 @@ function _confirmFullCoherentReset() {
       if (S.pairStates[pair].winTrades !== undefined) S.pairStates[pair].winTrades = 0;
       if (S.pairStates[pair].totalPnlUsd !== undefined) S.pairStates[pair].totalPnlUsd = 0;
     });
-    
+
     // Sauvegarde immédiate
     if (typeof saveState === 'function') saveState();
-    
+
     if (typeof showToast === 'function') {
       showToast('✅ Reset complet cohérent effectué', 4000, 'user');
     }
-    
+
     // Refresh UI
     if (typeof renderHome === 'function') renderHome();
     if (typeof renderSettingsPanel === 'function') renderSettingsPanel();
@@ -4868,13 +4861,13 @@ function renderHome() {
       levEl3.textContent = `Emprunté: ${fmt$(S.leverageBorrowed)} (${levUtil}%)`;
       levEl3.style.color = levUtil > 70 ? 'var(--down)' : levUtil > 40 ? 'var(--gold)' : 'var(--down)';
     }
-    
+
     // ═══ v7.12 · Q1:D · Alerte visible si capacité levier > 90% ═══
     // Calcul de la capacité absolue (base × mult, pas base × mult × index)
     const _p9Base = (S._autoLevBase && S._autoLevBase > 0) ? S._autoLevBase : (S.tradingAccount || 0);
     const _p9MaxCap = _p9Base * (S.leverageMaxMult || 10);
     const _p9UsagePct = _p9MaxCap > 0 ? ((S.leverageBorrowed || 0) / _p9MaxCap) * 100 : 0;
-    
+
     let _p9Alert = document.getElementById('p9LevAlert');
     if (!_p9Alert && levEl3 && levEl3.parentNode) {
       _p9Alert = document.createElement('div');
