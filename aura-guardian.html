@@ -286,7 +286,7 @@ const REF_BUGS = [
    detect:c=>{if(c.S&&c.S.fullPowerMode===true)return{hit:true,info:'fullPowerMode=true actuellement actif'};const code=c.code&&c.code['04-v8-0-livraison-35-mode-max-permissif-v.js'];if(code){const m=code.match(/function enableFullPowerMode[\s\S]*?\n\}/);const body=m?m[0]:'';if(/botAutoMode\s*=\s*true/.test(body))return{hit:true,info:'enableFullPowerMode() force botAutoMode=true (interdit) \u2192 \u00e0 retirer'};}return{hit:false,info:'Plein R\u00e9gime inactif, code sans for\u00e7age botAutoMode'};}},
   {id:'BUG-003',nom:'D\u00e9sync mode UI/storage',statut:'r\u00e9solu',fichier:'02-state-init.js',prio:'\u2014',
    desc:'Le mode affich\u00e9 (UI AUTO/MANU) doit \u00e9galer le mode stock\u00e9 (S.botAutoMode).',
-   detect:c=>{if(!c.S)return{hit:false,info:'\u00e9tat non charg\u00e9 \u2014 d\u00e9tection indisponible'};const el=document.getElementById('modeLabelText');if(!el)return{hit:false,info:'UI absente (page s\u00e9par\u00e9e) \u2014 comparaison possible seulement int\u00e9gr\u00e9 dans AURA'};const ui=el.textContent.trim().toUpperCase();const stored=c.S.botAutoMode?'AUTO':'MANU';if(ui&&ui!==stored)return{hit:true,info:'UI affiche '+ui+' mais S.botAutoMode='+stored+' \u2192 d\u00e9sync'};return{hit:false,info:'UI ('+ui+') = stock\u00e9 ('+stored+') \u2192 coh\u00e9rent'};}},
+   detect:c=>{if(!c.S)return{hit:false,info:'\u00e9tat non charg\u00e9 \u2014 d\u00e9tection indisponible'};const el=document.getElementById('modeLabelText');if(!el)return{hit:false,info:'UI absente (page s\u00e9par\u00e9e) \u2014 comparaison possible seulement int\u00e9gr\u00e9 dans AURA'};const norm=function(v){v=(v||'').trim().toUpperCase();if(v==='MAN'||v==='MANU')return'MANU';if(v==='AUTO')return'AUTO';return v;};const ui=norm(el.textContent);const stored=c.S.botAutoMode?'AUTO':'MANU';if(ui&&ui!==stored)return{hit:true,info:'UI affiche '+el.textContent.trim()+' mais S.botAutoMode='+stored+' \u2192 d\u00e9sync'};return{hit:false,info:'UI ('+el.textContent.trim()+') = stock\u00e9 ('+stored+') \u2192 coh\u00e9rent'};}},
   {id:'BUG-004',nom:'renderAll() manquant dans loadState()',statut:'r\u00e9solu',fichier:'09b2-save-load.js',prio:'P3',
    desc:'loadState() doit appeler renderAll() \u00e0 la fin, sinon les cartes restent \u00e0 $0 au boot.',
    detect:c=>{const code=c.code&&c.code['09b2-save-load.js'];if(!code)return{hit:false,info:'code 09b2 non charg\u00e9 \u2014 d\u00e9tection indisponible'};const m=code.match(/async function loadState[\s\S]*?\n\}\nwindow\.loadState/);const body=m?m[0]:code;if(/renderAll\s*\(/.test(body))return{hit:false,info:'renderAll() trouv\u00e9 dans loadState() \u2192 fix appliqu\u00e9'};return{hit:true,info:'renderAll() ABSENT de loadState() \u2192 cartes \u00e0 $0 au boot'};}},
@@ -357,14 +357,14 @@ const CTX={loaded:false,lsRaw:null,idbRaw:null,lsSnap:null,idbSnap:null,S:null,l
 async function collectState(){
   CTX.loaded=false;
   CTX.lsRaw=lsGet(SAVE_KEY);CTX.lsSnap=CTX.lsRaw?safeParse(CTX.lsRaw):null;
-  CTX.lsSize=CTX.lsRaw?CTX.lsRaw.length:null;
+  CTX.lsSize=CTX.lsRaw?CTX.lsRaw.length*2:null;
   CTX.lsCycle=CTX.lsSnap&&typeof CTX.lsSnap.cycle==='number'?CTX.lsSnap.cycle:null;
   CTX.lsSavedAt=CTX.lsSnap&&CTX.lsSnap.savedAt?CTX.lsSnap.savedAt:null;
   try{
     const db=await openDBNamed(DB_NAME,DB_VERSION);
     if(db){const v=await idbGet(db,STORE,SAVE_KEY);
       if(v){CTX.idbSnap=(typeof v==='string')?safeParse(v):v;CTX.idbRaw=(typeof v==='string')?v:JSON.stringify(v);
-        CTX.idbSize=CTX.idbRaw?CTX.idbRaw.length:null;
+        CTX.idbSize=CTX.idbRaw?CTX.idbRaw.length*2:null;
         CTX.idbCycle=CTX.idbSnap&&typeof CTX.idbSnap.cycle==='number'?CTX.idbSnap.cycle:null;
         CTX.idbSavedAt=CTX.idbSnap&&CTX.idbSnap.savedAt?CTX.idbSnap.savedAt:null;}
       try{db.close();}catch(e){}}
@@ -697,7 +697,12 @@ VIEWS.storage=function(){
 VIEW_INIT.storage=function(){
   const box=document.getElementById('lsKeysBox');if(!box)return;
   const keys=lsKeys().map(k=>({k,sz:getKeySize(k)})).sort((a,b)=>b.sz-a.sz);
-  box.innerHTML=keys.length?keys.map(o=>'<div class="log-entry"><span class="log-event">'+escapeHtml(o.k)+'</span> <span class="log-time">'+fmtBytes(o.sz)+'</span></div>').join(''):'<div class="hint">Aucune cl\u00e9.</div>';
+  // Detection dynamique : toute cle >100 Ko en rouge, >50 Ko en orange (pas de liste figee).
+  box.innerHTML=keys.length?keys.map(function(o){
+    var col = o.sz>100*1024 ? 'var(--crit,#ff4d6e)' : (o.sz>50*1024 ? 'var(--gold,#f5c842)' : '');
+    var flag = o.sz>100*1024 ? ' \u26a0' : '';
+    return '<div class="log-entry"><span class="log-event"'+(col?' style="color:'+col+'"':'')+'>'+escapeHtml(o.k)+flag+'</span> <span class="log-time"'+(col?' style="color:'+col+'"':'')+'>'+fmtBytes(o.sz)+'</span></div>';
+  }).join(''):'<div class="hint">Aucune cl\u00e9.</div>';
 };
 
 /* ============================================================
@@ -970,9 +975,9 @@ VIEWS.clean=function(){
 VIEW_INIT.clean=function(){
   function analyze(){let total=0;const keys=[];for(const k of lsKeys()){const sz=getKeySize(k);total+=sz;keys.push({key:k,size:sz});}keys.sort((a,b)=>b.size-a.size);return {total,keys};}
   function render(){
-    const a=analyze();const limit=10*1024*1024;
+    const a=analyze();const limit=5*1024*1024;
     let obsoleteTotal=0;OBSOLETE_KEYS.forEach(k=>obsoleteTotal+=getKeySize(k));
-    let h=rowKV('Total localStorage',fmtBytes(a.total)+' / ~'+fmtBytes(limit),a.total>limit*0.9?'crit':'');
+    let h=rowKV('Total localStorage',fmtBytes(a.total)+' / ~'+fmtBytes(limit),a.total>limit*0.8?'crit':(a.total>limit*0.6?'warn':'ok'));
     h+=rowKV('Cl\u00e9s stock\u00e9es',a.keys.length);
     OBSOLETE_KEYS.forEach(k=>{const s=getKeySize(k);h+=rowKV(k,s>0?fmtBytes(s):'absent',s>100*1024?'crit':(s>0?'warn':'muted'));});
     h+=rowKV('Obsol\u00e8tes \u00e0 lib\u00e9rer',fmtBytes(obsoleteTotal),obsoleteTotal>0?'warn':'');
@@ -1279,7 +1284,7 @@ VIEW_INIT.autobackup=function(){
   document.getElementById('abNow').onclick=async()=>{
     const btn=document.getElementById('abNow'); btn.textContent='⏳…'; btn.disabled=true;
     const r=await A.run(true);
-    btn.textContent= r.ok ? '✓ Backup #'+r.cycle : '✗ '+(r.reason||'échec'); 
+    btn.textContent= r.ok ? '✓ Backup #'+r.cycle : '✗ '+(r.reason||'échec');
     setTimeout(()=>switchTab('autobackup'),1200);
   };
   // section Données Guardian (téléchargement hors-navigateur de SES données)
