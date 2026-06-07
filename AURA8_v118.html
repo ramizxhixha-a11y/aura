@@ -330,6 +330,26 @@ body.real-mode-active { padding-top: 16px; }
             </div>
           </div>
         </div>
+        <!-- Réserve anti-négatif (livraison trading · juin 2026) -->
+        <div class="wc-accounts" style="padding-top:8px;border-top:1px dashed rgba(255,255,255,.06);margin-top:6px;">
+          <div class="wc-account">
+            <div class="wc-acc-icon">🛡️</div>
+            <div class="wc-acc-body">
+              <div class="wc-acc-label" title="Frais + intérêts mis de côté à l'ouverture de chaque trade pour que le compte ne soit jamais négatif">Réserve Anti-Négatif</div>
+              <div class="wc-acc-value" id="antiNegReserveVal" style="color:var(--ice);">$0</div>
+              <div class="wc-acc-sub" id="antiNegReserveSub" style="color:var(--t3);font-size:8px;">0 trade couvert</div>
+            </div>
+          </div>
+          <div class="wc-account-sep"></div>
+          <div class="wc-account">
+            <div class="wc-acc-icon">🏛️</div>
+            <div class="wc-acc-body">
+              <div class="wc-acc-label" title="Régime fiscal réellement appliqué selon le comportement du bot">Régime Fiscal</div>
+              <div class="wc-acc-value" id="fiscalRegimeVal" style="color:var(--gold);font-size:13px;">—</div>
+              <div class="wc-acc-sub" id="fiscalRegimeSub" style="color:var(--t3);font-size:8px;">en attente</div>
+            </div>
+          </div>
+        </div>
         <!-- v7.12 · Barre allocation Caisse/Trading/Positions (restaurée) -->
         <div class="wc-alloc-bar">
           <div class="wc-alloc-cash"  id="wAllocCash"  style="width:35%"></div>
