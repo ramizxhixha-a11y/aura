@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="google" content="notranslate">
+<title>SW Reset — AURA</title>
+<style>
+  body{margin:0;background:#0a0e16;color:#e8ecf4;font-family:-apple-system,system-ui,sans-serif;display:flex;min-height:100vh;align-items:center;justify-content:center;padding:20px}
+  .card{max-width:520px;width:100%;background:#121826;border:1px solid #1e2940;border-radius:16px;padding:24px;box-shadow:0 8px 40px rgba(0,0,0,.5)}
+  h1{font-size:18px;margin:0 0 4px;color:#38d4f5}
+  .sub{font-size:13px;color:#8b97ad;margin:0 0 18px}
+  .log{background:#0a0e16;border:1px solid #1e2940;border-radius:10px;padding:14px;font-family:monospace;font-size:12px;line-height:1.7;white-space:pre-wrap;min-height:120px;margin-bottom:16px}
+  .ok{color:#00e87a}.warn{color:#f5c842}.err{color:#ff4d6e}.dim{color:#8b97ad}
+  button{width:100%;border:none;border-radius:10px;padding:14px;font-size:14px;font-weight:800;cursor:pointer;margin-top:8px}
+  .go{background:linear-gradient(135deg,#38d4f5,#00e87a);color:#04121a}
+  .open{background:#1e2940;color:#e8ecf4;border:1px solid #38d4f5}
+  .note{font-size:11px;color:#8b97ad;margin-top:14px;line-height:1.6}
+</style>
+</head>
+<body>
+<div class="card">
+  <h1>🛡️ SW Reset — AURA</h1>
+  <p class="sub">Désinscrit le service worker et vide SES caches. Ne touche JAMAIS à localStorage ni IndexedDB : ton état AURA et tes backups sont intacts.</p>
+  <div class="log" id="log">Prêt. Appuie sur « Désinscrire & vider les caches SW ».</div>
+  <button class="go" id="go">Désinscrire &amp; vider les caches SW</button>
+  <button class="open" id="open">Ouvrir AURA (code neuf)</button>
+  <p class="note">Après désinscription, ouvre AURA : le navigateur ira chercher les fichiers JS neufs sur le réseau. Ton état (cycle, agents, portefeuille) n'est pas affecté.</p>
+</div>
+<script>
+const logEl = document.getElementById('log');
+function line(txt, cls){ const s=document.createElement('div'); if(cls)s.className=cls; s.textContent=txt; logEl.appendChild(s); }
+function clearLog(){ logEl.textContent=''; }
+
+document.getElementById('go').onclick = async () => {
+  clearLog();
+  line('▶ Démarrage…', 'dim');
+
+  // 1. Désinscrire tous les service workers
+  try {
+    if ('serviceWorker' in navigator) {
+      const regs = await navigator.serviceWorker.getRegistrations();
+      if (regs.length === 0) {
+        line('• Aucun service worker enregistré.', 'dim');
+      } else {
+        for (const r of regs) {
+          const ok = await r.unregister();
+          line('• SW désinscrit : ' + (r.scope || '?') + (ok ? ' ✅' : ' ⚠️'), ok ? 'ok' : 'warn');
+        }
+      }
+    } else {
+      line('• serviceWorker non supporté par ce navigateur.', 'warn');
+    }
+  } catch (e) {
+    line('✗ Erreur désinscription : ' + e.message, 'err');
+  }
+
+  // 2. Vider les caches du SW (Cache API) — PAS localStorage ni IndexedDB
+  try {
+    if ('caches' in window) {
+      const keys = await caches.keys();
+      if (keys.length === 0) {
+        line('• Aucun cache à vider.', 'dim');
+      } else {
+        for (const k of keys) {
+          await caches.delete(k);
+          line('• Cache vidé : ' + k + ' ✅', 'ok');
+        }
+      }
+    } else {
+      line('• Cache API non disponible.', 'dim');
+    }
+  } catch (e) {
+    line('✗ Erreur vidage cache : ' + e.message, 'err');
+  }
+
+  // 3. Confirmer que le storage est intact
+  try {
+    const ls = localStorage.getItem('nexus_state_v2');
+    if (ls) {
+      let cyc = '?';
+      try { cyc = JSON.parse(ls).cycle; } catch(e){}
+      line('• localStorage intact : nexus_state_v2 présent (cycle #' + cyc + ') ✅', 'ok');
+    } else {
+      line('• localStorage : nexus_state_v2 absent.', 'warn');
+    }
+  } catch (e) {
+    line('• Vérif localStorage : ' + e.message, 'warn');
+  }
+
+  line('', 'dim');
+  line('✅ Terminé. Ouvre AURA : le code neuf sera chargé.', 'ok');
+};
+
+document.getElementById('open').onclick = () => {
+  const v = 'reset' + Date.now();
+  location.href = 'AURA8_v118.html?v=' + v;
+};
+</script>
+</body>
+</html>
