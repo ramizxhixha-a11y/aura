@@ -582,6 +582,30 @@ function renderFiscalGlobal() {
       }).join('');
 
   sumEl.innerHTML = `
+    <!-- RÉGIME FISCAL APPLIQUÉ (réveil bot fiscal · juin 2026) -->
+    ${(function(){
+      if (typeof detectFiscalRegime !== 'function') return '';
+      const _fr = detectFiscalRegime();
+      const _col = _fr.isSpec ? 'var(--down)' : 'var(--up)';
+      const _bg  = _fr.isSpec ? 'rgba(255,61,107,.08)' : 'rgba(0,232,122,.06)';
+      const _annual = (typeof getAnnualNetRealised==='function') ? getAnnualNetRealised() : 0;
+      const _frTxt = _fr.franchise > 0
+        ? `Franchise ${_fr.franchise.toLocaleString('fr-FR')}€ · cumul annuel net $${_annual.toFixed(0)}`
+        : 'Pas de franchise dans ce pays';
+      const _ltTxt = _fr.longTermMonths > 0
+        ? `<div style="font-size:9px;color:var(--ice);margin-top:3px;">⏳ Détention >${_fr.longTermMonths} mois = régime allégé/exonéré ici</div>` : '';
+      return `<div style="background:${_bg};border:1px solid ${_col}33;border-radius:14px;padding:12px 14px;margin-bottom:10px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;">
+          <div>
+            <div style="font-size:10px;font-weight:700;color:${_col};text-transform:uppercase;letter-spacing:.06em;">${_fr.isSpec ? '⚠ Régime spéculatif' : '✅ Gestion normale'}</div>
+            <div style="font-size:9px;color:var(--t3);margin-top:2px;">${_fr.reason} · taux appliqué <b style="color:${_col};">${(_fr.rate*100).toFixed(_fr.rate*100%1===0?0:1)}%</b></div>
+          </div>
+          <div style="text-align:right;font-size:9px;color:var(--t3);">${_frTxt}</div>
+        </div>
+        ${_ltTxt}
+      </div>` ;
+    })()}
+
     <!-- COMPTE RÉSERVE SÉPARÉ -->
     <div class="fee-reserve-card">
       <div class="fee-reserve-top">
@@ -596,6 +620,11 @@ function renderFiscalGlobal() {
         </div>
       </div>
       <div class="fee-reserve-breakdown">
+        <!-- RÉSERVE ANTI-NÉGATIF (livraison trading · juin 2026) -->
+        <div class="fee-reserve-item" style="background:rgba(56,212,245,.05);border-radius:6px;padding:4px 6px;">
+          <span class="fee-reserve-item-label" style="font-weight:600;">🛡️ Réserve anti-négatif <span style="font-size:9px;color:var(--t3);">· ${(S.openPositions||[]).filter(p=>p._reservedAmount>0).length} trade(s) couvert(s)</span></span>
+          <span class="fee-reserve-item-val" style="color:var(--ice);font-weight:700;">$${(S.antiNegReserve||0).toFixed(2)}</span>
+        </div>
         <div class="fee-reserve-item">
           <span class="fee-reserve-item-label">Exchange</span>
           <span class="fee-reserve-item-val" style="color:var(--down);">$${f.totalTradingFees.toFixed(2)}</span>
