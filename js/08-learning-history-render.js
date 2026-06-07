@@ -909,7 +909,20 @@ function renderFiscalTax() {
         </div>
       </div>
       <div class="tax-note">${reg.note}</div>
-      ${S.taxConfig.region==='BE' ? `<div style="margin-top:6px;padding:6px 10px;background:rgba(0,232,122,.06);border-radius:8px;font-size:9px;color:var(--up);">🇧🇪 Régime par défaut : exonéré. En cas de spéculation active, 33% pourrait s'appliquer.</div>` : ''}
+      ${(function(){
+        if (typeof detectFiscalRegime !== 'function') return '';
+        const _fr = detectFiscalRegime();
+        const _col = _fr.isSpec ? 'var(--down)' : 'var(--up)';
+        const _bg  = _fr.isSpec ? 'rgba(255,61,107,.08)' : 'rgba(0,232,122,.06)';
+        const _ltNote = _fr.longTermMonths > 0
+          ? ` · Détention >${_fr.longTermMonths} mois = régime allégé/exonéré dans ce pays`
+          : '';
+        const _frNote = _fr.franchise > 0
+          ? ` · Franchise annuelle ${_fr.franchise.toLocaleString('fr-FR')}€`
+          : '';
+        return `<div style="margin-top:6px;padding:6px 10px;background:${_bg};border-radius:8px;font-size:9px;color:${_col};">
+          ${_fr.isSpec ? '⚠ Régime SPÉCULATIF détecté' : '✅ Gestion normale'} (${_fr.reason}) · taux appliqué ${(_fr.rate*100).toFixed(_fr.rate*100%1===0?0:1)}%${_frNote}${_ltNote}</div>`;
+      })()}
     </div>
 
     <div style="background:var(--s1);border:1px solid var(--border);border-radius:14px;overflow:hidden;margin-bottom:10px;">
@@ -950,7 +963,8 @@ function renderFiscalTax() {
           • Différer les trades rentables en fin d'année si possible<br>
           • Compenser avec des pertes latentes d'autres paires<br>
           • Méthode FIFO ou coût moyen selon avantage régional<br>
-          ${S.taxConfig.region==='BE' ? '• Conserver des preuves d\'investissement long-terme pour soutenir le régime exonéré' : ''}
+          ${S.taxConfig.region==='BE' ? '• Rester sous la franchise de 10 000€/an de plus-values nettes maintient l’exonération<br>• Éviter le levier et la haute fréquence pour rester en régime normal (10% au lieu de 33%)' : ''}
+          ${(S.taxConfig.region==='DE'||S.taxConfig.region==='PT') ? '• Conserver >1 an exonère totalement la plus-value dans ce pays' : ''}
           ${S.taxConfig.region==='CA' ? '• Utiliser le CELI/REER pour abri fiscal' : ''}
           • Seuil de déclaration approx.: <span style="color:var(--gold);">${S.taxConfig.region==='CA'?'pas de seuil min.':S.taxConfig.region==='US'?'>$600':'vérifier localement'}</span>
         </div>

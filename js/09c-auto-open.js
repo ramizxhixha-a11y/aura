@@ -471,6 +471,19 @@ function autoOpenPosition(pair, side, stakeOverride) {
     S.tradingAccount = Math.max(0, S.tradingAccount - baseStake);
   }
 
+  // ──────────────────────────────────────────────────────────────
+  // RÉSERVE ANTI-NÉGATIF — coût garanti d'aller-retour mis de côté
+  // (frais entrée+sortie+slippage+intérêts levier estimés). La taxe n'est
+  // PAS réservée ici (gain inconnu) ; elle est provisionnée à la clôture.
+  // ──────────────────────────────────────────────────────────────
+  let _reservedAmount = 0;
+  try {
+    if (typeof estimateTradeReserve === 'function' && typeof holdTradeReserve === 'function') {
+      const _est = estimateTradeReserve(stakeUsdt, (levBorrowed || 0) + _jitBorrowed);
+      _reservedAmount = holdTradeReserve(_est.total, pair);
+    }
+  } catch (e) { console.warn('antiNeg reserve:', e); }
+
   S.portfolio = S.cashAccount + S.tradingAccount;
 
   // Consommer le pending de borrow pour qu'il ne reste pas en suspens
@@ -500,6 +513,7 @@ function autoOpenPosition(pair, side, stakeOverride) {
     sl:            null,
     _paperRealMode: (S.tradingMode === 'paperReal'),
     _holdCycles:   0,
+    _reservedAmount: _reservedAmount,               // réserve anti-négatif mise de côté à l'ouverture
     conviction:    (typeof effectiveConviction !== 'undefined' ? effectiveConviction : lmsrP(ps)) || 0,
     _peakPnl:      0,
 

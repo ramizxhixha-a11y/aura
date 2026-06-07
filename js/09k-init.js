@@ -37,6 +37,26 @@ function _renderWalletCards() {
     const ownSub = document.getElementById('ownFundsSub');
     if (ownSub) ownSub.textContent = (S.ownFundsLog||[]).length + ' injection' + ((S.ownFundsLog||[]).length > 1 ? 's' : '');
 
+    // Réserve anti-négatif (livraison trading · juin 2026)
+    setEl('antiNegReserveVal', fmt2(S.antiNegReserve || 0));
+    const anSub = document.getElementById('antiNegReserveSub');
+    if (anSub) {
+      const _cov = (S.openPositions||[]).filter(p => p._reservedAmount > 0).length;
+      anSub.textContent = _cov + ' trade' + (_cov > 1 ? 's' : '') + ' couvert' + (_cov > 1 ? 's' : '');
+    }
+
+    // Régime fiscal appliqué (normal / spéculatif)
+    if (typeof detectFiscalRegime === 'function') {
+      const _fr = detectFiscalRegime();
+      const frVal = document.getElementById('fiscalRegimeVal');
+      const frSub = document.getElementById('fiscalRegimeSub');
+      if (frVal) {
+        frVal.textContent = (_fr.rate * 100).toFixed(_fr.rate*100 % 1 === 0 ? 0 : 1) + '%';
+        frVal.style.color = _fr.isSpec ? 'var(--down)' : 'var(--up)';
+      }
+      if (frSub) frSub.textContent = (_fr.isSpec ? '⚠ Spéculatif · ' : 'Normal · ') + _fr.reason;
+    }
+
     // Portefeuille total
     const totalEUR = ((S.cashAccount||0) + (S.tradingAccount||0) + (S.fiscalReserveAccount||0)) * (S.usdEurRate||0.92);
     const ptEl = document.querySelector('.portfolio-total-value, #portfolioTotalVal, [data-portfolio-total]');

@@ -1698,9 +1698,26 @@ function _resolvePairCycleCore(pair, ps) {
   const _fc      = S.feeConfig;
   const _reg     = S.taxConfig.regions[S.taxConfig.region];
   const _feePct  = (_fc.takerRate + _fc.slippage) * 2 + _fc.fundingRate * 3;
-  const _taxPct  = (_reg?.inclusion||0) * (_reg?.rate||0);
+  // Taux fiscal réellement applicable (régime normal/spéculatif détecté) — cohérent recordFees
+  const _frBE = (typeof detectFiscalRegime === 'function') ? detectFiscalRegime() : { rate:(_reg?.rate||0), inclusion:(_reg?.inclusion||0) };
+  const _taxPct  = (_frBE.inclusion||0) * (_frBE.rate||0);
   const _breakEven = _feePct + _taxPct;
-  if(effectiveConviction < _breakEven * 1.5) {
+  // ── BOT FISCAL · avis d'optimisation des frais PAR PAIRE (consulté par le décisionnaire) ──
+  // Estime le TP visé pour évaluer le poids des frais+taxes ; durcit le seuil si défavorable.
+  // Optimise sans interdire : un signal très fort peut toujours passer.
+  let _fiscalSeuilFactor = 1.0;
+  try {
+    if (typeof fiscalBotAdvicePerPair === 'function') {
+      const _tpGuess = Math.max(0.7, effectiveConviction * 3.2 * (1 + volCV * 9)); // même formule que tpPctE
+      const _adv = fiscalBotAdvicePerPair(pair, _tpGuess);
+      _fiscalSeuilFactor = _adv.seuilFactor || 1.0;
+      if (_adv.advice === 'défavorable' && (S.cycle % 8 === 0)) {
+        S.chainLog.push({ icon:'💎', desc:`Bot Fiscal ${pair} · ${_adv.reason} · seuil durci ×${_fiscalSeuilFactor.toFixed(2)}`, hash:rndHash(), time:nowStr() });
+        if (S.chainLog.length > 100) S.chainLog.splice(0, S.chainLog.length - 100);
+      }
+    }
+  } catch(e) {}
+  if(effectiveConviction < _breakEven * 1.5 * _fiscalSeuilFactor) {
     learnFromOutcome('cycle', 0, pair);
     ps.qYes = Math.max(20, 100 + (ps.qYes - 100) * 0.95);
     ps.qNo  = Math.max(20, 100 + (ps.qNo  - 100) * 0.95);
