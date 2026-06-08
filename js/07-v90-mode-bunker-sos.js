@@ -2578,23 +2578,58 @@ function bumpVersion(reason) {
 function triggerEvolution(weak) {
   const candidates = [...S.agents].filter(a=>!a.isBot&&!a.isMeta&&a.id!==weak.id)
                                    .sort((a,b)=>b.fitness-a.fitness);
-  const p1 = candidates[0], p2 = candidates[1];
-  if(!p1||!p2) return;
+  if(candidates.length < 2) return;
+
+  // ── ÉVOLUEUR ADAPTATIF ──────────────────────────────────────────────
+  // Le nombre de parents (2 à 6) et la mutation s'adaptent à la DIVERSITÉ de
+  // l'essaim, pour éviter à la fois la stagnation (ADN unique) et le chaos.
+  //  - essaim uniforme (agents qui pensent tous pareil) → beaucoup de parents
+  //    + forte mutation : on brasse large pour recréer de la diversité.
+  //  - essaim varié et sain → peu de parents (2) + mutation douce : on consolide
+  //    le meilleur ADN sans casser ce qui marche.
+  // Le croisement n'utilise plus le top1×top2 figé (qui clonait toujours les
+  // mêmes champions) mais une sélection par TOURNOI → parents variés.
+  const _scores = candidates.map(a => a.score || 0);
+  const _mean   = _scores.reduce((s,v)=>s+v,0) / _scores.length;
+  const _diversity = Math.sqrt(_scores.reduce((s,v)=>s+(v-_mean)**2,0) / _scores.length);
+  const _divFactor = 1 - Math.min(1, _diversity / 0.5);   // 0 (varié) → 1 (uniforme)
+  const _nbParents = Math.round(2 + _divFactor * 4);        // 2 à 6 parents
+  const _mutation  = 0.04 + _divFactor * 0.12;             // 0.04 à 0.16
+
+  // Sélection par tournoi : pour chaque parent, on tire 3 candidats au hasard
+  // (biais vers les bons via fitness²) et on garde le meilleur.
+  const _pickTournament = () => {
+    let best = null;
+    for(let i=0;i<3;i++){
+      const c = candidates[Math.floor(Math.random()*candidates.length)];
+      if(!best || (c.fitness||0) > (best.fitness||0)) best = c;
+    }
+    return best;
+  };
+  const parents = [];
+  for(let i=0;i<_nbParents;i++) parents.push(_pickTournament());
+  const p1 = parents[0], p2 = parents[1] || parents[0];
+
+  // Fusion pondérée dégressive : le 1er parent pèse le plus, les suivants moins.
+  let _wSum=0, _scoreMix=0, _confMix=0;
+  parents.forEach((p,idx)=>{ const w=1/(idx+1); _scoreMix+=(p.score||0)*w; _confMix+=(p.conf||0.5)*w; _wSum+=w; });
+  _scoreMix /= _wSum; _confMix /= _wSum;
 
   const genNum = (S._genCount = (S._genCount||1) + 1);
   const prevName = weak.name;
+  const _parentNames = parents.map(p=>p.name).join(' × ');
 
   S.evoLog.push({ type:'removed', title:'⚰ '+prevName+' retraité', desc:`Fitness: ${Math.floor(weak.fitness)} T$ · ${weak.errors||0} erreurs`, time:nowStr() });
 
-  // Croisement génétique des meilleurs parents
+  // Croisement génétique adaptatif
   weak.name    = `Hybrid Gen-${genNum}`;
   weak.emoji   = '🧬';
   weak.type    = p1.type.split('·')[0].trim()+'·'+p2.type.split('·')[0].trim();
   weak.source  = p1.source.split('/')[0]+'/'+p2.source.split('/')[0];
   weak.role    = 'hybrid';
   weak.fitness = 120;
-  weak.score   = (p1.score * 0.6 + p2.score * 0.4) + (Math.random() - 0.5) * 0.08;
-  weak.conf    = Math.min(0.80, (p1.conf * 0.6 + p2.conf * 0.4));
+  weak.score   = _scoreMix + (Math.random() - 0.5) * _mutation * 2;
+  weak.conf    = Math.min(0.80, _confMix);
   weak.color   = p1.color;
   weak.errors  = 0; weak.corrections = 0; weak.streak = 0;
   weak.memory  = [];
@@ -2617,9 +2652,9 @@ function triggerEvolution(weak) {
   weak.regimeFitness = mergeRegimeFit(p1.regimeFitness, p2.regimeFitness);
 
   if(S.evoLog.length > 50) S.evoLog.splice(0, S.evoLog.length - 50);
-  S.evoLog.push({ type:'new', title:'🧬 '+weak.name+' déployé', desc:`Parents: ${p1.name} × ${p2.name} | Gen-${genNum}`, time:nowStr() });
-  S.chainLog.push({ icon:'🧬', desc:`Évolueur: ${weak.name} remplace ${prevName} | fitness cible: 300 T$`, hash:rndHash(), time:nowStr() });
-  showToast('🧬 '+weak.name+' évolué depuis '+p1.name+' × '+p2.name);
+  S.evoLog.push({ type:'new', title:'🧬 '+weak.name+' déployé', desc:`${_nbParents} parents (div ${_diversity.toFixed(2)}) : ${_parentNames} | Gen-${genNum}`, time:nowStr() });
+  S.chainLog.push({ icon:'🧬', desc:`Évolueur: ${weak.name} ← ${_nbParents} ADN fusionnés · mut ${_mutation.toFixed(2)} | remplace ${prevName}`, hash:rndHash(), time:nowStr() });
+  showToast('🧬 '+weak.name+' évolué · '+_nbParents+' parents fusionnés');
   bumpVersion(`Évolution Gen-${genNum} · ${weak.name}`);
   buildAgentCards(); patchAgentCards();
 }
