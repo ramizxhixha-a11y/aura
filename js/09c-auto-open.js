@@ -624,5 +624,8 @@ function autoOpenPosition(pair, side, stakeOverride) {
   if (ps.trades.length > 100) ps.trades.splice(0, ps.trades.length - 100);
 
   updatePairBtnStates();
+  // Rafraîchir le badge "tout fermer" : sans ça, le compteur restait figé pendant
+  // que le bot ouvrait des positions (S.openPositions grossit mais l'UI affiche l'ancien).
+  if (typeof _updateCloseAllBadge === 'function') _updateCloseAllBadge();
 }
 window.autoOpenPosition = autoOpenPosition;
