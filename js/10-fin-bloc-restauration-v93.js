@@ -1730,8 +1730,10 @@ function _resolvePairCycleCore(pair, ps) {
   // Seuil de gain net minimum, durci par l'avis du bot fiscal (optimise sans interdire).
   const _minNetGain    = 0.0015 * _fiscalSeuilFactor;   // 0.15% net de base
   // On s'abstient si le gain net réel ne couvre pas le minimum, OU si la conviction
-  // est trop faible pour fier le signal (fiabilité minimale).
-  if(_gainNet < _minNetGain || effectiveConviction < 0.20) {
+  // est sous 0.40 : en dessous, le signal est trop faible (le bot perdait en ouvrant
+  // des trades à conviction 26-36%, touchés au stop-loss). On ne trade que les signaux
+  // solides (conviction >= 40%).
+  if(_gainNet < _minNetGain || effectiveConviction < 0.40) {
     learnFromOutcome('cycle', 0, pair);
     ps.qYes = Math.max(20, 100 + (ps.qYes - 100) * 0.95);
     ps.qNo  = Math.max(20, 100 + (ps.qNo  - 100) * 0.95);
