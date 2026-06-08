@@ -1057,6 +1057,9 @@ function _abInit() {
     lastRun:   null,
     runCount:  0,
   };
+  // Purge immédiate des anciens slots de backup localStorage (~1,8 Mo chacun) :
+  // ils saturaient le quota. Le backup complet vit dans l'IndexedDB + Guardian.
+  try { _AB_SLOTS.forEach(s => localStorage.removeItem(_AB_KEY_PREFIX + s)); } catch(_) {}
 }
 
 // Vérifier si un backup automatique doit s'exécuter
@@ -1080,45 +1083,19 @@ function _abExecute(mode) {
     // Correctif : (1) on part de buildSnapshot() — version allégée + filtrée par
     // mode (~1,5 Mo) quand elle est dispo ; (2) écriture tolérante au quota :
     // si plein, on purge le slot le plus ancien et on réessaie, au lieu d'échouer.
-    const _abBase = (typeof buildSnapshot === 'function')
-      ? buildSnapshot()
-      : JSON.parse(JSON.stringify(S));
-    const snap = {
-      _abMeta: {
-        mode, ts: Date.now(),
-        date: new Date().toLocaleString('fr-FR'),
-        portfolio: S.portfolio||0,
-        totalTrades: S.totalTrades||0,
-        version: 'v117',
-      },
-      ..._abBase,
-    };
-    const json = JSON.stringify(snap);
+    // Le backup ne stocke PLUS de copies complètes en localStorage : 3 slots
+    // (~1,8 Mo chacun) saturaient le quota (~5 Mo) et causaient QuotaExceededError.
+    // La persistance complète est déjà assurée par saveState() (IndexedDB) + Guardian
+    // (IDB toutes les 3h) + Drive. On purge donc les anciens slots LS définitivement,
+    // et le backup déclenche simplement une sauvegarde IDB via saveState.
+    try { _AB_SLOTS.forEach(s => localStorage.removeItem(_AB_KEY_PREFIX + s)); } catch(_) {}
+    if (typeof saveState === 'function') { try { saveState(true); } catch(_) {} }
 
-    // Écriture tolérante au quota : le slot le plus récent est prioritaire.
-    // Si le quota explose, on libère les slots anciens puis on réessaie.
-    const _abSafeWrite = (key, value) => {
-      try { localStorage.setItem(key, value); return true; }
-      catch(err) {
-        try { localStorage.removeItem(_AB_KEY_PREFIX + _AB_SLOTS[2]); } catch(_) {}
-        try { localStorage.setItem(key, value); return true; } catch(_) {}
-        try { localStorage.removeItem(_AB_KEY_PREFIX + _AB_SLOTS[1]); } catch(_) {}
-        try { localStorage.setItem(key, value); return true; } catch(_) {}
-        throw err;
-      }
-    };
-
-    // Rotation des slots (0=plus récent, 2=plus ancien) — rotation non bloquante :
-    // perdre une vieille copie est acceptable, perdre la plus récente ne l'est pas.
-    const slot2 = localStorage.getItem(_AB_KEY_PREFIX + _AB_SLOTS[1]);
-    if(slot2) { try { localStorage.setItem(_AB_KEY_PREFIX + _AB_SLOTS[2], slot2); } catch(_) {} }
-    const slot1 = localStorage.getItem(_AB_KEY_PREFIX + _AB_SLOTS[0]);
-    if(slot1) { try { localStorage.setItem(_AB_KEY_PREFIX + _AB_SLOTS[1], slot1); } catch(_) {} }
-    _abSafeWrite(_AB_KEY_PREFIX + _AB_SLOTS[0], json);
-
+    const _abSizeKo = (typeof buildSnapshot === 'function')
+      ? Math.round(JSON.stringify(buildSnapshot()).length / 1024) : 0;
     S.autoBackup.lastRun = new Date().toDateString();
     S.autoBackup.runCount = (S.autoBackup.runCount||0) + 1;
-    S.autoBackup.lastSize = Math.round(json.length/1024);
+    S.autoBackup.lastSize = _abSizeKo;
 
     if(mode==='auto') {
       showToast('💾 Auto-backup effectué · $'+((S.portfolio||0).toFixed(0)), 3000, 'win');
