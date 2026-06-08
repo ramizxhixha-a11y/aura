@@ -1307,5 +1307,25 @@ body.real-mode-active { padding-top: 16px; }
 <script src="guardian-config.js?v=125"></script>
 <script src="guardian-core.js?v=125"></script>
 <script src="guardian-embed.js?v=125"></script>
+<!-- ░░ Panneau Outils Avancés (reconstruit : l'élément manquait, le bouton openOutils() cliquait dans le vide) ░░ -->
+<div id="outilsPanel">
+  <div id="outilsInner">
+    <div class="outils-header">
+      <div class="outils-header-title">🔧 Outils Avancés</div>
+      <button class="outils-close" onclick="closeOutils()">✕</button>
+    </div>
+    <div class="outils-tabs">
+      <button class="outils-tab active" onclick="switchOutilsTab('analytics', this)">📊 Analytics</button>
+      <button class="outils-tab" onclick="switchOutilsTab('agents', this)">🤖 Agents</button>
+      <button class="outils-tab" onclick="switchOutilsTab('trading', this)">⚡ Trading</button>
+      <button class="outils-tab" onclick="switchOutilsTab('alertes', this)">🔔 Alertes</button>
+      <button class="outils-tab" onclick="switchOutilsTab('ui', this)">🎨 UI</button>
+    </div>
+    <div class="outils-body" id="outilsBody">
+      <div id="outilsContent" class="mx16"></div>
+    </div>
+  </div>
+</div>
+
 </body>
 </html>
