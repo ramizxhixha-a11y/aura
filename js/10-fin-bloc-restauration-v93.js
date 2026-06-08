@@ -1763,7 +1763,12 @@ function _resolvePairCycleCore(pair, ps) {
   }
 
   const tpPctE=Math.max(0.7,effectiveConviction*3.2*(1+volCV*9));
-  const slPctE=Math.max(0.35,tpPctE*0.42);
+  // SL adapté à la volatilité : placé HORS du bruit du marché (1.2× le bruit), mais
+  // borné à TP/1.5 pour garder un ratio gain/perte favorable (>= 1.5). L'ancien
+  // SL = TP×0.42 (0.35-1.1%) tombait DANS le bruit crypto (±0.5-1%/min) : touché par
+  // le bruit, le trade sortait en perte puis le prix repartait dans le bon sens.
+  const _slNoise = (volCV * 100) * 1.2;   // 1.2× le bruit (volCV exprimé en fraction)
+  const slPctE   = Math.max(0.35, Math.min(_slNoise, tpPctE / 1.5));
   const tpE   =ps.price*(1+(side==='long'?1:-1)*tpPctE/100);
   const slE   =ps.price*(1-(side==='long'?1:-1)*slPctE/100);
 
