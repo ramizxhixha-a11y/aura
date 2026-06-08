@@ -1,5 +1,5 @@
 // ════════════════════════════════════════════════════════════════════════
-// ▓▓▓ AURA8 — 09b2-save-load.js · VERSION 125 · 07/06/2026 ▓▓▓
+// ▓▓▓ AURA8 — 09b2-save-load.js · VERSION 126 · 08/06/2026 ▓▓▓
 // ════════════════════════════════════════════════════════════════════════
 // saveState + loadState + hooks de fermeture — TOUTE la persistance ici.
 //
@@ -157,11 +157,12 @@ async function saveState(silent = false) {
 
   // ── localStorage : snapshot ALLÉGÉ (anti-saturation) ────────────────
   // On n'écrit la version allégée que si l'IDB complet a réussi (sinon on
-  // perdrait les grosses clés). Si l'IDB a échoué, on écrit le complet en LS
-  // en dernier recours (fiabilité prime sur quota).
+  // perdrait les grosses clés). Le localStorage reçoit TOUJOURS la version allégée,
+  // même si l'IDB a échoué : écrire le snapshot complet (~1,7 Mo) en LS saturerait
+  // le quota mobile (~5 Mo) et ferait planter toutes les écritures suivantes. Mieux
+  // vaut un LS léger fiable (les grosses clés repartent dans l'IDB au cycle suivant).
   try {
-    const toStore = idbOk ? _lightSnapshot(snap) : snap;
-    localStorage.setItem(RT.SAVE_KEY, JSON.stringify(toStore));
+    localStorage.setItem(RT.SAVE_KEY, JSON.stringify(_lightSnapshot(snap)));
     lsOk = true;
   } catch (e) {
     console.warn('[saveState] localStorage error:', e.message);
