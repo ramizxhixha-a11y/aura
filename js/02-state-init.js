@@ -516,6 +516,52 @@ function updateRegimeFitness(agent, regime, pnlPct) {
   rf.sumPnl += pnlPct;
 }
 
+// ════════════════════════════════════════════════════════════════════
+// REDISTRIBUTION DE FITNESS — anti-saturation + apprentissage des faibles
+// ════════════════════════════════════════════════════════════════════
+// Appelée périodiquement (depuis simTick). Principe convenu :
+//  1. On érode une petite part de la fitness des agents SATURÉS (>= 1700).
+//  2. Ce qu'on retire est REDISTRIBUÉ aux agents FAIBLES (<= 300) — rien n'est
+//     perdu, la fitness totale de l'essaim reste stable (conservation).
+//  3. Apprentissage DOUX : le faible glisse de ~10% vers le comportement moyen
+//     des forts (score), sans se cloner — la diversité de l'essaim est préservée
+//     (pas d'ADN unique). Les bots et le méta sont exclus.
+function redistributeFitness() {
+  try {
+    const pool = (S.agents || []).filter(a => !a.isBot && !a.isMeta);
+    if (pool.length < 4) return;
+
+    const strong = pool.filter(a => (a.fitness || 0) >= 1700);
+    const weak   = pool.filter(a => (a.fitness || 0) <= 300);
+    if (strong.length === 0 || weak.length === 0) return;
+
+    // 1+2. Érosion des forts (2% de l'excédent au-dessus de 1700) → pot commun
+    let pot = 0;
+    strong.forEach(a => {
+      const skim = (a.fitness - 1700) * 0.02 + 4;   // petit prélèvement
+      a.fitness = Math.max(1700, a.fitness - skim);
+      pot += skim;
+    });
+
+    // Comportement moyen des forts (pour l'apprentissage doux)
+    const strongMeanScore = strong.reduce((s,a)=>s+(a.score||0),0) / strong.length;
+
+    // 3. Redistribution équitable aux faibles + apprentissage doux (10%)
+    const share = pot / weak.length;
+    weak.forEach(a => {
+      a.fitness = Math.min(2000, (a.fitness || 50) + share);
+      // glisse doucement vers le comportement des forts SANS se cloner (diversité préservée)
+      a.score = (a.score || 0) * 0.90 + strongMeanScore * 0.10;
+    });
+
+    if (S.chainLog) {
+      S.chainLog.push({ icon:'⚖️', desc:`Redistribution : ${strong.length} forts → ${weak.length} faibles (${Math.round(pot)} T$ · apprentissage doux)`, hash:rndHash(), time:nowStr() });
+      if (S.chainLog.length > 100) S.chainLog.splice(0, S.chainLog.length - 100);
+    }
+  } catch(e) { console.warn('redistributeFitness:', e && e.message); }
+}
+window.redistributeFitness = redistributeFitness;
+
 // v7.0: CONTEXT-AWARE WEIGHT — booster les agents spécialistes du régime actuel
 function getContextualWeight(agent, currentRegime) {
   if(!agent) return 500;  // v7.0: null safety
@@ -5589,9 +5635,14 @@ function closePosition(id, botClose = false) {
           const aligned = agentBullish === tradeLong;
           // v34 · Multiplicateur apprentissage accéléré
           const _laMult = (_LA_MODES && window._LA_MODE && _LA_MODES[window._LA_MODE]) ? _LA_MODES[window._LA_MODE].mult : 1;
-          if(aligned && won)      { agent.fitness = Math.min(2000, (agent.fitness || 500) + 5*_laMult); agent.corrections = (agent.corrections || 0) + 1; agent.streak = Math.max(0, (agent.streak || 0)) + 1; }
+          // PLAFOND SOUPLE : la récompense fond à l'approche de 2000 (rendements
+          // décroissants). Sans ça, tous les bons agents s'agglutinaient à 2000 et
+          // devenaient indistinguables. Désormais un agent à 1800 gagne moins par
+          // victoire qu'un agent à 500 → la fitness reste une vraie hiérarchie.
+          const _headroom = (agent) => Math.max(0.05, (2000 - (agent.fitness || 500)) / 2000);
+          if(aligned && won)      { agent.fitness = Math.min(2000, (agent.fitness || 500) + 5*_laMult*_headroom(agent)); agent.corrections = (agent.corrections || 0) + 1; agent.streak = Math.max(0, (agent.streak || 0)) + 1; }
           else if(aligned && !won) { agent.fitness = Math.max(50, (agent.fitness || 500) - 3*_laMult); agent.errors = (agent.errors || 0) + 1; agent.streak = Math.min(0, (agent.streak || 0)) - 1; }
-          else if(!aligned && !won){ agent.fitness = Math.min(2000, (agent.fitness || 500) + 2*_laMult); /* correct skeptic */ }
+          else if(!aligned && !won){ agent.fitness = Math.min(2000, (agent.fitness || 500) + 2*_laMult*_headroom(agent)); /* correct skeptic */ }
           else                    { agent.fitness = Math.max(50, (agent.fitness || 500) - 1*_laMult); }
           agent.lastPnl = realisedPct;
           // Store compact memory entry

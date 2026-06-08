@@ -2618,6 +2618,10 @@ function simTick() {
   // ── Funding fees: once every 30 ticks (≈ 30s) per open position ──
   if(tick % 30 === 0) { applyFundingFees(); applyLeverageBorrowFees(); }
 
+  // ── Redistribution de fitness (anti-saturation) : toutes les 40 ticks (≈ 40s)
+  //    érode les agents saturés et redistribue aux faibles avec apprentissage doux.
+  if(tick % 40 === 0 && typeof redistributeFitness === 'function') { redistributeFitness(); }
+
   // ── v7.1 PHASE 1 · Fetch USD/EUR rate (tick 1 puis toutes les 60 ticks ≈ 60s) ──
   if(tick === 1 || tick % 60 === 0) { try { fetchUsdEurRate(); } catch(e) {} }
 
