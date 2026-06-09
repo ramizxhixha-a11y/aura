@@ -1,0 +1,214 @@
+/* ═══════════════════════════════════════════════════════════════════════
+   AURA8 · 26-outils-generic.css
+   Styles GÉNÉRIQUES par suffixe pour les sections du panneau Outils Avancés.
+   ~410 classes (wx-*, ph-*, btc-*, lt-*, fee-*, lb-*, calc-*, ops-*, gr-*,
+   dream-*, mem-*, adn-*, etc.) n'avaient AUCUN style → tout s'affichait
+   empilé et illisible. Ce fichier les habille d'un coup via des regles par
+   suffixe commun (-section / -title / -row / -card / -grid / -bar / -val…).
+
+   IMPORTANT : tous les selecteurs sont dans :where() → specificite ZERO.
+   Ainsi des qu'une classe possede un vrai style ailleurs (heatmap, risk
+   score, correlation…), ce vrai style gagne TOUJOURS. Ce fichier n'agit
+   que comme filet de securite sur les classes qui n'ont rien.
+   ═══════════════════════════════════════════════════════════════════════ */
+
+:where(#outilsContent) {
+  font-size: 12px;
+  color: var(--t1);
+}
+
+/* ── Conteneurs de section : carte avec fond + bord + espacement ── */
+:where(#outilsContent [class$="-section"]) {
+  background: var(--s2, rgba(255,255,255,.03));
+  border: 1px solid var(--border, rgba(255,255,255,.07));
+  border-radius: 12px;
+  padding: 14px;
+  margin-bottom: 14px;
+}
+
+/* ── Titres de section ── */
+:where(#outilsContent [class$="-title"]) {
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--t1);
+  margin-bottom: 10px;
+  letter-spacing: .02em;
+}
+
+/* ── Lignes generiques : label a gauche, valeur a droite ── */
+:where(#outilsContent [class$="-row"]) {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 5px 0;
+  border-bottom: 1px solid rgba(255,255,255,.04);
+}
+
+/* ── Labels (gris, petits) ── */
+:where(#outilsContent [class$="-lbl"]),
+:where(#outilsContent [class$="-label"]),
+:where(#outilsContent [class$="-sub"]),
+:where(#outilsContent [class$="-desc"]),
+:where(#outilsContent [class$="-meta"]) {
+  font-size: 10px;
+  color: var(--t3, #888);
+  font-weight: 500;
+}
+
+/* ── Valeurs (alignees a droite, chiffres tabulaires) ── */
+:where(#outilsContent [class$="-val"]),
+:where(#outilsContent [class$="-value"]),
+:where(#outilsContent [class$="-amount"]),
+:where(#outilsContent [class$="-price"]),
+:where(#outilsContent [class$="-pnl"]),
+:where(#outilsContent [class$="-pct"]) {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--t1);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+/* ── Noms (mis en avant) ── */
+:where(#outilsContent [class$="-name"]) {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--t1);
+}
+
+/* ── Grilles : 2 colonnes ── */
+:where(#outilsContent [class$="-grid"]) {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
+}
+
+/* ── Cartes / items / cells : bloc avec fond leger ── */
+:where(#outilsContent [class$="-card"]),
+:where(#outilsContent [class$="-item"]),
+:where(#outilsContent [class$="-cell"]),
+:where(#outilsContent [class$="-block"]) {
+  background: var(--s3, rgba(255,255,255,.04));
+  border: 1px solid var(--border, rgba(255,255,255,.06));
+  border-radius: 10px;
+  padding: 10px;
+}
+
+/* En-tete interne d'une carte */
+:where(#outilsContent [class$="-header"]) {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+/* ── Barres de progression ── */
+:where(#outilsContent [class$="-bar"]),
+:where(#outilsContent [class$="-wrap"]) {
+  background: rgba(255,255,255,.07);
+  border-radius: 4px;
+  height: 6px;
+  overflow: hidden;
+  position: relative;
+  flex: 1 1 auto;
+  min-width: 40px;
+}
+:where(#outilsContent [class$="-fill"]) {
+  height: 100%;
+  border-radius: 4px;
+  background: var(--up, #00e87a);
+  transition: width .3s ease;
+}
+
+/* ── Boutons ── */
+:where(#outilsContent [class$="-btn"]) {
+  background: var(--s3, rgba(255,255,255,.05));
+  border: 1px solid var(--border, rgba(255,255,255,.12));
+  border-radius: 8px;
+  padding: 9px 14px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--t1);
+  cursor: pointer;
+  font-family: inherit;
+}
+
+/* ── Inputs ── */
+:where(#outilsContent [class$="-inp"]),
+:where(#outilsContent [class$="-input"]),
+:where(#outilsContent [class$="-slider"]) {
+  background: var(--s1, rgba(0,0,0,.3));
+  border: 1px solid var(--border, rgba(255,255,255,.12));
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-size: 12px;
+  color: var(--t1);
+  font-family: inherit;
+  width: 100%;
+}
+
+/* ── KPI / stats : petits blocs centres ── */
+:where(#outilsContent [class$="-stat"]),
+:where(#outilsContent [class$="-kpi"]) {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 6px;
+}
+:where(#outilsContent [class$="-stat-val"]),
+:where(#outilsContent [class$="-kpi-val"]) {
+  font-size: 14px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+:where(#outilsContent [class$="-stat-lbl"]),
+:where(#outilsContent [class$="-kpi-lbl"]) {
+  font-size: 9px;
+  color: var(--t3, #888);
+  text-transform: uppercase;
+  letter-spacing: .05em;
+}
+
+/* ── Stats-row : aligne plusieurs stats cote a cote ── */
+:where(#outilsContent [class$="-stats-row"]),
+:where(#outilsContent [class$="-stats"]),
+:where(#outilsContent [class$="-metrics"]) {
+  display: flex;
+  justify-content: space-around;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+/* ── Meteo (wx) ── */
+:where(#outilsContent .wx-grid) { display: grid; grid-template-columns: repeat(2,1fr); gap: 8px; }
+:where(#outilsContent .wx-forecast) { display: flex; gap: 8px; flex-wrap: wrap; }
+:where(#outilsContent .wx-fc-day) {
+  display: flex; flex-direction: column; align-items: center; gap: 2px;
+  background: var(--s3, rgba(255,255,255,.04)); border-radius: 8px; padding: 8px 10px;
+}
+
+/* ── Lettre des agents (lt) ── */
+:where(#outilsContent .lt-p) { font-size: 12px; line-height: 1.6; color: var(--t2); margin-bottom: 8px; }
+:where(#outilsContent .lt-voice) {
+  border-left: 2px solid var(--border2, rgba(255,255,255,.15));
+  padding-left: 10px; margin-bottom: 10px;
+}
+:where(#outilsContent .lt-voice-name) { font-size: 11px; font-weight: 700; color: var(--gold, #f5c842); }
+:where(#outilsContent .lt-letter) { font-style: italic; color: var(--t2); }
+
+/* ── Historique prix (ph) ── */
+:where(#outilsContent .ph-pair-card) {
+  background: var(--s3, rgba(255,255,255,.04));
+  border-radius: 10px; padding: 10px; margin-bottom: 8px;
+}
+:where(#outilsContent .ph-stats-row) { display: flex; justify-content: space-between; gap: 6px; flex-wrap: wrap; }
+:where(#outilsContent .ph-stat) { flex: 1 1 60px; }
+
+/* ── Impact BTC (btc) ── */
+:where(#outilsContent .btc-pair-grid) { display: grid; grid-template-columns: repeat(2,1fr); gap: 8px; }
+:where(#outilsContent .btc-pair-card) {
+  background: var(--s3, rgba(255,255,255,.04)); border-radius: 8px; padding: 8px;
+}
