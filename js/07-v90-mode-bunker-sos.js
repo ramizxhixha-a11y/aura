@@ -997,6 +997,9 @@ const _OUTILS_TABS = {
       { id:'drawdownSection',     render:'renderDrawdownSection',     init:null },
       { id:'mlPredSection',       render:'renderMlPredSection',       init:null },
       { id:'sentimentNewsSection',render:'renderSentimentNewsSection',init:null },
+      { id:'replaySection',       render:'renderReplaySection',       init:null },
+      { id:'whatifSection',       render:'renderWhatifSection',        init:null },
+      { id:'agentLetterSection',  render:'renderAgentLetterSection',   init:null },
     ]
   },
   agents: {
@@ -2627,13 +2630,18 @@ function triggerEvolution(weak) {
   weak.type    = p1.type.split('·')[0].trim()+'·'+p2.type.split('·')[0].trim();
   weak.source  = p1.source.split('/')[0]+'/'+p2.source.split('/')[0];
   weak.role    = 'hybrid';
-  weak.fitness = 120;
+  // Fitness de départ 350 (au-dessus du seuil d'élimination de 300) + marqueur de
+  // naissance : sans ça, l'hybride naissait à 120 (sous le seuil) et était retraité
+  // au tick suivant → boucle d'évolution infinie (40 000 générations en boucle).
+  // _bornCycle donne une période de grâce pour qu'il fasse ses preuves avant jugement.
+  weak.fitness = 350;
+  weak._bornCycle = (typeof S !== 'undefined' && S.cycle) ? S.cycle : 0;
   weak.score   = _scoreMix + (Math.random() - 0.5) * _mutation * 2;
   weak.conf    = Math.min(0.80, _confMix);
   weak.color   = p1.color;
   weak.errors  = 0; weak.corrections = 0; weak.streak = 0;
   weak.memory  = [];
-  weak.fitnessHistory = [120];
+  weak.fitnessHistory = [350];
   // v7.3 OPT · Hériter le regimeFitness du meilleur parent (fusion pondérée 60/40)
   const mergeRegimeFit = (rf1, rf2) => {
     const merged = {};

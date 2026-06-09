@@ -2051,25 +2051,39 @@ window.toggleWakeLock = toggleWakeLock;
 // Réacquérir le wake lock quand l'écran redevient visible
 // (l'API libère automatiquement quand l'onglet passe en arrière-plan)
 document.addEventListener('visibilitychange', async () => {
-  if (_wakeLockEnabled && document.visibilityState === 'visible' && !_wakeLockSentinel) {
+  // Source de vérité = localStorage (la variable mémoire _wakeLockEnabled se perd
+  // au rechargement/reprise PWA). On ré-acquiert le verrou dès que la page redevient
+  // visible si l'utilisateur l'avait activé.
+  let want = '0';
+  try { want = localStorage.getItem('aura_wakelock') || '0'; } catch(e) {}
+  if (want === '1' && document.visibilityState === 'visible' && !_wakeLockSentinel) {
+    _wakeLockEnabled = true;
     await _requestWakeLock();
     _updateWakeLockButton();
   }
 });
 
-// Restaurer l'état au chargement (depuis localStorage)
-window.addEventListener('load', async () => {
+// Restaurer l'état au chargement (depuis localStorage). On n'utilise PAS window.load
+// seul : en PWA/reprise, le script peut tourner alors que la page est déjà chargée,
+// et l'event 'load' ne se déclenche jamais. On lance donc l'init immédiatement si le
+// document est déjà prêt, sinon on attend 'load'.
+async function _initWakeLockFromStorage() {
   try {
     const saved = localStorage.getItem('aura_wakelock');
     if (saved === '1') {
+      _wakeLockEnabled = true;
       const success = await _requestWakeLock();
-      if (success) {
-        _wakeLockEnabled = true;
-        _updateWakeLockButton();
-      }
+      if (success) _updateWakeLockButton();
+    } else {
+      _updateWakeLockButton();
     }
   } catch(e) {}
-});
+}
+if (document.readyState === 'complete' || document.readyState === 'interactive') {
+  _initWakeLockFromStorage();
+} else {
+  window.addEventListener('load', _initWakeLockFromStorage);
+}
 
 // ════════════════════════════════════════════════════════════
 function toggleMode() {
@@ -3456,7 +3470,7 @@ async function refreshSentimentNews(force) {
   if(el) el.innerHTML='<div class="sn-section"><div class="sn-title">📰 Sentiment News</div><div style="text-align:center;padding:20px;font-size:10px;color:var(--t3);">⏳ Chargement des news…</div></div>';
 
   const articles = await _fetchCryptoNews();
-  if(articles) {
+  if(Array.isArray(articles) && articles.length) {
     _SN_CACHE.articles  = articles;
     _SN_CACHE.score     = _computeNewsScore(articles);
     _SN_CACHE.lastFetch = Date.now();
@@ -3498,7 +3512,7 @@ function renderSentimentNewsSection() {
   const pct = ((s/100)*100).toFixed(1);
 
   // Analyser les articles avec NLP
-  const analyzed = _SN_CACHE.articles.slice(0,15).map(a=>{
+  const analyzed = (Array.isArray(_SN_CACHE.articles)?_SN_CACHE.articles:[]).slice(0,15).map(a=>{
     const text = (a.title||'')+(a.body||'').slice(0,300);
     const nlp  = _nlpScore(text);
     return { ...a, nlp, sentiment: nlp.score>0.2?'bull':nlp.score<-0.2?'bear':'neut' };
@@ -3510,7 +3524,7 @@ function renderSentimentNewsSection() {
     const sym = pair.replace('/USDT','').toLowerCase();
     const name = {btc:'bitcoin',eth:'ethereum',xrp:'ripple',sol:'solana',doge:'dogecoin',ada:'cardano',avax:'avalanche',link:'chainlink'}[sym]||sym;
     let bull=0,bear=0,count=0;
-    _SN_CACHE.articles.forEach(a=>{
+    (Array.isArray(_SN_CACHE.articles)?_SN_CACHE.articles:[]).forEach(a=>{
       const t=(a.title||a.body||'').toLowerCase();
       if(t.includes(sym)||t.includes(name)){
         count++;

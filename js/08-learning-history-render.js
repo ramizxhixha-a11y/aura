@@ -2870,9 +2870,14 @@ function simTick() {
     // v6.9: Évolution continue — vérification chaque 15 ticks
     if(tick % 8 === 0) {
       try {
-        const _agents2 = [...S.agents].filter(a=>!a.isBot&&!a.isMeta).sort((a,b)=>a.fitness-b.fitness);
-        if(_agents2[0] && _agents2[0].fitness < 300) triggerEvolution(_agents2[0]);  // v7.2 TURBO · seuil relevé
-        // Forcer aussi évolution des agents avec score plat (stagnation)
+        // Période de grâce : un agent né il y a moins de 60 cycles n'est PAS évolué
+        // (sinon les hybrides, nés faibles, étaient retraités avant d'avoir fait leurs
+        // preuves → boucle d'évolution infinie). On lui laisse le temps de trader.
+        const _GRACE = 60;
+        const _evolvable = a => !a.isBot && !a.isMeta && (S.cycle - (a._bornCycle || 0)) >= _GRACE;
+        const _agents2 = [...S.agents].filter(_evolvable).sort((a,b)=>a.fitness-b.fitness);
+        if(_agents2[0] && _agents2[0].fitness < 300) triggerEvolution(_agents2[0]);
+        // Forcer aussi évolution des agents avec score plat (stagnation), hors période de grâce
         const _stagnant = _agents2.find(a => Math.abs(a.score||0) < 0.03 && a.fitness < 400);
         if(_stagnant && tick % 24 === 0) triggerEvolution(_stagnant);
       } catch(_e) {}
