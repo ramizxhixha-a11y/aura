@@ -1581,3 +1581,44 @@ body{transition:background .4s,color .3s;}
 .ts-dot{width:12px;height:12px;border-radius:50%;flex-shrink:0;border:1px solid rgba(255,255,255,.2);}
 .ts-div{height:1px;background:var(--border);margin:2px 0;}
 
+
+/* ═══════════════════════════════════════════════════════════════════
+   SCORE DE RISQUE GLOBAL — styles manquants (l'affichage était empilé
+   et illisible car ces classes n'avaient aucune règle CSS).
+   ═══════════════════════════════════════════════════════════════════ */
+.risk-section { padding: 4px 2px 8px; }
+.risk-title {
+  font-size: 13px; font-weight: 800; color: var(--t1);
+  margin-bottom: 12px; letter-spacing: .02em;
+}
+.risk-gauge-wrap {
+  display: flex; flex-direction: column; align-items: center;
+  margin-bottom: 16px;
+}
+.risk-gauge-arc { width: 160px; height: 80px; margin-bottom: 4px; }
+.risk-gauge-arc svg { width: 100%; height: 100%; }
+.risk-score-num { font-size: 34px; font-weight: 800; line-height: 1; font-variant-numeric: tabular-nums; }
+.risk-score-lbl { font-size: 12px; font-weight: 700; letter-spacing: .08em; margin-top: 2px; }
+
+/* Chaque facteur : une ligne alignée [nom | barre | valeur | détail] */
+.risk-factor {
+  display: flex; align-items: center; gap: 8px;
+  padding: 5px 0; border-bottom: 1px solid rgba(255,255,255,.04);
+}
+.risk-factor-name {
+  flex: 0 0 110px; font-size: 11px; color: var(--t2);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.risk-factor-bar {
+  flex: 1 1 auto; height: 6px; border-radius: 4px;
+  background: rgba(255,255,255,.07); overflow: hidden; min-width: 40px;
+}
+.risk-factor-fill { height: 100%; border-radius: 4px; transition: width .3s ease; }
+.risk-factor-val {
+  flex: 0 0 32px; text-align: right; font-size: 12px; font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.risk-rec {
+  margin-top: 14px; padding: 10px 12px; border-radius: 10px;
+  font-size: 11px; line-height: 1.5; color: var(--t1);
+}
