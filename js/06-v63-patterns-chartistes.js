@@ -3895,6 +3895,14 @@ function checkAntiRevenge(pnlUsd, pct, pair) {
   }
 }
 window.checkAntiRevenge = checkAntiRevenge;
+// Getter exposé : permet au flux de décision (autoOpenPosition) de savoir si le
+// blocage anti-revenge est actif. Vérifie aussi l'expiration du cooldown.
+window.isRevengeBlocked = function() {
+  try {
+    if (_rvActive && Date.now() >= _rvEndTime) { _rvActive = false; }  // cooldown expiré
+    return _rvActive;
+  } catch(e) { return false; }
+};
 
 function _rvConsecLosses() {
   const allT = Object.values(S.pairStates||{}).flatMap(ps=>(ps.trades||[]).filter(t=>t.type==='position'&&t.ts)).sort((a,b)=>b.ts-a.ts).slice(0,5);

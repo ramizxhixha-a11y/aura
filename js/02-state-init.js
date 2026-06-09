@@ -5312,6 +5312,13 @@ function closePosition(id, botClose = false) {
   // (si levier, le système "liquide" la position à -100% de la marge, pas plus)
   const realisedUsd = Math.max(-pos.stakeUsdt, rawUsd);
 
+  // ANTI-REVENGE : à chaque fermeture, on signale le résultat au système qui décide
+  // de bloquer le bot après une grosse perte ou une série de pertes (cooldown).
+  // Branché ici pour que la protection s'active réellement (avant, jamais appelée).
+  if (typeof checkAntiRevenge === 'function') {
+    try { checkAntiRevenge(realisedUsd, realisedPct, pos.pair); } catch(e) {}
+  }
+
   // v7.12 LIVRAISON 8 · STATS + RÈGLES en mode Réel
   if (S.tradingMode === 'paperReal' && pos.auto === true) {
     if (!S.paperRealStats) S.paperRealStats = {};

@@ -50,6 +50,21 @@ function autoOpenPosition(pair, side, stakeOverride) {
     return;
   }
 
+  // Gate Anti-Revenge : après une grosse perte ou une série de pertes, le système
+  // anti-revenge impose un cooldown (évite le "revenge trading" qui ruine les comptes).
+  // Tant que le blocage est actif, le bot s'abstient d'ouvrir. Ne touche pas botAutoMode.
+  if (typeof isRevengeBlocked === 'function' && isRevengeBlocked()) {
+    if (Math.random() < 0.05) {
+      S.chainLog.push({
+        icon: '🧘',
+        desc: `Ouverture bloquée · Anti-revenge (cooldown après pertes) · ${pair} ${side.toUpperCase()}`,
+        hash: rndHash(), time: nowStr()
+      });
+      if (S.chainLog.length > 100) S.chainLog.splice(0, S.chainLog.length - 100);
+    }
+    return;
+  }
+
   // ──────────────────────────────────────────────────────────────
   // Veille Marché — ajustement et blocage selon sentiment global
   // ──────────────────────────────────────────────────────────────
