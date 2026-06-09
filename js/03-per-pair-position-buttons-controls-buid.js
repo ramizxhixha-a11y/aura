@@ -1263,7 +1263,13 @@ function learnFromOutcome(source, pnlPct, pair) {
       const reason = a.errors >= 15 ? 'trop d\'erreurs' : 'fitness critique';
       a.errors = 0;
       a.corrections = (a.corrections||0) + 1;
-      S.chainLog.push({ icon:'🔄', desc:`${a.name} auto-recalibré · ${reason}`, hash:rndHash(), time:nowStr() });
+      // Le recalibrage est fréquent en marché CALM (les agents accumulent vite 15
+      // "erreurs" sur les petits mouvements). On ne journalise qu'1 fois sur 5 pour
+      // ne pas noyer le journal ni alourdir la sim (le splice répété coûtait du temps).
+      if (Math.random() < 0.2) {
+        S.chainLog.push({ icon:'🔄', desc:`${a.name} auto-recalibré · ${reason}`, hash:rndHash(), time:nowStr() });
+        if (S.chainLog.length > 100) S.chainLog.splice(0, S.chainLog.length - 100);
+      }
     }
 
     // ── Streak bonus ──
