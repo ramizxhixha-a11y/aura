@@ -76,12 +76,12 @@ window._auraGetGlobalS = _auraGetGlobalS;
 
   function formatChrono(s) {
     s = Math.max(0, Math.floor(s));
-    const d = Math.floor(s / 86400);
-    const h = Math.floor((s % 86400) / 3600);
+    const h = Math.floor(s / 3600);
     const m = Math.floor((s % 3600) / 60);
     const sec = s % 60;
     const pad = (n) => String(n).padStart(2, '0');
-    if (d > 0) return `${d}d ${pad(h)}:${pad(m)}`;
+    // Heures cumulées (pas de format "jours" : 39:53:42 est plus lisible que 1d 15:53,
+    // qui obligerait à calculer 1×24+15. Les heures s'accumulent au-delà de 24).
     if (h > 0) return `${pad(h)}:${pad(m)}:${pad(sec)}`;
     return `${pad(m)}:${pad(sec)}`;
   }
