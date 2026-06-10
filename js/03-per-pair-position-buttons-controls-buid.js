@@ -1197,7 +1197,10 @@ function learnFromOutcome(source, pnlPct, pair) {
   S.agents.forEach(a => {
     // Bots d'exécution : leur score reste 0 (role neutre), mais leur fitness évolue
     if(a.isBot) {
-      const botReward = won ? mag * 5 : -mag * 1.2;  // v7.3 OPT · récompense ×2.5, pénalité /1.25
+      let botReward = won ? mag * 5 : -mag * 1.2;  // v7.3 OPT · récompense ×2.5, pénalité /1.25
+      // Plafond souple : un gain près de 2000 rapporte de moins en moins, pour
+      // qu'un bot performant ne reste pas collé au maximum. Les pertes restent pleines.
+      if(won) { const _headroom = Math.max(0.05, (2000 - (a.fitness || 0)) / 2000); botReward *= _headroom; }
       a.fitness = Math.max(50, Math.min(2000, a.fitness + botReward));  // v8.0 LIVRAISON 30 · FIX #2 · borne min unifiée à 50
       a.totalReward = (a.totalReward || 0) + botReward;  // v7.3 OPT · affichage réel dans l'UI
       a.learningEvents = (a.learningEvents || 0) + 1;  // v7.3 OPT · compteur visible

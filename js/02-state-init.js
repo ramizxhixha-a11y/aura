@@ -528,6 +528,15 @@ function updateRegimeFitness(agent, regime, pnlPct) {
 //     (pas d'ADN unique). Les bots et le méta sont exclus.
 function redistributeFitness() {
   try {
+    // Érosion des BOTS saturés (≥1600) : eux aussi redescendent vers 1600 pour
+    // ne pas rester collés à 2000. Leur "pot" se dissipe (un bot ne transmet pas
+    // sa fitness aux agents : rôles distincts). Couplé au plafond souple du
+    // fichier 03, ça empêche tout bot de coller au maximum.
+    (S.agents || []).filter(a => a.isBot && (a.fitness || 0) >= 1600).forEach(a => {
+      const skim = (a.fitness - 1600) * 0.02 + 4;
+      a.fitness = Math.max(1600, a.fitness - skim);
+    });
+
     const pool = (S.agents || []).filter(a => !a.isBot && !a.isMeta);
     if (pool.length < 4) return;
 
