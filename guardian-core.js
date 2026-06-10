@@ -658,14 +658,43 @@ Core.describeCapabilities = describeCapabilities;
     return g;
   }
   // assemble le backup complet : AURA + Guardian
-  function grabFull(){
+  // Lecture autonome de l'état complet d'AURA depuis IndexedDB (NEXUS_DB / store state).
+  // L'état complet (~1.7 Mo, agents inclus) y vit ; le localStorage n'a qu'une version
+  // allégée (sans agents). On lit donc IDB en priorité pour un backup full digne de ce nom.
+  function _readAuraFromIDB(){
+    return new Promise(resolve=>{
+      let req; try { req = indexedDB.open('NEXUS_DB'); } catch(e){ return resolve(null); }
+      if(!req){ return resolve(null); }
+      req.onerror = ()=>resolve(null);
+      req.onsuccess = ()=>{
+        const db = req.result;
+        try {
+          if(!db.objectStoreNames.contains('state')){ resolve(null); return; }
+          const tx = db.transaction('state','readonly');
+          const g = tx.objectStore('state').get('nexus_state_v2');
+          g.onsuccess = ()=>{
+            let v = g.result;
+            // le store peut renvoyer l'objet directement ou enveloppé { key, value }
+            if(v && v.value && typeof v.value === 'object') v = v.value;
+            resolve(v && typeof v === 'object' ? v : null);
+          };
+          g.onerror = ()=>resolve(null);
+        } catch(e){ resolve(null); }
+      };
+      setTimeout(()=>resolve(null), 4000);
+    });
+  }
+
+  async function grabFull(){
     let auraSnap = null;
     // 1. État live (si Guardian est embarqué dans la page AURA)
     try { if(typeof abGrabState === 'function') auraSnap = abGrabState(); } catch(e){}
-    // 2. Fallback : lire le snapshot dans localStorage (clé nexus_state_v2),
-    //    partagé entre onglets du MÊME navigateur. Indispensable quand Guardian
-    //    tourne dans un onglet séparé de Chrome : il n'a pas le S live d'AURA,
-    //    mais le localStorage lui est accessible. Sans ça, aura restait null.
+    // 2. IndexedDB : l'état COMPLET (agents inclus). Priorité pour un vrai backup.
+    if(!auraSnap || typeof auraSnap.cycle !== 'number' || !(auraSnap.agents && auraSnap.agents.length)){
+      try { const idb = await _readAuraFromIDB(); if(idb && typeof idb.cycle === 'number') auraSnap = idb; } catch(e){}
+    }
+    // 3. Dernier recours : localStorage allégé (clé nexus_state_v2), partagé entre
+    //    onglets du même navigateur. Mieux que rien si IDB est inaccessible.
     if(!auraSnap || typeof auraSnap.cycle !== 'number'){
       try {
         const key = (CFG && CFG.storage && CFG.storage.saveKey) || 'nexus_state_v2';
@@ -684,9 +713,9 @@ Core.describeCapabilities = describeCapabilities;
       guardian: grabGuardianData()
     };
   }
-  function download(){
+  async function download(){
     try {
-      const data = grabFull();
+      const data = await grabFull();
       const blob = new Blob([JSON.stringify(data)], { type:'application/json' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -707,7 +736,7 @@ Core.describeCapabilities = describeCapabilities;
       // pour ne PAS déclencher un téléchargement dès l'ouverture de Guardian.
       if(!m.last){ m.last = now; setMeta(m); return; }
       if((now - m.last) < m.everyMin*60000) return;
-      if(download()){ m.last = now; setMeta(m); }
+      download().then(ok=>{ if(ok){ m.last = now; setMeta(m); } });
     } catch(e){}
   }
   if(window._gdlTimer) clearInterval(window._gdlTimer);
