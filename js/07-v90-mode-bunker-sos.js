@@ -1,5 +1,5 @@
 // ════════════════════════════════════════════════════════════
-// AURA8 — module consolidé 07/10 · maj 10/06/2026 (sync boutons répartition)
+// AURA8 — module consolidé 07/10 · maj 10/06/2026 (sync boutons répartition + total en $ + fonds propres €)
 // Contient : v90-mode-bunker-sos, veille-news-sociale, v5-1-brain-network-interactivity-tap-toolt, all-pairs-lmsr-gauges, open-positions-summary-home-page-v3-4
 // ════════════════════════════════════════════════════════════
 // ═══ v90 · MODE BUNKER SOS ═══
@@ -4361,7 +4361,7 @@ function renderHomePrices() {
   if (typeof _updateCloseAllBadge === 'function') _updateCloseAllBadge();
   // v7.1 P1: affichage = (caisse + réserve fiscale) × USD/EUR. S.portfolio reste interne = cash+trading.
   computePortfolioTotal();
-  setEl('heroVal', fmtEUR(S.portfolioTotal));
+  setEl('heroVal', fmt$2((S.cashAccount||0)+(S.tradingAccount||0)+(S.fiscalReserveAccount||0)));
   // v5 · hero beat + tone on significant change
   // FIX flash boot : au tout premier rendu, l'écart entre le portfolio sauvegardé et le
   // total recalculé n'est PAS un vrai gain/perte (juste un recalage au chargement) → on n'anime pas.
@@ -4551,7 +4551,7 @@ function renderHome() {
   // Patch
   // v7.1 P1: hero value = portfolioTotal EUR (cash + fiscal × USD/EUR). S.portfolio reste interne.
   computePortfolioTotal();
-  setEl('heroVal', fmtEUR(S.portfolioTotal));
+  setEl('heroVal', fmt$2((S.cashAccount||0)+(S.tradingAccount||0)+(S.fiscalReserveAccount||0)));
   // v8.0 LIVRAISON 26 · Affichage P&L par période — COHÉRENT avec P&L NET et P&L SESSION
   // On utilise periods.today qui est calibré à minuit, basé sur S.portfolio (équivaut au P&L SESSION du dashboard)
   let pnlForDisplay = 0;
@@ -4658,7 +4658,7 @@ function renderHome() {
   setEl('fiscalResVal', fmt$2(S.fiscalReserveAccount || 0));
   const _fiscalCount = (S.fiscalReserveLog || []).length;
   setEl('fiscalResSub', _fiscalCount + (_fiscalCount > 1 ? ' dépôts' : ' dépôt'));
-  setEl('ownFundsVal', fmtEUR((S.ownFundsInjected || 0) * (S.usdEurRate || 0.92)));  // v7.6 · affiché en EUR
+  setEl('ownFundsVal', fmtEUR(typeof window.ownFundsEUR === 'function' ? window.ownFundsEUR() : (S.ownFundsInjected || 0) * (S.usdEurRate || 0.92)));  // v8 · € réel injecté (figé)
   const _ownCount = (S.ownFundsLog || []).length;
   setEl('ownFundsSub', _ownCount === 0 ? 'Capital initial'
                    : _ownCount + (_ownCount > 1 ? ' injections' : ' injection'));

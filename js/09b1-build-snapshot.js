@@ -1,5 +1,5 @@
 // ════════════════════════════════════════════════════════════════════════
-// ▓▓▓ AURA8 — 09b1-build-snapshot.js · VERSION 122 · 10/06/2026 ▓▓▓
+// ▓▓▓ AURA8 — 09b1-build-snapshot.js · VERSION 123 · 10/06/2026 ▓▓▓
 // ════════════════════════════════════════════════════════════════════════
 // buildSnapshot — sérialisation complète de S vers un objet snap.
 //
@@ -122,6 +122,7 @@ function buildSnapshot() {
       fiscalReserveAccount: S.fiscalReserveAccount || 0,
       fiscalReserveLog:     (S.fiscalReserveLog || []).slice(0, 200),
       ownFundsInjected:     S.ownFundsInjected || 0,
+      _ownFundsLegacyEUR:   S._ownFundsLegacyEUR,
       ownFundsLog:          (S.ownFundsLog || []).slice(0, 200),
       fiatConvFeePct:       (typeof S.fiatConvFeePct === 'number') ? S.fiatConvFeePct : 0.002,
 

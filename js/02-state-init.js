@@ -4730,6 +4730,28 @@ function computePortfolioTotal(){
   return S.portfolioTotal;
 }
 
+// ── v8 · Fonds Propres en € RÉEL injecté (figé, indépendant du taux courant) ──
+// = euros réellement tapés lors des injections fiat EUR (somme des fiatAmount du journal)
+//   + capital "legacy" (présent mais hors journal) figé UNE seule fois en € au taux du moment.
+function ownFundsEUR(){
+  const log = S.ownFundsLog || [];
+  let eurInjected   = 0;   // vrais euros entrés lors des injections EUR
+  let loggedEurUSDT = 0;   // leur contre-valeur USDT déjà comptée dans ownFundsInjected
+  for (let i = 0; i < log.length; i++){
+    const e = log[i];
+    if (e && e.fiatType === 'EUR'){
+      eurInjected   += (+e.fiatAmount || 0);
+      loggedEurUSDT += (+e.amount     || 0);
+    }
+  }
+  if (S._ownFundsLegacyEUR == null){
+    const legacyUSDT = Math.max(0, (S.ownFundsInjected || 0) - loggedEurUSDT);
+    S._ownFundsLegacyEUR = legacyUSDT * (S.usdEurRate || 0.92);
+  }
+  return (S._ownFundsLegacyEUR || 0) + eurInjected;
+}
+window.ownFundsEUR = ownFundsEUR;
+
 // ── v7.2 PHASE 15 · Santé du solde trading vs dettes dues au fisc ──
 // Spec utilisateur:
 //   100-35% = vert stable (sain)

@@ -1,5 +1,5 @@
 // ════════════════════════════════════════════════════════════════════════
-// ▓▓▓ AURA8 — 09b2-save-load.js · VERSION 127 · 10/06/2026 ▓▓▓
+// ▓▓▓ AURA8 — 09b2-save-load.js · VERSION 128 · 10/06/2026 ▓▓▓
 // ════════════════════════════════════════════════════════════════════════
 // saveState + loadState + hooks de fermeture — TOUTE la persistance ici.
 //
@@ -483,6 +483,7 @@ async function loadState() {
     if (snap.fiscalReserveAccount != null) S.fiscalReserveAccount = snap.fiscalReserveAccount;
     if (Array.isArray(snap.fiscalReserveLog)) S.fiscalReserveLog  = snap.fiscalReserveLog;
     if (snap.ownFundsInjected     != null) S.ownFundsInjected     = snap.ownFundsInjected;
+    if (snap._ownFundsLegacyEUR   != null) S._ownFundsLegacyEUR   = snap._ownFundsLegacyEUR;
     if (Array.isArray(snap.ownFundsLog))    S.ownFundsLog         = snap.ownFundsLog;
     if (typeof snap.fiatConvFeePct === 'number') S.fiatConvFeePct = snap.fiatConvFeePct;
   } catch(e) { dbg.push('fiat:err'); }

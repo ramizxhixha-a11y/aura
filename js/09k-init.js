@@ -32,7 +32,7 @@ function _renderWalletCards() {
     if (fiscalSub) fiscalSub.textContent = (S.fiscalReserveLog||[]).length + ' dépôts';
 
     // Fonds propres
-    const ownEUR = ((S.ownFundsInjected||0) * (S.usdEurRate||0.92));
+    const ownEUR = (typeof window.ownFundsEUR === 'function' ? window.ownFundsEUR() : (S.ownFundsInjected||0) * (S.usdEurRate||0.92));
     setEl('ownFundsVal', fmtEUR(ownEUR));
     const ownSub = document.getElementById('ownFundsSub');
     if (ownSub) ownSub.textContent = (S.ownFundsLog||[]).length + ' injection' + ((S.ownFundsLog||[]).length > 1 ? 's' : '');
