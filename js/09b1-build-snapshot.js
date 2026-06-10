@@ -1,5 +1,5 @@
 // ════════════════════════════════════════════════════════════════════════
-// ▓▓▓ AURA8 — 09b1-build-snapshot.js · VERSION 121 · 21/05/2026 ▓▓▓
+// ▓▓▓ AURA8 — 09b1-build-snapshot.js · VERSION 122 · 10/06/2026 ▓▓▓
 // ════════════════════════════════════════════════════════════════════════
 // buildSnapshot — sérialisation complète de S vers un objet snap.
 //
@@ -29,6 +29,7 @@ function buildSnapshot() {
       tradingAccount:  S.tradingAccount,
       leverage:        S.leverage,
       botAutoMode:     S.botAutoMode,
+      profitSplitCaissePct: S.profitSplitCaissePct,
 
       // Cycle
       cycle:    S.cycle,

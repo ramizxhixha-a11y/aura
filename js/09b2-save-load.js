@@ -1,5 +1,5 @@
 // ════════════════════════════════════════════════════════════════════════
-// ▓▓▓ AURA8 — 09b2-save-load.js · VERSION 126 · 08/06/2026 ▓▓▓
+// ▓▓▓ AURA8 — 09b2-save-load.js · VERSION 127 · 10/06/2026 ▓▓▓
 // ════════════════════════════════════════════════════════════════════════
 // saveState + loadState + hooks de fermeture — TOUTE la persistance ici.
 //
@@ -302,6 +302,7 @@ async function loadState() {
   try { S.tradingAccount  = safeNum(snap.tradingAccount,  S.tradingAccount); } catch(e){}
   try { S.leverage        = safeNum(snap.leverage,        0); } catch(e){}
   try { S.botAutoMode     = snap.botAutoMode !== undefined ? snap.botAutoMode : false; } catch(e){}
+  try { if (snap.profitSplitCaissePct != null) S.profitSplitCaissePct = safeNum(snap.profitSplitCaissePct, 30); } catch(e){}
 
   try {
     if (snap.heatmap)          S.heatmap          = snap.heatmap;
