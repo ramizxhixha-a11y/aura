@@ -320,7 +320,7 @@ body.real-mode-active { padding-top: 16px; }
           </div>
         </div>
         <!-- Réserve anti-négatif + Régime fiscal (cartes home, branchées dans 09k) -->
-        <div class="wc-accounts" style="padding-top:8px;border-top:1px dashed rgba(255,255,255,.06);margin-top:6px;">
+        <div class="wc-accounts" style="padding-top:8px;border-top:1px dashed rgba(255,255,255,.06);margin-top:6px;align-items:flex-start;">
           <div class="wc-account">
             <div class="wc-acc-icon">🛡️</div>
             <div class="wc-acc-body">
@@ -335,7 +335,20 @@ body.real-mode-active { padding-top: 16px; }
             <div class="wc-acc-body">
               <div class="wc-acc-label" title="Régime fiscal réellement appliqué selon le comportement du bot">Régime Fiscal</div>
               <div class="wc-acc-value" id="fiscalRegimeVal" style="color:var(--gold);font-size:13px;">—</div>
-              <div class="wc-acc-sub" id="fiscalRegimeSub" style="color:var(--t3);font-size:8px;">en attente</div>
+              <div class="wc-acc-sub" id="fiscalRegimeSub" style="color:var(--t3);font-size:8px;line-height:1.25;">en attente</div>
+            </div>
+          </div>
+          <div class="wc-account-sep"></div>
+          <div class="wc-account">
+            <div class="wc-acc-icon">⚖️</div>
+            <div class="wc-acc-body">
+              <div class="wc-acc-label" title="Part du bénéfice net envoyée en Caisse après chaque trade gagnant">Répartition</div>
+              <div style="display:flex;align-items:center;gap:4px;margin-top:1px;">
+                <button class="step-btn" onclick="changeProfitSplit(-5)" style="width:22px;height:22px;font-size:13px;line-height:1;">−</button>
+                <span id="splitDisp" style="font-family:var(--font-display);font-size:13px;font-weight:700;color:var(--ice);min-width:30px;text-align:center;">30%</span>
+                <button class="step-btn" onclick="changeProfitSplit(5)" style="width:22px;height:22px;font-size:13px;line-height:1;">+</button>
+              </div>
+              <div class="wc-acc-sub" id="splitSub" style="color:var(--t3);font-size:8px;margin-top:1px;">Trading 70%</div>
             </div>
           </div>
         </div>
