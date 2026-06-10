@@ -660,7 +660,19 @@ Core.describeCapabilities = describeCapabilities;
   // assemble le backup complet : AURA + Guardian
   function grabFull(){
     let auraSnap = null;
+    // 1. État live (si Guardian est embarqué dans la page AURA)
     try { if(typeof abGrabState === 'function') auraSnap = abGrabState(); } catch(e){}
+    // 2. Fallback : lire le snapshot dans localStorage (clé nexus_state_v2),
+    //    partagé entre onglets du MÊME navigateur. Indispensable quand Guardian
+    //    tourne dans un onglet séparé de Chrome : il n'a pas le S live d'AURA,
+    //    mais le localStorage lui est accessible. Sans ça, aura restait null.
+    if(!auraSnap || typeof auraSnap.cycle !== 'number'){
+      try {
+        const key = (CFG && CFG.storage && CFG.storage.saveKey) || 'nexus_state_v2';
+        const raw = localStorage.getItem(key);
+        if(raw){ const parsed = JSON.parse(raw); if(parsed && typeof parsed === 'object') auraSnap = parsed; }
+      } catch(e){}
+    }
     const cyc = auraSnap && typeof auraSnap.cycle === 'number' ? auraSnap.cycle
               : (auraSnap && auraSnap.state && auraSnap.state.cycle) || null;
     return {
