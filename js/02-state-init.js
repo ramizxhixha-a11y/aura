@@ -531,28 +531,34 @@ function redistributeFitness() {
     const pool = (S.agents || []).filter(a => !a.isBot && !a.isMeta);
     if (pool.length < 4) return;
 
-    const strong = pool.filter(a => (a.fitness || 0) >= 1700);
+    const strong = pool.filter(a => (a.fitness || 0) >= 1600);
     const weak   = pool.filter(a => (a.fitness || 0) <= 300);
-    if (strong.length === 0 || weak.length === 0) return;
+    // L'érosion des saturés s'applique dès qu'il y a des forts, même sans faibles
+    // à nourrir : un agent dominant ne doit jamais rester collé à 2000 par inertie.
+    if (strong.length === 0) return;
 
-    // 1+2. Érosion des forts (2% de l'excédent au-dessus de 1700) → pot commun
+    // 1+2. Érosion des forts (2% de l'excédent au-dessus de 1600) → pot commun
     let pot = 0;
     strong.forEach(a => {
-      const skim = (a.fitness - 1700) * 0.02 + 4;   // petit prélèvement
-      a.fitness = Math.max(1700, a.fitness - skim);
+      const skim = (a.fitness - 1600) * 0.02 + 4;   // petit prélèvement
+      a.fitness = Math.max(1600, a.fitness - skim);
       pot += skim;
     });
 
     // Comportement moyen des forts (pour l'apprentissage doux)
     const strongMeanScore = strong.reduce((s,a)=>s+(a.score||0),0) / strong.length;
 
-    // 3. Redistribution équitable aux faibles + apprentissage doux (10%)
-    const share = pot / weak.length;
-    weak.forEach(a => {
-      a.fitness = Math.min(2000, (a.fitness || 50) + share);
-      // glisse doucement vers le comportement des forts SANS se cloner (diversité préservée)
-      a.score = (a.score || 0) * 0.90 + strongMeanScore * 0.10;
-    });
+    // 3. Redistribution équitable aux faibles + apprentissage doux (10%).
+    //    S'il n'y a aucun faible, le pot se dissipe : les forts ont quand même
+    //    redescendu, c'est l'effet anti-saturation voulu.
+    if (weak.length > 0) {
+      const share = pot / weak.length;
+      weak.forEach(a => {
+        a.fitness = Math.min(2000, (a.fitness || 50) + share);
+        // glisse doucement vers le comportement des forts SANS se cloner (diversité préservée)
+        a.score = (a.score || 0) * 0.90 + strongMeanScore * 0.10;
+      });
+    }
 
     if (S.chainLog) {
       S.chainLog.push({ icon:'⚖️', desc:`Redistribution : ${strong.length} forts → ${weak.length} faibles (${Math.round(pot)} T$ · apprentissage doux)`, hash:rndHash(), time:nowStr() });
