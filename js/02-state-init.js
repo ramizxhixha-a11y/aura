@@ -4726,7 +4726,7 @@ function computePortfolioTotal(){
   // v7.5 · Formule mise à jour: (caisse + trading + réserve fiscale) × USD/EUR
   // Le levier emprunté reste exclu (c'est une dette, pas un actif).
   const baseUSD = (S.cashAccount || 0) + (S.tradingAccount || 0) + (S.fiscalReserveAccount || 0);
-  S.portfolioTotal = baseUSD * (S.usdEurRate || 0.92);
+  S.portfolioTotal = baseUSD;  // v8 · USD (tout en $) — l'affichage € est géré séparément (ownFundsEUR)
   return S.portfolioTotal;
 }
 
