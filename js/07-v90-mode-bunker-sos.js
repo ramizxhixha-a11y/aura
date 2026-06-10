@@ -1,5 +1,5 @@
 // ════════════════════════════════════════════════════════════
-// AURA8 — module consolidé 07/10
+// AURA8 — module consolidé 07/10 · maj 10/06/2026 (sync boutons répartition)
 // Contient : v90-mode-bunker-sos, veille-news-sociale, v5-1-brain-network-interactivity-tap-toolt, all-pairs-lmsr-gauges, open-positions-summary-home-page-v3-4
 // ════════════════════════════════════════════════════════════
 // ═══ v90 · MODE BUNKER SOS ═══
@@ -4589,6 +4589,7 @@ function renderHome() {
   setEl('cashPct',  cashPct.toFixed(1)+'%');
   setEl('tradVal',  fmt$2(S.tradingAccount));
   setEl('tradPct',  tradPct.toFixed(1)+'%');
+  try { if (typeof _syncSplitDisp === 'function') _syncSplitDisp(); } catch(e){}
 
   // v7.2 Phase 15 · Témoin santé trading vs dettes fiscales
   try {

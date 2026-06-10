@@ -1,5 +1,5 @@
 // ════════════════════════════════════════════════════════════
-// AURA8 — module consolidé 10/10 · VERSION 125 · 01/06/2026
+// AURA8 — module consolidé 10/10 · VERSION 126 · 10/06/2026 (boutons répartition portefeuille)
 // Contient : fin-bloc-restauration-v93, bloc-restauration-v94, fin-bloc-restauration-v94
 //
 // ★ v125 (01/06/2026) — SUPPRESSION SYSTÈME nexusInternal_*
@@ -1970,18 +1970,23 @@ function _updateNetIndicator() {
 }
 if(typeof _updateNetIndicator==='function') window._updateNetIndicator = _updateNetIndicator;
 
-function _updateSplitPct(val) {
-  const n = Math.max(0, Math.min(100, parseInt(val, 10) || 0));
+// v123 · Répartition bénéfices déplacée dans le Portefeuille (boutons ± type levier)
+function changeProfitSplit(delta) {
+  const cur = (typeof S.profitSplitCaissePct === 'number' ? S.profitSplitCaissePct : 30);
+  let n = cur + (delta || 0);
+  if (n < 0) n = 0;
+  if (n > 100) n = 100;
   S.profitSplitCaissePct = n;
-  const valEl = document.getElementById('splitVal');
-  const cEl = document.getElementById('splitCaissePreview');
-  const tEl = document.getElementById('splitTradingPreview');
-  if (valEl) valEl.textContent = n + '%';
-  if (cEl) cEl.textContent = n + '%';
-  if (tEl) tEl.textContent = (100 - n) + '%';
+  _syncSplitDisp();
+  try { if (typeof saveState === 'function') saveState(true); } catch(e){}
 }
-window._updateSplitPct = _updateSplitPct;
-if(typeof _updateSplitPct==='function') window._updateSplitPct = _updateSplitPct;
+function _syncSplitDisp() {
+  const n = (typeof S.profitSplitCaissePct === 'number' ? S.profitSplitCaissePct : 30);
+  const d = document.getElementById('splitDisp'); if (d) d.textContent = n + '%';
+  const s = document.getElementById('splitSub');  if (s) s.textContent = 'Trading ' + (100 - n) + '%';
+}
+window.changeProfitSplit = changeProfitSplit;
+window._syncSplitDisp = _syncSplitDisp;
 
 function buildFeeLogCSV() {
   const log = S.fees.feeLog;

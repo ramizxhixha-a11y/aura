@@ -1,5 +1,5 @@
 // ════════════════════════════════════════════════════════════════════════
-// ▓▓▓ AURA8 — 09g-modals.js ▓▓▓
+// ▓▓▓ AURA8 — 09g-modals.js · maj 10/06/2026 (curseur répartition retiré → Portefeuille) ▓▓▓
 // ════════════════════════════════════════════════════════════════════════
 // Modals — openDiagnostic, openSnapshotsModal, openWhyModal.
 //
@@ -206,24 +206,6 @@ function openDiagnostic() {
       ${usagePct > 80 ? '<div class="diag-note">⚠ Levier proche du max : risque de liquidation si marché contre toi</div>' : ''}
     </div>
 
-    <div class="diag-section">
-      <div class="diag-sec-title">⚙️ RÉPARTITION BÉNÉFICES</div>
-      <div style="font-size:10px;color:var(--t3);margin-bottom:8px;line-height:1.4;">
-        Après chaque trade gagnant, le bénéfice net (après frais + taxes) est réparti :
-      </div>
-      <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">
-        <span style="font-size:10px;color:var(--ice);font-weight:700;min-width:55px;">Caisse</span>
-        <input type="range" id="splitSlider" min="0" max="100" step="5" value="${S.profitSplitCaissePct || 30}"
-               oninput="_updateSplitPct(this.value)"
-               style="flex:1;height:6px;accent-color:var(--ice);">
-        <span id="splitVal" style="font-family:var(--font-mono);font-size:12px;font-weight:700;color:var(--ice);min-width:40px;text-align:right;">${S.profitSplitCaissePct || 30}%</span>
-      </div>
-      <div style="display:flex;justify-content:space-between;align-items:center;font-size:9px;color:var(--t3);">
-        <span>→ Caisse (sécurisé) : <span id="splitCaissePreview" style="color:var(--up);font-weight:700;">${S.profitSplitCaissePct || 30}%</span></span>
-        <span>→ Trading (re-investi) : <span id="splitTradingPreview" style="color:var(--gold);font-weight:700;">${100 - (S.profitSplitCaissePct || 30)}%</span></span>
-      </div>
-      <div class="diag-note" style="margin-top:6px;">Les taxes sont toujours envoyées vers la réserve fiscale (comptabilité propre). Les pertes restent dans Trading.</div>
-    </div>
   `;
 
   overlay.classList.add('open');
