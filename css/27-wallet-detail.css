@@ -1,0 +1,51 @@
+/* ═══════════════════════════════════════════════════════════
+   27-wallet-detail.css · v1 (11/06/2026)
+   Panneau « détail » qui monte du bas quand on tape une tuile de compte.
+   Utilise les tokens AURA (--s1, --border2, --t1/2/3, --up/--ice/--gold/--down).
+   ═══════════════════════════════════════════════════════════ */
+#wdBackdrop{
+  position:fixed; inset:0; background:rgba(0,0,0,.6);
+  opacity:0; pointer-events:none; transition:opacity .25s;
+  z-index:9000; backdrop-filter:blur(2px);
+}
+#wdBackdrop.open{ opacity:1; pointer-events:auto; }
+
+#wdSheet{
+  position:fixed; left:0; right:0; bottom:0; max-width:520px; margin:0 auto;
+  background:var(--s1); border:1px solid var(--border2); border-bottom:none;
+  border-radius:22px 22px 0 0; padding:8px 18px 30px;
+  transform:translateY(110%); transition:transform .3s cubic-bezier(.2,.8,.2,1);
+  z-index:9001; max-height:82vh; overflow-y:auto;
+}
+#wdSheet.open{ transform:translateY(0); }
+
+.wd-grab{ width:38px; height:4px; background:var(--border2); border-radius:100px; margin:6px auto 14px; }
+.wd-head{ display:flex; align-items:center; gap:10px; margin-bottom:4px; }
+.wd-head .icn{ font-size:24px; }
+.wd-head h3{ font-size:16px; font-weight:700; color:var(--t1); margin:0; }
+.wd-head .big{ font-family:var(--font-mono); font-size:21px; font-weight:700; margin-left:auto; }
+.wd-desc{ font-size:11.5px; color:var(--t2); line-height:1.55; margin:8px 0 14px; }
+.wd-sec{ font-size:9px; color:var(--t3); letter-spacing:.12em; text-transform:uppercase; font-weight:700; margin:16px 0 8px; }
+
+.wd-kv{ display:flex; justify-content:space-between; padding:7px 0; font-size:12.5px; border-bottom:1px solid var(--border); }
+.wd-kv:last-child{ border-bottom:none; }
+.wd-kv .k{ color:var(--t2); }
+.wd-kv .v{ font-family:var(--font-mono); font-weight:600; color:var(--t1); }
+
+.wd-pos{ padding:9px 0; border-bottom:1px solid var(--border); }
+.wd-pos:last-child{ border-bottom:none; }
+.wd-pos-top{ display:flex; justify-content:space-between; font-size:12.5px; margin-bottom:5px; color:var(--t1); }
+.wd-pos-bar{ height:6px; background:rgba(255,255,255,.06); border-radius:100px; overflow:hidden; }
+.wd-pos-fill{ height:100%; border-radius:100px; }
+
+.wd-hist{ display:flex; justify-content:space-between; align-items:center; padding:8px 0; border-bottom:1px solid var(--border); font-size:12px; color:var(--t1); }
+.wd-hist:last-child{ border-bottom:none; }
+.wd-hist .when{ color:var(--t3); font-size:10px; }
+.wd-hist .amt{ font-family:var(--font-mono); font-weight:700; }
+
+.wd-empty{ font-size:11px; color:var(--t3); font-style:italic; padding:8px 0; }
+.wd-close{
+  width:100%; margin-top:18px; padding:12px; border-radius:12px;
+  border:1px solid var(--border2); background:var(--s2); color:var(--t1);
+  font-size:13px; font-weight:600; cursor:pointer;
+}

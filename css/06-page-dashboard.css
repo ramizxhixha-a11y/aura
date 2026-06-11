@@ -72,7 +72,7 @@
 .wc-account {
   display: flex; flex-direction: column; gap: 3px; align-items: flex-start;
   background: var(--s2); border: 1px solid var(--border); border-radius: 13px;
-  padding: 8px 9px; min-height: 60px;
+  padding: 8px 9px; min-height: 60px; cursor: pointer;
 }
 .wc-account-sep { display: none; }
 .wc-acc-icon { font-size: 14px; margin-top: 0; margin-bottom: 1px; flex-shrink: 0; }
