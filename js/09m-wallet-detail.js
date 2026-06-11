@@ -31,7 +31,15 @@
       case 'caisse': return {icn:'🏦', title:'Caisse', big:txt('cashVal'), color:'var(--ice)',
         desc:'Ta réserve personnelle. <b style="color:var(--ice)">Le bot ne peut jamais y toucher</b> — verrou de sécurité absolu.',
         kv:[['Part du portefeuille', txt('cashPct')], ['Accès du bot','🔒 Verrouillé']],
-        empty:'Les mouvements de caisse ne sont pas journalisés individuellement.'};
+        hist:(Array.isArray(s.cashLog)?s.cashLog:[]).slice(0,6).map(e=>{
+          const lbl = e.source==='profit_split' ? 'Bénéfice → Caisse'
+            : e.source==='transfer_in'  ? 'Transfert Trading → Caisse'
+            : e.source==='transfer_out' ? 'Transfert Caisse → Trading'
+            : (e.source||'Mouvement');
+          const pos = num(e.amount,0)>=0;
+          return [lbl, e.time||'', (pos?'+':'−')+'$'+fmt(Math.abs(num(e.amount,0))), pos?'var(--up)':'var(--down)'];
+        }),
+        empty:(s.cashLog&&s.cashLog.length)?null:'Aucun mouvement de caisse pour l\'instant.'};
 
       case 'trading': {
         const ops = Array.isArray(s.openPositions) ? s.openPositions : [];
@@ -59,14 +67,14 @@
       case 'fiscale': return {icn:'🏛️', title:'Réserve Fiscale', big:txt('fiscalResVal'), color:'var(--gold)',
         desc:'Reçoit automatiquement les taxes sur gains et les intérêts de levier. <b>Ne diminue jamais</b> (sauf retrait explicite).',
         kv:[['Dépôts', txt('fiscalResSub')], ['Région', reg.label||tax.region||'—']],
-        hist:(Array.isArray(s.fiscalReserveLog)?s.fiscalReserveLog:[]).slice(-6).reverse().map(e=>
+        hist:(Array.isArray(s.fiscalReserveLog)?s.fiscalReserveLog:[]).slice(0,6).map(e=>
           [e.desc||e.label||'Dépôt', e.time||'', (e.amount!=null?('+$'+fmt(e.amount)):''), 'var(--gold)']),
         empty:(s.fiscalReserveLog&&s.fiscalReserveLog.length)?null:'Aucun dépôt journalisé (cumul automatique).'};
 
       case 'fonds': return {icn:'💎', title:'Fonds Propres', big:txt('ownFundsVal'), color:'var(--up)',
         desc:'L\'argent réel que tu as injecté (en euros). <b style="color:var(--up)">Fiscalement exonéré</b> — affiché en € car c\'est ce que tu as vraiment mis.',
         kv:[['Injecté (équiv. USDT)','$'+fmt(s.ownFundsInjected)], ['Statut','Exonéré'], ['Région', reg.label||tax.region||'—']],
-        hist:(Array.isArray(s.ownFundsLog)?s.ownFundsLog:[]).slice(-6).reverse().map(e=>
+        hist:(Array.isArray(s.ownFundsLog)?s.ownFundsLog:[]).slice(0,6).map(e=>
           [(e.fiatType||'EUR')+' @ '+(e.rate!=null?e.rate:'—'), e.time||'', (e.fiatAmount!=null?('+'+fmt(e.fiatAmount)+' '+(e.fiatType||'€')):''), 'var(--up)']),
         empty:(s.ownFundsLog&&s.ownFundsLog.length)?null:'Capital initial — aucune injection ponctuelle journalisée.'};
 

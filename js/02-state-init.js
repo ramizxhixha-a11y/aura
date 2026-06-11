@@ -79,6 +79,7 @@ const S = {
   // (séparé de feeReserveAccount — alimenté en Phase 2 par les transferts trading→caisse)
   fiscalReserveAccount: 0,  // cumul des taxes prélevées (USDT)
   fiscalReserveLog:    [],  // historique des dépôts {amount, source, ts}
+  cashLog:             [],  // historique mouvements caisse {amount, source, ts, time}
 
   // ── RÉSERVE ANTI-NÉGATIF (livraison trading · juin 2026) ──
   // Coût garanti d'aller-retour mis de côté à l'ouverture de chaque trade
@@ -5589,6 +5590,9 @@ function closePosition(id, botClose = false) {
       // Envoyer les taxes vers fiscalReserveAccount (option B — comptabilité propre)
       if (_taxAmount > 0) {
         S.fiscalReserveAccount = (S.fiscalReserveAccount || 0) + _taxAmount;
+        if(!S.fiscalReserveLog) S.fiscalReserveLog = [];
+        S.fiscalReserveLog.unshift({ amount:_taxAmount, source:'tax_trade_close', ts:Date.now(), time:nowStr() });
+        if(S.fiscalReserveLog.length > 200) S.fiscalReserveLog.pop();
       }
 
       // Split du net restant
@@ -5599,6 +5603,9 @@ function closePosition(id, botClose = false) {
       // Appliquer les mouvements
       S.cashAccount = (S.cashAccount || 0) + _toCaisse;
       S.tradingAccount += _toTrading;
+      if(!S.cashLog) S.cashLog = [];
+      S.cashLog.unshift({ amount:_toCaisse, source:'profit_split', ts:Date.now(), time:nowStr() });
+      if(S.cashLog.length > 200) S.cashLog.pop();
 
       // Log discret dans chainLog
       S.chainLog.push({
@@ -6071,6 +6078,9 @@ function confirmTransfer() {
     if(amount > S.cashAccount) { showToast('⚠ Fonds insuffisants en caisse', 2800, 'critical'); return; }
     S.cashAccount    -= amount;
     S.tradingAccount += amount;
+    if(!S.cashLog) S.cashLog = [];
+    S.cashLog.unshift({ amount:-amount, source:'transfer_out', ts:Date.now(), time:nowStr() });
+    if(S.cashLog.length > 200) S.cashLog.pop();
     // Recalculer la réserve de levier après injection de capital
     syncLeverageReserve();
     showToast('✅ +' + fmt$(amount) + ' → Trading · Levier mis à jour');
@@ -6108,6 +6118,9 @@ function confirmTransfer() {
     }
     S.tradingAccount -= amount;
     S.cashAccount    += amount;
+    if(!S.cashLog) S.cashLog = [];
+    S.cashLog.unshift({ amount:amount, source:'transfer_in', ts:Date.now(), time:nowStr() });
+    if(S.cashLog.length > 200) S.cashLog.pop();
     syncLeverageReserve();
     showToast('✅ +' + fmt$(amount) + ' → Caisse' + warnMsg, 2800, 'user');
   }

@@ -482,6 +482,7 @@ async function loadState() {
   try {
     if (snap.fiscalReserveAccount != null) S.fiscalReserveAccount = snap.fiscalReserveAccount;
     if (Array.isArray(snap.fiscalReserveLog)) S.fiscalReserveLog  = snap.fiscalReserveLog;
+    if (Array.isArray(snap.cashLog))          S.cashLog            = snap.cashLog;
     if (snap.ownFundsInjected     != null) S.ownFundsInjected     = snap.ownFundsInjected;
     if (snap._ownFundsLegacyEUR   != null) S._ownFundsLegacyEUR   = snap._ownFundsLegacyEUR;
     if (Array.isArray(snap.ownFundsLog))    S.ownFundsLog         = snap.ownFundsLog;

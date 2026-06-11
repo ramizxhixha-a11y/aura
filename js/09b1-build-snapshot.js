@@ -121,6 +121,7 @@ function buildSnapshot() {
       // Comptes Fiat / fiscal / fonds propres
       fiscalReserveAccount: S.fiscalReserveAccount || 0,
       fiscalReserveLog:     (S.fiscalReserveLog || []).slice(0, 200),
+      cashLog:              (S.cashLog || []).slice(0, 200),
       ownFundsInjected:     S.ownFundsInjected || 0,
       _ownFundsLegacyEUR:   S._ownFundsLegacyEUR,
       ownFundsLog:          (S.ownFundsLog || []).slice(0, 200),
