@@ -1,5 +1,5 @@
 /* ============================================================
-   GUARDIAN EMBED · bouton flottant + panneau DANS AURA
+   GUARDIAN EMBED · bouton flottant + panneau DANS AURA · maj 11/06/2026 (auto-scan périodique + toast)
    Charge après guardian-config.js + guardian-core.js.
    Donne au moteur l'accès live à S, au DOM et aux erreurs JS
    → active la comparaison UI↔état et la capture d'erreurs.
@@ -108,7 +108,7 @@ ready(function(){
     btn.textContent='▶ Relancer l\'analyse'; btn.disabled=false;
   }
 
-  fab.onclick=()=>{ ov.classList.add('open'); if(!last) run(); };
+  fab.onclick=()=>{ ov.classList.add('open'); run(); };  // analyse fraîche à chaque ouverture
   document.getElementById('gdnClose').onclick=()=>ov.classList.remove('open');
   ov.onclick=e=>{ if(e.target===ov) ov.classList.remove('open'); };
   document.getElementById('gdnRun').onclick=run;
@@ -124,8 +124,36 @@ ready(function(){
     };
   });
 
-  /* analyse silencieuse au démarrage (après 4s) pour colorer le bouton si souci */
-  setTimeout(()=>{ window.GuardianCore.runAll().then(rep=>{ last=rep; updateFab(rep); }).catch(()=>{}); }, 4000);
+  /* ── Analyse silencieuse auto : démarrage + périodique + retour au premier plan ──
+     Met à jour la pastille du bouclier sans ouvrir le panneau. Toast UNIQUEMENT sur un
+     NOUVEAU problème (anti-spam). Cadence modérée (2 min) + au focus → économe en batterie. */
+  let _gdnPrevCrit = 0;
+  function _gdnToast(msg){
+    try{
+      const t=document.createElement('div');
+      t.textContent=msg;
+      t.style.cssText='position:fixed;left:50%;bottom:88px;transform:translateX(-50%);z-index:2147483647;'
+        +'background:#2a0d12;border:1px solid #ff4d6e;color:#ffe;padding:10px 14px;border-radius:10px;'
+        +'font:600 13px/1.35 system-ui,sans-serif;box-shadow:0 6px 22px rgba(0,0,0,.55);max-width:84vw;text-align:center;';
+      document.body.appendChild(t);
+      setTimeout(()=>{ t.style.transition='opacity .4s'; t.style.opacity='0'; setTimeout(()=>{ if(t.parentNode) t.remove(); },420); },4500);
+    }catch(e){}
+  }
+  function _gdnSilentScan(){
+    try{
+      window.GuardianCore.runAll().then(rep=>{
+        last=rep; updateFab(rep);
+        const crit = rep ? rep.results.filter(r=>r.level==='crit').length : 0;
+        if(crit > _gdnPrevCrit){
+          _gdnToast('🛡️ Guardian : '+crit+' problème'+(crit>1?'s':'')+' détecté'+(crit>1?'s':'')+' — touche le bouclier');
+        }
+        _gdnPrevCrit = crit;
+      }).catch(()=>{});
+    }catch(e){}
+  }
+  setTimeout(_gdnSilentScan, 4000);                                   // 1er scan au démarrage d'AURA
+  setInterval(_gdnSilentScan, 2*60*1000);                             // re-scan toutes les 2 min
+  document.addEventListener('visibilitychange', ()=>{ if(document.visibilityState==='visible') _gdnSilentScan(); }); // au retour sur AURA
 
   /* BACKUP AUTO : au démarrage (après 8s) puis toutes les 2 min, on vérifie si un
      backup est dû (selon l'intervalle réglé). abRun ne sauvegarde que si l'intervalle
