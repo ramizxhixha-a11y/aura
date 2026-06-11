@@ -18,7 +18,7 @@ function renderLearningHistory() {
   const won    = hist.filter(h=>h.won).length;
   const lost   = hist.length - won;
   const avgPnl = hist.length > 0
-    ? (hist.reduce((s,h)=>s+h.pnlPct,0)/hist.length).toFixed(2)
+    ? (hist.reduce((s,h)=>s+(typeof h.pnlPct==='number'?h.pnlPct:0),0)/hist.length).toFixed(2)
     : '0.00';
   const wr = hist.length > 0 ? Math.round(won/hist.length*100) : 0;
 
@@ -46,7 +46,8 @@ function renderLearningHistory() {
   feed.innerHTML = recent.map(h => {
     const up      = h.won;
     const dotCol  = up ? 'var(--up)' : 'var(--down)';
-    const pnlStr  = (h.pnlPct>=0?'+':'')+h.pnlPct.toFixed(2)+'%';
+    const _pp = (typeof h.pnlPct === 'number' && isFinite(h.pnlPct)) ? h.pnlPct : 0;
+    const pnlStr  = (_pp>=0?'+':'')+_pp.toFixed(2)+'%';
     const srcIcon = h.source==='position' ? '📈' : h.source==='trade' ? '⚡' : '🔄';
     const adj     = h.adjustments || [];
     const topAgent= adj.length>0
