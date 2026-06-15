@@ -2134,8 +2134,15 @@ function _initAlerts() {
 function checkPnlAlerts() {
   _initAlerts();
   const a = S.pnlAlerts;
-  const pnlSession = S.portfolio && S._startPortfolio
-    ? (S.portfolio - S._startPortfolio) : 0;
+  // FIX P&L session : meme source que le hero badge et les quick-stats —
+  // la periode recalibree a minuit (today.usd), et non le _startPortfolio
+  // fige d'il y a longtemps qui donnait de fausses alertes (-$14.67 sur un
+  // portefeuille pourtant plat).
+  let pnlSession = 0;
+  if (typeof _computePnlByPeriod === 'function') {
+    const _pp = _computePnlByPeriod();
+    if (_pp && _pp.today && _pp.today.hasData) pnlSession = _pp.today.usd;
+  }
   const dd = S.perf?.maxDrawdown || 0;
   const totalT = S.totalTrades || 0;
 
