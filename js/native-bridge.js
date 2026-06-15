@@ -1,8 +1,10 @@
-/* ▓▓▓ native-bridge.js · VERSION 2 ▓▓▓
+/* ▓▓▓ native-bridge.js · VERSION 3 ▓▓▓
    Pont natif AURA <-> app Android (Capacitor + cordova-plugin-background-mode).
    1) Service premier plan : garde le process en vie ecran eteint.
-   2) Audio silencieux en boucle : empeche Chrome/WebView de RALENTIR
-      les timers JS (simTick) quand l'ecran est eteint.
+   2) Audio INAUDIBLE a puissance NON NULLE (45 Hz, ~9%) en boucle :
+      le systeme le compte comme "audio actif" => ne ralentit plus les
+      timers JS (simTick + chrono) ecran eteint. La tablette ne reproduit
+      pas 45 Hz : aucun son entendu.
    TOTALEMENT INERTE dans un navigateur normal (ni Capacitor ni cordova). */
 (function () {
   'use strict';
@@ -10,7 +12,35 @@
   var isNative = !!(window.Capacitor || window.cordova);
   function log(m) { try { console.log('[native-bridge] ' + m); } catch (e) {} }
 
-  /* ============ 1) SERVICE PREMIER PLAN ============ */
+  /* ============ ANTI-BRIDAGE : audio inaudible ============ */
+  var TONE = 'data:audio/wav;base64,UklGRmQfAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YUAfAACAgIGBgoKDg4OEhIWFhYaGhoeHh4iIiImJiYqKioqKi4uLi4uLjIyMjIyMjIyMjIyMjIyMjIuLi4uLi4qKioqKiYmJiIiIh4eHhoaGhYWFhISDg4KCgoGBgICAf39+fn19fXx8e3t7enp6eXl4eHh4d3d3dnZ2dnZ1dXV1dXV0dHR0dHR0dHR0dHR0dHR0dXV1dXV1dnZ2dnd3d3d4eHh5eXl6enp7e3x8fH19fn5+f3+AgIGBgYKCg4ODhISFhYWGhoeHh4iIiIiJiYmKioqKi4uLi4uLi4yMjIyMjIyMjIyMjIyMjIyLi4uLi4uKioqKiYmJiYiIiIeHh4aGhoWFhISEg4OCgoKBgYCAf39/fn59fX18fHt7e3p6eXl5eHh4d3d3d3Z2dnZ1dXV1dXV0dHR0dHR0dHR0dHR0dHR0dHV1dXV1dXZ2dnZ3d3d3eHh4eXl5enp6e3t8fHx9fX5+fn9/gICBgYGCgoODhISEhYWFhoaHh4eIiIiJiYmJioqKiouLi4uLi4yMjIyMjIyMjIyMjIyMjIyMi4uLi4uLioqKiomJiYmIiIiHh4eGhoWFhYSEhIODgoKBgYGAgH9/fn5+fX18fHx7e3p6enl5eXh4eHd3d3d2dnZ2dXV1dXV1dHR0dHR0dHR0dHR0dHR0dHR1dXV1dXV2dnZ2d3d3d3h4eHl5eXp6e3t7fHx9fX1+fn9/f4CAgYGCgoKDg4SEhIWFhoaGh4eHiIiIiYmJiYqKioqLi4uLi4uMjIyMjIyMjIyMjIyMjIyMi4uLi4uLi4qKioqJiYmIiIiIh4eHhoaFhYWEhIODg4KCgYGBgIB/f35+fn19fHx8e3t6enp5eXl4eHh3d3d3dnZ2dnV1dXV1dXR0dHR0dHR0dHR0dHR0dHR1dXV1dXV2dnZ2dnd3d3h4eHh5eXp6ent7e3x8fX19fn5/f4CAgIGBgoKCg4OEhIWFhYaGhoeHh4iIiImJiYqKioqKi4uLi4uLjIyMjIyMjIyMjIyMjIyMjIuLi4uLi4qKioqKiYmJiIiIh4eHhoaGhYWFhISDg4OCgoGBgICAf39+fn19fXx8e3t7enp6eXl5eHh4d3d3dnZ2dnZ1dXV1dXV0dHR0dHR0dHR0dHR0dHR0dXV1dXV1dnZ2dnZ3d3d4eHh5eXl6enp7e3t8fH19fn5+f3+AgICBgYKCg4ODhISFhYWGhoaHh4iIiIiJiYmKioqKiouLi4uLi4yMjIyMjIyMjIyMjIyMjIyLi4uLi4uKioqKiYmJiYiIiIeHh4aGhoWFhISEg4OCgoKBgYCAf39/fn59fX18fHt7e3p6eXl5eHh4eHd3d3Z2dnZ1dXV1dXV1dHR0dHR0dHR0dHR0dHR0dHV1dXV1dXZ2dnZ3d3d3eHh4eXl5enp6e3t8fHx9fX5+fn9/gICBgYGCgoODg4SEhYWFhoaHh4eIiIiJiYmJioqKiouLi4uLi4yMjIyMjIyMjIyMjIyMjIyMi4uLi4uLioqKiomJiYmIiIiHh4eGhoaFhYSEhIODgoKCgYGAgH9/f35+fX18fHx7e3t6enl5eXh4eHd3d3d2dnZ2dXV1dXV1dHR0dHR0dHR0dHR0dHR0dHR1dXV1dXV2dnZ2d3d3d3h4eHl5eXp6e3t7fHx8fX1+fn9/f4CAgYGCgoKDg4SEhIWFhoaGh4eHiIiIiYmJiYqKioqLi4uLi4uMjIyMjIyMjIyMjIyMjIyMjIuLi4uLi4qKioqJiYmJiIiIh4eHhoaFhYWEhIODg4KCgYGBgIB/f35+fn19fHx8e3t6enp5eXl4eHh3d3d3dnZ2dnV1dXV1dXR0dHR0dHR0dHR0dHR0dHR1dXV1dXV1dnZ2dnd3d3h4eHh5eXl6ent7e3x8fX19fn5/f3+AgIGBgoKCg4OEhISFhYaGhoeHh4iIiImJiYmKioqKi4uLi4uLjIyMjIyMjIyMjIyMjIyMjIuLi4uLi4qKioqKiYmJiIiIiIeHhoaGhYWFhISDg4OCgoGBgICAf39+fn59fXx8e3t7enp6eXl5eHh4d3d3dnZ2dnZ1dXV1dXV0dHR0dHR0dHR0dHR0dHR0dXV1dXV1dnZ2dnZ3d3d4eHh5eXl6enp7e3t8fH19fX5+f3+AgICBgYKCg4ODhISFhYWGhoaHh4eIiIiJiYmKioqKiouLi4uLi4yMjIyMjIyMjIyMjIyMjIyLi4uLi4uKioqKiomJiYiIiIeHh4aGhoWFhYSEg4OCgoKBgYCAgH9/fn59fX18fHt7e3p6enl5eHh4eHd3d3Z2dnZ2dXV1dXV1dHR0dHR0dHR0dHR0dHR0dHV1dXV1dXZ2dnZ3d3d3eHh4eXl5enp6e3t8fHx9fX5+fn9/gICBgYGCgoODg4SEhYWFhoaHh4eIiIiIiYmJioqKiouLi4uLi4uMjIyMjIyMjIyMjIyMjIyMi4uLi4uLioqKiomJiYmIiIiHh4eGhoaFhYSEhIODgoKCgYGAgH9/f35+fX19fHx7e3t6enl5eXh4eHd3d3d2dnZ2dXV1dXV1dHR0dHR0dHR0dHR0dHR0dHR1dXV1dXV2dnZ2d3d3d3h4eHl5eXp6ent7fHx8fX1+fn5/f4CAgYGBgoKDg4SEhIWFhYaGh4eHiIiIiYmJiYqKioqLi4uLi4uMjIyMjIyMjIyMjIyMjIyMjIuLi4uLi4qKioqJiYmJiIiIh4eHhoaFhYWEhISDg4KCgYGBgIB/f35+fn19fHx8e3t6enp5eXl4eHh3d3d3dnZ2dnV1dXV1dXR0dHR0dHR0dHR0dHR0dHR0dXV1dXV1dnZ2dnd3d3d4eHh5eXl6ent7e3x8fX19fn5/f3+AgIGBgoKCg4OEhISFhYaGhoeHh4iIiImJiYmKioqKi4uLi4uLjIyMjIyMjIyMjIyMjIyMjIuLi4uLi4uKioqKiYmJiIiIiIeHh4aGhYWFhISDg4OCgoGBgYCAf39+fn59fXx8fHt7enp6eXl5eHh4d3d3d3Z2dnZ1dXV1dXV0dHR0dHR0dHR0dHR0dHR0dXV1dXV1dnZ2dnZ3d3d4eHh4eXl6enp7e3t8fH19fX5+f3+AgICBgYKCgoODhISFhYWGhoaHh4eIiIiJiYmKioqKiouLi4uLi4yMjIyMjIyMjIyMjIyMjIyLi4uLi4uKioqKiomJiYiIiIeHh4aGhoWFhYSEg4ODgoKBgYCAgH9/fn59fX18fHt7e3p6enl5eXh4eHd3d3Z2dnZ2dXV1dXV1dHR0dHR0dHR0dHR0dHR0dHV1dXV1dXZ2dnZ2d3d3eHh4eXl5enp6e3t7fHx9fX5+fn9/gICAgYGCgoODg4SEhYWFhoaGh4eIiIiIiYmJioqKioqLi4uLi4uMjIyMjIyMjIyMjIyMjIyMi4uLi4uLioqKiomJiYmIiIiHh4eGhoaFhYSEhIODgoKCgYGAgH9/f35+fX19fHx7e3t6enl5eXh4eHh3d3d2dnZ2dXV1dXV1dXR0dHR0dHR0dHR0dHR0dHR1dXV1dXV2dnZ2d3d3d3h4eHl5eXp6ent7fHx8fX1+fn5/f4CAgYGBgoKDg4OEhIWFhYaGh4eHiIiIiYmJiYqKioqLi4uLi4uMjIyMjIyMjIyMjIyMjIyMjIuLi4uLi4qKioqJiYmJiIiIh4eHhoaGhYWEhISDg4KCgoGBgIB/f39+fn19fHx8e3t7enp5eXl4eHh3d3d3dnZ2dnV1dXV1dXR0dHR0dHR0dHR0dHR0dHR0dXV1dXV1dnZ2dnd3d3d4eHh5eXl6ent7e3x8fH19fn5/f3+AgIGBgoKCg4OEhISFhYaGhoeHh4iIiImJiYmKioqKi4uLi4uLjIyMjIyMjIyMjIyMjIyMjIyLi4uLi4uKioqKiYmJiYiIiIeHh4aGhYWFhISDg4OCgoGBgYCAf39+fn59fXx8fHt7enp6eXl5eHh4d3d3d3Z2dnZ1dXV1dXV0dHR0dHR0dHR0dHR0dHR0dXV1dXV1dXZ2dnZ3d3d4eHh4eXl5enp7e3t8fH19fX5+f39/gICBgYKCgoODhISEhYWGhoaHh4eIiIiJiYmJioqKiouLi4uLi4yMjIyMjIyMjIyMjIyMjIyLi4uLi4uKioqKiomJiYiIiIiHh4aGhoWFhYSEg4ODgoKBgYCAgH9/fn5+fX18fHt7e3p6enl5eXh4eHd3d3Z2dnZ2dXV1dXV1dHR0dHR0dHR0dHR0dHR0dHV1dXV1dXZ2dnZ2d3d3eHh4eXl5enp6e3t7fHx9fX1+fn9/gICAgYGCgoODg4SEhYWFhoaGh4eHiIiIiYmJioqKioqLi4uLi4uMjIyMjIyMjIyMjIyMjIyMi4uLi4uLioqKioqJiYmIiIiHh4eGhoaFhYWEhIODgoKCgYGAgIB/f35+fX19fHx7e3t6enp5eXh4eHh3d3d2dnZ2dnV1dXV1dXR0dHR0dHR0dHR0dHR0dHR1dXV1dXV2dnZ2d3d3d3h4eHl5eXp6ent7fHx8fX1+fn5/f4CAgYGBgoKDg4OEhIWFhYaGh4eHiIiIiImJiYqKioqLi4uLi4uLjIyMjIyMjIyMjIyMjIyMjIuLi4uLi4qKioqJiYmJiIiIh4eHhoaGhYWEhISDg4KCgoGBgIB/f39+fn19fXx8e3t7enp5eXl4eHh3d3d3dnZ2dnV1dXV1dXR0dHR0dHR0dHR0dHR0dHR0dXV1dXV1dnZ2dnd3d3d4eHh5eXl6enp7e3x8fH19fn5+f3+AgIGBgYKCg4OEhISFhYWGhoeHh4iIiImJiYmKioqKi4uLi4uLjIyMjIyMjIyMjIyMjIyMjIyLi4uLi4uKioqKiYmJiYiIiIeHh4aGhYWFhISEg4OCgoGBgYCAf39+fn59fXx8fHt7enp6eXl5eHh4d3d3d3Z2dnZ1dXV1dXV0dHR0dHR0dHR0dHR0dHR0dHV1dXV1dXZ2dnZ3d3d3eHh4eXl5enp7e3t8fH19fX5+f39/gICBgYKCgoODhISEhYWGhoaHh4eIiIiJiYmJioqKiouLi4uLi4yMjIyMjIyMjIyMjIyMjIyLi4uLi4uLioqKiomJiYiIiIiHh4eGhoWFhYSEg4ODgoKBgYGAgH9/fn5+fX18fHx7e3p6enl5eXh4eHd3d3d2dnZ2dXV1dXV1dHR0dHR0dHR0dHR0dHR0dHV1dXV1dXZ2dnZ2d3d3eHh4eHl5enp6e3t7fHx9fX1+fn9/gICAgYGCgoKDg4SEhYWFhoaGh4eHiIiIiYmJioqKioqLi4uLi4uMjIyMjIyMjIyMjIyMjIyMi4uLi4uLioqKioqJiYmIiIiHh4eGhoaFhYWEhIODg4KCgYGAgIB/f35+fX19fHx7e3t6enp5eXl4eHh3d3d2dnZ2dnV1dXV1dXR0dHR0dHR0dHR0dHR0dHR1dXV1dXV2dnZ2dnd3d3h4eHl5eXp6ent7e3x8fX1+fn5/f4CAgIGBgoKDg4OEhIWFhYaGhoeHiIiIiImJiYqKioqKi4uLi4uLjIyMjIyMjIyMjIyMjIyMjIuLi4uLi4qKioqJiYmJiIiIh4eHhoaGhYWEhISDg4KCgoGBgIB/f39+fn19fXx8e3t7enp5eXl4eHh4d3d3dnZ2dnV1dXV1dXV0dHR0dHR0dHR0dHR0dHR0dXV1dXV1dnZ2dnd3d3d4eHh5eXl6enp7e3x8fH19fn5+f3+AgIGBgYKCg4ODhISFhYWGhoeHh4iIiImJiYmKioqKi4uLi4uLjIyMjIyMjIyMjIyMjIyMjIyLi4uLi4uKioqKiYmJiYiIiIeHh4aGhoWFhISEg4OCgoKBgYCAf39/fn59fXx8fHt7e3p6eXl5eHh4d3d3d3Z2dnZ1dXV1dXV0dHR0dHR0dHR0dHR0dHR0dHV1dXV1dXZ2dnZ3d3d3eHh4eXl5enp7e3t8fHx9fX5+f39/gICBgYKCgoODhISEhYWGhoaHh4eIiIiJiYmJioqKiouLi4uLi4yMjIyMjIyMjIyMjIyMjIyMi4uLi4uLioqKiomJiYmIiIiHh4eGhoWFhYSEg4ODgoKBgYGAgH9/fn5+fX18fHx7e3p6enl5eXh4eHd3d3d2dnZ2dXV1dXV1dHR0dHR0dHR0dHR0dHR0dHV1dXV1dXV2dnZ2d3d3eHh4eHl5eXp6e3t7fHx9fX1+fn9/f4CAgYGCgoKDg4SEhIWFhoaGh4eHiIiIiYmJiYqKioqLi4uLi4uMjIyMjIyMjIyMjIyMjIyMi4uLi4uLioqKioqJiYmIiIiIh4eGhoaFhYWEhIODg4KCgYGAgIB/f35+fn19fHx7e3t6enp5eXl4eHh3d3d2dnZ2dnV1dXV1dXR0dHR0dHR0dHR0dHR0dHR1dXV1dXV2dnZ2dnd3d3h4eHl5eXp6ent7e3x8fX19fn5/f4CAgIGBgoKDg4OEhIWFhYaGhoeHh4iIiImJiYqKioqKi4uLi4uLjIyMjIyMjIyMjIyMjIyMjIuLi4uLi4qKioqKiYmJiIiIh4eHhoaGhYWFhISDg4KCgoGBgICAf39+fn19fXx8e3t7enp6eXl4eHh4d3d3dnZ2dnZ1dXV1dXV0dHR0dHR0dHR0dHR0dHR0dXV1dXV1dnZ2dnd3d3d4eHh5eXl6enp7e3x8fH19fn5+f3+AgIGBgYKCg4ODhISFhYWGhoeHh4iIiIiJiYmKioqKi4uLi4uLi4yMjIyMjIyMjIyMjIyMjIyLi4uLi4uKioqKiYmJiYiIiIeHh4aGhoWFhISEg4OCgoKBgYCAf39/fn59fX18fHt7e3p6eXl5eHh4d3d3d3Z2dnZ1dXV1dXV0dHR0dHR0dHR0dHR0dHR0dHV1dXV1dXZ2dnZ3d3d3eHh4eXl5enp6e3t8fHx9fX5+fn9/gICBgYGCgoODhISEhYWFhoaHh4eIiIiJiYmJioqKiouLi4uLi4yMjIyMjIyMjIyMjIyMjIyMi4uLi4uLioqKiomJiYmIiIiHh4eGhoWFhYSEhIODgoKBgYGAgH9/fn5+fX18fHx7e3p6enl5eXh4eHd3d3d2dnZ2dXV1dXV1dHR0dHR0dHR0dHR0dHR0dHR1dXV1dXV2dnZ2d3d3d3h4eHl5eXp6e3t7fHx9fX1+fn9/f4CAgYGCgoKDg4SEhIWFhoaGh4eHiIiIiYmJiYqKioqLi4uLi4uMjIyMjIyMjIyMjIyMjIyMi4uLi4uLi4qKioqJiYmIiIiIh4eHhoaFhYWEhIODg4KCgYGBgIB/f35+fn19fHx8e3t6enp5eXl4eHh3d3d3dnZ2dnV1dXV1dXR0dHR0dHR0dHR0dHR0dHR1dXV1dXV2dnZ2dnd3d3h4eHh5eXp6ent7e3x8fX19fn5/f4CAgIGBgoKCg4OEhIWFhYaGhoeHh4iIiImJiYqKioqKi4uLi4uLjIyMjIyMjIyMjIyMjIyMjIuLi4uLi4qKioqKiYmJiIiIh4eHhoaGhYWFhISDg4OCgoGBgICAf39+fn19fXx8e3t7enp6eXl5eHh4d3d3dnZ2dnZ1dXV1dXV0dHR0dHR0dHR0dHR0dHR0dXV1dXV1dnZ2dnZ3d3d4eHh5eXl6enp7e3t8fH19fn5+f3+AgICBgYKCg4ODhISFhYWGhoaHh4iIiIiJiYmKioqKiouLi4uLi4yMjIyMjIyMjIyMjIyMjIyLi4uLi4uKioqKiYmJiYiIiIeHh4aGhoWFhISEg4OCgoKBgYCAf39/fn59fX18fHt7e3p6eXl5eHh4eHd3d3Z2dnZ1dXV1dXV1dHR0dHR0dHR0dHR0dHR0dHV1dXV1dXZ2dnZ3d3d3eHh4eXl5enp6e3t8fHx9fX5+fn9/gICBgYGCgoODg4SEhYWFhoaHh4eIiIiJiYmJioqKiouLi4uLi4yMjIyMjIyMjIyMjIyMjIyMi4uLi4uLioqKiomJiYmIiIiHh4eGhoaFhYSEhIODgoKCgYGAgH9/f35+fX18fHx7e3t6enl5eXh4eHd3d3d2dnZ2dXV1dXV1dHR0dHR0dHR0dHR0dHR0dHR1dXV1dXV2dnZ2d3d3d3h4eHl5eXp6e3t7fHx8fX1+fn9/f4CAgYGCgoKDg4SEhIWFhoaGh4eHiIiIiYmJiYqKioqLi4uLi4uMjIyMjIyMjIyMjIyMjIyMjIuLi4uLi4qKioqJiYmJiIiIh4eHhoaFhYWEhIODg4KCgYGBgIB/f35+fn19fHx8e3t6enp5eXl4eHh3d3d3dnZ2dnV1dXV1dXR0dHR0dHR0dHR0dHR0dHR1dXV1dXV1dnZ2dnd3d3h4eHh5eXl6ent7e3x8fX19fn5/f3+AgIGBgoKCg4OEhISFhYaGhoeHh4iIiImJiYmKioqKi4uLi4uLjIyMjIyMjIyMjIyMjIyMjIuLi4uLi4qKioqKiYmJiIiIiIeHhoaGhYWFhISDg4OCgoGBgICAf39+fn59fXx8e3t7enp6eXl5eHh4d3d3dnZ2dnZ1dXV1dXV0dHR0dHR0dHR0dHR0dHR0dXV1dXV1dnZ2dnZ3d3d4eHh5eXl6enp7e3t8fH19fX5+f3+AgICBgYKCg4ODhISFhYWGhoaHh4eIiIiJiYmKioqKiouLi4uLi4yMjIyMjIyMjIyMjIyMjIyLi4uLi4uKioqKiomJiYiIiIeHh4aGhoWFhYSEg4OCgoKBgYCAgH9/fn59fX18fHt7e3p6enl5eHh4eHd3d3Z2dnZ2dXV1dXV1dHR0dHR0dHR0dHR0dHR0dHV1dXV1dXZ2dnZ3d3d3eHh4eXl5enp6e3t8fHx9fX5+fn9/gICBgYGCgoODg4SEhYWFhoaHh4eIiIiIiYmJioqKiouLi4uLi4uMjIyMjIyMjIyMjIyMjIyMi4uLi4uLioqKiomJiYmIiIiHh4eGhoaFhYSEhIODgoKCgYGAgH9/f35+fX19fHx7e3t6enl5eXh4eHd3d3d2dnZ2dXV1dXV1dHR0dHR0dHR0dHR0dHR0dHR1dXV1dXV2dnZ2d3d3d3h4eHl5eXp6ent7fHx8fX1+fn5/f4CAgYGBgoKDg4SEhIWFhYaGh4eHiIiIiYmJiYqKioqLi4uLi4uMjIyMjIyMjIyMjIyMjIyMjIuLi4uLi4qKioqJiYmJiIiIh4eHhoaFhYWEhISDg4KCgYGBgIB/f35+fn19fHx8e3t6enp5eXl4eHh3d3d3dnZ2dnV1dXV1dXR0dHR0dHR0dHR0dHR0dHR0dXV1dXV1dnZ2dnd3d3d4eHh5eXl6ent7e3x8fX19fn5/f3+AgIGBgoKCg4OEhISFhYaGhoeHh4iIiImJiYmKioqKi4uLi4uLjIyMjIyMjIyMjIyMjIyMjIuLi4uLi4uKioqKiYmJiIiIiIeHh4aGhYWFhISDg4OCgoGBgYCAf39+fn59fXx8fHt7enp6eXl5eHh4d3d3d3Z2dnZ1dXV1dXV0dHR0dHR0dHR0dHR0dHR0dXV1dXV1dnZ2dnZ3d3d4eHh4eXl6enp7e3t8fH19fX5+f3+AgICBgYKCgoODhISFhYWGhoaHh4eIiIiJiYmKioqKiouLi4uLi4yMjIyMjIyMjIyMjIyMjIyLi4uLi4uKioqKiomJiYiIiIeHh4aGhoWFhYSEg4ODgoKBgYCAgH9/fn59fX18fHt7e3p6enl5eXh4eHd3d3Z2dnZ2dXV1dXV1dHR0dHR0dHR0dHR0dHR0dHV1dXV1dXZ2dnZ2d3d3eHh4eXl5enp6e3t7fHx9fX5+fn9/gICAgYGCgoODg4SEhYWFhoaGh4eIiIiIiYmJioqKioqLi4uLi4uMjIyMjIyMjIyMjIyMjIyMi4uLi4uLioqKiomJiYmIiIiHh4eGhoaFhYSEhIODgoKCgYGAgH9/f35+fX19fHx7e3t6enl5eXh4eHh3d3d2dnZ2dXV1dXV1dXR0dHR0dHR0dHR0dHR0dHR1dXV1dXV2dnZ2d3d3d3h4eHl5eXp6ent7fHx8fX1+fn5/f4CAgYGBgoKDg4OEhIWFhYaGh4eHiIiIiYmJiYqKioqLi4uLi4uMjIyMjIyMjIyMjIyMjIyMjIuLi4uLi4qKioqJiYmJiIiIh4eHhoaGhYWEhISDg4KCgoGBgIB/f39+fn19fHx8e3t7enp5eXl4eHh3d3d3dnZ2dnV1dXV1dXR0dHR0dHR0dHR0dHR0dHR0dXV1dXV1dnZ2dnd3d3d4eHh5eXl6ent7e3x8fH19fn5/f3+AgIGBgoKCg4OEhISFhYaGhoeHh4iIiImJiYmKioqKi4uLi4uLjIyMjIyMjIyMjIyMjIyMjIyLi4uLi4uKioqKiYmJiYiIiIeHh4aGhYWFhISDg4OCgoGBgYCAf39+fn59fXx8fHt7enp6eXl5eHh4d3d3d3Z2dnZ1dXV1dXV0dHR0dHR0dHR0dHR0dHR0dXV1dXV1dXZ2dnZ3d3d4eHh4eXl5enp7e3t8fH19fX5+f39/gICBgYKCgoODhISEhYWGhoaHh4eIiIiJiYmJioqKiouLi4uLi4yMjIyMjIyMjIyMjIyMjIyLi4uLi4uKioqKiomJiYiIiIiHh4aGhoWFhYSEg4ODgoKBgYCAgH9/fn5+fX18fHt7e3p6enl5eXh4eHd3d3Z2dnZ2dXV1dXV1dHR0dHR0dHR0dHR0dHR0dHV1dXV1dXZ2dnZ2d3d3eHh4eXl5enp6e3t7fHx9fX1+fn9/gA==';
+  var _ka = null, _kaOn = false;
+
+  function startKeepAlive() {
+    if (!isNative) return;
+    try {
+      if (!_ka) {
+        _ka = new Audio(TONE);
+        _ka.loop = true;
+        _ka.setAttribute('playsinline', '');
+      }
+      var p = _ka.play();
+      if (p && p.then) {
+        p.then(function () { if (!_kaOn) { _kaOn = true; log('keepalive ON'); } })
+         .catch(function (e) { _kaOn = false; log('keepalive play KO: ' + e); });
+      } else { _kaOn = true; }
+    } catch (e) { log('keepalive KO: ' + e); }
+  }
+
+  if (isNative) {
+    setTimeout(startKeepAlive, 2000);
+    var kick = function () { startKeepAlive(); };
+    document.addEventListener('touchstart', kick, { once: true });
+    document.addEventListener('click', kick, { once: true });
+    document.addEventListener('visibilitychange', startKeepAlive);
+  }
+
+  /* ============ SERVICE PREMIER PLAN ============ */
   function activateBg() {
     var bm = window.cordova && window.cordova.plugins && window.cordova.plugins.backgroundMode;
     if (!bm) { return; }
@@ -25,42 +55,12 @@
     try {
       bm.on('activate', function () {
         log('ARRIERE-PLAN actif');
+        startKeepAlive();   // s'assurer que l'audio tourne en arriere-plan
         try { if (typeof bm.disableWebViewOptimizations === 'function') bm.disableWebViewOptimizations(); } catch (e) {}
       });
     } catch (e) { log('on() KO: ' + e); }
   }
 
-  /* ============ 2) ANTI-BRIDAGE : AUDIO SILENCIEUX ============ */
-  /* WAV 100% silencieux (inaudible), joue en boucle a volume normal :
-     le systeme voit "media en lecture" => ne ralentit plus le JS. */
-  var SILENT = 'data:audio/wav;base64,UklGRmQGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YUAGAACAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA';
-  var _ka = null, _kaOn = false;
-
-  function startKeepAlive() {
-    if (_kaOn || !isNative) return;
-    try {
-      _ka = new Audio(SILENT);
-      _ka.loop = true;
-      _ka.setAttribute('playsinline', '');
-      var p = _ka.play();
-      if (p && p.then) {
-        p.then(function () { _kaOn = true; log('keepalive audio ON'); })
-         .catch(function (e) { _kaOn = false; log('keepalive play KO: ' + e); });
-      } else { _kaOn = true; }
-    } catch (e) { log('keepalive KO: ' + e); }
-  }
-
-  if (isNative) {
-    setTimeout(startKeepAlive, 2000);                          // tentative immediate
-    var kick = function () { startKeepAlive(); };              // sinon au 1er geste
-    document.addEventListener('touchstart', kick, { once: true });
-    document.addEventListener('click', kick, { once: true });
-    document.addEventListener('visibilitychange', function () {  // relance si coupe
-      if (_ka) { try { var q = _ka.play(); if (q && q.catch) q.catch(function () {}); } catch (e) {} }
-    });
-  }
-
-  /* ============ Demarrage ============ */
   document.addEventListener('deviceready', activateBg, false);
   var tries = 0;
   var iv = setInterval(function () {
