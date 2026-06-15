@@ -1,60 +1,72 @@
-/* ▓▓▓ native-bridge.js · VERSION 1 ▓▓▓
+/* ▓▓▓ native-bridge.js · VERSION 2 ▓▓▓
    Pont natif AURA <-> app Android (Capacitor + cordova-plugin-background-mode).
-   Active le service premier plan + wake lock pour que le bot continue de
-   tourner ecran eteint. TOTALEMENT INERTE dans un navigateur normal :
-   si window.cordova est absent, aucune action n'est faite. */
+   1) Service premier plan : garde le process en vie ecran eteint.
+   2) Audio silencieux en boucle : empeche Chrome/WebView de RALENTIR
+      les timers JS (simTick) quand l'ecran est eteint.
+   TOTALEMENT INERTE dans un navigateur normal (ni Capacitor ni cordova). */
 (function () {
   'use strict';
 
+  var isNative = !!(window.Capacitor || window.cordova);
   function log(m) { try { console.log('[native-bridge] ' + m); } catch (e) {} }
 
-  function activate() {
+  /* ============ 1) SERVICE PREMIER PLAN ============ */
+  function activateBg() {
     var bm = window.cordova && window.cordova.plugins && window.cordova.plugins.backgroundMode;
-    if (!bm) { return; }                 // navigateur normal : on ne fait rien
-
+    if (!bm) { return; }
     try {
       bm.configure({
-        title:   'AURA8',
-        text:    'Bot actif en arriere-plan',
-        icon:    'icon',
-        color:   '38d4f5',               // cyan AURA
-        resume:  true,
-        hidden:  false,
-        silent:  false,
-        bigText: false
+        title: 'AURA8', text: 'Bot actif en arriere-plan', icon: 'icon',
+        color: '38d4f5', resume: true, hidden: false, silent: false, bigText: false
       });
     } catch (e) { log('configure KO: ' + e); }
-
-    try { bm.enable(); log('background mode ENABLE'); }
-    catch (e) { log('enable KO: ' + e); }
-
-    // Demande (une fois) a sortir AURA de l'optimisation batterie Samsung.
-    try { if (typeof bm.disableBatteryOptimizations === 'function') bm.disableBatteryOptimizations(); }
-    catch (e) {}
-
-    // A chaque passage en arriere-plan : lever les bridages WebView (timers JS).
+    try { bm.enable(); log('background mode ENABLE'); } catch (e) { log('enable KO: ' + e); }
+    try { if (typeof bm.disableBatteryOptimizations === 'function') bm.disableBatteryOptimizations(); } catch (e) {}
     try {
       bm.on('activate', function () {
         log('ARRIERE-PLAN actif');
-        try { if (typeof bm.disableWebViewOptimizations === 'function') bm.disableWebViewOptimizations(); }
-        catch (e) {}
+        try { if (typeof bm.disableWebViewOptimizations === 'function') bm.disableWebViewOptimizations(); } catch (e) {}
       });
-      bm.on('deactivate', function () { log('retour premier plan'); });
     } catch (e) { log('on() KO: ' + e); }
   }
 
-  // Cordova/Capacitor pret.
-  document.addEventListener('deviceready', activate, false);
+  /* ============ 2) ANTI-BRIDAGE : AUDIO SILENCIEUX ============ */
+  /* WAV 100% silencieux (inaudible), joue en boucle a volume normal :
+     le systeme voit "media en lecture" => ne ralentit plus le JS. */
+  var SILENT = 'data:audio/wav;base64,UklGRmQGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YUAGAACAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA';
+  var _ka = null, _kaOn = false;
 
-  // Filet : si deviceready a deja ete emis avant le chargement de ce script.
+  function startKeepAlive() {
+    if (_kaOn || !isNative) return;
+    try {
+      _ka = new Audio(SILENT);
+      _ka.loop = true;
+      _ka.setAttribute('playsinline', '');
+      var p = _ka.play();
+      if (p && p.then) {
+        p.then(function () { _kaOn = true; log('keepalive audio ON'); })
+         .catch(function (e) { _kaOn = false; log('keepalive play KO: ' + e); });
+      } else { _kaOn = true; }
+    } catch (e) { log('keepalive KO: ' + e); }
+  }
+
+  if (isNative) {
+    setTimeout(startKeepAlive, 2000);                          // tentative immediate
+    var kick = function () { startKeepAlive(); };              // sinon au 1er geste
+    document.addEventListener('touchstart', kick, { once: true });
+    document.addEventListener('click', kick, { once: true });
+    document.addEventListener('visibilitychange', function () {  // relance si coupe
+      if (_ka) { try { var q = _ka.play(); if (q && q.catch) q.catch(function () {}); } catch (e) {} }
+    });
+  }
+
+  /* ============ Demarrage ============ */
+  document.addEventListener('deviceready', activateBg, false);
   var tries = 0;
   var iv = setInterval(function () {
     tries++;
     if (window.cordova && window.cordova.plugins && window.cordova.plugins.backgroundMode) {
-      clearInterval(iv);
-      activate();
-    } else if (tries > 20) {             // ~10 s puis on abandonne (= navigateur normal)
-      clearInterval(iv);
-    }
+      clearInterval(iv); activateBg();
+    } else if (tries > 20) { clearInterval(iv); }
   }, 500);
 })();
