@@ -2350,7 +2350,7 @@ function computeAdvancedMetrics() {
     const ddUsd = curUsd - peakUsd;
     if(ddUsd < maxDDUsd) {
       maxDDUsd = ddUsd;
-      maxDDPct = peakUsd > 0 ? (ddUsd / peakUsd * 100) : 0;
+      maxDDPct = peakUsd > 0 ? Math.max(-100, (ddUsd / peakUsd * 100)) : 0;
     }
   });
 

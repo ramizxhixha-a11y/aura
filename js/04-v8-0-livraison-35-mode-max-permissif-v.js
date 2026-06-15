@@ -2496,7 +2496,7 @@ function renderDrawdownSection() {
     cum+=r;
     equity.push(cum);
     if(cum>peak){ peak=cum; if(inDD){ episodes.push({depth:ddPeak-cum,pct:peak>0?(ddPeak-cum)/ddPeak*100:0,duration:i-ddStart}); inDD=false; } }
-    const dd=peak>0?(cum-peak)/peak*100:0;
+    const dd=peak>0?Math.max(-100,(cum-peak)/peak*100):0;
     ddCurve.push(dd);
     if(dd<curDD) curDD=dd;
     if(dd<maxDD){ maxDD=dd; maxDDPct=dd; }

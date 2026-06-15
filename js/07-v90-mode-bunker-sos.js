@@ -3178,11 +3178,9 @@ function renderPairPnl() {
 
   // Global header
   const gUsd = document.getElementById('globalPnlUsd');
-  const gPct = document.getElementById('globalPnlPct');
   const gTr  = document.getElementById('globalPnlTrades');
   const col  = totalUsd >= 0 ? 'var(--up)' : 'var(--down)';
-  if(gUsd) { gUsd.textContent = (totalUsd>=0?'+':'')+fmt$(totalUsd); gUsd.style.color = col; }
-  if(gPct) { gPct.textContent = (totalUsd>=0?'+':'')+totalUsd.toFixed(1)+'$'; gPct.style.color = col; }
+  if(gUsd) { gUsd.textContent = (totalUsd>=0?'+':'-')+'$'+Math.abs(totalUsd).toFixed(2); gUsd.style.color = col; }
   if(gTr)  { gTr.textContent  = totalTrades+' trades'; }
 
   // Stacked bars
