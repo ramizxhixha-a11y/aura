@@ -4794,15 +4794,6 @@ function renderHome() {
     sharpeEl.style.color = sharpe>0.5?'var(--up)':sharpe>0?'var(--gold)':'var(--down)';
   }
 
-  // Compounded profits display
-  const compEl = document.getElementById('qCompounded');
-  if(compEl) {
-    // v8.0 LIVRAISON 27 FIX · affiche la vraie valeur composée (persistée entre sessions)
-    const comp = S._totalCompounded||0;
-    compEl.textContent = (comp>=0?'+':'')+'$'+comp.toFixed(0);
-    compEl.style.color = comp>=0?'var(--up)':'var(--down)';
-  }
-
   // ── Stats row 2 : frais, efficacité, P&L net, réserve ──
   const f       = S.fees;
   const taxLive = calcTaxProvision();
