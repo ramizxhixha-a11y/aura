@@ -1754,7 +1754,19 @@ function _resolvePairCycleCore(pair, ps) {
   const kellyFrac  = Math.min(0.15, effectiveConviction * 0.35);
   const maxStake   = S.tradingAccount * kellyFrac * lmsrBonus;
   const convScale  = 0.40 + (0.60 * effectiveConviction);
-  const stakeRaw   = Math.max(stakeBase, maxStake * convScale);
+  // ── Throttle par PERFORMANCE de paire ──────────────────────────────────────
+  //   On mise MOINS sur les paires qui perdent durablement (signal = expectancy
+  //   % par trade = totalPnlPct/totalTrades, independant de la mise). Asymetrique
+  //   securite : reduit les perdantes (plancher 0.35, jamais coupe -> continue
+  //   d'apprendre), ne booste JAMAIS les gagnantes (plafond 1.0). Ne s'active
+  //   qu'avec un echantillon significatif (>=20 trades) pour eviter le bruit.
+  //   Sur backup reel : ADA -0.61%/tr -> x0.70, XRP -0.56% -> x0.72,
+  //   DOGE -1.19% -> x0.41 ; les gagnantes restent a x1.0.
+  let _perfMult = 1.0;
+  if ((ps.totalTrades || 0) >= 20) {
+    _perfMult = Math.max(0.35, Math.min(1.0, 1 + ((ps.totalPnlPct || 0) / ps.totalTrades) * 0.5));
+  }
+  const stakeRaw   = Math.max(stakeBase, maxStake * convScale) * _perfMult;
   const stakeUsdt  = Math.round(stakeRaw*adxFilter*volFilter*10)/10;
   
   let finalStake = stakeUsdt;
