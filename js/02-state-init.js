@@ -318,7 +318,7 @@ const S = {
   feeConfig: {
     makerRate:   0.0002,   // 0.02% maker (ordres limites — seuil conviction 80%)
     takerRate:   0.0005,   // 0.05% taker (ordres marché — signal modéré)
-    fundingRate: 0.00005,  // 0.005% financement/cycle (positions ouvertes)
+    fundingRate: 0.00005,  // taux de financement, interprete PAR 8h (comme un perp reel)
     slippage:    0.0003,   // 0.03% slippage — optimisé vs 0.05% précédent
     // Note: frais réels Binance spot: maker 0.02-0.10%, taker 0.04-0.10%
     // NEXUS utilise maker quand conviction >= 80% → réduction ~60% des frais
@@ -3939,8 +3939,15 @@ function recordFees(pair, notionalUsdt, pnlUsd, tradeType, reservedAmount) {
 
 // Frais de financement sur positions ouvertes (appelé chaque cycle)
 function applyFundingFees() {
+  // Funding REALISTE : fundingRate est interprete "par periode de 8h" (comme un
+  // perp Binance). Cette fonction tourne toutes les 30 s, donc on ne facture que
+  // la fraction de temps ecoulee (30s / 8h). Avant, on facturait fundingRate PLEIN
+  // toutes les 30 s (= 0.6%/h, ~500x le reel) : -109$ de funding sur 1537 trades
+  // alors que le gain brut n'etait que de +62$. Pour des trades de 5-15 min, le
+  // funding reel est quasi nul.
+  const _FUNDING_FRACTION = 30 / (8 * 3600);
   S.openPositions.forEach(pos => {
-    const fundFee = (pos.stakeUsdt || 0) * S.feeConfig.fundingRate;
+    const fundFee = (pos.stakeUsdt || 0) * S.feeConfig.fundingRate * _FUNDING_FRACTION;
     if(fundFee <= 0) return;
     S.fees.totalFunding += fundFee;
     S.fees.totalGross   += fundFee;
