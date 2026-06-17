@@ -103,6 +103,40 @@ function importState() {
 window.importState = importState;
 
 
+// ── Sauvegarde compatible WebView natif (Capacitor) ─────────────────────────
+// Un WebView Android ne declenche PAS le telechargement d'un lien blob (a.click).
+// On passe par le PARTAGE natif (navigator.share avec fichier) : ca ouvre le
+// selecteur Android (Drive, Fichiers, Gmail...) ou l'utilisateur choisit ou
+// enregistrer. Repli sur le telechargement blob classique pour les navigateurs.
+// DOIT etre appele dans un geste utilisateur (clic) pour que share() soit permis.
+async function _shareOrDownloadJSON(json, filename) {
+  // 1) Partage natif de fichier (WebView Capacitor + navigateurs mobiles recents)
+  try {
+    if (navigator.canShare && typeof File !== 'undefined') {
+      const file = new File([json], filename, { type: 'application/json' });
+      if (navigator.canShare({ files: [file] })) {
+        await navigator.share({ files: [file], title: filename });
+        return 'shared';
+      }
+    }
+  } catch (e) {
+    if (e && e.name === 'AbortError') return 'cancelled';   // l'utilisateur a annule
+    // sinon : on tombe sur le repli telechargement ci-dessous
+  }
+  // 2) Repli navigateur classique (Chrome desktop/mobile)
+  try {
+    const blob = new Blob([json], { type: 'application/json' });
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    a.href = url; a.download = filename;
+    document.body.appendChild(a); a.click();
+    setTimeout(() => { try { document.body.removeChild(a); } catch(_){} try { URL.revokeObjectURL(url); } catch(_){} }, 100);
+    return 'downloaded';
+  } catch (e) { return 'failed'; }
+}
+window._shareOrDownloadJSON = _shareOrDownloadJSON;
+
+
 function exportState(silent) {
   try {
     const snap = buildSnapshot();
@@ -123,29 +157,22 @@ function exportState(silent) {
     };
 
     const json = JSON.stringify(snap, null, 2);
-    const blob = new Blob([json], { type: 'application/json' });
-    const url  = URL.createObjectURL(blob);
-    const a    = document.createElement('a');
     const d    = new Date();
     const stamp = d.getFullYear() + '-' +
                   String(d.getMonth() + 1).padStart(2, '0') + '-' +
                   String(d.getDate()).padStart(2, '0')     + '_' +
                   String(d.getHours()).padStart(2, '0')    +
                   String(d.getMinutes()).padStart(2, '0');
+    const fname = 'nexus_save_' + stamp + '_cycle' + S.cycle + '.json';
 
-    a.href     = url;
-    a.download = 'nexus_save_' + stamp + '_cycle' + S.cycle + '.json';
-    document.body.appendChild(a);
-    a.click();
-
-    setTimeout(() => {
-      try { document.body.removeChild(a); } catch(e){}
-      try { URL.revokeObjectURL(url); } catch(e){}
-    }, 100);
-
-    if (typeof showToast === 'function') {
-      showToast('💾 Sauvegarde exportée : ' + a.download, 4000, 'user');
-    }
+    // Partage natif (WebView Android) ou telechargement (navigateur).
+    _shareOrDownloadJSON(json, fname).then(res => {
+      if (typeof showToast !== 'function') return;
+      if (res === 'shared')          showToast('💾 Choisis où enregistrer (Drive, Fichiers…)', 4000, 'user');
+      else if (res === 'downloaded') showToast('💾 Sauvegarde exportée : ' + fname, 4000, 'user');
+      else if (res === 'cancelled')  showToast('Partage annulé', 2500, 'user');
+      else                            showToast('❌ Export échoué', 4000, 'user');
+    });
     return true;
   } catch (e) {
     console.error('Export failed', e);
@@ -244,8 +271,31 @@ window.autoDownload = {
   // active avec fréquence en minutes (5=test, 180=3h, 360=6h, 720=12h)
   enable:  (everyMin) => { const m = autoDlGetMeta(); m.enabled = true; m.everyMin = everyMin || 180; autoDlSetMeta(m); },
   disable: () => { const m = autoDlGetMeta(); m.enabled = false; autoDlSetMeta(m); },
-  // téléchargement immédiat (nom unique)
-  now:     () => { return autoDlDownload(); }
+  // telechargement immediat (nom unique) — via partage natif (WebView) ou download
+  now:     () => {
+    try {
+      if (typeof buildSnapshot !== 'function') return false;
+      const snap = buildSnapshot();
+      if (!snap) return false;
+      if (!snap.savedAt) snap.savedAt = new Date().toISOString();
+      const json = JSON.stringify(snap, null, 2);
+      const d = new Date(); const pad = n => (n<10?'0':'')+n;
+      const stamp = d.getFullYear()+pad(d.getMonth()+1)+pad(d.getDate())+'-'+pad(d.getHours())+pad(d.getMinutes())+pad(d.getSeconds());
+      const cyc = (snap && typeof snap.cycle === 'number') ? snap.cycle : 0;
+      const fname = 'aura_backup_c'+cyc+'_'+stamp+'.json';
+      if (typeof _shareOrDownloadJSON === 'function') {
+        _shareOrDownloadJSON(json, fname).then(res => {
+          if (typeof showToast !== 'function') return;
+          if (res === 'shared')          showToast('💾 Choisis où enregistrer (Drive, Fichiers…)', 4000, 'user');
+          else if (res === 'downloaded') showToast('💾 Backup téléchargé : ' + fname, 4000, 'user');
+          else if (res === 'cancelled')  showToast('Partage annulé', 2500, 'user');
+          else                            showToast('❌ Sauvegarde échouée', 4000, 'user');
+        });
+        return true;
+      }
+      return autoDlDownload();
+    } catch (e) { return false; }
+  }
 };
 
 /* ════════════════════════════════════════════════════════════════════
