@@ -639,7 +639,8 @@ function renderSettingsPanel() {
         <div style="display:flex;gap:6px;">
           <button onclick="if(window.autoDownload)window.autoDownload.now();" style="flex:1;height:32px;border-radius:8px;border:1px solid var(--border);background:var(--s2);color:var(--t1);font-size:11px;font-weight:700;cursor:pointer;">⬇ Télécharger maintenant</button>
           <button onclick="if(window.recoverFromFiles)window.recoverFromFiles();" style="flex:1;height:32px;border-radius:8px;border:1px solid rgba(0,232,122,.4);background:rgba(0,232,122,.12);color:var(--up);font-size:11px;font-weight:700;cursor:pointer;">📂 Récupérer un backup</button>
-        </div>`;
+        </div>
+        <button onclick="if(window.auraDiag)window.auraDiag();" style="width:100%;height:34px;margin-top:6px;border-radius:8px;border:1px solid rgba(56,212,245,.4);background:rgba(56,212,245,.12);color:var(--ice);font-size:11px;font-weight:700;cursor:pointer;">📋 Copier diagnostic pour Claude</button>`;
       })()}
     </div>
 

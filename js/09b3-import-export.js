@@ -137,6 +137,85 @@ async function _shareOrDownloadJSON(json, filename) {
 window._shareOrDownloadJSON = _shareOrDownloadJSON;
 
 
+// ── Diagnostic compact (sans fichier, sans plugin) ──────────────────────────
+// Un WebView Capacitor sans plugin ne peut ni telecharger ni partager de fichier.
+// On copie donc un JSON COMPACT (~3 Ko : funding + stats/paire + mises recentes)
+// dans le presse-papier ; l'utilisateur le colle dans le chat pour analyse.
+// Repli : si clipboard refuse, on ouvre une fenetre avec le texte selectionnable.
+function _buildDiag() {
+  const St = (typeof window !== 'undefined' && window.S) ? window.S : (0, eval)('S');
+  const f = St.fees || {};
+  const pairs = {};
+  Object.entries(St.pairStates || {}).forEach(([p, ps]) => {
+    const tr = (ps.trades || []).slice(-20);
+    const avgStake = tr.length ? tr.reduce((a, t) => a + (t.stakeUsdt || 0), 0) / tr.length : 0;
+    pairs[p] = {
+      tt: ps.totalTrades || 0,
+      wt: ps.winTrades || 0,
+      pnlPct: +(+(ps.totalPnlPct || 0)).toFixed(2),
+      pnlUsd: +(+(ps.totalPnlUsd || 0)).toFixed(2),
+      avgStake: +avgStake.toFixed(2),
+      recentStakes: tr.slice(-6).map(t => +(+(t.stakeUsdt || 0)).toFixed(1))
+    };
+  });
+  return JSON.stringify({
+    cycle: St.cycle,
+    portfolio: +(+(St.portfolio || 0)).toFixed(2),
+    trading: +(+(St.tradingAccount || 0)).toFixed(2),
+    fees: {
+      funding:     +(+(f.totalFunding || 0)).toFixed(2),
+      tradingFees: +(+(f.totalTradingFees || 0)).toFixed(2),
+      slippage:    +(+(f.totalSlippage || 0)).toFixed(2),
+      gross:       +(+(f.totalGross || 0)).toFixed(2),
+      pnlGross:    +(+(f.totalPnlGross || 0)).toFixed(2)
+    },
+    pairs
+  });
+}
+
+function _showDiagModal(txt) {
+  try {
+    const ov = document.createElement('div');
+    ov.style.cssText = 'position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.85);display:flex;flex-direction:column;padding:16px;gap:10px;';
+    const ta = document.createElement('textarea');
+    ta.value = txt; ta.readOnly = true;
+    ta.style.cssText = 'flex:1;width:100%;font-size:11px;font-family:monospace;background:#0d1117;color:#7ee0ff;border:1px solid #38d4f5;border-radius:8px;padding:10px;';
+    const row = document.createElement('div');
+    row.style.cssText = 'display:flex;gap:8px;';
+    const bCopy = document.createElement('button');
+    bCopy.textContent = '📋 Tout sélectionner';
+    bCopy.style.cssText = 'flex:1;height:42px;border-radius:8px;border:1px solid #00e87a;background:rgba(0,232,122,.15);color:#00e87a;font-weight:700;';
+    bCopy.onclick = () => { ta.focus(); ta.select(); try { document.execCommand('copy'); } catch(e){} };
+    const bClose = document.createElement('button');
+    bClose.textContent = '✕ Fermer';
+    bClose.style.cssText = 'flex:1;height:42px;border-radius:8px;border:1px solid #ff4d6e;background:rgba(255,77,110,.15);color:#ff4d6e;font-weight:700;';
+    bClose.onclick = () => { try { document.body.removeChild(ov); } catch(e){} };
+    const hint = document.createElement('div');
+    hint.textContent = 'Tape dans la zone → Tout sélectionner → Copier → colle dans le chat Claude.';
+    hint.style.cssText = 'font-size:11px;color:#9fb0c0;';
+    row.appendChild(bCopy); row.appendChild(bClose);
+    ov.appendChild(hint); ov.appendChild(ta); ov.appendChild(row);
+    document.body.appendChild(ov);
+  } catch (e) {}
+}
+
+async function auraDiag() {
+  let txt;
+  try { txt = _buildDiag(); }
+  catch (e) {
+    if (typeof showToast === 'function') showToast('❌ État pas prêt', 3000, 'user');
+    return;
+  }
+  try {
+    await navigator.clipboard.writeText(txt);
+    if (typeof showToast === 'function') showToast('✅ Diagnostic copié — colle-le dans le chat Claude', 5000, 'user');
+  } catch (e) {
+    _showDiagModal(txt);   // repli : fenetre selectionnable
+  }
+}
+window.auraDiag = auraDiag;
+
+
 function exportState(silent) {
   try {
     const snap = buildSnapshot();
