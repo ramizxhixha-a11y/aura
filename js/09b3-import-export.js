@@ -142,6 +142,26 @@ window._shareOrDownloadJSON = _shareOrDownloadJSON;
 // On copie donc un JSON COMPACT (~3 Ko : funding + stats/paire + mises recentes)
 // dans le presse-papier ; l'utilisateur le colle dans le chat pour analyse.
 // Repli : si clipboard refuse, on ouvre une fenetre avec le texte selectionnable.
+// ── Moniteur de bridage (detection ralentissement ecran eteint / Doze) ───────
+// Un timer 1s qui mesure l'ecart REEL entre deux battements. Ecran allume : ~1s.
+// Si Android bride/suspend l'app (ecran eteint, Doze), l'ecart explose (ex: 600s
+// d'un coup au reveil). maxGap = plus longue suspension depuis l'ouverture de
+// l'app ; overs3s = nb de fois ou un tic a eu >3s de retard. Se reinitialise a
+// chaque ouverture de l'app -> ouvrir le soir, NE PAS rouvrir avant le matin.
+(function () {
+  if (window._tickMon) return;
+  var last = Date.now();
+  window._tickMon = { maxGapS: 0, lastGapS: 0, overs3s: 0, sinceMin: 0, _start: Date.now() };
+  setInterval(function () {
+    var now = Date.now(), gap = (now - last) / 1000; last = now;
+    var m = window._tickMon;
+    m.lastGapS = +gap.toFixed(1);
+    if (gap > m.maxGapS) m.maxGapS = +gap.toFixed(1);
+    if (gap > 3) m.overs3s++;
+    m.sinceMin = +((now - m._start) / 60000).toFixed(1);
+  }, 1000);
+})();
+
 function _buildDiag() {
   const St = (typeof window !== 'undefined' && window.S) ? window.S : (0, eval)('S');
   const f = St.fees || {};
@@ -160,6 +180,9 @@ function _buildDiag() {
   });
   return JSON.stringify({
     cycle: St.cycle,
+    ts: Date.now(),
+    tsStr: new Date().toString().slice(0, 24),
+    tickMon: window._tickMon || null,
     portfolio: +(+(St.portfolio || 0)).toFixed(2),
     trading: +(+(St.tradingAccount || 0)).toFixed(2),
     fees: {
