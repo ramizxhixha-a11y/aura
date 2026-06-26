@@ -1,5 +1,5 @@
 // ════════════════════════════════════════════════════════════════════════
-// ▓▓▓ AURA8 — 09b3-import-export.js · VERSION 121 · 21/05/2026 ▓▓▓
+// ▓▓▓ AURA8 — 09b3-import-export.js · VERSION 130 · 26/06/2026 ▓▓▓
 // ════════════════════════════════════════════════════════════════════════
 // importState + exportState + saveFeeRecord — import/export utilisateur.
 //
@@ -109,7 +109,33 @@ window.importState = importState;
 // selecteur Android (Drive, Fichiers, Gmail...) ou l'utilisateur choisit ou
 // enregistrer. Repli sur le telechargement blob classique pour les navigateurs.
 // DOIT etre appele dans un geste utilisateur (clic) pour que share() soit permis.
+// -- Ecriture fichier native (plugin Capacitor Filesystem, present dans l'APK) --
+// Ecrit le backup dans Documents/AURA_Backups/ SANS aucun geste ni popup. C'est
+// la VRAIE sauvegarde fichier : un WebView seul ne peut pas ecrire de fichier.
+// FolderSync synchronise ensuite ce dossier vers Drive. Retourne 'fs-written' si
+// l'ecriture native a reussi, sinon null (les replis share/blob prennent le relais).
+async function _fsWriteBackup(json, filename) {
+  try {
+    var FS = (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Filesystem) || null;
+    if (!FS) return null;
+    await FS.writeFile({
+      path: 'AURA_Backups/' + filename,
+      data: json,
+      directory: 'DOCUMENTS',
+      encoding: 'utf8',
+      recursive: true
+    });
+    return 'fs-written';
+  } catch (e) {
+    try { console.warn('[AURA] Filesystem write failed', e && e.message); } catch (_) {}
+    return null;
+  }
+}
+window._fsWriteBackup = _fsWriteBackup;
+
 async function _shareOrDownloadJSON(json, filename) {
+  // 0) Ecriture native silencieuse via le plugin Capacitor Filesystem (APK)
+  try { const fsRes = await _fsWriteBackup(json, filename); if (fsRes) return fsRes; } catch (e) {}
   // 1) Partage natif de fichier (WebView Capacitor + navigateurs mobiles recents)
   try {
     if (navigator.canShare && typeof File !== 'undefined') {
@@ -270,7 +296,8 @@ function exportState(silent) {
     // Partage natif (WebView Android) ou telechargement (navigateur).
     _shareOrDownloadJSON(json, fname).then(res => {
       if (typeof showToast !== 'function') return;
-      if (res === 'shared')          showToast('💾 Choisis où enregistrer (Drive, Fichiers…)', 4000, 'user');
+      if (res === 'fs-written')      showToast('💾 Sauvegardé dans Documents/AURA_Backups', 4000, 'user');
+      else if (res === 'shared')     showToast('💾 Choisis où enregistrer (Drive, Fichiers…)', 4000, 'user');
       else if (res === 'downloaded') showToast('💾 Sauvegarde exportée : ' + fname, 4000, 'user');
       else if (res === 'cancelled')  showToast('Partage annulé', 2500, 'user');
       else                            showToast('❌ Export échoué', 4000, 'user');
@@ -319,24 +346,27 @@ function autoDlGetMeta() {
 function autoDlSetMeta(m) { try { localStorage.setItem(AUTODL_KEY, JSON.stringify(m)); } catch(e){} }
 
 // Télécharge l'état avec un nom unique (cycle + horodatage → jamais de conflit).
-function autoDlDownload() {
+async function autoDlDownload() {
   try {
     if (typeof buildSnapshot !== 'function') return false;
     const snap = buildSnapshot();
     if (!snap) return false;
     if (!snap.savedAt) snap.savedAt = new Date().toISOString();
     const json = JSON.stringify(snap, null, 2);
-    const blob = new Blob([json], { type: 'application/json' });
-    const url  = URL.createObjectURL(blob);
-    const a    = document.createElement('a');
-    a.href     = url;
-    // nom UNIQUE (cycle + date-heure) → jamais de conflit, jamais de popup Chrome.
-    // L'app de synchro Android fait le ménage (garde les X derniers).
     const d = new Date();
     const pad = n => (n<10?'0':'')+n;
     const stamp = d.getFullYear() + pad(d.getMonth()+1) + pad(d.getDate()) + '-' + pad(d.getHours()) + pad(d.getMinutes()) + pad(d.getSeconds());
     const cyc = (snap && typeof snap.cycle === 'number') ? snap.cycle : 0;
-    a.download = 'aura_backup_c' + cyc + '_' + stamp + '.json';
+    const fname = 'aura_backup_c' + cyc + '_' + stamp + '.json';
+    // Ecriture native silencieuse (aucun geste utilisateur requis) -> APK Capacitor
+    const fsRes = await _fsWriteBackup(json, fname);
+    if (fsRes) return true;
+    // Repli navigateur (Chrome) : telechargement blob
+    const blob = new Blob([json], { type: 'application/json' });
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    a.href     = url;
+    a.download = fname;
     document.body.appendChild(a);
     a.click();
     setTimeout(() => { try { document.body.removeChild(a); } catch(e){} try { URL.revokeObjectURL(url); } catch(e){} }, 100);
@@ -355,16 +385,25 @@ function autoDlTick() {
     let cyc = -1;
     try { const St = (0, eval)('S'); if (St && typeof St.cycle === 'number') cyc = St.cycle; } catch(e){}
     if (cyc <= 100) return;
-    if (autoDlDownload()) {
-      m.last = now;
-      autoDlSetMeta(m);
-    }
+    Promise.resolve(autoDlDownload()).then(function (ok) {
+      if (ok) { m.last = now; autoDlSetMeta(m); }
+    });
   } catch (e) {}
 }
 
 // Vérifie toutes les 60s si un téléchargement est dû.
 if (window._autoDlTimer) clearInterval(window._autoDlTimer);
 window._autoDlTimer = setInterval(autoDlTick, 60000);
+
+// Activation auto par defaut SI le plugin natif Filesystem est present (1ere fois
+// seulement -- ne touche jamais a un reglage deja choisi par l'utilisateur).
+(function () {
+  try {
+    if (localStorage.getItem(AUTODL_KEY)) return;
+    var hasFS = !!(window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Filesystem);
+    if (hasFS) autoDlSetMeta({ enabled: true, everyMin: 180, last: 0 });
+  } catch (e) {}
+})();
 
 window.autoDownload = {
   getMeta: autoDlGetMeta,
@@ -388,7 +427,8 @@ window.autoDownload = {
       if (typeof _shareOrDownloadJSON === 'function') {
         _shareOrDownloadJSON(json, fname).then(res => {
           if (typeof showToast !== 'function') return;
-          if (res === 'shared')          showToast('💾 Choisis où enregistrer (Drive, Fichiers…)', 4000, 'user');
+          if (res === 'fs-written')      showToast('💾 Backup enregistré (Documents/AURA_Backups)', 4000, 'user');
+          else if (res === 'shared')     showToast('💾 Choisis où enregistrer (Drive, Fichiers…)', 4000, 'user');
           else if (res === 'downloaded') showToast('💾 Backup téléchargé : ' + fname, 4000, 'user');
           else if (res === 'cancelled')  showToast('Partage annulé', 2500, 'user');
           else                            showToast('❌ Sauvegarde échouée', 4000, 'user');
