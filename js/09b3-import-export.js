@@ -189,7 +189,14 @@ window._shareOrDownloadJSON = _shareOrDownloadJSON;
 })();
 
 function _buildDiag() {
-  const St = (typeof window !== 'undefined' && window.S) ? window.S : (0, eval)('S');
+  // FIX : même cause que autoDlTick — S n'est pas sur window (const de portée
+  // script), donc eval('S') échouait et _buildDiag() plantait → le bouton
+  // « Copier diagnostic pour Claude » ne produisait rien. Accesseur exposé.
+  let St = null;
+  try { if (typeof window._auraGetGlobalS === 'function') St = window._auraGetGlobalS(); } catch(e){}
+  if (!St && typeof window !== 'undefined' && window.S) St = window.S;
+  if (!St) { try { St = buildSnapshot(); } catch(e){ St = {}; } }
+  St = St || {};
   const f = St.fees || {};
   const pairs = {};
   Object.entries(St.pairStates || {}).forEach(([p, ps]) => {
@@ -381,9 +388,25 @@ function autoDlTick() {
     if (!m.enabled) return;
     const now = Date.now();
     if (m.last && (now - m.last) < m.everyMin * 60000) return;
-    // garde-fou : ne jamais télécharger un état vide/neuf
+    // garde-fou : ne jamais télécharger un état vide/neuf.
+    // FIX : S est un `const` de portée script (02-state-init.js), donc INVISIBLE
+    // à un eval('S') exécuté en scope global → l'ancien code récupérait toujours
+    // cyc=-1, le garde-fou bloquait CHAQUE tick, le backup ne partait jamais et le
+    // compteur restait figé sur « imminent… ». On lit le cycle via l'accesseur
+    // exposé window._auraGetGlobalS(), avec repli sur buildSnapshot().
     let cyc = -1;
-    try { const St = (0, eval)('S'); if (St && typeof St.cycle === 'number') cyc = St.cycle; } catch(e){}
+    try {
+      const St = (typeof window._auraGetGlobalS === 'function') ? window._auraGetGlobalS() : null;
+      if (St && typeof St.cycle === 'number') cyc = St.cycle;
+    } catch(e){}
+    if (cyc < 0) {
+      try {
+        if (typeof buildSnapshot === 'function') {
+          const snap = buildSnapshot();
+          if (snap && typeof snap.cycle === 'number') cyc = snap.cycle;
+        }
+      } catch(e){}
+    }
     if (cyc <= 100) return;
     Promise.resolve(autoDlDownload()).then(function (ok) {
       if (ok) { m.last = now; autoDlSetMeta(m); }
