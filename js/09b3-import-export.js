@@ -1,5 +1,5 @@
 // ════════════════════════════════════════════════════════════════════════
-// ▓▓▓ AURA8 — 09b3-import-export.js · VERSION 130 · 26/06/2026 ▓▓▓
+// ▓▓▓ AURA8 — 09b3-import-export.js · VERSION 131 · 28/06/2026 ▓▓▓
 // ════════════════════════════════════════════════════════════════════════
 // importState + exportState + saveFeeRecord — import/export utilisateur.
 //
@@ -115,21 +115,37 @@ window.importState = importState;
 // FolderSync synchronise ensuite ce dossier vers Drive. Retourne 'fs-written' si
 // l'ecriture native a reussi, sinon null (les replis share/blob prennent le relais).
 async function _fsWriteBackup(json, filename) {
-  try {
-    var FS = (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Filesystem) || null;
-    if (!FS) return null;
-    await FS.writeFile({
-      path: 'AURA_Backups/' + filename,
-      data: json,
-      directory: 'DOCUMENTS',
-      encoding: 'utf8',
-      recursive: true
-    });
-    return 'fs-written';
-  } catch (e) {
-    try { console.warn('[AURA] Filesystem write failed', e && e.message); } catch (_) {}
+  window._fsLastDiag = '';
+  var FS = (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Filesystem) || null;
+  if (!FS) {
+    window._fsLastDiag = 'Plugin Filesystem indisponible.\n'
+      + 'window.Capacitor = ' + (window.Capacitor ? 'present' : 'ABSENT') + '\n'
+      + 'Plugins.Filesystem = absent\n'
+      + "(soit l'app n'est pas l'APK natif, soit le plugin n'est pas charge)";
     return null;
   }
+  // On essaie plusieurs dossiers : Android recent bloque souvent DOCUMENTS.
+  var dirs = ['DOCUMENTS', 'EXTERNAL', 'DATA', 'CACHE'];
+  var errors = [];
+  for (var i = 0; i < dirs.length; i++) {
+    try {
+      var r = await FS.writeFile({
+        path: 'AURA_Backups/' + filename,
+        data: json,
+        directory: dirs[i],
+        encoding: 'utf8',
+        recursive: true
+      });
+      window._fsLastDir = dirs[i];
+      window._fsLastDiag = 'Ecrit dans le dossier : ' + dirs[i] + '\n'
+        + 'Chemin : ' + ((r && r.uri) ? r.uri : '(non renvoye)');
+      return 'fs-written';
+    } catch (e) {
+      errors.push('- ' + dirs[i] + ' : ' + ((e && (e.message || e.errorMessage)) || 'refuse'));
+    }
+  }
+  window._fsLastDiag = 'Ecriture refusee dans TOUS les dossiers :\n' + errors.join('\n');
+  return null;
 }
 window._fsWriteBackup = _fsWriteBackup;
 
@@ -438,28 +454,27 @@ window.autoDownload = {
   // telechargement immediat (nom unique) — via partage natif (WebView) ou download
   now:     () => {
     try {
-      if (typeof buildSnapshot !== 'function') return false;
+      if (typeof buildSnapshot !== 'function') { try{alert('Sauvegarde indisponible : moteur non pret.');}catch(e){} return false; }
       const snap = buildSnapshot();
-      if (!snap) return false;
+      if (!snap) { try{alert('Sauvegarde indisponible : etat non pret.');}catch(e){} return false; }
       if (!snap.savedAt) snap.savedAt = new Date().toISOString();
       const json = JSON.stringify(snap, null, 2);
       const d = new Date(); const pad = n => (n<10?'0':'')+n;
       const stamp = d.getFullYear()+pad(d.getMonth()+1)+pad(d.getDate())+'-'+pad(d.getHours())+pad(d.getMinutes())+pad(d.getSeconds());
       const cyc = (snap && typeof snap.cycle === 'number') ? snap.cycle : 0;
       const fname = 'aura_backup_c'+cyc+'_'+stamp+'.json';
-      if (typeof _shareOrDownloadJSON === 'function') {
-        _shareOrDownloadJSON(json, fname).then(res => {
-          if (typeof showToast !== 'function') return;
-          if (res === 'fs-written')      showToast('💾 Backup enregistré (Documents/AURA_Backups)', 4000, 'user');
-          else if (res === 'shared')     showToast('💾 Choisis où enregistrer (Drive, Fichiers…)', 4000, 'user');
-          else if (res === 'downloaded') showToast('💾 Backup téléchargé : ' + fname, 4000, 'user');
-          else if (res === 'cancelled')  showToast('Partage annulé', 2500, 'user');
-          else                            showToast('❌ Sauvegarde échouée', 4000, 'user');
-        });
-        return true;
-      }
-      return autoDlDownload();
-    } catch (e) { return false; }
+      // DIAGNOSTIC VISIBLE : on tente l'ecriture native et on AFFICHE le resultat exact.
+      Promise.resolve(_fsWriteBackup(json, fname)).then(function (res) {
+        var diag = window._fsLastDiag || '(pas de diagnostic)';
+        if (res === 'fs-written') {
+          try { alert('SAUVEGARDE REUSSIE\n\nFichier : ' + fname + '\n\n' + diag); } catch(e){}
+          if (typeof showToast === 'function') showToast('💾 Backup enregistre', 4000, 'user');
+        } else {
+          try { alert('LA SAUVEGARDE FICHIER A ECHOUE\n\n' + diag + '\n\n>> Recopie ce texte a Claude <<'); } catch(e){}
+        }
+      });
+      return true;
+    } catch (e) { try{alert('Erreur sauvegarde : ' + (e && e.message));}catch(_){} return false; }
   }
 };
 
