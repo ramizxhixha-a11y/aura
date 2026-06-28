@@ -468,3 +468,55 @@
   border-radius: 3px;
   transition: width .3s;
 }
+
+
+/* ═══════════════════════════════════════════════════════════
+   TABLETTE & PC — MODALES ADAPTATIVES (v1)
+   ───────────────────────────────────────────────────────────
+   Les pages (#app) s'élargissent déjà sur grand écran (règles 21b).
+   Mais les modales sont des overlays position:fixed avec une largeur
+   FIXE pensée téléphone (430px, 400px, 520px…) → elles restaient
+   étroites avec du vide autour sur tablette. On élargit ici TOUS les
+   conteneurs de modales de façon cohérente. Ciblage par nom exact,
+   !important pour primer sur les largeurs fixes de 15 / 21b / 22 / 27.
+   Les backdrops centrent déjà (flex center / margin auto) → la modale
+   plus large reste centrée. La carte de confirmation reste compacte.
+   ═══════════════════════════════════════════════════════════ */
+
+/* ─── Tablette portrait (600–1099px) ─── */
+@media (min-width: 600px) and (max-width: 1099px) {
+  .settings-sheet,
+  #wdSheet,
+  #transferInner,
+  .pair-detail-panel,
+  .pair-detail-card,
+  .modal-box,
+  .modal-sheet,
+  .diag-panel,
+  .why-panel,
+  #realCandlesModal > div,
+  #installModal > div {
+    max-width: 700px !important;
+    margin-left: auto !important;
+    margin-right: auto !important;
+  }
+}
+
+/* ─── Tablette paysage & PC (1100px et +) ─── */
+@media (min-width: 1100px) {
+  .settings-sheet,
+  #wdSheet,
+  #transferInner,
+  .pair-detail-panel,
+  .pair-detail-card,
+  .modal-box,
+  .modal-sheet,
+  .diag-panel,
+  .why-panel,
+  #realCandlesModal > div,
+  #installModal > div {
+    max-width: 880px !important;
+    margin-left: auto !important;
+    margin-right: auto !important;
+  }
+}
