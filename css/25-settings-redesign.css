@@ -1,5 +1,5 @@
 /* ═══════════════════════════════════════════════════════════
-   AURA8 v109 · 25-settings-redesign.css
+   AURA8 v110 · 25-settings-redesign.css
    LIVRAISON 2 — Modale réglages style iOS
    · 10 cartes en grille
    · Navigation menu → sous-pages
@@ -471,51 +471,65 @@
 
 
 /* ═══════════════════════════════════════════════════════════
-   TABLETTE & PC — MODALES ADAPTATIVES (v1)
+   TABLETTE & PC — MODALES ADAPTATIVES (v2)
    ───────────────────────────────────────────────────────────
-   Les pages (#app) s'élargissent déjà sur grand écran (règles 21b).
-   Mais les modales sont des overlays position:fixed avec une largeur
-   FIXE pensée téléphone (430px, 400px, 520px…) → elles restaient
-   étroites avec du vide autour sur tablette. On élargit ici TOUS les
-   conteneurs de modales de façon cohérente. Ciblage par nom exact,
-   !important pour primer sur les largeurs fixes de 15 / 21b / 22 / 27.
-   Les backdrops centrent déjà (flex center / margin auto) → la modale
-   plus large reste centrée. La carte de confirmation reste compacte.
+   Les pages (#app) s'élargissent déjà sur grand écran (21b).
+   Les modales sont des overlays position:fixed à largeur FIXE
+   téléphone → on les élargit ET on les REMPLIT (width:100%) pour
+   qu'elles occupent l'espace au lieu de flotter dans le vide
+   (ex. « Fermer positions » avec une seule ligne).
+   Deux tailles selon le contenu :
+   · LARGES  : réglages, détail paire, diagnostics, bougies, wallet
+   · MOYENNES: transfert, édition/fermeture position, install, pourquoi
+   margin auto → centrées même dans un backdrop flex non centré.
+   Téléphone (<600px) : aucune règle ne s'active, affichage intact.
    ═══════════════════════════════════════════════════════════ */
 
-/* ─── Tablette portrait (600–1099px) ─── */
+/* ─── Tablette (600–1099px) ─── */
 @media (min-width: 600px) and (max-width: 1099px) {
   .settings-sheet,
-  #wdSheet,
-  #transferInner,
   .pair-detail-panel,
   .pair-detail-card,
+  .diag-panel,
+  #realCandlesModal > div,
+  #wdSheet {
+    width: 100% !important;
+    max-width: 720px !important;
+    margin-left: auto !important;
+    margin-right: auto !important;
+  }
+  #transferInner,
   .modal-box,
   .modal-sheet,
-  .diag-panel,
   .why-panel,
-  #realCandlesModal > div,
   #installModal > div {
-    max-width: 700px !important;
+    width: 100% !important;
+    max-width: 520px !important;
     margin-left: auto !important;
     margin-right: auto !important;
   }
 }
 
-/* ─── Tablette paysage & PC (1100px et +) ─── */
+/* ─── PC & grandes tablettes paysage (1100px et +) ─── */
 @media (min-width: 1100px) {
   .settings-sheet,
-  #wdSheet,
-  #transferInner,
   .pair-detail-panel,
   .pair-detail-card,
+  .diag-panel,
+  #realCandlesModal > div,
+  #wdSheet {
+    width: 100% !important;
+    max-width: 900px !important;
+    margin-left: auto !important;
+    margin-right: auto !important;
+  }
+  #transferInner,
   .modal-box,
   .modal-sheet,
-  .diag-panel,
   .why-panel,
-  #realCandlesModal > div,
   #installModal > div {
-    max-width: 880px !important;
+    width: 100% !important;
+    max-width: 600px !important;
     margin-left: auto !important;
     margin-right: auto !important;
   }
