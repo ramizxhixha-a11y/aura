@@ -1,8 +1,14 @@
 /* ═══════════════════════════════════════════════════════════
    AURA8 · js/01-chrono-network.js
    ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓
-   ▓                   VERSION  v118.16                      ▓
+   ▓                   VERSION  v118.17                      ▓
    ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓
+
+   v118.17 : AUTO-REPRISE EN ARRIÈRE-PLAN
+   - La sim mémorise son état (clé localStorage 'aura_sim_running').
+   - Au retour d'arrière-plan / reload, elle se relance toute seule.
+   - Le bouton ▶ ne réapparaît plus jamais pour bloquer l'utilisateur.
+   - Respecte une pause volontaire (ne redémarre que si elle tournait).
 
    v118.16 : BUG CRITIQUE RÉSOLU
    - Type 'info' est MASQUÉ par défaut dans showToast() de l'app !
@@ -248,6 +254,7 @@ window._auraGetGlobalS = _auraGetGlobalS;
       try { simTick(); } catch(e) { console.warn('[AURA simTick]', e); }
     }, 1000);
     window._auraSimState.running = true;
+    try { localStorage.setItem('aura_sim_running','1'); } catch(e) {}
     try {
       const setFn = new Function('try{_simRunning=true;_simEverStarted=true;_simInterval=window._auraSimState.interval}catch(e){}');
       setFn();
@@ -269,6 +276,7 @@ window._auraGetGlobalS = _auraGetGlobalS;
     if (!window._auraSimState.running) return;
     if (window._auraSimState.interval) { clearInterval(window._auraSimState.interval); window._auraSimState.interval = null; }
     window._auraSimState.running = false;
+    try { localStorage.setItem('aura_sim_running','0'); } catch(e) {}
     try {
       const setFn = new Function('try{_simRunning=false;_simInterval=null}catch(e){}');
       setFn();
@@ -422,4 +430,50 @@ window._auraGetGlobalS = _auraGetGlobalS;
   } else {
     setTimeout(initTradeMode, 500);
   }
+})();
+
+
+/* ═══════════════════════════════════════════════════════════
+   ░░ AUTO-REPRISE DE LA SIMULATION · arrière-plan / reload ░░
+   AURA mémorise dans localStorage si la sim tournait (clé
+   'aura_sim_running'). Au boot ET au retour d'arrière-plan, si elle
+   tournait, elle se relance toute seule : le bouton ▶ ne bloque plus
+   jamais l'utilisateur, et aucune progression n'est perdue. Une pause
+   volontaire est respectée (pas de redémarrage intempestif).
+   ═══════════════════════════════════════════════════════════ */
+(function _auraSimAutoResume() {
+  'use strict';
+  function _wantsRun() {
+    try { return localStorage.getItem('aura_sim_running') === '1'; } catch (e) { return false; }
+  }
+  function _isRunning() {
+    return !!(window._auraSimState && window._auraSimState.running && window._auraSimState.interval);
+  }
+  function _hasSimTick() {
+    if (typeof window.simTick === 'function') return true;
+    try { return !!(new Function('try{return typeof simTick==="function"}catch(e){return false}'))(); }
+    catch (e) { return false; }
+  }
+  function _resume() {
+    if (!window._stateReady) return;          // attendre que l'état soit restauré
+    if (!_wantsRun() || _isRunning()) return;
+    if (typeof window.startSim !== 'function' || !_hasSimTick()) return;
+    window.startSim();
+  }
+  // Boot : attendre la fin de loadState, puis relancer si besoin.
+  var _tries = 0;
+  var _bootIv = setInterval(function () {
+    _tries++;
+    if (window._stateReady) {
+      _resume();
+      if (_isRunning() || !_wantsRun()) { clearInterval(_bootIv); return; }
+    }
+    if (_tries > 40) clearInterval(_bootIv);  // ~20 s de sécurité
+  }, 500);
+  // Retour d'arrière-plan / page restaurée.
+  window.addEventListener('pageshow', function () { setTimeout(_resume, 300); });
+  document.addEventListener('resume', function () { setTimeout(_resume, 300); }, false);
+  document.addEventListener('visibilitychange', function () {
+    if (document.visibilityState === 'visible') setTimeout(_resume, 300);
+  });
 })();
