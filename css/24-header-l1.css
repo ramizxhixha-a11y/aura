@@ -1,5 +1,5 @@
 /* ═══════════════════════════════════════════════════════════
-   AURA8 v119 · 24-header-l1.css
+   AURA8 v120 · 24-header-l1.css
    LIVRAISON 1 — Header refondu :
    · 3 nouveaux boutons (⚡ régime / 🩺 diag / CALM-VOLA)
    · Wake lock toggle (☾/☀)
@@ -57,7 +57,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 14px;
+  font-size: var(--fs-14);
   cursor: pointer;
   flex-shrink: 0;
   transition: background .15s, transform .1s, border-color .2s, color .2s, box-shadow .2s;
@@ -109,7 +109,7 @@
   background: rgba(56,212,245,.08);
   color: var(--ice);
   font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: var(--fs-10);
   font-weight: 800;
   letter-spacing: .12em;
   cursor: pointer;
@@ -144,7 +144,7 @@
   background: rgba(0,232,122,.08);
   color: var(--up);
   font-family: var(--font-mono);
-  font-size: 9px;
+  font-size: var(--fs-9);
   font-weight: 700;
   display: flex;
   align-items: center;
@@ -232,7 +232,7 @@
 /* ═══ CHRONO — couleur dédiée par mode ═══ */
 .chrono-display {
   font-family: var(--font-mono);
-  font-size: 12px;
+  font-size: var(--fs-12);
   font-weight: 700;
   color: var(--t2);
   letter-spacing: 0.05em;
@@ -251,7 +251,7 @@
 /* ═══ BADGE MODE (sous le chrono) ═══ */
 .mode-badge {
   font-family: var(--font-mono);
-  font-size: 7px;
+  font-size: var(--fs-7);
   font-weight: 800;
   letter-spacing: .08em;
   text-transform: uppercase;
@@ -287,22 +287,22 @@
 @media (max-width: 430px) {
   #statusBar { gap: 8px; padding: 10px 10px; }
   .header-buttons { gap: 6px; flex-wrap: nowrap; }
-  .btn-icon { width: 30px; height: 30px; font-size: 13px; }
+  .btn-icon { width: 30px; height: 30px; font-size: var(--fs-13); }
   .net-indicator { width: 11px; height: 11px; }
   .net-dot { width: 5.5px; height: 5.5px; }
   .header-right { min-width: 52px; }
-  .chrono-display { font-size: 11px; }
+  .chrono-display { font-size: var(--fs-11); }
   .mode-badge { font-size: 6.5px; padding: 1px 4px; }
   .btn-regime-marche, .btn-mode-toggle {
-    height: 30px; padding: 0 9px; font-size: 9px;
+    height: 30px; padding: 0 9px; font-size: var(--fs-9);
   }
   .btn-regime-marche { min-width: 54px; }
   .aura-circular-wrap { width: 56px; height: 56px; }
   .aura-circular-bg { width: 36px; height: 36px; }
   .aura-circular-pulse { width: 40px; height: 40px; }
   .aura-circular-svg text { font-size: 4.2px; }
-  .aura-circular-inner .aura-text { font-size: 7px; }
-  .aura-circular-inner .aura-infinity { font-size: 12px; }
+  .aura-circular-inner .aura-text { font-size: var(--fs-7); }
+  .aura-circular-inner .aura-infinity { font-size: var(--fs-12); }
   .aura-version-inner { font-size: 3.5px; margin-top: 1px; }
 }
 
@@ -312,21 +312,21 @@
   .aura-circular-pulse { width: 36px; height: 36px; }
   .aura-circular-svg text { font-size: 3.8px; }
   .aura-circular-inner .aura-text { font-size: 6.5px; }
-  .aura-circular-inner .aura-infinity { font-size: 11px; }
+  .aura-circular-inner .aura-infinity { font-size: var(--fs-11); }
   .aura-version-inner { font-size: 3px; }
 }
 
 @media (min-width: 700px) {
   #statusBar { padding: 14px 24px; gap: 16px; }
   .header-buttons { gap: 12px; }
-  .btn-icon { width: 36px; height: 36px; font-size: 16px; }
+  .btn-icon { width: 36px; height: 36px; font-size: var(--fs-16); }
   .net-indicator { width: 14px; height: 14px; }
   .net-dot { width: 7px; height: 7px; }
   .header-right { min-width: 64px; }
-  .chrono-display { font-size: 14px; }
-  .mode-badge { font-size: 8px; }
+  .chrono-display { font-size: var(--fs-14); }
+  .mode-badge { font-size: var(--fs-8); }
   .btn-regime-marche, .btn-mode-toggle {
-    height: 36px; padding: 0 14px; font-size: 11px;
+    height: 36px; padding: 0 14px; font-size: var(--fs-11);
   }
 }
 
@@ -344,7 +344,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 15px;
+  font-size: var(--fs-15);
   line-height: 1;
 }
 .btn-close-trades .cat-count {
@@ -352,7 +352,7 @@
   align-items: center;
   justify-content: center;
   font-family: var(--font-mono);
-  font-size: 14px;
+  font-size: var(--fs-14);
   font-weight: 800;
   line-height: 1;
   color: #fff;

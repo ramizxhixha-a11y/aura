@@ -1,5 +1,5 @@
 /* ═══════════════════════════════════════════════════════════
-   AURA8 v106 · 05-action-cards-base.css
+   AURA8 v107 · 05-action-cards-base.css
    Action cards redesign v7.12 (cœur visuel)
    Source: AURA8_v105.html lignes 1091 → 1385
    ═══════════════════════════════════════════════════════════ */
@@ -77,7 +77,7 @@
   padding-right: 0;
 }
 .action-card-pair .ac-pair-name {
-  font-size: 11px;
+  font-size: var(--fs-11);
   font-weight: 800;
   letter-spacing: .05em;
   color: var(--t1);
@@ -86,7 +86,7 @@
   text-overflow: ellipsis;
 }
 .action-card-pair .ac-pair-lmsr {
-  font-size: 8px;
+  font-size: var(--fs-8);
   font-weight: 700;
   padding: 2px 6px;
   border-radius: 6px;
@@ -101,7 +101,7 @@
 .ac-change24 {
   position: absolute;
   top: 10px; right: 10px;
-  font-size: 9px;
+  font-size: var(--fs-9);
   font-weight: 700;
   padding: 2px 6px;
   border-radius: 6px;
@@ -129,7 +129,7 @@
   gap: 2px;
   font-family: var(--font-mono);
   font-weight: 700;
-  font-size: 8px;
+  font-size: var(--fs-8);
   padding: 2px 5px;
   border-radius: 5px;
   white-space: nowrap;
@@ -143,7 +143,7 @@
 .ac-stat-pill.pur  { background: rgba(167,139,250,.08); color: var(--pur); }
 .ac-volatility {
   font-family: var(--font-mono);
-  font-size: 8px;
+  font-size: var(--fs-8);
   color: var(--t3);
   white-space: nowrap;
   flex-shrink: 0;
@@ -153,7 +153,7 @@
 /* ── Label principal (HOLD / LONG / SHORT) ── */
 .action-card-action {
   font-family: var(--font-display);
-  font-size: 24px;
+  font-size: var(--fs-24);
   font-weight: 800;
   line-height: 1;
   letter-spacing: -.01em;
@@ -178,7 +178,7 @@
 /* Prix sous le label principal */
 .action-card-price {
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: var(--fs-11);
   font-weight: 500;
   color: var(--t2);
   margin-top: 1px;
@@ -201,7 +201,7 @@
   min-width: 0;
 }
 .ac-agents-bar-label {
-  font-size: 7px;
+  font-size: var(--fs-7);
   color: var(--t3);
   letter-spacing: .06em;
   text-transform: uppercase;
@@ -211,7 +211,7 @@
 }
 .ac-agent-dot {
   width: 10px; height: 10px; border-radius: 50%;
-  font-size: 8px; display: inline-flex;
+  font-size: var(--fs-8); display: inline-flex;
   align-items: center; justify-content: center;
   border: 1px solid var(--border);
   flex-shrink: 0;
@@ -231,7 +231,7 @@
   min-width: 0;
 }
 .ac-pnl-label {
-  font-size: 8px;
+  font-size: var(--fs-8);
   color: var(--t3);
   letter-spacing: .06em;
   text-transform: uppercase;
@@ -240,28 +240,28 @@
 }
 .ac-pnl-stake {
   font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: var(--fs-10);
   font-weight: 700;
   color: var(--gold);
   white-space: nowrap;
 }
 .ac-pnl-val {
   font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: var(--fs-10);
   font-weight: 600;
   transition: color .3s;
   white-space: nowrap;
 }
 .ac-pnl-fee {
   font-family: var(--font-mono);
-  font-size: 9px;
+  font-size: var(--fs-9);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 .ac-pnl-gp {
   font-family: var(--font-mono);
-  font-size: 9px;
+  font-size: var(--fs-9);
   font-weight: 700;
   transition: color .3s;
   white-space: nowrap;
@@ -296,6 +296,6 @@
 }
 .ac-cum-pnl.up   { border-left-color: var(--up);   background: rgba(0,232,122,.04); }
 .ac-cum-pnl.down { border-left-color: var(--down); background: rgba(255,61,107,.04); }
-.ac-cum-lbl { font-size: 8px; color: var(--t3); text-transform: uppercase; letter-spacing: .05em; }
-.ac-cum-val { font-family: var(--font-mono); font-size: 10px; font-weight: 700; }
+.ac-cum-lbl { font-size: var(--fs-8); color: var(--t3); text-transform: uppercase; letter-spacing: .05em; }
+.ac-cum-val { font-family: var(--font-mono); font-size: var(--fs-10); font-weight: 700; }
 
