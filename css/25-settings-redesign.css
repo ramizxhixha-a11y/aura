@@ -1,5 +1,5 @@
 /* ═══════════════════════════════════════════════════════════
-   AURA8 v111 · 25-settings-redesign.css
+   AURA8 v112 · 25-settings-redesign.css
    LIVRAISON 2 — Modale réglages style iOS
    · 10 cartes en grille
    · Navigation menu → sous-pages
@@ -33,7 +33,7 @@
   width: 32px;
   height: 32px;
   border-radius: 50%;
-  font-size: 16px;
+  font-size: var(--fs-16);
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -51,14 +51,14 @@
   min-width: 0;
 }
 .aura-ss-title {
-  font-size: 13px;
+  font-size: var(--fs-13);
   font-weight: 800;
   letter-spacing: .1em;
   text-transform: uppercase;
   color: var(--t1);
 }
 .aura-ss-subtitle {
-  font-size: 8px;
+  font-size: var(--fs-8);
   color: var(--t3);
   letter-spacing: .08em;
   text-transform: uppercase;
@@ -107,19 +107,19 @@
   grid-column: span 2;
 }
 .aura-ss-card-icon {
-  font-size: 28px;
+  font-size: var(--fs-28);
   margin-bottom: 8px;
   display: block;
 }
 .aura-ss-card-title {
-  font-size: 11px;
+  font-size: var(--fs-11);
   font-weight: 800;
   letter-spacing: .1em;
   text-transform: uppercase;
   line-height: 1.2;
 }
 .aura-ss-card-sub {
-  font-size: 8px;
+  font-size: var(--fs-8);
   color: var(--t3);
   margin-top: 4px;
   line-height: 1.3;
@@ -130,7 +130,7 @@
   right: 8px;
   background: var(--up);
   color: var(--bg);
-  font-size: 7px;
+  font-size: var(--fs-7);
   font-weight: 800;
   padding: 2px 6px;
   border-radius: 4px;
@@ -171,7 +171,7 @@
 .aura-ss-version {
   text-align: center;
   padding: 18px 0 6px;
-  font-size: 9px;
+  font-size: var(--fs-9);
   color: var(--t3);
   letter-spacing: .1em;
 }
@@ -185,7 +185,7 @@
   margin-bottom: 12px;
 }
 .aura-ss-section-title {
-  font-size: 10px;
+  font-size: var(--fs-10);
   font-weight: 800;
   letter-spacing: .15em;
   text-transform: uppercase;
@@ -218,13 +218,13 @@
 .aura-ss-row:last-child { border-bottom: none; }
 .aura-ss-row-text { flex: 1; min-width: 0; }
 .aura-ss-row-label {
-  font-size: 11px;
+  font-size: var(--fs-11);
   font-weight: 700;
   color: var(--t1);
   margin-bottom: 2px;
 }
 .aura-ss-row-sub {
-  font-size: 9px;
+  font-size: var(--fs-9);
   color: var(--t3);
   line-height: 1.4;
 }
@@ -267,7 +267,7 @@
   color: var(--ice);
   padding: 8px 14px;
   border-radius: 8px;
-  font-size: 10px;
+  font-size: var(--fs-10);
   font-weight: 700;
   cursor: pointer;
   font-family: inherit;
@@ -291,7 +291,7 @@
   border: 1px solid rgba(255,61,107,.3);
   background: rgba(255,61,107,.06);
   color: var(--down);
-  font-size: 11px;
+  font-size: var(--fs-11);
   font-weight: 700;
   cursor: pointer;
   font-family: inherit;
@@ -313,7 +313,7 @@
 .aura-ss-hold-text { position: relative; z-index: 2; }
 .aura-ss-hold-action {
   position: relative; z-index: 2;
-  font-size: 9px;
+  font-size: var(--fs-9);
   color: var(--t3);
   letter-spacing: .1em;
   text-transform: uppercase;
@@ -332,7 +332,7 @@
 }
 .aura-ss-chrono-left { display: flex; align-items: center; gap: 8px; }
 .aura-ss-chrono-tag {
-  font-size: 9px;
+  font-size: var(--fs-9);
   font-weight: 800;
   padding: 3px 8px;
   border-radius: 10px;
@@ -350,7 +350,7 @@
 }
 .aura-ss-chrono-val {
   font-family: var(--font-mono);
-  font-size: 13px;
+  font-size: var(--fs-13);
   font-weight: 700;
   color: var(--t1);
   letter-spacing: 0.05em;
@@ -361,7 +361,7 @@
   color: var(--down);
   padding: 4px 10px;
   border-radius: 6px;
-  font-size: 9px;
+  font-size: var(--fs-9);
   font-weight: 700;
   cursor: pointer;
   font-family: inherit;
@@ -385,7 +385,7 @@
   background: transparent;
   color: var(--t3);
   font-family: inherit;
-  font-size: 11px;
+  font-size: var(--fs-11);
   font-weight: 700;
   letter-spacing: .1em;
   cursor: pointer;
@@ -415,23 +415,23 @@
   border: 2px solid var(--up);
 }
 .aura-ss-theme-card-icon {
-  font-size: 24px;
+  font-size: var(--fs-24);
   margin-bottom: 6px;
 }
 .aura-ss-theme-card-name {
-  font-size: 11px;
+  font-size: var(--fs-11);
   font-weight: 800;
   letter-spacing: .1em;
 }
 .aura-ss-theme-card-desc {
-  font-size: 8px;
+  font-size: var(--fs-8);
   color: var(--t3);
   margin-top: 3px;
 }
 .aura-ss-theme-card-check {
   position: absolute;
   top: 6px; right: 8px;
-  font-size: 10px;
+  font-size: var(--fs-10);
   color: var(--up);
 }
 
@@ -443,13 +443,13 @@
   text-align: center;
 }
 .aura-ss-perf-cell .perf-label {
-  font-size: 8px;
+  font-size: var(--fs-8);
   color: var(--t3);
   letter-spacing: .1em;
   margin-bottom: 4px;
 }
 .aura-ss-perf-cell .perf-value {
-  font-size: 12px;
+  font-size: var(--fs-13);
   font-weight: 800;
   font-family: var(--font-mono);
 }
@@ -471,102 +471,40 @@
 
 
 /* ═══════════════════════════════════════════════════════════
-   TABLETTE & PC — MODALES ADAPTATIVES (v3)
+   MODALES FLUIDES — adaptatives sans breakpoint ni zoom (v4)
    ───────────────────────────────────────────────────────────
-   But : sur tablette/PC, modales plus larges, REMPLIES, et surtout
-   TEXTE PLUS GRAND (le contenu était en px figés taille téléphone).
-   3 familles :
-   · LARGES à graphiques (détail paire, bougies, diagnostic, wallet)
-       → on élargit + remplit, SANS zoom (le zoom flouterait les charts).
-   · MOYENNES de texte (fermeture/édition position, transfert, install,
-       pourquoi) → zoom pour grossir le texte ; rendu ≤ 522/600px.
-   · RÉGLAGES (.settings-sheet, défile, ancré bas, max-height 88vh)
-       → zoom pour grossir le texte, AVEC hauteur compensée
-       (max-height: calc(88vh / zoom)) pour que le haut ne sorte pas
-       de l'écran ; sous 768px on élargit seulement (le zoom déborderait).
-   zoom multiplie aussi la largeur → max-width volontairement réduite
-   pour que largeur_rendue = max-width × zoom tienne dans l'écran.
-   Téléphone (<600px) : aucune règle ne s'active, affichage intact.
+   Plus de zoom bricolé, plus de max-width magiques en px.
+   Chaque modale prend une largeur FLUIDE (var --w-modal-*) :
+   · téléphone → plein écran (min(100%, …) = 100%)
+   · tablette/PC → plafonnée à une largeur lisible, centrée
+   Une seule règle par modale, valable à TOUTES les tailles.
+   La hauteur des panneaux qui défilent utilise dvh (sûr mobile).
    ═══════════════════════════════════════════════════════════ */
 
-/* ─── LARGES à graphiques : élargir + remplir, sans zoom ─── */
-@media (min-width: 600px) and (max-width: 1099px) {
-  .pair-detail-panel,
-  .pair-detail-card,
-  #realCandlesModal > div,
-  .diag-panel,
-  #wdSheet {
-    width: 100% !important;
-    max-width: 720px !important;
-    margin-left: auto !important;
-    margin-right: auto !important;
-  }
+/* Panneaux larges (réglages, détail paire, bougies, diagnostic, wallet) */
+.settings-sheet,
+.diag-panel,
+.pair-detail-panel,
+.pair-detail-card,
+#realCandlesModal > div,
+#wdSheet {
+  width: var(--w-modal-lg) !important;
+  max-width: var(--w-modal-lg) !important;
+  margin-left: auto !important;
+  margin-right: auto !important;
 }
-@media (min-width: 1100px) {
-  .pair-detail-panel,
-  .pair-detail-card,
-  #realCandlesModal > div,
-  .diag-panel,
-  #wdSheet {
-    width: 100% !important;
-    max-width: 900px !important;
-    margin-left: auto !important;
-    margin-right: auto !important;
-  }
+.settings-sheet {
+  max-height: 88dvh !important;
 }
 
-/* ─── MOYENNES de texte : zoom (texte plus grand) ─── */
-@media (min-width: 600px) and (max-width: 1099px) {
-  .modal-sheet,
-  .modal-box,
-  #transferInner,
-  #installModal > div,
-  .why-panel {
-    zoom: 1.16;
-    max-width: 450px !important;   /* rendu ≈ 522px */
-    margin-left: auto !important;
-    margin-right: auto !important;
-  }
-}
-@media (min-width: 1100px) {
-  .modal-sheet,
-  .modal-box,
-  #transferInner,
-  #installModal > div,
-  .why-panel {
-    zoom: 1.20;
-    max-width: 500px !important;   /* rendu ≈ 600px */
-    margin-left: auto !important;
-    margin-right: auto !important;
-  }
-}
-
-/* ─── RÉGLAGES : petit écran (600–767px) = élargir seulement ─── */
-@media (min-width: 600px) and (max-width: 767px) {
-  .settings-sheet {
-    width: 100% !important;
-    max-width: 600px !important;
-    margin-left: auto !important;
-    margin-right: auto !important;
-  }
-}
-/* ─── RÉGLAGES : tablette (768–1099px) = zoom + hauteur compensée ─── */
-@media (min-width: 768px) and (max-width: 1099px) {
-  .settings-sheet {
-    zoom: 1.18;
-    max-width: 610px !important;                /* rendu ≈ 720px */
-    max-height: calc(88vh / 1.18) !important;   /* rendu ≈ 88vh, ne coupe pas le haut */
-    margin-left: auto !important;
-    margin-right: auto !important;
-  }
-}
-/* ─── RÉGLAGES : PC (1100px et +) = zoom plus fort ─── */
-@media (min-width: 1100px) {
-  .settings-sheet {
-    zoom: 1.22;
-    max-width: 740px !important;                /* rendu ≈ 903px */
-    max-height: calc(88vh / 1.22) !important;
-    margin-left: auto !important;
-    margin-right: auto !important;
-  }
+/* Modales moyennes (fermeture/édition position, transfert, install, pourquoi) */
+.modal-sheet,
+.modal-box,
+#transferInner,
+#installModal > div,
+.why-panel {
+  width: var(--w-modal-md) !important;
+  max-width: var(--w-modal-md) !important;
+  margin-left: auto !important;
+  margin-right: auto !important;
 }

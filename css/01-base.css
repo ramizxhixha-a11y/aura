@@ -1,6 +1,6 @@
 /* ═══════════════════════════════════════════════════════════
-   AURA8 v119 · 01-base.css
-   Reset, :root variables, body, html
+   AURA8 v120 · 01-base.css
+   Reset, :root variables (+ fondations fluides), body, html
    ═══════════════════════════════════════════════════════════ */
 
 /* ── RESET & BASE ─────────────────────────────── */
@@ -34,6 +34,41 @@
   --mode-sim:   #38d4f5;   /* Auto-apprentissage → cyan  */
   --mode-paper: #00e87a;   /* Évaluation         → vert  */
   --mode-real:  #ff3d6b;   /* Mode Réel          → rouge */
+
+  /* ═══════════════════════════════════════════════════════
+     FONDATIONS FLUIDES (responsive sans breakpoint ni zoom)
+     ───────────────────────────────────────────────────────
+     Chaque token = clamp(min, préféré en vw, max).
+     La borne MIN = la taille px actuelle → le TÉLÉPHONE reste
+     identique ; ça grossit seulement quand l'écran s'élargit
+     (tablette, PC). On migre progressivement les px vers ces
+     variables, fichier par fichier. Base rem → respecte le
+     zoom utilisateur (accessibilité, WCAG 1.4.4).
+     ═══════════════════════════════════════════════════════ */
+
+  /* — Polices fluides (nom = taille px d'origine) — */
+  --fs-7:  clamp(0.438rem, 0.40rem + 0.17vw, 0.625rem);
+  --fs-8:  clamp(0.500rem, 0.46rem + 0.18vw, 0.688rem);
+  --fs-9:  clamp(0.563rem, 0.51rem + 0.23vw, 0.750rem);
+  --fs-10: clamp(0.625rem, 0.57rem + 0.25vw, 0.875rem);
+  --fs-11: clamp(0.688rem, 0.62rem + 0.30vw, 0.938rem);
+  --fs-13: clamp(0.813rem, 0.73rem + 0.36vw, 1.125rem);
+  --fs-16: clamp(1.000rem, 0.89rem + 0.49vw, 1.313rem);
+  --fs-20: clamp(1.250rem, 1.11rem + 0.62vw, 1.625rem);
+  --fs-24: clamp(1.500rem, 1.33rem + 0.74vw, 1.938rem);
+  --fs-28: clamp(1.750rem, 1.55rem + 0.87vw, 2.250rem);
+
+  /* — Espacements fluides — */
+  --sp-2xs: clamp(0.25rem, 0.23rem + 0.11vw, 0.375rem);
+  --sp-xs:  clamp(0.50rem, 0.46rem + 0.22vw, 0.625rem);
+  --sp-s:   clamp(0.75rem, 0.69rem + 0.33vw, 0.938rem);
+  --sp-m:   clamp(1.00rem, 0.91rem + 0.43vw, 1.250rem);
+  --sp-l:   clamp(1.50rem, 1.37rem + 0.65vw, 1.875rem);
+
+  /* — Largeurs de modales fluides (téléphone = plein écran, plafonné sur grand écran) — */
+  --w-modal-sm: min(100%, 24rem);
+  --w-modal-md: min(100%, 32rem);
+  --w-modal-lg: min(100%, 46rem);
 }
 
 html, body {
