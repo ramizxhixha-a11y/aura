@@ -1,5 +1,5 @@
 /* ═══════════════════════════════════════════════════════════
-   AURA8 v110 · 25-settings-redesign.css
+   AURA8 v111 · 25-settings-redesign.css
    LIVRAISON 2 — Modale réglages style iOS
    · 10 cartes en grille
    · Navigation menu → sous-pages
@@ -471,65 +471,101 @@
 
 
 /* ═══════════════════════════════════════════════════════════
-   TABLETTE & PC — MODALES ADAPTATIVES (v2)
+   TABLETTE & PC — MODALES ADAPTATIVES (v3)
    ───────────────────────────────────────────────────────────
-   Les pages (#app) s'élargissent déjà sur grand écran (21b).
-   Les modales sont des overlays position:fixed à largeur FIXE
-   téléphone → on les élargit ET on les REMPLIT (width:100%) pour
-   qu'elles occupent l'espace au lieu de flotter dans le vide
-   (ex. « Fermer positions » avec une seule ligne).
-   Deux tailles selon le contenu :
-   · LARGES  : réglages, détail paire, diagnostics, bougies, wallet
-   · MOYENNES: transfert, édition/fermeture position, install, pourquoi
-   margin auto → centrées même dans un backdrop flex non centré.
+   But : sur tablette/PC, modales plus larges, REMPLIES, et surtout
+   TEXTE PLUS GRAND (le contenu était en px figés taille téléphone).
+   3 familles :
+   · LARGES à graphiques (détail paire, bougies, diagnostic, wallet)
+       → on élargit + remplit, SANS zoom (le zoom flouterait les charts).
+   · MOYENNES de texte (fermeture/édition position, transfert, install,
+       pourquoi) → zoom pour grossir le texte ; rendu ≤ 522/600px.
+   · RÉGLAGES (.settings-sheet, défile, ancré bas, max-height 88vh)
+       → zoom pour grossir le texte, AVEC hauteur compensée
+       (max-height: calc(88vh / zoom)) pour que le haut ne sorte pas
+       de l'écran ; sous 768px on élargit seulement (le zoom déborderait).
+   zoom multiplie aussi la largeur → max-width volontairement réduite
+   pour que largeur_rendue = max-width × zoom tienne dans l'écran.
    Téléphone (<600px) : aucune règle ne s'active, affichage intact.
    ═══════════════════════════════════════════════════════════ */
 
-/* ─── Tablette (600–1099px) ─── */
+/* ─── LARGES à graphiques : élargir + remplir, sans zoom ─── */
 @media (min-width: 600px) and (max-width: 1099px) {
-  .settings-sheet,
   .pair-detail-panel,
   .pair-detail-card,
-  .diag-panel,
   #realCandlesModal > div,
+  .diag-panel,
   #wdSheet {
     width: 100% !important;
     max-width: 720px !important;
     margin-left: auto !important;
     margin-right: auto !important;
   }
-  #transferInner,
-  .modal-box,
-  .modal-sheet,
-  .why-panel,
-  #installModal > div {
-    width: 100% !important;
-    max-width: 520px !important;
-    margin-left: auto !important;
-    margin-right: auto !important;
-  }
 }
-
-/* ─── PC & grandes tablettes paysage (1100px et +) ─── */
 @media (min-width: 1100px) {
-  .settings-sheet,
   .pair-detail-panel,
   .pair-detail-card,
-  .diag-panel,
   #realCandlesModal > div,
+  .diag-panel,
   #wdSheet {
     width: 100% !important;
     max-width: 900px !important;
     margin-left: auto !important;
     margin-right: auto !important;
   }
-  #transferInner,
-  .modal-box,
+}
+
+/* ─── MOYENNES de texte : zoom (texte plus grand) ─── */
+@media (min-width: 600px) and (max-width: 1099px) {
   .modal-sheet,
-  .why-panel,
-  #installModal > div {
+  .modal-box,
+  #transferInner,
+  #installModal > div,
+  .why-panel {
+    zoom: 1.16;
+    max-width: 450px !important;   /* rendu ≈ 522px */
+    margin-left: auto !important;
+    margin-right: auto !important;
+  }
+}
+@media (min-width: 1100px) {
+  .modal-sheet,
+  .modal-box,
+  #transferInner,
+  #installModal > div,
+  .why-panel {
+    zoom: 1.20;
+    max-width: 500px !important;   /* rendu ≈ 600px */
+    margin-left: auto !important;
+    margin-right: auto !important;
+  }
+}
+
+/* ─── RÉGLAGES : petit écran (600–767px) = élargir seulement ─── */
+@media (min-width: 600px) and (max-width: 767px) {
+  .settings-sheet {
     width: 100% !important;
     max-width: 600px !important;
+    margin-left: auto !important;
+    margin-right: auto !important;
+  }
+}
+/* ─── RÉGLAGES : tablette (768–1099px) = zoom + hauteur compensée ─── */
+@media (min-width: 768px) and (max-width: 1099px) {
+  .settings-sheet {
+    zoom: 1.18;
+    max-width: 610px !important;                /* rendu ≈ 720px */
+    max-height: calc(88vh / 1.18) !important;   /* rendu ≈ 88vh, ne coupe pas le haut */
+    margin-left: auto !important;
+    margin-right: auto !important;
+  }
+}
+/* ─── RÉGLAGES : PC (1100px et +) = zoom plus fort ─── */
+@media (min-width: 1100px) {
+  .settings-sheet {
+    zoom: 1.22;
+    max-width: 740px !important;                /* rendu ≈ 903px */
+    max-height: calc(88vh / 1.22) !important;
     margin-left: auto !important;
     margin-right: auto !important;
   }
