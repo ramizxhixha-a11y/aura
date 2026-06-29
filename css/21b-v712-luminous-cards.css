@@ -1,5 +1,5 @@
 /* ═══════════════════════════════════════════════════════════
-   AURA8 v107 · 21b-v712-luminous-cards.css
+   AURA8 v108 · 21b-v712-luminous-cards.css
    luminous cards enhancements, bricks, MAN mode, tablet fix
    Source: AURA8_v105.html lignes 5027 → 7078
    ═══════════════════════════════════════════════════════════ */
@@ -1999,7 +1999,6 @@
 /* ─── PORTRAIT TABLETTE 8" (600-1099px) ─── */
 @media (min-width: 600px) and (max-width: 1099px) {
   #app {
-    max-width: 760px !important;
     padding: 0 8px !important;
   }
   #actionBrickGrid, #manBrickGrid, #pairBrickGrid {
@@ -2016,7 +2015,6 @@
 /* ─── PAYSAGE TABLETTE (1100px+) ─── */
 @media (min-width: 1100px) {
   #app {
-    max-width: 1200px !important;
     padding: 0 12px !important;
   }
   #actionBrickGrid, #manBrickGrid, #pairBrickGrid {
@@ -2042,12 +2040,7 @@
   }
 }
 
-/* ─── Très grand écran (1400px+) ─── */
-@media (min-width: 1400px) {
-  #app {
-    max-width: 1400px !important;
-  }
-}
+/* ─── Très grand écran : #app plafonné à 1400px est géré dans 02-layout ─── */
 
 /* Overflow safety */
 @media (min-width: 600px) {

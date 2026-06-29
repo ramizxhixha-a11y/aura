@@ -1,5 +1,5 @@
 /* ═══════════════════════════════════════════════════════════
-   AURA8 v106 · 02-layout.css
+   AURA8 v107 · 02-layout.css
    #app, statusBar, pages, nav, scroll container
    Source: AURA8_v105.html lignes 63 → 223
    ═══════════════════════════════════════════════════════════ */
@@ -9,7 +9,8 @@
   display: flex;
   flex-direction: column;
   height: 100dvh;
-  max-width: 430px;
+  width: 100%;
+  max-width: 1400px;
   margin: 0 auto;
   position: relative;
   overflow: hidden;
@@ -21,7 +22,7 @@
   justify-content: space-between;
   align-items: center;
   padding: calc(var(--safe-top) + 4px) 20px 6px;
-  font-size: 11px;
+  font-size: var(--fs-11);
   color: var(--t2);
   background: var(--bg);
   flex-shrink: 0;
@@ -40,17 +41,17 @@
 @media (max-width: 420px) {
   #statusBar { padding-left: 8px !important; padding-right: 8px !important; gap: 3px; }
   #statusBar > div:last-child { gap: 3px !important; flex-wrap: nowrap; overflow: hidden; }
-  #statusBar .status-time { margin-right: 2px !important; font-size: 10px; min-width:34px !important; max-width:34px !important; }
-  #statusBar #livePriceIndicator { font-size: 9px !important; padding: 2px 5px !important; min-width: 42px !important; max-width: 42px !important; }
+  #statusBar .status-time { margin-right: 2px !important; font-size: var(--fs-10); min-width:34px !important; max-width:34px !important; }
+  #statusBar #livePriceIndicator { font-size: var(--fs-9) !important; padding: 2px 5px !important; min-width: 42px !important; max-width: 42px !important; }
   #statusBar #settingsBtn,
   #statusBar #simToggleBtn,
   #statusBar #closeAllBtn {
-    width: 26px !important; height: 26px !important; font-size: 12px !important;
+    width: 26px !important; height: 26px !important; font-size: var(--fs-12) !important;
   }
-  #statusBar #modeToggleBtn { min-width: 46px !important; max-width: 46px !important; padding: 3px 6px !important; font-size: 8px !important; }
+  #statusBar #modeToggleBtn { min-width: 46px !important; max-width: 46px !important; padding: 3px 6px !important; font-size: var(--fs-8) !important; }
   /* Logo plus compact aussi */
-  .nexus-logo { font-size: 14px !important; }
-  .nexus-sub { font-size: 8px !important; max-width: 60px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .nexus-logo { font-size: var(--fs-14) !important; }
+  .nexus-sub { font-size: var(--fs-8) !important; max-width: 60px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 }
 /* Très petit (< 360px) : ultra-compact */
 @media (max-width: 360px) {
@@ -59,9 +60,9 @@
   #statusBar #settingsBtn,
   #statusBar #simToggleBtn,
   #statusBar #closeAllBtn {
-    width: 24px !important; height: 24px !important; font-size: 11px !important;
+    width: 24px !important; height: 24px !important; font-size: var(--fs-11) !important;
   }
-  #statusBar #modeToggleBtn { min-width: 36px !important; max-width: 36px !important; font-size: 7px !important; padding: 2px 4px !important; }
+  #statusBar #modeToggleBtn { min-width: 36px !important; max-width: 36px !important; font-size: var(--fs-7) !important; padding: 2px 4px !important; }
   #statusBar .mode-dot { width: 4px !important; height: 4px !important; }
   #statusBar #livePriceIndicator { min-width: 38px !important; max-width: 38px !important; }
   #statusBar .status-time { min-width: 30px !important; max-width: 30px !important; }
@@ -161,7 +162,7 @@
 .nav-btn.active { background: rgba(56,212,245,.08); }
 .nav-btn.active::after { content:''; display:block; width:16px; height:2px; border-radius:1px; background:var(--ice); margin:2px auto 0; }
 .nav-btn svg { width: 22px; height: 22px; }
-.nav-btn span { font-size: 9px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--t3); }
+.nav-btn span { font-size: var(--fs-9); letter-spacing: 0.06em; text-transform: uppercase; color: var(--t3); }
 .nav-btn.active span { color: var(--ice); }
 .nav-btn.active svg path, .nav-btn.active svg circle, .nav-btn.active svg rect { stroke: var(--ice); }
 
