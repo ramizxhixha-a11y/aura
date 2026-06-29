@@ -1,5 +1,8 @@
 // ════════════════════════════════════════════════════════════
 // AURA8 — module consolidé 04/10
+// ── 29/06/2026 : 245 font-size px → tokens fluides var(--fs-N)
+//    (responsive tablette/PC sans zoom ; téléphone inchangé car
+//     borne min des tokens = taille px d'origine).
 // Contient : v8-0-livraison-35-mode-max-permissif-valid, v6-0-user-controls-pending-actions-agent-m, v29-26-coach-ia-integre
 // ── 07/06/2026 : 3 ecritures corrigees — sauvegardaient dans la cle morte
 //    'nexus_state' (jamais relue) au lieu de nexus_state_v2 ; remplacees par
@@ -530,7 +533,7 @@ function renderSettingsPanel() {
   // Helper : historique des backups (Q2=B : par catégorie avec séparateurs)
   let HISTORIQUE_HTML = '';
   if (!_cachedBackupsList || _cachedBackupsList.length === 0) {
-    HISTORIQUE_HTML = '<div style="text-align:center;padding:14px;color:var(--t3);font-size:10px;">Aucun backup pour l\'instant.<br>Le 1er backup auto sera créé sous peu.</div>';
+    HISTORIQUE_HTML = '<div style="text-align:center;padding:14px;color:var(--t3);font-size:var(--fs-10);">Aucun backup pour l\'instant.<br>Le 1er backup auto sera créé sous peu.</div>';
   } else {
     const autos = _cachedBackupsList.filter(b => b.meta.type === 'auto');
     const manuels = _cachedBackupsList.filter(b => b.meta.type === 'manual');
@@ -539,23 +542,23 @@ function renderSettingsPanel() {
       const d = new Date(b.meta.date);
       const dateStr = String(d.getDate()).padStart(2,'0') + '/' + String(d.getMonth()+1).padStart(2,'0') + ' ' + String(d.getHours()).padStart(2,'0') + ':' + String(d.getMinutes()).padStart(2,'0');
       const sizeKo = b.meta.sizeChars ? Math.round(b.meta.sizeChars / 1024) : '?';
-      return '<div style="display:grid;grid-template-columns:1fr auto auto;gap:6px;align-items:center;padding:6px 8px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.04);border-radius:6px;font-size:10px;margin-bottom:4px;">' +
+      return '<div style="display:grid;grid-template-columns:1fr auto auto;gap:6px;align-items:center;padding:6px 8px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.04);border-radius:6px;font-size:var(--fs-10);margin-bottom:4px;">' +
         '<div style="color:var(--t1);font-family:var(--font-mono);font-size:9.5px;">' + dateStr + ' · ' + sizeKo + 'Ko</div>' +
-        '<button onclick="restoreBackup(' + b.id + ')" style="padding:3px 7px;background:rgba(0,232,122,.15);border:1px solid rgba(0,232,122,.3);border-radius:4px;color:var(--up);font-size:9px;font-weight:700;cursor:pointer;font-family:inherit;">RESTAURER</button>' +
-        '<button onclick="deleteBackup(' + b.id + ')" style="padding:3px 5px;background:rgba(255,61,107,.10);border:1px solid rgba(255,61,107,.20);border-radius:4px;color:var(--down);font-size:9px;font-weight:700;cursor:pointer;font-family:inherit;">✕</button>' +
+        '<button onclick="restoreBackup(' + b.id + ')" style="padding:3px 7px;background:rgba(0,232,122,.15);border:1px solid rgba(0,232,122,.3);border-radius:4px;color:var(--up);font-size:var(--fs-9);font-weight:700;cursor:pointer;font-family:inherit;">RESTAURER</button>' +
+        '<button onclick="deleteBackup(' + b.id + ')" style="padding:3px 5px;background:rgba(255,61,107,.10);border:1px solid rgba(255,61,107,.20);border-radius:4px;color:var(--down);font-size:var(--fs-9);font-weight:700;cursor:pointer;font-family:inherit;">✕</button>' +
       '</div>';
     };
     let html = '<div style="display:flex;flex-direction:column;gap:6px;max-height:280px;overflow-y:auto;">';
     if (autos.length > 0) {
-      html += '<div style="font-size:9px;color:var(--ice);font-weight:700;letter-spacing:.05em;text-transform:uppercase;padding:4px 0 2px;">🤖 AUTO (' + autos.length + ')</div>';
+      html += '<div style="font-size:var(--fs-9);color:var(--ice);font-weight:700;letter-spacing:.05em;text-transform:uppercase;padding:4px 0 2px;">🤖 AUTO (' + autos.length + ')</div>';
       html += autos.map(renderBackup).join('');
     }
     if (manuels.length > 0) {
-      html += '<div style="font-size:9px;color:var(--gold);font-weight:700;letter-spacing:.05em;text-transform:uppercase;padding:6px 0 2px;">✋ MANUELS (' + manuels.length + ')</div>';
+      html += '<div style="font-size:var(--fs-9);color:var(--gold);font-weight:700;letter-spacing:.05em;text-transform:uppercase;padding:6px 0 2px;">✋ MANUELS (' + manuels.length + ')</div>';
       html += manuels.map(renderBackup).join('');
     }
     if (preImports.length > 0) {
-      html += '<div style="font-size:9px;color:var(--down);font-weight:700;letter-spacing:.05em;text-transform:uppercase;padding:6px 0 2px;">🛡 PRÉ-IMPORTS (' + preImports.length + ')</div>';
+      html += '<div style="font-size:var(--fs-9);color:var(--down);font-weight:700;letter-spacing:.05em;text-transform:uppercase;padding:6px 0 2px;">🛡 PRÉ-IMPORTS (' + preImports.length + ')</div>';
       html += preImports.map(renderBackup).join('');
     }
     html += '</div>';
@@ -576,8 +579,8 @@ function renderSettingsPanel() {
       }
       if (S.agents) broken = S.agents.filter(a => !a.isBot && (a.fitness || 0) <= 80).length;
     } catch(e) {}
-    const btnStyle = (active) => 'background:' + (active ? 'rgba(167,139,250,.18)' : 'rgba(167,139,250,.05)') + ';color:' + (active ? 'var(--pur)' : 'rgba(167,139,250,.55)') + ';border:1px solid ' + (active ? 'rgba(167,139,250,.5)' : 'rgba(167,139,250,.2)') + ';border-radius:8px;padding:10px 12px;font-size:11px;font-weight:700;cursor:pointer;letter-spacing:.05em;text-align:left;display:flex;justify-content:space-between;align-items:center;width:100%;';
-    const badge = (n, active) => '<span style="background:' + (active ? 'rgba(167,139,250,.3)' : 'rgba(120,130,150,.15)') + ';color:' + (active ? '#fff' : 'var(--t3)') + ';font-size:10px;font-weight:800;padding:2px 8px;border-radius:8px;letter-spacing:0;">' + n + '</span>';
+    const btnStyle = (active) => 'background:' + (active ? 'rgba(167,139,250,.18)' : 'rgba(167,139,250,.05)') + ';color:' + (active ? 'var(--pur)' : 'rgba(167,139,250,.55)') + ';border:1px solid ' + (active ? 'rgba(167,139,250,.5)' : 'rgba(167,139,250,.2)') + ';border-radius:8px;padding:10px 12px;font-size:var(--fs-11);font-weight:700;cursor:pointer;letter-spacing:.05em;text-align:left;display:flex;justify-content:space-between;align-items:center;width:100%;';
+    const badge = (n, active) => '<span style="background:' + (active ? 'rgba(167,139,250,.3)' : 'rgba(120,130,150,.15)') + ';color:' + (active ? '#fff' : 'var(--t3)') + ';font-size:var(--fs-10);font-weight:800;padding:2px 8px;border-radius:8px;letter-spacing:0;">' + n + '</span>';
     DEBLOCAGES_HTML = '<div style="display:flex;flex-direction:column;gap:6px;">' +
       '<button onclick="window._resetPairBlacklists()" style="' + btnStyle(blacklisted>0) + '"><span>🔓 Réactiver paires blacklistées</span>' + badge(blacklisted, blacklisted>0) + '</button>' +
       '<button onclick="window._resetLossStreaks()" style="' + btnStyle(withStreak>0) + '"><span>🔄 Reset streaks de pertes</span>' + badge(withStreak, withStreak>0) + '</button>' +
@@ -603,10 +606,10 @@ function renderSettingsPanel() {
       ' onmousedown="_longPressStart(event,\'' + acc.id + '\')"' +
       ' onmouseup="_longPressEnd(event,\'' + acc.id + '\')"' +
       ' onmouseleave="_longPressEnd(event,\'' + acc.id + '\')"' +
-      ' style="background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.08);border-radius:8px;padding:10px 12px;font-size:11px;font-weight:700;cursor:pointer;letter-spacing:.05em;text-align:left;color:' + acc.color + ';font-family:inherit;width:100%;position:relative;overflow:hidden;">' +
+      ' style="background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.08);border-radius:8px;padding:10px 12px;font-size:var(--fs-11);font-weight:700;cursor:pointer;letter-spacing:.05em;text-align:left;color:' + acc.color + ';font-family:inherit;width:100%;position:relative;overflow:hidden;">' +
       '<div style="position:relative;z-index:2;display:flex;justify-content:space-between;align-items:center;">' +
       '  <span>⚠ ' + acc.label + '</span>' +
-      '  <span id="lpLabel_' + acc.id + '" style="font-size:9px;font-weight:600;color:var(--t3);letter-spacing:.05em;">MAINTENIR 2s</span>' +
+      '  <span id="lpLabel_' + acc.id + '" style="font-size:var(--fs-9);font-weight:600;color:var(--t3);letter-spacing:.05em;">MAINTENIR 2s</span>' +
       '</div>' +
       '<div id="lpFill_' + acc.id + '" style="position:absolute;left:0;top:0;height:100%;width:0;background:' + acc.color + ';opacity:.22;transition:width 0.05s linear;z-index:1;"></div>' +
       '</button>'
@@ -616,8 +619,8 @@ function renderSettingsPanel() {
   el.innerHTML = `
     <!-- Section Sauvegarde : téléchargement auto hors-navigateur + récupération -->
     <div class="pref-section" style="margin:0 0 14px 0;padding:12px;background:var(--s1);border:1px solid var(--border);border-radius:12px;">
-      <div style="font-size:10px;font-weight:700;color:var(--t2);text-transform:uppercase;letter-spacing:.08em;margin-bottom:10px;">💾 Sauvegarde hors-navigateur</div>
-      <div style="font-size:9px;color:var(--t3);line-height:1.5;margin-bottom:10px;">Télécharge un fichier de l'état dans tes Téléchargements, en rotation sur 3 fichiers (A/B/C) qui s'écrasent. Survit au vidage du cache. Une synchro Android peut l'envoyer sur Drive.</div>
+      <div style="font-size:var(--fs-10);font-weight:700;color:var(--t2);text-transform:uppercase;letter-spacing:.08em;margin-bottom:10px;">💾 Sauvegarde hors-navigateur</div>
+      <div style="font-size:var(--fs-9);color:var(--t3);line-height:1.5;margin-bottom:10px;">Télécharge un fichier de l'état dans tes Téléchargements, en rotation sur 3 fichiers (A/B/C) qui s'écrasent. Survit au vidage du cache. Une synchro Android peut l'envoyer sur Drive.</div>
       ${(() => {
         const ad = (window.autoDownload ? window.autoDownload.getMeta() : { enabled:false, everyMin:180, last:0 });
         const freqLabel = ad.everyMin < 60 ? ad.everyMin + ' min' : (ad.everyMin/60) + 'h';
@@ -626,33 +629,33 @@ function renderSettingsPanel() {
           if (!ad.last) countdown = 'au prochain cycle';
           else { let r = ad.last + ad.everyMin*60000 - Date.now(); if (r<=0) countdown='imminent…'; else { const h=Math.floor(r/3600000),mn=Math.floor((r%3600000)/60000),s=Math.floor((r%60000)/1000); countdown=(h>0?h+'h ':'')+mn+'min '+(s<10?'0':'')+s+'s'; } }
         }
-        const mkBtn = (min,lbl) => `<button onclick="if(window.autoDownload){window.autoDownload.enable(${min});renderSettingsPanel();}" style="flex:1;min-width:52px;height:30px;border-radius:8px;border:1px solid ${ad.enabled&&ad.everyMin===min?'rgba(0,232,122,.5)':'var(--border)'};background:${ad.enabled&&ad.everyMin===min?'rgba(0,232,122,.15)':'var(--s2)'};color:${ad.enabled&&ad.everyMin===min?'var(--up)':'var(--t2)'};font-size:10px;font-weight:700;cursor:pointer;">${lbl}</button>`;
+        const mkBtn = (min,lbl) => `<button onclick="if(window.autoDownload){window.autoDownload.enable(${min});renderSettingsPanel();}" style="flex:1;min-width:52px;height:30px;border-radius:8px;border:1px solid ${ad.enabled&&ad.everyMin===min?'rgba(0,232,122,.5)':'var(--border)'};background:${ad.enabled&&ad.everyMin===min?'rgba(0,232,122,.15)':'var(--s2)'};color:${ad.enabled&&ad.everyMin===min?'var(--up)':'var(--t2)'};font-size:var(--fs-10);font-weight:700;cursor:pointer;">${lbl}</button>`;
         return `
         <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:10px;">
           <div style="flex:1;">
-            <div style="font-size:12px;font-weight:600;color:var(--t1);">Téléchargement auto ${ad.enabled?'· '+freqLabel:''}</div>
-            <div style="font-size:9px;color:var(--t3);margin-top:2px;">${ad.enabled?'⏳ Prochain dans : <b id="savCountdown" style="color:var(--up)">'+countdown+'</b>':'désactivé'}</div>
+            <div style="font-size:var(--fs-12);font-weight:600;color:var(--t1);">Téléchargement auto ${ad.enabled?'· '+freqLabel:''}</div>
+            <div style="font-size:var(--fs-9);color:var(--t3);margin-top:2px;">${ad.enabled?'⏳ Prochain dans : <b id="savCountdown" style="color:var(--up)">'+countdown+'</b>':'désactivé'}</div>
           </div>
-          <button onclick="if(window.autoDownload){if(${ad.enabled}){window.autoDownload.disable();}else{window.autoDownload.enable(180);}renderSettingsPanel();}" style="min-width:54px;height:28px;border-radius:14px;border:1px solid ${ad.enabled?'rgba(0,232,122,.4)':'var(--border)'};background:${ad.enabled?'rgba(0,232,122,.15)':'var(--s2)'};color:${ad.enabled?'var(--up)':'var(--t3)'};font-size:10px;font-weight:700;cursor:pointer;">${ad.enabled?'ON':'OFF'}</button>
+          <button onclick="if(window.autoDownload){if(${ad.enabled}){window.autoDownload.disable();}else{window.autoDownload.enable(180);}renderSettingsPanel();}" style="min-width:54px;height:28px;border-radius:14px;border:1px solid ${ad.enabled?'rgba(0,232,122,.4)':'var(--border)'};background:${ad.enabled?'rgba(0,232,122,.15)':'var(--s2)'};color:${ad.enabled?'var(--up)':'var(--t3)'};font-size:var(--fs-10);font-weight:700;cursor:pointer;">${ad.enabled?'ON':'OFF'}</button>
         </div>
         <div style="display:flex;gap:6px;margin-bottom:10px;">${mkBtn(5,'5min')}${mkBtn(180,'3h')}${mkBtn(360,'6h')}${mkBtn(720,'12h')}</div>
         <div style="display:flex;gap:6px;">
-          <button onclick="if(window.autoDownload)window.autoDownload.now();" style="flex:1;height:32px;border-radius:8px;border:1px solid var(--border);background:var(--s2);color:var(--t1);font-size:11px;font-weight:700;cursor:pointer;">⬇ Télécharger maintenant</button>
-          <button onclick="if(window.recoverFromFiles)window.recoverFromFiles();" style="flex:1;height:32px;border-radius:8px;border:1px solid rgba(0,232,122,.4);background:rgba(0,232,122,.12);color:var(--up);font-size:11px;font-weight:700;cursor:pointer;">📂 Récupérer un backup</button>
+          <button onclick="if(window.autoDownload)window.autoDownload.now();" style="flex:1;height:32px;border-radius:8px;border:1px solid var(--border);background:var(--s2);color:var(--t1);font-size:var(--fs-11);font-weight:700;cursor:pointer;">⬇ Télécharger maintenant</button>
+          <button onclick="if(window.recoverFromFiles)window.recoverFromFiles();" style="flex:1;height:32px;border-radius:8px;border:1px solid rgba(0,232,122,.4);background:rgba(0,232,122,.12);color:var(--up);font-size:var(--fs-11);font-weight:700;cursor:pointer;">📂 Récupérer un backup</button>
         </div>
-        <button onclick="if(window.auraDiag)window.auraDiag();" style="width:100%;height:34px;margin-top:6px;border-radius:8px;border:1px solid rgba(56,212,245,.4);background:rgba(56,212,245,.12);color:var(--ice);font-size:11px;font-weight:700;cursor:pointer;">📋 Copier diagnostic pour Claude</button>`;
+        <button onclick="if(window.auraDiag)window.auraDiag();" style="width:100%;height:34px;margin-top:6px;border-radius:8px;border:1px solid rgba(56,212,245,.4);background:rgba(56,212,245,.12);color:var(--ice);font-size:var(--fs-11);font-weight:700;cursor:pointer;">📋 Copier diagnostic pour Claude</button>`;
       })()}
     </div>
 
     <!-- v7.0: Préférences utilisateur -->
     <div class="pref-section" style="margin:0 0 14px 0;padding:12px;background:var(--s1);border:1px solid var(--border);border-radius:12px;">
-      <div style="font-size:10px;font-weight:700;color:var(--t2);text-transform:uppercase;letter-spacing:.08em;margin-bottom:10px;">🔔 Préférences</div>
+      <div style="font-size:var(--fs-10);font-weight:700;color:var(--t2);text-transform:uppercase;letter-spacing:.08em;margin-bottom:10px;">🔔 Préférences</div>
       <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;">
         <div style="flex:1;">
-          <div style="font-size:12px;font-weight:600;color:var(--t1);">Notifications verbeuses</div>
-          <div style="font-size:9px;color:var(--t3);margin-top:2px;line-height:1.4;">${S.toastVerbose ? 'Toutes les actions bot visibles' : 'Silencieux — seuls les événements critiques et vos actions'}${S._silencedCount ? ` · <span style="color:var(--gold);">${S._silencedCount} silenciées</span>` : ''}</div>
+          <div style="font-size:var(--fs-12);font-weight:600;color:var(--t1);">Notifications verbeuses</div>
+          <div style="font-size:var(--fs-9);color:var(--t3);margin-top:2px;line-height:1.4;">${S.toastVerbose ? 'Toutes les actions bot visibles' : 'Silencieux — seuls les événements critiques et vos actions'}${S._silencedCount ? ` · <span style="color:var(--gold);">${S._silencedCount} silenciées</span>` : ''}</div>
         </div>
-        <button onclick="S.toastVerbose=!S.toastVerbose;S._silencedCount=0;renderSettingsPanel();" style="min-width:54px;height:28px;border-radius:14px;border:1px solid ${S.toastVerbose?'rgba(0,232,122,.4)':'var(--border)'};background:${S.toastVerbose?'rgba(0,232,122,.15)':'var(--s2)'};color:${S.toastVerbose?'var(--up)':'var(--t3)'};font-size:10px;font-weight:700;cursor:pointer;transition:all .2s;">${S.toastVerbose?'ON':'OFF'}</button>
+        <button onclick="S.toastVerbose=!S.toastVerbose;S._silencedCount=0;renderSettingsPanel();" style="min-width:54px;height:28px;border-radius:14px;border:1px solid ${S.toastVerbose?'rgba(0,232,122,.4)':'var(--border)'};background:${S.toastVerbose?'rgba(0,232,122,.15)':'var(--s2)'};color:${S.toastVerbose?'var(--up)':'var(--t3)'};font-size:var(--fs-10);font-weight:700;cursor:pointer;transition:all .2s;">${S.toastVerbose?'ON':'OFF'}</button>
       </div>
     </div>
 
@@ -663,12 +666,12 @@ function renderSettingsPanel() {
       const avgCol = p.avgMs < 50 ? 'var(--up)' : p.avgMs < 150 ? 'var(--gold)' : 'var(--down)';
       const health = p.avgMs < 50 ? 'EXCELLENT' : p.avgMs < 150 ? 'CORRECT' : 'LENT';
       return `<div style="margin:0 0 14px 0;padding:12px;background:var(--s1);border:1px solid var(--border);border-radius:12px;">
-        <div style="font-size:10px;font-weight:700;color:var(--t2);text-transform:uppercase;letter-spacing:.08em;margin-bottom:10px;">⚡ Performance · ${p.samples} ticks</div>
-        <div style="display:flex;gap:12px;font-family:var(--font-mono);font-size:11px;">
-          <div style="flex:1;"><div style="color:var(--t3);font-size:8px;">MOY</div><div style="color:${avgCol};font-weight:700;">${p.avgMs.toFixed(1)}ms</div></div>
-          <div style="flex:1;"><div style="color:var(--t3);font-size:8px;">MAX</div><div style="color:var(--t1);">${p.maxMs.toFixed(1)}ms</div></div>
-          <div style="flex:1;"><div style="color:var(--t3);font-size:8px;">DERNIER</div><div style="color:var(--t1);">${(p.lastMs||0).toFixed(1)}ms</div></div>
-          <div style="flex:1;text-align:right;"><div style="color:var(--t3);font-size:8px;">ÉTAT</div><div style="color:${avgCol};font-weight:700;font-size:9px;">${health}</div></div>
+        <div style="font-size:var(--fs-10);font-weight:700;color:var(--t2);text-transform:uppercase;letter-spacing:.08em;margin-bottom:10px;">⚡ Performance · ${p.samples} ticks</div>
+        <div style="display:flex;gap:12px;font-family:var(--font-mono);font-size:var(--fs-11);">
+          <div style="flex:1;"><div style="color:var(--t3);font-size:var(--fs-8);">MOY</div><div style="color:${avgCol};font-weight:700;">${p.avgMs.toFixed(1)}ms</div></div>
+          <div style="flex:1;"><div style="color:var(--t3);font-size:var(--fs-8);">MAX</div><div style="color:var(--t1);">${p.maxMs.toFixed(1)}ms</div></div>
+          <div style="flex:1;"><div style="color:var(--t3);font-size:var(--fs-8);">DERNIER</div><div style="color:var(--t1);">${(p.lastMs||0).toFixed(1)}ms</div></div>
+          <div style="flex:1;text-align:right;"><div style="color:var(--t3);font-size:var(--fs-8);">ÉTAT</div><div style="color:${avgCol};font-weight:700;font-size:var(--fs-9);">${health}</div></div>
         </div>
       </div>`;
     })()}
@@ -710,8 +713,8 @@ function renderSettingsPanel() {
         return `
           <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 10px;background:rgba(20,25,35,.6);border:1px solid var(--border);border-radius:8px;margin-bottom:6px;">
             <div style="display:flex;align-items:center;gap:8px;">
-              <span style="color:${cfgPair.color || 'var(--t1)'};font-weight:800;font-size:11px;font-family:ui-monospace,monospace;">${pair.split('/')[0]}</span>
-              <span style="color:${stateCol};font-size:9px;font-weight:600;">${stateLbl}</span>
+              <span style="color:${cfgPair.color || 'var(--t1)'};font-weight:800;font-size:var(--fs-11);font-family:ui-monospace,monospace;">${pair.split('/')[0]}</span>
+              <span style="color:${stateCol};font-size:var(--fs-9);font-weight:600;">${stateLbl}</span>
             </div>
 
           </div>
@@ -727,7 +730,7 @@ function renderSettingsPanel() {
       // Bouton master
       const masterBtn = isPaperReal ? `
         ` : (S.tradingMode === 'real' ? `
-        <button disabled style="background:var(--s2);color:var(--t3);border:1px solid var(--border);border-radius:10px;padding:12px 14px;font-size:11px;font-weight:700;cursor:not-allowed;letter-spacing:.05em;width:100%;display:flex;justify-content:space-between;align-items:center;opacity:.5;">
+        <button disabled style="background:var(--s2);color:var(--t3);border:1px solid var(--border);border-radius:10px;padding:12px 14px;font-size:var(--fs-11);font-weight:700;cursor:not-allowed;letter-spacing:.05em;width:100%;display:flex;justify-content:space-between;align-items:center;opacity:.5;">
           <span>Mode RÉEL actif · désactive-le d'abord</span>
         </button>` : `
         `);
@@ -740,7 +743,7 @@ function renderSettingsPanel() {
       const stats = S.paperRealStats || {};
       const tradedPairs = Object.keys(stats).filter(p => stats[p].trades > 0);
       const statsHTML = tradedPairs.length > 0 ? `
-        <div style="font-size:9px;color:var(--t3);font-weight:700;text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;display:flex;justify-content:space-between;align-items:center;">
+        <div style="font-size:var(--fs-9);color:var(--t3);font-weight:700;text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;display:flex;justify-content:space-between;align-items:center;">
           <span>📊 Performance Réel</span>
           <span style="font-size:8.5px;letter-spacing:0;text-transform:none;color:var(--t3);font-weight:600;opacity:.7;">WR récent · global</span>
         </div>
@@ -762,15 +765,15 @@ function renderSettingsPanel() {
           const pnlSign = s.pnlNet >= 0 ? '+' : '';
           const wrTxt = wrRecent != null ? wrRecent + '%·' + wrAll + '%' : wrAll + '%';
           return `
-            <div style="display:flex;align-items:center;justify-content:space-between;padding:6px 10px;background:rgba(20,25,35,.5);border:1px solid var(--border);border-radius:8px;margin-bottom:5px;font-size:10px;">
+            <div style="display:flex;align-items:center;justify-content:space-between;padding:6px 10px;background:rgba(20,25,35,.5);border:1px solid var(--border);border-radius:8px;margin-bottom:5px;font-size:var(--fs-10);">
               <div style="display:flex;align-items:center;gap:8px;flex:1;min-width:0;">
                 <span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:${dotCol};flex-shrink:0;"></span>
                 <span style="color:${cfgP.color||'var(--t1)'};font-weight:800;font-family:ui-monospace,monospace;min-width:36px;">${sym}</span>
                 <span style="color:var(--t2);font-family:ui-monospace,monospace;font-size:9.5px;">${s.wins}W·${s.losses}L</span>
               </div>
               <div style="display:flex;align-items:center;gap:10px;font-family:ui-monospace,monospace;">
-                <span style="color:${dotCol};font-weight:700;font-size:10px;">${wrTxt}</span>
-                <span style="color:${pnlCol};font-weight:800;font-size:10px;min-width:60px;text-align:right;">${pnlSign}$${s.pnlNet.toFixed(2)}</span>
+                <span style="color:${dotCol};font-weight:700;font-size:var(--fs-10);">${wrTxt}</span>
+                <span style="color:${pnlCol};font-weight:800;font-size:var(--fs-10);min-width:60px;text-align:right;">${pnlSign}$${s.pnlNet.toFixed(2)}</span>
               </div>
             </div>
           `;
@@ -778,15 +781,15 @@ function renderSettingsPanel() {
 
       // Bandeau pause globale si actif
       const globalPauseBanner = globalPaused ? `
-        <div style="background:rgba(255,61,107,.1);border:1px solid rgba(255,61,107,.4);border-radius:8px;padding:8px 10px;margin-bottom:12px;font-size:10px;color:var(--down);font-weight:700;text-align:center;">
+        <div style="background:rgba(255,61,107,.1);border:1px solid rgba(255,61,107,.4);border-radius:8px;padding:8px 10px;margin-bottom:12px;font-size:var(--fs-10);color:var(--down);font-weight:700;text-align:center;">
           🛑 Pause globale active · ${remainingMin} min restantes (3 pertes consécutives)
         </div>` : '';
 
       return `
       <div style="margin:16px 0 8px;padding:14px;background:${headerBg};border:1px solid ${headerBorder};border-radius:12px;">
-        <div style="font-size:12px;font-weight:700;color:${headerCol};text-transform:uppercase;letter-spacing:.08em;margin-bottom:10px;display:flex;justify-content:space-between;align-items:center;">
+        <div style="font-size:var(--fs-12);font-weight:700;color:${headerCol};text-transform:uppercase;letter-spacing:.08em;margin-bottom:10px;display:flex;justify-content:space-between;align-items:center;">
           <span>${isPaperReal?'📋':'🧪'} Mode Réel · ${isPaperReal?'ACTIF':'inactif'}</span>
-          <span style="font-size:9px;font-weight:600;opacity:.7;letter-spacing:0;text-transform:none;">${isPaperReal?'test sécurisé':'option intermédiaire'}</span>
+          <span style="font-size:var(--fs-9);font-weight:600;opacity:.7;letter-spacing:0;text-transform:none;">${isPaperReal?'test sécurisé':'option intermédiaire'}</span>
         </div>
         <div style="font-size:9.5px;color:var(--t2);line-height:1.5;margin-bottom:12px;">
           ${isPaperReal
@@ -798,7 +801,7 @@ function renderSettingsPanel() {
         ${statsHTML}
 
         <!-- Règles affichées -->
-        <div style="font-size:9px;color:var(--t3);font-weight:700;text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;">Règles actives</div>
+        <div style="font-size:var(--fs-9);color:var(--t3);font-weight:700;text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;">Règles actives</div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:14px;font-size:9.5px;font-family:ui-monospace,monospace;color:var(--t2);">
           <div style="padding:5px 8px;background:rgba(20,25,35,.5);border:1px solid var(--border);border-radius:6px;">Pos max : <b style="color:var(--gold);">${cfg.maxConcurrentPos||1}</b></div>
           <div style="padding:5px 8px;background:rgba(20,25,35,.5);border:1px solid var(--border);border-radius:6px;">Stake max : <b style="color:var(--gold);">${cfg.maxStakePct||5}%</b></div>
@@ -809,11 +812,11 @@ function renderSettingsPanel() {
         </div>
 
         <!-- Timeframe -->
-        <div style="font-size:9px;color:var(--t3);font-weight:700;text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;">Timeframe décisions bot</div>
+        <div style="font-size:var(--fs-9);color:var(--t3);font-weight:700;text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;">Timeframe décisions bot</div>
         <div style="display:flex;gap:4px;margin-bottom:14px;flex-wrap:wrap;">${tfButtons}</div>
 
         <!-- Paires -->
-        <div style="font-size:9px;color:var(--t3);font-weight:700;text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;">Paires actives en Réel</div>
+        <div style="font-size:var(--fs-9);color:var(--t3);font-weight:700;text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;">Paires actives en Réel</div>
         <div style="margin-bottom:14px;">${pairsHTML}</div>
 
         <!-- Bouton master -->
@@ -844,7 +847,7 @@ function renderSettingsPanel() {
       const bonusHTML = bonusKeys.length > 0 ? bonusKeys.map(p => {
         const sym = p.split('/')[0];
         const m = bonuses[p];
-        return `<span style="display:inline-block;background:rgba(0,232,122,.10);color:var(--up);border:1px solid rgba(0,232,122,.3);border-radius:6px;padding:3px 8px;font-size:9px;font-weight:700;font-family:ui-monospace,monospace;margin:2px;">${sym} × ${m.toFixed(2)}</span>`;
+        return `<span style="display:inline-block;background:rgba(0,232,122,.10);color:var(--up);border:1px solid rgba(0,232,122,.3);border-radius:6px;padding:3px 8px;font-size:var(--fs-9);font-weight:700;font-family:ui-monospace,monospace;margin:2px;">${sym} × ${m.toFixed(2)}</span>`;
       }).join('') : '<span style="color:var(--t3);font-size:9.5px;">Aucun bonus actif · paires en cours d&apos;évaluation</span>';
 
       return `
@@ -869,9 +872,9 @@ function renderSettingsPanel() {
 
         return '' +
         '<div style="margin:16px 0 8px;padding:14px;background:rgba(245,200,66,.04);border:1px solid rgba(245,200,66,.2);border-radius:12px;">' +
-          '<div style="font-size:12px;font-weight:700;color:var(--gold);text-transform:uppercase;letter-spacing:.08em;margin-bottom:10px;display:flex;justify-content:space-between;align-items:center;">' +
+          '<div style="font-size:var(--fs-12);font-weight:700;color:var(--gold);text-transform:uppercase;letter-spacing:.08em;margin-bottom:10px;display:flex;justify-content:space-between;align-items:center;">' +
             '<span>📊 P&L par période</span>' +
-            '<span style="font-size:9px;font-weight:600;opacity:.7;letter-spacing:0;text-transform:none;">recalibrage auto</span>' +
+            '<span style="font-size:var(--fs-9);font-weight:600;opacity:.7;letter-spacing:0;text-transform:none;">recalibrage auto</span>' +
           '</div>' +
           '<div style="font-size:9.5px;color:var(--t2);line-height:1.5;margin-bottom:12px;">' +
             'Reset automatique tous les jours à minuit. Tu vois ce qui se passe vraiment, pas un cumul absurde.' +
@@ -896,13 +899,13 @@ function renderSettingsPanel() {
                 '<span style="color:var(--t2);">Historique cumulé</span>' +
                 '<span style="color:var(--pur);font-weight:700;">' + totalDays + ' jours</span>' +
               '</div>' +
-              '<div style="display:flex;justify-content:space-between;font-size:9px;">' +
+              '<div style="display:flex;justify-content:space-between;font-size:var(--fs-9);">' +
                 '<span style="color:var(--t3);">Jours gagnants : <b style="color:' + (winRate >= 55 ? 'var(--up)' : winRate >= 45 ? 'var(--gold)' : 'var(--down)') + ';">' + winRate + '%</b></span>' +
                 '<span style="color:var(--t3);">Total : <b style="color:' + (totalPnl >= 0 ? 'var(--up)' : 'var(--down)') + ';">' + (totalPnl >= 0 ? '+' : '') + '$' + totalPnl.toFixed(2) + '</b></span>' +
               '</div>' +
             '</div>' : '') +
 
-          '<button onclick="resetPnlSession()" style="width:100%;padding:10px 14px;background:rgba(245,200,66,.10);border:1px solid rgba(245,200,66,.4);color:var(--gold);border-radius:8px;font-weight:700;font-size:11px;letter-spacing:.04em;cursor:pointer;-webkit-user-select:none;font-family:inherit;">🔄 Recalibrer la session manuellement</button>' +
+          '<button onclick="resetPnlSession()" style="width:100%;padding:10px 14px;background:rgba(245,200,66,.10);border:1px solid rgba(245,200,66,.4);color:var(--gold);border-radius:8px;font-weight:700;font-size:var(--fs-11);letter-spacing:.04em;cursor:pointer;-webkit-user-select:none;font-family:inherit;">🔄 Recalibrer la session manuellement</button>' +
 
           '<div style="font-size:8.5px;color:var(--t3);margin-top:8px;text-align:center;line-height:1.4;">' +
             'Apprentissage du bot, mémoire, agents : <b>tout est préservé</b>. Seuls les compteurs P&L sont remis à zéro.' +
@@ -911,16 +914,16 @@ function renderSettingsPanel() {
       })()}
 
       <div style="margin:16px 0 8px;padding:14px;background:rgba(167,139,250,.04);border:1px solid rgba(167,139,250,.2);border-radius:12px;">
-        <div style="font-size:12px;font-weight:700;color:var(--pur);text-transform:uppercase;letter-spacing:.08em;margin-bottom:10px;display:flex;justify-content:space-between;align-items:center;">
+        <div style="font-size:var(--fs-12);font-weight:700;color:var(--pur);text-transform:uppercase;letter-spacing:.08em;margin-bottom:10px;display:flex;justify-content:space-between;align-items:center;">
           <span>🧠 Diagnostic intelligence · Phase 1</span>
-          <span style="font-size:9px;font-weight:600;opacity:.7;letter-spacing:0;text-transform:none;">auto-réglage</span>
+          <span style="font-size:var(--fs-9);font-weight:600;opacity:.7;letter-spacing:0;text-transform:none;">auto-réglage</span>
         </div>
         <div style="font-size:9.5px;color:var(--t2);line-height:1.5;margin-bottom:12px;">
           Le bot ajuste ces paramètres en temps réel selon ses observations. Bornes de sécurité actives.
         </div>
 
         <!-- 1.1 Seuil pertes consécutives -->
-        <div style="display:flex;justify-content:space-between;align-items:center;padding:7px 10px;background:rgba(20,25,35,.5);border:1px solid var(--border);border-radius:6px;margin-bottom:5px;font-size:10px;font-family:ui-monospace,monospace;">
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:7px 10px;background:rgba(20,25,35,.5);border:1px solid var(--border);border-radius:6px;margin-bottom:5px;font-size:var(--fs-10);font-family:ui-monospace,monospace;">
           <span style="color:var(--t2);">1.1 · Pause après pertes consécutives</span>
           <span style="color:var(--gold);font-weight:700;">${consecThresh} pertes</span>
         </div>
@@ -929,7 +932,7 @@ function renderSettingsPanel() {
         </div>
 
         <!-- 1.2 Cooldown -->
-        <div style="display:flex;justify-content:space-between;align-items:center;padding:7px 10px;background:rgba(20,25,35,.5);border:1px solid var(--border);border-radius:6px;margin-bottom:5px;font-size:10px;font-family:ui-monospace,monospace;">
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:7px 10px;background:rgba(20,25,35,.5);border:1px solid var(--border);border-radius:6px;margin-bottom:5px;font-size:var(--fs-10);font-family:ui-monospace,monospace;">
           <span style="color:var(--t2);">1.2 · Cooldown après perte</span>
           <span style="color:var(--gold);font-weight:700;">${cooldownMin} min</span>
         </div>
@@ -938,7 +941,7 @@ function renderSettingsPanel() {
         </div>
 
         <!-- 1.3 TP/SL utilisés -->
-        <div style="display:flex;justify-content:space-between;align-items:center;padding:7px 10px;background:rgba(20,25,35,.5);border:1px solid var(--border);border-radius:6px;margin-bottom:5px;font-size:10px;font-family:ui-monospace,monospace;">
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:7px 10px;background:rgba(20,25,35,.5);border:1px solid var(--border);border-radius:6px;margin-bottom:5px;font-size:var(--fs-10);font-family:ui-monospace,monospace;">
           <span style="color:var(--t2);">1.3 · TP / SL méthode</span>
           <span style="color:var(--up);font-weight:700;">${tpUsed} / ${slUsed}</span>
         </div>
@@ -947,10 +950,10 @@ function renderSettingsPanel() {
         </div>
 
         <!-- 1.4 Bonus paires gagnantes -->
-        <div style="padding:7px 10px;background:rgba(20,25,35,.5);border:1px solid var(--border);border-radius:6px;margin-bottom:5px;font-size:10px;font-family:ui-monospace,monospace;">
+        <div style="padding:7px 10px;background:rgba(20,25,35,.5);border:1px solid var(--border);border-radius:6px;margin-bottom:5px;font-size:var(--fs-10);font-family:ui-monospace,monospace;">
           <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
             <span style="color:var(--t2);">1.4 · Bonus paires gagnantes</span>
-            <span style="color:var(--up);font-weight:700;font-size:9px;">${bonusKeys.length} active(s)</span>
+            <span style="color:var(--up);font-weight:700;font-size:var(--fs-9);">${bonusKeys.length} active(s)</span>
           </div>
           <div style="display:flex;flex-wrap:wrap;">${bonusHTML}</div>
         </div>
@@ -989,21 +992,21 @@ function renderSettingsPanel() {
 
           const regimeHTML = regimeStats.length > 0 ? regimeStats.slice(0, 4).map(r => {
             const cls = r.wr >= 60 ? 'var(--up)' : r.wr >= 45 ? 'var(--gold)' : 'var(--down)';
-            return `<span style="display:inline-block;background:rgba(20,25,35,.7);color:${cls};border:1px solid var(--border);border-radius:6px;padding:3px 8px;font-size:9px;font-weight:700;font-family:ui-monospace,monospace;margin:2px;">${r.regime} ${r.wr}% (${r.n})</span>`;
+            return `<span style="display:inline-block;background:rgba(20,25,35,.7);color:${cls};border:1px solid var(--border);border-radius:6px;padding:3px 8px;font-size:var(--fs-9);font-weight:700;font-family:ui-monospace,monospace;margin:2px;">${r.regime} ${r.wr}% (${r.n})</span>`;
           }).join('') : '<span style="color:var(--t3);font-size:9.5px;">Pas encore assez de données</span>';
 
           return `
-          <div style="padding:7px 10px;background:rgba(20,25,35,.5);border:1px solid var(--border);border-radius:6px;margin-bottom:5px;font-size:10px;font-family:ui-monospace,monospace;margin-top:14px;">
+          <div style="padding:7px 10px;background:rgba(20,25,35,.5);border:1px solid var(--border);border-radius:6px;margin-bottom:5px;font-size:var(--fs-10);font-family:ui-monospace,monospace;margin-top:14px;">
             <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
               <span style="color:var(--t2);">2.1 · Mémoire des contextes</span>
-              <span style="color:var(--pur);font-weight:700;font-size:9px;">${total} / 500</span>
+              <span style="color:var(--pur);font-weight:700;font-size:var(--fs-9);">${total} / 500</span>
             </div>
-            <div style="display:flex;justify-content:space-between;font-size:9px;color:var(--t2);margin-bottom:6px;font-family:ui-monospace,monospace;">
+            <div style="display:flex;justify-content:space-between;font-size:var(--fs-9);color:var(--t2);margin-bottom:6px;font-family:ui-monospace,monospace;">
               <span>Trades enrichis : <b style="color:var(--t1);">${enriched}</b></span>
               <span>WR mémoire : <b style="color:${wr >= 55 ? 'var(--up)' : wr >= 45 ? 'var(--gold)' : 'var(--down)'};">${wr}%</b></span>
               <span>P&L cumulé : <b style="color:${totalPnl >= 0 ? 'var(--up)' : 'var(--down)'};">${totalPnl >= 0 ? '+' : ''}$${totalPnl.toFixed(2)}</b></span>
             </div>
-            <div style="font-size:9px;color:var(--t3);margin-bottom:5px;text-transform:uppercase;letter-spacing:.05em;font-weight:700;">Performance par régime (3+ trades)</div>
+            <div style="font-size:var(--fs-9);color:var(--t3);margin-bottom:5px;text-transform:uppercase;letter-spacing:.05em;font-weight:700;">Performance par régime (3+ trades)</div>
             <div style="display:flex;flex-wrap:wrap;">${regimeHTML}</div>
           </div>
           <div style="font-size:8.5px;color:var(--t3);padding:0 10px;margin-bottom:4px;">
@@ -1032,7 +1035,7 @@ function renderSettingsPanel() {
             }
 
             const refusedHTML = refusedContexts.length > 0 ? refusedContexts.slice(0, 5).map(r => {
-              return '<div style="background:rgba(255,61,107,.06);color:var(--down);border:1px solid rgba(255,61,107,.25);border-radius:6px;padding:5px 8px;font-size:9px;font-family:ui-monospace,monospace;margin-bottom:4px;display:flex;justify-content:space-between;">' +
+              return '<div style="background:rgba(255,61,107,.06);color:var(--down);border:1px solid rgba(255,61,107,.25);border-radius:6px;padding:5px 8px;font-size:var(--fs-9);font-family:ui-monospace,monospace;margin-bottom:4px;display:flex;justify-content:space-between;">' +
                 '<span>' + r.sig + '</span>' +
                 '<span style="font-weight:700;">' + Math.round(r.wr * 100) + '% (' + r.trades + ')</span>' +
               '</div>';
@@ -1046,18 +1049,18 @@ function renderSettingsPanel() {
               const cls = isPositive ? 'var(--up)' : 'var(--down)';
               const bg = isPositive ? 'rgba(0,232,122,.06)' : 'rgba(255,61,107,.06)';
               const border = isPositive ? 'rgba(0,232,122,.25)' : 'rgba(255,61,107,.25)';
-              return '<span style="display:inline-block;background:' + bg + ';color:' + cls + ';border:1px solid ' + border + ';border-radius:6px;padding:3px 8px;font-size:9px;font-weight:700;font-family:ui-monospace,monospace;margin:2px;">' + b.name + ' × ' + b.mult.toFixed(2) + '</span>';
+              return '<span style="display:inline-block;background:' + bg + ';color:' + cls + ';border:1px solid ' + border + ';border-radius:6px;padding:3px 8px;font-size:var(--fs-9);font-weight:700;font-family:ui-monospace,monospace;margin:2px;">' + b.name + ' × ' + b.mult.toFixed(2) + '</span>';
             }).join('') : '<span style="color:var(--t3);font-size:9.5px;">En cours d&apos;analyse (5+ trades requis par agent)</span>';
 
             return '' +
-            '<div style="padding:7px 10px;background:rgba(167,139,250,.05);border:1px solid rgba(167,139,250,.25);border-radius:6px;margin-bottom:5px;font-size:10px;font-family:ui-monospace,monospace;margin-top:14px;">' +
+            '<div style="padding:7px 10px;background:rgba(167,139,250,.05);border:1px solid rgba(167,139,250,.25);border-radius:6px;margin-bottom:5px;font-size:var(--fs-10);font-family:ui-monospace,monospace;margin-top:14px;">' +
               '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">' +
                 '<span style="color:var(--pur);font-weight:700;">⚡ Phase 3 · Apprentissage actif</span>' +
                 '<span style="color:var(--t3);font-size:8.5px;">' + refusalCount + ' refus historiques</span>' +
               '</div>' +
-              '<div style="font-size:9px;color:var(--t3);margin-bottom:5px;text-transform:uppercase;letter-spacing:.05em;font-weight:700;">2.3 · Contextes bloqués (<30% WR sur 20+ trades)</div>' +
+              '<div style="font-size:var(--fs-9);color:var(--t3);margin-bottom:5px;text-transform:uppercase;letter-spacing:.05em;font-weight:700;">2.3 · Contextes bloqués (<30% WR sur 20+ trades)</div>' +
               '<div style="margin-bottom:8px;">' + refusedHTML + '</div>' +
-              '<div style="font-size:9px;color:var(--t3);margin-bottom:5px;text-transform:uppercase;letter-spacing:.05em;font-weight:700;">2.2 · Pondération votes agents</div>' +
+              '<div style="font-size:var(--fs-9);color:var(--t3);margin-bottom:5px;text-transform:uppercase;letter-spacing:.05em;font-weight:700;">2.2 · Pondération votes agents</div>' +
               '<div style="display:flex;flex-wrap:wrap;">' + boostsHTML + '</div>' +
             '</div>' +
             '<div style="font-size:8.5px;color:var(--t3);padding:0 10px;margin-bottom:4px;">' +
@@ -1080,11 +1083,11 @@ function renderSettingsPanel() {
             const lastV = ab.lastVerdict;
 
             const verdictHTML = lastV ?
-              '<div style="background:rgba(0,232,122,.06);color:var(--up);border:1px solid rgba(0,232,122,.25);border-radius:6px;padding:6px 8px;font-size:9px;font-family:ui-monospace,monospace;margin-bottom:8px;">' +
+              '<div style="background:rgba(0,232,122,.06);color:var(--up);border:1px solid rgba(0,232,122,.25);border-radius:6px;padding:6px 8px;font-size:var(--fs-9);font-family:ui-monospace,monospace;margin-bottom:8px;">' +
                 '<div style="font-weight:700;margin-bottom:3px;">Gen ' + lastV.generation + ' · ' + lastV.winner + ' a gagné</div>' +
                 '<div style="color:var(--t2);">WR ' + lastV.winnerWR + '% · P&L $' + lastV.winnerPnl + '</div>' +
               '</div>' :
-              '<div style="font-size:9px;color:var(--t3);margin-bottom:8px;">Aucun verdict encore (premier cycle en cours)</div>';
+              '<div style="font-size:var(--fs-9);color:var(--t3);margin-bottom:8px;">Aucun verdict encore (premier cycle en cours)</div>';
 
             const armHTML = function(arm, label, color, progress, wr) {
               const winsLabel = arm.wins || 0;
@@ -1093,7 +1096,7 @@ function renderSettingsPanel() {
               const pnlLabel = (arm.pnl || 0).toFixed(2);
               const pnlColor = (arm.pnl || 0) >= 0 ? 'var(--up)' : 'var(--down)';
               const params = arm.params || {};
-              return '<div style="padding:6px 8px;background:rgba(20,25,35,.5);border:1px solid var(--border);border-radius:6px;margin-bottom:5px;font-size:9px;font-family:ui-monospace,monospace;">' +
+              return '<div style="padding:6px 8px;background:rgba(20,25,35,.5);border:1px solid var(--border);border-radius:6px;margin-bottom:5px;font-size:var(--fs-9);font-family:ui-monospace,monospace;">' +
                 '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">' +
                   '<span style="color:' + color + ';font-weight:700;">' + label + '</span>' +
                   '<span style="color:var(--t2);">' + tradesLabel + '/' + threshold + '</span>' +
@@ -1101,7 +1104,7 @@ function renderSettingsPanel() {
                 '<div style="height:3px;background:var(--s3);border-radius:100px;overflow:hidden;margin-bottom:5px;">' +
                   '<div style="height:100%;width:' + progress + '%;background:' + color + ';border-radius:100px;"></div>' +
                 '</div>' +
-                '<div style="display:flex;justify-content:space-between;font-size:9px;">' +
+                '<div style="display:flex;justify-content:space-between;font-size:var(--fs-9);">' +
                   '<span style="color:var(--t2);">SL ×' + (params.slAtrMult || '?').toFixed(2) + '</span>' +
                   '<span style="color:var(--t2);">TP ×' + (params.tpAtrMult || '?').toFixed(2) + '</span>' +
                   '<span style="color:' + (wr >= 55 ? 'var(--up)' : wr >= 45 ? 'var(--gold)' : 'var(--down)') + ';font-weight:700;">' + wr + '% WR</span>' +
@@ -1111,7 +1114,7 @@ function renderSettingsPanel() {
             };
 
             return '' +
-            '<div style="padding:7px 10px;background:rgba(56,212,245,.05);border:1px solid rgba(56,212,245,.25);border-radius:6px;margin-bottom:5px;font-size:10px;font-family:ui-monospace,monospace;margin-top:14px;">' +
+            '<div style="padding:7px 10px;background:rgba(56,212,245,.05);border:1px solid rgba(56,212,245,.25);border-radius:6px;margin-bottom:5px;font-size:var(--fs-10);font-family:ui-monospace,monospace;margin-top:14px;">' +
               '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">' +
                 '<span style="color:#38d4f5;font-weight:700;">🧬 Phase 4a · A/B testing</span>' +
                 '<span style="color:var(--t3);font-size:8.5px;">Gen ' + (ab.generation || 0) + '</span>' +
@@ -1144,7 +1147,7 @@ function renderSettingsPanel() {
             const sharpeHTML = sharpeList.length > 0 ? sharpeList.map(s => {
               const cls = s.sharpe > 0.5 ? 'var(--up)' : s.sharpe > 0 ? 'var(--gold)' : 'var(--down)';
               const allocCls = s.alloc > 1.1 ? 'var(--up)' : s.alloc < 0.9 ? 'var(--down)' : 'var(--t2)';
-              return '<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 8px;background:rgba(20,25,35,.5);border:1px solid var(--border);border-radius:6px;margin-bottom:3px;font-size:9px;font-family:ui-monospace,monospace;">' +
+              return '<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 8px;background:rgba(20,25,35,.5);border:1px solid var(--border);border-radius:6px;margin-bottom:3px;font-size:var(--fs-9);font-family:ui-monospace,monospace;">' +
                 '<span style="color:var(--t2);font-weight:700;">' + s.pair + '</span>' +
                 '<span style="display:flex;gap:8px;">' +
                   '<span style="color:' + cls + ';font-weight:700;">Sharpe ' + s.sharpe.toFixed(2) + '</span>' +
@@ -1160,25 +1163,25 @@ function renderSettingsPanel() {
             const hedgeStreakColor = bearStreak >= 3 ? 'var(--down)' : bearStreak >= 1 ? 'var(--gold)' : 'var(--t2)';
 
             const hedgeActionHTML = lastHedge ?
-              '<div style="background:rgba(245,200,66,.06);color:var(--gold);border:1px solid rgba(245,200,66,.25);border-radius:6px;padding:6px 8px;font-size:9px;font-family:ui-monospace,monospace;margin-bottom:6px;">' +
+              '<div style="background:rgba(245,200,66,.06);color:var(--gold);border:1px solid rgba(245,200,66,.25);border-radius:6px;padding:6px 8px;font-size:var(--fs-9);font-family:ui-monospace,monospace;margin-bottom:6px;">' +
                 '<div style="font-weight:700;margin-bottom:2px;">🛡️ ' + lastHedge.candidate.split("/")[0] + ' SHORT · $' + lastHedge.stake + '</div>' +
                 '<div style="color:var(--t2);">' + lastHedge.reason + ' · régime ' + lastHedge.regime + '</div>' +
               '</div>' :
-              '<div style="font-size:9px;color:var(--t3);margin-bottom:6px;">Aucune action récente</div>';
+              '<div style="font-size:var(--fs-9);color:var(--t3);margin-bottom:6px;">Aucune action récente</div>';
 
             return '' +
-            '<div style="padding:7px 10px;background:rgba(0,232,122,.04);border:1px solid rgba(0,232,122,.2);border-radius:6px;margin-bottom:5px;font-size:10px;font-family:ui-monospace,monospace;margin-top:14px;">' +
+            '<div style="padding:7px 10px;background:rgba(0,232,122,.04);border:1px solid rgba(0,232,122,.2);border-radius:6px;margin-bottom:5px;font-size:var(--fs-10);font-family:ui-monospace,monospace;margin-top:14px;">' +
               '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">' +
                 '<span style="color:var(--up);font-weight:700;">⚖️ Phase 6b · Allocation + Hedging</span>' +
               '</div>' +
-              '<div style="font-size:9px;color:var(--t3);margin-bottom:5px;text-transform:uppercase;letter-spacing:.05em;font-weight:700;">5.2 · Allocation par Sharpe</div>' +
+              '<div style="font-size:var(--fs-9);color:var(--t3);margin-bottom:5px;text-transform:uppercase;letter-spacing:.05em;font-weight:700;">5.2 · Allocation par Sharpe</div>' +
               sharpeHTML +
-              '<div style="font-size:9px;color:var(--t3);margin:8px 0 5px;text-transform:uppercase;letter-spacing:.05em;font-weight:700;">5.3 · Hedging défensif</div>' +
-              '<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 8px;background:rgba(20,25,35,.5);border:1px solid var(--border);border-radius:6px;margin-bottom:5px;font-size:9px;font-family:ui-monospace,monospace;">' +
+              '<div style="font-size:var(--fs-9);color:var(--t3);margin:8px 0 5px;text-transform:uppercase;letter-spacing:.05em;font-weight:700;">5.3 · Hedging défensif</div>' +
+              '<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 8px;background:rgba(20,25,35,.5);border:1px solid var(--border);border-radius:6px;margin-bottom:5px;font-size:var(--fs-9);font-family:ui-monospace,monospace;">' +
                 '<span style="color:var(--t2);">État</span>' +
                 hedgeStatus +
               '</div>' +
-              '<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 8px;background:rgba(20,25,35,.5);border:1px solid var(--border);border-radius:6px;margin-bottom:5px;font-size:9px;font-family:ui-monospace,monospace;">' +
+              '<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 8px;background:rgba(20,25,35,.5);border:1px solid var(--border);border-radius:6px;margin-bottom:5px;font-size:var(--fs-9);font-family:ui-monospace,monospace;">' +
                 '<span style="color:var(--t2);">BEAR streak</span>' +
                 '<span style="color:' + hedgeStreakColor + ';font-weight:700;">' + bearStreak + ' / 3</span>' +
               '</div>' +
@@ -1209,28 +1212,28 @@ function renderSettingsPanel() {
               const absVal = Math.abs(c.val);
               const cls = absVal > 0.7 ? 'var(--down)' : absVal > 0.4 ? 'var(--gold)' : 'var(--t2)';
               const sign = c.val >= 0 ? '+' : '';
-              return '<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 8px;background:rgba(20,25,35,.5);border:1px solid var(--border);border-radius:6px;margin-bottom:3px;font-size:9px;font-family:ui-monospace,monospace;">' +
+              return '<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 8px;background:rgba(20,25,35,.5);border:1px solid var(--border);border-radius:6px;margin-bottom:3px;font-size:var(--fs-9);font-family:ui-monospace,monospace;">' +
                 '<span style="color:var(--t2);font-weight:700;">' + c.p1 + ' ↔ ' + c.p2 + '</span>' +
                 '<span style="color:' + cls + ';font-weight:700;">' + sign + c.val.toFixed(2) + '</span>' +
               '</div>';
             }).join('') : '<span style="color:var(--t3);font-size:9.5px;">Pas encore de matrice (30+ bougies par paire requises)</span>';
 
             const decisionHTML = lastDecision ?
-              '<div style="background:rgba(245,200,66,.06);color:var(--gold);border:1px solid rgba(245,200,66,.25);border-radius:6px;padding:6px 8px;font-size:9px;font-family:ui-monospace,monospace;margin-bottom:6px;">' +
+              '<div style="background:rgba(245,200,66,.06);color:var(--gold);border:1px solid rgba(245,200,66,.25);border-radius:6px;padding:6px 8px;font-size:var(--fs-9);font-family:ui-monospace,monospace;margin-bottom:6px;">' +
                 '<div style="font-weight:700;margin-bottom:2px;">' + lastDecision.pair.split("/")[0] + ' ↔ ' + lastDecision.correlatedWith.split("/")[0] + ' · corr ' + (lastDecision.value >= 0 ? '+' : '') + lastDecision.value.toFixed(2) + '</div>' +
                 '<div style="color:var(--t2);">Mise réduite à 50% (cumul de risque évité)</div>' +
               '</div>' :
-              '<div style="font-size:9px;color:var(--t3);margin-bottom:6px;">Aucune réduction récente</div>';
+              '<div style="font-size:var(--fs-9);color:var(--t3);margin-bottom:6px;">Aucune réduction récente</div>';
 
             return '' +
-            '<div style="padding:7px 10px;background:rgba(56,212,245,.04);border:1px solid rgba(56,212,245,.2);border-radius:6px;margin-bottom:5px;font-size:10px;font-family:ui-monospace,monospace;margin-top:14px;">' +
+            '<div style="padding:7px 10px;background:rgba(56,212,245,.04);border:1px solid rgba(56,212,245,.2);border-radius:6px;margin-bottom:5px;font-size:var(--fs-10);font-family:ui-monospace,monospace;margin-top:14px;">' +
               '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">' +
                 '<span style="color:#38d4f5;font-weight:700;">🌐 Phase 6a · Corrélation entre paires</span>' +
                 '<span style="color:var(--t3);font-size:8.5px;">' + Object.keys(matrix).length + ' pairs</span>' +
               '</div>' +
-              '<div style="font-size:9px;color:var(--t3);margin-bottom:5px;text-transform:uppercase;letter-spacing:.05em;font-weight:700;">5.1 · Top corrélations</div>' +
+              '<div style="font-size:var(--fs-9);color:var(--t3);margin-bottom:5px;text-transform:uppercase;letter-spacing:.05em;font-weight:700;">5.1 · Top corrélations</div>' +
               corrHTML +
-              '<div style="font-size:9px;color:var(--t3);margin:8px 0 5px;text-transform:uppercase;letter-spacing:.05em;font-weight:700;">Dernière décision</div>' +
+              '<div style="font-size:var(--fs-9);color:var(--t3);margin:8px 0 5px;text-transform:uppercase;letter-spacing:.05em;font-weight:700;">Dernière décision</div>' +
               decisionHTML +
               '<div style="font-size:8.5px;color:var(--t3);">Mises réduites par corrélation : <b style="color:var(--gold);">' + limitActions + '</b></div>' +
             '</div>' +
@@ -1248,28 +1251,28 @@ function renderSettingsPanel() {
             const earlyCloses = adapt.reversalEarlyCloses || 0;
 
             const vfHTML = lastVF ?
-              '<div style="background:rgba(245,200,66,.06);color:var(--gold);border:1px solid rgba(245,200,66,.25);border-radius:6px;padding:6px 8px;font-size:9px;font-family:ui-monospace,monospace;margin-bottom:6px;">' +
+              '<div style="background:rgba(245,200,66,.06);color:var(--gold);border:1px solid rgba(245,200,66,.25);border-radius:6px;padding:6px 8px;font-size:var(--fs-9);font-family:ui-monospace,monospace;margin-bottom:6px;">' +
                 '<div style="font-weight:700;margin-bottom:2px;">' + (lastVF.blocked ? '⚠ Pic prévu · ' : '') + lastVF.pair.split("/")[0] + '</div>' +
                 '<div style="color:var(--t2);">' + lastVF.currentVol + '% → <b style="color:var(--down);">' + lastVF.forecastVol + '%</b> (×' + lastVF.ratio + ')</div>' +
               '</div>' :
-              '<div style="font-size:9px;color:var(--t3);margin-bottom:6px;">Aucune prévision récente</div>';
+              '<div style="font-size:var(--fs-9);color:var(--t3);margin-bottom:6px;">Aucune prévision récente</div>';
 
             const revHTML = lastRev ?
-              '<div style="background:rgba(167,139,250,.06);color:var(--pur);border:1px solid rgba(167,139,250,.25);border-radius:6px;padding:6px 8px;font-size:9px;font-family:ui-monospace,monospace;margin-bottom:6px;">' +
+              '<div style="background:rgba(167,139,250,.06);color:var(--pur);border:1px solid rgba(167,139,250,.25);border-radius:6px;padding:6px 8px;font-size:var(--fs-9);font-family:ui-monospace,monospace;margin-bottom:6px;">' +
                 '<div style="font-weight:700;margin-bottom:2px;">' + lastRev.pair.split("/")[0] + ' · ' + lastRev.type + '</div>' +
                 '<div style="color:var(--t2);">' + (lastRev.action === "early_close" ? "Fermé en profit +" + lastRev.pnlPct + "%" : lastRev.action) + ' · confiance ' + lastRev.confidence + '</div>' +
               '</div>' :
-              '<div style="font-size:9px;color:var(--t3);margin-bottom:6px;">Aucun retournement détecté récemment</div>';
+              '<div style="font-size:var(--fs-9);color:var(--t3);margin-bottom:6px;">Aucun retournement détecté récemment</div>';
 
             return '' +
-            '<div style="padding:7px 10px;background:rgba(245,200,66,.04);border:1px solid rgba(245,200,66,.2);border-radius:6px;margin-bottom:5px;font-size:10px;font-family:ui-monospace,monospace;margin-top:14px;">' +
+            '<div style="padding:7px 10px;background:rgba(245,200,66,.04);border:1px solid rgba(245,200,66,.2);border-radius:6px;margin-bottom:5px;font-size:var(--fs-10);font-family:ui-monospace,monospace;margin-top:14px;">' +
               '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">' +
                 '<span style="color:var(--gold);font-weight:700;">🔮 Phase 5 · Intelligence prédictive</span>' +
               '</div>' +
-              '<div style="font-size:9px;color:var(--t3);margin-bottom:5px;text-transform:uppercase;letter-spacing:.05em;font-weight:700;">4.1 · Prévision de volatilité (GARCH)</div>' +
+              '<div style="font-size:var(--fs-9);color:var(--t3);margin-bottom:5px;text-transform:uppercase;letter-spacing:.05em;font-weight:700;">4.1 · Prévision de volatilité (GARCH)</div>' +
               vfHTML +
               '<div style="font-size:8.5px;color:var(--t3);margin-bottom:8px;">Trades bloqués par pic prévu : <b style="color:var(--gold);">' + blocks + '</b></div>' +
-              '<div style="font-size:9px;color:var(--t3);margin-bottom:5px;text-transform:uppercase;letter-spacing:.05em;font-weight:700;">4.2 · Détection retournements</div>' +
+              '<div style="font-size:var(--fs-9);color:var(--t3);margin-bottom:5px;text-transform:uppercase;letter-spacing:.05em;font-weight:700;">4.2 · Détection retournements</div>' +
               revHTML +
               '<div style="font-size:8.5px;color:var(--t3);">Fermetures préventives en profit : <b style="color:var(--up);">' + earlyCloses + '</b></div>' +
             '</div>' +
@@ -1301,7 +1304,7 @@ function renderSettingsPanel() {
             const topHybridsHTML = topHybrids.length > 0 ? topHybrids.map(a => {
               const fit = Math.round(a.fitness || 0);
               const cls = fit >= 1000 ? 'var(--up)' : fit >= 500 ? 'var(--gold)' : 'var(--t2)';
-              return '<span style="display:inline-block;background:rgba(20,25,35,.7);color:' + cls + ';border:1px solid var(--border);border-radius:6px;padding:3px 8px;font-size:9px;font-weight:700;font-family:ui-monospace,monospace;margin:2px;">' + (a.name || '?').replace('Hybrid Gen-', 'G') + ' · fit ' + fit + '</span>';
+              return '<span style="display:inline-block;background:rgba(20,25,35,.7);color:' + cls + ';border:1px solid var(--border);border-radius:6px;padding:3px 8px;font-size:var(--fs-9);font-weight:700;font-family:ui-monospace,monospace;margin:2px;">' + (a.name || '?').replace('Hybrid Gen-', 'G') + ' · fit ' + fit + '</span>';
             }).join('') : '<span style="color:var(--t3);font-size:9.5px;">Pas encore d&apos;hybrides matures</span>';
 
             // Transfer learning : stats par mode
@@ -1317,10 +1320,10 @@ function renderSettingsPanel() {
               const weightPct = Math.round(weight * 100);
               const isCurrent = mode === currentMode;
               const wrColor = wr >= 55 ? 'var(--up)' : wr >= 45 ? 'var(--gold)' : 'var(--down)';
-              return '<div style="display:flex;justify-content:space-between;align-items:center;padding:5px 8px;background:' + (isCurrent ? 'rgba(167,139,250,.08)' : 'rgba(20,25,35,.5)') + ';border:1px solid ' + (isCurrent ? 'rgba(167,139,250,.4)' : 'var(--border)') + ';border-radius:6px;margin-bottom:4px;font-size:9px;font-family:ui-monospace,monospace;">' +
+              return '<div style="display:flex;justify-content:space-between;align-items:center;padding:5px 8px;background:' + (isCurrent ? 'rgba(167,139,250,.08)' : 'rgba(20,25,35,.5)') + ';border:1px solid ' + (isCurrent ? 'rgba(167,139,250,.4)' : 'var(--border)') + ';border-radius:6px;margin-bottom:4px;font-size:var(--fs-9);font-family:ui-monospace,monospace;">' +
                 '<span style="display:flex;align-items:center;gap:6px;">' +
                   '<span style="color:' + color + ';font-weight:700;">' + label + '</span>' +
-                  (isCurrent ? '<span style="background:rgba(167,139,250,.2);color:var(--pur);font-size:8px;padding:1px 5px;border-radius:3px;font-weight:700;">ACTIF</span>' : '') +
+                  (isCurrent ? '<span style="background:rgba(167,139,250,.2);color:var(--pur);font-size:var(--fs-8);padding:1px 5px;border-radius:3px;font-weight:700;">ACTIF</span>' : '') +
                 '</span>' +
                 '<span style="display:flex;gap:8px;align-items:center;">' +
                   '<span style="color:var(--t2);">' + total + ' trades</span>' +
@@ -1331,18 +1334,18 @@ function renderSettingsPanel() {
             };
 
             return '' +
-            '<div style="padding:7px 10px;background:rgba(0,232,122,.04);border:1px solid rgba(0,232,122,.2);border-radius:6px;margin-bottom:5px;font-size:10px;font-family:ui-monospace,monospace;margin-top:14px;">' +
+            '<div style="padding:7px 10px;background:rgba(0,232,122,.04);border:1px solid rgba(0,232,122,.2);border-radius:6px;margin-bottom:5px;font-size:var(--fs-10);font-family:ui-monospace,monospace;margin-top:14px;">' +
               '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">' +
                 '<span style="color:var(--up);font-weight:700;">🧬 Phase 4b · Évolution & Transfer learning</span>' +
                 '<span style="color:var(--t3);font-size:8.5px;">Gen actuelle : ' + currentGenCount + '</span>' +
               '</div>' +
-              '<div style="font-size:9px;color:var(--t3);margin-bottom:5px;text-transform:uppercase;letter-spacing:.05em;font-weight:700;">3.2 · Top hybrides survivants</div>' +
+              '<div style="font-size:var(--fs-9);color:var(--t3);margin-bottom:5px;text-transform:uppercase;letter-spacing:.05em;font-weight:700;">3.2 · Top hybrides survivants</div>' +
               '<div style="display:flex;flex-wrap:wrap;margin-bottom:10px;">' + topHybridsHTML + '</div>' +
-              '<div style="font-size:9px;color:var(--t3);margin-bottom:5px;text-transform:uppercase;letter-spacing:.05em;font-weight:700;">3.3 · Mémoire multi-modes</div>' +
+              '<div style="font-size:var(--fs-9);color:var(--t3);margin-bottom:5px;text-transform:uppercase;letter-spacing:.05em;font-weight:700;">3.3 · Mémoire multi-modes</div>' +
 
               modeRowHTML('real', 'Mode Réel', 'var(--down)') +
               (memCombined && memCombined.wr !== null ?
-                '<div style="font-size:9px;color:var(--t3);margin-top:6px;text-align:center;">' +
+                '<div style="font-size:var(--fs-9);color:var(--t3);margin-top:6px;text-align:center;">' +
                   'WR consolidé : <b style="color:' + (memCombined.wr >= 0.55 ? 'var(--up)' : memCombined.wr >= 0.45 ? 'var(--gold)' : 'var(--down)') + ';">' + Math.round(memCombined.wr * 100) + '%</b>' +
                   ' · ' + memCombined.sourcesUsed + ' source(s) actives' +
                 '</div>' : '') +
@@ -1381,10 +1384,10 @@ function renderSettingsPanel() {
         return `
           <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 10px;background:rgba(20,25,35,.6);border:1px solid var(--border);border-radius:8px;margin-bottom:6px;">
             <div style="display:flex;align-items:center;gap:8px;">
-              <span style="color:${cfg.color || 'var(--t1)'};font-weight:800;font-size:11px;font-family:ui-monospace,monospace;">${pair.split('/')[0]}</span>
-              <span style="color:${stateCol};font-size:9px;font-weight:600;">${stateLbl}</span>
+              <span style="color:${cfg.color || 'var(--t1)'};font-weight:800;font-size:var(--fs-11);font-family:ui-monospace,monospace;">${pair.split('/')[0]}</span>
+              <span style="color:${stateCol};font-size:var(--fs-9);font-weight:600;">${stateLbl}</span>
             </div>
-            <button onclick="toggleRealPair('${pair}')" style="padding:4px 10px;font-size:9px;font-weight:700;border-radius:6px;cursor:pointer;background:${isActive?'rgba(0,232,122,.15)':'var(--s2)'};color:${isActive?'var(--up)':'var(--t2)'};border:1px solid ${isActive?'rgba(0,232,122,.4)':'var(--border)'};">
+            <button onclick="toggleRealPair('${pair}')" style="padding:4px 10px;font-size:var(--fs-9);font-weight:700;border-radius:6px;cursor:pointer;background:${isActive?'rgba(0,232,122,.15)':'var(--s2)'};color:${isActive?'var(--up)':'var(--t2)'};border:1px solid ${isActive?'rgba(0,232,122,.4)':'var(--border)'};">
               ${isActive?'ON':'OFF'}
             </button>
           </div>
@@ -1399,13 +1402,13 @@ function renderSettingsPanel() {
 
       // Bouton master sim ↔ real
       const masterBtn = isReal ? `
-        <button onclick="confirmSwitchMode()" style="background:rgba(0,232,122,.10);color:var(--up);border:1px solid rgba(0,232,122,.4);border-radius:10px;padding:12px 14px;font-size:12px;font-weight:800;cursor:pointer;letter-spacing:.05em;width:100%;display:flex;justify-content:space-between;align-items:center;">
+        <button onclick="confirmSwitchMode()" style="background:rgba(0,232,122,.10);color:var(--up);border:1px solid rgba(0,232,122,.4);border-radius:10px;padding:12px 14px;font-size:var(--fs-12);font-weight:800;cursor:pointer;letter-spacing:.05em;width:100%;display:flex;justify-content:space-between;align-items:center;">
           <span>↩ Repasser en mode SIMULATION</span>
-          <span style="opacity:.6;font-size:10px;">⚠</span>
+          <span style="opacity:.6;font-size:var(--fs-10);">⚠</span>
         </button>` : `
-        <button onclick="confirmSwitchToReal()" style="background:rgba(255,61,107,.10);color:var(--down);border:1px solid rgba(255,61,107,.4);border-radius:10px;padding:12px 14px;font-size:12px;font-weight:800;cursor:pointer;letter-spacing:.05em;width:100%;display:flex;justify-content:space-between;align-items:center;">
+        <button onclick="confirmSwitchToReal()" style="background:rgba(255,61,107,.10);color:var(--down);border:1px solid rgba(255,61,107,.4);border-radius:10px;padding:12px 14px;font-size:var(--fs-12);font-weight:800;cursor:pointer;letter-spacing:.05em;width:100%;display:flex;justify-content:space-between;align-items:center;">
           <span>⚠ Activer le MODE RÉEL</span>
-          <span style="opacity:.6;font-size:10px;">→ Binance live</span>
+          <span style="opacity:.6;font-size:var(--fs-10);">→ Binance live</span>
         </button>`;
 
       const headerCol = isReal ? 'var(--down)' : 'var(--ice)';
@@ -1414,9 +1417,9 @@ function renderSettingsPanel() {
 
       return `
       <div style="margin:16px 0 8px;padding:14px;background:${headerBg};border:1px solid ${headerBorder};border-radius:12px;">
-        <div style="font-size:12px;font-weight:700;color:${headerCol};text-transform:uppercase;letter-spacing:.08em;margin-bottom:10px;display:flex;justify-content:space-between;align-items:center;">
+        <div style="font-size:var(--fs-12);font-weight:700;color:${headerCol};text-transform:uppercase;letter-spacing:.08em;margin-bottom:10px;display:flex;justify-content:space-between;align-items:center;">
           <span>${isReal?'⚠':'🎯'} Mode trading · ${isReal?'RÉEL':'Mode Auto-apprentissage'}</span>
-          <span style="font-size:9px;font-weight:600;opacity:.7;letter-spacing:0;text-transform:none;">${isReal?'live Binance':'simulé'}</span>
+          <span style="font-size:var(--fs-9);font-weight:600;opacity:.7;letter-spacing:0;text-transform:none;">${isReal?'live Binance':'simulé'}</span>
         </div>
         <div style="font-size:9.5px;color:var(--t2);line-height:1.5;margin-bottom:12px;">
           ${isReal
@@ -1425,7 +1428,7 @@ function renderSettingsPanel() {
         </div>
 
         <!-- Timeframe -->
-        <div style="font-size:9px;color:var(--t3);font-weight:700;text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;">Timeframe décisions bot</div>
+        <div style="font-size:var(--fs-9);color:var(--t3);font-weight:700;text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;">Timeframe décisions bot</div>
         <div style="display:flex;gap:4px;margin-bottom:14px;flex-wrap:wrap;">${tfButtons}</div>
 
         <!-- v7.12 LIVRAISON 6 · Stats par paire en mode real -->
@@ -1453,21 +1456,21 @@ function renderSettingsPanel() {
             const pnlSign = s.pnlNet >= 0 ? '+' : '';
             const wrTxt = wrRecent != null ? wrRecent + '%·' + wrAll + '%' : wrAll + '%';
             return `
-              <div style="display:flex;align-items:center;justify-content:space-between;padding:6px 10px;background:rgba(20,25,35,.5);border:1px solid var(--border);border-radius:8px;margin-bottom:5px;font-size:10px;">
+              <div style="display:flex;align-items:center;justify-content:space-between;padding:6px 10px;background:rgba(20,25,35,.5);border:1px solid var(--border);border-radius:8px;margin-bottom:5px;font-size:var(--fs-10);">
                 <div style="display:flex;align-items:center;gap:8px;flex:1;min-width:0;">
                   <span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:${dotCol};flex-shrink:0;"></span>
                   <span style="color:${cfg.color||'var(--t1)'};font-weight:800;font-family:ui-monospace,monospace;min-width:36px;">${sym}</span>
                   <span style="color:var(--t2);font-family:ui-monospace,monospace;font-size:9.5px;">${s.wins}W·${s.losses}L</span>
                 </div>
                 <div style="display:flex;align-items:center;gap:10px;font-family:ui-monospace,monospace;">
-                  <span style="color:${dotCol};font-weight:700;font-size:10px;">${wrTxt}</span>
-                  <span style="color:${pnlCol};font-weight:800;font-size:10px;min-width:60px;text-align:right;">${pnlSign}$${s.pnlNet.toFixed(2)}</span>
+                  <span style="color:${dotCol};font-weight:700;font-size:var(--fs-10);">${wrTxt}</span>
+                  <span style="color:${pnlCol};font-weight:800;font-size:var(--fs-10);min-width:60px;text-align:right;">${pnlSign}$${s.pnlNet.toFixed(2)}</span>
                 </div>
               </div>
             `;
           }).join('');
           return `
-            <div style="font-size:9px;color:var(--t3);font-weight:700;text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;display:flex;justify-content:space-between;align-items:center;">
+            <div style="font-size:var(--fs-9);color:var(--t3);font-weight:700;text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;display:flex;justify-content:space-between;align-items:center;">
               <span>📊 Performance par paire (réel)</span>
               <span style="font-size:8.5px;letter-spacing:0;text-transform:none;color:var(--t3);font-weight:600;opacity:.7;">WR récent · global</span>
             </div>
@@ -1476,7 +1479,7 @@ function renderSettingsPanel() {
         })()}
 
         <!-- Paires -->
-        <div style="font-size:9px;color:var(--t3);font-weight:700;text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;">Paires actives en réel</div>
+        <div style="font-size:var(--fs-9);color:var(--t3);font-weight:700;text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;">Paires actives en réel</div>
         <div style="margin-bottom:14px;">${pairsHTML}</div>
 
         <!-- v7.12 LIVRAISON 6 · Bouton rollback si snapshot disponible -->
@@ -1492,7 +1495,7 @@ function renderSettingsPanel() {
           return `
             <button onclick="confirmRollbackPreReal()" style="background:rgba(245,200,66,.06);color:var(--gold);border:1px solid rgba(245,200,66,.35);border-radius:10px;padding:9px 14px;font-size:10.5px;font-weight:700;cursor:pointer;letter-spacing:.04em;width:100%;display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
               <span>↶ Restaurer état pré-réel · ${dollarStr}</span>
-              <span style="opacity:.7;font-size:9px;font-weight:600;letter-spacing:0;">il y a ${ageStr}</span>
+              <span style="opacity:.7;font-size:var(--fs-9);font-weight:600;letter-spacing:0;">il y a ${ageStr}</span>
             </button>
           `;
         })()}
@@ -1512,10 +1515,10 @@ function renderSettingsPanel() {
     <!-- v8.0 LIVRAISON 33 · BLOC OUTILS RAPIDES -->
     <!-- ════════════════════════════════════════════════════════════════ -->
     <div style="margin:16px 0 8px;padding:14px;background:rgba(0,232,122,.05);border:1px solid rgba(0,232,122,.2);border-radius:12px;">
-      <div style="font-size:12px;font-weight:700;color:var(--up);text-transform:uppercase;letter-spacing:.08em;margin-bottom:10px;">🛠 Outils</div>
-      <button onclick="openRealCandlesModal();closeSettingsModal();" style="background:rgba(0,232,122,.10);color:var(--up);border:1px solid rgba(0,232,122,.4);border-radius:10px;padding:12px 14px;font-size:12px;font-weight:700;cursor:pointer;letter-spacing:.05em;text-align:left;width:100%;display:flex;justify-content:space-between;align-items:center;">
+      <div style="font-size:var(--fs-12);font-weight:700;color:var(--up);text-transform:uppercase;letter-spacing:.08em;margin-bottom:10px;">🛠 Outils</div>
+      <button onclick="openRealCandlesModal();closeSettingsModal();" style="background:rgba(0,232,122,.10);color:var(--up);border:1px solid rgba(0,232,122,.4);border-radius:10px;padding:12px 14px;font-size:var(--fs-12);font-weight:700;cursor:pointer;letter-spacing:.05em;text-align:left;width:100%;display:flex;justify-content:space-between;align-items:center;">
         <span>📊 Bougies temps réel</span>
-        <span style="opacity:.6;font-size:10px;">5m·15m·1h</span>
+        <span style="opacity:.6;font-size:var(--fs-10);">5m·15m·1h</span>
       </button>
     </div>
 
@@ -1523,48 +1526,48 @@ function renderSettingsPanel() {
     <!-- v8.0 LIVRAISON 33 · BLOC 1 : SAUVEGARDES -->
     <!-- ════════════════════════════════════════════════════════════════ -->
     <div style="margin:16px 0 8px;padding:14px;background:rgba(56,212,245,.05);border:1px solid rgba(56,212,245,.2);border-radius:12px;">
-      <div style="font-size:12px;font-weight:700;color:var(--ice);text-transform:uppercase;letter-spacing:.08em;margin-bottom:12px;">📦 Sauvegardes & Restauration</div>
+      <div style="font-size:var(--fs-12);font-weight:700;color:var(--ice);text-transform:uppercase;letter-spacing:.08em;margin-bottom:12px;">📦 Sauvegardes & Restauration</div>
 
-      <div style="font-size:10px;font-weight:700;color:var(--t2);margin-bottom:6px;letter-spacing:.05em;">⬇ EXPORTER UN FICHIER</div>
-      <div style="font-size:9px;color:var(--t3);margin-bottom:8px;line-height:1.5;">Télécharge un backup complet (état + agents + trades + configs). Tu peux l'envoyer pour analyse.</div>
+      <div style="font-size:var(--fs-10);font-weight:700;color:var(--t2);margin-bottom:6px;letter-spacing:.05em;">⬇ EXPORTER UN FICHIER</div>
+      <div style="font-size:var(--fs-9);color:var(--t3);margin-bottom:8px;line-height:1.5;">Télécharge un backup complet (état + agents + trades + configs). Tu peux l'envoyer pour analyse.</div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:14px;">
-        <button onclick="exportBackup('json')" style="padding:10px;background:rgba(56,212,245,.15);border:1px solid rgba(56,212,245,.4);border-radius:8px;color:var(--ice);font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;">📦 .json</button>
-        <button onclick="exportBackup('txt')" style="padding:10px;background:rgba(56,212,245,.08);border:1px solid rgba(56,212,245,.25);border-radius:8px;color:var(--ice);font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;">📄 .txt</button>
+        <button onclick="exportBackup('json')" style="padding:10px;background:rgba(56,212,245,.15);border:1px solid rgba(56,212,245,.4);border-radius:8px;color:var(--ice);font-size:var(--fs-11);font-weight:700;cursor:pointer;font-family:inherit;">📦 .json</button>
+        <button onclick="exportBackup('txt')" style="padding:10px;background:rgba(56,212,245,.08);border:1px solid rgba(56,212,245,.25);border-radius:8px;color:var(--ice);font-size:var(--fs-11);font-weight:700;cursor:pointer;font-family:inherit;">📄 .txt</button>
       </div>
 
-      <div style="font-size:10px;font-weight:700;color:var(--t2);margin-bottom:6px;letter-spacing:.05em;">⬆ IMPORTER UN FICHIER</div>
-      <div style="font-size:9px;color:var(--t3);margin-bottom:8px;line-height:1.5;">2 modes selon le bouton choisi.</div>
+      <div style="font-size:var(--fs-10);font-weight:700;color:var(--t2);margin-bottom:6px;letter-spacing:.05em;">⬆ IMPORTER UN FICHIER</div>
+      <div style="font-size:var(--fs-9);color:var(--t3);margin-bottom:8px;line-height:1.5;">2 modes selon le bouton choisi.</div>
       <input type="file" id="backupImportFile" accept=".json,.txt" onchange="handleBackupImportFile(this)" style="display:none;" />
       <input type="file" id="backupImportMaxFile" accept=".json,.txt" onchange="handleBackupImportMaxFile(this)" style="display:none;" />
       <div style="display:flex;flex-direction:column;gap:6px;margin-bottom:14px;">
-        <button onclick="document.getElementById('backupImportFile').click()" style="padding:10px;background:rgba(245,200,66,.15);border:1px solid rgba(245,200,66,.4);border-radius:8px;color:var(--gold);font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;text-align:left;">
-          ⬆ Importer SÉCURISÉ <span style="font-size:9px;font-weight:500;color:var(--t3);">· configs whitelist (Q1=B/sécurisé)</span>
+        <button onclick="document.getElementById('backupImportFile').click()" style="padding:10px;background:rgba(245,200,66,.15);border:1px solid rgba(245,200,66,.4);border-radius:8px;color:var(--gold);font-size:var(--fs-11);font-weight:700;cursor:pointer;font-family:inherit;text-align:left;">
+          ⬆ Importer SÉCURISÉ <span style="font-size:var(--fs-9);font-weight:500;color:var(--t3);">· configs whitelist (Q1=B/sécurisé)</span>
         </button>
-        <button onclick="document.getElementById('backupImportMaxFile').click()" style="padding:10px;background:rgba(255,61,107,.15);border:1px solid rgba(255,61,107,.5);border-radius:8px;color:var(--down);font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;text-align:left;">
-          🔴 Importer MAX PERMISSIF <span style="font-size:9px;font-weight:500;color:var(--t3);">· tout sauf historique (à utiliser avec prudence)</span>
+        <button onclick="document.getElementById('backupImportMaxFile').click()" style="padding:10px;background:rgba(255,61,107,.15);border:1px solid rgba(255,61,107,.5);border-radius:8px;color:var(--down);font-size:var(--fs-11);font-weight:700;cursor:pointer;font-family:inherit;text-align:left;">
+          🔴 Importer MAX PERMISSIF <span style="font-size:var(--fs-9);font-weight:500;color:var(--t3);">· tout sauf historique (à utiliser avec prudence)</span>
         </button>
       </div>
 
-      <div style="font-size:10px;font-weight:700;color:var(--t2);margin-bottom:6px;letter-spacing:.05em;">🔄 SAUVEGARDE & CONTINUITÉ (AURA v43)</div>
-      <div style="font-size:9px;color:var(--t3);margin-bottom:8px;line-height:1.5;">Format v43 (snapshot léger) · à utiliser si tu changes d'appareil ou re-télécharges le HTML.</div>
+      <div style="font-size:var(--fs-10);font-weight:700;color:var(--t2);margin-bottom:6px;letter-spacing:.05em;">🔄 SAUVEGARDE & CONTINUITÉ (AURA v43)</div>
+      <div style="font-size:var(--fs-9);color:var(--t3);margin-bottom:8px;line-height:1.5;">Format v43 (snapshot léger) · à utiliser si tu changes d'appareil ou re-télécharges le HTML.</div>
       <div style="display:flex;gap:6px;margin-bottom:14px;">
-        <button onclick="exportState()" style="flex:1;padding:10px;background:rgba(0,232,122,.10);border:1px solid rgba(0,232,122,.35);border-radius:8px;color:var(--up);font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;">⬇ Exporter backup</button>
-        <button onclick="importState()" style="flex:1;padding:10px;background:rgba(56,212,245,.10);border:1px solid rgba(56,212,245,.35);border-radius:8px;color:var(--ice);font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;">⬆ Importer backup</button>
+        <button onclick="exportState()" style="flex:1;padding:10px;background:rgba(0,232,122,.10);border:1px solid rgba(0,232,122,.35);border-radius:8px;color:var(--up);font-size:var(--fs-11);font-weight:700;cursor:pointer;font-family:inherit;">⬇ Exporter backup</button>
+        <button onclick="importState()" style="flex:1;padding:10px;background:rgba(56,212,245,.10);border:1px solid rgba(56,212,245,.35);border-radius:8px;color:var(--ice);font-size:var(--fs-11);font-weight:700;cursor:pointer;font-family:inherit;">⬆ Importer backup</button>
       </div>
 
-      <div style="font-size:10px;font-weight:700;color:var(--t2);margin-bottom:6px;letter-spacing:.05em;">📸 SNAPSHOTS INTERNES</div>
-      <div style="font-size:9px;color:var(--t3);margin-bottom:8px;line-height:1.5;">Auto toutes les 30 min + après chaque trade · 5 conservés en rotation.</div>
-      <button onclick="openSnapshotsModal();closeSettingsModal();" style="width:100%;padding:10px;background:rgba(245,200,66,.10);border:1px solid rgba(245,200,66,.3);border-radius:8px;color:#f5c542;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;text-align:left;margin-bottom:14px;">📸 Voir et restaurer (1 tap)</button>
+      <div style="font-size:var(--fs-10);font-weight:700;color:var(--t2);margin-bottom:6px;letter-spacing:.05em;">📸 SNAPSHOTS INTERNES</div>
+      <div style="font-size:var(--fs-9);color:var(--t3);margin-bottom:8px;line-height:1.5;">Auto toutes les 30 min + après chaque trade · 5 conservés en rotation.</div>
+      <button onclick="openSnapshotsModal();closeSettingsModal();" style="width:100%;padding:10px;background:rgba(245,200,66,.10);border:1px solid rgba(245,200,66,.3);border-radius:8px;color:#f5c542;font-size:var(--fs-11);font-weight:700;cursor:pointer;font-family:inherit;text-align:left;margin-bottom:14px;">📸 Voir et restaurer (1 tap)</button>
 
-      <div style="font-size:10px;font-weight:700;color:var(--t2);margin-bottom:6px;letter-spacing:.05em;">📜 HISTORIQUE DES BACKUPS</div>
-      <div style="font-size:9px;color:var(--t3);margin-bottom:8px;line-height:1.5;">Auto : 1/jour pendant 7 jours · Manuel : 5 derniers · Pré-import : 3 derniers</div>
+      <div style="font-size:var(--fs-10);font-weight:700;color:var(--t2);margin-bottom:6px;letter-spacing:.05em;">📜 HISTORIQUE DES BACKUPS</div>
+      <div style="font-size:var(--fs-9);color:var(--t3);margin-bottom:8px;line-height:1.5;">Auto : 1/jour pendant 7 jours · Manuel : 5 derniers · Pré-import : 3 derniers</div>
       ${HISTORIQUE_HTML}
-      <button onclick="_refreshBackupsCache()" style="margin-top:8px;width:100%;padding:7px;background:transparent;border:1px solid rgba(255,255,255,.08);border-radius:6px;color:var(--t3);font-size:10px;font-weight:600;cursor:pointer;font-family:inherit;">🔄 Rafraîchir la liste</button>
+      <button onclick="_refreshBackupsCache()" style="margin-top:8px;width:100%;padding:7px;background:transparent;border:1px solid rgba(255,255,255,.08);border-radius:6px;color:var(--t3);font-size:var(--fs-10);font-weight:600;cursor:pointer;font-family:inherit;">🔄 Rafraîchir la liste</button>
 
       <!-- v8.0 LIVRAISON v11bis · Bouton Backup rapide manuel (déclenche un export immédiat .json) -->
-      <div style="font-size:10px;font-weight:700;color:var(--t2);margin:14px 0 6px;letter-spacing:.05em;">⚡ BACKUP RAPIDE</div>
-      <div style="font-size:9px;color:var(--t3);margin-bottom:8px;line-height:1.5;">Génère et télécharge un backup .json maintenant (utile avant un changement risqué).</div>
-      <button onclick="exportBackup('json')" style="width:100%;padding:10px;background:rgba(0,232,122,.12);border:1px solid rgba(0,232,122,.4);border-radius:8px;color:var(--up);font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;text-align:left;">
+      <div style="font-size:var(--fs-10);font-weight:700;color:var(--t2);margin:14px 0 6px;letter-spacing:.05em;">⚡ BACKUP RAPIDE</div>
+      <div style="font-size:var(--fs-9);color:var(--t3);margin-bottom:8px;line-height:1.5;">Génère et télécharge un backup .json maintenant (utile avant un changement risqué).</div>
+      <button onclick="exportBackup('json')" style="width:100%;padding:10px;background:rgba(0,232,122,.12);border:1px solid rgba(0,232,122,.4);border-radius:8px;color:var(--up);font-size:var(--fs-11);font-weight:700;cursor:pointer;font-family:inherit;text-align:left;">
         💾 Backup maintenant (.json)
       </button>
     </div>
@@ -1573,11 +1576,11 @@ function renderSettingsPanel() {
     <!-- v8.0 LIVRAISON v11bis · BLOC DIAGNOSTICS (raccourcis Réglages) -->
     <!-- ════════════════════════════════════════════════════════════════ -->
     <div style="margin:16px 0 8px;padding:14px;background:rgba(167,139,250,.05);border:1px solid rgba(167,139,250,.25);border-radius:12px;">
-      <div style="font-size:12px;font-weight:700;color:var(--pur);text-transform:uppercase;letter-spacing:.08em;margin-bottom:12px;">🩺 Diagnostics</div>
+      <div style="font-size:var(--fs-12);font-weight:700;color:var(--pur);text-transform:uppercase;letter-spacing:.08em;margin-bottom:12px;">🩺 Diagnostics</div>
 
-      <div style="font-size:10px;font-weight:700;color:var(--t2);margin-bottom:6px;letter-spacing:.05em;">SANTÉ DU SYSTÈME</div>
-      <div style="font-size:9px;color:var(--t3);margin-bottom:8px;line-height:1.5;">Vue d'ensemble : trades, P&amp;L, marché, agents, capital, répartition.</div>
-      <button onclick="openDiagnostic()" style="width:100%;padding:10px;background:rgba(167,139,250,.12);border:1px solid rgba(167,139,250,.4);border-radius:8px;color:var(--pur);font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;text-align:left;margin-bottom:10px;">
+      <div style="font-size:var(--fs-10);font-weight:700;color:var(--t2);margin-bottom:6px;letter-spacing:.05em;">SANTÉ DU SYSTÈME</div>
+      <div style="font-size:var(--fs-9);color:var(--t3);margin-bottom:8px;line-height:1.5;">Vue d'ensemble : trades, P&amp;L, marché, agents, capital, répartition.</div>
+      <button onclick="openDiagnostic()" style="width:100%;padding:10px;background:rgba(167,139,250,.12);border:1px solid rgba(167,139,250,.4);border-radius:8px;color:var(--pur);font-size:var(--fs-11);font-weight:700;cursor:pointer;font-family:inherit;text-align:left;margin-bottom:10px;">
         🩺 Ouvrir le diagnostic santé
       </button>
     </div>
@@ -1586,45 +1589,45 @@ function renderSettingsPanel() {
     <!-- v8.0 LIVRAISON 33 · BLOC 2 : RESETS -->
     <!-- ════════════════════════════════════════════════════════════════ -->
     <div style="margin:16px 0 8px;padding:14px;background:rgba(245,166,35,.05);border:1px solid rgba(245,166,35,.25);border-radius:12px;">
-      <div style="font-size:12px;font-weight:700;color:#f5a623;text-transform:uppercase;letter-spacing:.08em;margin-bottom:12px;">🔄 Resets & Déblocages</div>
+      <div style="font-size:var(--fs-12);font-weight:700;color:#f5a623;text-transform:uppercase;letter-spacing:.08em;margin-bottom:12px;">🔄 Resets & Déblocages</div>
 
-      <div style="font-size:10px;font-weight:700;color:var(--pur);margin-bottom:6px;letter-spacing:.05em;">🔓 DÉBLOCAGES</div>
-      <div style="font-size:9px;color:var(--t3);margin-bottom:8px;line-height:1.5;">Les paires blacklistées et streaks de pertes sont pausées auto. Utilise pour donner une chance de reprendre.</div>
+      <div style="font-size:var(--fs-10);font-weight:700;color:var(--pur);margin-bottom:6px;letter-spacing:.05em;">🔓 DÉBLOCAGES</div>
+      <div style="font-size:var(--fs-9);color:var(--t3);margin-bottom:8px;line-height:1.5;">Les paires blacklistées et streaks de pertes sont pausées auto. Utilise pour donner une chance de reprendre.</div>
       ${DEBLOCAGES_HTML}
 
       <!-- v8.0 LIVRAISON 37 · Bouton Reset P&L · onclick simplifié -->
-      <div style="font-size:10px;font-weight:700;color:var(--ice);margin:14px 0 6px;letter-spacing:.05em;">📊 RESET P&amp;L CUMULÉ</div>
-      <div style="font-size:9px;color:var(--t3);margin-bottom:8px;line-height:1.5;">Remet à zéro le P&amp;L cumulé de toutes les paires affiché sur l'écran d'accueil.</div>
-      <button onclick="_confirmResetPnlCumule()" style="width:100%;padding:10px;background:rgba(56,212,245,.10);border:1px solid rgba(56,212,245,.30);border-radius:8px;color:var(--ice);font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;text-align:left;">
+      <div style="font-size:var(--fs-10);font-weight:700;color:var(--ice);margin:14px 0 6px;letter-spacing:.05em;">📊 RESET P&amp;L CUMULÉ</div>
+      <div style="font-size:var(--fs-9);color:var(--t3);margin-bottom:8px;line-height:1.5;">Remet à zéro le P&amp;L cumulé de toutes les paires affiché sur l'écran d'accueil.</div>
+      <button onclick="_confirmResetPnlCumule()" style="width:100%;padding:10px;background:rgba(56,212,245,.10);border:1px solid rgba(56,212,245,.30);border-radius:8px;color:var(--ice);font-size:var(--fs-11);font-weight:700;cursor:pointer;font-family:inherit;text-align:left;">
         ↺ Reset P&amp;L cumulé toutes paires
       </button>
 
       <!-- v8.0 LIVRAISON 41 · Reset complet cohérent (fix corruption paperRealStats) -->
-      <div style="font-size:10px;font-weight:700;color:var(--mag);margin:14px 0 6px;letter-spacing:.05em;">🧹 RESET COMPLET COHÉRENT</div>
-      <div style="font-size:9px;color:var(--t3);margin-bottom:8px;line-height:1.5;">Synchronise et remet à zéro TOUS les compteurs liés (paperRealStats, heatmap, mémoire contexte, fees par paire). Utile en cas de chiffres incohérents entre les écrans.</div>
-      <button onclick="_confirmFullCoherentReset()" style="width:100%;padding:10px;background:rgba(255,77,191,.10);border:1px solid rgba(255,77,191,.30);border-radius:8px;color:var(--mag);font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;text-align:left;">
+      <div style="font-size:var(--fs-10);font-weight:700;color:var(--mag);margin:14px 0 6px;letter-spacing:.05em;">🧹 RESET COMPLET COHÉRENT</div>
+      <div style="font-size:var(--fs-9);color:var(--t3);margin-bottom:8px;line-height:1.5;">Synchronise et remet à zéro TOUS les compteurs liés (paperRealStats, heatmap, mémoire contexte, fees par paire). Utile en cas de chiffres incohérents entre les écrans.</div>
+      <button onclick="_confirmFullCoherentReset()" style="width:100%;padding:10px;background:rgba(255,77,191,.10);border:1px solid rgba(255,77,191,.30);border-radius:8px;color:var(--mag);font-size:var(--fs-11);font-weight:700;cursor:pointer;font-family:inherit;text-align:left;">
         🧹 Reset complet cohérent (fix incohérences)
       </button>
 
-      <div style="font-size:10px;font-weight:700;color:var(--t2);margin:12px 0 6px;letter-spacing:.05em;">💰 RESET PAR COMPTE</div>
-      <div style="font-size:9px;color:var(--t3);margin-bottom:8px;line-height:1.5;"><strong>Maintenir 2 secondes</strong> sur un bouton pour confirmer.</div>
+      <div style="font-size:var(--fs-10);font-weight:700;color:var(--t2);margin:12px 0 6px;letter-spacing:.05em;">💰 RESET PAR COMPTE</div>
+      <div style="font-size:var(--fs-9);color:var(--t3);margin-bottom:8px;line-height:1.5;"><strong>Maintenir 2 secondes</strong> sur un bouton pour confirmer.</div>
       ${LONGPRESS_HTML}
 
-      <div style="font-size:10px;font-weight:700;color:var(--t2);margin:12px 0 6px;letter-spacing:.05em;">🧠 RESET PAR DOMAINE</div>
-      <div style="font-size:9px;color:var(--t3);margin-bottom:8px;line-height:1.5;">Archive automatiquement avant de réinitialiser ${RESET_DOMAINS.length} domaines distincts.</div>
+      <div style="font-size:var(--fs-10);font-weight:700;color:var(--t2);margin:12px 0 6px;letter-spacing:.05em;">🧠 RESET PAR DOMAINE</div>
+      <div style="font-size:var(--fs-9);color:var(--t3);margin-bottom:8px;line-height:1.5;">Archive automatiquement avant de réinitialiser ${RESET_DOMAINS.length} domaines distincts.</div>
       <div class="domain-grid">${rows}</div>
       ${fullResetBlock}
 
-      <div style="font-size:10px;font-weight:700;color:var(--down);margin:14px 0 6px;letter-spacing:.05em;">⚠️ FACTORY RESET</div>
+      <div style="font-size:var(--fs-10);font-weight:700;color:var(--down);margin:14px 0 6px;letter-spacing:.05em;">⚠️ FACTORY RESET</div>
       <div style="display:flex;align-items:flex-start;gap:10px;padding:10px;background:rgba(255,61,107,.05);border:1px solid rgba(255,61,107,.2);border-radius:8px;">
-        <div style="font-size:18px;">⚠️</div>
+        <div style="font-size:var(--fs-18);">⚠️</div>
         <div style="flex:1;">
           <div style="font-size:10.5px;font-weight:700;color:var(--down);text-transform:uppercase;letter-spacing:.05em;margin-bottom:3px;">Reset complet · premier lancement</div>
-          <div style="font-size:9px;color:var(--t2);line-height:1.5;margin-bottom:8px;">
+          <div style="font-size:var(--fs-9);color:var(--t2);line-height:1.5;margin-bottom:8px;">
             Efface <strong>TOUT</strong> : comptes, trades, positions, agents évolués, archives. L'application redémarre comme à la 1ère installation.<br>
             <strong style="color:var(--down);">Action irréversible.</strong>
           </div>
-          <button onclick="_confirmFactoryReset()" style="background:var(--down);color:#fff;border:none;border-radius:7px;padding:7px 12px;font-size:10px;font-weight:700;cursor:pointer;letter-spacing:.05em;text-transform:uppercase;">🔄 Reset complet</button>
+          <button onclick="_confirmFactoryReset()" style="background:var(--down);color:#fff;border:none;border-radius:7px;padding:7px 12px;font-size:var(--fs-10);font-weight:700;cursor:pointer;letter-spacing:.05em;text-transform:uppercase;">🔄 Reset complet</button>
         </div>
       </div>
     </div>
@@ -1635,7 +1638,7 @@ function renderSettingsPanel() {
         <span class="archives-count">${archives.length}/50 · ${totalResets} reset(s)</span>
       </div>
       ${archivesHtml}
-      <div style="margin-top:10px;font-size:8px;color:var(--t3);line-height:1.5;text-align:center;">
+      <div style="margin-top:10px;font-size:var(--fs-8);color:var(--t3);line-height:1.5;text-align:center;">
         Les archives sont conservées pour que le système apprenne<br>de ses trajectoires passées · max 50 entrées · FIFO
       </div>
     </div>`;
@@ -1926,7 +1929,7 @@ function renderBrainLog() {
   const entries = (S.brainLog || []).slice(0, 6);
   if(entries.length === 0) return '';
   return `<div style="margin-top:10px;padding:8px 10px;background:var(--s2);border-radius:9px;">
-    <div style="font-size:8px;color:var(--t3);letter-spacing:.08em;margin-bottom:6px;">🧠 DÉCISIONS DU CERVEAU · ${entries.length} récentes</div>
+    <div style="font-size:var(--fs-8);color:var(--t3);letter-spacing:.08em;margin-bottom:6px;">🧠 DÉCISIONS DU CERVEAU · ${entries.length} récentes</div>
     ${entries.map(e => {
       const d = new Date(e.ts);
       const timeStr = `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
@@ -2003,13 +2006,13 @@ function _updateWakeLockButton() {
     btn.textContent = '';
     btn.innerHTML = '☀';
     btn.setAttribute('data-state', 'active');
-    btn.style.cssText = "width:28px;height:28px;border-radius:50%;border:1px solid rgba(255,183,0,.35);background:rgba(255,183,0,.08);color:#f5a01a;display:flex;align-items:center;justify-content:center;font-size:14px;cursor:pointer;-webkit-user-select:none;transition:background .15s,border-color .15s;text-align:center;line-height:1;padding:0 0 1px 1px;";
+    btn.style.cssText = "width:28px;height:28px;border-radius:50%;border:1px solid rgba(255,183,0,.35);background:rgba(255,183,0,.08);color:#f5a01a;display:flex;align-items:center;justify-content:center;font-size:var(--fs-14);cursor:pointer;-webkit-user-select:none;transition:background .15s,border-color .15s;text-align:center;line-height:1;padding:0 0 1px 1px;";
     btn.title = 'Wake Lock ON · cliquer pour désactiver';
   } else {
     // INACTIF : LUNE ☾ blanche inclinée - cercle 28px (comme ⚙)
     btn.innerHTML = '<span style="display:inline-block;transform:rotate(-25deg);">☾</span>';
     btn.setAttribute('data-state', 'inactive');
-    btn.style.cssText = "width:28px;height:28px;border-radius:50%;border:1px solid rgba(230,235,245,.35);background:rgba(230,235,245,.08);color:#e6ebf5;display:flex;align-items:center;justify-content:center;font-size:16px;cursor:pointer;-webkit-user-select:none;transition:background .15s,border-color .15s;text-align:center;line-height:1;padding:0;";
+    btn.style.cssText = "width:28px;height:28px;border-radius:50%;border:1px solid rgba(230,235,245,.35);background:rgba(230,235,245,.08);color:#e6ebf5;display:flex;align-items:center;justify-content:center;font-size:var(--fs-16);cursor:pointer;-webkit-user-select:none;transition:background .15s,border-color .15s;text-align:center;line-height:1;padding:0;";
     btn.title = 'Wake Lock OFF · cliquer pour empêcher l\'écran de s\'éteindre';
   }
 }
@@ -2372,7 +2375,7 @@ function renderAlertsSection() {
     <div class="alert-card">
       <div class="alert-card-title">
         🏆 Objectifs & Jalons
-        <span style="margin-left:auto;font-size:9px;color:var(--t3);font-weight:400;">${doneCount}/${goals.length} atteints</span>
+        <span style="margin-left:auto;font-size:var(--fs-9);color:var(--t3);font-weight:400;">${doneCount}/${goals.length} atteints</span>
       </div>
       ${goals.map(g => {
         const pct = Math.min(100, g.target > 0 ? (g.current / g.target * 100) : 0);
@@ -2408,7 +2411,7 @@ function renderHeatmapSection() {
   const hm = S.heatmap || {byHour:{},byWeekday:{},byDayHour:{},byPair:{}};
   const totalTrades = S.totalTrades || 0;
   if(totalTrades === 0) {
-    el.innerHTML = '<div class="hm-section"><div class="hm-title">⏰ Heatmap Temporelle</div><div style="text-align:center;padding:20px;font-size:10px;color:var(--t3);">📊 Se remplit après chaque trade clôturé.</div></div>';
+    el.innerHTML = '<div class="hm-section"><div class="hm-title">⏰ Heatmap Temporelle</div><div style="text-align:center;padding:20px;font-size:var(--fs-10);color:var(--t3);">📊 Se remplit après chaque trade clôturé.</div></div>';
     return;
   }
   const days = ['Dim','Lun','Mar','Mer','Jeu','Ven','Sam'];
@@ -2443,15 +2446,15 @@ function renderHeatmapSection() {
   let recos = '';
   if(hrRanked.length>0){
     const b=hrRanked[0];
-    recos += '<div class="hm-reco"><span style="font-size:14px;">✅</span><span style="color:var(--t2);">Meilleure heure : <strong style="color:var(--t1);">'+b.h+'h</strong> · '+b.count+' trades · <strong style="color:var(--up);">+$'+b.pnl.toFixed(2)+'</strong> · '+Math.round(b.wins/b.count*100)+'%WR</span></div>';
+    recos += '<div class="hm-reco"><span style="font-size:var(--fs-14);">✅</span><span style="color:var(--t2);">Meilleure heure : <strong style="color:var(--t1);">'+b.h+'h</strong> · '+b.count+' trades · <strong style="color:var(--up);">+$'+b.pnl.toFixed(2)+'</strong> · '+Math.round(b.wins/b.count*100)+'%WR</span></div>';
   }
   if(hrRanked.length>1){
     const w=hrRanked[hrRanked.length-1];
-    if(w.pnl<0) recos += '<div class="hm-reco"><span style="font-size:14px;">⚠️</span><span style="color:var(--t2);">Éviter <strong style="color:var(--t1);">'+w.h+'h</strong> · '+w.count+' trades · <strong style="color:var(--down);">$'+w.pnl.toFixed(2)+'</strong></span></div>';
+    if(w.pnl<0) recos += '<div class="hm-reco"><span style="font-size:var(--fs-14);">⚠️</span><span style="color:var(--t2);">Éviter <strong style="color:var(--t1);">'+w.h+'h</strong> · '+w.count+' trades · <strong style="color:var(--down);">$'+w.pnl.toFixed(2)+'</strong></span></div>';
   }
   if(dayRanked.length>0){
     const b=dayRanked[0];
-    recos += '<div class="hm-reco"><span style="font-size:14px;">📅</span><span style="color:var(--t2);">Meilleur jour : <strong style="color:var(--t1);">'+days[b.wd]+'</strong> · <strong style="color:var(--up);">+$'+b.pnl.toFixed(2)+'</strong></span></div>';
+    recos += '<div class="hm-reco"><span style="font-size:var(--fs-14);">📅</span><span style="color:var(--t2);">Meilleur jour : <strong style="color:var(--t1);">'+days[b.wd]+'</strong> · <strong style="color:var(--up);">+$'+b.pnl.toFixed(2)+'</strong></span></div>';
   }
 
   // Par paire
@@ -2461,11 +2464,11 @@ function renderHeatmapSection() {
   pairRows.forEach(p=>{
     const wr=p.count>0?Math.round(p.wins/p.count*100):0;
     const bh=p.bestH?(' · '+p.bestH[0]+'h best'):'';
-    pairHTML+='<div class="hm-pair-row"><div><span style="font-weight:700;color:var(--t1);">'+p.pair.replace('/USDT','')+'</span><span style="font-size:8px;color:var(--t3);margin-left:6px;">'+p.count+' trades · '+wr+'%WR'+bh+'</span></div><span style="font-family:var(--font-mono);font-weight:700;color:'+(p.pnl>=0?'var(--up)':'var(--down)')+';">'+(p.pnl>=0?'+':'')+'$'+p.pnl.toFixed(2)+'</span></div>';
+    pairHTML+='<div class="hm-pair-row"><div><span style="font-weight:700;color:var(--t1);">'+p.pair.replace('/USDT','')+'</span><span style="font-size:var(--fs-8);color:var(--t3);margin-left:6px;">'+p.count+' trades · '+wr+'%WR'+bh+'</span></div><span style="font-family:var(--font-mono);font-weight:700;color:'+(p.pnl>=0?'var(--up)':'var(--down)')+';">'+(p.pnl>=0?'+':'')+'$'+p.pnl.toFixed(2)+'</span></div>';
   });
 
   el.innerHTML =
-    '<div class="hm-section"><div class="hm-title">⏰ Heatmap Temporelle <span style="font-size:8px;color:var(--t3);font-weight:400;">'+totalTrades+' trades · clic = détails</span></div>'+g+'<div style="display:flex;gap:10px;margin-top:5px;font-size:8px;color:var(--t3);"><span>🟢 Gain</span><span>🔴 Perte</span><span>⬛ Aucun</span></div></div>'
+    '<div class="hm-section"><div class="hm-title">⏰ Heatmap Temporelle <span style="font-size:var(--fs-8);color:var(--t3);font-weight:400;">'+totalTrades+' trades · clic = détails</span></div>'+g+'<div style="display:flex;gap:10px;margin-top:5px;font-size:var(--fs-8);color:var(--t3);"><span>🟢 Gain</span><span>🔴 Perte</span><span>⬛ Aucun</span></div></div>'
     +(recos?'<div class="hm-section"><div class="hm-title">💡 Recommandations</div>'+recos+'</div>':'')
     +(pairHTML?'<div class="hm-section"><div class="hm-title">₿ Par paire</div>'+pairHTML+'</div>':'');
 }
@@ -2480,7 +2483,7 @@ function renderDrawdownSection() {
   );
 
   if(allTrades.length < 3) {
-    el.innerHTML='<div class="dd-section"><div class="dd-title">📉 Analyse Drawdown</div><div style="text-align:center;padding:20px;font-size:10px;color:var(--t3);">Minimum 3 trades nécessaires.</div></div>';
+    el.innerHTML='<div class="dd-section"><div class="dd-title">📉 Analyse Drawdown</div><div style="text-align:center;padding:20px;font-size:var(--fs-10);color:var(--t3);">Minimum 3 trades nécessaires.</div></div>';
     return;
   }
 
@@ -2548,7 +2551,7 @@ function renderDrawdownSection() {
 
   el.innerHTML=
     '<div class="dd-section">'
-      +'<div class="dd-title">📉 Analyse Drawdown Avancée <span style="font-size:8px;color:var(--t3);font-weight:400;">'+allTrades.length+' trades</span></div>'
+      +'<div class="dd-title">📉 Analyse Drawdown Avancée <span style="font-size:var(--fs-8);color:var(--t3);font-weight:400;">'+allTrades.length+' trades</span></div>'
 
       // Métriques clés
       +'<div class="dd-metric-grid">'
@@ -2560,7 +2563,7 @@ function renderDrawdownSection() {
 
       // Courbe equity SVG
       +'<div style="margin-bottom:8px;">'
-        +'<div style="font-size:9px;color:var(--t3);margin-bottom:4px;">Courbe equity cumulée</div>'
+        +'<div style="font-size:var(--fs-9);color:var(--t3);margin-bottom:4px;">Courbe equity cumulée</div>'
         +'<svg width="100%" viewBox="0 0 '+W+' '+H+'" style="display:block;border-radius:6px;background:var(--s2);">'
           +'<polyline points="'+pts+'" fill="none" stroke="'+(lastEquity>=0?'#00e87a':'#ff3d6b')+'" stroke-width="1.5"/>'
           +'<line x1="0" y1="'+(H-((0-minE)/(maxE-minE||1))*H).toFixed(1)+'" x2="'+W+'" y2="'+(H-((0-minE)/(maxE-minE||1))*H).toFixed(1)+'" stroke="rgba(255,255,255,.15)" stroke-width="0.5" stroke-dasharray="4,4"/>'
@@ -2575,11 +2578,11 @@ function renderDrawdownSection() {
         +'</div>':'')
 
       // Pires épisodes
-      +(sortedEp.length>0?'<div style="font-size:9px;color:var(--t3);margin-bottom:5px;">Pires épisodes de drawdown</div>'
-        +sortedEp.map((ep,i)=>'<div class="dd-episode"><span class="dd-episode-rank">'+['🥇','🥈','🥉','4️⃣','5️⃣'][i]+'</span><div class="dd-episode-info"><span style="color:var(--t2);font-size:10px;">Durée ~'+ep.duration+' trades · Profondeur $'+ep.depth.toFixed(2)+'</span></div><span class="dd-episode-pct">'+ep.pct.toFixed(1)+'%</span></div>').join(''):'')
+      +(sortedEp.length>0?'<div style="font-size:var(--fs-9);color:var(--t3);margin-bottom:5px;">Pires épisodes de drawdown</div>'
+        +sortedEp.map((ep,i)=>'<div class="dd-episode"><span class="dd-episode-rank">'+['🥇','🥈','🥉','4️⃣','5️⃣'][i]+'</span><div class="dd-episode-info"><span style="color:var(--t2);font-size:var(--fs-10);">Durée ~'+ep.duration+' trades · Profondeur $'+ep.depth.toFixed(2)+'</span></div><span class="dd-episode-pct">'+ep.pct.toFixed(1)+'%</span></div>').join(''):'')
 
       // Distribution pertes consécutives
-      +(consecBars?'<div style="margin-top:10px;"><div style="font-size:9px;color:var(--t3);margin-bottom:4px;">Distribution pertes consécutives (clic = détails)</div><div class="dd-streak-bar">'+consecBars+'</div><div style="display:flex;justify-content:space-between;font-size:8px;color:var(--t3);margin-top:2px;"><span>1 perte</span><span>'+Math.max(...Object.keys(consecDist).map(Number))+' pertes</span></div></div>':'')
+      +(consecBars?'<div style="margin-top:10px;"><div style="font-size:var(--fs-9);color:var(--t3);margin-bottom:4px;">Distribution pertes consécutives (clic = détails)</div><div class="dd-streak-bar">'+consecBars+'</div><div style="display:flex;justify-content:space-between;font-size:var(--fs-8);color:var(--t3);margin-top:2px;"><span>1 perte</span><span>'+Math.max(...Object.keys(consecDist).map(Number))+' pertes</span></div></div>':'')
 
     +'</div>';
 }
@@ -2618,7 +2621,7 @@ function initWhatIfSection() {
   el.innerHTML = `
     <div class="wi-section">
       <div class="wi-title">🔮 Simulation What-If</div>
-      <div style="font-size:9px;color:var(--t3);margin-bottom:10px;">Modifie les paramètres pour voir l'impact sur tes profits.</div>
+      <div style="font-size:var(--fs-9);color:var(--t3);margin-bottom:10px;">Modifie les paramètres pour voir l'impact sur tes profits.</div>
 
       <div class="wi-slider-row">
         <span class="wi-slider-lbl">💰 Stake / trade</span>
@@ -2717,7 +2720,7 @@ function updateWhatIf() {
         <span class="wi-result-lbl">Frais totaux</span>
       </div>
     </div>
-    <div style="margin-top:8px;padding:6px 10px;background:rgba(255,255,255,.03);border-radius:8px;font-size:9px;color:var(--t3);">
+    <div style="margin-top:8px;padding:6px 10px;background:rgba(255,255,255,.03);border-radius:8px;font-size:var(--fs-9);color:var(--t3);">
       ${res.nWins} gains (+$${res.grossWin.toFixed(2)}) · ${res.nLoss} pertes (-$${res.grossLoss.toFixed(2)}) · Pire série: ~${res.maxConsecLoss} pertes cons.
       ${res.expectancy < 0 ? '<br><span style="color:var(--down);font-weight:700;">⚠ Espérance négative — stratégie non rentable à ces paramètres</span>' : ''}
     </div>`;
@@ -2730,7 +2733,7 @@ function updateWhatIf() {
       const realWR  = allT.filter(t=>(t.pnlUsdt||0)>0).length/allT.length*100;
       const diff    = res.netPnl - realPnl;
       cmpEl.innerHTML = `
-        <div style="font-size:9px;font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:.08em;margin-bottom:5px;">Comparaison avec tes vrais trades</div>
+        <div style="font-size:var(--fs-9);font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:.08em;margin-bottom:5px;">Comparaison avec tes vrais trades</div>
         <div class="wi-compare-row">
           <span style="color:var(--t2);">P&L réel (${allT.length} trades)</span>
           <span style="font-family:var(--font-mono);font-weight:700;color:${realPnl>=0?'var(--up)':'var(--down)'};">${realPnl>=0?'+':''}$${realPnl.toFixed(2)}</span>
@@ -2761,7 +2764,7 @@ function initBacktestSection() {
   const pairOpts = pairs.map(p=>`<option value="${p}">${p}</option>`).join('');
   el.innerHTML = `
     <div class="bt-section">
-      <div class="bt-title">📊 Backtesting Rapide <span style="font-size:8px;color:var(--t3);font-weight:400;">Données Binance réelles</span></div>
+      <div class="bt-title">📊 Backtesting Rapide <span style="font-size:var(--fs-8);color:var(--t3);font-weight:400;">Données Binance réelles</span></div>
       <div class="bt-controls">
         <div class="bt-control">
           <label>Paire</label>
@@ -2893,7 +2896,7 @@ async function runBacktest() {
 
     if(trades.length === 0) {
       res.style.display='block';
-      res.innerHTML='<div style="text-align:center;padding:16px;font-size:10px;color:var(--t3);">Aucun signal détecté sur cette période. Essaie un timeframe ou seuil différent.</div>';
+      res.innerHTML='<div style="text-align:center;padding:16px;font-size:var(--fs-10);color:var(--t3);">Aucun signal détecté sur cette période. Essaie un timeframe ou seuil différent.</div>';
       return;
     }
 
@@ -2929,13 +2932,13 @@ async function runBacktest() {
         <div class="bt-metric"><span class="bt-metric-val" style="color:${pf>=1.5?'var(--up)':pf>=1?'var(--gold)':'var(--down)'};">${pf.toFixed(2)}</span><span class="bt-metric-lbl">Profit Factor</span></div>
       </div>
       <div style="margin-bottom:8px;">
-        <div style="font-size:8px;color:var(--t3);margin-bottom:3px;">Equity curve backtest (${candles.length} bougies ${tf})</div>
+        <div style="font-size:var(--fs-8);color:var(--t3);margin-bottom:3px;">Equity curve backtest (${candles.length} bougies ${tf})</div>
         <svg width="100%" viewBox="0 0 ${W} ${H}" style="display:block;background:var(--s2);border-radius:6px;">
           <line x1="0" y1="${(H-((0-minE)/(maxE-minE||1))*H).toFixed(1)}" x2="${W}" y2="${(H-((0-minE)/(maxE-minE||1))*H).toFixed(1)}" stroke="rgba(255,255,255,.15)" stroke-width="0.5" stroke-dasharray="3,3"/>
           <polyline points="${epts}" fill="none" stroke="${netPnl>=0?'#00e87a':'#ff3d6b'}" stroke-width="1.5"/>
         </svg>
       </div>
-      <div style="font-size:9px;color:var(--t3);margin-bottom:5px;">5 derniers trades</div>
+      <div style="font-size:var(--fs-9);color:var(--t3);margin-bottom:5px;">5 derniers trades</div>
       <div class="bt-log">
         ${last5.map(t=>`<div class="bt-trade-row">
           <span style="color:${t.side==='long'?'var(--up)':'var(--down)'};">${t.side==='long'?'↑':'↓'} ${t.reason}</span>
@@ -2943,11 +2946,11 @@ async function runBacktest() {
           <span style="font-weight:700;color:${t.netPnl>=0?'var(--up)':'var(--down)'};">${t.netPnl>=0?'+':''}$${t.netPnl.toFixed(2)}</span>
         </div>`).join('')}
       </div>
-      <div style="font-size:8px;color:var(--t3);margin-top:6px;text-align:center;">Stratégie EMA 9/21 · TP 3% / SL 2% · frais 0.1% · données ${pair}</div>`;
+      <div style="font-size:var(--fs-8);color:var(--t3);margin-top:6px;text-align:center;">Stratégie EMA 9/21 · TP 3% / SL 2% · frais 0.1% · données ${pair}</div>`;
 
   } catch(e) {
     res.style.display='block';
-    res.innerHTML=`<div style="text-align:center;padding:12px;font-size:10px;color:var(--down);">⚠ Erreur : ${e.message}<br><span style="color:var(--t3);">Vérifie ta connexion internet</span></div>`;
+    res.innerHTML=`<div style="text-align:center;padding:12px;font-size:var(--fs-10);color:var(--down);">⚠ Erreur : ${e.message}<br><span style="color:var(--t3);">Vérifie ta connexion internet</span></div>`;
   } finally {
     btn.disabled=false;
     btn.textContent='▶ Lancer le Backtest';
@@ -2968,7 +2971,7 @@ function initReplaySection() {
   if(!el) return;
   el.innerHTML = `
     <div class="rp-section">
-      <div class="rp-title">⏪ Replay de Session <span style="font-size:8px;color:var(--t3);font-weight:400;" id="rpEventCount">—</span></div>
+      <div class="rp-title">⏪ Replay de Session <span style="font-size:var(--fs-8);color:var(--t3);font-weight:400;" id="rpEventCount">—</span></div>
       <div class="rp-controls">
         <button class="rp-btn play" id="rpPlayBtn" onclick="replayPlay()">▶ Play</button>
         <button class="rp-btn reset" onclick="replayReset()">↺ Reset</button>
@@ -2978,7 +2981,7 @@ function initReplaySection() {
           <option value="5">×5</option>
           <option value="10">×10</option>
         </select>
-        <span style="font-size:9px;color:var(--t3);" id="rpClock">—</span>
+        <span style="font-size:var(--fs-9);color:var(--t3);" id="rpClock">—</span>
       </div>
       <div class="rp-progress-wrap">
         <div class="rp-progress-bar"><div class="rp-progress-fill" id="rpFill" style="width:0%"></div></div>
@@ -2987,7 +2990,7 @@ function initReplaySection() {
       <!-- Stats en temps réel -->
       <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-bottom:10px;" id="rpStats"></div>
       <!-- Stream d'événements -->
-      <div style="font-size:9px;color:var(--t3);margin-bottom:4px;">Événements</div>
+      <div style="font-size:var(--fs-9);color:var(--t3);margin-bottom:4px;">Événements</div>
       <div class="rp-stream" id="rpStream"></div>
     </div>`;
 
@@ -3236,19 +3239,19 @@ function renderCoachSection() {
     <div class="coach-section">
       <div class="coach-title">
         🎓 Coach IA
-        <span style="font-size:9px;color:var(--t3);font-weight:400;">${n} trades analysés</span>
+        <span style="font-size:var(--fs-9);color:var(--t3);font-weight:400;">${n} trades analysés</span>
       </div>
 
       <!-- Score global -->
       <div style="margin-bottom:12px;">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
-          <span style="font-size:9px;color:var(--t3);">Score de performance global</span>
-          <span style="font-size:16px;font-weight:800;font-family:var(--font-mono);color:${scoreCol};">${score}/100</span>
+          <span style="font-size:var(--fs-9);color:var(--t3);">Score de performance global</span>
+          <span style="font-size:var(--fs-16);font-weight:800;font-family:var(--font-mono);color:${scoreCol};">${score}/100</span>
         </div>
         <div class="coach-score-bar">
           <div class="coach-score-fill" style="width:${score}%;background:${scoreCol};"></div>
         </div>
-        <div style="font-size:9px;color:${scoreCol};text-align:right;">${score>=75?'✅ Excellent':score>=60?'🟡 Bon':score>=40?'🟠 À améliorer':'🔴 Attention'}</div>
+        <div style="font-size:var(--fs-9);color:${scoreCol};text-align:right;">${score>=75?'✅ Excellent':score>=60?'🟡 Bon':score>=40?'🟠 À améliorer':'🔴 Attention'}</div>
       </div>
 
       <!-- Conseils -->
@@ -3359,7 +3362,7 @@ function renderPairScoreSection() {
     <div class="sc-section">
       <div class="sc-title">
         🎯 Score de Confiance par Paire
-        <span style="font-size:8px;color:var(--t3);font-weight:400;">Mis à jour en temps réel</span>
+        <span style="font-size:var(--fs-8);color:var(--t3);font-weight:400;">Mis à jour en temps réel</span>
       </div>
       ${scores.map(s=>{
         const ps = S.pairStates[s.pair]||{};
@@ -3370,7 +3373,7 @@ function renderPairScoreSection() {
           <div class="sc-pair-header">
             <div>
               <span class="sc-pair-name" style="color:${PAIRS[s.pair]?.color||'var(--t1)'};">${s.pair.replace('/USDT','')}</span>
-              ${hasPos?`<span style="font-size:8px;background:rgba(167,139,250,.15);color:var(--pur);padding:1px 5px;border-radius:4px;margin-left:6px;">POS</span>`:''}
+              ${hasPos?`<span style="font-size:var(--fs-8);background:rgba(167,139,250,.15);color:var(--pur);padding:1px 5px;border-radius:4px;margin-left:6px;">POS</span>`:''}
             </div>
             <div style="text-align:right;">
               <span class="sc-pair-score" style="color:${s.color};">${s.score}</span>
@@ -3475,7 +3478,7 @@ async function refreshSentimentNews(force) {
 
   // Afficher loading
   const el = document.getElementById('sentimentNewsSection');
-  if(el) el.innerHTML='<div class="sn-section"><div class="sn-title">📰 Sentiment News</div><div style="text-align:center;padding:20px;font-size:10px;color:var(--t3);">⏳ Chargement des news…</div></div>';
+  if(el) el.innerHTML='<div class="sn-section"><div class="sn-title">📰 Sentiment News</div><div style="text-align:center;padding:20px;font-size:var(--fs-10);color:var(--t3);">⏳ Chargement des news…</div></div>';
 
   const articles = await _fetchCryptoNews();
   if(Array.isArray(articles) && articles.length) {
@@ -3508,8 +3511,8 @@ function renderSentimentNewsSection() {
       <div class="sn-section">
         <div class="sn-title">📰 Sentiment News & Social</div>
         <div style="text-align:center;padding:16px;">
-          <div style="font-size:10px;color:var(--t3);margin-bottom:10px;">Analyse NLP des dernières actualités crypto (CryptoCompare)</div>
-          <button onclick="refreshSentimentNews(true)" style="background:rgba(56,212,245,.12);border:1px solid rgba(56,212,245,.3);border-radius:8px;color:var(--ice);font-size:11px;font-weight:700;padding:8px 20px;cursor:pointer;font-family:inherit;">📡 Charger les news</button>
+          <div style="font-size:var(--fs-10);color:var(--t3);margin-bottom:10px;">Analyse NLP des dernières actualités crypto (CryptoCompare)</div>
+          <button onclick="refreshSentimentNews(true)" style="background:rgba(56,212,245,.12);border:1px solid rgba(56,212,245,.3);border-radius:8px;color:var(--ice);font-size:var(--fs-11);font-weight:700;padding:8px 20px;cursor:pointer;font-family:inherit;">📡 Charger les news</button>
         </div>
       </div>`;
     return;
@@ -3549,7 +3552,7 @@ function renderSentimentNewsSection() {
     <div class="sn-section">
       <div class="sn-title">
         📰 Sentiment News & Social
-        <button onclick="refreshSentimentNews(true)" style="font-size:8px;background:rgba(255,255,255,.06);border:1px solid var(--border);border-radius:5px;color:var(--t3);padding:2px 7px;cursor:pointer;font-family:inherit;">🔄 ${ago}</button>
+        <button onclick="refreshSentimentNews(true)" style="font-size:var(--fs-8);background:rgba(255,255,255,.06);border:1px solid var(--border);border-radius:5px;color:var(--t3);padding:2px 7px;cursor:pointer;font-family:inherit;">🔄 ${ago}</button>
       </div>
 
       <!-- Score global -->
@@ -3560,13 +3563,13 @@ function renderSentimentNewsSection() {
       <div class="sn-gauge">
         <div class="sn-gauge-cursor" style="left:${pct}%;color:${col};"></div>
       </div>
-      <div style="display:flex;justify-content:space-between;font-size:8px;color:var(--t3);margin-bottom:10px;">
+      <div style="display:flex;justify-content:space-between;font-size:var(--fs-8);color:var(--t3);margin-bottom:10px;">
         <span>0 — Très baissier</span><span>50 — Neutre</span><span>100 — Très haussier</span>
       </div>
 
       <!-- Mentions par paire -->
       ${Object.keys(pairMentions).length>0?`
-        <div style="font-size:9px;color:var(--t3);margin-bottom:5px;">Mentions par paire dans les news</div>
+        <div style="font-size:var(--fs-9);color:var(--t3);margin-bottom:5px;">Mentions par paire dans les news</div>
         ${Object.entries(pairMentions).sort((a,b)=>b[1].count-a[1].count).slice(0,5).map(([pair,d])=>{
           const sentCol = d.score>0.2?'var(--up)':d.score<-0.2?'var(--down)':'var(--t3)';
           const sentLbl = d.score>0.2?'📈':d.score<-0.2?'📉':'➡️';
@@ -3580,7 +3583,7 @@ function renderSentimentNewsSection() {
       `:''}
 
       <!-- Articles récents analysés -->
-      <div style="font-size:9px;color:var(--t3);margin-bottom:5px;">Dernières actualités analysées (${analyzed.length})</div>
+      <div style="font-size:var(--fs-9);color:var(--t3);margin-bottom:5px;">Dernières actualités analysées (${analyzed.length})</div>
       ${analyzed.slice(0,8).map(a=>{
         const sentCol = a.sentiment==='bull'?'var(--up)':a.sentiment==='bear'?'var(--down)':'var(--t3)';
         const ago2 = a.published_on ? Math.floor((Date.now()/1000-a.published_on)/3600)+'h' : '—';
@@ -3761,7 +3764,7 @@ function renderMlPredSection() {
     <div class="ml-section">
       <div class="ml-title">
         🔮 Prédiction ML — Prochaine Bougie
-        <span style="font-size:8px;color:var(--t3);font-weight:400;">Ensemble 4 modèles</span>
+        <span style="font-size:var(--fs-8);color:var(--t3);font-weight:400;">Ensemble 4 modèles</span>
       </div>
 
       <!-- Sélecteur paire -->
@@ -3784,19 +3787,19 @@ function renderMlPredSection() {
         </div>
 
         <!-- Modèles individuels -->
-        <div style="font-size:8px;color:var(--t3);margin-bottom:5px;">Votes des modèles</div>
+        <div style="font-size:var(--fs-8);color:var(--t3);margin-bottom:5px;">Votes des modèles</div>
         ${pred.models.map(m=>{
           const mc = m.dir>0?'var(--up)':m.dir<0?'var(--down)':'var(--t3)';
           const pct= Math.round(m.conf*100);
           return `<div class="ml-model-row">
-            <span style="font-size:11px;">${m.icon}</span>
-            <span style="color:var(--t2);min-width:110px;font-size:9px;">${m.name}</span>
+            <span style="font-size:var(--fs-11);">${m.icon}</span>
+            <span style="color:var(--t2);min-width:110px;font-size:var(--fs-9);">${m.name}</span>
             <div class="ml-model-bar-wrap">
               <div class="ml-model-bar">
                 <div class="ml-model-fill" style="width:${pct}%;background:${mc};"></div>
               </div>
             </div>
-            <span style="color:${mc};font-weight:700;font-size:10px;min-width:36px;text-align:right;">
+            <span style="color:${mc};font-weight:700;font-size:var(--fs-10);min-width:36px;text-align:right;">
               ${m.dir>0?'↑':m.dir<0?'↓':'→'} ${pct}%
             </span>
           </div>`;
@@ -3818,16 +3821,16 @@ function renderMlPredSection() {
           </div>
         </div>
 
-        <div style="font-size:8px;color:var(--t3);margin-top:6px;text-align:center;">
+        <div style="font-size:var(--fs-8);color:var(--t3);margin-top:6px;text-align:center;">
           ⚠️ Prédiction indicative · pas un conseil financier · ${pred.confidence<50?'signal faible':''}
         </div>
       </div>
 
       <!-- Note méthodologique -->
-      <div style="font-size:8px;color:var(--t3);line-height:1.5;padding:6px;background:rgba(255,255,255,.02);border-radius:6px;">
+      <div style="font-size:var(--fs-8);color:var(--t3);line-height:1.5;padding:6px;background:rgba(255,255,255,.02);border-radius:6px;">
         Ensemble de 4 modèles ML légers : Régression linéaire (30%) · RSI Momentum (25%) · Bollinger (25%) · MACD (20%). Données : ${Object.keys(PAIRS||{}).length*0||(S.pairStates?.[_mlSelectedPair]?.candles?.length||0)} bougies.
       </div>
-      ` : '<div style="text-align:center;padding:16px;font-size:10px;color:var(--t3);">Données insuffisantes pour la prédiction.</div>'}
+      ` : '<div style="text-align:center;padding:16px;font-size:var(--fs-10);color:var(--t3);">Données insuffisantes pour la prédiction.</div>'}
     </div>`;
 }
 window.renderMlPredSection = renderMlPredSection;
@@ -3845,7 +3848,7 @@ function renderAgentHistorySection() {
     <div class="ah-section">
       <div class="ah-title">
         🤖 Historique des Agents
-        <span style="font-size:8px;color:var(--t3);font-weight:400;">${agents.length} agents · Gen ${S._genCount||1}</span>
+        <span style="font-size:var(--fs-8);color:var(--t3);font-weight:400;">${agents.length} agents · Gen ${S._genCount||1}</span>
       </div>
       <div class="ah-tabs">
         <button class="ah-tab ${_ahTab==='evolution'?'active':''}" onclick="_ahTab='evolution';renderAgentHistorySection();">📜 Évolution</button>
@@ -3861,7 +3864,7 @@ function renderAgentHistorySection() {
   if(_ahTab === 'evolution') {
     // Journal d'évolution
     if(evoLog.length === 0) {
-      content.innerHTML = '<div style="text-align:center;padding:16px;font-size:10px;color:var(--t3);">Aucune évolution enregistrée — les agents évoluent après les trades.</div>';
+      content.innerHTML = '<div style="text-align:center;padding:16px;font-size:var(--fs-10);color:var(--t3);">Aucune évolution enregistrée — les agents évoluent après les trades.</div>';
       return;
     }
     content.innerHTML = evoLog.slice(0,20).map(e=>{
@@ -3891,14 +3894,14 @@ function renderAgentHistorySection() {
       const fitPct = Math.min(100, fit/maxFit*100);
       return `<div class="ah-agent-card">
         <div class="ah-agent-header">
-          <span style="font-size:18px;">${a.emoji||'🤖'}</span>
+          <span style="font-size:var(--fs-18);">${a.emoji||'🤖'}</span>
           <div style="flex:1;">
             <div class="ah-agent-name">${a.name||'Agent'}</div>
-            <div style="font-size:8px;color:var(--t3);">${a.type||''} · ${a.role||''}</div>
+            <div style="font-size:var(--fs-8);color:var(--t3);">${a.type||''} · ${a.role||''}</div>
           </div>
           <div style="text-align:right;">
             <span class="ah-agent-fit" style="color:${fitCol};">${Math.floor(fit)} T$</span>
-            <div style="font-size:8px;color:${score>=0?'var(--up)':'var(--down)'};">${score>=0?'+':''}${score.toFixed(3)}</div>
+            <div style="font-size:var(--fs-8);color:${score>=0?'var(--up)':'var(--down)'};">${score>=0?'+':''}${score.toFixed(3)}</div>
           </div>
         </div>
         <div class="ah-fit-bar">
@@ -3961,27 +3964,27 @@ function renderAgentHistorySection() {
           {v:broken, l:'Cassés (<100)', c:broken>0?'var(--down)':'var(--t3)'},
           {v:globalWR+'%', l:'WR global agents', c:globalWR>=55?'var(--up)':'var(--down)'},
         ].map(m=>`<div style="background:var(--s2);border:1px solid var(--border);border-radius:8px;padding:7px;text-align:center;">
-          <span style="font-size:14px;font-weight:800;font-family:var(--font-mono);color:${m.c};display:block;">${m.v}</span>
-          <span style="font-size:8px;color:var(--t3);">${m.l}</span>
+          <span style="font-size:var(--fs-14);font-weight:800;font-family:var(--font-mono);color:${m.c};display:block;">${m.v}</span>
+          <span style="font-size:var(--fs-8);color:var(--t3);">${m.l}</span>
         </div>`).join('')}
       </div>
-      <div style="font-size:9px;color:var(--t3);margin-bottom:5px;">Distribution fitness</div>
+      <div style="font-size:var(--fs-9);color:var(--t3);margin-bottom:5px;">Distribution fitness</div>
       ${[
         {lbl:'⭐ Élites ≥1500',n:dist.elite,col:'var(--up)'},
         {lbl:'✅ Bons 800-1499',n:dist.bon,col:'var(--ice)'},
         {lbl:'⚡ Moyens 300-799',n:dist.moyen,col:'var(--gold)'},
         {lbl:'⚠ Faibles <300',n:dist.faible,col:'var(--down)'},
-      ].map(d=>`<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;font-size:10px;">
+      ].map(d=>`<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;font-size:var(--fs-10);">
         <span style="min-width:110px;color:var(--t2);">${d.lbl}</span>
         <div style="flex:1;height:6px;background:rgba(255,255,255,.06);border-radius:100px;overflow:hidden;">
           <div style="height:100%;width:${Math.round(d.n/distMax*100)}%;background:${d.col};border-radius:100px;"></div>
         </div>
         <span style="font-weight:700;color:${d.col};min-width:20px;text-align:right;">${d.n}</span>
       </div>`).join('')}
-      <div style="font-size:9px;color:var(--t3);margin-top:8px;margin-bottom:5px;">Agents par rôle</div>
+      <div style="font-size:var(--fs-9);color:var(--t3);margin-top:8px;margin-bottom:5px;">Agents par rôle</div>
       ${Object.entries(agents.reduce((m,a)=>{const r=a.role||a.type||'?';m[r]=(m[r]||0)+1;return m;},{}))
         .sort((a,b)=>b[1]-a[1]).slice(0,6).map(([role,n])=>`
-        <div style="display:flex;justify-content:space-between;padding:3px 0;font-size:9px;border-bottom:1px solid rgba(255,255,255,.04);">
+        <div style="display:flex;justify-content:space-between;padding:3px 0;font-size:var(--fs-9);border-bottom:1px solid rgba(255,255,255,.04);">
           <span style="color:var(--t2);">${role}</span>
           <span style="font-family:var(--font-mono);font-weight:700;color:var(--t1);">${n}</span>
         </div>`).join('')}`;
@@ -4126,7 +4129,7 @@ function renderLearningAccelSection() {
     <div class="la-section">
       <div class="la-title">
         🏋️ Apprentissage Accéléré
-        <span style="font-size:8px;color:var(--t3);font-weight:400;">Mode actif : ${_LA_MODES[window._LA_MODE]?.label||'Normal'}</span>
+        <span style="font-size:var(--fs-8);color:var(--t3);font-weight:400;">Mode actif : ${_LA_MODES[window._LA_MODE]?.label||'Normal'}</span>
       </div>
 
       <!-- Modes -->
@@ -4160,7 +4163,7 @@ function renderLearningAccelSection() {
       <!-- Session en cours -->
       ${window._LA_SESSION_RUNNING || sess.trades>0 ? `
         <div style="background:rgba(167,139,250,.06);border:1px solid rgba(167,139,250,.2);border-radius:8px;padding:8px 10px;margin-bottom:8px;">
-          <div style="font-size:9px;font-weight:700;color:var(--pur);margin-bottom:5px;">
+          <div style="font-size:var(--fs-9);font-weight:700;color:var(--pur);margin-bottom:5px;">
             ${window._LA_SESSION_RUNNING ? '⚡ Session en cours…' : '✅ Dernière session'}
           </div>
           ${window._LA_SESSION_RUNNING ? `<div class="la-progress"><div class="la-progress-fill" style="width:${Math.min(100,sess.trades/30*100).toFixed(0)}%;background:var(--pur);animation:none;"></div></div>` : ''}
@@ -4178,10 +4181,10 @@ function renderLearningAccelSection() {
         ${window._LA_SESSION_RUNNING ? '⏸ Arrêter la session' : '▶ Lancer session d\'entraînement'}
       </button>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:6px;">
-        <button onclick="boostAllAgents(50)" style="padding:7px;border-radius:7px;background:rgba(0,232,122,.1);border:1px solid rgba(0,232,122,.25);color:var(--up);font-size:10px;font-weight:700;cursor:pointer;font-family:inherit;">💉 +50 T$ tous</button>
-        <button onclick="boostAllAgents(200)" style="padding:7px;border-radius:7px;background:rgba(56,212,245,.1);border:1px solid rgba(56,212,245,.25);color:var(--ice);font-size:10px;font-weight:700;cursor:pointer;font-family:inherit;">💉 +200 T$ tous</button>
+        <button onclick="boostAllAgents(50)" style="padding:7px;border-radius:7px;background:rgba(0,232,122,.1);border:1px solid rgba(0,232,122,.25);color:var(--up);font-size:var(--fs-10);font-weight:700;cursor:pointer;font-family:inherit;">💉 +50 T$ tous</button>
+        <button onclick="boostAllAgents(200)" style="padding:7px;border-radius:7px;background:rgba(56,212,245,.1);border:1px solid rgba(56,212,245,.25);color:var(--ice);font-size:var(--fs-10);font-weight:700;cursor:pointer;font-family:inherit;">💉 +200 T$ tous</button>
       </div>
-      <div style="font-size:8px;color:var(--t3);margin-top:6px;text-align:center;">Le mode accéléré s'applique automatiquement à chaque trade réel.</div>
+      <div style="font-size:var(--fs-8);color:var(--t3);margin-top:6px;text-align:center;">Le mode accéléré s'applique automatiquement à chaque trade réel.</div>
     </div>`;
 }
 window.renderLearningAccelSection = renderLearningAccelSection;
@@ -4252,23 +4255,23 @@ function renderStratCompSection() {
     <div class="cs-section">
       <div class="cs-title">
         ⚔️ Comparateur de Stratégies
-        <span style="font-size:8px;color:${enabled?'var(--up)':'var(--t3)'};font-weight:400;">${enabled?'🟢 A/B Actif':'⚫ Inactif'}</span>
+        <span style="font-size:var(--fs-8);color:${enabled?'var(--up)':'var(--t3)'};font-weight:400;">${enabled?'🟢 A/B Actif':'⚫ Inactif'}</span>
       </div>
 
       <!-- Onglets -->
       <div style="display:flex;gap:6px;margin-bottom:10px;">
-        ${['live','params','history'].map(t=>`<button style="padding:4px 10px;border-radius:6px;font-size:9px;font-weight:700;cursor:pointer;border:1px solid;font-family:inherit;background:${_csTab===t?'rgba(167,139,250,.15)':'var(--s2)'};border-color:${_csTab===t?'rgba(167,139,250,.4)':'var(--border)'};color:${_csTab===t?'var(--pur)':'var(--t2)'};" onclick="_csTab='${t}';renderStratCompSection();">${t==='live'?'📊 Live':t==='params'?'⚙️ Params':'📜 Historique'}</button>`).join('')}
-        <button onclick="toggleAbTesting()" style="margin-left:auto;padding:4px 10px;border-radius:6px;font-size:9px;font-weight:700;cursor:pointer;font-family:inherit;background:${enabled?'rgba(0,232,122,.1)':'rgba(255,255,255,.06)'};border:1px solid ${enabled?'rgba(0,232,122,.3)':'var(--border)'};color:${enabled?'var(--up)':'var(--t3)'};">${enabled?'✓ Actif':'Activer'}</button>
+        ${['live','params','history'].map(t=>`<button style="padding:4px 10px;border-radius:6px;font-size:var(--fs-9);font-weight:700;cursor:pointer;border:1px solid;font-family:inherit;background:${_csTab===t?'rgba(167,139,250,.15)':'var(--s2)'};border-color:${_csTab===t?'rgba(167,139,250,.4)':'var(--border)'};color:${_csTab===t?'var(--pur)':'var(--t2)'};" onclick="_csTab='${t}';renderStratCompSection();">${t==='live'?'📊 Live':t==='params'?'⚙️ Params':'📜 Historique'}</button>`).join('')}
+        <button onclick="toggleAbTesting()" style="margin-left:auto;padding:4px 10px;border-radius:6px;font-size:var(--fs-9);font-weight:700;cursor:pointer;font-family:inherit;background:${enabled?'rgba(0,232,122,.1)':'rgba(255,255,255,.06)'};border:1px solid ${enabled?'rgba(0,232,122,.3)':'var(--border)'};color:${enabled?'var(--up)':'var(--t3)'};">${enabled?'✓ Actif':'Activer'}</button>
       </div>
 
       ${_csTab === 'live' ? `
         <!-- Résultats en temps réel -->
         ${leader ? `
         <div class="cs-verdict ${leader==='A'?'a-wins':leader==='B'?'b-wins':'tie'}">
-          <div style="font-size:14px;font-weight:800;color:${leader==='A'?'var(--ice)':leader==='B'?'var(--pur)':'var(--gold)'};">
+          <div style="font-size:var(--fs-14);font-weight:800;color:${leader==='A'?'var(--ice)':leader==='B'?'var(--pur)':'var(--gold)'};">
             ${leader==='TIE'?'⚖️ Égalité':'🏆 Stratégie '+leader+' en tête'}
           </div>
-          <div style="font-size:9px;color:var(--t3);margin-top:3px;">
+          <div style="font-size:var(--fs-9);color:var(--t3);margin-top:3px;">
             ${leader!=='TIE'?(leader==='A'?armA.label:armB.label)+' · '+(leader==='A'?armA.trades:armB.trades)+' trades':'Performances équivalentes'}
           </div>
         </div>` : ''}
@@ -4292,31 +4295,31 @@ function renderStratCompSection() {
           </div>`).join('')}
         </div>
 
-        <div style="font-size:9px;color:var(--t3);text-align:center;margin-top:4px;">
+        <div style="font-size:var(--fs-9);color:var(--t3);text-align:center;margin-top:4px;">
           Prochain trade : Stratégie <strong style="color:var(--t1);">${ab.nextAssign||'A'}</strong> · Génération ${ab.generation||0}
         </div>
-        <button onclick="resetAbTesting()" style="width:100%;margin-top:8px;padding:7px;border-radius:7px;background:rgba(255,255,255,.04);border:1px solid var(--border);color:var(--t3);font-size:10px;cursor:pointer;font-family:inherit;">↺ Remettre à zéro les compteurs</button>
+        <button onclick="resetAbTesting()" style="width:100%;margin-top:8px;padding:7px;border-radius:7px;background:rgba(255,255,255,.04);border:1px solid var(--border);color:var(--t3);font-size:var(--fs-10);cursor:pointer;font-family:inherit;">↺ Remettre à zéro les compteurs</button>
       ` : _csTab === 'params' ? `
         <!-- Paramètres des stratégies -->
-        <div style="font-size:9px;color:var(--t3);margin-bottom:8px;">
+        <div style="font-size:var(--fs-9);color:var(--t3);margin-bottom:8px;">
           Stratégie A est fixe (référence). Modifie la stratégie B (challenger) :
         </div>
         ${paramDefs.map(p=>`
           <div class="cs-param-row">
             <span class="cs-param-lbl">${p.label}</span>
             <div style="display:flex;align-items:center;gap:8px;">
-              <span style="font-size:9px;color:var(--ice);min-width:36px;text-align:center;">${paramsA[p.key]||'—'}</span>
-              <span style="font-size:9px;color:var(--t3);">→</span>
+              <span style="font-size:var(--fs-9);color:var(--ice);min-width:36px;text-align:center;">${paramsA[p.key]||'—'}</span>
+              <span style="font-size:var(--fs-9);color:var(--t3);">→</span>
               <input type="number" class="cs-param-input" value="${paramsB[p.key]||''}" min="${p.min}" max="${p.max}" step="${p.step}"
                 onchange="updateStratBParam('${p.key}',this.value)" style="color:var(--pur);">
             </div>
           </div>`).join('')}
-        <div style="font-size:8px;color:var(--t3);margin-top:8px;line-height:1.5;">
+        <div style="font-size:var(--fs-8);color:var(--t3);margin-top:8px;line-height:1.5;">
           SL/TP en multiple d'ATR · Stake factor multiplie la mise (0.5 = moitié, 1.5 = +50%)
         </div>
       ` : `
         <!-- Historique des verdicts -->
-        ${history.length===0 ? `<div style="text-align:center;padding:16px;font-size:10px;color:var(--t3);">Aucun verdict encore — le verdict se déclenche après 50 trades par stratégie.</div>` :
+        ${history.length===0 ? `<div style="text-align:center;padding:16px;font-size:var(--fs-10);color:var(--t3);">Aucun verdict encore — le verdict se déclenche après 50 trades par stratégie.</div>` :
         history.map(v=>`
           <div class="cs-history-item">
             <span style="color:${v.winner==='A'?'var(--ice)':'var(--pur)'};">🏆 Stratégie ${v.winner||'?'} gagne</span>
@@ -4446,7 +4449,7 @@ function renderAnomalySection() {
     <div class="da-section">
       <div class="da-title">
         🔍 Détecteur d'Anomalies
-        <span style="font-size:9px;font-weight:700;color:${isOk?'var(--up)':critCount>0?'var(--down)':'var(--gold)'};">
+        <span style="font-size:var(--fs-9);font-weight:700;color:${isOk?'var(--up)':critCount>0?'var(--down)':'var(--gold)'};">
           ${isOk?'✅ OK':critCount>0?'🔴 '+critCount+' critique(s)':'🟡 '+warnCount+' alerte(s)'}
         </span>
       </div>
@@ -4475,7 +4478,7 @@ function renderAnomalySection() {
           </div>
         </div>`).join('')}
 
-      <div style="font-size:8px;color:var(--t3);margin-top:8px;text-align:center;">
+      <div style="font-size:var(--fs-8);color:var(--t3);margin-top:8px;text-align:center;">
         Analyse en temps réel · ${new Date().toLocaleTimeString()}
       </div>
     </div>`;
