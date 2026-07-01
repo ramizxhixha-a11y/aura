@@ -1,4 +1,4 @@
-// [ETAPE 3 · SEPARATION 3 MODES] play/pause PAR MODE (defaut pause, memoire par mode, auto-resume par mode) · 01/07/2026
+// [ETAPE 3 · SEPARATION 3 MODES] play/pause PAR MODE (defaut pause, memoire par mode, auto-resume par mode) + play bloque si compte trading vide · 01/07/2026
 /* ═══════════════════════════════════════════════════════════
    AURA8 · js/01-chrono-network.js
    ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓
@@ -248,6 +248,19 @@ window._auraGetGlobalS = _auraGetGlobalS;
     return MAP[mode] || MAP['sim'];
   }
   window.startSim = function startSim() {
+    // ETAPE 3b · play IMPOSSIBLE si le compte TRADING du mode actif est vide.
+    // (L'injection alimente la CAISSE ; il faut transferer vers le trading avant.)
+    try {
+      var _gS = window._auraGetGlobalS ? window._auraGetGlobalS() : null;
+      if (_gS && (Number(_gS.tradingAccount) || 0) <= 0) {
+        if ((Number(_gS.cashAccount) || 0) > 0)
+          _toast('\u26A0 Compte trading vide \u2014 transf\u00E8re de la caisse vers le trading avant de lancer', 'warn');
+        else
+          _toast('\u26A0 Aucun fonds \u2014 injecte de l\'argent puis alimente le trading avant de lancer', 'warn');
+        try { _updateBtn(false); } catch(e) {}
+        return;
+      }
+    } catch(e) {}
     if (window._auraSimState.running && window._auraSimState.interval) return;
     const simTick = _getSimTick();
     if (!simTick) { _toast('⚠ simTick introuvable', 'warn'); return; }
