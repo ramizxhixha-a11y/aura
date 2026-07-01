@@ -1,3 +1,4 @@
+// [ETAPE 2 · SEPARATION 3 MODES] aiguillage argent par accesseurs (mode actif) · 01/07/2026
 // [ETAPE 1 · SEPARATION 3 MODES] walletStore additif dormant · 01/07/2026
 // ════════════════════════════════════════════════════════════
 // ── 07/06/2026 : nettoyage — logs [DIAGNOSTIC closePosition] + _scheduleBgRetry (morte) retirés.
@@ -5809,7 +5810,9 @@ function _freshWallet() {
     // — levier —
     leverage:0, leverageReserve:0, leverageBorrowed:0, leverageTotalFees:0,
     // — reserve anti-negatif —
-    antiNegReserve:0,
+    antiNegReserve:0, antiNegReserveLog:[],
+    // — cumul P&L realise, internes levier & legacy EUR (par mode) —
+    _totalCompounded:0, _autoLevBase:0, _autoLevBorrowed:0, _ownFundsLegacyEUR:0,
     // — compteurs de perf (par mode, a zero) —
     totalTrades:0, winTrades:0, consecLosses:0,
     // — detail par paire : { 'BTC/USDT': {wins,losses,pnlNet,trades,lastTrades:[],lastUpdate} } —
@@ -5873,6 +5876,42 @@ try {
 } catch(e){}
 // creation immediate au chargement du module (idempotent ; loadState re-complete)
 try { _ensureWalletStore(); } catch(e){}
+
+// ========================================================================
+// ETAPE 2 · AIGUILLAGE ARGENT PAR ACCESSEURS
+// ------------------------------------------------------------------------
+// Chaque champ argent de S ci-dessous devient un accesseur (get/set) branche
+// sur le wallet du mode ACTIF (_activeWallet, base sur S.tradingMode). Effet :
+// TOUTE lecture/ecriture/injection de S.cashAccount, S.tradingAccount, etc. va
+// automatiquement dans le portefeuille du bon mode, SANS changer une ligne du
+// code consommateur (des centaines de references restent telles quelles).
+// Basculer de mode => _activeWallet() change => les champs refletent l'autre
+// portefeuille. Balances de depart a ZERO (walletStore neuf). Le cerveau et
+// cycle/generations ne passent PAS par ici : ils restent partages.
+// ========================================================================
+var _WALLET_ACCESSOR_FIELDS = [
+  'portfolio','cashAccount','tradingAccount','fiscalReserveAccount','ownFundsInjected',
+  '_ownFundsLegacyEUR','_startPortfolio','_totalCompounded',
+  'leverage','leverageReserve','leverageBorrowed','leverageTotalFees',
+  '_autoLevBase','_autoLevBorrowed','antiNegReserve','totalTrades','winTrades',
+  'cashLog','fiscalReserveLog','ownFundsLog','antiNegReserveLog'
+];
+function _installWalletAccessors() {
+  if (typeof S === 'undefined' || !S) return;
+  _WALLET_ACCESSOR_FIELDS.forEach(function(f){
+    var d = Object.getOwnPropertyDescriptor(S, f);
+    if (d && typeof d.get === 'function') return;   // deja un accesseur
+    Object.defineProperty(S, f, {
+      configurable: true,
+      enumerable: true,
+      get: function(){ return _activeWallet()[f]; },
+      set: function(v){ _activeWallet()[f] = v; }
+    });
+  });
+}
+try { window._WALLET_ACCESSOR_FIELDS = _WALLET_ACCESSOR_FIELDS; } catch(e){}
+try { window._installWalletAccessors = _installWalletAccessors; } catch(e){}
+try { _installWalletAccessors(); } catch(e){}
 
 function setBotMode(isAuto) {
   const prev = S.botAutoMode;

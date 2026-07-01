@@ -1,3 +1,4 @@
+// [ETAPE 2 · SEPARATION 3 MODES] restaurations argent obsoletes retirees + reset unique (chronos+P&L) · 01/07/2026
 // [ETAPE 1 · SEPARATION 3 MODES] walletStore additif dormant · 01/07/2026
 // ════════════════════════════════════════════════════════════════════════
 // ▓▓▓ AURA8 — 09b2-save-load.js · VERSION 128 · 10/06/2026 ▓▓▓
@@ -298,10 +299,6 @@ async function loadState() {
 
   const safeNum = (val, fallback) => (typeof val === 'number' && isFinite(val)) ? val : fallback;
 
-  try { S.portfolio       = safeNum(snap.portfolio,       S.portfolio); } catch(e){}
-  try { S.cashAccount     = safeNum(snap.cashAccount,     S.cashAccount); } catch(e){}
-  try { S.tradingAccount  = safeNum(snap.tradingAccount,  S.tradingAccount); } catch(e){}
-  try { S.leverage        = safeNum(snap.leverage,        0); } catch(e){}
   try { S.botAutoMode     = snap.botAutoMode !== undefined ? snap.botAutoMode : false; } catch(e){}
   try { if (snap.profitSplitCaissePct != null) S.profitSplitCaissePct = safeNum(snap.profitSplitCaissePct, 30); } catch(e){}
   // ── SEPARATION DES 3 MODES (etape 1) · restaurer les 3 portefeuilles puis garantir/completer
@@ -348,7 +345,6 @@ async function loadState() {
     if (Array.isArray(snap.tradeContextMemory))                                    S.tradeContextMemory         = snap.tradeContextMemory.slice(-500);
     if (snap.abTesting                  && typeof snap.abTesting                  === 'object') S.abTesting                  = Object.assign(S.abTesting       || {}, snap.abTesting);
     if (snap.pnlPeriod                  && typeof snap.pnlPeriod                  === 'object') S.pnlPeriod                  = Object.assign(S.pnlPeriod       || {}, snap.pnlPeriod);
-    if (typeof snap._totalCompounded === 'number') S._totalCompounded = snap._totalCompounded;
     if (typeof snap._genCount        === 'number') S._genCount        = snap._genCount;
     if (snap.preRealSnapshotPaperReal   && typeof snap.preRealSnapshotPaperReal   === 'object') S.preRealSnapshotPaperReal   = snap.preRealSnapshotPaperReal;
   } catch(e) { dbg.push('paperReal:err'); }
@@ -370,13 +366,10 @@ async function loadState() {
     S.cycleMax        = snap.cycleMax        || 30;
     S.pnl24h          = snap.pnl24h          || 0;
     S.pnlHistory      = snap.pnlHistory      || [];
-    S.totalTrades     = snap.totalTrades     || 0;
-    S.winTrades       = snap.winTrades       || 0;
     S.chainLog        = snap.chainLog        || [];
     S.learningHistory = snap.learningHistory || [];
     S.evoLog          = snap.evoLog          || [];
     S.openPositions   = snap.openPositions   || [];
-    if (snap._startPortfolio) S._startPortfolio = snap._startPortfolio;
   } catch(e) { dbg.push('cycle:err'); }
 
   try {
@@ -478,25 +471,8 @@ async function loadState() {
   try { if (snap.vMajor != null) S.vMajor = snap.vMajor; } catch(e){}
 
   try {
-    if (snap.leverageReserve   != null) S.leverageReserve   = snap.leverageReserve;
-    if (snap.leverageBorrowed  != null) S.leverageBorrowed  = snap.leverageBorrowed;
-    if (snap.leverageTotalFees != null) S.leverageTotalFees = snap.leverageTotalFees;
-  } catch(e) { dbg.push('lev:err'); }
-
-  try {
-    if (snap.fiscalReserveAccount != null) S.fiscalReserveAccount = snap.fiscalReserveAccount;
-    if (Array.isArray(snap.fiscalReserveLog)) S.fiscalReserveLog  = snap.fiscalReserveLog;
-    if (Array.isArray(snap.cashLog))          S.cashLog            = snap.cashLog;
-    if (snap.ownFundsInjected     != null) S.ownFundsInjected     = snap.ownFundsInjected;
-    if (snap._ownFundsLegacyEUR   != null) S._ownFundsLegacyEUR   = snap._ownFundsLegacyEUR;
-    if (Array.isArray(snap.ownFundsLog))    S.ownFundsLog         = snap.ownFundsLog;
     if (typeof snap.fiatConvFeePct === 'number') S.fiatConvFeePct = snap.fiatConvFeePct;
   } catch(e) { dbg.push('fiat:err'); }
-
-  try {
-    if (snap._autoLevBase     != null) S._autoLevBase     = snap._autoLevBase;
-    if (snap._autoLevBorrowed != null) S._autoLevBorrowed = snap._autoLevBorrowed;
-  } catch(e) {}
 
   try {
     if (snap.dynamicPairKeys && snap.dynamicPairKeys.length && typeof PAIRS !== 'undefined') {
@@ -551,6 +527,28 @@ async function loadState() {
       if (S.pnlPeriod && typeof S.pnlPeriod === 'object') S.pnlPeriod.todayStartPortfolio = _pf;
     }
   } catch(e) { dbg.push('startPf-recal:err'); }
+
+  // ── RESET UNIQUE · SEPARATION 3 MODES v2 ─────────────────────────────────
+  // Les balances viennent maintenant de walletStore (a zero au depart), donc le
+  // faux solde herite n'est plus restaure. Ici on remet a zero ce qui n'est pas
+  // encore par-mode : les 3 chronos + l'historique P&L cosmetique. UNE SEULE
+  // FOIS (drapeau LS), ensuite tout s'accumule normalement. Cerveau et
+  // cycle/generations NON touches.
+  try {
+    if (!localStorage.getItem('aura_walletsep_reset_v2')) {
+      if (window.AuraChrono && typeof window.AuraChrono.resetAll === 'function') window.AuraChrono.resetAll();
+      S.pnlHistory = [];
+      S.pnl24h = 0;
+      if (S.pnlPeriod && typeof S.pnlPeriod === 'object') {
+        S.pnlPeriod.todayStartPortfolio = null; S.pnlPeriod.todayDate = null;
+        S.pnlPeriod.weekStartPortfolio  = null; S.pnlPeriod.weekStart = null;
+        S.pnlPeriod.monthStartPortfolio = null; S.pnlPeriod.monthStart = null;
+        S.pnlPeriod.history = [];
+      }
+      localStorage.setItem('aura_walletsep_reset_v2', String(Date.now()));
+      dbg.push('walletsep-reset-v2: OK');
+    }
+  } catch(e) { dbg.push('walletsep-reset:err'); }
 
   setTimeout(() => {
     try { if (typeof renderAll === 'function') renderAll(); } catch(e){}
