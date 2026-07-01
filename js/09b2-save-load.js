@@ -1,3 +1,4 @@
+// [ETAPE 1 · SEPARATION 3 MODES] walletStore additif dormant · 01/07/2026
 // ════════════════════════════════════════════════════════════════════════
 // ▓▓▓ AURA8 — 09b2-save-load.js · VERSION 128 · 10/06/2026 ▓▓▓
 // ════════════════════════════════════════════════════════════════════════
@@ -303,6 +304,9 @@ async function loadState() {
   try { S.leverage        = safeNum(snap.leverage,        0); } catch(e){}
   try { S.botAutoMode     = snap.botAutoMode !== undefined ? snap.botAutoMode : false; } catch(e){}
   try { if (snap.profitSplitCaissePct != null) S.profitSplitCaissePct = safeNum(snap.profitSplitCaissePct, 30); } catch(e){}
+  // ── SEPARATION DES 3 MODES (etape 1) · restaurer les 3 portefeuilles puis garantir/completer
+  try { if (snap.walletStore && typeof snap.walletStore === 'object') S.walletStore = snap.walletStore; } catch(e){}
+  try { if (typeof _ensureWalletStore === 'function') _ensureWalletStore(); } catch(e){}
 
   try {
     if (snap.heatmap)          S.heatmap          = snap.heatmap;

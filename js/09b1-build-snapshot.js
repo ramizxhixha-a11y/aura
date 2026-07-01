@@ -1,3 +1,4 @@
+// [ETAPE 1 · SEPARATION 3 MODES] walletStore additif dormant · 01/07/2026
 // ════════════════════════════════════════════════════════════════════════
 // ▓▓▓ AURA8 — 09b1-build-snapshot.js · VERSION 123 · 10/06/2026 ▓▓▓
 // ════════════════════════════════════════════════════════════════════════
@@ -30,6 +31,9 @@ function buildSnapshot() {
       leverage:        S.leverage,
       botAutoMode:     S.botAutoMode,
       profitSplitCaissePct: S.profitSplitCaissePct,
+
+      // ── SEPARATION DES 3 MODES (etape 1) · 3 portefeuilles independants + play/pause par mode
+      walletStore:     S.walletStore,
 
       // Cycle
       cycle:    S.cycle,

@@ -1,3 +1,4 @@
+// [ETAPE 1 · SEPARATION 3 MODES] walletStore additif dormant · 01/07/2026
 // ════════════════════════════════════════════════════════════
 // ── 07/06/2026 : nettoyage — logs [DIAGNOSTIC closePosition] + _scheduleBgRetry (morte) retirés.
 // AURA8 — module consolidé 02/10
@@ -137,6 +138,17 @@ const S = {
   // v7.12 LIVRAISON 6 · SAFETY · snapshot pris automatiquement avant chaque activation
   // du mode réel. Permet de rollback en 1 clic si quelque chose tourne mal.
   preRealSnapshot: null,        // { snap:{...}, takenAt: timestamp, mode: 'auto-pre-real' }
+
+  // ── SEPARATION DES 3 MODES · FONDATION (etape 1 · additif, dormant) ──────
+  // Chaque mode — AA='sim', EV='paperReal', RE='real' — recoit un portefeuille
+  // financier COMPLET et independant (caisse, trading, reserve fiscale propre,
+  // fonds injectes, levier, portefeuille, _startPortfolio, stats par paire,
+  // W/L, historique P&L jour/semaine/mois, logs, kill-switch, paires actives,
+  // timeframe, pertes consecutives, play/pause). Tout a ZERO. Cree/complete par
+  // _ensureWalletStore() au chargement. DORMANT en etape 1 : les comptes plats
+  // ci-dessus pilotent encore l'app a l'identique ; l'aiguillage argent = etape 2.
+  // Le cerveau (agents, lecons, memoire) et cycle/generations restent PARTAGES.
+  walletStore: null,          // { sim:{...}, paperReal:{...}, real:{...} } — cree au load
 
   // Utilise vraies bougies Binance MAIS avec règles de sécurité strictes
   agentLessonsPaperReal: [],    // mémoire séparée pour ce mode
@@ -5778,6 +5790,89 @@ function applyBotSuggestion(pair, side, stake) {
     ps.stake = _origStake;   // restore user's stake setting
   }
 }
+
+// ========================================================================
+// SEPARATION DES 3 MODES · HELPERS DE FONDATION (etape 1 · additif)
+// ------------------------------------------------------------------------
+// Portefeuilles financiers independants par mode (AA/EV/RE), tous a zero.
+// DORMANTS en etape 1 : rien ne les lit encore, l'app tourne sur les comptes
+// plats existants. L'etape 2 branchera lecture/ecriture argent vers
+// _activeWallet(). Le cerveau (agents/lecons/memoire) et cycle/generations
+// ne sont PAS dupliques : ils restent partages a la racine de S.
+// ========================================================================
+function _freshWallet() {
+  return {
+    // — comptes —
+    cashAccount:0, tradingAccount:0, fiscalReserveAccount:0, ownFundsInjected:0,
+    // — portefeuille & base P&L de session —
+    portfolio:0, _startPortfolio:0,
+    // — levier —
+    leverage:0, leverageReserve:0, leverageBorrowed:0, leverageTotalFees:0,
+    // — reserve anti-negatif —
+    antiNegReserve:0,
+    // — compteurs de perf (par mode, a zero) —
+    totalTrades:0, winTrades:0, consecLosses:0,
+    // — detail par paire : { 'BTC/USDT': {wins,losses,pnlNet,trades,lastTrades:[],lastUpdate} } —
+    statsByPair:{},
+    // — securite & execution —
+    killSwitch:{},        // { 'BTC/USDT': {paused,lossStreak,reason} }
+    activePairs:{},       // { 'BTC/USDT': true }
+    timeframe:'15m',
+    running:false,        // play/pause INDEPENDANT de ce mode
+    // — historique P&L —
+    pnlPeriod:{ day:0, week:0, month:0, history:[] },
+    // — journaux —
+    cashLog:[], fiscalReserveLog:[], ownFundsLog:[],
+    startedAt:0
+  };
+}
+function _freshWalletStore() {
+  return { sim:_freshWallet(), paperReal:_freshWallet(), real:_freshWallet() };
+}
+// normalise vers une cle de wallet valide ('sim' par defaut)
+function _walletKey(mode) {
+  var m = mode || ((typeof S!=='undefined' && S) ? S.tradingMode : 'sim') || 'sim';
+  return (m === 'paperReal' || m === 'real') ? m : 'sim';
+}
+// wallet d'un mode donne (cree le store/mode si absent)
+function _walletFor(mode) {
+  if (typeof S==='undefined' || !S) return _freshWallet();
+  if (!S.walletStore) S.walletStore = _freshWalletStore();
+  var k = _walletKey(mode);
+  if (!S.walletStore[k]) S.walletStore[k] = _freshWallet();
+  return S.walletStore[k];
+}
+// wallet du mode ACTIF
+function _activeWallet() { return _walletFor((typeof S!=='undefined' && S) ? S.tradingMode : 'sim'); }
+// play/pause par mode
+function _isModeRunning(mode) { return !!_walletFor(mode).running; }
+function _setModeRunning(mode, on) { _walletFor(mode).running = !!on; }
+// garantit 3 wallets a zero + complete les champs manquants, SANS toucher au cerveau
+function _ensureWalletStore() {
+  if (typeof S==='undefined' || !S) return null;
+  if (!S.walletStore || typeof S.walletStore !== 'object') S.walletStore = _freshWalletStore();
+  ['sim','paperReal','real'].forEach(function(k){
+    if (!S.walletStore[k] || typeof S.walletStore[k] !== 'object') {
+      S.walletStore[k] = _freshWallet();
+    } else {
+      var base = _freshWallet();               // complete les champs ajoutes en montee de version
+      for (var f in base) if (!(f in S.walletStore[k])) S.walletStore[k][f] = base[f];
+    }
+  });
+  return S.walletStore;
+}
+try {
+  window._freshWallet       = _freshWallet;
+  window._freshWalletStore  = _freshWalletStore;
+  window._walletKey         = _walletKey;
+  window._walletFor         = _walletFor;
+  window._activeWallet      = _activeWallet;
+  window._isModeRunning     = _isModeRunning;
+  window._setModeRunning    = _setModeRunning;
+  window._ensureWalletStore = _ensureWalletStore;
+} catch(e){}
+// creation immediate au chargement du module (idempotent ; loadState re-complete)
+try { _ensureWalletStore(); } catch(e){}
 
 function setBotMode(isAuto) {
   const prev = S.botAutoMode;
