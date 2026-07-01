@@ -1,3 +1,4 @@
+// [ETAPE 3 · SEPARATION 3 MODES] play/pause PAR MODE (defaut pause, memoire par mode, auto-resume par mode) · 01/07/2026
 /* ═══════════════════════════════════════════════════════════
    AURA8 · js/01-chrono-network.js
    ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓
@@ -255,6 +256,11 @@ window._auraGetGlobalS = _auraGetGlobalS;
     }, 1000);
     window._auraSimState.running = true;
     try { localStorage.setItem('aura_sim_running','1'); } catch(e) {}
+    // ETAPE 3 · play/pause PAR MODE : marque le mode actif comme "en cours"
+    try {
+      var _pmM = (window.AuraChrono && window.AuraChrono.getCurrentMode) ? window.AuraChrono.getCurrentMode() : 'sim';
+      if (window._setModeRunning) window._setModeRunning(_pmM, true);
+    } catch(e) {}
     try {
       const setFn = new Function('try{_simRunning=true;_simEverStarted=true;_simInterval=window._auraSimState.interval}catch(e){}');
       setFn();
@@ -277,6 +283,11 @@ window._auraGetGlobalS = _auraGetGlobalS;
     if (window._auraSimState.interval) { clearInterval(window._auraSimState.interval); window._auraSimState.interval = null; }
     window._auraSimState.running = false;
     try { localStorage.setItem('aura_sim_running','0'); } catch(e) {}
+    // ETAPE 3 · play/pause PAR MODE : marque le mode actif comme "en pause"
+    try {
+      var _pmM = (window.AuraChrono && window.AuraChrono.getCurrentMode) ? window.AuraChrono.getCurrentMode() : 'sim';
+      if (window._setModeRunning) window._setModeRunning(_pmM, false);
+    } catch(e) {}
     try {
       const setFn = new Function('try{_simRunning=false;_simInterval=null}catch(e){}');
       setFn();
@@ -389,6 +400,16 @@ window._auraGetGlobalS = _auraGetGlobalS;
       setFn(nextMode);
     } catch(e) {}
 
+    // ETAPE 3 · le moteur suit le play/pause DU NOUVEAU mode :
+    // si ce mode etait "en cours", on (re)lance ; sinon on met en pause.
+    // L'ancien mode garde son propre drapeau (il "se souvient").
+    try {
+      var _wants = window._isModeRunning ? !!window._isModeRunning(nextMode) : false;
+      var _run   = !!(window._auraSimState && window._auraSimState.running);
+      if (_wants && !_run && window.startSim)      window.startSim();
+      else if (!_wants && _run && window.stopSim)  window.stopSim();
+    } catch(e) {}
+
     // 3. Mise à jour visuelle bouton
     updateButtonVisual(nextMode);
 
@@ -444,7 +465,13 @@ window._auraGetGlobalS = _auraGetGlobalS;
 (function _auraSimAutoResume() {
   'use strict';
   function _wantsRun() {
-    try { return localStorage.getItem('aura_sim_running') === '1'; } catch (e) { return false; }
+    // ETAPE 3 · play/pause PAR MODE : on relit le drapeau du MODE ACTIF
+    // (walletStore[mode].running). Wallets neufs => false => defaut EN PAUSE.
+    try {
+      var m = (window.AuraChrono && window.AuraChrono.getCurrentMode) ? window.AuraChrono.getCurrentMode() : 'sim';
+      if (window._isModeRunning) return !!window._isModeRunning(m);
+      return localStorage.getItem('aura_sim_running') === '1';
+    } catch (e) { return false; }
   }
   function _isRunning() {
     return !!(window._auraSimState && window._auraSimState.running && window._auraSimState.interval);
