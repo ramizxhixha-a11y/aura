@@ -1,4 +1,5 @@
 <!DOCTYPE html>
+<!-- [FIX Man/Manu · 01/07/2026] libelles unifies MAN (fin du message incoherent MAN vs MANU) -->
 <html lang="fr">
 <head>
 <meta charset="UTF-8">
@@ -285,14 +286,14 @@ const REF_BUGS = [
    desc:'D\u00e9sactivation incompl\u00e8te : snapshot agents non restaur\u00e9, flags non reset, botAutoMode non touch\u00e9.',
    detect:c=>{if(c.S&&c.S.fullPowerMode===true)return{hit:true,info:'fullPowerMode=true actuellement actif'};const code=c.code&&c.code['04-v8-0-livraison-35-mode-max-permissif-v.js'];if(code){const m=code.match(/function enableFullPowerMode[\s\S]*?\n\}/);const body=m?m[0]:'';if(/botAutoMode\s*=\s*true/.test(body))return{hit:true,info:'enableFullPowerMode() force botAutoMode=true (interdit) \u2192 \u00e0 retirer'};}return{hit:false,info:'Plein R\u00e9gime inactif, code sans for\u00e7age botAutoMode'};}},
   {id:'BUG-003',nom:'D\u00e9sync mode UI/storage',statut:'r\u00e9solu',fichier:'02-state-init.js',prio:'\u2014',
-   desc:'Le mode affich\u00e9 (UI AUTO/MANU) doit \u00e9galer le mode stock\u00e9 (S.botAutoMode).',
-   detect:c=>{if(!c.S)return{hit:false,info:'\u00e9tat non charg\u00e9 \u2014 d\u00e9tection indisponible'};const el=document.getElementById('modeLabelText');if(!el)return{hit:false,info:'UI absente (page s\u00e9par\u00e9e) \u2014 comparaison possible seulement int\u00e9gr\u00e9 dans AURA'};const norm=function(v){v=(v||'').trim().toUpperCase();if(v==='MAN'||v==='MANU')return'MANU';if(v==='AUTO')return'AUTO';return v;};const ui=norm(el.textContent);const stored=c.S.botAutoMode?'AUTO':'MANU';if(ui&&ui!==stored)return{hit:true,info:'UI affiche '+el.textContent.trim()+' mais S.botAutoMode='+stored+' \u2192 d\u00e9sync'};return{hit:false,info:'UI ('+el.textContent.trim()+') = stock\u00e9 ('+stored+') \u2192 coh\u00e9rent'};}},
+   desc:'Le mode affich\u00e9 (UI AUTO/MAN) doit \u00e9galer le mode stock\u00e9 (S.botAutoMode).',
+   detect:c=>{if(!c.S)return{hit:false,info:'\u00e9tat non charg\u00e9 \u2014 d\u00e9tection indisponible'};const el=document.getElementById('modeLabelText');if(!el)return{hit:false,info:'UI absente (page s\u00e9par\u00e9e) \u2014 comparaison possible seulement int\u00e9gr\u00e9 dans AURA'};const norm=function(v){v=(v||'').trim().toUpperCase();if(v==='MAN'||v==='MAN')return'MAN';if(v==='AUTO')return'AUTO';return v;};const ui=norm(el.textContent);const stored=c.S.botAutoMode?'AUTO':'MAN';if(ui&&ui!==stored)return{hit:true,info:'UI affiche '+el.textContent.trim()+' mais S.botAutoMode='+stored+' \u2192 d\u00e9sync'};return{hit:false,info:'UI ('+el.textContent.trim()+') = stock\u00e9 ('+stored+') \u2192 coh\u00e9rent'};}},
   {id:'BUG-004',nom:'renderAll() manquant dans loadState()',statut:'r\u00e9solu',fichier:'09b2-save-load.js',prio:'P3',
    desc:'loadState() doit appeler renderAll() \u00e0 la fin, sinon les cartes restent \u00e0 $0 au boot.',
    detect:c=>{const code=c.code&&c.code['09b2-save-load.js'];if(!code)return{hit:false,info:'code 09b2 non charg\u00e9 \u2014 d\u00e9tection indisponible'};const m=code.match(/async function loadState[\s\S]*?\n\}\nwindow\.loadState/);const body=m?m[0]:code;if(/renderAll\s*\(/.test(body))return{hit:false,info:'renderAll() trouv\u00e9 dans loadState() \u2192 fix appliqu\u00e9'};return{hit:true,info:'renderAll() ABSENT de loadState() \u2192 cartes \u00e0 $0 au boot'};}},
-  {id:'BUG-005',nom:'Bunker SOS force MANU',statut:'en attente',fichier:'07-v90-mode-bunker-sos.js',prio:'P4',
-   desc:'L\'activation du Bunker force MANU sans demande \u2014 viole la r\u00e8gle d\'axe (seul l\'utilisateur change botAutoMode).',
-   detect:c=>{if(c.S&&c.S._bunker&&c.S._bunker.active&&c.S.botAutoMode===false)return{hit:true,info:'bunker actif + MANU \u2014 for\u00e7age possible'};const code=c.code&&c.code['07-v90-mode-bunker-sos.js'];if(code){const m=code.match(/function activateBunker[\s\S]*?\n\}/);const body=m?m[0]:'';if(/botAutoMode\s*=\s*false/.test(body))return{hit:true,info:'activateBunker() force botAutoMode=false (viole r\u00e8gle d\'axe) \u2192 \u00e0 retirer'};}return{hit:false,info:'bunker inactif, code sans for\u00e7age MANU'};}},
+  {id:'BUG-005',nom:'Bunker SOS force MAN',statut:'en attente',fichier:'07-v90-mode-bunker-sos.js',prio:'P4',
+   desc:'L\'activation du Bunker force MAN sans demande \u2014 viole la r\u00e8gle d\'axe (seul l\'utilisateur change botAutoMode).',
+   detect:c=>{if(c.S&&c.S._bunker&&c.S._bunker.active&&c.S.botAutoMode===false)return{hit:true,info:'bunker actif + MAN \u2014 for\u00e7age possible'};const code=c.code&&c.code['07-v90-mode-bunker-sos.js'];if(code){const m=code.match(/function activateBunker[\s\S]*?\n\}/);const body=m?m[0]:'';if(/botAutoMode\s*=\s*false/.test(body))return{hit:true,info:'activateBunker() force botAutoMode=false (viole r\u00e8gle d\'axe) \u2192 \u00e0 retirer'};}return{hit:false,info:'bunker inactif, code sans for\u00e7age MAN'};}},
   {id:'OBS-A',nom:'Flash gain/perte au d\u00e9marrage',statut:'observ\u00e9',fichier:'07-v90-mode-bunker-sos.js',prio:'UX',
    desc:'animateHeroValue d\u00e9clench\u00e9 \u00e0 tort au 1er rendu : portfolio restaur\u00e9 vs recalcul\u00e9 diff\u00e8re de >15$. Dur\u00e9e 800ms \u00e0 passer \u00e0 2s + animation distincte de la vraie cl\u00f4ture.',
    detect:c=>{if(c.S&&typeof c.S.portfolio==='number'&&typeof c.S._startPortfolio==='number'){const d=Math.abs(c.S.portfolio-c.S._startPortfolio);if(d>15)return{hit:true,info:'\u00e9cart portfolio/_startPortfolio = $'+d.toFixed(2)+' (>15 \u2192 flash au boot)'};}return{hit:false,info:'\u00e9cart sous le seuil de flash'};}},
@@ -300,7 +301,7 @@ const REF_BUGS = [
    desc:'_startPortfolio devrait \u00eatre recal\u00e9 au load (sinon le P&L de session au boot est faux \u2014 cause d\'OBS-A).',
    detect:c=>{const code=c.code&&c.code['09b2-save-load.js'];if(!code)return{hit:false,info:'code 09b2 non charg\u00e9 \u2014 d\u00e9tection indisponible'};const m=code.match(/async function loadState[\s\S]*?\n\}\nwindow\.loadState/);const body=m?m[0]:code;if(/_startPortfolio\s*=/.test(body))return{hit:false,info:'_startPortfolio recal\u00e9 dans loadState() \u2192 OK'};return{hit:true,info:'_startPortfolio jamais recal\u00e9 au load \u2192 P&L de session fauss\u00e9 au boot'};}},
   {id:'OBS-C',nom:'Phase COLLECTE fig\u00e9e',statut:'cosm\u00e9tique',fichier:'08-learning-history-render.js',prio:'\u2014',
-   desc:'phasePct (1 - cycleTimer/cycleMax) reste fig\u00e9 si simTick ne tourne pas (MANU/pause). Cosm\u00e9tique, aucune d\u00e9cision ne le lit.',
+   desc:'phasePct (1 - cycleTimer/cycleMax) reste fig\u00e9 si simTick ne tourne pas (MAN/pause). Cosm\u00e9tique, aucune d\u00e9cision ne le lit.',
    detect:c=>{if(!c.S)return{hit:false,info:'\u00e9tat non charg\u00e9 \u2014 d\u00e9tection indisponible'};const tm=c.S.cycleTimer,mx=c.S.cycleMax;if(typeof tm!=='number'||typeof mx!=='number'||mx<=0)return{hit:false,info:'cycleTimer/cycleMax non exploitables \u2014 rien \u00e0 signaler'};if(c.S.running===false&&tm>0)return{hit:true,info:'sim en pause (running=false) avec cycleTimer fig\u00e9 \u00e0 '+tm+'/'+mx+' \u2192 phase COLLECTE g\u00e9l\u00e9e (cosm\u00e9tique)'};return{hit:false,info:'phase coh\u00e9rente avec l\'activit\u00e9 du sim'};}}
 ];
 
@@ -522,7 +523,7 @@ VIEWS.dashboard=function(){
     h+=rowKV('Source la plus r\u00e9cente',CTX.source,'ok');
     h+=rowKV('Cycle',S.cycle!=null?'#'+S.cycle:'\u2014');
     h+=rowKV('Mode trading',S.tradingMode||'\u2014');
-    h+=rowKV('botAutoMode',S.botAutoMode===false?'MANU':(S.botAutoMode?'AUTO':'\u2014'));
+    h+=rowKV('botAutoMode',S.botAutoMode===false?'MAN':(S.botAutoMode?'AUTO':'\u2014'));
     h+=rowKV('Portfolio',typeof S.portfolio==='number'?('$'+S.portfolio.toFixed(2)):'\u2014');
     h+=rowKV('Cash',typeof S.cashAccount==='number'?('$'+S.cashAccount.toFixed(2)):'\u2014');
     h+=rowKV('Trading',typeof S.tradingAccount==='number'?('$'+S.tradingAccount.toFixed(2)):'\u2014');
