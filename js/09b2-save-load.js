@@ -1,3 +1,4 @@
+// [ETAPE 4 · SEPARATION 3 MODES] restaurations pairStates + fees flat retirees (walletStore les porte par mode) · 01/07/2026
 // [ETAPE 2 · SEPARATION 3 MODES] restaurations argent obsoletes retirees + reset unique (chronos+P&L) · 01/07/2026
 // [ETAPE 1 · SEPARATION 3 MODES] walletStore additif dormant · 01/07/2026
 // ════════════════════════════════════════════════════════════════════════
@@ -373,14 +374,6 @@ async function loadState() {
   } catch(e) { dbg.push('cycle:err'); }
 
   try {
-    if (snap.fees) {
-      Object.assign(S.fees, snap.fees);
-      S.fees.feeLog = snap.fees.feeLog || [];
-      S.fees.byPair = snap.fees.byPair || {};
-    }
-  } catch(e) { dbg.push('fees:err'); }
-
-  try {
     if (snap.taxConfig) {
       S.taxConfig.region = snap.taxConfig.region || S.taxConfig.region;
       if (snap.taxConfig.regions) {
@@ -414,41 +407,6 @@ async function loadState() {
       });
     }
   } catch(e) { dbg.push('agents:err'); }
-
-  try {
-    const snapAge    = snap.savedAt ? (Date.now() - new Date(snap.savedAt).getTime()) : 0;
-    const priceStale = snapAge > 600000;
-    if (snap.pairStates) {
-      Object.entries(snap.pairStates).forEach(([pair, saved]) => {
-        const ps = S.pairStates && S.pairStates[pair];
-        if (!ps) return;
-        if (!priceStale) ps.price = saved.price || ps.price;
-        ps.qYes         = saved.qYes         || ps.qYes;
-        ps.qNo          = saved.qNo          || ps.qNo;
-        ps.stake        = saved.stake        || ps.stake;
-        ps.userStake    = saved.userStake    || false;
-        ps.pairLeverage = saved.pairLeverage || 1;
-        ps.threshold    = saved.threshold    || 0.65;
-        ps.userCycleSet = saved.userCycleSet || false;
-        ps.lastAction   = saved.lastAction   || 'hold';
-        ps.holdStartTs  = saved.holdStartTs  || 0;
-        ps.capital      = saved.capital      || ps.capital;
-        ps.cycleMax     = saved.cycleMax     || ps.cycleMax;
-        ps.cycleTimer   = saved.cycleTimer   || ps.cycleTimer;
-        ps.totalTrades  = saved.totalTrades  || 0;
-        ps.winTrades    = saved.winTrades    || 0;
-        ps.totalPnlPct  = saved.totalPnlPct  || 0;
-        ps.totalPnlUsd  = saved.totalPnlUsd  || 0;
-        ps.pnl24h       = saved.pnl24h       || 0;
-        ps.trades       = saved.trades       || [];
-        if (saved.candles && saved.candles.length) ps.candles = saved.candles;
-        if (snap.pairBestWorst && snap.pairBestWorst[pair]) {
-          ps.bestTrade  = snap.pairBestWorst[pair].bestTrade  || null;
-          ps.worstTrade = snap.pairBestWorst[pair].worstTrade || null;
-        }
-      });
-    }
-  } catch(e) { dbg.push('pairs:err'); }
 
   try {
     if (snap.agentMemories && S.agents) {

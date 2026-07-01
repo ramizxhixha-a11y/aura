@@ -1,3 +1,4 @@
+// [ETAPE 4 · SEPARATION 3 MODES] pairStates + fees PAR MODE (trades/P&L/frais separes, reset auto) · 01/07/2026
 // [ETAPE 2 · SEPARATION 3 MODES] aiguillage argent par accesseurs (mode actif) · 01/07/2026
 // [ETAPE 1 · SEPARATION 3 MODES] walletStore additif dormant · 01/07/2026
 // ════════════════════════════════════════════════════════════
@@ -5815,8 +5816,13 @@ function _freshWallet() {
     _totalCompounded:0, _autoLevBase:0, _autoLevBorrowed:0, _ownFundsLegacyEUR:0,
     // — compteurs de perf (par mode, a zero) —
     totalTrades:0, winTrades:0, consecLosses:0,
-    // — detail par paire : { 'BTC/USDT': {wins,losses,pnlNet,trades,lastTrades:[],lastUpdate} } —
+    // — detail par paire (agrege) —
     statsByPair:{},
+    // — ETAPE 4 : etat de trading par-paire PAR MODE (price, candles, trades, P&L, capital...) —
+    //   rempli par _ensureWalletStore pour toutes les paires courantes —
+    pairStates:{},
+    // — ETAPE 4 : frais + reserve frais PAR MODE (feeReserveAccount = le compte separe) —
+    fees:{ totalTradingFees:0, totalFunding:0, totalSlippage:0, totalGross:0, totalTaxProvision:0, totalPnlGross:0, totalPnlNet:0, tradeCount:0, feeReserveAccount:0, feeLog:[], byPair:{} },
     // — securite & execution —
     killSwitch:{},        // { 'BTC/USDT': {paused,lossStreak,reason} }
     activePairs:{},       // { 'BTC/USDT': true }
@@ -5861,6 +5867,17 @@ function _ensureWalletStore() {
       var base = _freshWallet();               // complete les champs ajoutes en montee de version
       for (var f in base) if (!(f in S.walletStore[k])) S.walletStore[k][f] = base[f];
     }
+    // ETAPE 4 : garantir que pairStates de CE wallet couvre toutes les paires
+    // courantes (base + dynamiques), SANS ecraser les etats deja charges.
+    try {
+      var _w = S.walletStore[k];
+      if (!_w.pairStates || typeof _w.pairStates !== 'object') _w.pairStates = {};
+      if (typeof PAIRS !== 'undefined' && typeof makePairState === 'function') {
+        Object.keys(PAIRS).forEach(function(pk){
+          if (!_w.pairStates[pk]) _w.pairStates[pk] = makePairState(PAIRS[pk]);
+        });
+      }
+    } catch(e) {}
   });
   return S.walletStore;
 }
@@ -5894,7 +5911,8 @@ var _WALLET_ACCESSOR_FIELDS = [
   '_ownFundsLegacyEUR','_startPortfolio','_totalCompounded',
   'leverage','leverageReserve','leverageBorrowed','leverageTotalFees',
   '_autoLevBase','_autoLevBorrowed','antiNegReserve','totalTrades','winTrades',
-  'cashLog','fiscalReserveLog','ownFundsLog','antiNegReserveLog'
+  'cashLog','fiscalReserveLog','ownFundsLog','antiNegReserveLog',
+  'pairStates','fees'
 ];
 function _installWalletAccessors() {
   if (typeof S === 'undefined' || !S) return;
