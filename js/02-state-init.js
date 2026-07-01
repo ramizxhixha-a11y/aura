@@ -1,3 +1,4 @@
+// [ETAPE 5 · SEPARATION 3 MODES] journal de bord (dreamJournal) PAR MODE + reset auto · 01/07/2026
 // [ETAPE 4 · SEPARATION 3 MODES] pairStates + fees PAR MODE (trades/P&L/frais separes, reset auto) · 01/07/2026
 // [ETAPE 2 · SEPARATION 3 MODES] aiguillage argent par accesseurs (mode actif) · 01/07/2026
 // [ETAPE 1 · SEPARATION 3 MODES] walletStore additif dormant · 01/07/2026
@@ -5832,6 +5833,8 @@ function _freshWallet() {
     pnlPeriod:{ day:0, week:0, month:0, history:[] },
     // — journaux —
     cashLog:[], fiscalReserveLog:[], ownFundsLog:[],
+    // — ETAPE 5 : journal de bord (trades affiches) PAR MODE —
+    dreamJournal:[],
     startedAt:0
   };
 }
@@ -5912,7 +5915,7 @@ var _WALLET_ACCESSOR_FIELDS = [
   'leverage','leverageReserve','leverageBorrowed','leverageTotalFees',
   '_autoLevBase','_autoLevBorrowed','antiNegReserve','totalTrades','winTrades',
   'cashLog','fiscalReserveLog','ownFundsLog','antiNegReserveLog',
-  'pairStates','fees'
+  'pairStates','fees','dreamJournal'
 ];
 function _installWalletAccessors() {
   if (typeof S === 'undefined' || !S) return;

@@ -1,3 +1,4 @@
+// [ETAPE 5] journal de bord : max 10 entrees affichees (etait 20) · 01/07/2026
 // ════════════════════════════════════════════════════════════
 // AURA8 — module consolidé 03/10
 // Contient : per-pair-position-buttons-controls-build-o, memoire-episodique-metaphores-feature-1, 5-lead-lag-inter-pair-correlations, bot-fleet-archives, v8-0-livraison-32-systeme-de-backup-import
@@ -3412,7 +3413,7 @@ function renderJournal() {
   if(emptyEl) emptyEl.style.display = 'none';
 
   // Rendu des entrées (max 20 affichées)
-  const displayed = filtered.slice(0, 20);
+  const displayed = filtered.slice(0, 10);
   entriesEl.innerHTML = displayed.map(e => {
     const win = e.pnlUsd >= 0;
     const pnlStr = (win?'+':'') + '$' + Math.abs(e.pnlUsd||0).toFixed(2)
@@ -3455,9 +3456,9 @@ function renderJournal() {
   }).join('');
 
   // Lien "voir plus" si > 20
-  if(filtered.length > 20) {
+  if(filtered.length > 10) {
     entriesEl.innerHTML += `<div style="text-align:center;font-size:10px;color:var(--t3);padding:8px;">
-      … ${filtered.length - 20} autres entrées (filtre pour voir plus)
+      … ${filtered.length - 10} autres entrées (filtre pour voir plus)
     </div>`;
   }
 }

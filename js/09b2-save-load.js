@@ -1,3 +1,4 @@
+// [ETAPE 5 · SEPARATION 3 MODES] restauration dreamJournal flat retiree (walletStore le porte par mode) · 01/07/2026
 // [ETAPE 4 · SEPARATION 3 MODES] restaurations pairStates + fees flat retirees (walletStore les porte par mode) · 01/07/2026
 // [ETAPE 2 · SEPARATION 3 MODES] restaurations argent obsoletes retirees + reset unique (chronos+P&L) · 01/07/2026
 // [ETAPE 1 · SEPARATION 3 MODES] walletStore additif dormant · 01/07/2026
@@ -309,7 +310,6 @@ async function loadState() {
   try {
     if (snap.heatmap)          S.heatmap          = snap.heatmap;
     if (snap.shadow)           S.shadow           = snap.shadow;
-    if (snap.dreamJournal)     S.dreamJournal     = snap.dreamJournal;
     if (snap.decisionCascade)  S.decisionCascade  = snap.decisionCascade;
     if (snap.resonanceHistory) S.resonanceHistory = snap.resonanceHistory;
     if (snap.archives)         S.archives         = snap.archives;

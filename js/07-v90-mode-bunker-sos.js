@@ -1,3 +1,4 @@
+// [FIX] bunker : pas de declenchement sans capital (evite le faux -100% apres reset) · 01/07/2026
 // ════════════════════════════════════════════════════════════
 // AURA8 — module consolidé 07/10 · maj 10/06/2026 (sync boutons répartition + total en $ + fonds propres €)
 // Contient : v90-mode-bunker-sos, veille-news-sociale, v5-1-brain-network-interactivity-tap-toolt, all-pairs-lmsr-gauges, open-positions-summary-home-page-v3-4
@@ -48,9 +49,21 @@ function _bkGetCapRef() {
 // Vérifier si le bunker doit se déclencher
 function checkBunker() {
   const cfg = _bkGet();
+
+  // FIX · PAS DE CAPITAL => PAS DE BUNKER.
+  // Sans argent sur le compte trading, le calcul (capRef-cap)/capRef donne un
+  // faux -100% et declenche le bunker a tort (ex: juste apres un reset). On
+  // leve un bunker eventuellement actif et on efface la reference perimee pour
+  // qu'une future injection reparte proprement.
+  const cap = S.tradingAccount||0;
+  if(cap <= 0) {
+    if(cfg.active) { try { exitBunker(); } catch(e){} }
+    try { localStorage.removeItem(_BK_CAP_REF_KEY); } catch(e){}
+    return;
+  }
+
   if(!cfg.enabled || cfg.active) return;
 
-  const cap    = S.tradingAccount||0;
   const capRef = _bkGetCapRef();
   if(capRef<=0) return;
 
