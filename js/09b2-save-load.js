@@ -1,3 +1,4 @@
+// [FIX SEPARATION] recalage session/jour PAR WALLET a chaque boot + purge one-shot des bases et cumuls pollues par le legacy (~5000) · 02/07/2026
 // [SEPARATION COMPLETE 3 MODES · 02/07/2026] restaurations flat openPositions/pnl24h/pnlHistory/pnlPeriod retirees (walletStore les porte par mode)
 // [ETAPE 5 · SEPARATION 3 MODES] restauration dreamJournal flat retiree (walletStore le porte par mode) · 01/07/2026
 // [ETAPE 4 · SEPARATION 3 MODES] restaurations pairStates + fees flat retirees (walletStore les porte par mode) · 01/07/2026
@@ -469,17 +470,34 @@ async function loadState() {
   // la session ecoulee dans le cumul (_totalCompounded, zero perte) puis on
   // recale _startPortfolio sur le portefeuille courant : la P&L de session
   // repart de 0, la P&L totale reste identique.
+  // FIX SEPARATION · le recalage s'applique aux TROIS wallets, pas seulement au
+  // mode actif au boot. Sans ca, les bases de session/jour des modes non actifs
+  // restaient perimees (voire polluees par l'ancien pnlPeriod flat legacy,
+  // ex. base ~5000 d'une vieille epoque) -> P&L de session faux au switch.
   try {
-    const _pf = (typeof S.portfolio === 'number') ? S.portfolio : null;
-    if (_pf !== null && typeof S._startPortfolio === 'number' && S._startPortfolio > 0) {
-      const _sessionElapsed = _pf - S._startPortfolio;
-      if (Math.abs(_sessionElapsed) > 0.01) {
-        S._totalCompounded = (S._totalCompounded || 0) + _sessionElapsed;
-      }
-    }
-    if (_pf !== null) {
-      S._startPortfolio = _pf;
-      if (S.pnlPeriod && typeof S.pnlPeriod === 'object') S.pnlPeriod.todayStartPortfolio = _pf;
+    if (S.walletStore && typeof S.walletStore === 'object') {
+      // PURGE ONE-SHOT (drapeau LS) : les bases de session/jour heritees d'avant la
+      // separation etaient polluees (ex. todayStartPortfolio ~5000 du flat legacy
+      // copie dans les wallets par les anciens boots) et les cumuls ont pu absorber
+      // ces fausses "sessions". Conformement a la spec de separation (compteurs de
+      // perf PAR MODE a zero), le premier boot remet le cumul a 0 et recale les
+      // bases SANS versement. Les boots suivants versent normalement.
+      var _pfFirst = false;
+      try { _pfFirst = !localStorage.getItem('aura_startpf_recal_v3'); } catch(e) {}
+      ['sim','paperReal','real'].forEach(function(_mk){
+        var _w = S.walletStore[_mk]; if (!_w || typeof _w !== 'object') return;
+        var _wpf = (_w.cashAccount||0) + (_w.tradingAccount||0);   // definition de portfolio (02)
+        if (_pfFirst) {
+          _w._totalCompounded = 0;
+        } else if (typeof _w._startPortfolio === 'number' && _w._startPortfolio > 0) {
+          var _el = _wpf - _w._startPortfolio;
+          if (Math.abs(_el) > 0.01) _w._totalCompounded = (_w._totalCompounded || 0) + _el;
+        }
+        _w.portfolio = _wpf;
+        _w._startPortfolio = _wpf;
+        if (_w.pnlPeriod && typeof _w.pnlPeriod === 'object') _w.pnlPeriod.todayStartPortfolio = _wpf;
+      });
+      if (_pfFirst) { try { localStorage.setItem('aura_startpf_recal_v3', String(Date.now())); } catch(e) {} }
     }
   } catch(e) { dbg.push('startPf-recal:err'); }
 

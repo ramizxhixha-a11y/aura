@@ -1,3 +1,6 @@
+// [FIX] badge mode sous le chrono (#modeBadge) cable au boot et au switch (etait un HTML statique affichant 'AA' en permanence) · 02/07/2026
+// [FIX] changer de mode ne coupe plus le moteur : play/pause global, le chrono ne se fige plus au switch · 01/07/2026
+// [FIX] switch de mode : renderAll() pour repeindre les cartes wallet du mode actif (donnees deja par mode) · 01/07/2026
 // [ETAPE 3 · SEPARATION 3 MODES] play/pause PAR MODE (defaut pause, memoire par mode, auto-resume par mode) + play bloque si compte trading vide · 01/07/2026
 /* ═══════════════════════════════════════════════════════════
    AURA8 · js/01-chrono-network.js
@@ -413,18 +416,33 @@ window._auraGetGlobalS = _auraGetGlobalS;
       setFn(nextMode);
     } catch(e) {}
 
-    // ETAPE 3 · le moteur suit le play/pause DU NOUVEAU mode :
-    // si ce mode etait "en cours", on (re)lance ; sinon on met en pause.
-    // L'ancien mode garde son propre drapeau (il "se souvient").
+    // FIX · changer de mode NE coupe PAS le moteur (le chrono ne se fige plus).
+    // Avant : le moteur adoptait le play/pause memorise du nouveau mode, donc
+    // passer d'un mode qui tourne a un mode jamais lance (en pause par defaut)
+    // appelait stopSim() et figeait le chrono. Desormais le play/pause est GLOBAL :
+    // s'il tournait il continue dans le nouveau mode (le chrono de ce mode compte) ;
+    // s'il etait en pause il reste en pause. On aligne juste le drapeau du nouveau
+    // mode sur l'etat courant pour rester coherent (boot / auto-resume).
+    // NB : on ne touche NI le bouton play/pause NI l'intervalle → le moteur garde
+    // son etat ; le tick du chrono suit le bouton (⏸ = compte) sans interruption.
     try {
-      var _wants = window._isModeRunning ? !!window._isModeRunning(nextMode) : false;
-      var _run   = !!(window._auraSimState && window._auraSimState.running);
-      if (_wants && !_run && window.startSim)      window.startSim();
-      else if (!_wants && _run && window.stopSim)  window.stopSim();
+      var _run = !!(window._auraSimState && window._auraSimState.running);
+      if (window._setModeRunning) window._setModeRunning(nextMode, _run);
+    } catch(e) {}
+
+    // ★ FIX AFFICHAGE PAR MODE · repeindre les cartes wallet du nouveau mode.
+    // Les donnees sont deja separees par mode (accesseurs sur S.cashAccount,
+    // S.tradingAccount, ...) ; sans re-render, l'affichage restait fige sur le
+    // mode precedent (memes $ dans les 3 modes). renderAll() -> renderHome().
+    try {
+      if (typeof window.renderAll === 'function') window.renderAll();
+      else if (typeof renderAll === 'function') renderAll();
+      else new Function('try{renderAll()}catch(e){}')();
     } catch(e) {}
 
     // 3. Mise à jour visuelle bouton
     updateButtonVisual(nextMode);
+    _syncModeBadge(nextMode);
 
     // 4. ★ NOTIFICATION v118.16 : type natif de showToast pour vraie couleur app ★
     //    ATTENTION : 'info' est MASQUÉ par défaut → utiliser 'ice' pour AA
@@ -442,6 +460,15 @@ window._auraGetGlobalS = _auraGetGlobalS;
     try { if (typeof window.saveState === 'function') window.saveState(false); } catch(e) {}
   };
 
+  // FIX · #modeBadge (sous le chrono) etait un HTML statique jamais mis a jour :
+  // il affichait "AA" en permanence, meme en EV/RE (source de confusion).
+  function _syncModeBadge(mode) {
+    try {
+      var el = document.getElementById('modeBadge');
+      if (el && MODES[mode]) { el.textContent = MODES[mode].label; el.style.color = MODES[mode].color; }
+    } catch(e) {}
+  }
+
   function initTradeMode() {
     injectCSS();
     if (!fixNestedButton()) { setTimeout(initTradeMode, 1500); return; }
@@ -457,6 +484,7 @@ window._auraGetGlobalS = _auraGetGlobalS;
     if (S && S.tradingMode !== initMode) {
       S.tradingMode = initMode;
     }
+    _syncModeBadge(initMode);
   }
 
   if (document.readyState === 'loading') {
