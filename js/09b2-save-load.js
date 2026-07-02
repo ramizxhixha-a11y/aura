@@ -1,3 +1,4 @@
+// [SEPARATION COMPLETE 3 MODES · 02/07/2026] restaurations flat openPositions/pnl24h/pnlHistory/pnlPeriod retirees (walletStore les porte par mode)
 // [ETAPE 5 · SEPARATION 3 MODES] restauration dreamJournal flat retiree (walletStore le porte par mode) · 01/07/2026
 // [ETAPE 4 · SEPARATION 3 MODES] restaurations pairStates + fees flat retirees (walletStore les porte par mode) · 01/07/2026
 // [ETAPE 2 · SEPARATION 3 MODES] restaurations argent obsoletes retirees + reset unique (chronos+P&L) · 01/07/2026
@@ -345,7 +346,6 @@ async function loadState() {
     if (snap.adaptiveState              && typeof snap.adaptiveState              === 'object') S.adaptiveState              = Object.assign(S.adaptiveState   || {}, snap.adaptiveState);
     if (Array.isArray(snap.tradeContextMemory))                                    S.tradeContextMemory         = snap.tradeContextMemory.slice(-500);
     if (snap.abTesting                  && typeof snap.abTesting                  === 'object') S.abTesting                  = Object.assign(S.abTesting       || {}, snap.abTesting);
-    if (snap.pnlPeriod                  && typeof snap.pnlPeriod                  === 'object') S.pnlPeriod                  = Object.assign(S.pnlPeriod       || {}, snap.pnlPeriod);
     if (typeof snap._genCount        === 'number') S._genCount        = snap._genCount;
     if (snap.preRealSnapshotPaperReal   && typeof snap.preRealSnapshotPaperReal   === 'object') S.preRealSnapshotPaperReal   = snap.preRealSnapshotPaperReal;
   } catch(e) { dbg.push('paperReal:err'); }
@@ -365,12 +365,9 @@ async function loadState() {
   try {
     S.cycle           = typeof snap.cycle === 'number' ? snap.cycle : 0;
     S.cycleMax        = snap.cycleMax        || 30;
-    S.pnl24h          = snap.pnl24h          || 0;
-    S.pnlHistory      = snap.pnlHistory      || [];
     S.chainLog        = snap.chainLog        || [];
     S.learningHistory = snap.learningHistory || [];
     S.evoLog          = snap.evoLog          || [];
-    S.openPositions   = snap.openPositions   || [];
   } catch(e) { dbg.push('cycle:err'); }
 
   try {

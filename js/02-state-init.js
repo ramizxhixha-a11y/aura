@@ -1,3 +1,5 @@
+// [SEPARATION COMPLETE 3 MODES · 02/07/2026] openPositions + pnlHistory + pnl24h + pnlPeriod + etat bunker PAR MODE (accesseurs) · garde fermeture auto en 'real' · migration one-shot (dette orpheline purgee) · purge copies mortes du wallet
+// [FIX] transfert MAX (100%) : vide la caisse au centime pres + nettoyage residu (avant : Math.floor laissait la partie <1$) · 01/07/2026
 // [ETAPE 5 · SEPARATION 3 MODES] journal de bord (dreamJournal) PAR MODE + reset auto · 01/07/2026
 // [ETAPE 4 · SEPARATION 3 MODES] pairStates + fees PAR MODE (trades/P&L/frais separes, reset auto) · 01/07/2026
 // [ETAPE 2 · SEPARATION 3 MODES] aiguillage argent par accesseurs (mode actif) · 01/07/2026
@@ -5336,6 +5338,9 @@ function openPosition(pair, side) {
 
 // botClose=true means called from bot — MUST NOT close manual positions
 function closePosition(id, botClose = false) {
+  // ★ GARDE MODE REEL · aucune fermeture AUTOMATIQUE (botClose) en mode 'real' :
+  // le bot ne touche jamais au reel. Les fermetures MANUELLES restent libres.
+  if (botClose && S.tradingMode === 'real') return;
   // v7.12 · PACK RÉSILIENCE · sauvegarde avant fermeture
   try { if (typeof _p5PreActionSave === 'function') _p5PreActionSave('close'); } catch(e) {}
 
@@ -5816,26 +5821,26 @@ function _freshWallet() {
     // — cumul P&L realise, internes levier & legacy EUR (par mode) —
     _totalCompounded:0, _autoLevBase:0, _autoLevBorrowed:0, _ownFundsLegacyEUR:0,
     // — compteurs de perf (par mode, a zero) —
-    totalTrades:0, winTrades:0, consecLosses:0,
-    // — detail par paire (agrege) —
-    statsByPair:{},
+    totalTrades:0, winTrades:0,
     // — ETAPE 4 : etat de trading par-paire PAR MODE (price, candles, trades, P&L, capital...) —
     //   rempli par _ensureWalletStore pour toutes les paires courantes —
     pairStates:{},
     // — ETAPE 4 : frais + reserve frais PAR MODE (feeReserveAccount = le compte separe) —
     fees:{ totalTradingFees:0, totalFunding:0, totalSlippage:0, totalGross:0, totalTaxProvision:0, totalPnlGross:0, totalPnlNet:0, tradeCount:0, feeReserveAccount:0, feeLog:[], byPair:{} },
-    // — securite & execution —
-    killSwitch:{},        // { 'BTC/USDT': {paused,lossStreak,reason} }
-    activePairs:{},       // { 'BTC/USDT': true }
-    timeframe:'15m',
+    // — SEPARATION COMPLETE : positions ouvertes PAR MODE —
+    openPositions:[],
+    // — SEPARATION COMPLETE : etat bunker PAR MODE (la config reste dans S.bunkerCfg) —
+    bunker:{ active:false, capRef:0, startCapital:0, triggerTs:0, pausedByBunker:false },
+    // — execution —
     running:false,        // play/pause INDEPENDANT de ce mode
     // — historique P&L —
     pnlPeriod:{ day:0, week:0, month:0, history:[] },
+    // — SEPARATION COMPLETE : courbe portefeuille + P&L 24h PAR MODE —
+    pnlHistory:[], pnl24h:0,
     // — journaux —
     cashLog:[], fiscalReserveLog:[], ownFundsLog:[],
     // — ETAPE 5 : journal de bord (trades affiches) PAR MODE —
-    dreamJournal:[],
-    startedAt:0
+    dreamJournal:[]
   };
 }
 function _freshWalletStore() {
@@ -5867,6 +5872,14 @@ function _ensureWalletStore() {
     if (!S.walletStore[k] || typeof S.walletStore[k] !== 'object') {
       S.walletStore[k] = _freshWallet();
     } else {
+      var _wm = S.walletStore[k];
+      // MIGRATION SEPARATION COMPLETE (07/2026) · one-shot par wallet existant :
+      // openPositions devient PAR MODE. Les positions du flat global legacy sont
+      // abandonnees ; les emprunts qui les couvraient deviendraient des dettes
+      // orphelines -> remis a zero avec elles.
+      if (!('openPositions' in _wm)) { _wm.openPositions = []; _wm.leverageBorrowed = 0; _wm._autoLevBorrowed = 0; }
+      // Purge des copies mortes du wallet (jamais branchees sur un accesseur) :
+      ['consecLosses','statsByPair','killSwitch','activePairs','timeframe','startedAt'].forEach(function(fd){ if (fd in _wm) delete _wm[fd]; });
       var base = _freshWallet();               // complete les champs ajoutes en montee de version
       for (var f in base) if (!(f in S.walletStore[k])) S.walletStore[k][f] = base[f];
     }
@@ -5915,7 +5928,8 @@ var _WALLET_ACCESSOR_FIELDS = [
   'leverage','leverageReserve','leverageBorrowed','leverageTotalFees',
   '_autoLevBase','_autoLevBorrowed','antiNegReserve','totalTrades','winTrades',
   'cashLog','fiscalReserveLog','ownFundsLog','antiNegReserveLog',
-  'pairStates','fees','dreamJournal'
+  'pairStates','fees','dreamJournal',
+  'openPositions','pnlHistory','pnl24h','pnlPeriod','bunker'
 ];
 function _installWalletAccessors() {
   if (typeof S === 'undefined' || !S) return;
@@ -6228,8 +6242,12 @@ function updateTransferUI() {
 }
 
 function setTransferPct(pct) {
-  const src = transferDir==='cash2trade' ? S.cashAccount : S.tradingAccount;
-  document.getElementById('transferInput').value = Math.floor(src * pct/100);
+  const src = (transferDir==='cash2trade' ? S.cashAccount : S.tradingAccount) || 0;
+  // MAX (100%) = tout transferer AU CENTIME pres. Avant : Math.floor arrondissait
+  // au dollar entier, donc 22.77 -> 22 et il restait 0.77 en caisse. Pour 100% on
+  // plafonne au centime inferieur (jamais au-dessus du solde) ; sinon dollar entier.
+  const val = pct >= 100 ? Math.floor(src*100)/100 : Math.floor(src * pct/100);
+  document.getElementById('transferInput').value = val;
 }
 
 function confirmTransfer() {
@@ -6240,6 +6258,7 @@ function confirmTransfer() {
     if(amount > S.cashAccount) { showToast('⚠ Fonds insuffisants en caisse', 2800, 'critical'); return; }
     S.cashAccount    -= amount;
     S.tradingAccount += amount;
+    if(S.cashAccount < 0.01) S.cashAccount = 0;   // MAX : pas de residu de centimes en caisse
     if(!S.cashLog) S.cashLog = [];
     S.cashLog.unshift({ amount:-amount, source:'transfer_out', ts:Date.now(), time:nowStr() });
     if(S.cashLog.length > 200) S.cashLog.pop();
@@ -6280,6 +6299,7 @@ function confirmTransfer() {
     }
     S.tradingAccount -= amount;
     S.cashAccount    += amount;
+    if(S.tradingAccount < 0.01) S.tradingAccount = 0;   // MAX : pas de residu de centimes en trading
     if(!S.cashLog) S.cashLog = [];
     S.cashLog.unshift({ amount:amount, source:'transfer_in', ts:Date.now(), time:nowStr() });
     if(S.cashLog.length > 200) S.cashLog.pop();

@@ -1,3 +1,4 @@
+// [SEPARATION COMPLETE 3 MODES · 02/07/2026] GARDE MODE REEL : aucune ouverture automatique en 'real' (analyse/suggestions continuent, trades manuels libres) + gate bunker lu par mode
 // ════════════════════════════════════════════════════════════════════════
 // ▓▓▓ AURA8 — 09c-auto-open.js ▓▓▓
 // ════════════════════════════════════════════════════════════════════════
@@ -14,6 +15,18 @@
 // ════════════════════════════════════════════════════════════════════════
 
 function autoOpenPosition(pair, side, stakeOverride) {
+
+  // ★ GARDE MODE REEL · le bot n'ouvre JAMAIS de position automatiquement en
+  // mode 'real' (regle : le bot ne touche pas au reel — AUTO comme MANU).
+  // L'analyse, l'apprentissage et les suggestions continuent ; seule
+  // l'EXECUTION auto est bloquee. Les trades manuels restent libres.
+  if (S.tradingMode === 'real') {
+    if (!window._reAutoBlockToasted) {
+      window._reAutoBlockToasted = true;
+      try { showToast('\uD83D\uDD12 Mode R\u00C9EL : ex\u00E9cution automatique bloqu\u00E9e \u2014 trades manuels uniquement', 4500, 'warn'); } catch(e) {}
+    }
+    return;
+  }
 
   // Gate global : le bot n'agit que si AUTO est activé
   if (S.botAutoMode === false) return;
@@ -38,7 +51,7 @@ function autoOpenPosition(pair, side, stakeOverride) {
 
   // Gate Bunker : si le mode Bunker est actif et configuré pour pauser le bot,
   // on s'abstient d'ouvrir (protection d'urgence). Ne touche pas botAutoMode.
-  if (S.bunkerCfg && S.bunkerCfg.active === true && S.bunkerCfg.pausedByBunker === true) {
+  if (S.bunker && S.bunker.active === true && S.bunker.pausedByBunker === true) {
     if (Math.random() < 0.05) {
       S.chainLog.push({
         icon: '🚨',

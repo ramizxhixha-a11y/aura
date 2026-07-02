@@ -1,3 +1,5 @@
+// [SEPARATION COMPLETE 3 MODES · 02/07/2026] bunker PAR MODE : active/capRef/startCapital/pausedByBunker vivent dans le wallet du mode actif · plus de faux declenchement au switch · cle LS globale legacy supprimee
+// [FIX] badge levier 'EMPRUNT BLOQUE' : cache par defaut a chaque rendu (ne reste plus affiche dans un mode sans emprunt) · 02/07/2026
 // [FIX] bunker : pas de declenchement sans capital (evite le faux -100% apres reset) · 01/07/2026
 // ════════════════════════════════════════════════════════════
 // AURA8 — module consolidé 07/10 · maj 10/06/2026 (sync boutons répartition + total en $ + fonds propres €)
@@ -9,15 +11,21 @@
 // positions réduites au strict minimum, alerte Telegram
 
 let _bunkerTimer  = null;
-const _BK_CAP_REF_KEY = 'aura_bunker_cap_ref_v90';
+// ★ ETAT BUNKER PAR MODE · vit dans le wallet du mode actif (accesseur S.bunker) :
+// active / capRef / startCapital / triggerTs / pausedByBunker sont PAR MODE.
+// -> un bunker declenche en AA ne s'affiche plus en EV/RE, et la reference de
+//    capital d'un mode ne provoque plus de faux -90% dans un autre mode.
+// La CONFIG (enabled, triggerDropPct, actions, seuils) reste globale (S.bunkerCfg).
+function _bkState() {
+  if (!S.bunker || typeof S.bunker !== 'object') S.bunker = { active:false, capRef:0, startCapital:0, triggerTs:0, pausedByBunker:false };
+  return S.bunker;
+}
+try { localStorage.removeItem('aura_bunker_cap_ref_v90'); } catch(e) {}  // cle legacy GLOBALE supprimee (remplacee par S.bunker.capRef par mode)
 
 function _bkGet() {
   if(!S.bunkerCfg) S.bunkerCfg = {
     enabled:        true,
     triggerDropPct: 10,   // % de chute pour déclencher
-    active:         false,
-    startCapital:   null,
-    triggerTs:      null,
     actions: {
       pauseBot:     true,
       reduceMises:  true,
@@ -38,12 +46,12 @@ function _bkInitCapRef() {
     // v118 FIX · Toujours réinitialiser la référence au démarrage
     // Évite les déclenchements parasites basés sur des anciens highs de sessions précédentes
     // La référence repart du capital actuel → le bunker ne peut déclencher que sur une chute FUTURE
-    localStorage.setItem(_BK_CAP_REF_KEY, cap.toString());
+    _bkState().capRef = cap;
   }
 }
 
 function _bkGetCapRef() {
-  return parseFloat(localStorage.getItem(_BK_CAP_REF_KEY)||'0') || S.tradingAccount||1000;
+  return _bkState().capRef || 0;
 }
 
 // Vérifier si le bunker doit se déclencher
@@ -57,41 +65,47 @@ function checkBunker() {
   // qu'une future injection reparte proprement.
   const cap = S.tradingAccount||0;
   if(cap <= 0) {
-    if(cfg.active) { try { exitBunker(); } catch(e){} }
-    try { localStorage.removeItem(_BK_CAP_REF_KEY); } catch(e){}
+    if(_bkState().active) { try { exitBunker(); } catch(e){} }
+    _bkState().capRef = 0;
     return;
   }
 
-  if(!cfg.enabled || cfg.active) return;
+  if(!cfg.enabled || _bkState().active) return;
 
-  const capRef = _bkGetCapRef();
-  if(capRef<=0) return;
+  let capRef = _bkGetCapRef();
+  if(capRef <= 0) {
+    // Premiere reference de CE mode : on la pose au capital courant.
+    // La chute ne peut se mesurer qu'a partir du prochain passage (chute FUTURE).
+    _bkState().capRef = cap;
+    return;
+  }
 
   const dropPct = (capRef-cap)/capRef*100;
 
   if(dropPct >= cfg.triggerDropPct) {
     activateBunker(dropPct);
   }
-  // Mettre à jour la référence si le capital monte (nouveau high)
+  // Mettre à jour la référence si le capital monte (nouveau high) — du mode actif
   if(cap > capRef) {
-    localStorage.setItem(_BK_CAP_REF_KEY, cap.toString());
+    _bkState().capRef = cap;
   }
 }
 window.checkBunker = checkBunker;
 
 function activateBunker(dropPct) {
   const cfg = _bkGet();
-  if(cfg.active) return;
-  cfg.active      = true;
-  cfg.triggerTs   = Date.now();
-  cfg.startCapital= S.tradingAccount||0;
+  var _bst = _bkState();
+  if(_bst.active) return;
+  _bst.active      = true;
+  _bst.triggerTs   = Date.now();
+  _bst.startCapital= S.tradingAccount||0;
   const dropStr   = (dropPct||0).toFixed(1);
 
   // Actions immédiates
   if(cfg.actions.pauseBot) {
     // Pause du bot via un flag DÉDIÉ au bunker — ne touche JAMAIS botAutoMode
     // (axe utilisateur seul). autoOpenPosition consulte ce flag pour s'abstenir.
-    cfg.pausedByBunker = true;
+    _bst.pausedByBunker = true;
   }
   if(cfg.actions.reduceMises) {
     const prevStake = S.stakeConfig?.defaultStake||S.stakeUsdt||20;
@@ -132,10 +146,10 @@ window.activateBunker = activateBunker;
 // Check auto sortie
 function _bkAutoCheck() {
   const cfg    = _bkGet();
-  if(!cfg.active) return;
+  if(!_bkState().active) return;
   _bkUpdateBanner();
   const cap    = S.tradingAccount||0;
-  const start  = cfg.startCapital||cap;
+  const start  = _bkState().startCapital||cap;
   if(start>0 && (cap-start)/start*100 >= cfg.recoveryPct) {
     showToast(`✅ Capital récupéré +${cfg.recoveryPct}% — Bunker levé automatiquement`, 3500, 'win');
     exitBunker();
@@ -161,12 +175,13 @@ function exitBunker() {
     delete a._bunkerPaused;
   });
 
-  // Nouvelle référence = capital actuel
+  // Nouvelle référence = capital actuel (du mode actif)
   const cap = S.tradingAccount||0;
-  if(cap>0) localStorage.setItem(_BK_CAP_REF_KEY, cap.toString());
+  if(cap>0) _bkState().capRef = cap;
 
-  cfg.active = false;
-  cfg.pausedByBunker = false;
+  var _bstx = _bkState();
+  _bstx.active = false;
+  _bstx.pausedByBunker = false;
   document.getElementById('bunkerBanner')?.classList.remove('show');
   document.getElementById('pages')?.style.removeProperty('padding-top');
   showToast('🏳️ Mode Bunker levé — Capital référence réinitialisé', 3000, 'win');
@@ -191,12 +206,13 @@ window.updateBkParam = updateBkParam;
 // Vérification automatique toutes les 2min
 setInterval(()=>{ try { checkBunker(); } catch(e){}; }, 120000);
 // Init référence au démarrage
-setTimeout(()=>{ _bkInitCapRef(); _bkGet(); if(_bkGet().active){ document.getElementById('bunkerBanner')?.classList.add('show'); document.getElementById('pages')?.style.setProperty('padding-top','28px'); } }, 2000);
+setTimeout(()=>{ _bkInitCapRef(); _bkGet(); if(_bkState().active){ document.getElementById('bunkerBanner')?.classList.add('show'); document.getElementById('pages')?.style.setProperty('padding-top','28px'); } }, 2000);
 
 function renderBunkerSection() {
   const el  = document.getElementById('bunkerSection');
   if(!el) return;
   const cfg = _bkGet();
+  const _bact = _bkState().active;   // etat PAR MODE (le badge ACTIF ne concerne que le mode courant)
   const capRef = _bkGetCapRef();
   const cap    = S.tradingAccount||0;
   const dropPct= capRef>0?(capRef-cap)/capRef*100:0;
@@ -205,20 +221,20 @@ function renderBunkerSection() {
   el.innerHTML = `
     <div class="bk-section">
       <div class="bk-title">🚨 Mode Bunker SOS
-        <span style="font-size:8px;color:${cfg.active?'var(--down)':'var(--t3)'};font-weight:400;">${cfg.active?'ACTIF':'En veille'}</span>
+        <span style="font-size:8px;color:${_bact?'var(--down)':'var(--t3)'};font-weight:400;">${_bact?'ACTIF':'En veille'}</span>
       </div>
 
       <!-- Status -->
       <div class="bk-status">
-        <div style="font-size:28px;margin-bottom:6px;">${cfg.active?'🚨':'🛡️'}</div>
-        <div style="font-size:${cfg.active?14:11}px;font-weight:900;color:${cfg.active?'var(--down)':'var(--t1)'};">${cfg.active?'BUNKER ACTIVÉ':'Protection active'}</div>
+        <div style="font-size:28px;margin-bottom:6px;">${_bact?'🚨':'🛡️'}</div>
+        <div style="font-size:${_bact?14:11}px;font-weight:900;color:${_bact?'var(--down)':'var(--t1)'};">${_bact?'BUNKER ACTIVÉ':'Protection active'}</div>
         <div style="font-size:9px;color:var(--t3);margin-top:4px;">
           Référence capital : $${capRef.toFixed(0)} · Actuel : $${cap.toFixed(0)}
         </div>
         <div style="font-size:11px;font-weight:700;margin-top:4px;color:${trigColor};">
           Chute actuelle : ${dropPct.toFixed(1)}% / seuil ${cfg.triggerDropPct}%
         </div>
-        ${cfg.active?`
+        ${_bact?`
         <button onclick="exitBunker()" style="margin-top:8px;padding:6px 16px;border-radius:7px;background:rgba(255,61,107,.12);border:1px solid rgba(255,61,107,.3);color:var(--down);font-size:10px;font-weight:700;cursor:pointer;font-family:inherit;">🏳️ Lever le bunker</button>`:''}
       </div>
 
@@ -4898,6 +4914,14 @@ function renderHome() {
 
   // Session info — leverage utilization (v6.8: sync with levBorrowedSub block above)
   // NOTE: levBorrowedSub already set above (lines ~49-56) — only update if borrowed
+  // FIX PAR MODE · cacher l'alerte levier PAR DEFAUT a chaque rendu. Sans ca,
+  // quand un mode a emprunte (alerte "EMPRUNT BLOQUE" creee/affichee) puis qu'on
+  // passe a un mode SANS emprunt, le bloc ci-dessous ne s'execute pas (il est
+  // garde par leverageBorrowed > 0) donc l'alerte restait affichee a tort.
+  try {
+    var _p9AlertReset = document.getElementById('p9LevAlert');
+    if (_p9AlertReset) _p9AlertReset.style.display = 'none';
+  } catch(e) {}
   if(S.leverageBorrowed > 0) {
     const levUtil = S.leverageReserve > 0
       ? Math.round(S.leverageBorrowed / (S.leverageReserve + S.leverageBorrowed) * 100)

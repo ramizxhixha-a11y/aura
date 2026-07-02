@@ -1,3 +1,4 @@
+// [SEPARATION COMPLETE 3 MODES · 02/07/2026] flat openPositions/pnl24h/pnlHistory/pnlPeriod retires (walletStore les porte par mode)
 // [ETAPE 1 · SEPARATION 3 MODES] walletStore additif dormant · 01/07/2026
 // ════════════════════════════════════════════════════════════════════════
 // ▓▓▓ AURA8 — 09b1-build-snapshot.js · VERSION 123 · 10/06/2026 ▓▓▓
@@ -93,7 +94,6 @@ function buildSnapshot() {
         }])
       ),
 
-      openPositions: S.openPositions || [],
 
       // Frais & taxes
       fees:      S.fees,
@@ -109,8 +109,6 @@ function buildSnapshot() {
       // Stats globales
       totalTrades:     S.totalTrades,
       winTrades:       S.winTrades,
-      pnl24h:          S.pnl24h,
-      pnlHistory:      (S.pnlHistory || []).slice(-80),
       _startPortfolio: S._startPortfolio || S.portfolio,
 
       // Version
@@ -197,7 +195,6 @@ function buildSnapshot() {
       adaptiveState:             S.adaptiveState || {},
       tradeContextMemory:        (S.tradeContextMemory || []).slice(-500),
       abTesting:                 S.abTesting || null,
-      pnlPeriod:                 S.pnlPeriod || null,
 
       preRealSnapshotPaperReal: (S.tradingMode === 'paperReal') ? (S.preRealSnapshotPaperReal || null) : null,
 
