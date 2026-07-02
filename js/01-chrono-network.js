@@ -1,5 +1,5 @@
+// [FIX] play/pause PAR MODE STRICT retabli : play dans un mode n affecte JAMAIS les deux autres (annule le play global du 01/07) + one-shot remise en pause des drapeaux pollues + purge cle legacy aura_sim_running · 02/07/2026
 // [FIX] badge mode sous le chrono (#modeBadge) cable au boot et au switch (etait un HTML statique affichant 'AA' en permanence) · 02/07/2026
-// [FIX] changer de mode ne coupe plus le moteur : play/pause global, le chrono ne se fige plus au switch · 01/07/2026
 // [FIX] switch de mode : renderAll() pour repeindre les cartes wallet du mode actif (donnees deja par mode) · 01/07/2026
 // [ETAPE 3 · SEPARATION 3 MODES] play/pause PAR MODE (defaut pause, memoire par mode, auto-resume par mode) + play bloque si compte trading vide · 01/07/2026
 /* ═══════════════════════════════════════════════════════════
@@ -9,7 +9,7 @@
    ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓
 
    v118.17 : AUTO-REPRISE EN ARRIÈRE-PLAN
-   - La sim mémorise son état (clé localStorage 'aura_sim_running').
+   - Chaque mode memorise son etat play/pause (walletStore[mode].running).
    - Au retour d'arrière-plan / reload, elle se relance toute seule.
    - Le bouton ▶ ne réapparaît plus jamais pour bloquer l'utilisateur.
    - Respecte une pause volontaire (ne redémarre que si elle tournait).
@@ -271,7 +271,6 @@ window._auraGetGlobalS = _auraGetGlobalS;
       try { simTick(); } catch(e) { console.warn('[AURA simTick]', e); }
     }, 1000);
     window._auraSimState.running = true;
-    try { localStorage.setItem('aura_sim_running','1'); } catch(e) {}
     // ETAPE 3 · play/pause PAR MODE : marque le mode actif comme "en cours"
     try {
       var _pmM = (window.AuraChrono && window.AuraChrono.getCurrentMode) ? window.AuraChrono.getCurrentMode() : 'sim';
@@ -298,7 +297,6 @@ window._auraGetGlobalS = _auraGetGlobalS;
     if (!window._auraSimState.running) return;
     if (window._auraSimState.interval) { clearInterval(window._auraSimState.interval); window._auraSimState.interval = null; }
     window._auraSimState.running = false;
-    try { localStorage.setItem('aura_sim_running','0'); } catch(e) {}
     // ETAPE 3 · play/pause PAR MODE : marque le mode actif comme "en pause"
     try {
       var _pmM = (window.AuraChrono && window.AuraChrono.getCurrentMode) ? window.AuraChrono.getCurrentMode() : 'sim';
@@ -416,18 +414,17 @@ window._auraGetGlobalS = _auraGetGlobalS;
       setFn(nextMode);
     } catch(e) {}
 
-    // FIX · changer de mode NE coupe PAS le moteur (le chrono ne se fige plus).
-    // Avant : le moteur adoptait le play/pause memorise du nouveau mode, donc
-    // passer d'un mode qui tourne a un mode jamais lance (en pause par defaut)
-    // appelait stopSim() et figeait le chrono. Desormais le play/pause est GLOBAL :
-    // s'il tournait il continue dans le nouveau mode (le chrono de ce mode compte) ;
-    // s'il etait en pause il reste en pause. On aligne juste le drapeau du nouveau
-    // mode sur l'etat courant pour rester coherent (boot / auto-resume).
-    // NB : on ne touche NI le bouton play/pause NI l'intervalle → le moteur garde
-    // son etat ; le tick du chrono suit le bouton (⏸ = compte) sans interruption.
+    // PLAY/PAUSE PAR MODE (strict) · le moteur suit le drapeau DU NOUVEAU mode :
+    // s'il etait "en cours" (play memorise), on (re)lance ; sinon on met en pause.
+    // L'ancien mode garde son propre drapeau (il "se souvient" et REPREND tout
+    // seul quand on revient dessus). Faire play dans un mode n'affecte JAMAIS
+    // les deux autres. (Annule le play/pause "global" du 01/07 qui mettait tous
+    // les modes visites en play.)
     try {
-      var _run = !!(window._auraSimState && window._auraSimState.running);
-      if (window._setModeRunning) window._setModeRunning(nextMode, _run);
+      var _wants = window._isModeRunning ? !!window._isModeRunning(nextMode) : false;
+      var _run   = !!(window._auraSimState && window._auraSimState.running);
+      if (_wants && !_run && window.startSim)      window.startSim();
+      else if (!_wants && _run && window.stopSim)  window.stopSim();
     } catch(e) {}
 
     // ★ FIX AFFICHAGE PAR MODE · repeindre les cartes wallet du nouveau mode.
@@ -497,11 +494,10 @@ window._auraGetGlobalS = _auraGetGlobalS;
 
 /* ═══════════════════════════════════════════════════════════
    ░░ AUTO-REPRISE DE LA SIMULATION · arrière-plan / reload ░░
-   AURA mémorise dans localStorage si la sim tournait (clé
-   'aura_sim_running'). Au boot ET au retour d'arrière-plan, si elle
-   tournait, elle se relance toute seule : le bouton ▶ ne bloque plus
-   jamais l'utilisateur, et aucune progression n'est perdue. Une pause
-   volontaire est respectée (pas de redémarrage intempestif).
+   PAR MODE : chaque mode memorise son play/pause (walletStore[mode].running).
+   Au boot ET au retour d'arriere-plan, si LE MODE AFFICHE etait en cours,
+   il se relance tout seul. Une pause volontaire est respectee, et un mode
+   en pause ne demarre jamais parce qu'un autre tournait.
    ═══════════════════════════════════════════════════════════ */
 (function _auraSimAutoResume() {
   'use strict';
@@ -511,7 +507,7 @@ window._auraGetGlobalS = _auraGetGlobalS;
     try {
       var m = (window.AuraChrono && window.AuraChrono.getCurrentMode) ? window.AuraChrono.getCurrentMode() : 'sim';
       if (window._isModeRunning) return !!window._isModeRunning(m);
-      return localStorage.getItem('aura_sim_running') === '1';
+      return false;
     } catch (e) { return false; }
   }
   function _isRunning() {
@@ -533,6 +529,16 @@ window._auraGetGlobalS = _auraGetGlobalS;
   var _bootIv = setInterval(function () {
     _tries++;
     if (window._stateReady) {
+      // ONE-SHOT (drapeau LS) · le play/pause "global" du 01/07 a pu marquer les
+      // 3 modes "en cours" a tort. On remet tout en pause UNE fois : l'utilisateur
+      // refait play dans le mode voulu, et le par-mode strict repart proprement.
+      try {
+        if (!localStorage.getItem('aura_permode_reset_v2')) {
+          if (window._setModeRunning) ['sim','paperReal','real'].forEach(function(m){ window._setModeRunning(m, false); });
+          localStorage.removeItem('aura_sim_running');   // cle legacy morte, purgee
+          localStorage.setItem('aura_permode_reset_v2', String(Date.now()));
+        }
+      } catch(e) {}
       _resume();
       if (_isRunning() || !_wantsRun()) { clearInterval(_bootIv); return; }
     }
