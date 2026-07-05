@@ -1,3 +1,4 @@
+// [REGLES REEL v2 · edictees par Rams 05/07/2026] en MANU jamais d ouverture ; en AUTO ouverture RE permise UNIQUEMENT si RE est en play (consentement) — remplace le blocage total du 02/07
 // [SEPARATION COMPLETE 3 MODES · 02/07/2026] GARDE MODE REEL : aucune ouverture automatique en 'real' (analyse/suggestions continuent, trades manuels libres) + gate bunker lu par mode
 // ════════════════════════════════════════════════════════════════════════
 // ▓▓▓ AURA8 — 09c-auto-open.js ▓▓▓
@@ -16,16 +17,18 @@
 
 function autoOpenPosition(pair, side, stakeOverride) {
 
-  // ★ GARDE MODE REEL · le bot n'ouvre JAMAIS de position automatiquement en
-  // mode 'real' (regle : le bot ne touche pas au reel — AUTO comme MANU).
-  // L'analyse, l'apprentissage et les suggestions continuent ; seule
-  // l'EXECUTION auto est bloquee. Les trades manuels restent libres.
+  // ★ REGLES REEL v2 (edictees par Rams le 05/07) · en MANU : le bot ne peut
+  // JAMAIS ouvrir (il suggere, pre-remplit, surveille, et peut STOPPER — les
+  // fermetures de protection sont gerees dans closePosition). En AUTO :
+  // ouverture permise UNIQUEMENT si RE est en play (le play = ton consentement
+  // explicite). Le filtre "bases solides apprises" (conviction pleine +
+  // expectancy AA/EV positive de la paire) est applique par le decideur (10)
+  // avant meme d'arriver ici.
   if (S.tradingMode === 'real') {
-    if (!window._reAutoBlockToasted) {
-      window._reAutoBlockToasted = true;
-      try { showToast('\uD83D\uDD12 Mode R\u00C9EL : ex\u00E9cution automatique bloqu\u00E9e \u2014 trades manuels uniquement', 4500, 'warn'); } catch(e) {}
-    }
-    return;
+    if (S.botAutoMode === false) return;                     // MANU : jamais d'ouverture
+    var _reRun = false;
+    try { _reRun = window._isModeRunning ? !!window._isModeRunning('real') : false; } catch(e) {}
+    if (!_reRun) return;                                     // RE pas en play : pas de consentement
   }
 
   // Gate global : le bot n'agit que si AUTO est activé

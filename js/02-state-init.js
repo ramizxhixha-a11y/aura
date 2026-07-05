@@ -1,3 +1,4 @@
+// [REGLES REEL v2 · edictees par Rams 05/07/2026] fermetures de PROTECTION (stop/TP/perte excessive) PERMISES en Reel, en MANU comme en AUTO — le bot surveille et stoppe si necessaire
 // [FIX] injection = NEUTRE pour le P&L : les bases session/jour montent du montant injecte (avant : l'injection etait comptee comme un benefice au boot suivant — cumul EV +32.50 = l'injection de 30 EUR) · 05/07/2026
 // [SEPARATION COMPLETE 3 MODES · 02/07/2026] openPositions + pnlHistory + pnl24h + pnlPeriod + etat bunker PAR MODE (accesseurs) · garde fermeture auto en 'real' · migration one-shot (dette orpheline purgee) · purge copies mortes du wallet
 // [FIX] transfert MAX (100%) : vide la caisse au centime pres + nettoyage residu (avant : Math.floor laissait la partie <1$) · 01/07/2026
@@ -5345,9 +5346,9 @@ function openPosition(pair, side) {
 
 // botClose=true means called from bot — MUST NOT close manual positions
 function closePosition(id, botClose = false) {
-  // ★ GARDE MODE REEL · aucune fermeture AUTOMATIQUE (botClose) en mode 'real' :
-  // le bot ne touche jamais au reel. Les fermetures MANUELLES restent libres.
-  if (botClose && S.tradingMode === 'real') return;
+  // ★ REGLES REEL v2 (Rams 05/07) · les fermetures de PROTECTION (stop-loss,
+  // TP, perte excessive) sont PERMISES en Reel, en MANU comme en AUTO :
+  // "le bot surveille et stoppe si necessaire, meme si je l'ai oublie".
   // v7.12 · PACK RÉSILIENCE · sauvegarde avant fermeture
   try { if (typeof _p5PreActionSave === 'function') _p5PreActionSave('close'); } catch(e) {}
 

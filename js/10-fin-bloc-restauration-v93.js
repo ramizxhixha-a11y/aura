@@ -1,3 +1,4 @@
+// [REGLES REEL v2 · edictees par Rams 05/07/2026] filtre bases solides pour le Reel : conviction pleine >=0.40 (jamais la zone exploratoire) ET expectancy apprise AA+EV positive de la paire, sinon abstention
 // [PONT CLAUDE v4.0 · DEPOT SANS TOKEN] sans token configure, Export = POST simple vers une boite fixe (teste en reel avec le fichier de 938 Ko, relu intact par Claude) : zero compte, zero collage, zero configuration ; token GitHub reste prioritaire si present · chaque verdict affiche a quel compte GitHub appartient le token (GET /user) : un fine-grained d un autre compte que ramizxhixha-a11y ne pourra JAMAIS ecrire, quelles que soient ses permissions · la version du pont s affiche dans la barre (Pont v3.6) et dans chaque toast d erreur — preuve du 05/07 : la PWA a execute du code perime toute la soiree pendant que les fixes etaient en ligne · chaque erreur affiche les 12 premiers caracteres du token UTILISE par l app (ghp_=classic, github_pat_=fine-grained) — identification definitive du token en cause · le champ token n est plus pre-rempli : l ancien placeholder •••• faisait IGNORER en silence les nouveaux tokens colles (cause des 3 echecs identiques) — desormais tout collage est enregistre, confirme a l ecran, et teste aussitot · sha lu via le LISTING racine (le fichier ~1 Mo pouvait faire echouer la lecture directe du sha) + chaque refus affiche LE MESSAGE BRUT DE GITHUB a l ecran (capture = cause exacte) · sans token : feuille de partage Android (fonctionne en PWA) -> envoyer aura_live.json directement a l appli Claude ; token = envoi repo 1 clic ; dernier recours telechargement · le token est teste des le collage (verdict precis : ecrit OK / lit sans ecrire / repo invisible / mal colle) + verdicts 401 vs 403 distincts a l envoi · Export pour Claude : avec token GitHub (⚙, fine-grained repo aura Contents RW) le fichier est POUSSE au repo en 1 clic (zero telechargement/upload/commit — requis en PWA ou le download Blob est ignore) ; sans token : telechargement classique · 05/07/2026
 // [AGRESSIVITE · validee par Rams 05/07/2026] seuil d engagement 0.40 -> 0.30 avec zone exploratoire a mise reduite (50-100%) + anti-stagnation actif sur ce gate + TP plancher 0.6% + SL 1.4x hors bruit (plancher 0.45%) + seuil LMSR sans double comptage fiscal · 05/07/2026
 // [FIX] plus de log/toast 'BOT LONG' fantome quand l'ouverture est bloquee (garde mode REEL) ou echoue · 05/07/2026
@@ -1740,6 +1741,30 @@ function _resolvePairCycleCore(pair, ps) {
   // rejetait la quasi-totalite (9 trades en 3 jours) et neutralisait l'anti-
   // stagnation (_convBoost n'atteignait jamais ce gate). Demi-mise = plus de
   // trades + plus d'apprentissage reel, risque par trade contenu.
+  // ★ REGLES REEL v2 (Rams 05/07) · en Reel, pas de zone exploratoire ni de
+  // paris : ouverture seulement a conviction PLEINE (>= 0.40) ET sur une paire
+  // dont l'expectancy APPRISE (P&L nets cumules en AA + EV) est positive —
+  // "tenter une session gagnante avec des bases solides".
+  if (S.tradingMode === 'real') {
+    var _reSolid = false;
+    if (effectiveConviction >= 0.40) {
+      var _learned = 0;
+      try {
+        var _wsL = S.walletStore || {};
+        ['sim','paperReal'].forEach(function(_mk){
+          var _psL = _wsL[_mk] && _wsL[_mk].pairStates && _wsL[_mk].pairStates[pair];
+          if (_psL && typeof _psL.totalPnlUsd === 'number') _learned += _psL.totalPnlUsd;
+        });
+      } catch(e) {}
+      _reSolid = _learned > 0;
+    }
+    if (!_reSolid) {
+      learnFromOutcome('cycle', 0, pair);
+      ps.qYes = Math.max(20, 100 + (ps.qYes - 100) * 0.95);
+      ps.qNo  = Math.max(20, 100 + (ps.qNo  - 100) * 0.95);
+      return;
+    }
+  }
   const _convFloor = 0.30 - Math.min(0.04, (S._convBoost || 0) * 0.5);
   if(_gainNet < _minNetGain || effectiveConviction < _convFloor) {
     learnFromOutcome('cycle', 0, pair);
