@@ -1,4 +1,4 @@
-// [PONT CLAUDE v3.1 · TEST TOKEN] le token est teste des le collage (verdict precis : ecrit OK / lit sans ecrire / repo invisible / mal colle) + verdicts 401 vs 403 distincts a l envoi · Export pour Claude : avec token GitHub (⚙, fine-grained repo aura Contents RW) le fichier est POUSSE au repo en 1 clic (zero telechargement/upload/commit — requis en PWA ou le download Blob est ignore) ; sans token : telechargement classique · 05/07/2026
+// [PONT CLAUDE v3.3 · ABOUTIR LE TOKEN] sha lu via le LISTING racine (le fichier ~1 Mo pouvait faire echouer la lecture directe du sha) + chaque refus affiche LE MESSAGE BRUT DE GITHUB a l ecran (capture = cause exacte) · sans token : feuille de partage Android (fonctionne en PWA) -> envoyer aura_live.json directement a l appli Claude ; token = envoi repo 1 clic ; dernier recours telechargement · le token est teste des le collage (verdict precis : ecrit OK / lit sans ecrire / repo invisible / mal colle) + verdicts 401 vs 403 distincts a l envoi · Export pour Claude : avec token GitHub (⚙, fine-grained repo aura Contents RW) le fichier est POUSSE au repo en 1 clic (zero telechargement/upload/commit — requis en PWA ou le download Blob est ignore) ; sans token : telechargement classique · 05/07/2026
 // [AGRESSIVITE · validee par Rams 05/07/2026] seuil d engagement 0.40 -> 0.30 avec zone exploratoire a mise reduite (50-100%) + anti-stagnation actif sur ce gate + TP plancher 0.6% + SL 1.4x hors bruit (plancher 0.45%) + seuil LMSR sans double comptage fiscal · 05/07/2026
 // [FIX] plus de log/toast 'BOT LONG' fantome quand l'ouverture est bloquee (garde mode REEL) ou echoue · 05/07/2026
 // ════════════════════════════════════════════════════════════
@@ -2151,12 +2151,36 @@ function exportForClaude() {
     };
     var tk = null; try { tk = localStorage.getItem('aura_claude_gh_token') || null; } catch(e) {}
     if (tk) { _claudePush(payload, tk); return; }
-    // Fallback sans token : telechargement classique (marche en onglet navigateur ;
-    // en PWA installee Android le download est ignore -> configurer le token via ⚙).
-    downloadFile(JSON.stringify(payload), 'aura_live.json', 'application/json');
-    var hh = new Date(); var pad = function(n){ return (n<10?'0':'')+n; };
-    try { showToast('\u2705 aura_live.json \u00b7 cycle ' + (payload.auraCycle||'?') + ' \u00b7 ' + pad(hh.getHours()) + ':' + pad(hh.getMinutes()) + ' \u2014 si RIEN n\'apparait dans T\u00e9l\u00e9chargements (PWA) : configure le token \u2699 pour l\'envoi direct', 7000, 'win'); } catch(e) {}
+    _claudeShareOrDownload(payload);
   } catch(e) { try { showToast('Export Claude : erreur', 3000, 'warn'); } catch(_) {} }
+}
+
+// SANS token : feuille de PARTAGE Android (marche en PWA, la ou le telechargement
+// est ignore). L'utilisateur choisit l'appli Claude -> le fichier arrive dans le
+// chat. Fallback final : telechargement classique (onglet navigateur).
+function _claudeShareOrDownload(payload) {
+  var txt = JSON.stringify(payload);
+  var cyc = payload.auraCycle || '?';
+  try {
+    if (navigator.canShare && typeof File === 'function') {
+      var f = new File([txt], 'aura_live.json', { type: 'application/json' });
+      if (navigator.canShare({ files: [f] })) {
+        navigator.share({ files: [f], title: 'aura_live.json \u00b7 cycle ' + cyc })
+          .then(function(){ try { showToast('\u2705 Partag\u00e9 \u00b7 cycle ' + cyc + ' \u2014 choisis Claude (ou envoie le fichier dans le chat)', 6000, 'win'); } catch(e) {} })
+          .catch(function(err){
+            if (err && err.name === 'AbortError') return;   // feuille fermee volontairement
+            _claudeDownloadFallback(txt, cyc);
+          });
+        return;
+      }
+    }
+  } catch(e) {}
+  _claudeDownloadFallback(txt, cyc);
+}
+function _claudeDownloadFallback(txt, cyc) {
+  downloadFile(txt, 'aura_live.json', 'application/json');
+  var hh = new Date(); var pad = function(n){ return (n<10?'0':'')+n; };
+  try { showToast('\u2705 aura_live.json \u00b7 cycle ' + cyc + ' \u00b7 ' + pad(hh.getHours()) + ':' + pad(hh.getMinutes()) + ' \u2014 dans T\u00e9l\u00e9chargements', 6000, 'win'); } catch(e) {}
 }
 
 // Envoi DIRECT au repo (API GitHub, token fine-grained limite au repo, Contents RW).
@@ -2167,28 +2191,34 @@ function _claudeB64(str) {
   return btoa(unescape(encodeURIComponent(str)));
 }
 function _claudePush(payload, tk) {
-  var api = 'https://api.github.com/repos/ramizxhixha-a11y/aura/contents/aura_live.json';
+  var base = 'https://api.github.com/repos/ramizxhixha-a11y/aura';
   var hdr = { 'Authorization': 'Bearer ' + tk, 'Accept': 'application/vnd.github+json' };
   try { showToast('\u23F3 Envoi \u00e0 Claude\u2026', 2500, 'ice'); } catch(e) {}
-  fetch(api, { headers: hdr, cache: 'no-store' })
-    .then(function(r){ return r.status === 200 ? r.json() : null; })
-    .then(function(meta){
-      var body = { message: 'aura_live via AURA \u00b7 cycle ' + (payload.auraCycle||'?'), content: _claudeB64(JSON.stringify(payload)) };
-      if (meta && meta.sha) body.sha = meta.sha;
-      return fetch(api, { method: 'PUT', headers: Object.assign({ 'Content-Type': 'application/json' }, hdr), body: JSON.stringify(body) });
+  // Le sha du fichier existant est lu via le LISTING de la racine (fiable quelle
+  // que soit la taille du fichier ; le GET direct d'un fichier proche de 1 Mo
+  // peut etre refuse par l'API et aurait fait echouer la mise a jour).
+  fetch(base + '/contents/?ref=main', { headers: hdr, cache: 'no-store' })
+    .then(function(r){
+      if (r.status !== 200) return r.json().catch(function(){ return {}; }).then(function(j){ throw { st: r.status, gh: j && j.message }; });
+      return r.json();
+    })
+    .then(function(list){
+      var sha = null;
+      if (Array.isArray(list)) { for (var i = 0; i < list.length; i++) { if (list[i] && list[i].name === 'aura_live.json') { sha = list[i].sha; break; } } }
+      var body = { message: 'aura_live via AURA \u00b7 cycle ' + (payload.auraCycle || '?'), content: _claudeB64(JSON.stringify(payload)) };
+      if (sha) body.sha = sha;
+      return fetch(base + '/contents/aura_live.json', { method: 'PUT', headers: Object.assign({ 'Content-Type': 'application/json' }, hdr), body: JSON.stringify(body) });
     })
     .then(function(r){
-      if (r && (r.status === 200 || r.status === 201)) {
-        try { showToast('\u2705 Envoy\u00e9 \u00e0 Claude \u00b7 cycle ' + (payload.auraCycle||'?') + ' \u2014 il peut le lire maintenant', 6000, 'win'); } catch(e) {}
-      } else if (r && r.status === 401) {
-        try { showToast('\u26D4 Token invalide (mal coll\u00e9 ou expir\u00e9) \u2014 recolle-le via \u2699', 7000, 'warn'); } catch(e) {}
-      } else if (r && r.status === 403 || (r && r.status === 404)) {
-        try { showToast('\u26D4 Droits insuffisants \u2192 refais le token : Only select repositories \u2192 aura + Contents : Read and write', 8000, 'warn'); } catch(e) {}
-      } else {
-        try { showToast('\u26A0 Envoi \u00e9chou\u00e9 (HTTP ' + (r ? r.status : '?') + ')', 5000, 'warn'); } catch(e) {}
-      }
+      if (!r) return;
+      if (r.status === 200 || r.status === 201) { try { showToast('\u2705 Envoy\u00e9 \u00e0 Claude \u00b7 cycle ' + (payload.auraCycle || '?') + ' \u2014 il peut le lire maintenant', 6000, 'win'); } catch(e) {} return; }
+      return r.json().catch(function(){ return {}; }).then(function(j){ throw { st: r.status, gh: j && j.message }; });
     })
-    .catch(function(){ try { showToast('\u26A0 Envoi \u00e9chou\u00e9 (r\u00e9seau)', 5000, 'warn'); } catch(e) {} });
+    .catch(function(e){
+      var st = e && e.st, gh = e && e.gh;
+      var msg = st ? ('GitHub ' + st + (gh ? (' \u00b7 \u00ab ' + String(gh).slice(0, 90) + ' \u00bb') : '')) : 'r\u00e9seau coup\u00e9';
+      try { showToast('\u26D4 ' + msg + ' \u2014 envoie une capture de CE message \u00e0 Claude', 9000, 'warn'); } catch(_) {}
+    });
 }
 function claudeTokenConfig() {
   try {
@@ -2206,18 +2236,23 @@ function claudeTokenConfig() {
 function _claudeTestToken(tk) {
   try { showToast('\u23F3 Test du token\u2026', 2000, 'ice'); } catch(e) {}
   fetch('https://api.github.com/repos/ramizxhixha-a11y/aura', { headers: { 'Authorization': 'Bearer ' + tk, 'Accept': 'application/vnd.github+json' }, cache: 'no-store' })
-    .then(function(r){ return r.status === 200 ? r.json() : Promise.reject(r.status); })
+    .then(function(r){
+      if (r.status === 200) return r.json();
+      return r.json().catch(function(){ return {}; }).then(function(j){ throw { st: r.status, gh: j && j.message }; });
+    })
     .then(function(j){
       if (j && j.permissions && j.permissions.push === true) {
-        try { showToast('\u2705 Token OK \u2014 \u00e9criture confirm\u00e9e. L\'export part en 1 clic.', 5000, 'win'); } catch(e) {}
+        try { showToast('\u2705 Token OK \u2014 \u00e9criture confirm\u00e9e. Clique \uD83D\uDCE4, l\'envoi part en 1 clic.', 6000, 'win'); } catch(e) {}
       } else {
-        try { showToast('\u26A0 Le token LIT le repo mais ne peut pas \u00c9CRIRE \u2192 dans le token : Permissions \u2192 Contents : Read and write', 8000, 'warn'); } catch(e) {}
+        try { showToast('\u26A0 Le token LIT le repo mais ne peut pas \u00c9CRIRE \u2192 Permissions \u2192 Contents : Read and write', 9000, 'warn'); } catch(e) {}
       }
     })
-    .catch(function(st){
-      if (st === 404 || st === 403) { try { showToast('\u26D4 Le token ne voit PAS le repo aura \u2192 Repository access : Only select repositories \u2192 aura', 8000, 'warn'); } catch(e) {} }
-      else if (st === 401) { try { showToast('\u26D4 Token invalide (mal coll\u00e9 ou expir\u00e9) \u2192 recopie-le en entier (commence par github_pat_)', 8000, 'warn'); } catch(e) {} }
-      else { try { showToast('\u26A0 Test impossible (r\u00e9seau/HTTP ' + st + ')', 5000, 'warn'); } catch(e) {} }
+    .catch(function(e){
+      var st = e && e.st, gh = e && e.gh ? (' \u00b7 \u00ab ' + String(e.gh).slice(0, 80) + ' \u00bb') : '';
+      var hint = (st === 401) ? ' \u2192 token mal coll\u00e9 ou expir\u00e9 (doit commencer par github_pat_)'
+               : (st === 404 || st === 403) ? ' \u2192 le token ne voit pas le repo : Only select repositories \u2192 aura, ET v\u00e9rifie que tu cr\u00e9es le token CONNECT\u00c9 au compte ramizxhixha-a11y'
+               : '';
+      try { showToast('\u26D4 GitHub ' + (st || '?') + gh + hint + ' \u2014 envoie une capture de CE message', 10000, 'warn'); } catch(_) {}
     });
 }
 window.claudeTokenConfig = claudeTokenConfig;
