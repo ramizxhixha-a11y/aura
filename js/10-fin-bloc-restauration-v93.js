@@ -1,4 +1,4 @@
-// [PONT CLAUDE v3.7 · COMPTE DU TOKEN] chaque verdict affiche a quel compte GitHub appartient le token (GET /user) : un fine-grained d un autre compte que ramizxhixha-a11y ne pourra JAMAIS ecrire, quelles que soient ses permissions · la version du pont s affiche dans la barre (Pont v3.6) et dans chaque toast d erreur — preuve du 05/07 : la PWA a execute du code perime toute la soiree pendant que les fixes etaient en ligne · chaque erreur affiche les 12 premiers caracteres du token UTILISE par l app (ghp_=classic, github_pat_=fine-grained) — identification definitive du token en cause · le champ token n est plus pre-rempli : l ancien placeholder •••• faisait IGNORER en silence les nouveaux tokens colles (cause des 3 echecs identiques) — desormais tout collage est enregistre, confirme a l ecran, et teste aussitot · sha lu via le LISTING racine (le fichier ~1 Mo pouvait faire echouer la lecture directe du sha) + chaque refus affiche LE MESSAGE BRUT DE GITHUB a l ecran (capture = cause exacte) · sans token : feuille de partage Android (fonctionne en PWA) -> envoyer aura_live.json directement a l appli Claude ; token = envoi repo 1 clic ; dernier recours telechargement · le token est teste des le collage (verdict precis : ecrit OK / lit sans ecrire / repo invisible / mal colle) + verdicts 401 vs 403 distincts a l envoi · Export pour Claude : avec token GitHub (⚙, fine-grained repo aura Contents RW) le fichier est POUSSE au repo en 1 clic (zero telechargement/upload/commit — requis en PWA ou le download Blob est ignore) ; sans token : telechargement classique · 05/07/2026
+// [PONT CLAUDE v4.0 · DEPOT SANS TOKEN] sans token configure, Export = POST simple vers une boite fixe (teste en reel avec le fichier de 938 Ko, relu intact par Claude) : zero compte, zero collage, zero configuration ; token GitHub reste prioritaire si present · chaque verdict affiche a quel compte GitHub appartient le token (GET /user) : un fine-grained d un autre compte que ramizxhixha-a11y ne pourra JAMAIS ecrire, quelles que soient ses permissions · la version du pont s affiche dans la barre (Pont v3.6) et dans chaque toast d erreur — preuve du 05/07 : la PWA a execute du code perime toute la soiree pendant que les fixes etaient en ligne · chaque erreur affiche les 12 premiers caracteres du token UTILISE par l app (ghp_=classic, github_pat_=fine-grained) — identification definitive du token en cause · le champ token n est plus pre-rempli : l ancien placeholder •••• faisait IGNORER en silence les nouveaux tokens colles (cause des 3 echecs identiques) — desormais tout collage est enregistre, confirme a l ecran, et teste aussitot · sha lu via le LISTING racine (le fichier ~1 Mo pouvait faire echouer la lecture directe du sha) + chaque refus affiche LE MESSAGE BRUT DE GITHUB a l ecran (capture = cause exacte) · sans token : feuille de partage Android (fonctionne en PWA) -> envoyer aura_live.json directement a l appli Claude ; token = envoi repo 1 clic ; dernier recours telechargement · le token est teste des le collage (verdict precis : ecrit OK / lit sans ecrire / repo invisible / mal colle) + verdicts 401 vs 403 distincts a l envoi · Export pour Claude : avec token GitHub (⚙, fine-grained repo aura Contents RW) le fichier est POUSSE au repo en 1 clic (zero telechargement/upload/commit — requis en PWA ou le download Blob est ignore) ; sans token : telechargement classique · 05/07/2026
 // [AGRESSIVITE · validee par Rams 05/07/2026] seuil d engagement 0.40 -> 0.30 avec zone exploratoire a mise reduite (50-100%) + anti-stagnation actif sur ce gate + TP plancher 0.6% + SL 1.4x hors bruit (plancher 0.45%) + seuil LMSR sans double comptage fiscal · 05/07/2026
 // [FIX] plus de log/toast 'BOT LONG' fantome quand l'ouverture est bloquee (garde mode REEL) ou echoue · 05/07/2026
 // ════════════════════════════════════════════════════════════
@@ -2134,7 +2134,11 @@ if(typeof downloadFile==='function') window.downloadFile = downloadFile;
 // frais PAR CONSTRUCTION — plus jamais le piege du "mauvais navigateur" (les
 // exports Guardian photographiaient un vieil IDB du 28/06). Enveloppe identique
 // au backup Guardian -> meme lecteur cote Claude. Nom FIXE : aura_live.json.
-var _PONT_V = 'v3.7';   // ★ VERSION VISIBLE : affichee dans la barre et les toasts.
+var _PONT_V = 'v4.0';
+// Boite de depot Claude (webhook.site) : URL fixe, ecriture par POST 'simple'
+// (text/plain) que le navigateur envoie SANS preflight ni permission — teste le
+// 05/07 avec le fichier reel de 938 Ko, relu intact cote Claude.
+var _CLAUDE_BOX = '79c51876-8b4d-475e-baac-79b050e6d74c';   // ★ VERSION VISIBLE : affichee dans la barre et les toasts.
 // Une capture d'ecran suffit desormais a savoir QUELLE version tourne reellement
 // (la PWA a servi du code perime toute la soiree du 05/07 pendant que les fixes
 // etaient en ligne — indetectable sans ce marqueur).
@@ -2155,13 +2159,27 @@ function exportForClaude() {
     };
     var tk = null; try { tk = localStorage.getItem('aura_claude_gh_token') || null; } catch(e) {}
     if (tk) { _claudePush(payload, tk); return; }
-    _claudeShareOrDownload(payload);
+    _claudeDrop(payload);
   } catch(e) { try { showToast('Export Claude : erreur', 3000, 'warn'); } catch(_) {} }
 }
 
 // SANS token : feuille de PARTAGE Android (marche en PWA, la ou le telechargement
 // est ignore). L'utilisateur choisit l'appli Claude -> le fichier arrive dans le
 // chat. Fallback final : telechargement classique (onglet navigateur).
+// DEPOT SANS RIEN : POST 'simple' vers la boite fixe. mode:'no-cors' = le
+// navigateur envoie sans exiger de permission du serveur ; la reponse est
+// opaque (on ne peut pas la lire), donc le toast dit 'Depose' — c'est Claude
+// qui CONFIRME la reception en lisant la boite (verifie une fois en reel).
+// Si le reseau rejette : bascule sur partage/telechargement.
+function _claudeDrop(payload) {
+  var txt = JSON.stringify(payload);
+  var cyc = payload.auraCycle || '?';
+  try {
+    fetch('https://webhook.site/' + _CLAUDE_BOX, { method: 'POST', mode: 'no-cors', headers: { 'Content-Type': 'text/plain' }, body: txt })
+      .then(function(){ try { showToast('✅ [' + _PONT_V + '] Déposé pour Claude · cycle ' + cyc + ' — il confirme la réception à la lecture', 6000, 'win'); } catch(e) {} })
+      .catch(function(){ _claudeShareOrDownload(payload); });
+  } catch(e) { _claudeShareOrDownload(payload); }
+}
 function _claudeShareOrDownload(payload) {
   var txt = JSON.stringify(payload);
   var cyc = payload.auraCycle || '?';
