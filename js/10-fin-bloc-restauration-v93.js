@@ -1,4 +1,4 @@
-// [PONT CLAUDE v3.4 · FIX COLLAGE] le champ token n est plus pre-rempli : l ancien placeholder •••• faisait IGNORER en silence les nouveaux tokens colles (cause des 3 echecs identiques) — desormais tout collage est enregistre, confirme a l ecran, et teste aussitot · sha lu via le LISTING racine (le fichier ~1 Mo pouvait faire echouer la lecture directe du sha) + chaque refus affiche LE MESSAGE BRUT DE GITHUB a l ecran (capture = cause exacte) · sans token : feuille de partage Android (fonctionne en PWA) -> envoyer aura_live.json directement a l appli Claude ; token = envoi repo 1 clic ; dernier recours telechargement · le token est teste des le collage (verdict precis : ecrit OK / lit sans ecrire / repo invisible / mal colle) + verdicts 401 vs 403 distincts a l envoi · Export pour Claude : avec token GitHub (⚙, fine-grained repo aura Contents RW) le fichier est POUSSE au repo en 1 clic (zero telechargement/upload/commit — requis en PWA ou le download Blob est ignore) ; sans token : telechargement classique · 05/07/2026
+// [PONT CLAUDE v3.5 · INSTRUMENT DE VERITE] chaque erreur affiche les 12 premiers caracteres du token UTILISE par l app (ghp_=classic, github_pat_=fine-grained) — identification definitive du token en cause · le champ token n est plus pre-rempli : l ancien placeholder •••• faisait IGNORER en silence les nouveaux tokens colles (cause des 3 echecs identiques) — desormais tout collage est enregistre, confirme a l ecran, et teste aussitot · sha lu via le LISTING racine (le fichier ~1 Mo pouvait faire echouer la lecture directe du sha) + chaque refus affiche LE MESSAGE BRUT DE GITHUB a l ecran (capture = cause exacte) · sans token : feuille de partage Android (fonctionne en PWA) -> envoyer aura_live.json directement a l appli Claude ; token = envoi repo 1 clic ; dernier recours telechargement · le token est teste des le collage (verdict precis : ecrit OK / lit sans ecrire / repo invisible / mal colle) + verdicts 401 vs 403 distincts a l envoi · Export pour Claude : avec token GitHub (⚙, fine-grained repo aura Contents RW) le fichier est POUSSE au repo en 1 clic (zero telechargement/upload/commit — requis en PWA ou le download Blob est ignore) ; sans token : telechargement classique · 05/07/2026
 // [AGRESSIVITE · validee par Rams 05/07/2026] seuil d engagement 0.40 -> 0.30 avec zone exploratoire a mise reduite (50-100%) + anti-stagnation actif sur ce gate + TP plancher 0.6% + SL 1.4x hors bruit (plancher 0.45%) + seuil LMSR sans double comptage fiscal · 05/07/2026
 // [FIX] plus de log/toast 'BOT LONG' fantome quand l'ouverture est bloquee (garde mode REEL) ou echoue · 05/07/2026
 // ════════════════════════════════════════════════════════════
@@ -2217,7 +2217,11 @@ function _claudePush(payload, tk) {
     .catch(function(e){
       var st = e && e.st, gh = e && e.gh;
       var msg = st ? ('GitHub ' + st + (gh ? (' \u00b7 \u00ab ' + String(gh).slice(0, 90) + ' \u00bb') : '')) : 'r\u00e9seau coup\u00e9';
-      try { showToast('\u26D4 ' + msg + ' \u2014 envoie une capture de CE message \u00e0 Claude', 9000, 'warn'); } catch(_) {}
+      // ★ v3.5 · INSTRUMENT DE VERITE : montrer QUEL token l'app utilise reellement
+      // (12 premiers caracteres — non sensible sur ~90). ghp_ = classic,
+      // github_pat_ = fine-grained. La capture de CE toast identifie le token
+      // sans aucune ambiguite possible.
+      try { showToast('\u26D4 ' + msg + ' \u00b7 token utilis\u00e9 : ' + String(tk).slice(0, 12) + '\u2026 \u2014 capture CE message pour Claude', 10000, 'warn'); } catch(_) {}
     });
 }
 function claudeTokenConfig() {
@@ -2263,10 +2267,10 @@ function _claudeTestToken(tk) {
     })
     .catch(function(e){
       var st = e && e.st, gh = e && e.gh ? (' \u00b7 \u00ab ' + String(e.gh).slice(0, 80) + ' \u00bb') : '';
-      var hint = (st === 401) ? ' \u2192 token mal coll\u00e9 ou expir\u00e9 (doit commencer par github_pat_)'
-               : (st === 404 || st === 403) ? ' \u2192 le token ne voit pas le repo : Only select repositories \u2192 aura, ET v\u00e9rifie que tu cr\u00e9es le token CONNECT\u00c9 au compte ramizxhixha-a11y'
+      var hint = (st === 401) ? ' \u2192 token mal coll\u00e9 ou expir\u00e9'
+               : (st === 404 || st === 403) ? ' \u2192 ce token ne voit pas le repo aura'
                : '';
-      try { showToast('\u26D4 GitHub ' + (st || '?') + gh + hint + ' \u2014 envoie une capture de CE message', 10000, 'warn'); } catch(_) {}
+      try { showToast('\u26D4 GitHub ' + (st || '?') + gh + hint + ' \u00b7 token utilis\u00e9 : ' + String(tk).slice(0, 12) + '\u2026 \u2014 capture CE message', 10000, 'warn'); } catch(_) {}
     });
 }
 window.claudeTokenConfig = claudeTokenConfig;
