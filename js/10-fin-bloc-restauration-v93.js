@@ -1,4 +1,4 @@
-// [PONT CLAUDE v3.6 · VERSION VISIBLE] la version du pont s affiche dans la barre (Pont v3.6) et dans chaque toast d erreur — preuve du 05/07 : la PWA a execute du code perime toute la soiree pendant que les fixes etaient en ligne · chaque erreur affiche les 12 premiers caracteres du token UTILISE par l app (ghp_=classic, github_pat_=fine-grained) — identification definitive du token en cause · le champ token n est plus pre-rempli : l ancien placeholder •••• faisait IGNORER en silence les nouveaux tokens colles (cause des 3 echecs identiques) — desormais tout collage est enregistre, confirme a l ecran, et teste aussitot · sha lu via le LISTING racine (le fichier ~1 Mo pouvait faire echouer la lecture directe du sha) + chaque refus affiche LE MESSAGE BRUT DE GITHUB a l ecran (capture = cause exacte) · sans token : feuille de partage Android (fonctionne en PWA) -> envoyer aura_live.json directement a l appli Claude ; token = envoi repo 1 clic ; dernier recours telechargement · le token est teste des le collage (verdict precis : ecrit OK / lit sans ecrire / repo invisible / mal colle) + verdicts 401 vs 403 distincts a l envoi · Export pour Claude : avec token GitHub (⚙, fine-grained repo aura Contents RW) le fichier est POUSSE au repo en 1 clic (zero telechargement/upload/commit — requis en PWA ou le download Blob est ignore) ; sans token : telechargement classique · 05/07/2026
+// [PONT CLAUDE v3.7 · COMPTE DU TOKEN] chaque verdict affiche a quel compte GitHub appartient le token (GET /user) : un fine-grained d un autre compte que ramizxhixha-a11y ne pourra JAMAIS ecrire, quelles que soient ses permissions · la version du pont s affiche dans la barre (Pont v3.6) et dans chaque toast d erreur — preuve du 05/07 : la PWA a execute du code perime toute la soiree pendant que les fixes etaient en ligne · chaque erreur affiche les 12 premiers caracteres du token UTILISE par l app (ghp_=classic, github_pat_=fine-grained) — identification definitive du token en cause · le champ token n est plus pre-rempli : l ancien placeholder •••• faisait IGNORER en silence les nouveaux tokens colles (cause des 3 echecs identiques) — desormais tout collage est enregistre, confirme a l ecran, et teste aussitot · sha lu via le LISTING racine (le fichier ~1 Mo pouvait faire echouer la lecture directe du sha) + chaque refus affiche LE MESSAGE BRUT DE GITHUB a l ecran (capture = cause exacte) · sans token : feuille de partage Android (fonctionne en PWA) -> envoyer aura_live.json directement a l appli Claude ; token = envoi repo 1 clic ; dernier recours telechargement · le token est teste des le collage (verdict precis : ecrit OK / lit sans ecrire / repo invisible / mal colle) + verdicts 401 vs 403 distincts a l envoi · Export pour Claude : avec token GitHub (⚙, fine-grained repo aura Contents RW) le fichier est POUSSE au repo en 1 clic (zero telechargement/upload/commit — requis en PWA ou le download Blob est ignore) ; sans token : telechargement classique · 05/07/2026
 // [AGRESSIVITE · validee par Rams 05/07/2026] seuil d engagement 0.40 -> 0.30 avec zone exploratoire a mise reduite (50-100%) + anti-stagnation actif sur ce gate + TP plancher 0.6% + SL 1.4x hors bruit (plancher 0.45%) + seuil LMSR sans double comptage fiscal · 05/07/2026
 // [FIX] plus de log/toast 'BOT LONG' fantome quand l'ouverture est bloquee (garde mode REEL) ou echoue · 05/07/2026
 // ════════════════════════════════════════════════════════════
@@ -2134,7 +2134,7 @@ if(typeof downloadFile==='function') window.downloadFile = downloadFile;
 // frais PAR CONSTRUCTION — plus jamais le piege du "mauvais navigateur" (les
 // exports Guardian photographiaient un vieil IDB du 28/06). Enveloppe identique
 // au backup Guardian -> meme lecteur cote Claude. Nom FIXE : aura_live.json.
-var _PONT_V = 'v3.6';   // ★ VERSION VISIBLE : affichee dans la barre et les toasts.
+var _PONT_V = 'v3.7';   // ★ VERSION VISIBLE : affichee dans la barre et les toasts.
 // Une capture d'ecran suffit desormais a savoir QUELLE version tourne reellement
 // (la PWA a servi du code perime toute la soiree du 05/07 pendant que les fixes
 // etaient en ligne — indetectable sans ce marqueur).
@@ -2190,6 +2190,16 @@ function _claudeDownloadFallback(txt, cyc) {
 // Envoi DIRECT au repo (API GitHub, token fine-grained limite au repo, Contents RW).
 // Un clic : GET sha du fichier existant puis PUT du nouveau contenu. Zero
 // telechargement, zero upload manuel, zero Commit — le repo recoit tout seul.
+// A quel compte GitHub appartient le token ? (GET /user -> login).
+// Un fine-grained ne peut JAMAIS acceder aux repos d'un autre compte : si le
+// login affiche n'est pas ramizxhixha-a11y, TOUTES les editions de droits sont
+// vaines — c'est la cause racine, prouvee a l'ecran.
+function _claudeWho(tk) {
+  return fetch('https://api.github.com/user', { headers: { 'Authorization': 'Bearer ' + tk, 'Accept': 'application/vnd.github+json' }, cache: 'no-store' })
+    .then(function(r){ return r.status === 200 ? r.json() : null; })
+    .then(function(j){ return (j && j.login) ? j.login : '?'; })
+    .catch(function(){ return '?'; });
+}
 function _claudeB64(str) {
   // base64 sur du UTF-8 (btoa seul casse sur les accents)
   return btoa(unescape(encodeURIComponent(str)));
@@ -2225,7 +2235,10 @@ function _claudePush(payload, tk) {
       // (12 premiers caracteres — non sensible sur ~90). ghp_ = classic,
       // github_pat_ = fine-grained. La capture de CE toast identifie le token
       // sans aucune ambiguite possible.
-      try { showToast('\u26D4 [' + _PONT_V + '] ' + msg + ' \u00b7 token utilis\u00e9 : ' + String(tk).slice(0, 12) + '\u2026 \u2014 capture CE message pour Claude', 10000, 'warn'); } catch(_) {}
+      _claudeWho(tk).then(function(who){
+        var alerte = (who !== '?' && who !== 'ramizxhixha-a11y') ? ' \u26A0 PAS le proprietaire du repo !' : '';
+        try { showToast('\u26D4 [' + _PONT_V + '] ' + msg + ' \u00b7 token : ' + String(tk).slice(0, 12) + '\u2026 \u00b7 compte du token : ' + who + alerte + ' \u2014 capture CE message', 12000, 'warn'); } catch(_) {}
+      });
     });
 }
 function claudeTokenConfig() {
@@ -2264,7 +2277,9 @@ function _claudeTestToken(tk) {
     })
     .then(function(j){
       if (j && j.permissions && j.permissions.push === true) {
-        try { showToast('\u2705 Token OK \u2014 \u00e9criture confirm\u00e9e. Clique \uD83D\uDCE4, l\'envoi part en 1 clic.', 6000, 'win'); } catch(e) {}
+        _claudeWho(tk).then(function(who){
+          try { showToast('\u2705 [' + _PONT_V + '] Token OK \u00b7 compte : ' + who + ' \u00b7 \u00e9criture confirm\u00e9e \u2014 clique \uD83D\uDCE4', 6000, 'win'); } catch(e) {}
+        });
       } else {
         try { showToast('\u26A0 Le token LIT le repo mais ne peut pas \u00c9CRIRE \u2192 Permissions \u2192 Contents : Read and write', 9000, 'warn'); } catch(e) {}
       }
@@ -2274,7 +2289,10 @@ function _claudeTestToken(tk) {
       var hint = (st === 401) ? ' \u2192 token mal coll\u00e9 ou expir\u00e9'
                : (st === 404 || st === 403) ? ' \u2192 ce token ne voit pas le repo aura'
                : '';
-      try { showToast('\u26D4 [' + _PONT_V + '] GitHub ' + (st || '?') + gh + hint + ' \u00b7 token utilis\u00e9 : ' + String(tk).slice(0, 12) + '\u2026 \u2014 capture CE message', 10000, 'warn'); } catch(_) {}
+      _claudeWho(tk).then(function(who){
+        var alerte = (who !== '?' && who !== 'ramizxhixha-a11y') ? ' \u26A0 PAS le proprietaire du repo !' : '';
+        try { showToast('\u26D4 [' + _PONT_V + '] GitHub ' + (st || '?') + gh + hint + ' \u00b7 compte du token : ' + who + alerte + ' \u2014 capture CE message', 12000, 'warn'); } catch(_) {}
+      });
     });
 }
 window.claudeTokenConfig = claudeTokenConfig;
