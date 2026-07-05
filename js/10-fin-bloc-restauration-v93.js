@@ -1,3 +1,4 @@
+// [AGRESSIVITE · validee par Rams 05/07/2026] seuil d engagement 0.40 -> 0.30 avec zone exploratoire a mise reduite (50-100%) + anti-stagnation actif sur ce gate + TP plancher 0.6% + SL 1.4x hors bruit (plancher 0.45%) + seuil LMSR sans double comptage fiscal · 05/07/2026
 // [FIX] plus de log/toast 'BOT LONG' fantome quand l'ouverture est bloquee (garde mode REEL) ou echoue · 05/07/2026
 // ════════════════════════════════════════════════════════════
 // AURA8 — module consolidé 10/10 · VERSION 126 · 10/06/2026 (boutons répartition portefeuille)
@@ -1714,7 +1715,7 @@ function _resolvePairCycleCore(pair, ps) {
   let _fiscalSeuilFactor = 1.0;
   try {
     if (typeof fiscalBotAdvicePerPair === 'function') {
-      const _tpGuess = Math.max(0.7, effectiveConviction * 3.2 * (1 + volCV * 9)); // même formule que tpPctE
+      const _tpGuess = Math.max(0.6, effectiveConviction * 3.2 * (1 + volCV * 9)); // même formule que tpPctE
       const _adv = fiscalBotAdvicePerPair(pair, _tpGuess);
       _fiscalSeuilFactor = _adv.seuilFactor || 1.0;
       if (_adv.advice === 'défavorable' && (S.cycle % 8 === 0)) {
@@ -1724,24 +1725,32 @@ function _resolvePairCycleCore(pair, ps) {
     }
   } catch(e) {}
   // Gain visé (même formule que le TP réel tpPctE plus bas), en fraction.
-  const _tpFrac     = Math.max(0.7, effectiveConviction * 3.2 * (1 + volCV * 9)) / 100;
+  const _tpFrac     = Math.max(0.6, effectiveConviction * 3.2 * (1 + volCV * 9)) / 100;
   // Gain net espéré = gain - frais aller-retour - impôt sur le gain net de frais.
   const _gainAfterFees = _tpFrac - _feePct;
   const _gainNet       = _gainAfterFees - Math.max(0, _gainAfterFees) * _taxPct;
   // Seuil de gain net minimum, durci par l'avis du bot fiscal (optimise sans interdire).
   const _minNetGain    = 0.0015 * _fiscalSeuilFactor;   // 0.15% net de base
-  // On s'abstient si le gain net réel ne couvre pas le minimum, OU si la conviction
-  // est sous 0.40 : en dessous, le signal est trop faible (le bot perdait en ouvrant
-  // des trades à conviction 26-36%, touchés au stop-loss). On ne trade que les signaux
-  // solides (conviction >= 40%).
-  if(_gainNet < _minNetGain || effectiveConviction < 0.40) {
+  // ★ AGRESSIVITE (05/07/2026, validee par Rams : "plus de trades") ·
+  // Seuil plein 0.40 -> 0.30 avec ZONE EXPLORATOIRE : entre 0.30 et 0.40 le bot
+  // trade a MISE REDUITE (50->100% progressif). Justification : les pertes des
+  // trades a conviction 26-36% venaient du SL place DANS le bruit (corrige depuis,
+  // et encore elargi ci-dessous) ; les signaux reels tournent a 26-36% -> le 0.40
+  // rejetait la quasi-totalite (9 trades en 3 jours) et neutralisait l'anti-
+  // stagnation (_convBoost n'atteignait jamais ce gate). Demi-mise = plus de
+  // trades + plus d'apprentissage reel, risque par trade contenu.
+  const _convFloor = 0.30 - Math.min(0.04, (S._convBoost || 0) * 0.5);
+  if(_gainNet < _minNetGain || effectiveConviction < _convFloor) {
     learnFromOutcome('cycle', 0, pair);
     ps.qYes = Math.max(20, 100 + (ps.qYes - 100) * 0.95);
     ps.qNo  = Math.max(20, 100 + (ps.qNo  - 100) * 0.95);
     return;
   }
   if(!ps.userCycleSet) {
-    const optThr = Math.min(0.72, Math.max(0.55, 0.50 + _breakEven * 6 + effectiveConviction * 0.10));
+    // ★ (05/07) la taxe est DEJA comptee dans _gainNet ci-dessus : la garder aussi
+    // dans le seuil LMSR = double comptage qui poussait threshold au plafond en
+    // regime speculatif. Le seuil ne depend plus que des frais reels + conviction.
+    const optThr = Math.min(0.65, Math.max(0.52, 0.50 + _feePct * 6 + effectiveConviction * 0.10));
     if(Math.abs(optThr - (ps.threshold||0.65)) > 0.02) {
       ps.threshold = Math.round(optThr * 100) / 100;
       const _pk2 = pair.replace('/','_');
@@ -1767,7 +1776,10 @@ function _resolvePairCycleCore(pair, ps) {
   if ((ps.totalTrades || 0) >= 20) {
     _perfMult = Math.max(0.35, Math.min(1.0, 1 + ((ps.totalPnlPct || 0) / ps.totalTrades) * 0.5));
   }
-  const stakeRaw   = Math.max(stakeBase, maxStake * convScale) * _perfMult;
+  // Mise progressive de la zone exploratoire : 50% a 0.30, 100% a partir de 0.40.
+  const _convStakeMult = effectiveConviction >= 0.40 ? 1.0
+    : Math.max(0.5, 0.5 + 0.5 * (effectiveConviction - 0.30) / 0.10);
+  const stakeRaw   = Math.max(stakeBase, maxStake * convScale) * _perfMult * _convStakeMult;
   const stakeUsdt  = Math.round(stakeRaw*adxFilter*volFilter*10)/10;
   
   let finalStake = stakeUsdt;
@@ -1775,13 +1787,13 @@ function _resolvePairCycleCore(pair, ps) {
     finalStake = _checkPaperRealStakeLimit(stakeUsdt, pair, side);
   }
 
-  const tpPctE=Math.max(0.7,effectiveConviction*3.2*(1+volCV*9));
+  const tpPctE=Math.max(0.6,effectiveConviction*3.2*(1+volCV*9));   // ★ 05/07 : TP plancher 0.7->0.6% (plus atteignable, reste >4x le gain net minimum)
   // SL adapté à la volatilité : placé HORS du bruit du marché (1.2× le bruit), mais
   // borné à TP/1.5 pour garder un ratio gain/perte favorable (>= 1.5). L'ancien
   // SL = TP×0.42 (0.35-1.1%) tombait DANS le bruit crypto (±0.5-1%/min) : touché par
   // le bruit, le trade sortait en perte puis le prix repartait dans le bon sens.
-  const _slNoise = (volCV * 100) * 1.2;   // 1.2× le bruit (volCV exprimé en fraction)
-  const slPctE   = Math.max(0.35, Math.min(_slNoise, tpPctE / 1.5));
+  const _slNoise = (volCV * 100) * 1.4;   // ★ 05/07 : 1.2x -> 1.4x le bruit (le journal montrait encore des sorties-bruit a -0.5/-0.9%)
+  const slPctE   = Math.max(0.45, Math.min(_slNoise, tpPctE / 1.4));   // plancher 0.35->0.45, ratio min 1.4 (gain/perte reste favorable)
   const tpE   =ps.price*(1+(side==='long'?1:-1)*tpPctE/100);
   const slE   =ps.price*(1-(side==='long'?1:-1)*slPctE/100);
 
