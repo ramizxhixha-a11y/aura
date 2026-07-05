@@ -1,4 +1,4 @@
-// [PONT CLAUDE v3.3 · ABOUTIR LE TOKEN] sha lu via le LISTING racine (le fichier ~1 Mo pouvait faire echouer la lecture directe du sha) + chaque refus affiche LE MESSAGE BRUT DE GITHUB a l ecran (capture = cause exacte) · sans token : feuille de partage Android (fonctionne en PWA) -> envoyer aura_live.json directement a l appli Claude ; token = envoi repo 1 clic ; dernier recours telechargement · le token est teste des le collage (verdict precis : ecrit OK / lit sans ecrire / repo invisible / mal colle) + verdicts 401 vs 403 distincts a l envoi · Export pour Claude : avec token GitHub (⚙, fine-grained repo aura Contents RW) le fichier est POUSSE au repo en 1 clic (zero telechargement/upload/commit — requis en PWA ou le download Blob est ignore) ; sans token : telechargement classique · 05/07/2026
+// [PONT CLAUDE v3.4 · FIX COLLAGE] le champ token n est plus pre-rempli : l ancien placeholder •••• faisait IGNORER en silence les nouveaux tokens colles (cause des 3 echecs identiques) — desormais tout collage est enregistre, confirme a l ecran, et teste aussitot · sha lu via le LISTING racine (le fichier ~1 Mo pouvait faire echouer la lecture directe du sha) + chaque refus affiche LE MESSAGE BRUT DE GITHUB a l ecran (capture = cause exacte) · sans token : feuille de partage Android (fonctionne en PWA) -> envoyer aura_live.json directement a l appli Claude ; token = envoi repo 1 clic ; dernier recours telechargement · le token est teste des le collage (verdict precis : ecrit OK / lit sans ecrire / repo invisible / mal colle) + verdicts 401 vs 403 distincts a l envoi · Export pour Claude : avec token GitHub (⚙, fine-grained repo aura Contents RW) le fichier est POUSSE au repo en 1 clic (zero telechargement/upload/commit — requis en PWA ou le download Blob est ignore) ; sans token : telechargement classique · 05/07/2026
 // [AGRESSIVITE · validee par Rams 05/07/2026] seuil d engagement 0.40 -> 0.30 avec zone exploratoire a mise reduite (50-100%) + anti-stagnation actif sur ce gate + TP plancher 0.6% + SL 1.4x hors bruit (plancher 0.45%) + seuil LMSR sans double comptage fiscal · 05/07/2026
 // [FIX] plus de log/toast 'BOT LONG' fantome quand l'ouverture est bloquee (garde mode REEL) ou echoue · 05/07/2026
 // ════════════════════════════════════════════════════════════
@@ -2222,12 +2222,26 @@ function _claudePush(payload, tk) {
 }
 function claudeTokenConfig() {
   try {
-    var cur = localStorage.getItem('aura_claude_gh_token') || '';
-    var v = window.prompt('Colle ton token GitHub (fine-grained \u00b7 repo aura \u00b7 Contents: Read and write).\nVide + OK = effacer.', cur ? '\u2022\u2022\u2022\u2022 (token en place \u2014 remplace ou vide)' : '');
-    if (v === null) return;
-    v = (v || '').trim();
-    if (!v || v.indexOf('\u2022') === 0) { if (!v) { localStorage.removeItem('aura_claude_gh_token'); try { showToast('Token effac\u00e9', 2500, 'ice'); } catch(e) {} } return; }
+    var cur = null; try { cur = localStorage.getItem('aura_claude_gh_token'); } catch(e) {}
+    // ★ FIX (05/07 soir) · le champ n'est PLUS pre-rempli : l'ancien placeholder
+    // « •••• » faisait ignorer EN SILENCE tout collage qui le laissait en tete —
+    // les nouveaux tokens de Rams n'etaient donc JAMAIS enregistres et l'app
+    // poussait toujours avec le premier token rate. Desormais : champ VIDE,
+    // tout collage non vide est enregistre puis TESTE immediatement.
+    var msg = cur ? 'Un token est deja enregistre.\n\nColle le NOUVEAU token pour le remplacer (il sera teste aussitot).\nLaisse vide + OK pour EFFACER le token actuel.'
+                  : 'Colle ton token GitHub (il sera teste aussitot).';
+    var v = window.prompt(msg, '');
+    if (v === null) return;                       // Annuler : rien ne change
+    v = (v || '').replace(/\s+/g, '');           // espaces/retours du clavier retires
+    if (!v) {
+      if (cur && window.confirm('Effacer le token enregistre ?')) {
+        localStorage.removeItem('aura_claude_gh_token');
+        try { showToast('Token efface', 2500, 'ice'); } catch(e) {}
+      }
+      return;
+    }
     localStorage.setItem('aura_claude_gh_token', v);
+    try { showToast('\uD83D\uDCBE Token enregistre (' + v.slice(0, 10) + '\u2026) \u2014 test en cours', 2500, 'ice'); } catch(e) {}
     _claudeTestToken(v);
   } catch(e) {}
 }
