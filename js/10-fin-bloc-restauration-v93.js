@@ -1,4 +1,4 @@
-// [PONT CLAUDE · DANS AURA] bouton Export pour Claude dans Outils Avances : exporte l etat VIVANT de la page (aura_live.json, source aura-live, cycle affiche) — supprime le piege du mauvais navigateur · 05/07/2026
+// [PONT CLAUDE v3 · ENVOI DIRECT] Export pour Claude : avec token GitHub (⚙, fine-grained repo aura Contents RW) le fichier est POUSSE au repo en 1 clic (zero telechargement/upload/commit — requis en PWA ou le download Blob est ignore) ; sans token : telechargement classique · 05/07/2026
 // [AGRESSIVITE · validee par Rams 05/07/2026] seuil d engagement 0.40 -> 0.30 avec zone exploratoire a mise reduite (50-100%) + anti-stagnation actif sur ce gate + TP plancher 0.6% + SL 1.4x hors bruit (plancher 0.45%) + seuil LMSR sans double comptage fiscal · 05/07/2026
 // [FIX] plus de log/toast 'BOT LONG' fantome quand l'ouverture est bloquee (garde mode REEL) ou echoue · 05/07/2026
 // ════════════════════════════════════════════════════════════
@@ -2149,11 +2149,57 @@ function exportForClaude() {
       aura: snap,
       guardian: null
     };
+    var tk = null; try { tk = localStorage.getItem('aura_claude_gh_token') || null; } catch(e) {}
+    if (tk) { _claudePush(payload, tk); return; }
+    // Fallback sans token : telechargement classique (marche en onglet navigateur ;
+    // en PWA installee Android le download est ignore -> configurer le token via ⚙).
     downloadFile(JSON.stringify(payload), 'aura_live.json', 'application/json');
     var hh = new Date(); var pad = function(n){ return (n<10?'0':'')+n; };
-    try { showToast('\u2705 aura_live.json \u00b7 cycle ' + (payload.auraCycle||'?') + ' \u00b7 ' + pad(hh.getHours()) + ':' + pad(hh.getMinutes()) + ' \u2014 supprime les anciens de T\u00e9l\u00e9chargements puis uploade \u00e0 la racine (Replace + Commit)', 7000, 'win'); } catch(e) {}
+    try { showToast('\u2705 aura_live.json \u00b7 cycle ' + (payload.auraCycle||'?') + ' \u00b7 ' + pad(hh.getHours()) + ':' + pad(hh.getMinutes()) + ' \u2014 si RIEN n\'apparait dans T\u00e9l\u00e9chargements (PWA) : configure le token \u2699 pour l\'envoi direct', 7000, 'win'); } catch(e) {}
   } catch(e) { try { showToast('Export Claude : erreur', 3000, 'warn'); } catch(_) {} }
 }
+
+// Envoi DIRECT au repo (API GitHub, token fine-grained limite au repo, Contents RW).
+// Un clic : GET sha du fichier existant puis PUT du nouveau contenu. Zero
+// telechargement, zero upload manuel, zero Commit — le repo recoit tout seul.
+function _claudeB64(str) {
+  // base64 sur du UTF-8 (btoa seul casse sur les accents)
+  return btoa(unescape(encodeURIComponent(str)));
+}
+function _claudePush(payload, tk) {
+  var api = 'https://api.github.com/repos/ramizxhixha-a11y/aura/contents/aura_live.json';
+  var hdr = { 'Authorization': 'Bearer ' + tk, 'Accept': 'application/vnd.github+json' };
+  try { showToast('\u23F3 Envoi \u00e0 Claude\u2026', 2500, 'ice'); } catch(e) {}
+  fetch(api, { headers: hdr, cache: 'no-store' })
+    .then(function(r){ return r.status === 200 ? r.json() : null; })
+    .then(function(meta){
+      var body = { message: 'aura_live via AURA \u00b7 cycle ' + (payload.auraCycle||'?'), content: _claudeB64(JSON.stringify(payload)) };
+      if (meta && meta.sha) body.sha = meta.sha;
+      return fetch(api, { method: 'PUT', headers: Object.assign({ 'Content-Type': 'application/json' }, hdr), body: JSON.stringify(body) });
+    })
+    .then(function(r){
+      if (r && (r.status === 200 || r.status === 201)) {
+        try { showToast('\u2705 Envoy\u00e9 \u00e0 Claude \u00b7 cycle ' + (payload.auraCycle||'?') + ' \u2014 il peut le lire maintenant', 6000, 'win'); } catch(e) {}
+      } else if (r && (r.status === 401 || r.status === 403)) {
+        try { showToast('\u26D4 Token refus\u00e9 (expir\u00e9 ou droits insuffisants) \u2014 reconfigure via \u2699', 6000, 'warn'); } catch(e) {}
+      } else {
+        try { showToast('\u26A0 Envoi \u00e9chou\u00e9 (HTTP ' + (r ? r.status : '?') + ')', 5000, 'warn'); } catch(e) {}
+      }
+    })
+    .catch(function(){ try { showToast('\u26A0 Envoi \u00e9chou\u00e9 (r\u00e9seau)', 5000, 'warn'); } catch(e) {} });
+}
+function claudeTokenConfig() {
+  try {
+    var cur = localStorage.getItem('aura_claude_gh_token') || '';
+    var v = window.prompt('Colle ton token GitHub (fine-grained \u00b7 repo aura \u00b7 Contents: Read and write).\nVide + OK = effacer.', cur ? '\u2022\u2022\u2022\u2022 (token en place \u2014 remplace ou vide)' : '');
+    if (v === null) return;
+    v = (v || '').trim();
+    if (!v || v.indexOf('\u2022') === 0) { if (!v) { localStorage.removeItem('aura_claude_gh_token'); try { showToast('Token effac\u00e9', 2500, 'ice'); } catch(e) {} } return; }
+    localStorage.setItem('aura_claude_gh_token', v);
+    try { showToast('\u2705 Token enregistr\u00e9 \u2014 l\'export part maintenant en 1 clic', 4000, 'win'); } catch(e) {}
+  } catch(e) {}
+}
+window.claudeTokenConfig = claudeTokenConfig;
 window.exportForClaude = exportForClaude;
 
 // Bouton injecte dans le panneau Outils Avances (sous les onglets, visible partout)
@@ -2167,7 +2213,8 @@ window.exportForClaude = exportForClaude;
       bar.id = 'claudeExportBar';
       bar.style.cssText = 'padding:8px 14px;display:flex;align-items:center;gap:10px;border-bottom:1px solid rgba(120,180,255,.12);';
       bar.innerHTML = '<button onclick="exportForClaude()" style="flex:0 0 auto;padding:7px 12px;border-radius:9px;border:1.5px solid rgba(56,212,245,.5);background:rgba(56,212,245,.10);color:#38d4f5;font-weight:800;font-size:12px;">\uD83D\uDCE4 Export pour Claude</button>'
-        + '<span style="font-size:10px;color:var(--t3,#8899aa);line-height:1.35;">aura_live.json \u00b7 \u00e9tat VIVANT de cette page \u00b7 uploader \u00e0 la racine du repo (Replace + Commit)</span>';
+        + '<button onclick="claudeTokenConfig()" title="Configurer le token GitHub (envoi direct)" style="flex:0 0 auto;padding:7px 10px;border-radius:9px;border:1.5px solid rgba(136,153,170,.4);background:transparent;color:#8899aa;font-size:12px;">\u2699</button>'
+        + '<span style="font-size:10px;color:var(--t3,#8899aa);line-height:1.35;">aura_live.json \u00b7 \u00e9tat VIVANT \u00b7 avec token \u2699 : envoi DIRECT au repo en 1 clic (sinon t\u00e9l\u00e9chargement)</span>';
       tabs.insertAdjacentElement('afterend', bar);
       return true;
     } catch(e) { return false; }
