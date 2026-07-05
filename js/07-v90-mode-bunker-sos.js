@@ -1,3 +1,4 @@
+// [FIX] sortie auto du bunker : timer PERMANENT (avant : perdu au reload -> bunker AA coince actif+paused depuis le 02/07, bot bloque en ouverture) · 05/07/2026
 // [SEPARATION COMPLETE 3 MODES · 02/07/2026] bunker PAR MODE : active/capRef/startCapital/pausedByBunker vivent dans le wallet du mode actif · plus de faux declenchement au switch · cle LS globale legacy supprimee
 // [FIX] badge levier 'EMPRUNT BLOQUE' : cache par defaut a chaque rendu (ne reste plus affiche dans un mode sans emprunt) · 02/07/2026
 // [FIX] bunker : pas de declenchement sans capital (evite le faux -100% apres reset) · 01/07/2026
@@ -10,7 +11,12 @@
 // Passe en mode ultra-conservateur : mises minimales, bots en veille,
 // positions réduites au strict minimum, alerte Telegram
 
-let _bunkerTimer  = null;
+// ★ Timer de sortie auto PERMANENT (05/07/2026) · avant, le setInterval de
+// _bkAutoCheck n'etait cree QUE dans activateBunker : apres un reload, un bunker
+// actif restauré n'avait PLUS de timer -> il ne se levait JAMAIS (bunker AA
+// coince actif+paused depuis le 02/07 malgre un capital remonte a +112%, et le
+// bot bloque en ouverture). Le timer tourne desormais en continu ; _bkAutoCheck
+// sort immediatement si aucun bunker n'est actif dans le mode courant.
 // ★ ETAT BUNKER PAR MODE · vit dans le wallet du mode actif (accesseur S.bunker) :
 // active / capRef / startCapital / triggerTs / pausedByBunker sont PAR MODE.
 // -> un bunker declenche en AA ne s'affiche plus en EV/RE, et la reference de
@@ -138,10 +144,10 @@ function activateBunker(dropPct) {
   S.chainLog = S.chainLog||[];
   S.chainLog.push({icon:'🚨',desc:`BUNKER: capital -${dropStr}% ($${(S.tradingAccount||0).toFixed(2)}) · actions ${Object.entries(cfg.actions).filter(([,v])=>v).map(([k])=>k).join(',')}`,hash:Math.random().toString(36).slice(2,8),time:new Date().toLocaleTimeString()});
 
-  _bunkerTimer = setInterval(_bkAutoCheck, 60000);
   renderBunkerSection();
 }
 window.activateBunker = activateBunker;
+setInterval(function(){ try { _bkAutoCheck(); } catch(e) {} }, 60000);
 
 // Check auto sortie
 function _bkAutoCheck() {
@@ -167,7 +173,6 @@ function _bkUpdateBanner() {
 
 function exitBunker() {
   const cfg = _bkGet();
-  clearInterval(_bunkerTimer); _bunkerTimer=null;
 
   // Restaurer mises
   (S.agents||[]).forEach(a=>{

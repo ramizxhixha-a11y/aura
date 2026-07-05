@@ -1,3 +1,4 @@
+// [FIX] plus de log/toast 'BOT LONG' fantome quand l'ouverture est bloquee (garde mode REEL) ou echoue · 05/07/2026
 // ════════════════════════════════════════════════════════════
 // AURA8 — module consolidé 10/10 · VERSION 126 · 10/06/2026 (boutons répartition portefeuille)
 // Contient : fin-bloc-restauration-v93, bloc-restauration-v94, fin-bloc-restauration-v94
@@ -1787,7 +1788,11 @@ function _resolvePairCycleCore(pair, ps) {
   autoOpenPosition(pair, side, finalStake);
 
   const np = S.openPositions.find(p => p.pair===pair && p.auto===true);
-  if(np) { np.tp=tpE; np.sl=slE; np._holdCycles=0; }
+  // ★ (05/07/2026) si l'ouverture n'a PAS eu lieu (garde mode REEL, fonds
+  // insuffisants, ...), on s'arrete la : plus de log "BOT LONG" ni de toast
+  // fantomes annoncant un trade qui n'existe pas.
+  if(!np) return;
+  np.tp=tpE; np.sl=slE; np._holdCycles=0;
 
   const pt=cfg.dec>=4?ps.price.toFixed(cfg.dec):Math.floor(ps.price).toLocaleString();
   const tt=cfg.dec>=4?tpE.toFixed(cfg.dec):Math.floor(tpE).toLocaleString();

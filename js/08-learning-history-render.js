@@ -1,3 +1,4 @@
+// [FIX MAJEUR] 'portfolio drift' SUPPRIME : creation d'argent aleatoire biaisee positive (~+21%/jour composee) — les portefeuilles gonflaient sans trades (+50$ fantomes en 3 jours sur AA et EV, preuve backup Guardian 05/07) · 05/07/2026
 // ════════════════════════════════════════════════════════════
 // AURA8 — module consolidé 08/10
 // Contient : learning-history-render, lmsr-threshold-drag-yellow-marker-on-actio, simulation-tick-multi-pair
@@ -2828,14 +2829,14 @@ function simTick() {
     });
   }
 
-  // Portfolio drift — realistic: tiny % of total portfolio, not flat $
-  // v7.5 FIX · la dérive ne s'applique QUE si le trading est déjà > 0
-  // (empêche la création de fonds à partir de rien après un reset)
-  if(tick % 5 === 0 && S.tradingAccount > 0) {
-    const drift = S.tradingAccount * (Math.random() - 0.485) * 0.0008;  // ±0.08% per 5s
-    S.tradingAccount = Math.max(0, S.tradingAccount + drift);
-    S.portfolio      = S.cashAccount + S.tradingAccount;
-    // Real intraday P&L from portfolio history (not random)
+  // ★ "PORTFOLIO DRIFT" SUPPRIME (05/07/2026) · ce mecanisme creait de l'argent
+  // aleatoire (±0.08% toutes les 5 s, biais POSITIF ≈ +21%/jour compose) : les
+  // portefeuilles gonflaient tout seuls sans aucun trade (+50 $ fantomes en 3
+  // jours sur AA et EV, preuves dans le backup Guardian du 05/07). Desormais les
+  // gains ne peuvent venir QUE des trades. On garde le recalcul portfolio + P&L
+  // de session (photo reelle, zero creation d'argent).
+  if(tick % 5 === 0) {
+    S.portfolio = S.cashAccount + S.tradingAccount;
     if(!S._startPortfolio) S._startPortfolio = S.portfolio;
     const sessionGain = S.portfolio - S._startPortfolio;
     S.pnl24h = S._startPortfolio > 0

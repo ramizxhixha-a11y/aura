@@ -1,3 +1,4 @@
+// [FIX] injection = NEUTRE pour le P&L : les bases session/jour montent du montant injecte (avant : l'injection etait comptee comme un benefice au boot suivant — cumul EV +32.50 = l'injection de 30 EUR) · 05/07/2026
 // [SEPARATION COMPLETE 3 MODES · 02/07/2026] openPositions + pnlHistory + pnl24h + pnlPeriod + etat bunker PAR MODE (accesseurs) · garde fermeture auto en 'real' · migration one-shot (dette orpheline purgee) · purge copies mortes du wallet
 // [FIX] transfert MAX (100%) : vide la caisse au centime pres + nettoyage residu (avant : Math.floor laissait la partie <1$) · 01/07/2026
 // [ETAPE 5 · SEPARATION 3 MODES] journal de bord (dreamJournal) PAR MODE + reset auto · 01/07/2026
@@ -4974,6 +4975,12 @@ function injectFundsFromFiat(fiatType, fiatAmount){
   S.portfolio     = S.cashAccount + S.tradingAccount;
   // Spec: ces sommes sont exonérées d'impôt → on trace dans ownFundsInjected
   S.ownFundsInjected = (S.ownFundsInjected || 0) + p.netUSDT;
+  // ★ INJECTION NEUTRE POUR LE P&L (05/07/2026) · une injection n'est PAS un gain.
+  // Les bases de session et du jour montent du meme montant, sinon le recalage au
+  // boot suivant comptait l'injection comme un benefice de session (preuve backup :
+  // cumul EV +32.50 = l'injection de 30 EUR, cumul RE +44.11 = les transferts).
+  if (typeof S._startPortfolio === 'number' && S._startPortfolio > 0) S._startPortfolio += p.netUSDT;
+  if (S.pnlPeriod && typeof S.pnlPeriod === 'object' && typeof S.pnlPeriod.todayStartPortfolio === 'number') S.pnlPeriod.todayStartPortfolio += p.netUSDT;
   if(!S.ownFundsLog) S.ownFundsLog = [];
   S.ownFundsLog.unshift({
     amount:    p.netUSDT,

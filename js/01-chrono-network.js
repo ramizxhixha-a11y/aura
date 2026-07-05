@@ -1,3 +1,4 @@
+// [FIX] detection reseau REELLE (ping Binance 20s + events) : coupure => temoin ROUGE clignotant + trading en PAUSE + play bloque ; retour => vert + reprise AUTO du mode pause (navigator.onLine seul etait non fiable sur Android) · 02/07/2026
 // [FIX] play/pause PAR MODE STRICT retabli : play dans un mode n affecte JAMAIS les deux autres (annule le play global du 01/07) + one-shot remise en pause des drapeaux pollues + purge cle legacy aura_sim_running · 02/07/2026
 // [FIX] badge mode sous le chrono (#modeBadge) cable au boot et au switch (etait un HTML statique affichant 'AA' en permanence) · 02/07/2026
 // [FIX] switch de mode : renderAll() pour repeindre les cartes wallet du mode actif (donnees deja par mode) · 01/07/2026
@@ -104,21 +105,52 @@ window._auraGetGlobalS = _auraGetGlobalS;
     localStorage.setItem(K_RUNNING,   state.running);
   }
 
-  function evaluateNetwork() {
-    if (!navigator.onLine) return 'offline';
-    const conn = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
-    if (conn && conn.effectiveType) {
-      const t = conn.effectiveType;
-      if (t === '4g') return 'online';
-      if (t === '3g') return 'unstable';
-      if (t === '2g' || t === 'slow-2g') return 'unstable';
+  // ─── DETECTION RESEAU REELLE ────────────────────────────────────────────
+  // navigator.onLine est NON FIABLE sur Android (reste "online" si le WiFi est
+  // connecte a un routeur, meme sans Internet). Seule verite : un ping HTTP
+  // reel vers Binance (/api/v3/ping, endpoint concu pour ca). 2 echecs
+  // consecutifs => OFFLINE (temoin rouge + pause du trading) ; 1 succes =>
+  // ONLINE (temoin vert + reprise auto du mode qui avait ete pause).
+  function _setNet(sNew) {
+    if (state.netStatus === sNew) return;
+    var prev = state.netStatus;
+    state.netStatus = sNew;
+    render();
+    if (sNew === 'offline') {
+      try {
+        if (window._auraSimState && window._auraSimState.running) {
+          window._netPausedMode = state.currentMode;
+          if (window.stopSim) window.stopSim();
+        }
+        if (typeof window.showToast === 'function') window.showToast('\uD83D\uDD34 Connexion perdue \u2014 trading en pause', 4000, 'loss');
+      } catch(e) {}
+    } else if (prev === 'offline') {
+      try {
+        if (typeof window.showToast === 'function') window.showToast('\uD83D\uDFE2 Connexion r\u00E9tablie', 3000, 'win');
+        var pm = window._netPausedMode;
+        if (pm) {
+          window._netPausedMode = null;
+          if (window._setModeRunning) window._setModeRunning(pm, true);   // reprendra a la visite du mode
+          if (pm === state.currentMode && window.startSim) window.startSim();
+        }
+      } catch(e) {}
     }
-    return 'online';
+  }
+
+  var _pingFails = 0;
+  function _netPing() {
+    var ctl = null, to = null;
+    try { ctl = new AbortController(); to = setTimeout(function(){ try { ctl.abort(); } catch(e) {} }, 5000); } catch(e) {}
+    fetch('https://api.binance.com/api/v3/ping', ctl ? { signal: ctl.signal, cache: 'no-store' } : { cache: 'no-store' })
+      .then(function(){ if (to) clearTimeout(to); _pingFails = 0; _setNet('online'); })
+      .catch(function(){ if (to) clearTimeout(to); _pingFails++; if (_pingFails >= 2 || navigator.onLine === false) _setNet('offline'); });
   }
 
   function onNetworkChange() {
-    state.netStatus = evaluateNetwork();
-    render();
+    // L'event 'offline' du navigateur est fiable DANS CE SENS ; 'online' ne
+    // garantit rien -> toujours confirme par un ping reel.
+    if (navigator.onLine === false) { _pingFails = 2; _setNet('offline'); }
+    _netPing();
   }
 
   function syncRunningFromUI() {
@@ -198,6 +230,7 @@ window._auraGetGlobalS = _auraGetGlobalS;
     }
     window.addEventListener('beforeunload', () => { save(); });
     onNetworkChange();
+    setInterval(_netPing, 20000);   // verite reseau toutes les 20 s (endpoint leger)
     setInterval(tick, 1000);
     render();
   }
@@ -260,6 +293,14 @@ window._auraGetGlobalS = _auraGetGlobalS;
           _toast('\u26A0 Compte trading vide \u2014 transf\u00E8re de la caisse vers le trading avant de lancer', 'warn');
         else
           _toast('\u26A0 Aucun fonds \u2014 injecte de l\'argent puis alimente le trading avant de lancer', 'warn');
+        try { _updateBtn(false); } catch(e) {}
+        return;
+      }
+    } catch(e) {}
+    // GARDE RESEAU · pas de lancement sans connexion reelle (temoin rouge).
+    try {
+      if (window.AuraChrono && window.AuraChrono.state && window.AuraChrono.state.netStatus === 'offline') {
+        _toast('\uD83D\uDD34 Pas de connexion \u2014 impossible de lancer', 'warn');
         try { _updateBtn(false); } catch(e) {}
         return;
       }
@@ -352,6 +393,9 @@ window._auraGetGlobalS = _auraGetGlobalS;
         user-select: none; margin-right: 4px;
       }
       .btn-trade-mode:active { transform: scale(0.94); }
+      .net-indicator.online  { background:#00e87a !important; box-shadow:0 0 8px rgba(0,232,122,.55) !important; }
+      .net-indicator.offline { background:#ff3d6b !important; box-shadow:0 0 8px rgba(255,61,107,.55) !important; animation: aura-netblink 1s infinite; }
+      @keyframes aura-netblink { 50% { opacity: .3; } }
       .btn-trade-mode.mode-AA { color:#38d4f5; border-color:rgba(56,212,245,.55); background:rgba(56,212,245,.08); box-shadow:0 0 0 1px rgba(56,212,245,.15); }
       .btn-trade-mode.mode-AA:hover { background:rgba(56,212,245,.15); box-shadow:0 0 12px rgba(56,212,245,.3); }
       .btn-trade-mode.mode-EV { color:#00e87a; border-color:rgba(0,232,122,.55); background:rgba(0,232,122,.08); box-shadow:0 0 0 1px rgba(0,232,122,.15); }
