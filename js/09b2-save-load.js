@@ -1,3 +1,4 @@
+// [ASSAINISSEMENT ONE-SHOT] comptes remis au REEL (injections + vrais P&L journalises) : purge de l argent du drift (+51 fantomes AA et EV), compensation du trou de migration RE (+10.76), cumuls recales sur les vrais gains · fiscal/caisse/intelligence intacts · 05/07/2026
 // [FIX SEPARATION] recalage session/jour PAR WALLET a chaque boot + purge one-shot des bases et cumuls pollues par le legacy (~5000) · 02/07/2026
 // [SEPARATION COMPLETE 3 MODES · 02/07/2026] restaurations flat openPositions/pnl24h/pnlHistory/pnlPeriod retirees (walletStore les porte par mode)
 // [ETAPE 5 · SEPARATION 3 MODES] restauration dreamJournal flat retiree (walletStore le porte par mode) · 01/07/2026
@@ -470,6 +471,38 @@ async function loadState() {
   // la session ecoulee dans le cumul (_totalCompounded, zero perte) puis on
   // recale _startPortfolio sur le portefeuille courant : la P&L de session
   // repart de 0, la P&L totale reste identique.
+  // ★ ASSAINISSEMENT ONE-SHOT (05/07/2026, demande par Rams) · remet chaque
+  // compte trading au REEL : injections nettes + vrais P&L de trades journalises
+  // (fees.totalPnlNet). Purge : l'argent cree par le 'portfolio drift' (~+51 $
+  // fantomes sur AA et EV en 3 jours) et compense le trou de migration RE
+  // (-10.76 : mises des positions abandonnees le 02/07 jamais re-creditees).
+  // Le cumul P&L repart sur les vrais gains. Ne touche PAS : reserve fiscale,
+  // caisse, intelligence (agents/lecons), pairStates, journaux.
+  try {
+    if (S.walletStore && typeof S.walletStore === 'object'
+        && !localStorage.getItem('aura_assainissement_v1')) {
+      ['sim','paperReal','real'].forEach(function(_mk){
+        var _w = S.walletStore[_mk]; if (!_w || typeof _w !== 'object') return;
+        var _inj = _w.ownFundsInjected || 0;
+        var _net = (_w.fees && typeof _w.fees.totalPnlNet === 'number') ? _w.fees.totalPnlNet : 0;
+        var _reel = Math.max(0, _inj + _net - (_w.cashAccount || 0));
+        _w.tradingAccount   = _reel;
+        _w.portfolio        = (_w.cashAccount || 0) + _reel;
+        _w._totalCompounded = _net;
+        _w._startPortfolio  = _w.portfolio;
+        if (_w.pnlPeriod && typeof _w.pnlPeriod === 'object') {
+          _w.pnlPeriod.todayStartPortfolio = _w.portfolio;
+          _w.pnlPeriod.day = 0;
+        }
+        if (_w.bunker && typeof _w.bunker === 'object') _w.bunker.capRef = _reel;
+        if (Array.isArray(_w.pnlHistory)) _w.pnlHistory = [_w.portfolio];
+        _w.pnl24h = 0;
+      });
+      try { localStorage.setItem('aura_assainissement_v1', String(Date.now())); } catch(e) {}
+      dbg.push('assaini:v1');
+    }
+  } catch(e) { dbg.push('assaini:err'); }
+
   // FIX SEPARATION · le recalage s'applique aux TROIS wallets, pas seulement au
   // mode actif au boot. Sans ca, les bases de session/jour des modes non actifs
   // restaient perimees (voire polluees par l'ancien pnlPeriod flat legacy,
