@@ -1,3 +1,4 @@
+// [PONT CLAUDE · DANS AURA] bouton Export pour Claude dans Outils Avances : exporte l etat VIVANT de la page (aura_live.json, source aura-live, cycle affiche) — supprime le piege du mauvais navigateur · 05/07/2026
 // [AGRESSIVITE · validee par Rams 05/07/2026] seuil d engagement 0.40 -> 0.30 avec zone exploratoire a mise reduite (50-100%) + anti-stagnation actif sur ce gate + TP plancher 0.6% + SL 1.4x hors bruit (plancher 0.45%) + seuil LMSR sans double comptage fiscal · 05/07/2026
 // [FIX] plus de log/toast 'BOT LONG' fantome quand l'ouverture est bloquee (garde mode REEL) ou echoue · 05/07/2026
 // ════════════════════════════════════════════════════════════
@@ -2127,6 +2128,52 @@ function downloadFile(content, filename, mime) {
   URL.revokeObjectURL(url);
 }
 if(typeof downloadFile==='function') window.downloadFile = downloadFile;
+
+// ═══ PONT CLAUDE · EXPORT DEPUIS AURA (05/07/2026) ═══
+// Le bouton vit DANS AURA : cette page EST l'etat vivant, donc l'export est
+// frais PAR CONSTRUCTION — plus jamais le piege du "mauvais navigateur" (les
+// exports Guardian photographiaient un vieil IDB du 28/06). Enveloppe identique
+// au backup Guardian -> meme lecteur cote Claude. Nom FIXE : aura_live.json.
+function exportForClaude() {
+  try {
+    var snap = (typeof buildSnapshot === 'function') ? buildSnapshot()
+             : (window.buildSnapshot ? window.buildSnapshot() : null);
+    if (!snap) { try { showToast('Export impossible : etat non pret', 3000, 'warn'); } catch(e) {} return; }
+    var payload = {
+      _type: 'aura_guardian_full',
+      version: 'aura-embed-1',
+      savedAt: new Date().toISOString(),
+      auraCycle: (typeof snap.cycle === 'number') ? snap.cycle : null,
+      auraSource: 'aura-live',
+      auraSavedAt: snap.savedAt || null,
+      aura: snap,
+      guardian: null
+    };
+    downloadFile(JSON.stringify(payload), 'aura_live.json', 'application/json');
+    var hh = new Date(); var pad = function(n){ return (n<10?'0':'')+n; };
+    try { showToast('\u2705 aura_live.json \u00b7 cycle ' + (payload.auraCycle||'?') + ' \u00b7 ' + pad(hh.getHours()) + ':' + pad(hh.getMinutes()) + ' \u2014 supprime les anciens de T\u00e9l\u00e9chargements puis uploade \u00e0 la racine (Replace + Commit)', 7000, 'win'); } catch(e) {}
+  } catch(e) { try { showToast('Export Claude : erreur', 3000, 'warn'); } catch(_) {} }
+}
+window.exportForClaude = exportForClaude;
+
+// Bouton injecte dans le panneau Outils Avances (sous les onglets, visible partout)
+(function _injectClaudeExport(){
+  function put(){
+    try {
+      if (document.getElementById('claudeExportBar')) return true;
+      var tabs = document.querySelector('#outilsPanel .outils-tabs');
+      if (!tabs) return false;
+      var bar = document.createElement('div');
+      bar.id = 'claudeExportBar';
+      bar.style.cssText = 'padding:8px 14px;display:flex;align-items:center;gap:10px;border-bottom:1px solid rgba(120,180,255,.12);';
+      bar.innerHTML = '<button onclick="exportForClaude()" style="flex:0 0 auto;padding:7px 12px;border-radius:9px;border:1.5px solid rgba(56,212,245,.5);background:rgba(56,212,245,.10);color:#38d4f5;font-weight:800;font-size:12px;">\uD83D\uDCE4 Export pour Claude</button>'
+        + '<span style="font-size:10px;color:var(--t3,#8899aa);line-height:1.35;">aura_live.json \u00b7 \u00e9tat VIVANT de cette page \u00b7 uploader \u00e0 la racine du repo (Replace + Commit)</span>';
+      tabs.insertAdjacentElement('afterend', bar);
+      return true;
+    } catch(e) { return false; }
+  }
+  if (!put()) { var iv = setInterval(function(){ if (put()) clearInterval(iv); }, 1500); setTimeout(function(){ clearInterval(iv); }, 30000); }
+})();
 
 function enableFullPowerMode() {
   if (!S || !S.agents) return;
