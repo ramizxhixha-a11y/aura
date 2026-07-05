@@ -1,4 +1,5 @@
 <!DOCTYPE html>
+<!-- [PONT CLAUDE] bouton '📤 Export pour Claude (aura_live.json)' dans Backup auto → Drive · 05/07/2026 -->
 <!-- [FIX Man/Manu · 01/07/2026] libelles unifies MAN (fin du message incoherent MAN vs MANU) -->
 <html lang="fr">
 <head>
@@ -1303,11 +1304,16 @@ VIEW_INIT.autobackup=function(){
       +'<button class="btn'+(gm.enabled&&gm.everyMin===180?' gold':'')+'" data-gh="3">3h</button>'
       +'<button class="btn'+(gm.enabled&&gm.everyMin===360?' gold':'')+'" data-gh="6">6h</button>'
       +'<button class="btn'+(gm.enabled&&gm.everyMin===720?' gold':'')+'" data-gh="12">12h</button></div>'
-      +'<div class="controls" style="margin-top:6px"><button class="btn green" id="gdlNow">⬇ Télécharger le backup complet</button></div>';
+      +'<div class="controls" style="margin-top:6px"><button class="btn green" id="gdlNow">⬇ Télécharger le backup complet</button></div>'
+      +'<div class="sect-label" style="margin-top:12px">🤖 Pont Claude · lecture directe</div>'
+      +'<div class="hint">Même backup, nom <b>fixe</b> <code>aura_live.json</code>. 1) Supprime l\'ancien <code>aura_live.json</code> de Téléchargements. 2) Bouton ci-dessous. 3) Uploade-le à la <b>racine</b> du repo (Replace). Claude le lit ensuite tout seul, sans que tu l\'envoies dans le chat.</div>'
+      +'<div class="controls" style="margin-top:6px"><button class="btn gold" id="gdlClaude">📤 Export pour Claude (aura_live.json)</button></div>';
     document.getElementById('gdlToggle').onclick=()=>{ if(gm.enabled)DD.disable(); else DD.enable(180); switchTab('autobackup'); };
     gdlBox.querySelectorAll('[data-gh]').forEach(b=>{ b.onclick=()=>{ DD.enable(parseInt(b.getAttribute('data-gh'))*60); switchTab('autobackup'); }; });
     gdlBox.querySelectorAll('[data-gmin]').forEach(b=>{ b.onclick=()=>{ DD.enable(parseInt(b.getAttribute('data-gmin'))); switchTab('autobackup'); }; });
     document.getElementById('gdlNow').onclick=()=>{ const btn=document.getElementById('gdlNow'); DD.now(); btn.textContent='✓ téléchargé'; setTimeout(()=>switchTab('autobackup'),1200); };
+    const gdlC=document.getElementById('gdlClaude');
+    if(gdlC) gdlC.onclick=()=>{ if(DD.forClaude){ DD.forClaude(); gdlC.textContent='✓ aura_live.json téléchargé — uploade-le à la racine du repo'; } else { gdlC.textContent='⚠ guardian-core.js pas à jour (upload les 2 fichiers)'; } };
     // compte à rebours vivant
     if(window._gdlCdTimer) clearInterval(window._gdlCdTimer);
     window._gdlCdTimer=setInterval(()=>{
