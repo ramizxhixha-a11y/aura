@@ -1,4 +1,4 @@
-// [PONT CLAUDE v3 · ENVOI DIRECT] Export pour Claude : avec token GitHub (⚙, fine-grained repo aura Contents RW) le fichier est POUSSE au repo en 1 clic (zero telechargement/upload/commit — requis en PWA ou le download Blob est ignore) ; sans token : telechargement classique · 05/07/2026
+// [PONT CLAUDE v3.1 · TEST TOKEN] le token est teste des le collage (verdict precis : ecrit OK / lit sans ecrire / repo invisible / mal colle) + verdicts 401 vs 403 distincts a l envoi · Export pour Claude : avec token GitHub (⚙, fine-grained repo aura Contents RW) le fichier est POUSSE au repo en 1 clic (zero telechargement/upload/commit — requis en PWA ou le download Blob est ignore) ; sans token : telechargement classique · 05/07/2026
 // [AGRESSIVITE · validee par Rams 05/07/2026] seuil d engagement 0.40 -> 0.30 avec zone exploratoire a mise reduite (50-100%) + anti-stagnation actif sur ce gate + TP plancher 0.6% + SL 1.4x hors bruit (plancher 0.45%) + seuil LMSR sans double comptage fiscal · 05/07/2026
 // [FIX] plus de log/toast 'BOT LONG' fantome quand l'ouverture est bloquee (garde mode REEL) ou echoue · 05/07/2026
 // ════════════════════════════════════════════════════════════
@@ -2180,8 +2180,10 @@ function _claudePush(payload, tk) {
     .then(function(r){
       if (r && (r.status === 200 || r.status === 201)) {
         try { showToast('\u2705 Envoy\u00e9 \u00e0 Claude \u00b7 cycle ' + (payload.auraCycle||'?') + ' \u2014 il peut le lire maintenant', 6000, 'win'); } catch(e) {}
-      } else if (r && (r.status === 401 || r.status === 403)) {
-        try { showToast('\u26D4 Token refus\u00e9 (expir\u00e9 ou droits insuffisants) \u2014 reconfigure via \u2699', 6000, 'warn'); } catch(e) {}
+      } else if (r && r.status === 401) {
+        try { showToast('\u26D4 Token invalide (mal coll\u00e9 ou expir\u00e9) \u2014 recolle-le via \u2699', 7000, 'warn'); } catch(e) {}
+      } else if (r && r.status === 403 || (r && r.status === 404)) {
+        try { showToast('\u26D4 Droits insuffisants \u2192 refais le token : Only select repositories \u2192 aura + Contents : Read and write', 8000, 'warn'); } catch(e) {}
       } else {
         try { showToast('\u26A0 Envoi \u00e9chou\u00e9 (HTTP ' + (r ? r.status : '?') + ')', 5000, 'warn'); } catch(e) {}
       }
@@ -2196,8 +2198,27 @@ function claudeTokenConfig() {
     v = (v || '').trim();
     if (!v || v.indexOf('\u2022') === 0) { if (!v) { localStorage.removeItem('aura_claude_gh_token'); try { showToast('Token effac\u00e9', 2500, 'ice'); } catch(e) {} } return; }
     localStorage.setItem('aura_claude_gh_token', v);
-    try { showToast('\u2705 Token enregistr\u00e9 \u2014 l\'export part maintenant en 1 clic', 4000, 'win'); } catch(e) {}
+    _claudeTestToken(v);
   } catch(e) {}
+}
+// Verdict immediat du token : voit-il le repo ? peut-il ECRIRE ?
+// (GET /repos renvoie permissions.push quand authentifie)
+function _claudeTestToken(tk) {
+  try { showToast('\u23F3 Test du token\u2026', 2000, 'ice'); } catch(e) {}
+  fetch('https://api.github.com/repos/ramizxhixha-a11y/aura', { headers: { 'Authorization': 'Bearer ' + tk, 'Accept': 'application/vnd.github+json' }, cache: 'no-store' })
+    .then(function(r){ return r.status === 200 ? r.json() : Promise.reject(r.status); })
+    .then(function(j){
+      if (j && j.permissions && j.permissions.push === true) {
+        try { showToast('\u2705 Token OK \u2014 \u00e9criture confirm\u00e9e. L\'export part en 1 clic.', 5000, 'win'); } catch(e) {}
+      } else {
+        try { showToast('\u26A0 Le token LIT le repo mais ne peut pas \u00c9CRIRE \u2192 dans le token : Permissions \u2192 Contents : Read and write', 8000, 'warn'); } catch(e) {}
+      }
+    })
+    .catch(function(st){
+      if (st === 404 || st === 403) { try { showToast('\u26D4 Le token ne voit PAS le repo aura \u2192 Repository access : Only select repositories \u2192 aura', 8000, 'warn'); } catch(e) {} }
+      else if (st === 401) { try { showToast('\u26D4 Token invalide (mal coll\u00e9 ou expir\u00e9) \u2192 recopie-le en entier (commence par github_pat_)', 8000, 'warn'); } catch(e) {} }
+      else { try { showToast('\u26A0 Test impossible (r\u00e9seau/HTTP ' + st + ')', 5000, 'warn'); } catch(e) {} }
+    });
 }
 window.claudeTokenConfig = claudeTokenConfig;
 window.exportForClaude = exportForClaude;
