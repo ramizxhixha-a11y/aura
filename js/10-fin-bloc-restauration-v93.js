@@ -1,4 +1,4 @@
-// [PONT CLAUDE v3.5 · INSTRUMENT DE VERITE] chaque erreur affiche les 12 premiers caracteres du token UTILISE par l app (ghp_=classic, github_pat_=fine-grained) — identification definitive du token en cause · le champ token n est plus pre-rempli : l ancien placeholder •••• faisait IGNORER en silence les nouveaux tokens colles (cause des 3 echecs identiques) — desormais tout collage est enregistre, confirme a l ecran, et teste aussitot · sha lu via le LISTING racine (le fichier ~1 Mo pouvait faire echouer la lecture directe du sha) + chaque refus affiche LE MESSAGE BRUT DE GITHUB a l ecran (capture = cause exacte) · sans token : feuille de partage Android (fonctionne en PWA) -> envoyer aura_live.json directement a l appli Claude ; token = envoi repo 1 clic ; dernier recours telechargement · le token est teste des le collage (verdict precis : ecrit OK / lit sans ecrire / repo invisible / mal colle) + verdicts 401 vs 403 distincts a l envoi · Export pour Claude : avec token GitHub (⚙, fine-grained repo aura Contents RW) le fichier est POUSSE au repo en 1 clic (zero telechargement/upload/commit — requis en PWA ou le download Blob est ignore) ; sans token : telechargement classique · 05/07/2026
+// [PONT CLAUDE v3.6 · VERSION VISIBLE] la version du pont s affiche dans la barre (Pont v3.6) et dans chaque toast d erreur — preuve du 05/07 : la PWA a execute du code perime toute la soiree pendant que les fixes etaient en ligne · chaque erreur affiche les 12 premiers caracteres du token UTILISE par l app (ghp_=classic, github_pat_=fine-grained) — identification definitive du token en cause · le champ token n est plus pre-rempli : l ancien placeholder •••• faisait IGNORER en silence les nouveaux tokens colles (cause des 3 echecs identiques) — desormais tout collage est enregistre, confirme a l ecran, et teste aussitot · sha lu via le LISTING racine (le fichier ~1 Mo pouvait faire echouer la lecture directe du sha) + chaque refus affiche LE MESSAGE BRUT DE GITHUB a l ecran (capture = cause exacte) · sans token : feuille de partage Android (fonctionne en PWA) -> envoyer aura_live.json directement a l appli Claude ; token = envoi repo 1 clic ; dernier recours telechargement · le token est teste des le collage (verdict precis : ecrit OK / lit sans ecrire / repo invisible / mal colle) + verdicts 401 vs 403 distincts a l envoi · Export pour Claude : avec token GitHub (⚙, fine-grained repo aura Contents RW) le fichier est POUSSE au repo en 1 clic (zero telechargement/upload/commit — requis en PWA ou le download Blob est ignore) ; sans token : telechargement classique · 05/07/2026
 // [AGRESSIVITE · validee par Rams 05/07/2026] seuil d engagement 0.40 -> 0.30 avec zone exploratoire a mise reduite (50-100%) + anti-stagnation actif sur ce gate + TP plancher 0.6% + SL 1.4x hors bruit (plancher 0.45%) + seuil LMSR sans double comptage fiscal · 05/07/2026
 // [FIX] plus de log/toast 'BOT LONG' fantome quand l'ouverture est bloquee (garde mode REEL) ou echoue · 05/07/2026
 // ════════════════════════════════════════════════════════════
@@ -2134,6 +2134,10 @@ if(typeof downloadFile==='function') window.downloadFile = downloadFile;
 // frais PAR CONSTRUCTION — plus jamais le piege du "mauvais navigateur" (les
 // exports Guardian photographiaient un vieil IDB du 28/06). Enveloppe identique
 // au backup Guardian -> meme lecteur cote Claude. Nom FIXE : aura_live.json.
+var _PONT_V = 'v3.6';   // ★ VERSION VISIBLE : affichee dans la barre et les toasts.
+// Une capture d'ecran suffit desormais a savoir QUELLE version tourne reellement
+// (la PWA a servi du code perime toute la soiree du 05/07 pendant que les fixes
+// etaient en ligne — indetectable sans ce marqueur).
 function exportForClaude() {
   try {
     var snap = (typeof buildSnapshot === 'function') ? buildSnapshot()
@@ -2221,7 +2225,7 @@ function _claudePush(payload, tk) {
       // (12 premiers caracteres — non sensible sur ~90). ghp_ = classic,
       // github_pat_ = fine-grained. La capture de CE toast identifie le token
       // sans aucune ambiguite possible.
-      try { showToast('\u26D4 ' + msg + ' \u00b7 token utilis\u00e9 : ' + String(tk).slice(0, 12) + '\u2026 \u2014 capture CE message pour Claude', 10000, 'warn'); } catch(_) {}
+      try { showToast('\u26D4 [' + _PONT_V + '] ' + msg + ' \u00b7 token utilis\u00e9 : ' + String(tk).slice(0, 12) + '\u2026 \u2014 capture CE message pour Claude', 10000, 'warn'); } catch(_) {}
     });
 }
 function claudeTokenConfig() {
@@ -2270,7 +2274,7 @@ function _claudeTestToken(tk) {
       var hint = (st === 401) ? ' \u2192 token mal coll\u00e9 ou expir\u00e9'
                : (st === 404 || st === 403) ? ' \u2192 ce token ne voit pas le repo aura'
                : '';
-      try { showToast('\u26D4 GitHub ' + (st || '?') + gh + hint + ' \u00b7 token utilis\u00e9 : ' + String(tk).slice(0, 12) + '\u2026 \u2014 capture CE message', 10000, 'warn'); } catch(_) {}
+      try { showToast('\u26D4 [' + _PONT_V + '] GitHub ' + (st || '?') + gh + hint + ' \u00b7 token utilis\u00e9 : ' + String(tk).slice(0, 12) + '\u2026 \u2014 capture CE message', 10000, 'warn'); } catch(_) {}
     });
 }
 window.claudeTokenConfig = claudeTokenConfig;
@@ -2288,7 +2292,7 @@ window.exportForClaude = exportForClaude;
       bar.style.cssText = 'padding:8px 14px;display:flex;align-items:center;gap:10px;border-bottom:1px solid rgba(120,180,255,.12);';
       bar.innerHTML = '<button onclick="exportForClaude()" style="flex:0 0 auto;padding:7px 12px;border-radius:9px;border:1.5px solid rgba(56,212,245,.5);background:rgba(56,212,245,.10);color:#38d4f5;font-weight:800;font-size:12px;">\uD83D\uDCE4 Export pour Claude</button>'
         + '<button onclick="claudeTokenConfig()" title="Configurer le token GitHub (envoi direct)" style="flex:0 0 auto;padding:7px 10px;border-radius:9px;border:1.5px solid rgba(136,153,170,.4);background:transparent;color:#8899aa;font-size:12px;">\u2699</button>'
-        + '<span style="font-size:10px;color:var(--t3,#8899aa);line-height:1.35;">aura_live.json \u00b7 \u00e9tat VIVANT \u00b7 avec token \u2699 : envoi DIRECT au repo en 1 clic (sinon t\u00e9l\u00e9chargement)</span>';
+        + '<span style="font-size:10px;color:var(--t3,#8899aa);line-height:1.35;"><b style="color:#38d4f5;">Pont ' + _PONT_V + '</b> \u00b7 aura_live.json \u00b7 \u00e9tat VIVANT \u00b7 avec token \u2699 : envoi DIRECT au repo (sinon t\u00e9l\u00e9chargement)</span>';
       tabs.insertAdjacentElement('afterend', bar);
       return true;
     } catch(e) { return false; }
