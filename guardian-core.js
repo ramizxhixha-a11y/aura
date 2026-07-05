@@ -1,3 +1,4 @@
+// [PONT CLAUDE] dataDownload.forClaude() : meme backup complet, nom FIXE aura_live.json (upload racine repo -> lien stable lu par Claude) · 05/07/2026
 /* ============================================================
    GUARDIAN CORE · moteur de sondes (l'intelligence)
    Indépendant de l'affichage. Détecte automatiquement s'il
@@ -713,7 +714,7 @@ Core.describeCapabilities = describeCapabilities;
       guardian: grabGuardianData()
     };
   }
-  async function download(){
+  async function download(fixedName){
     try {
       const data = await grabFull();
       const blob = new Blob([JSON.stringify(data)], { type:'application/json' });
@@ -721,7 +722,9 @@ Core.describeCapabilities = describeCapabilities;
       const a = document.createElement('a');
       const dt = new Date(); const pad = n => (n<10?'0':'')+n;
       const stamp = dt.getFullYear()+pad(dt.getMonth()+1)+pad(dt.getDate())+'-'+pad(dt.getHours())+pad(dt.getMinutes())+pad(dt.getSeconds());
-      a.href = url; a.download = 'aura_guardian_full_' + stamp + '.json';
+      // fixedName (ex. 'aura_live.json') : meme contenu, nom FIXE — pour l'upload
+      // GitHub a lien stable que Claude lit seul a chaque session.
+      a.href = url; a.download = fixedName || ('aura_guardian_full_' + stamp + '.json');
       document.body.appendChild(a); a.click();
       setTimeout(()=>{ try{document.body.removeChild(a);}catch(e){} try{URL.revokeObjectURL(url);}catch(e){} }, 100);
       return true;
@@ -745,7 +748,9 @@ Core.describeCapabilities = describeCapabilities;
     getMeta, setMeta, tick,
     enable: (everyMin)=>{ const m=getMeta(); m.enabled=true; m.everyMin=everyMin||180; setMeta(m); },
     disable: ()=>{ const m=getMeta(); m.enabled=false; setMeta(m); },
-    now: ()=>{ return download(); }
+    now: ()=>{ return download(); },
+    // Export pour Claude : identique au backup complet, nom FIXE 'aura_live.json'.
+    forClaude: ()=>{ return download('aura_live.json'); }
   };
 })();
 
