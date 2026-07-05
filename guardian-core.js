@@ -1,3 +1,4 @@
+// [PONT CLAUDE v2] source du snapshot tracee dans le fichier (live/idb/ls-light + date interne) + garde anti-perime : alerte si l etat de CE navigateur est vieux/ancien/absent (evite d exporter un etat du mauvais navigateur) · 05/07/2026
 // [PONT CLAUDE] dataDownload.forClaude() : meme backup complet, nom FIXE aura_live.json (upload racine repo -> lien stable lu par Claude) · 05/07/2026
 /* ============================================================
    GUARDIAN CORE · moteur de sondes (l'intelligence)
@@ -688,11 +689,12 @@ Core.describeCapabilities = describeCapabilities;
 
   async function grabFull(){
     let auraSnap = null;
+    let _srcTag = 'aucune';
     // 1. État live (si Guardian est embarqué dans la page AURA)
-    try { if(typeof abGrabState === 'function') auraSnap = abGrabState(); } catch(e){}
+    try { if(typeof abGrabState === 'function') auraSnap = abGrabState(); if(auraSnap) _srcTag = 'live'; } catch(e){}
     // 2. IndexedDB : l'état COMPLET (agents inclus). Priorité pour un vrai backup.
     if(!auraSnap || typeof auraSnap.cycle !== 'number' || !(auraSnap.agents && auraSnap.agents.length)){
-      try { const idb = await _readAuraFromIDB(); if(idb && typeof idb.cycle === 'number') auraSnap = idb; } catch(e){}
+      try { const idb = await _readAuraFromIDB(); if(idb && typeof idb.cycle === 'number'){ auraSnap = idb; _srcTag = 'idb'; } } catch(e){}
     }
     // 3. Dernier recours : localStorage allégé (clé nexus_state_v2), partagé entre
     //    onglets du même navigateur. Mieux que rien si IDB est inaccessible.
@@ -700,7 +702,7 @@ Core.describeCapabilities = describeCapabilities;
       try {
         const key = (CFG && CFG.storage && CFG.storage.saveKey) || 'nexus_state_v2';
         const raw = localStorage.getItem(key);
-        if(raw){ const parsed = JSON.parse(raw); if(parsed && typeof parsed === 'object') auraSnap = parsed; }
+        if(raw){ const parsed = JSON.parse(raw); if(parsed && typeof parsed === 'object'){ auraSnap = parsed; _srcTag = 'ls-light'; } }
       } catch(e){}
     }
     const cyc = auraSnap && typeof auraSnap.cycle === 'number' ? auraSnap.cycle
@@ -710,13 +712,16 @@ Core.describeCapabilities = describeCapabilities;
       version: GUARDIAN_VERSION,
       savedAt: new Date().toISOString(),
       auraCycle: cyc,
+      // ★ PONT CLAUDE · tracabilite : d'ou vient ce snapshot + sa date interne.
+      auraSource: _srcTag,
+      auraSavedAt: (auraSnap && auraSnap.savedAt) || null,
       aura: auraSnap,            // état complet d'AURA (null si AURA jamais ouverte dans ce navigateur)
       guardian: grabGuardianData()
     };
   }
-  async function download(fixedName){
+  async function download(fixedName, preData){
     try {
-      const data = await grabFull();
+      const data = preData || await grabFull();
       const blob = new Blob([JSON.stringify(data)], { type:'application/json' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -750,7 +755,27 @@ Core.describeCapabilities = describeCapabilities;
     disable: ()=>{ const m=getMeta(); m.enabled=false; setMeta(m); },
     now: ()=>{ return download(); },
     // Export pour Claude : identique au backup complet, nom FIXE 'aura_live.json'.
-    forClaude: ()=>{ return download('aura_live.json'); }
+    // ★ GARDE ANTI-PERIME : si l'etat AURA de CE navigateur est vieux (>30 min),
+    // sans walletStore (structure d'avant la separation) ou absent, l'export a
+    // deja trompe une fois (snapshot du 28/06 exporte le 05/07 : Guardian ouvert
+    // dans le MAUVAIS navigateur). On previent et on demande confirmation au
+    // lieu d'exporter silencieusement un etat perime.
+    forClaude: async ()=>{
+      const data = await grabFull();
+      let warn = null;
+      if(!data.aura) warn = 'AURA n\'a jamais tourné dans CE navigateur.';
+      else {
+        const ts = Date.parse(data.aura.savedAt || '') || 0;
+        const ageMin = ts ? Math.round((Date.now() - ts)/60000) : null;
+        if(!data.aura.walletStore) warn = 'État SANS walletStore (structure ancienne, datée du ' + String(data.aura.savedAt||'?').slice(0,10) + ').';
+        else if(ageMin === null || ageMin > 30) warn = 'État daté de ' + (ageMin===null?'?':ageMin+' min') + ' (cycle ' + (data.auraCycle||'?') + ').';
+      }
+      if(warn){
+        const msg = '⚠ ' + warn + '\n\nAURA tourne probablement dans un AUTRE navigateur.\nOuvre Guardian dans le MÊME navigateur qu\'AURA, ou ouvre AURA ici puis réessaie.\n\nExporter quand même cet état périmé ?';
+        if(!window.confirm(msg)) return false;
+      }
+      return download('aura_live.json', data);
+    }
   };
 })();
 
