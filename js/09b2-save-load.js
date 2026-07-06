@@ -1,4 +1,4 @@
-// [ASSAINISSEMENT ONE-SHOT] comptes remis au REEL (injections + vrais P&L journalises) : purge de l argent du drift (+51 fantomes AA et EV), compensation du trou de migration RE (+10.76), cumuls recales sur les vrais gains · fiscal/caisse/intelligence intacts · 05/07/2026
+// [DEFAUT EV · 06/07/2026] paperRealActivePairs vide depuis l origine (la 1re garde du moteur EV rejetait tout) : au boot, liste vide => toutes les paires activees (miroir du Reel) — EV peut enfin trader · [ASSAINISSEMENT ONE-SHOT] comptes remis au REEL (injections + vrais P&L journalises) : purge de l argent du drift (+51 fantomes AA et EV), compensation du trou de migration RE (+10.76), cumuls recales sur les vrais gains · fiscal/caisse/intelligence intacts · 05/07/2026
 // [FIX SEPARATION] recalage session/jour PAR WALLET a chaque boot + purge one-shot des bases et cumuls pollues par le legacy (~5000) · 02/07/2026
 // [SEPARATION COMPLETE 3 MODES · 02/07/2026] restaurations flat openPositions/pnl24h/pnlHistory/pnlPeriod retirees (walletStore les porte par mode)
 // [ETAPE 5 · SEPARATION 3 MODES] restauration dreamJournal flat retiree (walletStore le porte par mode) · 01/07/2026
@@ -502,6 +502,22 @@ async function loadState() {
       dbg.push('assaini:v1');
     }
   } catch(e) { dbg.push('assaini:err'); }
+
+  // ★ SIMULTANE · DEFAUT EV (06/07/2026) · paperRealActivePairs n'a JAMAIS ete
+  // initialise (0 paire active depuis l'origine) : la PREMIERE garde du moteur
+  // EV rejetait chaque cycle de chaque paire — c'est pour ca qu'EV n'a jamais
+  // trade (1 seul trade historique). Au boot, si la liste est vide, toutes les
+  // paires du systeme sont activees (miroir du comportement du mode Reel).
+  // Defaut permanent (pas un one-shot) : si la liste se re-vide un jour, elle
+  // se repeuple au boot suivant.
+  try {
+    if (!S.paperRealActivePairs || Object.keys(S.paperRealActivePairs).length === 0) {
+      var _pSrc = (typeof PAIRS !== 'undefined' && PAIRS && Object.keys(PAIRS).length) ? PAIRS : (S.pairStates || {});
+      S.paperRealActivePairs = {};
+      Object.keys(_pSrc).forEach(function(_pp){ S.paperRealActivePairs[_pp] = true; });
+      dbg.push('evPairs:init:' + Object.keys(S.paperRealActivePairs).length);
+    }
+  } catch(e) { dbg.push('evPairs:err'); }
 
   // FIX SEPARATION · le recalage s'applique aux TROIS wallets, pas seulement au
   // mode actif au boot. Sans ca, les bases de session/jour des modes non actifs
