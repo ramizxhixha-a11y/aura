@@ -1,3 +1,4 @@
+// [SIMULTANE · ETAPE 1 · 06/07/2026] MULTIPLEXEUR 3 MODES : chaque mode EN PLAY bat a chaque tick quel que soit l ecran (bascule atomique, accesseurs par mode, protection SL/TP par mode, affiche traite en dernier) — conception Rams : AA apprend, EV evalue, RE surveille/agit selon Regles v2, TOUS EN MEME TEMPS
 // [FIX MAJEUR] 'portfolio drift' SUPPRIME : creation d'argent aleatoire biaisee positive (~+21%/jour composee) — les portefeuilles gonflaient sans trades (+50$ fantomes en 3 jours sur AA et EV, preuve backup Guardian 05/07) · 05/07/2026
 // ════════════════════════════════════════════════════════════
 // AURA8 — module consolidé 08/10
@@ -2590,23 +2591,46 @@ function escHtml(s) {
 let tick = 0;
 
 function simTick() {
-  // v7.12 LIVRAISON 8 · Appliquer SL/TP Réel si applicable
-  if (S.tradingMode === 'paperReal') {
-    try { _applyPaperRealProtection(); } catch(e) {}
-  }
   // v7.2 Phase 18 · Perf monitoring (rolling window, sans impact perceptible)
   const _perfStart = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
   tick++;
 
-  // ── Per-pair independent cycle timers ──────────────────────
-  // Each pair has its own cycleMax/cycleTimer — they fire independently
-  Object.entries(S.pairStates).forEach(([pair, ps]) => {
-    ps.cycleTimer--;
-    if(ps.cycleTimer <= 0) {
-      ps.cycleTimer = ps.cycleMax;
-      S.cycle++;         // global cycle counter increments per any pair resolution
-      resolvePairCycle(pair, ps);
-    }
+  // ═══ MULTIPLEXEUR 3 MODES · Etape 1 du SIMULTANE (conception Rams) ═══
+  // Chaque mode EN PLAY bat a CHAQUE tick, quel que soit l'ecran : bascule
+  // ATOMIQUE de contexte (les accesseurs routent argent/positions/journal/
+  // compteurs vers le wallet du mode traite), protection SL/TP du mode, puis
+  // cycles independants des paires. Le mode AFFICHE est traite en DERNIER pour
+  // que le contexte final soit toujours celui de l'ecran (renders inchanges).
+  // Le Reel n'entre ici que si TU l'as mis en play — et ses ouvertures restent
+  // gouvernees par les Regles Reel v2 (MANU jamais ; AUTO : bases solides).
+  var _mDisp = S.tradingMode;
+  var _mRun  = [];
+  try {
+    ['sim','paperReal','real'].forEach(function(_m){
+      if (_m !== _mDisp && window._isModeRunning && window._isModeRunning(_m)) _mRun.push(_m);
+    });
+  } catch(e) {}
+  _mRun.push(_mDisp);
+  window._bgResolve = false;
+  _mRun.forEach(function(_m){
+    var _isBg = (_m !== _mDisp);
+    if (_isBg) { S.tradingMode = _m; window._bgResolve = true; }
+    try {
+      // Protection SL/TP du mode traite (les positions EV/RE sont surveillees
+      // MEME quand un autre mode est a l'ecran — "stop si je l'ai oublie").
+      if (S.tradingMode === 'paperReal' || S.tradingMode === 'real') {
+        try { _applyPaperRealProtection(); } catch(e) {}
+      }
+      Object.entries(S.pairStates).forEach(([pair, ps]) => {
+        ps.cycleTimer--;
+        if(ps.cycleTimer <= 0) {
+          ps.cycleTimer = ps.cycleMax;
+          S.cycle++;
+          resolvePairCycle(pair, ps);
+        }
+      });
+    } catch(e) {}
+    if (_isBg) { S.tradingMode = _mDisp; window._bgResolve = false; }
   });
 
   // ── Global ring timer (display only — BTC/USDT reference) ──

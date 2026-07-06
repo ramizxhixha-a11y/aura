@@ -1,3 +1,4 @@
+// [SIMULTANE · ETAPE 1 · 06/07/2026] le moteur bat tant qu AU MOINS UN mode est en play : pause de l ecran n arrete plus les modes d arriere-plan ; play rejoint le battement ; reprise au boot si un mode quelconque vivait
 // [FIX] detection reseau REELLE (ping Binance 20s + events) : coupure => temoin ROUGE clignotant + trading en PAUSE + play bloque ; retour => vert + reprise AUTO du mode pause (navigator.onLine seul etait non fiable sur Android) · 02/07/2026
 // [FIX] play/pause PAR MODE STRICT retabli : play dans un mode n affecte JAMAIS les deux autres (annule le play global du 01/07) + one-shot remise en pause des drapeaux pollues + purge cle legacy aura_sim_running · 02/07/2026
 // [FIX] badge mode sous le chrono (#modeBadge) cable au boot et au switch (etait un HTML statique affichant 'AA' en permanence) · 02/07/2026
@@ -283,6 +284,14 @@ window._auraGetGlobalS = _auraGetGlobalS;
       ? window.AuraChrono.getCurrentMode() : 'sim';
     return MAP[mode] || MAP['sim'];
   }
+  // SIMULTANE E1 · un mode quelconque est-il en play ? (le moteur doit battre
+  // tant qu'AU MOINS UN mode vit, meme si celui a l'ecran est en pause)
+  function _anyModeRunning() {
+    try {
+      if (!window._isModeRunning) return false;
+      return ['sim','paperReal','real'].some(function(m){ return !!window._isModeRunning(m); });
+    } catch(e) { return false; }
+  }
   window.startSim = function startSim() {
     // ETAPE 3b · play IMPOSSIBLE si le compte TRADING du mode actif est vide.
     // (L'injection alimente la CAISSE ; il faut transferer vers le trading avant.)
@@ -305,7 +314,16 @@ window._auraGetGlobalS = _auraGetGlobalS;
         return;
       }
     } catch(e) {}
-    if (window._auraSimState.running && window._auraSimState.interval) return;
+    if (window._auraSimState.running && window._auraSimState.interval) {
+      // SIMULTANE E1 · le moteur bat deja (un autre mode vit) : on marque
+      // simplement le mode AFFICHE comme "en cours" — il rejoint le battement.
+      try {
+        var _pmJ = (window.AuraChrono && window.AuraChrono.getCurrentMode) ? window.AuraChrono.getCurrentMode() : 'sim';
+        if (window._setModeRunning) window._setModeRunning(_pmJ, true);
+      } catch(e) {}
+      _updateBtn(true);
+      return;
+    }
     const simTick = _getSimTick();
     if (!simTick) { _toast('⚠ simTick introuvable', 'warn'); return; }
     window._auraSimState.interval = setInterval(function() {
@@ -336,13 +354,16 @@ window._auraGetGlobalS = _auraGetGlobalS;
   };
   window.stopSim = function stopSim() {
     if (!window._auraSimState.running) return;
-    if (window._auraSimState.interval) { clearInterval(window._auraSimState.interval); window._auraSimState.interval = null; }
-    window._auraSimState.running = false;
-    // ETAPE 3 · play/pause PAR MODE : marque le mode actif comme "en pause"
+    // marque d'abord le mode AFFICHE comme "en pause"
     try {
       var _pmM = (window.AuraChrono && window.AuraChrono.getCurrentMode) ? window.AuraChrono.getCurrentMode() : 'sim';
       if (window._setModeRunning) window._setModeRunning(_pmM, false);
     } catch(e) {}
+    // SIMULTANE E1 · l'interval ne meurt QUE si plus AUCUN mode ne vit :
+    // mettre l'ecran en pause n'arrete plus les modes qui battent derriere.
+    if (_anyModeRunning()) { _updateBtn(false); return; }
+    if (window._auraSimState.interval) { clearInterval(window._auraSimState.interval); window._auraSimState.interval = null; }
+    window._auraSimState.running = false;
     try {
       const setFn = new Function('try{_simRunning=false;_simInterval=null}catch(e){}');
       setFn();
@@ -550,7 +571,11 @@ window._auraGetGlobalS = _auraGetGlobalS;
     // (walletStore[mode].running). Wallets neufs => false => defaut EN PAUSE.
     try {
       var m = (window.AuraChrono && window.AuraChrono.getCurrentMode) ? window.AuraChrono.getCurrentMode() : 'sim';
-      if (window._isModeRunning) return !!window._isModeRunning(m);
+      if (window._isModeRunning) {
+        // SIMULTANE E1 · le moteur redemarre si AU MOINS UN mode etait en play
+        // (les modes d'arriere-plan survivent aux reloads, pas seulement l'affiche)
+        return ['sim','paperReal','real'].some(function(_mm){ return !!window._isModeRunning(_mm); });
+      }
       return false;
     } catch (e) { return false; }
   }
