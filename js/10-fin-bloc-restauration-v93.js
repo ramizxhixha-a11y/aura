@@ -1,4 +1,4 @@
-// [GARDE-FOU PERTE MAX · 06/07/2026] balayage 1 s de toutes les positions de tous les modes en play : fermeture immediate si perte prix > 2x le SL (borne 1.5-3 %) — la regle Rams 'stop si perte trop importante' + le fix des queues SOL -7.38/ETH -3.92 · [REGLES REEL v2] filtre bases solides pour le Reel : conviction pleine >=0.40 (jamais la zone exploratoire) ET expectancy apprise AA+EV positive de la paire, sinon abstention
+// [MISES PROPORTIONNELLES · 06/07/2026] plancher RELATIF (5 % du compte, min 2, override utilisateur respecte) au lieu du plancher fixe 10 qui faisait 20 % du capital par trade + CAP d exposition globale 50 % du compte · [LAISSER COURIR] le timeout ne coupe plus les positions en marche vers leur TP (protegees breakeven au-dela de 45 % du TP) : fin des 13/41 sorties quasi nulles qui mangeaient l edge brut +0.29 en frais · [GARDE-FOU PERTE MAX] balayage 1 s de toutes les positions de tous les modes en play : fermeture immediate si perte prix > 2x le SL (borne 1.5-3 %) — la regle Rams 'stop si perte trop importante' + le fix des queues SOL -7.38/ETH -3.92 · [REGLES REEL v2] filtre bases solides pour le Reel : conviction pleine >=0.40 (jamais la zone exploratoire) ET expectancy apprise AA+EV positive de la paire, sinon abstention
 // [PONT CLAUDE v4.0 · DEPOT SANS TOKEN] sans token configure, Export = POST simple vers une boite fixe (teste en reel avec le fichier de 938 Ko, relu intact par Claude) : zero compte, zero collage, zero configuration ; token GitHub reste prioritaire si present · chaque verdict affiche a quel compte GitHub appartient le token (GET /user) : un fine-grained d un autre compte que ramizxhixha-a11y ne pourra JAMAIS ecrire, quelles que soient ses permissions · la version du pont s affiche dans la barre (Pont v3.6) et dans chaque toast d erreur — preuve du 05/07 : la PWA a execute du code perime toute la soiree pendant que les fixes etaient en ligne · chaque erreur affiche les 12 premiers caracteres du token UTILISE par l app (ghp_=classic, github_pat_=fine-grained) — identification definitive du token en cause · le champ token n est plus pre-rempli : l ancien placeholder •••• faisait IGNORER en silence les nouveaux tokens colles (cause des 3 echecs identiques) — desormais tout collage est enregistre, confirme a l ecran, et teste aussitot · sha lu via le LISTING racine (le fichier ~1 Mo pouvait faire echouer la lecture directe du sha) + chaque refus affiche LE MESSAGE BRUT DE GITHUB a l ecran (capture = cause exacte) · sans token : feuille de partage Android (fonctionne en PWA) -> envoyer aura_live.json directement a l appli Claude ; token = envoi repo 1 clic ; dernier recours telechargement · le token est teste des le collage (verdict precis : ecrit OK / lit sans ecrire / repo invisible / mal colle) + verdicts 401 vs 403 distincts a l envoi · Export pour Claude : avec token GitHub (⚙, fine-grained repo aura Contents RW) le fichier est POUSSE au repo en 1 clic (zero telechargement/upload/commit — requis en PWA ou le download Blob est ignore) ; sans token : telechargement classique · 05/07/2026
 // [AGRESSIVITE · validee par Rams 05/07/2026] seuil d engagement 0.40 -> 0.30 avec zone exploratoire a mise reduite (50-100%) + anti-stagnation actif sur ce gate + TP plancher 0.6% + SL 1.4x hors bruit (plancher 0.45%) + seuil LMSR sans double comptage fiscal · 05/07/2026
 // [FIX] plus de log/toast 'BOT LONG' fantome quand l'ouverture est bloquee (garde mode REEL) ou echoue · 05/07/2026
@@ -1670,12 +1670,20 @@ function _resolvePairCycleCore(pair, ps) {
     botPos._holdCycles=(botPos._holdCycles||0)+1;
     const minHoldMet = botPos._holdCycles >= 5;
     const maxHold=Math.ceil(8/Math.max(0.1,effectiveConviction));
-    const timeClose=botPos._holdCycles>=maxHold;
+    // ★ LAISSER COURIR (06/07/2026) · le timeout fermait au chrono QUEL QUE SOIT
+    // le P&L : 13 sorties/41 quasi nulles, gain moyen plafonne a +0.4 % alors que
+    // le TP vise 0.6-1.2 % — l'edge brut (+0.29 $) etait mange par les frais.
+    // Desormais le timeout ne coupe plus une position EN MARCHE vers son objectif
+    // (au-dela de 45 % du TP, le breakeven-stop la protege deja : elle ne peut
+    // plus repasser rouge). Il ne recycle que les positions qui STAGNENT.
+    const timeClose=botPos._holdCycles>=maxHold && pnlPct < tpPct*0.45;
+    // garde-fou absolu : rien ne vit plus de 3x maxHold (marche vraiment figee)
+    const hardTime=botPos._holdCycles>=maxHold*3;
     const oppWeight=S.agents.filter(a=>{const ad=a.score>0.05?1:a.score<-0.05?-1:0;return ad!==0&&ad!==posDir;}).reduce((s,a)=>s+(a.fitness||1),0)/totalFitness;
     const consRev=oppWeight>0.75&&effectiveConviction>0.55;
 
     const canBotClose = S.botAutoMode !== false;
-    if(canBotClose && (slHit || (minHoldMet && (tpHit||sigRev||timeClose||consRev)))){
+    if(canBotClose && (slHit || (minHoldMet && (tpHit||sigRev||timeClose||hardTime||consRev)))){
       const why=tpHit?`TP +${tpPct.toFixed(1)}%`:slHit?`SL −${slPct.toFixed(1)}%`:(sigRev||consRev)?'Signal inversé':'Timeout';
       closePosition(botPos.id,true);
       learnFromOutcome('trade',pnlPct,pair);
@@ -1785,7 +1793,14 @@ function _resolvePairCycleCore(pair, ps) {
     }
   }
   const side = action==='buy'?'long':'short';
-  const stakeBase = Math.max(10, ps.stake || 10);
+  // ★ MISES PROPORTIONNELLES (06/07/2026, constat Rams) · l'ancien plancher
+  // FIXE de 10 $ ecrasait tout le calcul : sur un compte de ~52 $, chaque mise
+  // = 20 % du capital quel que soit le contexte. Desormais le plancher est
+  // RELATIF (5 % du compte, minimum absolu 2 $ pour rester au-dessus des
+  // frais) — les mises suivent ton argent, a la baisse comme a la hausse.
+  // Si tu regles une mise par paire dans l'UI (ps.stake > 0), elle est respectee.
+  const stakeBase = (ps.stake && ps.stake > 0) ? ps.stake
+                  : Math.max(2, (S.tradingAccount || 0) * 0.05);
   const lmsrBonus  = (action==='buy' && adjProb > 0.52) || (action==='sell' && adjProb < 0.48) ? 1.20 : 1.0;
   const kellyFrac  = Math.min(0.15, effectiveConviction * 0.35);
   const maxStake   = S.tradingAccount * kellyFrac * lmsrBonus;
@@ -1806,7 +1821,21 @@ function _resolvePairCycleCore(pair, ps) {
   const _convStakeMult = effectiveConviction >= 0.40 ? 1.0
     : Math.max(0.5, 0.5 + 0.5 * (effectiveConviction - 0.30) / 0.10);
   const stakeRaw   = Math.max(stakeBase, maxStake * convScale) * _perfMult * _convStakeMult;
-  const stakeUsdt  = Math.round(stakeRaw*adxFilter*volFilter*10)/10;
+  let   stakeUsdt  = Math.round(stakeRaw*adxFilter*volFilter*10)/10;
+  // ★ CAP D'EXPOSITION GLOBALE (06/07/2026) · jamais plus de 50 % du compte
+  // engage en positions simultanees : la mise est reduite au disponible sous
+  // le plafond, et s'il reste moins de 2 $ de marge, abstention (le capital
+  // reste proportionne, quel que soit le nombre de paires favorables).
+  try {
+    const _engaged = (S.openPositions || []).reduce(function(sum, p){ return sum + (Number(p.stakeUsdt) || 0); }, 0);
+    const _capExpo = (S.tradingAccount || 0) * 0.5;
+    const _room = _capExpo - _engaged;
+    if (_room < 2) {
+      learnFromOutcome('cycle', 0, pair);
+      return;
+    }
+    if (stakeUsdt > _room) stakeUsdt = Math.round(_room * 10) / 10;
+  } catch(e) {}
   
   let finalStake = stakeUsdt;
   if (S.tradingMode === 'paperReal' && typeof _checkPaperRealStakeLimit === 'function') {
