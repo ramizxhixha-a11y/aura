@@ -1,3 +1,4 @@
+// [SIMULTANE · ETAPE 3 · 06/07/2026] le collecteur de bougies reelles sert les modes EN PLAY (walletStore.running), plus seulement le mode affiche : EV et RE recoivent leurs prix en continu meme ecran sur AA — helper _bgPairsToWatch + health-check sans verrou d ecran + gardien des connexions a 1 s (demande Rams)
 // [REGLES REEL v2 · edictees par Rams 05/07/2026] fermetures de PROTECTION (stop/TP/perte excessive) PERMISES en Reel, en MANU comme en AUTO — le bot surveille et stoppe si necessaire
 // [FIX] injection = NEUTRE pour le P&L : les bases session/jour montent du montant injecte (avant : l'injection etait comptee comme un benefice au boot suivant — cumul EV +32.50 = l'injection de 30 EUR) · 05/07/2026
 // [SEPARATION COMPLETE 3 MODES · 02/07/2026] openPositions + pnlHistory + pnl24h + pnlPeriod + etat bunker PAR MODE (accesseurs) · garde fermeture auto en 'real' · migration one-shot (dette orpheline purgee) · purge copies mortes du wallet
@@ -4382,15 +4383,27 @@ function _scheduleBgRetryFor(pair) {
   _bgCollectorRetryByPair[pair] = Math.min(60000, delay * 2);
 }
 
+// ★ SIMULTANE E3 (06/07) · les bougies reelles sont collectees pour les modes
+// EN PLAY, plus seulement pour le mode a l'ecran : EV et RE recoivent leur
+// carburant en continu meme quand tu regardes AA. (Si real ET EV sont en play
+// sur une meme paire, le flux prend le timeframe real — identiques en pratique.)
+function _bgModesNeeded() {
+  const _wsS = S.walletStore || {};
+  return {
+    re: (S.tradingMode === 'real')      || !!(_wsS.real && _wsS.real.running),
+    ev: (S.tradingMode === 'paperReal') || !!(_wsS.paperReal && _wsS.paperReal.running)
+  };
+}
+function _bgPairsToWatch() {
+  const _need = _bgModesNeeded();
+  let out = [];
+  if (_need.re) out = out.concat(Object.keys(S.realActivePairs || {}).filter(p => S.realActivePairs[p]));
+  if (_need.ev) out = out.concat(Object.keys(S.paperRealActivePairs || {}).filter(p => S.paperRealActivePairs[p]));
+  return Array.from(new Set(out));
+}
 function _startBgCollector() {
-  // Construire la liste des paires à surveiller
-  let pairsToWatch = [];
-  if (S.tradingMode === 'real') {
-    pairsToWatch = Object.keys(S.realActivePairs || {}).filter(p => S.realActivePairs[p]);
-  } else if (S.tradingMode === 'paperReal') {
-    // v7.12 LIVRAISON 8 · WebSocket pour paires Réel aussi
-    pairsToWatch = Object.keys(S.paperRealActivePairs || {}).filter(p => S.paperRealActivePairs[p]);
-  }
+  // Construire la liste des paires à surveiller (modes en play + mode affiché)
+  let pairsToWatch = _bgPairsToWatch();
   if (pairsToWatch.length === 0) {
     try {
       const keys = Object.keys(PAIRS || {});
@@ -4407,9 +4420,10 @@ function _startBgCollector() {
     }
   });
   // Ouvrir ceux qui manquent + bootstrap REST pour les paires pausées/nouvelles
-  const _bgTf = (S.tradingMode === 'real') ? (S.realTimeframe || '15m') : (S.paperRealTimeframe || '15m');
+  const _bgNeed = _bgModesNeeded();
+  const _bgTf = _bgNeed.re ? (S.realTimeframe || '15m') : (S.paperRealTimeframe || '15m');
   pairsToWatch.forEach(pair => {
-    const _bgKs = (S.tradingMode === 'real')
+    const _bgKs = _bgNeed.re
       ? (S.realKillSwitch && S.realKillSwitch[pair])
       : (S.paperRealKillSwitch && S.paperRealKillSwitch[pair]);
     const _isStalePaused = _bgKs && _bgKs.paused && _bgKs.reason === 'Données obsolètes';
@@ -4468,13 +4482,9 @@ window._fetchAndBootstrapRealCandles = _fetchAndBootstrapRealCandles;
 // Si un WS est dans un autre état (CONNECTING=0, CLOSING=2, CLOSED=3) depuis trop
 // longtemps, on le force à se reconnecter. Évite les WS "endormis" sur Android.
 function _bgCollectorHealthCheck() {
-  if (!_isRealLike()) return;
-  let pairsToWatch = [];
-  if (S.tradingMode === 'real') {
-    pairsToWatch = Object.keys(S.realActivePairs || {}).filter(p => S.realActivePairs[p]);
-  } else if (S.tradingMode === 'paperReal') {
-    pairsToWatch = Object.keys(S.paperRealActivePairs || {}).filter(p => S.paperRealActivePairs[p]);
-  }
+  // ★ SIMULTANE E3 · le gardien des flux sert les modes EN PLAY, plus l'ecran :
+  // il repare/ouvre les WS d'EV et de RE meme quand AA est affiche.
+  let pairsToWatch = _bgPairsToWatch();
   if (pairsToWatch.length === 0) return;
   // v7.12 LIVRAISON 12 · Si aucun WS actif alors qu'on devrait en avoir, démarrer
   if (Object.keys(_bgCollectorWSMap || {}).length === 0) {
@@ -4521,7 +4531,12 @@ function _bgCollectorHealthCheck() {
 }
 window._bgCollectorHealthCheck = _bgCollectorHealthCheck;
 // v7.12 LIVRAISON 13 · Health check plus rapide (toutes les 5s)
-setInterval(_bgCollectorHealthCheck, 5000);
+// ★ (06/07, demande Rams) gardien des connexions : 5 s -> 1 s, aligne sur le
+// battement du moteur (1 tick/s). Une coupure de flux est detectee et reparee
+// dans la seconde. Descendre sous 1 s n'apporterait rien : le moteur lui-meme
+// ne consomme les prix qu'une fois par seconde — et les PRIX, eux, arrivent
+// deja en TEMPS REEL (chaque transaction Binance, des qu'elle a lieu).
+setInterval(_bgCollectorHealthCheck, 1000);
 
 // v7.12 LIVRAISON 13 · REFRESH PRÉVENTIF toutes les 30 minutes
 // Ferme et recrée TOUS les WS pour éviter la dégradation lente
