@@ -1,4 +1,4 @@
-// [DEFAUT EV · 06/07/2026] paperRealActivePairs vide depuis l origine (la 1re garde du moteur EV rejetait tout) : au boot, liste vide => toutes les paires activees (miroir du Reel) — EV peut enfin trader · [ASSAINISSEMENT ONE-SHOT] comptes remis au REEL (injections + vrais P&L journalises) : purge de l argent du drift (+51 fantomes AA et EV), compensation du trou de migration RE (+10.76), cumuls recales sur les vrais gains · fiscal/caisse/intelligence intacts · 05/07/2026
+// [DEFAUT EV v2 · AUTO-PROUVANT · 06/07/2026] bloc AUTONOME (agit des que l etat est pret, independant du chemin de boot) qui active les paires EV si la liste est vide ET signe chargement+action dans le chainLog (visible dans chaque depot) — remplace la v1 logee dans loadState · paperRealActivePairs vide depuis l origine (la 1re garde du moteur EV rejetait tout) : au boot, liste vide => toutes les paires activees (miroir du Reel) — EV peut enfin trader · [ASSAINISSEMENT ONE-SHOT] comptes remis au REEL (injections + vrais P&L journalises) : purge de l argent du drift (+51 fantomes AA et EV), compensation du trou de migration RE (+10.76), cumuls recales sur les vrais gains · fiscal/caisse/intelligence intacts · 05/07/2026
 // [FIX SEPARATION] recalage session/jour PAR WALLET a chaque boot + purge one-shot des bases et cumuls pollues par le legacy (~5000) · 02/07/2026
 // [SEPARATION COMPLETE 3 MODES · 02/07/2026] restaurations flat openPositions/pnl24h/pnlHistory/pnlPeriod retirees (walletStore les porte par mode)
 // [ETAPE 5 · SEPARATION 3 MODES] restauration dreamJournal flat retiree (walletStore le porte par mode) · 01/07/2026
@@ -503,22 +503,6 @@ async function loadState() {
     }
   } catch(e) { dbg.push('assaini:err'); }
 
-  // ★ SIMULTANE · DEFAUT EV (06/07/2026) · paperRealActivePairs n'a JAMAIS ete
-  // initialise (0 paire active depuis l'origine) : la PREMIERE garde du moteur
-  // EV rejetait chaque cycle de chaque paire — c'est pour ca qu'EV n'a jamais
-  // trade (1 seul trade historique). Au boot, si la liste est vide, toutes les
-  // paires du systeme sont activees (miroir du comportement du mode Reel).
-  // Defaut permanent (pas un one-shot) : si la liste se re-vide un jour, elle
-  // se repeuple au boot suivant.
-  try {
-    if (!S.paperRealActivePairs || Object.keys(S.paperRealActivePairs).length === 0) {
-      var _pSrc = (typeof PAIRS !== 'undefined' && PAIRS && Object.keys(PAIRS).length) ? PAIRS : (S.pairStates || {});
-      S.paperRealActivePairs = {};
-      Object.keys(_pSrc).forEach(function(_pp){ S.paperRealActivePairs[_pp] = true; });
-      dbg.push('evPairs:init:' + Object.keys(S.paperRealActivePairs).length);
-    }
-  } catch(e) { dbg.push('evPairs:err'); }
-
   // FIX SEPARATION · le recalage s'applique aux TROIS wallets, pas seulement au
   // mode actif au boot. Sans ca, les bases de session/jour des modes non actifs
   // restaient perimees (voire polluees par l'ancien pnlPeriod flat legacy,
@@ -747,3 +731,40 @@ function scheduleAutoSave() {
 window.scheduleAutoSave = scheduleAutoSave;
 
 console.log('[09b2 v125] ✅ hooks + autosave 10s installés · LS allégé · IDB complet · fusion au load');
+
+// ═══ SIMULTANE · DEFAUT EV v2 (06/07/2026) · AUTO-PROUVANT ═══
+// paperRealActivePairs etait VIDE depuis l'origine : la 1re garde du moteur EV
+// rejetait chaque cycle — EV n'a jamais trade. Ce bloc est AUTONOME (il n'attend
+// plus le chemin de chargement d'etat : il agit des que l'etat est pret, quel
+// que soit le boot) et AUTO-PROUVANT : il signe son chargement ET son action
+// dans le journal systeme (chainLog), visibles dans chaque depot 📤.
+(function _evPairsDefault(){
+  function _log(desc){
+    try {
+      if (S && S.chainLog) {
+        S.chainLog.push({ icon:'\u2714', desc: desc, hash: Math.random().toString(36).slice(2,8), time: new Date().toLocaleTimeString() });
+        if (S.chainLog.length > 100) S.chainLog.splice(0, S.chainLog.length - 100);
+      }
+    } catch(e) {}
+  }
+  var _tries = 0;
+  var _iv = setInterval(function(){
+    _tries++;
+    var _ready = false;
+    try { _ready = !!window._stateReady; } catch(e) {}
+    if (!_ready && _tries < 60) return;
+    clearInterval(_iv);
+    try {
+      var _n0 = S.paperRealActivePairs ? Object.keys(S.paperRealActivePairs).length : -1;
+      if (_n0 <= 0) {
+        var _pSrc = (typeof PAIRS !== 'undefined' && PAIRS && Object.keys(PAIRS).length) ? PAIRS : (S.pairStates || {});
+        S.paperRealActivePairs = {};
+        Object.keys(_pSrc).forEach(function(_pp){ S.paperRealActivePairs[_pp] = true; });
+        _log('09b2·defEV2 charg\u00e9 \u2014 EV : ' + Object.keys(S.paperRealActivePairs).length + ' paires ACTIV\u00c9ES (liste \u00e9tait vide)');
+        try { if (typeof showToast === 'function') showToast('\u2705 EV : ' + Object.keys(S.paperRealActivePairs).length + ' paires activ\u00e9es', 4000, 'win'); } catch(e) {}
+      } else {
+        _log('09b2·defEV2 charg\u00e9 \u2014 EV : ' + _n0 + ' paires d\u00e9j\u00e0 actives (rien \u00e0 faire)');
+      }
+    } catch(e) { _log('09b2·defEV2 charg\u00e9 \u2014 erreur d\'activation'); }
+  }, 500);
+})();
