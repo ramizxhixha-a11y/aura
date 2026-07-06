@@ -1,4 +1,4 @@
-// [REGLES REEL v2 · edictees par Rams 05/07/2026] filtre bases solides pour le Reel : conviction pleine >=0.40 (jamais la zone exploratoire) ET expectancy apprise AA+EV positive de la paire, sinon abstention
+// [GARDE-FOU PERTE MAX · 06/07/2026] balayage 1 s de toutes les positions de tous les modes en play : fermeture immediate si perte prix > 2x le SL (borne 1.5-3 %) — la regle Rams 'stop si perte trop importante' + le fix des queues SOL -7.38/ETH -3.92 · [REGLES REEL v2] filtre bases solides pour le Reel : conviction pleine >=0.40 (jamais la zone exploratoire) ET expectancy apprise AA+EV positive de la paire, sinon abstention
 // [PONT CLAUDE v4.0 · DEPOT SANS TOKEN] sans token configure, Export = POST simple vers une boite fixe (teste en reel avec le fichier de 938 Ko, relu intact par Claude) : zero compte, zero collage, zero configuration ; token GitHub reste prioritaire si present · chaque verdict affiche a quel compte GitHub appartient le token (GET /user) : un fine-grained d un autre compte que ramizxhixha-a11y ne pourra JAMAIS ecrire, quelles que soient ses permissions · la version du pont s affiche dans la barre (Pont v3.6) et dans chaque toast d erreur — preuve du 05/07 : la PWA a execute du code perime toute la soiree pendant que les fixes etaient en ligne · chaque erreur affiche les 12 premiers caracteres du token UTILISE par l app (ghp_=classic, github_pat_=fine-grained) — identification definitive du token en cause · le champ token n est plus pre-rempli : l ancien placeholder •••• faisait IGNORER en silence les nouveaux tokens colles (cause des 3 echecs identiques) — desormais tout collage est enregistre, confirme a l ecran, et teste aussitot · sha lu via le LISTING racine (le fichier ~1 Mo pouvait faire echouer la lecture directe du sha) + chaque refus affiche LE MESSAGE BRUT DE GITHUB a l ecran (capture = cause exacte) · sans token : feuille de partage Android (fonctionne en PWA) -> envoyer aura_live.json directement a l appli Claude ; token = envoi repo 1 clic ; dernier recours telechargement · le token est teste des le collage (verdict precis : ecrit OK / lit sans ecrire / repo invisible / mal colle) + verdicts 401 vs 403 distincts a l envoi · Export pour Claude : avec token GitHub (⚙, fine-grained repo aura Contents RW) le fichier est POUSSE au repo en 1 clic (zero telechargement/upload/commit — requis en PWA ou le download Blob est ignore) ; sans token : telechargement classique · 05/07/2026
 // [AGRESSIVITE · validee par Rams 05/07/2026] seuil d engagement 0.40 -> 0.30 avec zone exploratoire a mise reduite (50-100%) + anti-stagnation actif sur ce gate + TP plancher 0.6% + SL 1.4x hors bruit (plancher 0.45%) + seuil LMSR sans double comptage fiscal · 05/07/2026
 // [FIX] plus de log/toast 'BOT LONG' fantome quand l'ouverture est bloquee (garde mode REEL) ou echoue · 05/07/2026
@@ -1845,6 +1845,57 @@ function _resolvePairCycleCore(pair, ps) {
   if(S.chainLog.length>100)S.chainLog.splice(0,S.chainLog.length-100);
 }
 if(typeof _resolvePairCycleCore==='function') window._resolvePairCycleCore = _resolvePairCycleCore;
+
+// ═══ GARDE-FOU PERTE MAX (06/07/2026) · regle Rams : "le bot surveille et
+// stoppe si perte trop importante, meme si je l'ai oublie" ═══
+// Les cycles ne voyaient les stops qu'a LEUR resolution : SOL -7.38 % et
+// ETH -3.92 % ont traverse leur SL pendant la fenetre et mange les gains d'AA.
+// Ce balayage independant passe CHAQUE SECONDE sur les positions de CHAQUE
+// mode en play (bascule atomique, comme le multiplexeur) : toute position dont
+// la perte prix depasse le plafond est fermee immediatement.
+// Plafond par position : 2x le SL prevu, borne entre 1.5 % et 3 %.
+// Positions manuelles : fermees aussi (c'est TA protection qui s'execute) —
+// closePosition(id, false) car la garde interne refuse botClose sur du manuel.
+setInterval(function _lossCapSweep() {
+  try {
+    if (!S || !S.walletStore || !window._isModeRunning) return;
+    var _disp = S.tradingMode;
+    var _modes = [];
+    ['sim','paperReal','real'].forEach(function(_m){
+      if (_m === _disp || window._isModeRunning(_m)) _modes.push(_m);
+    });
+    _modes.forEach(function(_m){
+      var _sw = (_m !== _disp);
+      if (_sw) S.tradingMode = _m;
+      try {
+        (S.openPositions || []).slice().forEach(function(pos){
+          var ps = S.pairStates && S.pairStates[pos.pair];
+          var px = ps ? Number(ps.price) : 0;
+          var entry = Number(pos.entryPrice);
+          if (!px || !entry) return;
+          var _sd = String(pos.side || '').toLowerCase();
+          var isLong = _sd.indexOf('long') === 0 || _sd === 'buy';
+          var pnlPct = isLong ? (px - entry) / entry * 100 : (entry - px) / entry * 100;
+          var slPct = 1.0;
+          if (pos.sl && Number(pos.sl) > 0) slPct = Math.abs(entry - Number(pos.sl)) / entry * 100;
+          var cap = Math.min(3, Math.max(1.5, 2 * slPct));
+          if (pnlPct <= -cap) {
+            try {
+              if (S.chainLog) {
+                S.chainLog.push({ icon:'\u26D4', desc:'Perte max \u00b7 ' + pos.pair + ' ferm\u00e9 \u00e0 ' + pnlPct.toFixed(2) + '% (plafond ' + cap.toFixed(1) + '%)',
+                  hash: Math.random().toString(36).slice(2,8), time: new Date().toLocaleTimeString() });
+                if (S.chainLog.length > 100) S.chainLog.splice(0, S.chainLog.length - 100);
+              }
+            } catch(e) {}
+            try { closePosition(pos.id, pos.auto === true); } catch(e) {}
+            try { showToast('\u26D4 Perte max \u00b7 ' + pos.pair + ' ' + pnlPct.toFixed(1) + '%', 4000, 'loss'); } catch(e) {}
+          }
+        });
+      } catch(e) {}
+      if (_sw) S.tradingMode = _disp;
+    });
+  } catch(e) {}
+}, 1000);
 
 function _resolvePaperRealCycle(pair, ps) {
   if (!(S.paperRealActivePairs && S.paperRealActivePairs[pair])) return;
