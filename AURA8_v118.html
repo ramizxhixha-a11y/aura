@@ -1,4 +1,5 @@
 <!DOCTYPE html>
+<!-- [DEFAUT EV v3 · INLINE · 06/07/2026] bloc auto-prouvant dans le DOCUMENT : active les 8 paires EV si liste vide + signe dans le chainLog (contournement de la coquille qui ne recharge pas les JS) -->
 <html lang="fr">
 <head>
 <meta charset="UTF-8">
@@ -1340,5 +1341,43 @@ body.real-mode-active { padding-top: 16px; }
   </div>
 </div>
 
+<script>
+// ═══ DEFAUT EV v3 · INLINE HTML (06/07/2026) · AUTO-PROUVANT ═══
+// Les fichiers JS livres aujourd'hui ne chargent pas dans la coquille native
+// (elle ne refait un vrai chargement que rarement). Ce bloc vit dans le
+// DOCUMENT lui-meme : si la coquille recharge le HTML, le contact EV se met.
+// Meme logique que 09b2-defEV2 : active les 8 paires EV si la liste est vide,
+// et SIGNE chargement + action dans le journal systeme (visible au depot).
+(function(){
+  function _log(desc){
+    try {
+      if (typeof S !== 'undefined' && S && S.chainLog) {
+        S.chainLog.push({ icon:'\u2714', desc: desc, hash: Math.random().toString(36).slice(2,8), time: new Date().toLocaleTimeString() });
+        if (S.chainLog.length > 100) S.chainLog.splice(0, S.chainLog.length - 100);
+      }
+    } catch(e) {}
+  }
+  var _t = 0;
+  var _iv = setInterval(function(){
+    _t++;
+    var _ok = false;
+    try { _ok = !!window._stateReady; } catch(e) {}
+    if (!_ok && _t < 60) return;
+    clearInterval(_iv);
+    try {
+      var _n0 = (typeof S !== 'undefined' && S && S.paperRealActivePairs) ? Object.keys(S.paperRealActivePairs).length : -1;
+      if (_n0 <= 0) {
+        var _src = (typeof PAIRS !== 'undefined' && PAIRS && Object.keys(PAIRS).length) ? PAIRS : ((S && S.pairStates) || {});
+        S.paperRealActivePairs = {};
+        Object.keys(_src).forEach(function(p){ S.paperRealActivePairs[p] = true; });
+        _log('html\u00b7defEV3 charg\u00e9 \u2014 EV : ' + Object.keys(S.paperRealActivePairs).length + ' paires ACTIV\u00c9ES (liste \u00e9tait vide)');
+        try { if (typeof showToast === 'function') showToast('\u2705 EV : ' + Object.keys(S.paperRealActivePairs).length + ' paires activ\u00e9es', 4000, 'win'); } catch(e) {}
+      } else {
+        _log('html\u00b7defEV3 charg\u00e9 \u2014 EV : ' + _n0 + ' paires d\u00e9j\u00e0 actives');
+      }
+    } catch(e) { _log('html\u00b7defEV3 charg\u00e9 \u2014 erreur'); }
+  }, 500);
+})();
+</script>
 </body>
 </html>
