@@ -1,3 +1,4 @@
+// [FEEDBACK REEL · 07/07/2026] la realite pese plus lourd que la simulation dans learnFromOutcome : Evaluation x3, Reel x5, ecole x1 (multiplexeur garantit le mode au moment de l appel) — les vrais trades forgent enfin la fitness des agents
 // [ETAPE 5] journal de bord : max 10 entrees affichees (etait 20) · 01/07/2026
 // ════════════════════════════════════════════════════════════
 // AURA8 — module consolidé 03/10
@@ -1185,12 +1186,19 @@ function learnFromOutcome(source, pnlPct, pair) {
     const _regime = detectMarketRegime();
     S.agents.forEach(a => {
       // Agent ayant un score actif dans ce trade
-      if(Math.abs(a.score||0) > 0.05) updateRegimeFitness(a, _regime, pnlPct);
+      if(Math.abs(a.score||0) > 0.05) updateRegimeFitness(a, _regime, pnlPct * ((S.tradingMode === 'real') ? 5 : (S.tradingMode === 'paperReal') ? 3 : 1));
     });
     S._lastRegime = _regime;
   }
   const won   = pnlPct > 0;
-  const mag   = Math.abs(pnlPct);
+  // ★ FEEDBACK REEL (07/07/2026) · la realite pese plus lourd que la simulation.
+  // Grace au multiplexeur, S.tradingMode est TOUJOURS le mode du trade au moment
+  // de cet appel : un trade sur VRAIS prix forge la fitness des agents plus fort
+  // qu'un trade du moteur simule — Evaluation x3, Reel x5, ecole x1. C'est la
+  // boucle qui transforme les vrais resultats en apprentissage au lieu de les
+  // perdre : l'ecole propose, l'examen et le terrain CORRIGENT.
+  const _modeW = (S.tradingMode === 'real') ? 5 : (S.tradingMode === 'paperReal') ? 3 : 1;
+  const mag   = Math.abs(pnlPct) * _modeW;
   const decay = source==='position' ? 1.3 : source==='trade' ? 1.0 : 0.7;
 
   const adjustments = [];
