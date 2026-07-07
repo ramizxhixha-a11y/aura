@@ -1,3 +1,4 @@
+// [REGLAGES v2 · ETAPE 1 · 07/07/2026] le panneau 'MODE REEL test securise' retrouve son vrai nom (MODE EVALUATION, l examen : vrais prix sans argent reel), ses paires recoivent leurs INTERRUPTEURS (togglePaperRealPair), les deux listes de paires sont renommees sans ambiguite (Evaluation vs MODE REEL argent reel), le texte GBM clarifie — etape 2 a venir : boutons legacy confirmSwitch*
 // ════════════════════════════════════════════════════════════
 // AURA8 — module consolidé 04/10
 // ── 29/06/2026 : 245 font-size px → tokens fluides var(--fs-N)
@@ -716,7 +717,9 @@ function renderSettingsPanel() {
               <span style="color:${cfgPair.color || 'var(--t1)'};font-weight:800;font-size:var(--fs-11);font-family:ui-monospace,monospace;">${pair.split('/')[0]}</span>
               <span style="color:${stateCol};font-size:var(--fs-9);font-weight:600;">${stateLbl}</span>
             </div>
-
+            <button onclick="togglePaperRealPair('${pair}')" style="padding:4px 10px;font-size:var(--fs-9);font-weight:700;border-radius:6px;cursor:pointer;background:${isActive?'rgba(0,232,122,.15)':'var(--s2)'};color:${isActive?'var(--up)':'var(--t2)'};border:1px solid ${isActive?'rgba(0,232,122,.4)':'var(--border)'};">
+              ${isActive?'ON':'OFF'}
+            </button>
           </div>
         `;
       }).join('');
@@ -788,13 +791,13 @@ function renderSettingsPanel() {
       return `
       <div style="margin:16px 0 8px;padding:14px;background:${headerBg};border:1px solid ${headerBorder};border-radius:12px;">
         <div style="font-size:var(--fs-12);font-weight:700;color:${headerCol};text-transform:uppercase;letter-spacing:.08em;margin-bottom:10px;display:flex;justify-content:space-between;align-items:center;">
-          <span>${isPaperReal?'📋':'🧪'} Mode Réel · ${isPaperReal?'ACTIF':'inactif'}</span>
-          <span style="font-size:var(--fs-9);font-weight:600;opacity:.7;letter-spacing:0;text-transform:none;">${isPaperReal?'test sécurisé':'option intermédiaire'}</span>
+          <span>${isPaperReal?'🎓':'🎓'} Mode Évaluation · ${isPaperReal?'ACTIF':'inactif'}</span>
+          <span style="font-size:var(--fs-9);font-weight:600;opacity:.7;letter-spacing:0;text-transform:none;">${isPaperReal?"l'examen · vrais prix, argent fictif":'examen en pause'}</span>
         </div>
         <div style="font-size:9.5px;color:var(--t2);line-height:1.5;margin-bottom:12px;">
           ${isPaperReal
-            ? '<b style="color:var(--gold)">Mode Réel actif.</b> Vraies bougies Binance · règles strictes : 1 position max, arrêt -3%, gain +2%, pause 30min après perte, arrêt global après 3 pertes.'
-            : 'Mode trading réel. Utilise vraies bougies Binance avec règles de protection strictes pour tester la stratégie sans gros risque.'}
+            ? '<b style="color:var(--gold)">Évaluation active — l\'examen.</b> Le bot teste la stratégie apprise à l\'école sur les VRAIS prix Binance, sans argent réel. Règles du banc d\'essai : arrêt -3%, gain +2%, pause 30min après perte, arrêt global après 3 pertes.'
+            : 'Mode Évaluation (l\'examen). Le bot teste la stratégie sur les vraies bougies Binance, sans argent réel — c\'est lui qui décide ce qui mérite le mode Réel.'}
         </div>
         ${globalPauseBanner}
 
@@ -816,7 +819,7 @@ function renderSettingsPanel() {
         <div style="display:flex;gap:4px;margin-bottom:14px;flex-wrap:wrap;">${tfButtons}</div>
 
         <!-- Paires -->
-        <div style="font-size:var(--fs-9);color:var(--t3);font-weight:700;text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;">Paires actives en Réel</div>
+        <div style="font-size:var(--fs-9);color:var(--t3);font-weight:700;text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;">Paires actives · Évaluation</div>
         <div style="margin-bottom:14px;">${pairsHTML}</div>
 
         <!-- Bouton master -->
@@ -1424,7 +1427,7 @@ function renderSettingsPanel() {
         <div style="font-size:9.5px;color:var(--t2);line-height:1.5;margin-bottom:12px;">
           ${isReal
             ? '<b style="color:var(--down)">Mode réel actif.</b> Le bot prend ses décisions sur les bougies Binance live de la paire/timeframe sélectionnés. Les agents apprennent dans une mémoire séparée. Trades restent simulés (trading).'
-            : 'Mode trading. Le bot tourne sur le moteur GBM rapide. Avant d\'activer le mode réel, choisis les paires et le timeframe ci-dessous.'}
+            : 'Mode Auto-apprentissage — l\'école. Le bot s\'entraîne en continu sur un marché simulé pour forger ses agents. Les paires ci-dessous sont celles du MODE RÉEL (à choisir avant toute activation), avec le timeframe des décisions.'}
         </div>
 
         <!-- Timeframe -->
@@ -1479,7 +1482,7 @@ function renderSettingsPanel() {
         })()}
 
         <!-- Paires -->
-        <div style="font-size:var(--fs-9);color:var(--t3);font-weight:700;text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;">Paires actives en réel</div>
+        <div style="font-size:var(--fs-9);color:var(--t3);font-weight:700;text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;">Paires actives · MODE RÉEL (argent réel)</div>
         <div style="margin-bottom:14px;">${pairsHTML}</div>
 
         <!-- v7.12 LIVRAISON 6 · Bouton rollback si snapshot disponible -->
