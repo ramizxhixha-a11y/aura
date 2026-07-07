@@ -1,4 +1,4 @@
-// [SIMULTANE · ETAPE 3 · 06/07/2026] le collecteur de bougies reelles sert les modes EN PLAY (walletStore.running), plus seulement le mode affiche : EV et RE recoivent leurs prix en continu meme ecran sur AA — helper _bgPairsToWatch + health-check sans verrou d ecran + gardien des connexions a 1 s (demande Rams)
+// [POLITIQUE CAPITAL volet B · Rams 06/07, livre 07/07] taxes des gains provisionnees dans la reserve ANTI-NEGATIF au fil de la session (part taxes tracee via antiNegTaxPart) puis dispatchees vers la reserve FISCALE au changement de jour (_dispatchSessionTaxes, 60s, rattrapage au boot) · [SIMULTANE · ETAPE 3] le collecteur de bougies reelles sert les modes EN PLAY (walletStore.running), plus seulement le mode affiche : EV et RE recoivent leurs prix en continu meme ecran sur AA — helper _bgPairsToWatch + health-check sans verrou d ecran + gardien des connexions a 1 s (demande Rams)
 // [REGLES REEL v2 · edictees par Rams 05/07/2026] fermetures de PROTECTION (stop/TP/perte excessive) PERMISES en Reel, en MANU comme en AUTO — le bot surveille et stoppe si necessaire
 // [FIX] injection = NEUTRE pour le P&L : les bases session/jour montent du montant injecte (avant : l'injection etait comptee comme un benefice au boot suivant — cumul EV +32.50 = l'injection de 30 EUR) · 05/07/2026
 // [SEPARATION COMPLETE 3 MODES · 02/07/2026] openPositions + pnlHistory + pnl24h + pnlPeriod + etat bunker PAR MODE (accesseurs) · garde fermeture auto en 'real' · migration one-shot (dette orpheline purgee) · purge copies mortes du wallet
@@ -3895,18 +3895,17 @@ function recordFees(pair, notionalUsdt, pnlUsd, tradeType, reservedAmount) {
   S.fees.feeReserveAccount += totalFee;
   // ── v7.1 P2: taxes dû au fisc → fiscalReserveAccount (compte séparé avec historique) ──
   if(taxAmount > 0) {
-    S.fiscalReserveAccount = (S.fiscalReserveAccount || 0) + taxAmount;
-    if(!S.fiscalReserveLog) S.fiscalReserveLog = [];
-    S.fiscalReserveLog.unshift({
-      amount: taxAmount,
-      source: 'tax_trade_close',
-      pair,
-      pnlGross: pnlUsd,
-      region: tc.region,
-      ts: Date.now(),
-      time: nowStr()
-    });
-    if(S.fiscalReserveLog.length > 200) S.fiscalReserveLog.pop();
+    // ★ POLITIQUE CAPITAL volet B (Rams 06/07) · les taxes des gains sont
+    // provisionnees AU FIL DE LA SESSION dans la reserve ANTI-NEGATIF (elles
+    // renforcent la couverture pendant qu'on trade), puis dispatchees vers la
+    // reserve FISCALE en fin de session (rollover quotidien, voir
+    // _dispatchSessionTaxes). S.antiNegTaxPart trace la part "taxes" de la
+    // reserve pour ne dispatcher QUE ce qui est du au fisc, pas les couvertures.
+    S.antiNegReserve  = (S.antiNegReserve  || 0) + taxAmount;
+    S.antiNegTaxPart  = (S.antiNegTaxPart  || 0) + taxAmount;
+    if(!S.antiNegReserveLog) S.antiNegReserveLog = [];
+    S.antiNegReserveLog.unshift({ amount: taxAmount, source: 'tax_provision_session', pair: pair, ts: Date.now() });
+    if(S.antiNegReserveLog.length > 50) S.antiNegReserveLog.length = 50;
   }
 
   // Accumulation par paire
@@ -6457,3 +6456,39 @@ window.closeClosePositionsModal = closeClosePositionsModal;
 window.confirmCloseOne = confirmCloseOne;
 window.confirmCloseAll = confirmCloseAll;
 
+// ═══ POLITIQUE CAPITAL volet B (Rams 06/07) · DISPATCH DE FIN DE SESSION ═══
+// Chaque minute, si le jour a change : la part "taxes" accumulee dans la
+// reserve anti-negatif est transferee vers la reserve fiscale, correctement
+// dispatchee (bornee a la reserve disponible), journalisee des deux cotes et
+// signee dans le chainLog. Couvre aussi le rattrapage au boot si l'app etait
+// fermee a minuit.
+function _dispatchSessionTaxes() {
+  try {
+    if (typeof S === 'undefined' || !S) return;
+    var _day = new Date().toDateString();
+    if (S._taxDispatchDay === undefined) { S._taxDispatchDay = _day; return; }
+    if (S._taxDispatchDay === _day) return;
+    S._taxDispatchDay = _day;
+    var part = Number(S.antiNegTaxPart || 0);
+    if (!(part > 0)) return;
+    var avail = Number(S.antiNegReserve || 0);
+    var amount = Math.min(part, avail);
+    if (!(amount > 0)) { S.antiNegTaxPart = 0; return; }
+    S.antiNegReserve = avail - amount;
+    S.antiNegTaxPart = part - amount;
+    S.fiscalReserveAccount = (S.fiscalReserveAccount || 0) + amount;
+    if(!S.fiscalReserveLog) S.fiscalReserveLog = [];
+    S.fiscalReserveLog.unshift({ amount: amount, source: 'tax_session_dispatch', ts: Date.now() });
+    if(S.fiscalReserveLog.length > 50) S.fiscalReserveLog.length = 50;
+    if(!S.antiNegReserveLog) S.antiNegReserveLog = [];
+    S.antiNegReserveLog.unshift({ amount: -amount, source: 'tax_session_dispatch', ts: Date.now() });
+    if(S.antiNegReserveLog.length > 50) S.antiNegReserveLog.length = 50;
+    try {
+      if (S.chainLog) {
+        S.chainLog.push({ icon: '\uD83C\uDFE6', desc: 'Fin de session \u00b7 taxes dispatch\u00e9es : ' + amount.toFixed(2) + ' $ \u2192 r\u00e9serve fiscale', hash: Math.random().toString(36).slice(2,8), time: new Date().toLocaleTimeString() });
+        if (S.chainLog.length > 100) S.chainLog.splice(0, S.chainLog.length - 100);
+      }
+    } catch(e) {}
+  } catch(e) {}
+}
+setInterval(_dispatchSessionTaxes, 60000);
