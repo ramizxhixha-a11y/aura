@@ -1,4 +1,4 @@
-// [SIMULTANE · ETAPE 1 · 06/07/2026] le moteur bat tant qu AU MOINS UN mode est en play : pause de l ecran n arrete plus les modes d arriere-plan ; play rejoint le battement ; reprise au boot si un mode quelconque vivait
+// [VERROU ECRAN · 08/07/2026] Wake Lock : tant qu AURA est au premier plan avec un mode en play, l ecran ne s eteint plus (Android ne gele plus les horloges) — signature chainLog au verrouillage · [SIMULTANE · ETAPE 1 · 06/07/2026] le moteur bat tant qu AU MOINS UN mode est en play : pause de l ecran n arrete plus les modes d arriere-plan ; play rejoint le battement ; reprise au boot si un mode quelconque vivait
 // [FIX] detection reseau REELLE (ping Binance 20s + events) : coupure => temoin ROUGE clignotant + trading en PAUSE + play bloque ; retour => vert + reprise AUTO du mode pause (navigator.onLine seul etait non fiable sur Android) · 02/07/2026
 // [FIX] play/pause PAR MODE STRICT retabli : play dans un mode n affecte JAMAIS les deux autres (annule le play global du 01/07) + one-shot remise en pause des drapeaux pollues + purge cle legacy aura_sim_running · 02/07/2026
 // [FIX] badge mode sous le chrono (#modeBadge) cable au boot et au switch (etait un HTML statique affichant 'AA' en permanence) · 02/07/2026
@@ -619,4 +619,37 @@ window._auraGetGlobalS = _auraGetGlobalS;
   document.addEventListener('visibilitychange', function () {
     if (document.visibilityState === 'visible') setTimeout(_resume, 300);
   });
+})();
+
+// ═══ VERROU D'ECRAN (08/07/2026) · les 3 modes ne travaillent que si Android
+// ne gele pas les horloges JavaScript — et Android gele des que l'ecran
+// s'eteint. Ce verrou (Wake Lock) empeche l'extinction TANT QU'AURA EST AU
+// PREMIER PLAN et qu'au moins un mode est en play : branchee au secteur, la
+// tablette devient un poste de trading continu. Limite assumee : une web-app
+// ne peut PAS tourner ecran vraiment eteint (il faudrait un service natif) —
+// le verrou regle le probleme en amont : l'ecran ne s'eteint plus.
+(function _auraWakeLock(){
+  var _lock = null;
+  function _anyRun(){
+    try { return ['sim','paperReal','real'].some(function(m){ return window._isModeRunning && !!window._isModeRunning(m); }); } catch(e) { return false; }
+  }
+  function _acquire(){
+    try {
+      if (!('wakeLock' in navigator)) return;
+      if (_lock || document.visibilityState !== 'visible' || !_anyRun()) return;
+      navigator.wakeLock.request('screen').then(function(l){
+        _lock = l;
+        l.addEventListener('release', function(){ _lock = null; });
+        try {
+          if (typeof S !== 'undefined' && S && S.chainLog) {
+            S.chainLog.push({ icon:'\uD83D\uDD12', desc:'Verrou d\'\u00e9cran actif \u2014 les modes en play ne seront plus gel\u00e9s tant qu\'AURA est devant', hash: Math.random().toString(36).slice(2,8), time: new Date().toLocaleTimeString() });
+            if (S.chainLog.length > 100) S.chainLog.splice(0, S.chainLog.length - 100);
+          }
+        } catch(e) {}
+      }).catch(function(){});
+    } catch(e) {}
+  }
+  try { document.addEventListener('visibilitychange', function(){ if (document.visibilityState === 'visible') _acquire(); }); } catch(e) {}
+  setInterval(_acquire, 15000);
+  setTimeout(_acquire, 3000);
 })();
