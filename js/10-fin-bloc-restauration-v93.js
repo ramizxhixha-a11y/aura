@@ -1,4 +1,4 @@
-// [DEPOT AUTOMATIQUE 26/07/2026] l app depose seule : 2 min apres chargement (preuve de code frais) puis toutes les 30 min — plus aucun geste requis · [PONT · NOUVELLE BOITE 12/07/2026] l ancienne boite webhook a expire (404) : nouvelle boite a48904e7, testee en reel (POST + relecture) · [RYTHME 08/07/2026] effet volatilite plafonne x1.6 dans le cycle adaptatif : fini le 120s constant, la conviction accelere le rythme (40-90s) · [FIX MISES 08/07/2026] le stake historique 10 (defaut d epoque sur 16/16 paires) n est plus pris pour un choix utilisateur + l exposition ENGAGEE se soustrait a nouveau du plafond global · [POLITIQUE CAPITAL A+C · Rams 06/07/2026] quasi-totalite investie (cap = compte − max(1$,2%), remplace 50%) + porte LEVIER si conviction >=0.85 et index levier >=x1 (emprunt du manque via 09c, rembourse a la cloture) · [MISES PROPORTIONNELLES] plancher RELATIF (5 % du compte, min 2, override utilisateur respecte) au lieu du plancher fixe 10 qui faisait 20 % du capital par trade + CAP d exposition globale 50 % du compte · [LAISSER COURIR] le timeout ne coupe plus les positions en marche vers leur TP (protegees breakeven au-dela de 45 % du TP) : fin des 13/41 sorties quasi nulles qui mangeaient l edge brut +0.29 en frais · [GARDE-FOU PERTE MAX] balayage 1 s de toutes les positions de tous les modes en play : fermeture immediate si perte prix > 2x le SL (borne 1.5-3 %) — la regle Rams 'stop si perte trop importante' + le fix des queues SOL -7.38/ETH -3.92 · [REGLES REEL v2] filtre bases solides pour le Reel : conviction pleine >=0.40 (jamais la zone exploratoire) ET expectancy apprise AA+EV positive de la paire, sinon abstention
+// [ALLOCATION PAR QUALITE 26/07/2026] le capital va ou le bot gagne : esperance apprise > +0.03 %/trade = mise x1.8, < -0.15 %/trade = quart de mise + conviction +0.12, sinon normale — plafond global inchange · [DISJONCTEUR PAR PAIRE 26/07/2026] une paire dont l esperance apprise (totalPnlPct/totalTrades) est < -0.15 %/trade sur >=15 trades exige +0.12 de conviction et n engage qu un quart de la mise — SOL/AVAX/DOGE/ETH concentraient 89 % des pertes ; reversible seul · [DEPOT AUTOMATIQUE 26/07/2026] l app depose seule : 2 min apres chargement (preuve de code frais) puis toutes les 30 min — plus aucun geste requis · [PONT · NOUVELLE BOITE 12/07/2026] l ancienne boite webhook a expire (404) : nouvelle boite a48904e7, testee en reel (POST + relecture) · [RYTHME 08/07/2026] effet volatilite plafonne x1.6 dans le cycle adaptatif : fini le 120s constant, la conviction accelere le rythme (40-90s) · [FIX MISES 08/07/2026] le stake historique 10 (defaut d epoque sur 16/16 paires) n est plus pris pour un choix utilisateur + l exposition ENGAGEE se soustrait a nouveau du plafond global · [POLITIQUE CAPITAL A+C · Rams 06/07/2026] quasi-totalite investie (cap = compte − max(1$,2%), remplace 50%) + porte LEVIER si conviction >=0.85 et index levier >=x1 (emprunt du manque via 09c, rembourse a la cloture) · [MISES PROPORTIONNELLES] plancher RELATIF (5 % du compte, min 2, override utilisateur respecte) au lieu du plancher fixe 10 qui faisait 20 % du capital par trade + CAP d exposition globale 50 % du compte · [LAISSER COURIR] le timeout ne coupe plus les positions en marche vers leur TP (protegees breakeven au-dela de 45 % du TP) : fin des 13/41 sorties quasi nulles qui mangeaient l edge brut +0.29 en frais · [GARDE-FOU PERTE MAX] balayage 1 s de toutes les positions de tous les modes en play : fermeture immediate si perte prix > 2x le SL (borne 1.5-3 %) — la regle Rams 'stop si perte trop importante' + le fix des queues SOL -7.38/ETH -3.92 · [REGLES REEL v2] filtre bases solides pour le Reel : conviction pleine >=0.40 (jamais la zone exploratoire) ET expectancy apprise AA+EV positive de la paire, sinon abstention
 // [PONT CLAUDE v4.0 · DEPOT SANS TOKEN] sans token configure, Export = POST simple vers une boite fixe (teste en reel avec le fichier de 938 Ko, relu intact par Claude) : zero compte, zero collage, zero configuration ; token GitHub reste prioritaire si present · chaque verdict affiche a quel compte GitHub appartient le token (GET /user) : un fine-grained d un autre compte que ramizxhixha-a11y ne pourra JAMAIS ecrire, quelles que soient ses permissions · la version du pont s affiche dans la barre (Pont v3.6) et dans chaque toast d erreur — preuve du 05/07 : la PWA a execute du code perime toute la soiree pendant que les fixes etaient en ligne · chaque erreur affiche les 12 premiers caracteres du token UTILISE par l app (ghp_=classic, github_pat_=fine-grained) — identification definitive du token en cause · le champ token n est plus pre-rempli : l ancien placeholder •••• faisait IGNORER en silence les nouveaux tokens colles (cause des 3 echecs identiques) — desormais tout collage est enregistre, confirme a l ecran, et teste aussitot · sha lu via le LISTING racine (le fichier ~1 Mo pouvait faire echouer la lecture directe du sha) + chaque refus affiche LE MESSAGE BRUT DE GITHUB a l ecran (capture = cause exacte) · sans token : feuille de partage Android (fonctionne en PWA) -> envoyer aura_live.json directement a l appli Claude ; token = envoi repo 1 clic ; dernier recours telechargement · le token est teste des le collage (verdict precis : ecrit OK / lit sans ecrire / repo invisible / mal colle) + verdicts 401 vs 403 distincts a l envoi · Export pour Claude : avec token GitHub (⚙, fine-grained repo aura Contents RW) le fichier est POUSSE au repo en 1 clic (zero telechargement/upload/commit — requis en PWA ou le download Blob est ignore) ; sans token : telechargement classique · 05/07/2026
 // [AGRESSIVITE · validee par Rams 05/07/2026] seuil d engagement 0.40 -> 0.30 avec zone exploratoire a mise reduite (50-100%) + anti-stagnation actif sur ce gate + TP plancher 0.6% + SL 1.4x hors bruit (plancher 0.45%) + seuil LMSR sans double comptage fiscal · 05/07/2026
 // [FIX] plus de log/toast 'BOT LONG' fantome quand l'ouverture est bloquee (garde mode REEL) ou echoue · 05/07/2026
@@ -1778,7 +1778,35 @@ function _resolvePairCycleCore(pair, ps) {
       return;
     }
   }
-  const _convFloor = 0.30 - Math.min(0.04, (S._convBoost || 0) * 0.5);
+  // ═══ DISJONCTEUR PAR PAIRE (26/07/2026) ═══
+  // Constat sur 251 trades : SOL (-0.536 %/trade), AVAX (-0.370), DOGE (-0.264)
+  // et ETH (-0.444) concentrent 89 % des pertes — le bot avait leur esperance
+  // dans ses propres donnees (ps.totalPnlPct / ps.totalTrades) sans jamais s'en
+  // servir pour moduler son engagement. Desormais une paire dont l'esperance
+  // APPRISE est nettement negative sur un echantillon significatif doit fournir
+  // une conviction plus forte, et n'engage qu'un quart de la mise (mode
+  // observation : l'ecole continue d'apprendre, le portefeuille ne paie plus).
+  // Reversible seul : des que l'esperance repasse au-dessus du seuil, tout
+  // revient a la normale — aucune paire n'est bannie.
+  // ALLOCATION PAR QUALITE (demande Rams 26/07 : "optimiser les mises au
+  // maximum") : le capital ne doit pas etre disperse uniformement — il va la ou
+  // le bot GAGNE. Trois regimes, tous fondes sur l'esperance apprise :
+  //   esperance < -0.15 %/trade  -> observation : quart de mise, conviction +0.12
+  //   esperance > +0.03 %/trade  -> conviction prouvee : mise x1.8
+  //   entre les deux             -> mise normale
+  // Le plafond global (compte moins la couverture des frais) borne toujours
+  // l'ensemble : concentrer n'est pas sur-engager.
+  var _pairExp = 0, _pairWatch = false, _pairGood = false;
+  try {
+    var _pt = ps.totalTrades || 0;
+    if (_pt >= 15 && typeof ps.totalPnlPct === 'number') {
+      _pairExp = ps.totalPnlPct / _pt;
+      _pairWatch = _pairExp < -0.15;
+      _pairGood  = _pairExp > 0.03;
+    }
+  } catch(e) {}
+  window._pairWatchMult = _pairWatch ? 0.25 : (_pairGood ? 1.8 : 1);
+  const _convFloor = (0.30 - Math.min(0.04, (S._convBoost || 0) * 0.5)) + (_pairWatch ? 0.12 : 0);
   if(_gainNet < _minNetGain || effectiveConviction < _convFloor) {
     learnFromOutcome('cycle', 0, pair);
     ps.qYes = Math.max(20, 100 + (ps.qYes - 100) * 0.95);
@@ -1808,8 +1836,8 @@ function _resolvePairCycleCore(pair, ps) {
   // paires (16/16 dans les donnees), PAS un choix utilisateur — il est ignore
   // et le plancher proportionnel s'applique. Toute AUTRE valeur > 0 = reglage
   // volontaire, respecte tel quel.
-  const stakeBase = (ps.stake && ps.stake > 0 && ps.stake !== 10) ? ps.stake
-                  : Math.max(2, (S.tradingAccount || 0) * 0.05);
+  const stakeBase = ((ps.stake && ps.stake > 0 && ps.stake !== 10) ? ps.stake
+                  : Math.max(2, (S.tradingAccount || 0) * 0.05)) * (window._pairWatchMult || 1);
   const lmsrBonus  = (action==='buy' && adjProb > 0.52) || (action==='sell' && adjProb < 0.48) ? 1.20 : 1.0;
   const kellyFrac  = Math.min(0.15, effectiveConviction * 0.35);
   const maxStake   = S.tradingAccount * kellyFrac * lmsrBonus;
