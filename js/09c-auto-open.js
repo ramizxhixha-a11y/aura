@@ -1,4 +1,17 @@
-// [REGLES REEL v2 · edictees par Rams 05/07/2026] en MANU jamais d ouverture ; en AUTO ouverture RE permise UNIQUEMENT si RE est en play (consentement) — remplace le blocage total du 02/07
+// [PLANCHER PROPORTIONNEL 26/07/2026] les 9 planchers 10$ et 4 arrondis par paliers de 10 supprimes d un bloc (le correctif partiel du 06/07 en laissait 7 : inoperant par construction) — plancher = 5 % du compte, min 2$, arrondi au dixieme ; gate <20$ et clamp 25 % alignes sur la politique de capital · [REGLES REEL v2 · edictees par Rams 05/07/2026] en MANU jamais d ouverture ; en AUTO ouverture RE permise UNIQUEMENT si RE est en play (consentement) — remplace le blocage total du 02/07
+
+// ═══ PLANCHER DE MISE PROPORTIONNEL (26/07/2026) ═══
+// Tout ce fichier etait bati sur "mise minimale 10 $, paliers de 10 $" —
+// heritage des comptes fictifs a 1000 $. Sur un compte de 35 $, chaque trade
+// engageait 29 % du capital, et le calcul proportionnel du decideur (10) etait
+// systematiquement ecrase a la remontee. 9 planchers + 4 arrondis corriges ici
+// EN UNE FOIS (le correctif partiel du 06/07 etait inoperant par construction).
+// Plancher = 5 % du compte, minimum absolu 2 $ (au-dessus des frais).
+function _stakeFloor() {
+  try { return Math.max(2, (S.tradingAccount || 0) * 0.05); } catch(e) { return 2; }
+}
+// arrondi au DIXIEME (les paliers de 10 $ n'ont plus de sens a cette echelle)
+function _stakeRound(x) { return Math.round((Number(x) || 0) * 10) / 10; }
 // [SEPARATION COMPLETE 3 MODES · 02/07/2026] GARDE MODE REEL : aucune ouverture automatique en 'real' (analyse/suggestions continuent, trades manuels libres) + gate bunker lu par mode
 // ════════════════════════════════════════════════════════════════════════
 // ▓▓▓ AURA8 — 09c-auto-open.js ▓▓▓
@@ -122,7 +135,7 @@ function autoOpenPosition(pair, side, stakeOverride) {
         else if (sent <= -20) mult = 0.8;
 
         if (mult !== 1.0) {
-          stakeOverride = Math.max(10, Math.round(baseMise * mult / 10) * 10);
+          stakeOverride = Math.max(_stakeFloor(), _stakeRound(baseMise * mult));
           if (Math.random() < 0.2) {
             S.chainLog.push({
               icon: '📡',
@@ -317,9 +330,11 @@ function autoOpenPosition(pair, side, stakeOverride) {
   } catch (e) {}
 
   // Règle métier absolue : le bot utilise SEULEMENT tradingAccount — jamais cashAccount
+  // la mise venue du decideur (10) est deja proportionnee : on la respecte.
+  // ps.stake === 10 = defaut d'epoque pose sur toutes les paires, pas un choix.
   let baseStake = stakeOverride != null
-    ? Math.max(10, Math.round(stakeOverride * 10) / 10)
-    : Math.max(10, ps.stake || 10);
+    ? Math.max(_stakeFloor(), _stakeRound(stakeOverride))
+    : ((ps.stake && ps.stake > 0 && ps.stake !== 10) ? ps.stake : _stakeFloor());
 
   // ──────────────────────────────────────────────────────────────
   // Brain Gate — analyse du roster d'agents qui filtre le trade
@@ -369,7 +384,7 @@ function autoOpenPosition(pair, side, stakeOverride) {
         // Pas de réduction sur HOLD majority — LMSR peut encore donner un signal valable
 
         if (_brainMult !== 1.0) {
-          baseStake = Math.max(10, Math.round(baseStake * _brainMult * 10) / 10);
+          baseStake = Math.max(_stakeFloor(), _stakeRound(baseStake * _brainMult));
         }
       }
 
@@ -404,17 +419,20 @@ function autoOpenPosition(pair, side, stakeOverride) {
       const fleetResult = runBotFleet('pre_trade', { stake: baseStake });
       if (fleetResult?.sizer?.mult && Math.abs(fleetResult.sizer.mult - 1) > 0.01) {
         const adjusted = baseStake * fleetResult.sizer.mult;
-        baseStake = Math.max(10, Math.round(adjusted * 10) / 10);
+        baseStake = Math.max(_stakeFloor(), _stakeRound(adjusted));
       }
     } catch (e) {}
   }
 
   // Fallback levier si compte trading vide
   let _useLeverageForStake = false;
-  if (S.tradingAccount < 20) {
+  // le seuil "compte < 20 $ = bot suspendu" contredisait la politique de capital
+  // (quasi-totalite investie => residuel volontairement petit) : il devient
+  // proportionnel — on ne suspend que si le compte ne couvre plus un plancher.
+  if (S.tradingAccount < _stakeFloor() * 2) {
     const levAvail = S.leverageReserve || 0;
     if (levAvail >= 20) {
-      baseStake = Math.max(10, Math.min(50, Math.floor(levAvail * 0.10 / 10) * 10));
+      baseStake = Math.max(_stakeFloor(), Math.min(50, _stakeRound(levAvail * 0.10)));
       _useLeverageForStake = true;
     } else {
       showToast('⚠ Compte trading et levier insuffisants · bot suspendu', 2800, 'critical');
@@ -422,7 +440,9 @@ function autoOpenPosition(pair, side, stakeOverride) {
     }
   } else {
     if (baseStake > S.tradingAccount * 0.95) {
-      baseStake = Math.max(10, Math.floor(S.tradingAccount * 0.25 / 10) * 10);
+      // POLITIQUE DE CAPITAL (Rams 06/07) : quasi-totalite investie — on borne
+      // au disponible moins la couverture des frais, plus de repli arbitraire a 25 %.
+      baseStake = Math.max(_stakeFloor(), _stakeRound(S.tradingAccount - Math.max(1, S.tradingAccount * 0.02)));
     }
   }
 
@@ -470,7 +490,7 @@ function autoOpenPosition(pair, side, stakeOverride) {
         if (levBorrowed > 0) repayLeverage(levBorrowed);
         return;
       }
-      baseStake = Math.max(10, Math.floor(baseStake * scaleFactor / 10) * 10);
+      baseStake = Math.max(_stakeFloor(), _stakeRound(baseStake * scaleFactor));
     }
   }
 
@@ -495,8 +515,9 @@ function autoOpenPosition(pair, side, stakeOverride) {
     let _check = validateAntiNegative(baseStake, _anticBorrowFor(baseStake), ps);
     // Réduction par paliers de 10 jusqu'à ce que le pire cas tienne
     let _guard = 0;
-    while (!_check.ok && baseStake > 10 && _guard < 50) {
-      baseStake = Math.max(10, baseStake - 10);
+    while (!_check.ok && baseStake > _stakeFloor() && _guard < 50) {
+      // paliers proportionnels (15 % de la mise, min 0.5 $) au lieu de -10 $ fixe
+      baseStake = Math.max(_stakeFloor(), _stakeRound(baseStake - Math.max(0.5, baseStake * 0.15)));
       _check = validateAntiNegative(baseStake, _anticBorrowFor(baseStake), ps);
       _guard++;
     }
