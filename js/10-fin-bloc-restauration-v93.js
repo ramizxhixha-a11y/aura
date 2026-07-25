@@ -1,4 +1,4 @@
-// [PONT · NOUVELLE BOITE 12/07/2026] l ancienne boite webhook a expire (404) : nouvelle boite a48904e7, testee en reel (POST + relecture) · [RYTHME 08/07/2026] effet volatilite plafonne x1.6 dans le cycle adaptatif : fini le 120s constant, la conviction accelere le rythme (40-90s) · [FIX MISES 08/07/2026] le stake historique 10 (defaut d epoque sur 16/16 paires) n est plus pris pour un choix utilisateur + l exposition ENGAGEE se soustrait a nouveau du plafond global · [POLITIQUE CAPITAL A+C · Rams 06/07/2026] quasi-totalite investie (cap = compte − max(1$,2%), remplace 50%) + porte LEVIER si conviction >=0.85 et index levier >=x1 (emprunt du manque via 09c, rembourse a la cloture) · [MISES PROPORTIONNELLES] plancher RELATIF (5 % du compte, min 2, override utilisateur respecte) au lieu du plancher fixe 10 qui faisait 20 % du capital par trade + CAP d exposition globale 50 % du compte · [LAISSER COURIR] le timeout ne coupe plus les positions en marche vers leur TP (protegees breakeven au-dela de 45 % du TP) : fin des 13/41 sorties quasi nulles qui mangeaient l edge brut +0.29 en frais · [GARDE-FOU PERTE MAX] balayage 1 s de toutes les positions de tous les modes en play : fermeture immediate si perte prix > 2x le SL (borne 1.5-3 %) — la regle Rams 'stop si perte trop importante' + le fix des queues SOL -7.38/ETH -3.92 · [REGLES REEL v2] filtre bases solides pour le Reel : conviction pleine >=0.40 (jamais la zone exploratoire) ET expectancy apprise AA+EV positive de la paire, sinon abstention
+// [DEPOT AUTOMATIQUE 26/07/2026] l app depose seule : 2 min apres chargement (preuve de code frais) puis toutes les 30 min — plus aucun geste requis · [PONT · NOUVELLE BOITE 12/07/2026] l ancienne boite webhook a expire (404) : nouvelle boite a48904e7, testee en reel (POST + relecture) · [RYTHME 08/07/2026] effet volatilite plafonne x1.6 dans le cycle adaptatif : fini le 120s constant, la conviction accelere le rythme (40-90s) · [FIX MISES 08/07/2026] le stake historique 10 (defaut d epoque sur 16/16 paires) n est plus pris pour un choix utilisateur + l exposition ENGAGEE se soustrait a nouveau du plafond global · [POLITIQUE CAPITAL A+C · Rams 06/07/2026] quasi-totalite investie (cap = compte − max(1$,2%), remplace 50%) + porte LEVIER si conviction >=0.85 et index levier >=x1 (emprunt du manque via 09c, rembourse a la cloture) · [MISES PROPORTIONNELLES] plancher RELATIF (5 % du compte, min 2, override utilisateur respecte) au lieu du plancher fixe 10 qui faisait 20 % du capital par trade + CAP d exposition globale 50 % du compte · [LAISSER COURIR] le timeout ne coupe plus les positions en marche vers leur TP (protegees breakeven au-dela de 45 % du TP) : fin des 13/41 sorties quasi nulles qui mangeaient l edge brut +0.29 en frais · [GARDE-FOU PERTE MAX] balayage 1 s de toutes les positions de tous les modes en play : fermeture immediate si perte prix > 2x le SL (borne 1.5-3 %) — la regle Rams 'stop si perte trop importante' + le fix des queues SOL -7.38/ETH -3.92 · [REGLES REEL v2] filtre bases solides pour le Reel : conviction pleine >=0.40 (jamais la zone exploratoire) ET expectancy apprise AA+EV positive de la paire, sinon abstention
 // [PONT CLAUDE v4.0 · DEPOT SANS TOKEN] sans token configure, Export = POST simple vers une boite fixe (teste en reel avec le fichier de 938 Ko, relu intact par Claude) : zero compte, zero collage, zero configuration ; token GitHub reste prioritaire si present · chaque verdict affiche a quel compte GitHub appartient le token (GET /user) : un fine-grained d un autre compte que ramizxhixha-a11y ne pourra JAMAIS ecrire, quelles que soient ses permissions · la version du pont s affiche dans la barre (Pont v3.6) et dans chaque toast d erreur — preuve du 05/07 : la PWA a execute du code perime toute la soiree pendant que les fixes etaient en ligne · chaque erreur affiche les 12 premiers caracteres du token UTILISE par l app (ghp_=classic, github_pat_=fine-grained) — identification definitive du token en cause · le champ token n est plus pre-rempli : l ancien placeholder •••• faisait IGNORER en silence les nouveaux tokens colles (cause des 3 echecs identiques) — desormais tout collage est enregistre, confirme a l ecran, et teste aussitot · sha lu via le LISTING racine (le fichier ~1 Mo pouvait faire echouer la lecture directe du sha) + chaque refus affiche LE MESSAGE BRUT DE GITHUB a l ecran (capture = cause exacte) · sans token : feuille de partage Android (fonctionne en PWA) -> envoyer aura_live.json directement a l appli Claude ; token = envoi repo 1 clic ; dernier recours telechargement · le token est teste des le collage (verdict precis : ecrit OK / lit sans ecrire / repo invisible / mal colle) + verdicts 401 vs 403 distincts a l envoi · Export pour Claude : avec token GitHub (⚙, fine-grained repo aura Contents RW) le fichier est POUSSE au repo en 1 clic (zero telechargement/upload/commit — requis en PWA ou le download Blob est ignore) ; sans token : telechargement classique · 05/07/2026
 // [AGRESSIVITE · validee par Rams 05/07/2026] seuil d engagement 0.40 -> 0.30 avec zone exploratoire a mise reduite (50-100%) + anti-stagnation actif sur ce gate + TP plancher 0.6% + SL 1.4x hors bruit (plancher 0.45%) + seuil LMSR sans double comptage fiscal · 05/07/2026
 // [FIX] plus de log/toast 'BOT LONG' fantome quand l'ouverture est bloquee (garde mode REEL) ou echoue · 05/07/2026
@@ -2272,6 +2272,54 @@ var _CLAUDE_BOX = 'a48904e7-79e7-4477-855b-1f2d69c7b7a5';   // ★ VERSION VISIB
 // Une capture d'ecran suffit desormais a savoir QUELLE version tourne reellement
 // (la PWA a servi du code perime toute la soiree du 05/07 pendant que les fixes
 // etaient en ligne — indetectable sans ce marqueur).
+// ═══ DEPOT AUTOMATIQUE (26/07/2026) ═══
+// Le bouton d'export ne declenchait plus rien (cause non identifiable a
+// distance) : le geste est SUPPRIME du chemin critique. L'app depose seule —
+// 2 min apres le chargement (ce 1er depot PROUVE que le code frais tourne),
+// puis toutes les 30 min. Rien a cliquer, jamais. Le bouton reste disponible
+// pour un envoi immediat, mais plus rien n'en depend.
+function _autoDropToClaude(reason) {
+  try {
+    var snap = (typeof buildSnapshot === 'function') ? buildSnapshot()
+             : (window.buildSnapshot ? window.buildSnapshot() : null);
+    if (!snap) return;
+    var payload = {
+      _type: 'aura_guardian_full',
+      version: 'aura-embed-1',
+      savedAt: new Date().toISOString(),
+      auraCycle: (typeof snap.cycle === 'number') ? snap.cycle : null,
+      auraSource: 'aura-live',
+      auraSavedAt: snap.savedAt || null,
+      autoReason: reason || 'periodic',
+      aura: snap,
+      guardian: null
+    };
+    fetch('https://webhook.site/' + _CLAUDE_BOX, {
+      method: 'POST', mode: 'no-cors',
+      headers: { 'Content-Type': 'text/plain' },
+      body: JSON.stringify(payload)
+    }).then(function(){
+      try {
+        if (typeof S !== 'undefined' && S && S.chainLog) {
+          S.chainLog.push({ icon:'\uD83D\uDCE1', desc:'D\u00e9p\u00f4t automatique envoy\u00e9 (' + (reason||'periodic') + ') \u00b7 cycle ' + (payload.auraCycle||'?'), hash: Math.random().toString(36).slice(2,8), time: new Date().toLocaleTimeString() });
+          if (S.chainLog.length > 100) S.chainLog.splice(0, S.chainLog.length - 100);
+        }
+      } catch(e) {}
+    }).catch(function(){});
+  } catch(e) {}
+}
+(function _autoDropScheduler(){
+  var _t = 0;
+  var _iv = setInterval(function(){
+    _t++;
+    var ok = false; try { ok = !!window._stateReady; } catch(e) {}
+    if (!ok && _t < 120) return;
+    clearInterval(_iv);
+    setTimeout(function(){ _autoDropToClaude('boot'); }, 120000);
+    setInterval(function(){ _autoDropToClaude('periodic'); }, 1800000);
+  }, 1000);
+})();
+
 function exportForClaude() {
   try {
     var snap = (typeof buildSnapshot === 'function') ? buildSnapshot()
