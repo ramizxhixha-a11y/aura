@@ -1,4 +1,20 @@
-// [POLITIQUE CAPITAL volet B · Rams 06/07, livre 07/07] taxes des gains provisionnees dans la reserve ANTI-NEGATIF au fil de la session (part taxes tracee via antiNegTaxPart) puis dispatchees vers la reserve FISCALE au changement de jour (_dispatchSessionTaxes, 60s, rattrapage au boot) · [SIMULTANE · ETAPE 3] le collecteur de bougies reelles sert les modes EN PLAY (walletStore.running), plus seulement le mode affiche : EV et RE recoivent leurs prix en continu meme ecran sur AA — helper _bgPairsToWatch + health-check sans verrou d ecran + gardien des connexions a 1 s (demande Rams)
+// [BASE LEVIER = CAPITAL PROPRE 26/07/2026] la capacite d emprunt suit le capital REELLEMENT possede (detenu - dette) au lieu d un instantane fige a 40.64$ qui bloquait tout a 100 % : suit les injections, immunise contre la spirale emprunt->capacite · [POLITIQUE CAPITAL volet B · Rams 06/07, livre 07/07] taxes des gains provisionnees dans la reserve ANTI-NEGATIF au fil de la session (part taxes tracee via antiNegTaxPart) puis dispatchees vers la reserve FISCALE au changement de jour (_dispatchSessionTaxes, 60s, rattrapage au boot) · [SIMULTANE · ETAPE 3] le collecteur de bougies reelles sert les modes EN PLAY (walletStore.running), plus seulement le mode affiche : EV et RE recoivent leurs prix en continu meme ecran sur AA — helper _bgPairsToWatch + health-check sans verrou d ecran + gardien des connexions a 1 s (demande Rams)
+
+// ═══ CAPITAL PROPRE (26/07/2026) ═══
+// La capacite d'emprunt etait calculee sur _autoLevBase : un INSTANTANE du
+// compte au 1er emprunt (40,64 $), fige a jamais. Consequence : le compte a
+// grossi a 382 $ (dont 406 $ empruntes), les injections n'ont rien change, et
+// le levier affichait "BLOQUE 100 %" avec 3 657 $ de reserve inutilisable.
+// La base juste = le capital REELLEMENT possede : detenu moins la dette.
+// Emprunter n'augmente PAS le capital propre (l'argent recu est compense par
+// la dette) : aucune spirale possible. Injecter des fonds, si.
+function _ownCapital() {
+  try {
+    var eng = (S.openPositions || []).reduce(function(a, p){ return a + (Number(p.stakeUsdt) || 0); }, 0);
+    var own = (S.tradingAccount || 0) + (S.cashAccount || 0) + eng - (S.leverageBorrowed || 0);
+    return Math.max(0, own);
+  } catch(e) { return Math.max(0, S.tradingAccount || 0); }
+}
 // [REGLES REEL v2 · edictees par Rams 05/07/2026] fermetures de PROTECTION (stop/TP/perte excessive) PERMISES en Reel, en MANU comme en AUTO — le bot surveille et stoppe si necessaire
 // [FIX] injection = NEUTRE pour le P&L : les bases session/jour montent du montant injecte (avant : l'injection etait comptee comme un benefice au boot suivant — cumul EV +32.50 = l'injection de 30 EUR) · 05/07/2026
 // [SEPARATION COMPLETE 3 MODES · 02/07/2026] openPositions + pnlHistory + pnl24h + pnlPeriod + etat bunker PAR MODE (accesseurs) · garde fermeture auto en 'real' · migration one-shot (dette orpheline purgee) · purge copies mortes du wallet
@@ -3411,7 +3427,7 @@ function blendRealPrices() {
 // INITIALISATION DU COMPTE LEVIER
 // ============================================================
 function initLeverageReserve() {
-  S.leverageReserve = S.tradingAccount * S.leverageMaxMult;
+  S.leverageReserve = _ownCapital() * S.leverageMaxMult;
 }
 
 function syncLeverageReserve() {
@@ -3426,8 +3442,7 @@ function syncLeverageReserve() {
   //   index 10 → disponible $0 (tout consommé)
   const index    = S.leverage || 0;
   const maxIdx   = S.leverageMaxMult || 10;
-  const useFrozenBase = index > 0 && (S._autoLevBase || 0) > 0;
-  const base = useFrozenBase ? S._autoLevBase : (S.tradingAccount || 0);
+  const base = _ownCapital();
   const totalCapacity = base * 10 * maxIdx;  // capacité max théorique (à ×10)
   S.leverageReserve   = Math.max(0, totalCapacity - (S.leverageBorrowed || 0));
 }
@@ -3483,14 +3498,14 @@ function applyAutoLeverageBorrow(newIndex, prevIndex) {
   // Cas activation initiale (0 → N>0) : snapshot du trading AVANT transfert
   if(prevIndex === 0 && newIndex > 0) {
     S._autoLevBase = S.tradingAccount || 0;
-    const targetBorrow = S._autoLevBase * mult * newIndex;  // réserve entière = base × 10 × index
+    const targetBorrow = _ownCapital() * mult * newIndex;  // reserve = capital PROPRE x 10 x index
     if(targetBorrow > 0) {
       S.tradingAccount    += targetBorrow;
       S.leverageBorrowed  = (S.leverageBorrowed || 0) + targetBorrow;
       S._autoLevBorrowed  = targetBorrow;
       S.chainLog.push({
         icon:'⚡',
-        desc:`Levier ×${newIndex} activé · ${fmt$2(targetBorrow)} transférés de la réserve vers trading (base ${fmt$2(S._autoLevBase)})`,
+        desc:`Levier ×${newIndex} activé · ${fmt$2(targetBorrow)} transférés de la réserve vers trading (capital propre ${fmt$2(_ownCapital())})`,
         hash:rndHash(), time:nowStr()
       });
     } else {
@@ -3504,8 +3519,7 @@ function applyAutoLeverageBorrow(newIndex, prevIndex) {
   }
 
   // Cas ajustement (N>0 → M>0) : diff par rapport à la base initiale
-  const base = S._autoLevBase || (S.tradingAccount || 0);
-  if(!S._autoLevBase) S._autoLevBase = base;  // rattrapage si missing
+  const base = _ownCapital();
   const targetBorrow = base * mult * newIndex;  // v7.6 · nouvelle formule
   const delta = targetBorrow - (S._autoLevBorrowed || 0);
 
@@ -3562,7 +3576,7 @@ function setLeverageByBot(newIndex, reason) {
       }
       // Baisse partielle → vérifier la faisabilité
       const mult = S.leverageMaxMult || 10;
-      const base = S._autoLevBase || (S.tradingAccount || 0);
+      const base = _ownCapital();
       const targetBorrow = base * mult * newIndex;
       const needsRepay = (S._autoLevBorrowed || 0) - targetBorrow;
       if (needsRepay > 0 && needsRepay > (S.tradingAccount || 0)) {
@@ -3615,7 +3629,7 @@ function ensureLeverageCoverForTrade(neededStake, pair) {
   // v7.2 Phase 14c-revised FIX: capacité max basée sur la BASE initiale (snapshot au 1er emprunt)
   // sinon après un trade qui vide trading, maxBorrow deviendrait ≤ 0 à cause du recalcul.
   // Si pas encore de base (1er emprunt), on prend le trading courant (qui sera figé en snapshot).
-  const base = (S._autoLevBase && S._autoLevBase > 0) ? S._autoLevBase : (S.tradingAccount || 0);
+  const base = _ownCapital();
   const maxBorrow = base * (S.leverageMaxMult || 10) * index - (S.leverageBorrowed || 0);
   if(maxBorrow <= 0) return { ok:false, action:'capped', shortfall, reason:'reserve_empty' };
 
@@ -6189,7 +6203,7 @@ function changeLeverage(delta) {
       // Cas 2 : baisse partielle (N → M, M > 0) → calculer si trading suffit
       // Vérifier que le remboursement partiel ne va pas créer une dette orpheline
       const mult = S.leverageMaxMult || 10;
-      const base = S._autoLevBase || (S.tradingAccount || 0);
+      const base = _ownCapital();
       const targetBorrow = base * mult * newIndex;
       const needsRepay = (S._autoLevBorrowed || 0) - targetBorrow;
       if (needsRepay > 0 && needsRepay > (S.tradingAccount || 0)) {
