@@ -1400,36 +1400,73 @@ body.real-mode-active { padding-top: 16px; }
 })();
 </script>
 <script>
-// ═══ AUTO-MISE A JOUR (26/07/2026) ═══
-// Fini les redemarrages manuels apres chaque upload : toutes les 5 minutes,
-// l'app demande au serveur la version courante du document (sans cache). Si
-// elle differe de celle qui tourne, l'app se recharge SEULE — l'etat est
-// sauvegarde en continu (localStorage + IndexedDB), un rechargement est donc
-// sans danger : c'est exactement ce qui se passe a chaque demarrage.
-// Signature dans le chainLog avant le rechargement, pour tracer l'evenement.
+// ═══ AUTO-MISE A JOUR · v2 SECURISEE (26/07/2026) ═══
+// La v1 pouvait BOUCLER dans un WebView Android : elle detectait un ecart de
+// version, appelait location.reload(), le WebView reservait la page depuis son
+// cache -> meme ecart -> rechargement toutes les 5 min. Trois protections :
+//  1. rechargement sur une URL JAMAIS VUE (?r=timestamp) : le cache ne peut pas
+//     la servir, le WebView est oblige d'aller au reseau ;
+//  2. UNE seule tentative par session (sessionStorage) ;
+//  3. compteur persistant : apres 2 tentatives sans effet, l'auto-mise a jour
+//     se DESACTIVE et le signale — jamais de boucle, meme en cas d'imprevu.
 (function _autoUpdate(){
   var MINE = '20260729';
+  var KEY_TRIED = 'aura_upd_tried';
+  var KEY_FAILS = 'aura_upd_fails';
+  function _get(st, k){ try { return st.getItem(k); } catch(e) { return null; } }
+  function _set(st, k, v){ try { st.setItem(k, v); } catch(e) {} }
+  // au demarrage : si on avait tente et que la version n'a pas change, c'est un echec
+  try {
+    var pending = _get(localStorage, 'aura_upd_pending');
+    if (pending) {
+      if (pending === MINE) {
+        var f = (parseInt(_get(localStorage, KEY_FAILS) || '0', 10) || 0) + 1;
+        _set(localStorage, KEY_FAILS, String(f));
+      } else {
+        _set(localStorage, KEY_FAILS, '0');
+      }
+      try { localStorage.removeItem('aura_upd_pending'); } catch(e) {}
+    }
+  } catch(e) {}
+  function _log(desc){
+    try {
+      if (typeof S !== 'undefined' && S && S.chainLog) {
+        S.chainLog.push({ icon:'\u2B07', desc: desc, hash: Math.random().toString(36).slice(2,8), time: new Date().toLocaleTimeString() });
+        if (S.chainLog.length > 100) S.chainLog.splice(0, S.chainLog.length - 100);
+      }
+    } catch(e) {}
+  }
   function _check(){
     try {
+      var fails = parseInt(_get(localStorage, KEY_FAILS) || '0', 10) || 0;
+      if (fails >= 2) return;                       // desactivee : ne boucle jamais
+      if (_get(sessionStorage, KEY_TRIED)) return;  // une seule tentative par session
       fetch('AURA8_v118.html?ping=' + Date.now(), { cache: 'no-store' })
         .then(function(r){ return r.ok ? r.text() : null; })
         .then(function(txt){
           if (!txt) return;
           var m = txt.match(/\?v=(\d{8})/);
           if (!m || m[1] === MINE) return;
-          try {
-            if (typeof S !== 'undefined' && S && S.chainLog) {
-              S.chainLog.push({ icon:'\u2B07', desc:'Nouvelle version d\u00e9tect\u00e9e (v' + m[1] + ') \u2014 rechargement automatique', hash: Math.random().toString(36).slice(2,8), time: new Date().toLocaleTimeString() });
-              if (S.chainLog.length > 100) S.chainLog.splice(0, S.chainLog.length - 100);
-            }
-            if (typeof saveState === 'function') saveState();
-          } catch(e) {}
-          setTimeout(function(){ try { location.reload(); } catch(e) {} }, 1500);
+          _set(sessionStorage, KEY_TRIED, '1');
+          _set(localStorage, 'aura_upd_pending', MINE);
+          _log('Nouvelle version d\u00e9tect\u00e9e (v' + m[1] + ') \u2014 rechargement');
+          try { if (typeof saveState === 'function') saveState(); } catch(e) {}
+          setTimeout(function(){
+            try { location.replace(location.pathname + '?r=' + Date.now()); }
+            catch(e) { try { location.reload(true); } catch(e2) {} }
+          }, 1500);
         })
         .catch(function(){});
     } catch(e) {}
   }
-  setTimeout(_check, 60000);
+  setTimeout(function(){
+    try {
+      if ((parseInt(_get(localStorage, KEY_FAILS) || '0', 10) || 0) >= 2) {
+        _log('Mise \u00e0 jour auto d\u00e9sactiv\u00e9e (le rechargement reste sans effet) \u2014 red\u00e9marrage manuel requis');
+      }
+    } catch(e) {}
+    _check();
+  }, 60000);
   setInterval(_check, 300000);
 })();
 </script>
