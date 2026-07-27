@@ -1,4 +1,4 @@
-// [DEFAUT EV v2 · AUTO-PROUVANT · 06/07/2026] bloc AUTONOME (agit des que l etat est pret, independant du chemin de boot) qui active les paires EV si la liste est vide ET signe chargement+action dans le chainLog (visible dans chaque depot) — remplace la v1 logee dans loadState · paperRealActivePairs vide depuis l origine (la 1re garde du moteur EV rejetait tout) : au boot, liste vide => toutes les paires activees (miroir du Reel) — EV peut enfin trader · [ASSAINISSEMENT ONE-SHOT] comptes remis au REEL (injections + vrais P&L journalises) : purge de l argent du drift (+51 fantomes AA et EV), compensation du trou de migration RE (+10.76), cumuls recales sur les vrais gains · fiscal/caisse/intelligence intacts · 05/07/2026
+// [PERFORMANCE 26/07/2026] purge de rotation toutes les 2 min (bougies 60/tf, trades 40/paire, historiques bornes, texte narratif tronque au-dela des 5 derniers souvenirs) + sauvegarde 10s -> 25s : etat 1.38 Mo -> ~0.8 Mo, charge de sauvegarde divisee par ~4 · [DEFAUT EV v2 · AUTO-PROUVANT · 06/07/2026] bloc AUTONOME (agit des que l etat est pret, independant du chemin de boot) qui active les paires EV si la liste est vide ET signe chargement+action dans le chainLog (visible dans chaque depot) — remplace la v1 logee dans loadState · paperRealActivePairs vide depuis l origine (la 1re garde du moteur EV rejetait tout) : au boot, liste vide => toutes les paires activees (miroir du Reel) — EV peut enfin trader · [ASSAINISSEMENT ONE-SHOT] comptes remis au REEL (injections + vrais P&L journalises) : purge de l argent du drift (+51 fantomes AA et EV), compensation du trou de migration RE (+10.76), cumuls recales sur les vrais gains · fiscal/caisse/intelligence intacts · 05/07/2026
 // [FIX SEPARATION] recalage session/jour PAR WALLET a chaque boot + purge one-shot des bases et cumuls pollues par le legacy (~5000) · 02/07/2026
 // [SEPARATION COMPLETE 3 MODES · 02/07/2026] restaurations flat openPositions/pnl24h/pnlHistory/pnlPeriod retirees (walletStore les porte par mode)
 // [ETAPE 5 · SEPARATION 3 MODES] restauration dreamJournal flat retiree (walletStore le porte par mode) · 01/07/2026
@@ -726,7 +726,9 @@ function scheduleAutoSave() {
         saveState(true);                // silent : pas de toast
       }
     } catch (e) {}
-  }, 10000);
+  }, 25000);   // ★ 26/07 : 10 s -> 25 s (l'etat pese 1,38 Mo : serialiser
+                 // toutes les 10 s saturait le WebView). Combine a la purge
+                 // ci-dessous, la charge de sauvegarde baisse d'environ 4x.
 }
 window.scheduleAutoSave = scheduleAutoSave;
 
@@ -768,3 +770,63 @@ console.log('[09b2 v125] ✅ hooks + autosave 10s installés · LS allégé · I
     } catch(e) { _log('09b2·defEV2 charg\u00e9 \u2014 erreur d\'activation'); }
   }, 500);
 })();
+
+// ═══ PURGE DE ROTATION (26/07/2026) ═══
+// L'etat sauvegarde pesait 1,38 Mo, re-serialise en entier toutes les 10 s :
+// bougies (297 Ko), trades par paire (339 Ko), historiques d'apprentissage
+// (125 Ko), journaux de reserve (30 Ko) et surtout le texte narratif des
+// souvenirs d'agents (149 Ko, duplique entre agents[].memory et agentMemories).
+// Cette purge tourne toutes les 2 min et applique la regle du projet :
+// l'intelligence vient de la PROFONDEUR (fitness, lecons, generations, gardees
+// integralement), pas du volume d'evenements. Rien de ce qui sert a apprendre
+// n'est touche : seuls les historiques rotatifs sont ramenes a une taille utile.
+function _auraRotatePurge() {
+  try {
+    if (typeof S === 'undefined' || !S) return;
+    var cut = function(arr, n){ return (Array.isArray(arr) && arr.length > n) ? arr.slice(0, n) : arr; };
+    var cutEnd = function(arr, n){ return (Array.isArray(arr) && arr.length > n) ? arr.slice(-n) : arr; };
+
+    // bougies : 60 par timeframe suffisent a tous les indicateurs (etaient 100)
+    var rc = S.realCandles || {};
+    Object.keys(rc).forEach(function(p){
+      var tfs = rc[p] || {};
+      Object.keys(tfs).forEach(function(tf){ tfs[tf] = cutEnd(tfs[tf], 60); });
+    });
+
+    // historiques rotatifs
+    S.learningHistory  = cut(S.learningHistory, 80);
+    S.globalMemoryPool = cut(S.globalMemoryPool, 30);
+    S.fiscalReserveLog = cut(S.fiscalReserveLog, 50);
+    S.dreamJournal     = cut(S.dreamJournal, 30);
+
+    // trades memorises par paire, dans les trois modes (etaient 100/paire)
+    var wsx = S.walletStore || {};
+    ['sim','paperReal','real'].forEach(function(mk){
+      var w = wsx[mk]; if (!w) return;
+      var pst = w.pairStates || {};
+      Object.keys(pst).forEach(function(pp){
+        if (pst[pp] && Array.isArray(pst[pp].trades)) pst[pp].trades = cutEnd(pst[pp].trades, 40);
+      });
+      w.dreamJournal      = cut(w.dreamJournal, 40);
+      w.antiNegReserveLog = cut(w.antiNegReserveLog, 50);
+      w.pnlHistory        = cutEnd(w.pnlHistory, 100);
+    });
+
+    // souvenirs d'agents : on GARDE toutes les entrees (c'est l'apprentissage),
+    // mais le texte narratif long n'est utile qu'a l'affichage des plus recentes.
+    var trim = function(list){
+      if (!Array.isArray(list)) return list;
+      list.forEach(function(e, i){
+        if (i >= 5 && e && typeof e.metaphor === 'string' && e.metaphor.length > 60) {
+          e.metaphor = e.metaphor.slice(0, 60) + '\u2026';
+        }
+      });
+      return list;
+    };
+    (S.agents || []).forEach(function(a){ if (a) trim(a.memory); });
+    var am = S.agentMemories || {};
+    Object.keys(am).forEach(function(k){ trim(am[k]); });
+  } catch(e) {}
+}
+setInterval(_auraRotatePurge, 120000);
+setTimeout(_auraRotatePurge, 20000);
