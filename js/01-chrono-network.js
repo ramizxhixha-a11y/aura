@@ -1,0 +1,624 @@
+// [NETTOYAGE PERF 26/07/2026] verrou d ecran SUPPRIME (minuterie 15 s ajoutee sans besoin exprime) · [ex-VERROU ECRAN] Wake Lock : tant qu AURA est au premier plan avec un mode en play, l ecran ne s eteint plus (Android ne gele plus les horloges) — signature chainLog au verrouillage · [SIMULTANE · ETAPE 1 · 06/07/2026] le moteur bat tant qu AU MOINS UN mode est en play : pause de l ecran n arrete plus les modes d arriere-plan ; play rejoint le battement ; reprise au boot si un mode quelconque vivait
+// [FIX] detection reseau REELLE (ping Binance 20s + events) : coupure => temoin ROUGE clignotant + trading en PAUSE + play bloque ; retour => vert + reprise AUTO du mode pause (navigator.onLine seul etait non fiable sur Android) · 02/07/2026
+// [FIX] play/pause PAR MODE STRICT retabli : play dans un mode n affecte JAMAIS les deux autres (annule le play global du 01/07) + one-shot remise en pause des drapeaux pollues + purge cle legacy aura_sim_running · 02/07/2026
+// [FIX] badge mode sous le chrono (#modeBadge) cable au boot et au switch (etait un HTML statique affichant 'AA' en permanence) · 02/07/2026
+// [FIX] switch de mode : renderAll() pour repeindre les cartes wallet du mode actif (donnees deja par mode) · 01/07/2026
+// [ETAPE 3 · SEPARATION 3 MODES] play/pause PAR MODE (defaut pause, memoire par mode, auto-resume par mode) + play bloque si compte trading vide · 01/07/2026
+/* ═══════════════════════════════════════════════════════════
+   AURA8 · js/01-chrono-network.js
+   ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓
+   ▓                   VERSION  v118.17                      ▓
+   ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓
+
+   v118.17 : AUTO-REPRISE EN ARRIÈRE-PLAN
+   - Chaque mode memorise son etat play/pause (walletStore[mode].running).
+   - Au retour d'arrière-plan / reload, elle se relance toute seule.
+   - Le bouton ▶ ne réapparaît plus jamais pour bloquer l'utilisateur.
+   - Respecte une pause volontaire (ne redémarre que si elle tournait).
+
+   v118.16 : BUG CRITIQUE RÉSOLU
+   - Type 'info' est MASQUÉ par défaut dans showToast() de l'app !
+   - C'est pour ça que les notifs AA n'apparaissaient pas
+   - Nouveau mapping :
+     • sim       → 'ice'  (bleu cyan, var(--ice), visible)
+     • paperReal → 'win'  (vert)
+     • real      → 'loss' (rouge)
+   - Appliqué à cycleTradeMode et startSim/stopSim
+   ═══════════════════════════════════════════════════════════ */
+
+function _auraGetGlobalS() {
+  try { if (typeof window !== 'undefined' && window.S) return window.S; } catch(e) {}
+  try {
+    const fn = new Function('try { return typeof S !== "undefined" ? S : null; } catch(e) { return null; }');
+    return fn();
+  } catch(e) {}
+  return null;
+}
+window._auraGetGlobalS = _auraGetGlobalS;
+
+(function _auraChrono() {
+  'use strict';
+
+  const K_SIM_SEC   = 'aura_chrono_sim_seconds';
+  const K_PAPER_SEC = 'aura_chrono_paperReal_seconds';
+  const K_REAL_SEC  = 'aura_chrono_real_seconds';
+  const K_MODE      = 'aura_current_trade_mode';
+  const K_RUNNING   = 'aura_system_running';
+
+  const K_OLD_AUTO  = 'aura_chrono_auto_seconds';
+  const K_OLD_MANU  = 'aura_chrono_manu_seconds';
+
+  function _readCounter(key, fallbackKeys) {
+    const v = parseInt(localStorage.getItem(key) || '', 10);
+    if (!isNaN(v) && v > 0) return v;
+    if (fallbackKeys && fallbackKeys.length) {
+      for (const k of fallbackKeys) {
+        const old = parseInt(localStorage.getItem(k) || '', 10);
+        if (!isNaN(old) && old > 0) {
+          localStorage.setItem(key, old);
+          localStorage.removeItem(k);
+          return old;
+        }
+      }
+    }
+    return 0;
+  }
+
+  function _getInitialMode() {
+    const stored = localStorage.getItem(K_MODE);
+    if (stored && ['sim', 'paperReal', 'real'].includes(stored)) return stored;
+
+    const S = window._auraGetGlobalS();
+    if (S && S.tradingMode && ['sim', 'paperReal', 'real'].includes(S.tradingMode)) {
+      return S.tradingMode;
+    }
+    return 'sim';
+  }
+
+  const state = {
+    chronoSeconds: {
+      sim:       _readCounter(K_SIM_SEC, [K_OLD_AUTO]),
+      paperReal: _readCounter(K_PAPER_SEC, [K_OLD_MANU]),
+      real:      _readCounter(K_REAL_SEC, []),
+    },
+    currentMode: _getInitialMode(),
+    running: false,
+    netStatus: 'online',
+  };
+
+  function formatChrono(s) {
+    s = Math.max(0, Math.floor(s));
+    const h = Math.floor(s / 3600);
+    const m = Math.floor((s % 3600) / 60);
+    const sec = s % 60;
+    const pad = (n) => String(n).padStart(2, '0');
+    // Heures cumulées (pas de format "jours" : 39:53:42 est plus lisible que 1d 15:53,
+    // qui obligerait à calculer 1×24+15. Les heures s'accumulent au-delà de 24).
+    if (h > 0) return `${pad(h)}:${pad(m)}:${pad(sec)}`;
+    return `${pad(m)}:${pad(sec)}`;
+  }
+
+  function save() {
+    localStorage.setItem(K_SIM_SEC,   state.chronoSeconds.sim);
+    localStorage.setItem(K_PAPER_SEC, state.chronoSeconds.paperReal);
+    localStorage.setItem(K_REAL_SEC,  state.chronoSeconds.real);
+    localStorage.setItem(K_MODE,      state.currentMode);
+    localStorage.setItem(K_RUNNING,   state.running);
+  }
+
+  // ─── DETECTION RESEAU REELLE ────────────────────────────────────────────
+  // navigator.onLine est NON FIABLE sur Android (reste "online" si le WiFi est
+  // connecte a un routeur, meme sans Internet). Seule verite : un ping HTTP
+  // reel vers Binance (/api/v3/ping, endpoint concu pour ca). 2 echecs
+  // consecutifs => OFFLINE (temoin rouge + pause du trading) ; 1 succes =>
+  // ONLINE (temoin vert + reprise auto du mode qui avait ete pause).
+  function _setNet(sNew) {
+    if (state.netStatus === sNew) return;
+    var prev = state.netStatus;
+    state.netStatus = sNew;
+    render();
+    if (sNew === 'offline') {
+      try {
+        if (window._auraSimState && window._auraSimState.running) {
+          window._netPausedMode = state.currentMode;
+          if (window.stopSim) window.stopSim();
+        }
+        if (typeof window.showToast === 'function') window.showToast('\uD83D\uDD34 Connexion perdue \u2014 trading en pause', 4000, 'loss');
+      } catch(e) {}
+    } else if (prev === 'offline') {
+      try {
+        if (typeof window.showToast === 'function') window.showToast('\uD83D\uDFE2 Connexion r\u00E9tablie', 3000, 'win');
+        var pm = window._netPausedMode;
+        if (pm) {
+          window._netPausedMode = null;
+          if (window._setModeRunning) window._setModeRunning(pm, true);   // reprendra a la visite du mode
+          if (pm === state.currentMode && window.startSim) window.startSim();
+        }
+      } catch(e) {}
+    }
+  }
+
+  var _pingFails = 0;
+  function _netPing() {
+    var ctl = null, to = null;
+    try { ctl = new AbortController(); to = setTimeout(function(){ try { ctl.abort(); } catch(e) {} }, 5000); } catch(e) {}
+    fetch('https://api.binance.com/api/v3/ping', ctl ? { signal: ctl.signal, cache: 'no-store' } : { cache: 'no-store' })
+      .then(function(){ if (to) clearTimeout(to); _pingFails = 0; _setNet('online'); })
+      .catch(function(){ if (to) clearTimeout(to); _pingFails++; if (_pingFails >= 2 || navigator.onLine === false) _setNet('offline'); });
+  }
+
+  function onNetworkChange() {
+    // L'event 'offline' du navigateur est fiable DANS CE SENS ; 'online' ne
+    // garantit rien -> toujours confirme par un ping reel.
+    if (navigator.onLine === false) { _pingFails = 2; _setNet('offline'); }
+    _netPing();
+  }
+
+  function syncRunningFromUI() {
+    const btn = document.getElementById('simToggleBtn');
+    if (!btn) return;
+    const text = btn.textContent.trim();
+    const isRunning = text === '⏸';
+    if (state.running !== isRunning) {
+      state.running = isRunning;
+      save();
+    }
+  }
+
+  function tick() {
+    syncRunningFromUI();
+    if (state.running && state.netStatus !== 'offline') {
+      state.chronoSeconds[state.currentMode]++;
+      if (state.chronoSeconds[state.currentMode] % 10 === 0) save();
+    }
+    render();
+  }
+
+  function render() {
+    const chronoEl = document.getElementById('chronoEl');
+    if (chronoEl) {
+      chronoEl.textContent = formatChrono(state.chronoSeconds[state.currentMode]);
+      chronoEl.className = 'chrono-display';
+      if (state.running) chronoEl.classList.add('running');
+      const _mc = state.currentMode === 'real' ? '#ff3d6b' : (state.currentMode === 'paperReal' ? '#00e87a' : '#38d4f5');
+      chronoEl.style.color = _mc;
+      const _hdr = document.getElementById('statusBar');
+      if (_hdr) _hdr.style.borderColor = _mc;
+    }
+
+    const netEl = document.getElementById('netIndicator');
+    if (netEl) {
+      netEl.className = 'net-indicator ' + state.netStatus;
+    }
+  }
+
+  window.AuraChrono = {
+    state: state,
+    formatChrono: formatChrono,
+    getCurrentMode: function() { return state.currentMode; },
+    setMode: function(newMode) {
+      if (!['sim', 'paperReal', 'real'].includes(newMode)) return;
+      state.currentMode = newMode;
+      save();
+      render();
+    },
+    resetChrono: function(mode) {
+      if (state.chronoSeconds[mode] !== undefined) {
+        state.chronoSeconds[mode] = 0;
+        save();
+        render();
+      }
+    },
+    resetAll: function() {
+      state.chronoSeconds.sim = 0;
+      state.chronoSeconds.paperReal = 0;
+      state.chronoSeconds.real = 0;
+      save();
+      render();
+    },
+    getChrono: function(mode) {
+      const m = mode || state.currentMode;
+      return state.chronoSeconds[m] || 0;
+    },
+    refresh: function() { render(); }
+  };
+
+  function init() {
+    window.addEventListener('online', onNetworkChange);
+    window.addEventListener('offline', onNetworkChange);
+    if (navigator.connection) {
+      navigator.connection.addEventListener('change', onNetworkChange);
+    }
+    window.addEventListener('beforeunload', () => { save(); });
+    onNetworkChange();
+    setInterval(_netPing, 20000);   // verite reseau toutes les 20 s (endpoint leger)
+    setInterval(tick, 1000);
+    render();
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', init);
+  } else {
+    init();
+  }
+})();
+
+
+/* ═══════════════════════════════════════════════════════════
+   ░░ CONTRÔLE DE SIMULATION · startSim / stopSim / toggleSim ░░
+   Pilote le setInterval de simTick (1000ms) et synchronise l'état
+   _auraSimState avec le système _simRunning des autres modules.
+   ═══════════════════════════════════════════════════════════ */
+(function _auraStartSimFix() {
+  'use strict';
+  window._auraSimState = window._auraSimState || { interval: null, running: false };
+  function _getSimTick() {
+    if (typeof window.simTick === 'function') return window.simTick;
+    try {
+      const fn = new Function('try{return typeof simTick==="function"?simTick:null}catch(e){return null}');
+      return fn();
+    } catch(e) {}
+    return null;
+  }
+  function _updateBtn(running) {
+    const btn = document.getElementById('simToggleBtn');
+    if (!btn) return;
+    btn.textContent = running ? '⏸' : '▶';
+    btn.classList.toggle('idle', !running);
+    btn.classList.toggle('running', running);
+  }
+  function _toast(msg, type) {
+    try {
+      if (typeof window.showToast === 'function') window.showToast(msg, 2500, type || 'win');
+    } catch(e) {}
+  }
+  // v118.16 : mapping mode → label + type pour notifications adaptatives
+  // ATTENTION : 'info' est MASQUÉ par défaut dans showToast() → utiliser 'ice' pour AA
+  function _getModeInfo() {
+    const MAP = {
+      'sim':       { name: 'Auto-apprentissage', type: 'ice'  },
+      'paperReal': { name: 'Évaluation',         type: 'win'  },
+      'real':      { name: 'Trading Réel',       type: 'loss' }
+    };
+    const mode = (window.AuraChrono && window.AuraChrono.getCurrentMode)
+      ? window.AuraChrono.getCurrentMode() : 'sim';
+    return MAP[mode] || MAP['sim'];
+  }
+  // SIMULTANE E1 · un mode quelconque est-il en play ? (le moteur doit battre
+  // tant qu'AU MOINS UN mode vit, meme si celui a l'ecran est en pause)
+  function _anyModeRunning() {
+    try {
+      if (!window._isModeRunning) return false;
+      return ['sim','paperReal','real'].some(function(m){ return !!window._isModeRunning(m); });
+    } catch(e) { return false; }
+  }
+  window.startSim = function startSim() {
+    // ETAPE 3b · play IMPOSSIBLE si le compte TRADING du mode actif est vide.
+    // (L'injection alimente la CAISSE ; il faut transferer vers le trading avant.)
+    try {
+      var _gS = window._auraGetGlobalS ? window._auraGetGlobalS() : null;
+      if (_gS && (Number(_gS.tradingAccount) || 0) <= 0) {
+        if ((Number(_gS.cashAccount) || 0) > 0)
+          _toast('\u26A0 Compte trading vide \u2014 transf\u00E8re de la caisse vers le trading avant de lancer', 'warn');
+        else
+          _toast('\u26A0 Aucun fonds \u2014 injecte de l\'argent puis alimente le trading avant de lancer', 'warn');
+        try { _updateBtn(false); } catch(e) {}
+        return;
+      }
+    } catch(e) {}
+    // GARDE RESEAU · pas de lancement sans connexion reelle (temoin rouge).
+    try {
+      if (window.AuraChrono && window.AuraChrono.state && window.AuraChrono.state.netStatus === 'offline') {
+        _toast('\uD83D\uDD34 Pas de connexion \u2014 impossible de lancer', 'warn');
+        try { _updateBtn(false); } catch(e) {}
+        return;
+      }
+    } catch(e) {}
+    if (window._auraSimState.running && window._auraSimState.interval) {
+      // SIMULTANE E1 · le moteur bat deja (un autre mode vit) : on marque
+      // simplement le mode AFFICHE comme "en cours" — il rejoint le battement.
+      try {
+        var _pmJ = (window.AuraChrono && window.AuraChrono.getCurrentMode) ? window.AuraChrono.getCurrentMode() : 'sim';
+        if (window._setModeRunning) window._setModeRunning(_pmJ, true);
+      } catch(e) {}
+      _updateBtn(true);
+      return;
+    }
+    const simTick = _getSimTick();
+    if (!simTick) { _toast('⚠ simTick introuvable', 'warn'); return; }
+    window._auraSimState.interval = setInterval(function() {
+      try { simTick(); } catch(e) { console.warn('[AURA simTick]', e); }
+    }, 1000);
+    window._auraSimState.running = true;
+    // ETAPE 3 · play/pause PAR MODE : marque le mode actif comme "en cours"
+    try {
+      var _pmM = (window.AuraChrono && window.AuraChrono.getCurrentMode) ? window.AuraChrono.getCurrentMode() : 'sim';
+      if (window._setModeRunning) window._setModeRunning(_pmM, true);
+    } catch(e) {}
+    try {
+      const setFn = new Function('try{_simRunning=true;_simEverStarted=true;_simInterval=window._auraSimState.interval}catch(e){}');
+      setFn();
+    } catch(e) {}
+    _updateBtn(true);
+    // v118.15 : message + couleur adaptés au mode trading actif
+    const modeInfo = _getModeInfo();
+    try {
+      const S = window._auraGetGlobalS();
+      if (S && S.chainLog) {
+        S.chainLog.push({ icon:'▶', desc: modeInfo.name + ' démarré · cycle #' + (S.cycle || 0),
+          hash:Math.random().toString(36).slice(2,8), time:new Date().toLocaleTimeString() });
+        if (S.chainLog.length > 100) S.chainLog.splice(0, S.chainLog.length - 100);
+      }
+    } catch(e) {}
+    _toast('▶ ' + modeInfo.name + ' démarré', modeInfo.type);
+  };
+  window.stopSim = function stopSim() {
+    if (!window._auraSimState.running) return;
+    // marque d'abord le mode AFFICHE comme "en pause"
+    try {
+      var _pmM = (window.AuraChrono && window.AuraChrono.getCurrentMode) ? window.AuraChrono.getCurrentMode() : 'sim';
+      if (window._setModeRunning) window._setModeRunning(_pmM, false);
+    } catch(e) {}
+    // SIMULTANE E1 · l'interval ne meurt QUE si plus AUCUN mode ne vit :
+    // mettre l'ecran en pause n'arrete plus les modes qui battent derriere.
+    if (_anyModeRunning()) { _updateBtn(false); return; }
+    if (window._auraSimState.interval) { clearInterval(window._auraSimState.interval); window._auraSimState.interval = null; }
+    window._auraSimState.running = false;
+    try {
+      const setFn = new Function('try{_simRunning=false;_simInterval=null}catch(e){}');
+      setFn();
+    } catch(e) {}
+    _updateBtn(false);
+    // v118.15 : message + couleur adaptés au mode trading actif
+    const modeInfo = _getModeInfo();
+    try {
+      const S = window._auraGetGlobalS();
+      if (S && S.chainLog) {
+        S.chainLog.push({ icon:'⏸', desc: modeInfo.name + ' en pause · cycle #' + (S.cycle || 0),
+          hash:Math.random().toString(36).slice(2,8), time:new Date().toLocaleTimeString() });
+        if (S.chainLog.length > 100) S.chainLog.splice(0, S.chainLog.length - 100);
+      }
+    } catch(e) {}
+    _toast('⏸ ' + modeInfo.name + ' en pause', modeInfo.type);
+  };
+  window.toggleSim = function toggleSim() {
+    if (window._auraSimState.running) window.stopSim();
+    else window.startSim();
+  };
+})();
+
+/* ═══════════════════════════════════════════════════════════
+   ░░ BOUTON MODE DE TRADING · AA / EV / RE ░░
+   Gère l'affichage et le cycle du mode de trading (sim/paperReal/real)
+   avec sa couleur. Ne touche jamais botAutoMode (axe utilisateur seul).
+   ═══════════════════════════════════════════════════════════ */
+(function _auraTradeModeFix() {
+  'use strict';
+
+  const MODES = {
+    'sim':       { label: 'AA', cssClass: 'mode-AA', color: '#38d4f5', name: 'Auto-apprentissage' },
+    'paperReal': { label: 'EV', cssClass: 'mode-EV', color: '#00e87a', name: 'Évaluation' },
+    'real':      { label: 'RE', cssClass: 'mode-RE', color: '#ff3d6b', name: 'Réel' }
+  };
+  const CYCLE_ORDER = ['sim', 'paperReal', 'real'];
+
+  function injectCSS() {
+    if (document.getElementById('aura-trademode-css')) return;
+    const css = `
+      .btn-trade-mode {
+        padding: 4px 9px; border-radius: 8px; font-weight: 700;
+        font-size: 11px; letter-spacing: 0.5px; border: 1.5px solid;
+        cursor: pointer; background: transparent;
+        font-family: var(--font-mono, 'SF Mono', monospace);
+        transition: all 0.25s ease; line-height: 1;
+        user-select: none; margin-right: 4px;
+      }
+      .btn-trade-mode:active { transform: scale(0.94); }
+      .net-indicator.online  { background:#00e87a !important; box-shadow:0 0 8px rgba(0,232,122,.55) !important; }
+      .net-indicator.offline { background:#ff3d6b !important; box-shadow:0 0 8px rgba(255,61,107,.55) !important; animation: aura-netblink 1s infinite; }
+      @keyframes aura-netblink { 50% { opacity: .3; } }
+      .btn-trade-mode.mode-AA { color:#38d4f5; border-color:rgba(56,212,245,.55); background:rgba(56,212,245,.08); box-shadow:0 0 0 1px rgba(56,212,245,.15); }
+      .btn-trade-mode.mode-AA:hover { background:rgba(56,212,245,.15); box-shadow:0 0 12px rgba(56,212,245,.3); }
+      .btn-trade-mode.mode-EV { color:#00e87a; border-color:rgba(0,232,122,.55); background:rgba(0,232,122,.08); box-shadow:0 0 0 1px rgba(0,232,122,.15); }
+      .btn-trade-mode.mode-EV:hover { background:rgba(0,232,122,.15); box-shadow:0 0 12px rgba(0,232,122,.3); }
+      .btn-trade-mode.mode-RE { color:#ff3d6b; border-color:rgba(255,61,107,.6); background:rgba(255,61,107,.10); box-shadow:0 0 0 1px rgba(255,61,107,.2); }
+      .btn-trade-mode.mode-RE:hover { background:rgba(255,61,107,.18); box-shadow:0 0 14px rgba(255,61,107,.4); }
+    `;
+    const style = document.createElement('style');
+    style.id = 'aura-trademode-css';
+    style.textContent = css;
+    document.head.appendChild(style);
+  }
+
+  function fixNestedButton() {
+    const inner = document.getElementById('tradeModeBtn');
+    if (!inner) return false;
+    const parent = inner.parentElement;
+    if (!parent || parent.id !== 'modeToggleBtn') return true;
+    const grandParent = parent.parentElement;
+    if (!grandParent) return false;
+    grandParent.insertBefore(inner, parent);
+    return true;
+  }
+
+  function updateButtonVisual(mode) {
+    const btn = document.getElementById('tradeModeBtn');
+    if (!btn) return;
+    const cfg = MODES[mode] || MODES['sim'];
+    btn.textContent = cfg.label;
+    btn.classList.remove('mode-AA', 'mode-EV', 'mode-RE');
+    btn.classList.add(cfg.cssClass);
+    btn.title = 'Mode: ' + cfg.name + ' (tape pour cycler)';
+    // Colorer l'EN-TÊTE selon le mode (bordure + logo + halo via CSS hdr-*)
+    const hdr = document.getElementById('statusBar');
+    if (hdr) {
+      hdr.classList.remove('hdr-sim', 'hdr-paper', 'hdr-real');
+      const hdrClass = mode === 'real' ? 'hdr-real' : (mode === 'paperReal' ? 'hdr-paper' : 'hdr-sim');
+      hdr.classList.add(hdrClass);
+    }
+  }
+
+  window.cycleTradeMode = function cycleTradeMode() {
+    const currentMode = (window.AuraChrono && window.AuraChrono.getCurrentMode)
+      ? window.AuraChrono.getCurrentMode() : 'sim';
+
+    const currentIdx = CYCLE_ORDER.indexOf(currentMode);
+    const nextIdx = (currentIdx + 1) % CYCLE_ORDER.length;
+    const nextMode = CYCLE_ORDER[nextIdx];
+
+    // 1. Chrono interne
+    if (window.AuraChrono && window.AuraChrono.setMode) {
+      window.AuraChrono.setMode(nextMode);
+    }
+
+    // 2. S.tradingMode pour le reste de l'app
+    const S = window._auraGetGlobalS();
+    if (S) { S.tradingMode = nextMode; }
+    try {
+      const setFn = new Function('mode', 'try{S.tradingMode=mode}catch(e){}');
+      setFn(nextMode);
+    } catch(e) {}
+
+    // PLAY/PAUSE PAR MODE (strict) · le moteur suit le drapeau DU NOUVEAU mode :
+    // s'il etait "en cours" (play memorise), on (re)lance ; sinon on met en pause.
+    // L'ancien mode garde son propre drapeau (il "se souvient" et REPREND tout
+    // seul quand on revient dessus). Faire play dans un mode n'affecte JAMAIS
+    // les deux autres. (Annule le play/pause "global" du 01/07 qui mettait tous
+    // les modes visites en play.)
+    try {
+      var _wants = window._isModeRunning ? !!window._isModeRunning(nextMode) : false;
+      var _run   = !!(window._auraSimState && window._auraSimState.running);
+      if (_wants && !_run && window.startSim)      window.startSim();
+      else if (!_wants && _run && window.stopSim)  window.stopSim();
+    } catch(e) {}
+
+    // ★ FIX AFFICHAGE PAR MODE · repeindre les cartes wallet du nouveau mode.
+    // Les donnees sont deja separees par mode (accesseurs sur S.cashAccount,
+    // S.tradingAccount, ...) ; sans re-render, l'affichage restait fige sur le
+    // mode precedent (memes $ dans les 3 modes). renderAll() -> renderHome().
+    try {
+      if (typeof window.renderAll === 'function') window.renderAll();
+      else if (typeof renderAll === 'function') renderAll();
+      else new Function('try{renderAll()}catch(e){}')();
+    } catch(e) {}
+
+    // 3. Mise à jour visuelle bouton
+    updateButtonVisual(nextMode);
+    _syncModeBadge(nextMode);
+
+    // 4. ★ NOTIFICATION v118.16 : type natif de showToast pour vraie couleur app ★
+    //    ATTENTION : 'info' est MASQUÉ par défaut → utiliser 'ice' pour AA
+    //    sim → 'ice' (bleu cyan) · paperReal → 'win' (vert) · real → 'loss' (rouge)
+    try {
+      const TYPE_MAP = { 'sim': 'ice', 'paperReal': 'win', 'real': 'loss' };
+      const msg = 'Activation Mode ' + MODES[nextMode].name;
+      const type = TYPE_MAP[nextMode] || 'ice';
+      if (typeof window.showToast === 'function') {
+        window.showToast(msg, 2500, type);
+      }
+    } catch(e) {}
+
+    // 5. Save app state
+    try { if (typeof window.saveState === 'function') window.saveState(false); } catch(e) {}
+  };
+
+  // FIX · #modeBadge (sous le chrono) etait un HTML statique jamais mis a jour :
+  // il affichait "AA" en permanence, meme en EV/RE (source de confusion).
+  function _syncModeBadge(mode) {
+    try {
+      var el = document.getElementById('modeBadge');
+      if (el && MODES[mode]) { el.textContent = MODES[mode].label; el.style.color = MODES[mode].color; }
+    } catch(e) {}
+  }
+
+  function initTradeMode() {
+    injectCSS();
+    if (!fixNestedButton()) { setTimeout(initTradeMode, 1500); return; }
+    const btn = document.getElementById('tradeModeBtn');
+    if (!btn) return;
+    btn.onclick = window.cycleTradeMode;
+
+    const initMode = (window.AuraChrono && window.AuraChrono.getCurrentMode)
+      ? window.AuraChrono.getCurrentMode() : 'sim';
+    updateButtonVisual(initMode);
+
+    const S = window._auraGetGlobalS();
+    if (S && S.tradingMode !== initMode) {
+      S.tradingMode = initMode;
+    }
+    _syncModeBadge(initMode);
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', () => setTimeout(initTradeMode, 500));
+  } else {
+    setTimeout(initTradeMode, 500);
+  }
+})();
+
+
+/* ═══════════════════════════════════════════════════════════
+   ░░ AUTO-REPRISE DE LA SIMULATION · arrière-plan / reload ░░
+   PAR MODE : chaque mode memorise son play/pause (walletStore[mode].running).
+   Au boot ET au retour d'arriere-plan, si LE MODE AFFICHE etait en cours,
+   il se relance tout seul. Une pause volontaire est respectee, et un mode
+   en pause ne demarre jamais parce qu'un autre tournait.
+   ═══════════════════════════════════════════════════════════ */
+(function _auraSimAutoResume() {
+  'use strict';
+  function _wantsRun() {
+    // ETAPE 3 · play/pause PAR MODE : on relit le drapeau du MODE ACTIF
+    // (walletStore[mode].running). Wallets neufs => false => defaut EN PAUSE.
+    try {
+      var m = (window.AuraChrono && window.AuraChrono.getCurrentMode) ? window.AuraChrono.getCurrentMode() : 'sim';
+      if (window._isModeRunning) {
+        // SIMULTANE E1 · le moteur redemarre si AU MOINS UN mode etait en play
+        // (les modes d'arriere-plan survivent aux reloads, pas seulement l'affiche)
+        return ['sim','paperReal','real'].some(function(_mm){ return !!window._isModeRunning(_mm); });
+      }
+      return false;
+    } catch (e) { return false; }
+  }
+  function _isRunning() {
+    return !!(window._auraSimState && window._auraSimState.running && window._auraSimState.interval);
+  }
+  function _hasSimTick() {
+    if (typeof window.simTick === 'function') return true;
+    try { return !!(new Function('try{return typeof simTick==="function"}catch(e){return false}'))(); }
+    catch (e) { return false; }
+  }
+  function _resume() {
+    if (!window._stateReady) return;          // attendre que l'état soit restauré
+    if (!_wantsRun() || _isRunning()) return;
+    if (typeof window.startSim !== 'function' || !_hasSimTick()) return;
+    window.startSim();
+  }
+  // Boot : attendre la fin de loadState, puis relancer si besoin.
+  var _tries = 0;
+  var _bootIv = setInterval(function () {
+    _tries++;
+    if (window._stateReady) {
+      // ONE-SHOT (drapeau LS) · le play/pause "global" du 01/07 a pu marquer les
+      // 3 modes "en cours" a tort. On remet tout en pause UNE fois : l'utilisateur
+      // refait play dans le mode voulu, et le par-mode strict repart proprement.
+      try {
+        if (!localStorage.getItem('aura_permode_reset_v2')) {
+          if (window._setModeRunning) ['sim','paperReal','real'].forEach(function(m){ window._setModeRunning(m, false); });
+          localStorage.removeItem('aura_sim_running');   // cle legacy morte, purgee
+          localStorage.setItem('aura_permode_reset_v2', String(Date.now()));
+        }
+      } catch(e) {}
+      _resume();
+      if (_isRunning() || !_wantsRun()) { clearInterval(_bootIv); return; }
+    }
+    if (_tries > 40) clearInterval(_bootIv);  // ~20 s de sécurité
+  }, 500);
+  // Retour d'arrière-plan / page restaurée.
+  window.addEventListener('pageshow', function () { setTimeout(_resume, 300); });
+  document.addEventListener('resume', function () { setTimeout(_resume, 300); }, false);
+  document.addEventListener('visibilitychange', function () {
+    if (document.visibilityState === 'visible') setTimeout(_resume, 300);
+  });
+})();
+
+
