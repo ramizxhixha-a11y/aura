@@ -2614,7 +2614,13 @@ function simTick() {
   window._bgResolve = false;
   // ★ 26/07 perf : le garde-fou perte max n'a plus sa propre minuterie —
   // il s'execute ici, dans le battement existant, une fois sur trois.
-  if (tick % 3 === 0) { try { if (window._lossCapSweep) window._lossCapSweep(); } catch(e) {} }
+  // Le garde-fou perte max a ete SUPPRIME (regle Rams 27/07 : aucun plafond
+  // impose, le bot gere ses sorties). Seule subsiste la protection de
+  // solvabilite du levier, qui tourne a chaque changement de prix (02) ; ce
+  // passage periodique n en est que le filet si le flux venait a s interrompre.
+  if (tick % 3 === 0) {
+    try { if (window._leverageMarginCheck) window._leverageMarginCheck(); } catch(e) {}
+  }
   _mRun.forEach(function(_m){
     var _isBg = (_m !== _mDisp);
     // ★ PERF 26/07 · un cycle de paire dure 40 a 120 SECONDES : resoudre les

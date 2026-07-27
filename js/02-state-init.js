@@ -1,18 +1,124 @@
-// [NETTOYAGE PERF 26/07/2026] health-check collecteur 1 s -> 5 s, dispatch taxes 1 min -> 10 min · [BASE LEVIER = CAPITAL PROPRE 26/07/2026] la capacite d emprunt suit le capital REELLEMENT possede (detenu - dette) au lieu d un instantane fige a 40.64$ qui bloquait tout a 100 % : suit les injections, immunise contre la spirale emprunt->capacite · [POLITIQUE CAPITAL volet B · Rams 06/07, livre 07/07] taxes des gains provisionnees dans la reserve ANTI-NEGATIF au fil de la session (part taxes tracee via antiNegTaxPart) puis dispatchees vers la reserve FISCALE au changement de jour (_dispatchSessionTaxes, 60s, rattrapage au boot) · [SIMULTANE · ETAPE 3] le collecteur de bougies reelles sert les modes EN PLAY (walletStore.running), plus seulement le mode affiche : EV et RE recoivent leurs prix en continu meme ecran sur AA — helper _bgPairsToWatch + health-check sans verrou d ecran + gardien des connexions a 1 s (demande Rams)
+// [DECISION AU BOT · regle Rams 27/07/2026] aucun seuil ni plafond impose : le bot gere ses cloture comme il l entend ; le systeme n intervient qu a la limite physique (solde net a zero) pour que le compte ne passe jamais en negatif · [SOLVABILITE EN TEMPS REEL · regle Rams 27/07/2026] le controle se declenche A CHAQUE CHANGEMENT DE PRIX (flux WebSocket trade + kline), plus sur une horloge de 3 s — cout nul sans dette, garde anti-reentrance · frais/taxes/frais d emprunt imputes a la reserve anti-negatif (deja provisionnes en continu) : seule la dette NETTE pese sur le compte trading, le coussin ne couvre que le risque de marche · cloture totale immediate (positions, frais, impots, restitution du levier) des que le reste net ne couvre plus les couts : le compte trading s arrete a ZERO, jamais negatif · [BASE EMPRUNT = CAPITAL TRADING · regle Rams 27/07/2026] capacite calculee sur le capital de trading du debut (compte + mises engagees - dette), caisse verrouillee EXCLUE · [NETTOYAGE PERF 26/07/2026] health-check collecteur 1 s -> 5 s, dispatch taxes 1 min -> 10 min · [BASE LEVIER = CAPITAL PROPRE 26/07/2026] la capacite d emprunt suit le capital REELLEMENT possede (detenu - dette) au lieu d un instantane fige a 40.64$ qui bloquait tout a 100 % : suit les injections, immunise contre la spirale emprunt->capacite · [POLITIQUE CAPITAL volet B · Rams 06/07, livre 07/07] taxes des gains provisionnees dans la reserve ANTI-NEGATIF au fil de la session (part taxes tracee via antiNegTaxPart) puis dispatchees vers la reserve FISCALE au changement de jour (_dispatchSessionTaxes, 60s, rattrapage au boot) · [SIMULTANE · ETAPE 3] le collecteur de bougies reelles sert les modes EN PLAY (walletStore.running), plus seulement le mode affiche : EV et RE recoivent leurs prix en continu meme ecran sur AA — helper _bgPairsToWatch + health-check sans verrou d ecran + gardien des connexions a 1 s (demande Rams)
 
-// ═══ CAPITAL PROPRE (26/07/2026) ═══
-// La capacite d'emprunt etait calculee sur _autoLevBase : un INSTANTANE du
-// compte au 1er emprunt (40,64 $), fige a jamais. Consequence : le compte a
-// grossi a 382 $ (dont 406 $ empruntes), les injections n'ont rien change, et
-// le levier affichait "BLOQUE 100 %" avec 3 657 $ de reserve inutilisable.
-// La base juste = le capital REELLEMENT possede : detenu moins la dette.
-// Emprunter n'augmente PAS le capital propre (l'argent recu est compense par
-// la dette) : aucune spirale possible. Injecter des fonds, si.
-function _ownCapital() {
+// ═══ BASE DE LA CAPACITE D'EMPRUNT (regle Rams, 27/07/2026) ═══
+// La capacite d'emprunt se calcule sur le CAPITAL DE TRADING DU DEBUT, avant
+// que les mises soient engagees — et non sur le capital total :
+//   base = (compte trading + mises deja engagees) - dette
+// Trois choix explicites :
+//  · la CAISSE est EXCLUE : elle est verrouillee (bot lock), ce n'est pas du
+//    capital de trading, elle n'ouvre donc aucun droit a emprunter ;
+//  · la DETTE est deduite : l'argent emprunte n'est pas a nous. C'est ce qui
+//    empeche la spirale (emprunter -> compte plus gros -> emprunter plus),
+//    a l'origine des 62 $ de dette orpheline constatee le 27/07 ;
+//  · les MISES ENGAGEES sont reintegrees : elles proviennent du compte
+//    trading, les ignorer ferait retrecir la base a chaque ouverture.
+// ═══ GARDE-FOU DE SOLVABILITE DU LEVIER (regle Rams, 27/07/2026) ═══
+// "Pendant le trading, si les pertes arrivent, le levier est cloture
+//  immediatement, frais / taxes / impots calcules en temps reel et restitution
+//  totale du levier : le pire des cas c'est ZERO au compte trading, jamais -0."
+//
+// A chaque controle, on calcule ce qui resterait VRAIMENT si on soldait tout
+// a l'instant : valeur de liquidation des positions + compte trading, moins
+// les frais de sortie, moins l'impot du sur les gains, moins la dette. Des que
+// ce reste net tombe au niveau du coussin de securite, on solde AVANT que le
+// compte ne puisse passer sous zero — on ne descend jamais en negatif parce
+// qu'on ferme pendant qu'il reste de quoi payer.
+function _leverageSolvency() {
+  var out = { equity: 0, debt: 0, fees: 0, tax: 0, net: 0, hasLev: false };
+  try {
+    var feeConf  = S.feeConfig || {};
+    var feeRate  = (feeConf.takerRate || 0.001) + (feeConf.slippage || 0.0005);
+    var taxReg   = (S.taxConfig && S.taxConfig.regions && S.taxConfig.regions[S.taxConfig.region]) || null;
+    var taxRate  = taxReg ? ((taxReg.inclusion || 0) * (taxReg.rate || 0)) : 0;
+    var debt = Number(S.leverageBorrowed || 0);
+    out.debt   = debt;
+    out.hasLev = debt > 0;
+    var liq = 0, fees = 0, gains = 0;
+    (S.openPositions || []).forEach(function(pos){
+      var stake = Number(pos.stakeUsdt) || 0;
+      var entry = Number(pos.entryPrice) || 0;
+      var ps    = S.pairStates && S.pairStates[pos.pair];
+      var px    = ps ? Number(ps.price) : 0;
+      var pnl   = 0;
+      if (entry > 0 && px > 0) {
+        var sd = String(pos.side || '').toLowerCase();
+        var isLong = sd.indexOf('long') === 0 || sd === 'buy';
+        pnl = stake * ((isLong ? (px - entry) : (entry - px)) / entry);
+      }
+      liq  += stake + pnl;          // valeur de liquidation immediate
+      fees += stake * feeRate;      // frais de sortie
+      if (pnl > 0) gains += pnl;    // seuls les gains sont imposes
+    });
+    out.equity = (S.tradingAccount || 0) + liq;
+    out.fees   = fees;
+    out.tax    = gains * taxRate;
+    out.net    = out.equity - out.fees - out.tax - debt;
+  } catch(e) {}
+  return out;
+}
+
+// Solde total : ferme tout, paie, restitue le levier en entier.
+function _forceCloseAllForSolvency(reason) {
+  try {
+    var ids = (S.openPositions || []).map(function(p){ return p.id; });
+    ids.forEach(function(id){
+      try { closePosition(id, false); } catch(e) {}
+    });
+    var debt = Number(S.leverageBorrowed || 0);
+    if (debt > 0 && typeof repayLeverage === 'function') {
+      try { repayLeverage(Math.min(debt, S.tradingAccount || 0)); } catch(e) {}
+    }
+    // le compte ne descend jamais sous zero
+    if ((S.tradingAccount || 0) < 0) S.tradingAccount = 0;
+    if (typeof S.leverage !== 'undefined') S.leverage = 0;
+    try {
+      if (S.chainLog) {
+        S.chainLog.push({ icon:'\uD83D\uDED1', desc:'Cl\u00f4ture de solvabilit\u00e9 \u00b7 ' + reason + ' \u2014 positions sold\u00e9es, frais et imp\u00f4ts r\u00e9gl\u00e9s, levier restitu\u00e9', hash: Math.random().toString(36).slice(2,8), time: new Date().toLocaleTimeString() });
+        if (S.chainLog.length > 100) S.chainLog.splice(0, S.chainLog.length - 100);
+      }
+    } catch(e) {}
+    try { if (typeof showToast === 'function') showToast('\uD83D\uDED1 Levier cl\u00f4tur\u00e9 \u2014 solde prot\u00e9g\u00e9', 6000, 'warn'); } catch(e) {}
+    try { if (typeof saveState === 'function') saveState(true); } catch(e) {}
+  } catch(e) {}
+}
+
+// Controle appele par le battement (aucune minuterie supplementaire).
+window._leverageMarginCheck = function _leverageMarginCheck() {
+  try {
+    // sortie immediate sans dette : le controle ne coute rien au flux de prix
+    if (!S || !(Number(S.leverageBorrowed || 0) > 0)) return;
+    // anti-reentrance : la cloture ferme des positions, ce qui peut relancer
+    // des mises a jour de prix — on ne veut pas la declencher deux fois.
+    if (window._solvencyClosing) return;
+    var sv = _leverageSolvency();
+    // ★ LA DECISION APPARTIENT AU BOT (regle Rams 27/07) · plus aucun seuil
+    // en pourcentage, plus aucun plafond choisi a sa place : tant que le compte
+    // est solvable, c'est le bot qui juge s'il ferme ou s'il laisse courir,
+    // avec ses propres signaux. Ce controle n'est plus un arbitre de strategie.
+    //
+    // Il ne subsiste qu'une LIMITE PHYSIQUE, celle que tu as posee toi-meme :
+    // "le pire des cas c'est zero de solde, jamais -0". On n'intervient donc
+    // qu'au point de rupture reel — quand ce qui reste apres remboursement de
+    // la dette et paiement de ce qui n'est pas couvert par la reserve
+    // anti-negatif tombe a zero. Ce n'est pas un choix de risque : c'est le
+    // moment ou une seconde de plus creerait une dette impayable.
+    var due       = sv.fees + sv.tax;
+    var provision = Math.max(0, Number(S.antiNegReserve || 0));
+    var uncovered = Math.max(0, due - provision);   // part que la reserve ne couvre pas
+    var netReal   = sv.equity - sv.debt - uncovered;
+    if (netReal <= 0) {
+      window._solvencyClosing = true;
+      try { _forceCloseAllForSolvency('solde \u00e0 z\u00e9ro atteint (net ' + netReal.toFixed(2) + ' $) \u2014 protection du compte'); }
+      finally { window._solvencyClosing = false; }
+    }
+  } catch(e) {}
+};
+
+function _tradingCapitalBase() {
   try {
     var eng = (S.openPositions || []).reduce(function(a, p){ return a + (Number(p.stakeUsdt) || 0); }, 0);
-    var own = (S.tradingAccount || 0) + (S.cashAccount || 0) + eng - (S.leverageBorrowed || 0);
-    return Math.max(0, own);
+    var base = (S.tradingAccount || 0) + eng - (S.leverageBorrowed || 0);
+    return Math.max(0, base);
   } catch(e) { return Math.max(0, S.tradingAccount || 0); }
 }
 // [REGLES REEL v2 · edictees par Rams 05/07/2026] fermetures de PROTECTION (stop/TP/perte excessive) PERMISES en Reel, en MANU comme en AUTO — le bot surveille et stoppe si necessaire
@@ -1100,6 +1206,8 @@ function _rcConnectWS(pair) {
           try {
             const ps = (S && S.pairStates) ? S.pairStates[_realCandlesState.selectedPair] : null;
             if (ps) ps.price = ohlc.c;
+            // ★ TEMPS REEL · meme controle sur le close officiel Binance
+            if (window._leverageMarginCheck) window._leverageMarginCheck();
           } catch(e) {}
           // Insérer/mettre à jour la bougie correspondante dans S.realCandles
           _upsertKlineCandle(_realCandlesState.selectedPair, _realCandlesState.selectedInterval, ohlc);
@@ -1114,6 +1222,11 @@ function _rcConnectWS(pair) {
             try {
               const ps = (S && S.pairStates) ? S.pairStates[_realCandlesState.selectedPair] : null;
               if (ps) ps.price = price;
+              // ★ TEMPS REEL (regle Rams 27/07) · la solvabilite du levier est
+              // verifiee A CHAQUE CHANGEMENT DE PRIX, pas sur une horloge :
+              // c'est le prix qui cree le risque, c'est donc lui qui doit
+              // declencher le controle. Cout nul sans dette (sortie immediate).
+              if (window._leverageMarginCheck) window._leverageMarginCheck();
             } catch(e) {}
             // Pour les autres timeframes (pas la sélectionnée), on continue d'aggréger via trades
             // (le stream kline ne couvre que la timeframe courante)
@@ -3427,7 +3540,7 @@ function blendRealPrices() {
 // INITIALISATION DU COMPTE LEVIER
 // ============================================================
 function initLeverageReserve() {
-  S.leverageReserve = _ownCapital() * S.leverageMaxMult;
+  S.leverageReserve = _tradingCapitalBase() * S.leverageMaxMult;
 }
 
 function syncLeverageReserve() {
@@ -3442,7 +3555,7 @@ function syncLeverageReserve() {
   //   index 10 → disponible $0 (tout consommé)
   const index    = S.leverage || 0;
   const maxIdx   = S.leverageMaxMult || 10;
-  const base = _ownCapital();
+  const base = _tradingCapitalBase();
   const totalCapacity = base * 10 * maxIdx;  // capacité max théorique (à ×10)
   S.leverageReserve   = Math.max(0, totalCapacity - (S.leverageBorrowed || 0));
 }
@@ -3498,14 +3611,14 @@ function applyAutoLeverageBorrow(newIndex, prevIndex) {
   // Cas activation initiale (0 → N>0) : snapshot du trading AVANT transfert
   if(prevIndex === 0 && newIndex > 0) {
     S._autoLevBase = S.tradingAccount || 0;
-    const targetBorrow = _ownCapital() * mult * newIndex;  // reserve = capital PROPRE x 10 x index
+    const targetBorrow = _tradingCapitalBase() * mult * newIndex;  // reserve = capital PROPRE x 10 x index
     if(targetBorrow > 0) {
       S.tradingAccount    += targetBorrow;
       S.leverageBorrowed  = (S.leverageBorrowed || 0) + targetBorrow;
       S._autoLevBorrowed  = targetBorrow;
       S.chainLog.push({
         icon:'⚡',
-        desc:`Levier ×${newIndex} activé · ${fmt$2(targetBorrow)} transférés de la réserve vers trading (capital propre ${fmt$2(_ownCapital())})`,
+        desc:`Levier ×${newIndex} activé · ${fmt$2(targetBorrow)} transférés de la réserve vers trading (capital propre ${fmt$2(_tradingCapitalBase())})`,
         hash:rndHash(), time:nowStr()
       });
     } else {
@@ -3519,7 +3632,7 @@ function applyAutoLeverageBorrow(newIndex, prevIndex) {
   }
 
   // Cas ajustement (N>0 → M>0) : diff par rapport à la base initiale
-  const base = _ownCapital();
+  const base = _tradingCapitalBase();
   const targetBorrow = base * mult * newIndex;  // v7.6 · nouvelle formule
   const delta = targetBorrow - (S._autoLevBorrowed || 0);
 
@@ -3576,7 +3689,7 @@ function setLeverageByBot(newIndex, reason) {
       }
       // Baisse partielle → vérifier la faisabilité
       const mult = S.leverageMaxMult || 10;
-      const base = _ownCapital();
+      const base = _tradingCapitalBase();
       const targetBorrow = base * mult * newIndex;
       const needsRepay = (S._autoLevBorrowed || 0) - targetBorrow;
       if (needsRepay > 0 && needsRepay > (S.tradingAccount || 0)) {
@@ -3629,7 +3742,7 @@ function ensureLeverageCoverForTrade(neededStake, pair) {
   // v7.2 Phase 14c-revised FIX: capacité max basée sur la BASE initiale (snapshot au 1er emprunt)
   // sinon après un trade qui vide trading, maxBorrow deviendrait ≤ 0 à cause du recalcul.
   // Si pas encore de base (1er emprunt), on prend le trading courant (qui sera figé en snapshot).
-  const base = _ownCapital();
+  const base = _tradingCapitalBase();
   const maxBorrow = base * (S.leverageMaxMult || 10) * index - (S.leverageBorrowed || 0);
   if(maxBorrow <= 0) return { ok:false, action:'capped', shortfall, reason:'reserve_empty' };
 
@@ -6207,7 +6320,7 @@ function changeLeverage(delta) {
       // Cas 2 : baisse partielle (N → M, M > 0) → calculer si trading suffit
       // Vérifier que le remboursement partiel ne va pas créer une dette orpheline
       const mult = S.leverageMaxMult || 10;
-      const base = _ownCapital();
+      const base = _tradingCapitalBase();
       const targetBorrow = base * mult * newIndex;
       const needsRepay = (S._autoLevBorrowed || 0) - targetBorrow;
       if (needsRepay > 0 && needsRepay > (S.tradingAccount || 0)) {

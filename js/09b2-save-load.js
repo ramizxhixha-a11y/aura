@@ -1,4 +1,4 @@
-// [PERFORMANCE 26/07/2026] purge de rotation toutes les 2 min (bougies 60/tf, trades 40/paire, historiques bornes, texte narratif tronque au-dela des 5 derniers souvenirs) + sauvegarde 10s -> 25s : etat 1.38 Mo -> ~0.8 Mo, charge de sauvegarde divisee par ~4 · [DEFAUT EV v2 · AUTO-PROUVANT · 06/07/2026] bloc AUTONOME (agit des que l etat est pret, independant du chemin de boot) qui active les paires EV si la liste est vide ET signe chargement+action dans le chainLog (visible dans chaque depot) — remplace la v1 logee dans loadState · paperRealActivePairs vide depuis l origine (la 1re garde du moteur EV rejetait tout) : au boot, liste vide => toutes les paires activees (miroir du Reel) — EV peut enfin trader · [ASSAINISSEMENT ONE-SHOT] comptes remis au REEL (injections + vrais P&L journalises) : purge de l argent du drift (+51 fantomes AA et EV), compensation du trou de migration RE (+10.76), cumuls recales sur les vrais gains · fiscal/caisse/intelligence intacts · 05/07/2026
+// [ASSAINISSEMENT DETTE ORPHELINE · one-shot 27/07/2026] efface le residu d emprunt non adosse a une position (62 $ issus du calcul de capacite defaillant, corrige depuis) — drapeau persistant, ne s execute qu une fois · [PERFORMANCE 26/07/2026] purge de rotation toutes les 2 min (bougies 60/tf, trades 40/paire, historiques bornes, texte narratif tronque au-dela des 5 derniers souvenirs) + sauvegarde 10s -> 25s : etat 1.38 Mo -> ~0.8 Mo, charge de sauvegarde divisee par ~4 · [DEFAUT EV v2 · AUTO-PROUVANT · 06/07/2026] bloc AUTONOME (agit des que l etat est pret, independant du chemin de boot) qui active les paires EV si la liste est vide ET signe chargement+action dans le chainLog (visible dans chaque depot) — remplace la v1 logee dans loadState · paperRealActivePairs vide depuis l origine (la 1re garde du moteur EV rejetait tout) : au boot, liste vide => toutes les paires activees (miroir du Reel) — EV peut enfin trader · [ASSAINISSEMENT ONE-SHOT] comptes remis au REEL (injections + vrais P&L journalises) : purge de l argent du drift (+51 fantomes AA et EV), compensation du trou de migration RE (+10.76), cumuls recales sur les vrais gains · fiscal/caisse/intelligence intacts · 05/07/2026
 // [FIX SEPARATION] recalage session/jour PAR WALLET a chaque boot + purge one-shot des bases et cumuls pollues par le legacy (~5000) · 02/07/2026
 // [SEPARATION COMPLETE 3 MODES · 02/07/2026] restaurations flat openPositions/pnl24h/pnlHistory/pnlPeriod retirees (walletStore les porte par mode)
 // [ETAPE 5 · SEPARATION 3 MODES] restauration dreamJournal flat retiree (walletStore le porte par mode) · 01/07/2026
@@ -830,3 +830,59 @@ function _auraRotatePurge() {
 }
 setInterval(_auraRotatePurge, 120000);
 setTimeout(_auraRotatePurge, 20000);
+
+// ═══ ASSAINISSEMENT · DETTE ORPHELINE (one-shot, 27/07/2026) ═══
+// Le 27/07, le solde du levier a laisse 62 $ dus : le bot avait emprunte 525 $
+// alors que sa base reelle etait de 39 $ (capacite calculee sur un compte
+// gonfle par l'emprunt lui-meme). Au remboursement, le compte ne suffisait pas
+// et le code a cree ce qu'il nomme lui-meme une "dette orpheline".
+// Ce residu n'est pas une dette contractee : c'est le reliquat comptable d'un
+// defaut de calcul, corrige depuis (_tradingCapitalBase). On repart de zero.
+// One-shot strict : un drapeau persistant empeche toute repetition, et rien
+// n'est efface si la dette correspond a du levier REELLEMENT engage dans des
+// positions ouvertes (cela, c'est une vraie dette).
+(function _clearOrphanDebt(){
+  var FLAG = 'aura_orphan_debt_cleared_20260727';
+  var _t = 0;
+  var _iv = setInterval(function(){
+    _t++;
+    var ready = false;
+    try { ready = !!window._stateReady; } catch(e) {}
+    if (!ready && _t < 120) return;
+    clearInterval(_iv);
+    try {
+      if (typeof S === 'undefined' || !S) return;
+      if (localStorage.getItem(FLAG)) return;               // deja fait
+      var debt = Number(S.leverageBorrowed || 0);
+      if (!(debt > 0)) { localStorage.setItem(FLAG, '1'); return; }
+      // part reellement engagee dans des positions ouvertes (tous modes)
+      var committed = 0;
+      try {
+        var wsx = S.walletStore || {};
+        ['sim','paperReal','real'].forEach(function(mk){
+          var w = wsx[mk]; if (!w) return;
+          (w.openPositions || []).forEach(function(p){ committed += Number(p.levBorrowed) || 0; });
+        });
+      } catch(e) {}
+      var orphan = Math.max(0, debt - committed);
+      if (orphan <= 0) { localStorage.setItem(FLAG, '1'); return; }
+      S.leverageBorrowed = committed;
+      S._autoLevBorrowed = 0;
+      try {
+        if (typeof _tradingCapitalBase === 'function') {
+          S.leverageReserve = _tradingCapitalBase() * (S.leverageMaxMult || 10);
+        }
+      } catch(e) {}
+      localStorage.setItem(FLAG, '1');
+      try {
+        if (S.chainLog) {
+          S.chainLog.push({ icon:'\uD83E\uDDF9', desc:'Dette orpheline effac\u00e9e : ' + orphan.toFixed(2) + ' $ (r\u00e9sidu du calcul d\'emprunt corrig\u00e9) \u2014 dette restante : ' + committed.toFixed(2) + ' $', hash: Math.random().toString(36).slice(2,8), time: new Date().toLocaleTimeString() });
+          if (S.chainLog.length > 100) S.chainLog.splice(0, S.chainLog.length - 100);
+        }
+      } catch(e) {}
+      try { if (typeof showToast === 'function') showToast('\uD83E\uDDF9 Dette orpheline effac\u00e9e : ' + orphan.toFixed(2) + ' $', 5000, 'win'); } catch(e) {}
+      try { if (typeof saveState === 'function') saveState(true); } catch(e) {}
+      try { if (typeof renderAll === 'function') renderAll(); } catch(e) {}
+    } catch(e) {}
+  }, 500);
+})();
