@@ -1,4 +1,4 @@
-// [NETTOYAGE PERF 26/07/2026] verrou d ecran SUPPRIME (minuterie 15 s ajoutee sans besoin exprime) · [ex-VERROU ECRAN] Wake Lock : tant qu AURA est au premier plan avec un mode en play, l ecran ne s eteint plus (Android ne gele plus les horloges) — signature chainLog au verrouillage · [SIMULTANE · ETAPE 1 · 06/07/2026] le moteur bat tant qu AU MOINS UN mode est en play : pause de l ecran n arrete plus les modes d arriere-plan ; play rejoint le battement ; reprise au boot si un mode quelconque vivait
+// [CHRONOS PAR MODE · TERMINE 26/07/2026] chaque mode en play compte SA seconde (le temps des modes d arriere-plan n est plus perdu) + la marche du chrono ne se deduit plus du texte d un bouton (cause des chronos qui demarraient et s arretaient) + bouton play toujours synchronise apres bascule · [PERF BASCULE 26/07/2026] renderAll() differe au changement de mode : le bouton, le badge et le chrono repondent immediatement au lieu d attendre le repaint complet · [NETTOYAGE PERF 26/07/2026] verrou d ecran SUPPRIME (minuterie 15 s ajoutee sans besoin exprime) · [ex-VERROU ECRAN] Wake Lock : tant qu AURA est au premier plan avec un mode en play, l ecran ne s eteint plus (Android ne gele plus les horloges) — signature chainLog au verrouillage · [SIMULTANE · ETAPE 1 · 06/07/2026] le moteur bat tant qu AU MOINS UN mode est en play : pause de l ecran n arrete plus les modes d arriere-plan ; play rejoint le battement ; reprise au boot si un mode quelconque vivait
 // [FIX] detection reseau REELLE (ping Binance 20s + events) : coupure => temoin ROUGE clignotant + trading en PAUSE + play bloque ; retour => vert + reprise AUTO du mode pause (navigator.onLine seul etait non fiable sur Android) · 02/07/2026
 // [FIX] play/pause PAR MODE STRICT retabli : play dans un mode n affecte JAMAIS les deux autres (annule le play global du 01/07) + one-shot remise en pause des drapeaux pollues + purge cle legacy aura_sim_running · 02/07/2026
 // [FIX] badge mode sous le chrono (#modeBadge) cable au boot et au switch (etait un HTML statique affichant 'AA' en permanence) · 02/07/2026
@@ -154,22 +154,41 @@ window._auraGetGlobalS = _auraGetGlobalS;
     _netPing();
   }
 
-  function syncRunningFromUI() {
-    const btn = document.getElementById('simToggleBtn');
-    if (!btn) return;
-    const text = btn.textContent.trim();
-    const isRunning = text === '⏸';
-    if (state.running !== isRunning) {
-      state.running = isRunning;
-      save();
-    }
+  // ═══ CHRONOS PAR MODE · chantier termine (26/07/2026) ═══
+  // DEUX defauts de fond, a l'origine des chronos qui "demarrent et s'arretent"
+  // et du temps qui ne comptait que pour un mode :
+  //
+  //  1. La marche du chrono etait deduite du TEXTE d'un bouton de l'interface
+  //     (lecture du DOM chaque seconde). Si le bouton n'etait pas encore rendu,
+  //     venait d'etre repeint, ou si son libelle changeait, le chrono se figeait
+  //     ou repartait tout seul. La verite du play/pause n'a jamais ete dans le
+  //     DOM : elle est dans les drapeaux par mode (_isModeRunning), la meme
+  //     source que le moteur. On la lit directement.
+  //
+  //  2. Un seul compteur avancait, celui du mode AFFICHE — alors que les trois
+  //     modes travaillent en meme temps depuis le simultane. Le temps d'un mode
+  //     d'arriere-plan etait simplement perdu.
+  //
+  // Desormais : CHAQUE mode en play compte SA propre seconde, qu'il soit a
+  // l'ecran ou non. Plus aucune lecture du DOM dans le compteur.
+  function _modeRuns(m) {
+    try { return window._isModeRunning ? !!window._isModeRunning(m) : false; }
+    catch(e) { return false; }
   }
 
   function tick() {
-    syncRunningFromUI();
-    if (state.running && state.netStatus !== 'offline') {
-      state.chronoSeconds[state.currentMode]++;
-      if (state.chronoSeconds[state.currentMode] % 10 === 0) save();
+    if (state.netStatus !== 'offline') {
+      var _any = false;
+      ['sim', 'paperReal', 'real'].forEach(function(m) {
+        if (_modeRuns(m)) {
+          state.chronoSeconds[m] = (state.chronoSeconds[m] || 0) + 1;
+          _any = true;
+        }
+      });
+      state.running = _modeRuns(state.currentMode);
+      if (_any && (state.chronoSeconds[state.currentMode] || 0) % 10 === 0) save();
+    } else {
+      state.running = false;
     }
     render();
   }
@@ -267,6 +286,8 @@ window._auraGetGlobalS = _auraGetGlobalS;
     btn.classList.toggle('idle', !running);
     btn.classList.toggle('running', running);
   }
+  // expose pour la bascule de mode (fix bouton fige, 26/07)
+  try { window._auraUpdateBtn = _updateBtn; } catch(e) {}
   function _toast(msg, type) {
     try {
       if (typeof window.showToast === 'function') window.showToast(msg, 2500, type || 'win');
@@ -490,17 +511,31 @@ window._auraGetGlobalS = _auraGetGlobalS;
       var _run   = !!(window._auraSimState && window._auraSimState.running);
       if (_wants && !_run && window.startSim)      window.startSim();
       else if (!_wants && _run && window.stopSim)  window.stopSim();
+      // ★ FIX BOUTON (26/07) · quand ni start ni stop n'est appele (le moteur
+      // bat deja pour un autre mode, ou tout est en pause), le bouton restait
+      // fige sur l'etat du mode PRECEDENT. Il affiche desormais toujours
+      // l'etat du mode reellement affiche.
+      else if (window._auraUpdateBtn) window._auraUpdateBtn(_wants);
+      // le chrono suit immediatement, sans attendre le battement suivant
+      try { if (window.AuraChrono && window.AuraChrono.refresh) window.AuraChrono.refresh(); } catch(e) {}
     } catch(e) {}
 
     // ★ FIX AFFICHAGE PAR MODE · repeindre les cartes wallet du nouveau mode.
     // Les donnees sont deja separees par mode (accesseurs sur S.cashAccount,
     // S.tradingAccount, ...) ; sans re-render, l'affichage restait fige sur le
     // mode precedent (memes $ dans les 3 modes). renderAll() -> renderHome().
-    try {
-      if (typeof window.renderAll === 'function') window.renderAll();
-      else if (typeof renderAll === 'function') renderAll();
-      else new Function('try{renderAll()}catch(e){}')();
-    } catch(e) {}
+    // ★ PERF 26/07 · renderAll() repeint TOUT l'ecran (cartes, agents, marche) :
+    // l'appeler ici bloquait le clic jusqu'a la fin du repaint, d'ou la
+    // sensation que le bouton "ne reagit pas". Il est desormais differe d'un
+    // souffle : le bouton, le badge et le chrono repondent immediatement,
+    // l'ecran se repeint juste apres.
+    setTimeout(function(){
+      try {
+        if (typeof window.renderAll === 'function') window.renderAll();
+        else if (typeof renderAll === 'function') renderAll();
+        else new Function('try{renderAll()}catch(e){}')();
+      } catch(e) {}
+    }, 0);
 
     // 3. Mise à jour visuelle bouton
     updateButtonVisual(nextMode);

@@ -1,4 +1,4 @@
-// [NETTOYAGE PERF 26/07/2026] le garde-fou perte max s execute dans ce battement (1 tick sur 3) au lieu d une minuterie separee · [SIMULTANE · ETAPE 1 · 06/07/2026] MULTIPLEXEUR 3 MODES : chaque mode EN PLAY bat a chaque tick quel que soit l ecran (bascule atomique, accesseurs par mode, protection SL/TP par mode, affiche traite en dernier) — conception Rams : AA apprend, EV evalue, RE surveille/agit selon Regles v2, TOUS EN MEME TEMPS
+// [PERF BATTEMENT 26/07/2026] les modes d arriere-plan sont resolus 1 tick sur 3 (decompte x3, resultat identique) : le battement ne fait plus 3x le travail chaque seconde · [NETTOYAGE PERF 26/07/2026] le garde-fou perte max s execute dans ce battement (1 tick sur 3) au lieu d une minuterie separee · [SIMULTANE · ETAPE 1 · 06/07/2026] MULTIPLEXEUR 3 MODES : chaque mode EN PLAY bat a chaque tick quel que soit l ecran (bascule atomique, accesseurs par mode, protection SL/TP par mode, affiche traite en dernier) — conception Rams : AA apprend, EV evalue, RE surveille/agit selon Regles v2, TOUS EN MEME TEMPS
 // [FIX MAJEUR] 'portfolio drift' SUPPRIME : creation d'argent aleatoire biaisee positive (~+21%/jour composee) — les portefeuilles gonflaient sans trades (+50$ fantomes en 3 jours sur AA et EV, preuve backup Guardian 05/07) · 05/07/2026
 // ════════════════════════════════════════════════════════════
 // AURA8 — module consolidé 08/10
@@ -2617,6 +2617,14 @@ function simTick() {
   if (tick % 3 === 0) { try { if (window._lossCapSweep) window._lossCapSweep(); } catch(e) {} }
   _mRun.forEach(function(_m){
     var _isBg = (_m !== _mDisp);
+    // ★ PERF 26/07 · un cycle de paire dure 40 a 120 SECONDES : resoudre les
+    // modes d'arriere-plan a chaque seconde triplait le travail du battement
+    // pour rien (l'interface devenait molle, le changement de mode tardait).
+    // Ils sont desormais traites 1 tick sur 3, avec un decompte de 3 : le
+    // resultat est identique a la seconde pres, pour un tiers du cout.
+    // Le mode AFFICHE, lui, garde sa precision a la seconde.
+    if (_isBg && (tick % 3 !== 0)) return;
+    var _step = _isBg ? 3 : 1;
     if (_isBg) { S.tradingMode = _m; window._bgResolve = true; }
     try {
       // Protection SL/TP du mode traite (les positions EV/RE sont surveillees
@@ -2625,7 +2633,7 @@ function simTick() {
         try { _applyPaperRealProtection(); } catch(e) {}
       }
       Object.entries(S.pairStates).forEach(([pair, ps]) => {
-        ps.cycleTimer--;
+        ps.cycleTimer -= _step;
         if(ps.cycleTimer <= 0) {
           ps.cycleTimer = ps.cycleMax;
           S.cycle++;
