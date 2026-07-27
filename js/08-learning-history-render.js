@@ -1,4 +1,4 @@
-// [SIMULTANE · ETAPE 1 · 06/07/2026] MULTIPLEXEUR 3 MODES : chaque mode EN PLAY bat a chaque tick quel que soit l ecran (bascule atomique, accesseurs par mode, protection SL/TP par mode, affiche traite en dernier) — conception Rams : AA apprend, EV evalue, RE surveille/agit selon Regles v2, TOUS EN MEME TEMPS
+// [NETTOYAGE PERF 26/07/2026] le garde-fou perte max s execute dans ce battement (1 tick sur 3) au lieu d une minuterie separee · [SIMULTANE · ETAPE 1 · 06/07/2026] MULTIPLEXEUR 3 MODES : chaque mode EN PLAY bat a chaque tick quel que soit l ecran (bascule atomique, accesseurs par mode, protection SL/TP par mode, affiche traite en dernier) — conception Rams : AA apprend, EV evalue, RE surveille/agit selon Regles v2, TOUS EN MEME TEMPS
 // [FIX MAJEUR] 'portfolio drift' SUPPRIME : creation d'argent aleatoire biaisee positive (~+21%/jour composee) — les portefeuilles gonflaient sans trades (+50$ fantomes en 3 jours sur AA et EV, preuve backup Guardian 05/07) · 05/07/2026
 // ════════════════════════════════════════════════════════════
 // AURA8 — module consolidé 08/10
@@ -2612,6 +2612,9 @@ function simTick() {
   } catch(e) {}
   _mRun.push(_mDisp);
   window._bgResolve = false;
+  // ★ 26/07 perf : le garde-fou perte max n'a plus sa propre minuterie —
+  // il s'execute ici, dans le battement existant, une fois sur trois.
+  if (tick % 3 === 0) { try { if (window._lossCapSweep) window._lossCapSweep(); } catch(e) {} }
   _mRun.forEach(function(_m){
     var _isBg = (_m !== _mDisp);
     if (_isBg) { S.tradingMode = _m; window._bgResolve = true; }

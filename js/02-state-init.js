@@ -1,4 +1,4 @@
-// [BASE LEVIER = CAPITAL PROPRE 26/07/2026] la capacite d emprunt suit le capital REELLEMENT possede (detenu - dette) au lieu d un instantane fige a 40.64$ qui bloquait tout a 100 % : suit les injections, immunise contre la spirale emprunt->capacite · [POLITIQUE CAPITAL volet B · Rams 06/07, livre 07/07] taxes des gains provisionnees dans la reserve ANTI-NEGATIF au fil de la session (part taxes tracee via antiNegTaxPart) puis dispatchees vers la reserve FISCALE au changement de jour (_dispatchSessionTaxes, 60s, rattrapage au boot) · [SIMULTANE · ETAPE 3] le collecteur de bougies reelles sert les modes EN PLAY (walletStore.running), plus seulement le mode affiche : EV et RE recoivent leurs prix en continu meme ecran sur AA — helper _bgPairsToWatch + health-check sans verrou d ecran + gardien des connexions a 1 s (demande Rams)
+// [NETTOYAGE PERF 26/07/2026] health-check collecteur 1 s -> 5 s, dispatch taxes 1 min -> 10 min · [BASE LEVIER = CAPITAL PROPRE 26/07/2026] la capacite d emprunt suit le capital REELLEMENT possede (detenu - dette) au lieu d un instantane fige a 40.64$ qui bloquait tout a 100 % : suit les injections, immunise contre la spirale emprunt->capacite · [POLITIQUE CAPITAL volet B · Rams 06/07, livre 07/07] taxes des gains provisionnees dans la reserve ANTI-NEGATIF au fil de la session (part taxes tracee via antiNegTaxPart) puis dispatchees vers la reserve FISCALE au changement de jour (_dispatchSessionTaxes, 60s, rattrapage au boot) · [SIMULTANE · ETAPE 3] le collecteur de bougies reelles sert les modes EN PLAY (walletStore.running), plus seulement le mode affiche : EV et RE recoivent leurs prix en continu meme ecran sur AA — helper _bgPairsToWatch + health-check sans verrou d ecran + gardien des connexions a 1 s (demande Rams)
 
 // ═══ CAPITAL PROPRE (26/07/2026) ═══
 // La capacite d'emprunt etait calculee sur _autoLevBase : un INSTANTANE du
@@ -4549,7 +4549,11 @@ window._bgCollectorHealthCheck = _bgCollectorHealthCheck;
 // dans la seconde. Descendre sous 1 s n'apporterait rien : le moteur lui-meme
 // ne consomme les prix qu'une fois par seconde — et les PRIX, eux, arrivent
 // deja en TEMPS REEL (chaque transaction Binance, des qu'elle a lieu).
-setInterval(_bgCollectorHealthCheck, 1000);
+// ★ 26/07 perf : 1 s -> 5 s. Ce gardien ne fait que verifier que les flux de
+// prix sont vivants ; les prix eux-memes arrivent en TEMPS REEL par WebSocket,
+// independamment de lui. A 1 s il se reveillait 86 400 fois par jour pour ne
+// rien faire dans l'immense majorite des cas.
+setInterval(_bgCollectorHealthCheck, 5000);
 
 // v7.12 LIVRAISON 13 · REFRESH PRÉVENTIF toutes les 30 minutes
 // Ferme et recrée TOUS les WS pour éviter la dégradation lente
@@ -6505,4 +6509,6 @@ function _dispatchSessionTaxes() {
     } catch(e) {}
   } catch(e) {}
 }
-setInterval(_dispatchSessionTaxes, 60000);
+// ★ 26/07 perf : 1 min -> 10 min. Le dispatch ne se declenche qu'au CHANGEMENT
+// DE JOUR : le verifier 1 440 fois par jour n'avait aucun sens.
+setInterval(_dispatchSessionTaxes, 600000);
