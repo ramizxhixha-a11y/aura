@@ -1,3 +1,4 @@
+// [FRAIS REELS BINANCE · 28/07/2026] recordFees facture desormais l ALLER-RETOUR (entree taker + sortie maker/taker + slippage x2) au lieu d un seul cote ; taux feeConfig alignes sur Binance spot VIP 0 (0,10 % par cote, maker=taker) au lieu de 0,02/0,05 % — le cout reel d un aller-retour passe de 0,080 % a 0,260 %
 // [DECISION AU BOT · regle Rams 27/07/2026] aucun seuil ni plafond impose : le bot gere ses cloture comme il l entend ; le systeme n intervient qu a la limite physique (solde net a zero) pour que le compte ne passe jamais en negatif · [SOLVABILITE EN TEMPS REEL · regle Rams 27/07/2026] le controle se declenche A CHAQUE CHANGEMENT DE PRIX (flux WebSocket trade + kline), plus sur une horloge de 3 s — cout nul sans dette, garde anti-reentrance · frais/taxes/frais d emprunt imputes a la reserve anti-negatif (deja provisionnes en continu) : seule la dette NETTE pese sur le compte trading, le coussin ne couvre que le risque de marche · cloture totale immediate (positions, frais, impots, restitution du levier) des que le reste net ne couvre plus les couts : le compte trading s arrete a ZERO, jamais negatif · [BASE EMPRUNT = CAPITAL TRADING · regle Rams 27/07/2026] capacite calculee sur le capital de trading du debut (compte + mises engagees - dette), caisse verrouillee EXCLUE · [NETTOYAGE PERF 26/07/2026] health-check collecteur 1 s -> 5 s, dispatch taxes 1 min -> 10 min · [BASE LEVIER = CAPITAL PROPRE 26/07/2026] la capacite d emprunt suit le capital REELLEMENT possede (detenu - dette) au lieu d un instantane fige a 40.64$ qui bloquait tout a 100 % : suit les injections, immunise contre la spirale emprunt->capacite · [POLITIQUE CAPITAL volet B · Rams 06/07, livre 07/07] taxes des gains provisionnees dans la reserve ANTI-NEGATIF au fil de la session (part taxes tracee via antiNegTaxPart) puis dispatchees vers la reserve FISCALE au changement de jour (_dispatchSessionTaxes, 60s, rattrapage au boot) · [SIMULTANE · ETAPE 3] le collecteur de bougies reelles sert les modes EN PLAY (walletStore.running), plus seulement le mode affiche : EV et RE recoivent leurs prix en continu meme ecran sur AA — helper _bgPairsToWatch + health-check sans verrou d ecran + gardien des connexions a 1 s (demande Rams)
 
 // ═══ BASE DE LA CAPACITE D'EMPRUNT (regle Rams, 27/07/2026) ═══
@@ -458,12 +459,14 @@ const S = {
 
   // ── FRAIS & TAXES ────────────────────────────────────────────
   feeConfig: {
-    makerRate:   0.0002,   // 0.02% maker (ordres limites — seuil conviction 80%)
-    takerRate:   0.0005,   // 0.05% taker (ordres marché — signal modéré)
+    // Taux Binance spot VIP 0, verifies le 28/07/2026 : 0,10 % PAR COTE,
+    // maker comme taker (le spot n'a pas d'ecart maker/taker au palier 0).
+    // Le rabais BNB (0,075 %) exige de detenir du BNB : on ne le presuppose pas.
+    // Aucun palier VIP n'est atteignable au capital actuel.
+    makerRate:   0.001,    // 0,10 % maker
+    takerRate:   0.001,    // 0,10 % taker
     fundingRate: 0.00005,  // taux de financement, interprete PAR 8h (comme un perp reel)
-    slippage:    0.0003,   // 0.03% slippage — optimisé vs 0.05% précédent
-    // Note: frais réels Binance spot: maker 0.02-0.10%, taker 0.04-0.10%
-    // NEXUS utilise maker quand conviction >= 80% → réduction ~60% des frais
+    slippage:    0.0003,   // 0,03 % de slippage PAR COTE (paires majeures liquides)
   },
   taxConfig: {
     region:     'BE',     // Belgique par défaut
@@ -3973,10 +3976,20 @@ function recordFees(pair, notionalUsdt, pnlUsd, tradeType, reservedAmount) {
   const tc  = S.taxConfig;
   const reg = tc.regions[tc.region];
 
-  // Frais de trading (taker pour trades auto/market, maker pour limites)
-  const tradingFee = notionalUsdt * (tradeType === 'maker' ? fc.makerRate : fc.takerRate);
-  // Slippage estimé (aller + retour combiné)
-  const slipFee    = notionalUsdt * fc.slippage;
+  // ── Frais de trading · ALLER-RETOUR COMPLET ──────────────────────────
+  // recordFees est le SEUL point de debit reel (appele une fois, a la
+  // fermeture). Il ne facturait qu'un seul cote, alors que la decision
+  // d'entree (03-...buid.js) et estimateTradeReserve modelisent tous deux
+  // l'aller-retour : le bot validait ses trades contre un cout ~2x superieur
+  // a celui que sa comptabilite lui facturait ensuite. Tout le P&L appris
+  // etait donc biaise dans le sens optimiste.
+  // Ouverture : le bot ouvre au marche -> toujours taker.
+  // Fermeture : maker ou taker selon le type de sortie.
+  const entryFee   = notionalUsdt * fc.takerRate;
+  const exitFee    = notionalUsdt * (tradeType === 'maker' ? fc.makerRate : fc.takerRate);
+  const tradingFee = entryFee + exitFee;
+  // Slippage subi des deux cotes
+  const slipFee    = notionalUsdt * fc.slippage * 2;
   // Total frais du trade
   const totalFee   = tradingFee + slipFee;
 

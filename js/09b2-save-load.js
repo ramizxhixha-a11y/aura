@@ -1,3 +1,4 @@
+// [MIGRATION FRAIS REELS · one-shot 28/07/2026] feeConfig etant persiste (_LIGHT_KEYS), la nouvelle valeur par defaut de 02 serait ecrasee au boot : cette migration releve makerRate/takerRate au plancher Binance 0,10 % dans le state sauvegarde (ne baisse jamais un taux deja superieur)
 // [ASSAINISSEMENT DETTE ORPHELINE · one-shot 27/07/2026] efface le residu d emprunt non adosse a une position (62 $ issus du calcul de capacite defaillant, corrige depuis) — drapeau persistant, ne s execute qu une fois · [PERFORMANCE 26/07/2026] purge de rotation toutes les 2 min (bougies 60/tf, trades 40/paire, historiques bornes, texte narratif tronque au-dela des 5 derniers souvenirs) + sauvegarde 10s -> 25s : etat 1.38 Mo -> ~0.8 Mo, charge de sauvegarde divisee par ~4 · [DEFAUT EV v2 · AUTO-PROUVANT · 06/07/2026] bloc AUTONOME (agit des que l etat est pret, independant du chemin de boot) qui active les paires EV si la liste est vide ET signe chargement+action dans le chainLog (visible dans chaque depot) — remplace la v1 logee dans loadState · paperRealActivePairs vide depuis l origine (la 1re garde du moteur EV rejetait tout) : au boot, liste vide => toutes les paires activees (miroir du Reel) — EV peut enfin trader · [ASSAINISSEMENT ONE-SHOT] comptes remis au REEL (injections + vrais P&L journalises) : purge de l argent du drift (+51 fantomes AA et EV), compensation du trou de migration RE (+10.76), cumuls recales sur les vrais gains · fiscal/caisse/intelligence intacts · 05/07/2026
 // [FIX SEPARATION] recalage session/jour PAR WALLET a chaque boot + purge one-shot des bases et cumuls pollues par le legacy (~5000) · 02/07/2026
 // [SEPARATION COMPLETE 3 MODES · 02/07/2026] restaurations flat openPositions/pnl24h/pnlHistory/pnlPeriod retirees (walletStore les porte par mode)
@@ -881,6 +882,67 @@ setTimeout(_auraRotatePurge, 20000);
         }
       } catch(e) {}
       try { if (typeof showToast === 'function') showToast('\uD83E\uDDF9 Dette orpheline effac\u00e9e : ' + orphan.toFixed(2) + ' $', 5000, 'win'); } catch(e) {}
+      try { if (typeof saveState === 'function') saveState(true); } catch(e) {}
+      try { if (typeof renderAll === 'function') renderAll(); } catch(e) {}
+    } catch(e) {}
+  }, 500);
+})();
+
+// ═══ MIGRATION · TAUX DE FRAIS REELS (one-shot, 28/07/2026) ═══
+// feeConfig fait partie de la liste blanche persistee (_LIGHT_KEYS) : changer
+// la valeur par defaut dans 02-state-init.js ne suffit pas, la sauvegarde
+// ecrase la nouvelle valeur au boot. Cette migration reecrit les taux stockes.
+//
+// Constat : le state portait makerRate 0,02 % et takerRate 0,05 %, alors que
+// Binance spot au palier VIP 0 facture 0,10 % PAR COTE, maker comme taker
+// (verifie le 28/07/2026). Combine au fait que recordFees ne facturait qu'un
+// seul cote, le cout reel d'un aller-retour etait sous-estime d'un facteur ~5.
+// Tout l'apprentissage accumule a valide des trades sur un cout fictif.
+//
+// Ne fait que RELEVER un taux sous le plancher reel : un taux deja superieur
+// (regle manuellement par l'utilisateur) n'est jamais abaisse.
+(function _upgradeFeeRates(){
+  var FLAG = 'aura_fee_rates_binance_20260728';
+  var FLOOR_MAKER = 0.001;   // 0,10 %
+  var FLOOR_TAKER = 0.001;   // 0,10 %
+  var _t = 0;
+  var _iv = setInterval(function(){
+    _t++;
+    var ready = false;
+    try { ready = !!window._stateReady; } catch(e) {}
+    if (!ready && _t < 120) return;
+    clearInterval(_iv);
+    try {
+      if (typeof S === 'undefined' || !S) return;
+      if (localStorage.getItem(FLAG)) return;               // deja fait
+      if (!S.feeConfig) S.feeConfig = {};
+      var fc = S.feeConfig;
+      var oldMaker = Number(fc.makerRate);
+      var oldTaker = Number(fc.takerRate);
+      var changed = [];
+      if (!(oldMaker >= FLOOR_MAKER)) {
+        fc.makerRate = FLOOR_MAKER;
+        changed.push('maker ' + (oldMaker * 100).toFixed(3) + '% -> 0.100%');
+      }
+      if (!(oldTaker >= FLOOR_TAKER)) {
+        fc.takerRate = FLOOR_TAKER;
+        changed.push('taker ' + (oldTaker * 100).toFixed(3) + '% -> 0.100%');
+      }
+      localStorage.setItem(FLAG, '1');
+      if (!changed.length) return;                          // rien a corriger
+      try {
+        if (S.chainLog) {
+          S.chainLog.push({
+            icon: '\uD83D\uDCB8',
+            desc: 'Frais alignes sur Binance spot VIP 0 : ' + changed.join(' \u00b7 ')
+                + ' \u2014 aller-retour desormais factur\u00e9 en entier',
+            hash: Math.random().toString(36).slice(2, 8),
+            time: new Date().toLocaleTimeString()
+          });
+          if (S.chainLog.length > 100) S.chainLog.splice(0, S.chainLog.length - 100);
+        }
+      } catch(e) {}
+      try { if (typeof showToast === 'function') showToast('\uD83D\uDCB8 Frais r\u00e9els Binance appliqu\u00e9s : ' + changed.join(' \u00b7 '), 6000, 'warn'); } catch(e) {}
       try { if (typeof saveState === 'function') saveState(true); } catch(e) {}
       try { if (typeof renderAll === 'function') renderAll(); } catch(e) {}
     } catch(e) {}
