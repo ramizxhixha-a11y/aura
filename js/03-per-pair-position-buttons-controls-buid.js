@@ -1181,6 +1181,20 @@ function _drawActionMiniChartsInner() {
 // ============================================================
 function learnFromOutcome(source, pnlPct, pair) {
 
+  // ── UN NON-EVENEMENT N ENSEIGNE RIEN (30/07/2026) ───────────────────
+  // `const won = pnlPct > 0` classait pnlPct === 0 comme une PERTE.
+  // Or le fichier 10 appelle learnFromOutcome('cycle', 0, pair) sur quatre
+  // chemins ou le bot decide de NE PAS trader (l.1775 bases RE non solides,
+  // l.1811 gate d entree refuse, l.1902 marge d exposition insuffisante,
+  // l.1907 mise sous 2 $). Chaque abstention punissait donc tous les agents
+  // haussiers et recompensait tous les baissiers.
+  // Comme mag = |0| = 0, la fitness ne bougeait PAS : le degat restait
+  // invisible dans les metriques de fitness pendant que score, conf, errors
+  // et streak derivaient. D ou corr(fitness, justesse) = +0,038 mesuree sur
+  // 28 agents — la fitness et la decision avaient ete decouplees.
+  // Zero n est pas une perte : c est l absence de resultat.
+  if (!(Math.abs(Number(pnlPct)) > 0)) return;
+
   // v7.0: Update per-regime fitness
   if(source === 'trade' && typeof detectMarketRegime === 'function' && pnlPct != null) {
     const _regime = detectMarketRegime();
@@ -1258,7 +1272,15 @@ function learnFromOutcome(source, pnlPct, pair) {
       a.conf  = Math.max(0.35, a.conf - signalStrength * 0.045);  // v7.2 TURBO · ×3 (ex: 0.015)
       // La correction est proportionnelle au nombre d'erreurs consécutives — s'adapte plus vite si récidive
       const correctionFactor = Math.min(0.075, 0.024 + (a.errors * 0.006));  // v7.2 TURBO · ×3
-      a.score = Math.max(-1, Math.min(1, a.score - (won?1:-1) * signalStrength * correctionFactor));
+      // ── SIGNE CORRIGE (30/07/2026) ───────────────────────────────────
+      // Etait : a.score - (won?1:-1) * signalStrength * correctionFactor
+      // Ce signe opposé à celui de la branche alignée poussait l agent qui se
+      // trompe PLUS LOIN dans son erreur, au lieu de le ramener. Simule sur le
+      // code reel, agent haussier a +0,600 punit 8 fois : +0,614 -> +0,633 ->
+      // +0,683 -> +0,755 -> +0,853. Le commentaire d origine annoncait pourtant
+      // « inverser partiellement le score » : l intention etait juste, le signe
+      // etait faux. Les deux branches doivent corriger vers la MEME realite.
+      a.score = Math.max(-1, Math.min(1, a.score + (won?1:-1) * signalStrength * correctionFactor));
       a.corrections = (a.corrections||0) + 1;
       // Stocker dans mémoire d'erreurs pour éviter de répéter
       if(!a.memory) a.memory = [];

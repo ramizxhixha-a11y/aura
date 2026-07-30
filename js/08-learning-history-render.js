@@ -2819,10 +2819,16 @@ function simTick() {
   // Blend real prices smoothly every tick
   blendRealPrices();
 
-  // New candle for ALL pairs every 3 ticks — GBM with agent signal bias
+  // ── Prix reels : recuperation toutes les ~15 s (30/07/2026) ──────────
+  // Cet appel etait imbrique dans `if(tick % 3 === 0){ if(tick % 15 === 1) }`.
+  // tick ≡ 1 (mod 15) implique tick ≡ 1 (mod 3) : l intersection avec
+  // tick ≡ 0 (mod 3) est VIDE. Verifie sur 3000 ticks : 0 occurrence.
+  // fetchLivePrices n etait donc JAMAIS appele depuis la boucle de tick, et
+  // le reancrage aux prix reels ne survivait que par le watchdog 45 s.
+  if(tick % 15 === 1) fetchLivePrices();
+
+  // New candle for ALL pairs every 3 ticks
   if(tick % 3 === 0) {
-    // Fetch live prices every ~30s (async, non-blocking)
-    if(tick % 15 === 1) fetchLivePrices();  // v7.12: 15s interval (avoid rate limit)
   if(tick % 4 === 0 && typeof _fpEmergencyCheck === 'function') _fpEmergencyCheck();  // v7.12 P1: watchdog FP
   if(tick % 2 === 0 && typeof updatePairBricks === 'function' && S.currentPage === 0) updatePairBricks();  // v7.12 P2: briques
   if(tick % 2 === 0 && typeof updateActionBricks === 'function' && S.currentPage === 0) updateActionBricks();  // v7.12 P2: briques actions
@@ -2836,8 +2842,18 @@ function simTick() {
       const cfg  = PAIRS[pair];
       const last = ps.candles[ps.candles.length - 1] || { c: ps.price };
 
-      // Agent-driven bias (LMSR signal)
-      const lmsrBias     = (lmsrP(ps) - 0.5) * cfg.vol * 0.7;
+      // ── Prix simule SANS retroaction des agents (30/07/2026) ──────────
+      // Le terme retire etait : lmsrBias = (lmsrP(ps) - 0.5) * cfg.vol * 0.7
+      // Il faisait bouger le prix DANS LA DIRECTION que les agents predisaient.
+      // Boucle fermee : les agents predisent -> le prix leur donne raison ->
+      // ils sont recompenses -> leur conviction se renforce. Mesure : a la
+      // valeur observee lmsrProb=0.5658, 38,5 % du mouvement entre deux
+      // ancrages reels etait produit par les agents eux-memes ; au-dela de
+      // lmsrProb=0.70 ils fabriquaient plus de 100 % du prix.
+      // Comme S.agents est GLOBAL (non cloisonne par mode), cette population
+      // entrainee dans un monde qui lui obeissait decidait ensuite en EV et RE
+      // sur de vrais prix, ou sa prediction n a aucun pouvoir causal.
+      // Le prix simule ne doit dependre que du marche et du hasard.
       // Mean-reversion component: gently pull toward a recent moving avg
       const closes       = ps.candles.slice(-20).map(c => c.c);
       const ma20         = closes.length > 3 ? closes.reduce((a,b)=>a+b,0)/closes.length : last.c;
@@ -2847,7 +2863,7 @@ function simTick() {
       // Occasional larger moves (fat tails — realistic crypto)
       const fatTail      = Math.random() < 0.04 ? (Math.random()-0.5)*cfg.vol*4 : 0;
 
-      const ch = lmsrBias + reversionPull + noise + fatTail;
+      const ch = reversionPull + noise + fatTail;
       const o  = last.c;
       const c  = o + ch;
       const h  = Math.max(o, c) + Math.abs(ch)*0.3 + Math.random()*cfg.vol*0.3;
