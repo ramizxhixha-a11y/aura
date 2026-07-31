@@ -1,3 +1,4 @@
+// [OPTION A · 31/07/2026] garde d ouverture 'Bunker actif -> return' supprimee : le bunker ne bloque plus les ouvertures (il reduit les mises via 07). Debloque EV coince en bunker paused depuis le 26/07.
 // [PLANCHER PROPORTIONNEL 26/07/2026] les 9 planchers 10$ et 4 arrondis par paliers de 10 supprimes d un bloc (le correctif partiel du 06/07 en laissait 7 : inoperant par construction) — plancher = 5 % du compte, min 2$, arrondi au dixieme ; gate <20$ et clamp 25 % alignes sur la politique de capital · [REGLES REEL v2 · edictees par Rams 05/07/2026] en MANU jamais d ouverture ; en AUTO ouverture RE permise UNIQUEMENT si RE est en play (consentement) — remplace le blocage total du 02/07
 
 // ═══ PLANCHER DE MISE PROPORTIONNEL (26/07/2026) ═══
@@ -58,20 +59,6 @@ function autoOpenPosition(pair, side, stakeOverride) {
       S.chainLog.push({
         icon: '🔴',
         desc: `Ouverture bloquée · connexion coupée · ${pair} ${side.toUpperCase()}`,
-        hash: rndHash(), time: nowStr()
-      });
-      if (S.chainLog.length > 100) S.chainLog.splice(0, S.chainLog.length - 100);
-    }
-    return;
-  }
-
-  // Gate Bunker : si le mode Bunker est actif et configuré pour pauser le bot,
-  // on s'abstient d'ouvrir (protection d'urgence). Ne touche pas botAutoMode.
-  if (S.bunker && S.bunker.active === true && S.bunker.pausedByBunker === true) {
-    if (Math.random() < 0.05) {
-      S.chainLog.push({
-        icon: '🚨',
-        desc: `Ouverture bloquée · Bunker actif · ${pair} ${side.toUpperCase()}`,
         hash: rndHash(), time: nowStr()
       });
       if (S.chainLog.length > 100) S.chainLog.splice(0, S.chainLog.length - 100);

@@ -1,3 +1,4 @@
+// [OPTION A · 31/07/2026] bunker ne met PLUS le bot en pause (pauseBot supprime : config, action, garde 09c, toggle UI) -> reduit seulement les mises et continue en AUTO ; un mode en arriere-plan (EV/RE) ne peut plus rester bloque actif+paused sans etre leve · corrige EV mort depuis le 26/07
 // [FIX] sortie auto du bunker : timer PERMANENT (avant : perdu au reload -> bunker AA coince actif+paused depuis le 02/07, bot bloque en ouverture) · 05/07/2026
 // [SEPARATION COMPLETE 3 MODES · 02/07/2026] bunker PAR MODE : active/capRef/startCapital/pausedByBunker vivent dans le wallet du mode actif · plus de faux declenchement au switch · cle LS globale legacy supprimee
 // [FIX] badge levier 'EMPRUNT BLOQUE' : cache par defaut a chaque rendu (ne reste plus affiche dans un mode sans emprunt) · 02/07/2026
@@ -33,7 +34,6 @@ function _bkGet() {
     enabled:        true,
     triggerDropPct: 10,   // % de chute pour déclencher
     actions: {
-      pauseBot:     true,
       reduceMises:  true,
       closePositions: false,  // risqué — off par défaut
       sendTelegram: true,
@@ -107,12 +107,9 @@ function activateBunker(dropPct) {
   _bst.startCapital= S.tradingAccount||0;
   const dropStr   = (dropPct||0).toFixed(1);
 
-  // Actions immédiates
-  if(cfg.actions.pauseBot) {
-    // Pause du bot via un flag DÉDIÉ au bunker — ne touche JAMAIS botAutoMode
-    // (axe utilisateur seul). autoOpenPosition consulte ce flag pour s'abstenir.
-    _bst.pausedByBunker = true;
-  }
+  // Actions immédiates — le bunker ne met JAMAIS le bot en pause (Option A) :
+  // il réduit les mises et laisse le bot continuer en AUTO. Il ne peut donc plus
+  // piéger un mode en arrière-plan (EV/RE) dans un état actif+bloqué non levé.
   if(cfg.actions.reduceMises) {
     const prevStake = S.stakeConfig?.defaultStake||S.stakeUsdt||20;
     const newStake  = Math.max(1, Math.round(prevStake*cfg.minStakePct/100));
@@ -186,7 +183,6 @@ function exitBunker() {
 
   var _bstx = _bkState();
   _bstx.active = false;
-  _bstx.pausedByBunker = false;
   document.getElementById('bunkerBanner')?.classList.remove('show');
   document.getElementById('pages')?.style.removeProperty('padding-top');
   showToast('🏳️ Mode Bunker levé — Capital référence réinitialisé', 3000, 'win');
@@ -274,7 +270,6 @@ function renderBunkerSection() {
       <!-- Actions -->
       <div style="font-size:9px;color:var(--t3);margin:8px 0 5px;">Actions au déclenchement</div>
       ${[
-        {k:'pauseBot',       lbl:'⏸ Mettre le bot en pause'},
         {k:'reduceMises',    lbl:'📉 Réduire les mises'},
         {k:'closePositions', lbl:'🛑 Fermer les positions (risqué)'},
         {k:'sendTelegram',   lbl:'📲 Alerter via Telegram'},
