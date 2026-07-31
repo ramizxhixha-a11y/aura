@@ -1,3 +1,4 @@
+// [COHERENCE DECIMALES CARTES HOME · 31/07/2026] ENGAGE (capStaked, avant fmt$ floore -> '$2' vs exposition '$2.7563'), RES. FRAIS (qReserve, avant toFixed(0)) et P&L JOUR (qSessionPnl, avant toFixed(1) -> '-$0.0') passes a 2 decimales · MAX/LIBRE laisses entiers (plafonds en milliers)
 // [AFFICHAGE P&L CUMULE · 31/07/2026] barres par paire : valeur P&L a 2 decimales (avant fmt$ arrondissait -0.05$ en '$-1' par Math.floor) + mise/exposition a 4 decimales (avant float brut a 16 chiffres)
 // [OPTION A · 31/07/2026] bunker ne met PLUS le bot en pause (pauseBot supprime : config, action, garde 09c, toggle UI) -> reduit seulement les mises et continue en AUTO ; un mode en arriere-plan (EV/RE) ne peut plus rester bloque actif+paused sans etre leve · corrige EV mort depuis le 26/07
 // [FIX] sortie auto du bunker : timer PERMANENT (avant : perdu au reload -> bunker AA coince actif+paused depuis le 02/07, bot bloque en ouverture) · 05/07/2026
@@ -4538,7 +4539,7 @@ function renderHomePrices() {
   const _capPctStr = cap.usedPct.toFixed(2)+'%';  // v15 · 2 décimales
   const capPctEl = document.getElementById('capBarPct');
   if (capPctEl && capPctEl.textContent !== _capPctStr) capPctEl.textContent = _capPctStr;
-  const _capStakedStr = fmt$(cap.staked);
+  const _capStakedStr = '$'+Number(cap.staked).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
   const capStakedEl = document.getElementById('capStaked');
   if (capStakedEl && capStakedEl.textContent !== _capStakedStr) capStakedEl.textContent = _capStakedStr;
   const _capMaxStr = fmt$(cap.maxAllowed);
@@ -4870,7 +4871,7 @@ function renderHome() {
     netEl.title = 'P&L NET = trades fermés - frais - taxes. Différent du P&L SESSION qui inclut les positions ouvertes.';
   }
   if(resEl) {
-    resEl.textContent = '$'+f.feeReserveAccount.toFixed(0);
+    resEl.textContent = '$'+Number(f.feeReserveAccount).toFixed(2);
   }
 
   // ── Stats row 3 : best agent, avg cycle, generations, composite signal ──
@@ -4909,7 +4910,7 @@ function renderHome() {
   }
   const spEl = document.getElementById('qSessionPnl');
   if(spEl) {
-    spEl.textContent = (sessGain>=0?'+$':'−$')+Math.abs(sessGain).toFixed(1);
+    spEl.textContent = (sessGain>=0?'+$':'−$')+Math.abs(sessGain).toFixed(2);
     spEl.style.color = sessGain>=0?'var(--up)':'var(--down)';
   }
 
