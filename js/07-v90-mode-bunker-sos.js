@@ -1,3 +1,4 @@
+// [AFFICHAGE P&L CUMULE · 31/07/2026] barres par paire : valeur P&L a 2 decimales (avant fmt$ arrondissait -0.05$ en '$-1' par Math.floor) + mise/exposition a 4 decimales (avant float brut a 16 chiffres)
 // [OPTION A · 31/07/2026] bunker ne met PLUS le bot en pause (pauseBot supprime : config, action, garde 09c, toggle UI) -> reduit seulement les mises et continue en AUTO ; un mode en arriere-plan (EV/RE) ne peut plus rester bloque actif+paused sans etre leve · corrige EV mort depuis le 26/07
 // [FIX] sortie auto du bunker : timer PERMANENT (avant : perdu au reload -> bunker AA coince actif+paused depuis le 02/07, bot bloque en ouverture) · 05/07/2026
 // [SEPARATION COMPLETE 3 MODES · 02/07/2026] bunker PAR MODE : active/capRef/startCapital/pausedByBunker vivent dans le wallet du mode actif · plus de faux declenchement au switch · cle LS globale legacy supprimee
@@ -3247,12 +3248,12 @@ function renderPairPnl() {
     const badgeEl = document.getElementById('pb_badge_'+k);
     const pos     = S.openPositions.find(p => p.pair === pair);
     if(fillEl)  { fillEl.style.width = barPct+'%'; fillEl.style.background = bcol; fillEl.style.left = up?'0':'auto'; fillEl.style.right = up?'auto':'0'; }
-    if(usdEl)   { usdEl.textContent = (up?'+':'')+fmt$(usd); usdEl.style.color = up?'var(--up)':'var(--down)'; }
+    if(usdEl)   { usdEl.textContent = (up?'+':'-')+'$'+Math.abs(usd).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}); usdEl.style.color = up?'var(--up)':'var(--down)'; }
     if(metaEl)  metaEl.textContent = trades+'t · '+wr+'%';
     if(badgeEl) {
       if(pos) {
         const exp = pos.totalExposure || pos.stakeUsdt;
-        badgeEl.textContent = (pos.side==='long'?'↑':'↓')+' $'+exp;
+        badgeEl.textContent = (pos.side==='long'?'↑':'↓')+' $'+Number(exp).toFixed(4);
         badgeEl.style.display = '';
       } else { badgeEl.style.display = 'none'; }
     }
