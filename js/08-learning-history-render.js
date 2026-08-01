@@ -1,3 +1,4 @@
+// [ONGLET TRADES REEL · 02/08/2026] l'onglet Trades du journal CHAIN lit desormais l'historique reel des trades (ps.trades par paire, conserve, cape a 100/paire) au lieu du journal volatil qui les evincait sous le flot Apprentissage/Dream (plafond 200) · TRADE_ICONS/isTrade supprimes (code mort)
 // [MODALE TEMPS REEL · 01/08/2026] la modale « Fermer les positions », si visible, est re-rendue a chaque battement (P&L $ live sur le prix courant, quel que soit l'onglet)
 // [PERF BATTEMENT 26/07/2026] les modes d arriere-plan sont resolus 1 tick sur 3 (decompte x3, resultat identique) : le battement ne fait plus 3x le travail chaque seconde · [NETTOYAGE PERF 26/07/2026] le garde-fou perte max s execute dans ce battement (1 tick sur 3) au lieu d une minuterie separee · [SIMULTANE · ETAPE 1 · 06/07/2026] MULTIPLEXEUR 3 MODES : chaque mode EN PLAY bat a chaque tick quel que soit l ecran (bascule atomique, accesseurs par mode, protection SL/TP par mode, affiche traite en dernier) — conception Rams : AA apprend, EV evalue, RE surveille/agit selon Regles v2, TOUS EN MEME TEMPS
 // [FIX MAJEUR] 'portfolio drift' SUPPRIME : creation d'argent aleatoire biaisee positive (~+21%/jour composee) — les portefeuilles gonflaient sans trades (+50$ fantomes en 3 jours sur AA et EV, preuve backup Guardian 05/07) · 05/07/2026
@@ -374,20 +375,44 @@ function renderChain() {
     return;
   }
 
-  // Category icon sets
-  const TRADE_ICONS = ['💚','🔴','✅','❌','💸','🟢','⚡','💰','📈','📉','⬆','⬇','🎯','⊗'];
+  // Category icon sets (Trades lu depuis l'historique réel plus bas, pas par icône)
   const LEARN_ICONS = ['🧠','🧬','⛓','💭','🪞','🦋','🌀','✏️','📝','🎓'];
   const DAO_ICONS   = ['🏛','🔑','🪙','🗳','▶','⏸','🌐','📡','⚖️','⚠️','🌍','☁️','🤖','🚨','↺'];
-  const isTrade = t => TRADE_ICONS.includes(t.icon);
   const isLearn = t => LEARN_ICONS.includes(t.icon) || t.category === 'learn';
   const isDao   = t => DAO_ICONS.includes(t.icon);
+
+  // ── Onglet Trades : lit l'historique RÉEL des trades (ps.trades par paire, conservé
+  //    dans l'état, capé à 100/paire). Le journal volatil (plafond 200) évinçait sinon les
+  //    trades sous le flot Apprentissage/Dream. Ouvertures + clôtures, format de ligne identique.
+  const _fmtPx = v => { if(v==null) return '?'; const n=Number(v); return n>=100?n.toFixed(2):(n>=1?n.toFixed(4):n.toPrecision(4)); };
+  const _rawTrades = [];
+  const _ps = S.pairStates || {};
+  Object.keys(_ps).forEach(pair => {
+    const arr = (_ps[pair] && _ps[pair].trades) || [];
+    arr.forEach(t => _rawTrades.push({ pair, t }));
+  });
+  _rawTrades.sort((a,b) => (b.t.ts||0) - (a.t.ts||0));
+  const tradeRows = _rawTrades.map(({pair, t}) => {
+    const isClose = t.type !== 'open';
+    const dir  = t.side === 'buy' ? 'LONG' : 'SHORT';
+    const pnl  = Number(t.pnlUsdt);
+    const icon = isClose ? (pnl >= 0 ? '✅' : '❌') : (t.side === 'buy' ? '🟢' : '🔴');
+    let desc;
+    if (isClose) {
+      const pct = (t.pnl != null) ? ` (${Number(t.pnl).toFixed(2)}%)` : '';
+      desc = `${pair} ${dir} · ${_fmtPx(t.entryPrice)}→${_fmtPx(t.price)} · ${pnl>=0?'+':'−'}$${Math.abs(pnl||0).toFixed(2)}${pct}`;
+    } else {
+      desc = `${pair} ${dir} ouvert · mise $${Number(t.stakeUsdt||0).toFixed(4)} @ ${_fmtPx(t.price)}`;
+    }
+    return { icon, desc, hash:'', time:(typeof fmtDT === 'function' ? fmtDT(t.ts) : (t.time||'')) };
+  });
 
   const allReversed = S.chainLog.slice().reverse();
 
   // B. Count per category (for badges)
   const counts = {
     all: allReversed.length,
-    trade: allReversed.filter(isTrade).length,
+    trade: tradeRows.length,
     learn: allReversed.filter(isLearn).length,
     dao: allReversed.filter(isDao).length,
   };
@@ -403,12 +428,13 @@ function renderChain() {
   });
 
   // A. Filter full log first, then take 30 most recent matches
-  let logs = allReversed;
-  if(_chainFilter === 'trade')      logs = logs.filter(isTrade);
-  else if(_chainFilter === 'learn') logs = logs.filter(isLearn);
-  else if(_chainFilter === 'dao')   logs = logs.filter(isDao);
+  let logs;
+  if(_chainFilter === 'trade')      logs = tradeRows;              // historique RÉEL des trades (ps.trades)
+  else if(_chainFilter === 'learn') logs = allReversed.filter(isLearn);
+  else if(_chainFilter === 'dao')   logs = allReversed.filter(isDao);
+  else                              logs = allReversed;
 
-  const visible = logs.slice(0, 30);
+  const visible = logs.slice(0, _chainFilter === 'trade' ? 60 : 30);
 
   // Color map for icons
   const iconColor = {
