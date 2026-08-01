@@ -1,3 +1,4 @@
+// [DERNIERS TRADES · 01/08/2026] mise affichee a 4 decimales (avant t.stakeUsdt brut -> '$2.7555188052979953')
 // [COHERENCE DECIMALES CARTES HOME · 31/07/2026] ENGAGE (capStaked, avant fmt$ floore -> '$2' vs exposition '$2.7563'), RES. FRAIS (qReserve, avant toFixed(0)) et P&L JOUR (qSessionPnl, avant toFixed(1) -> '-$0.0') passes a 2 decimales · MAX/LIBRE laisses entiers (plafonds en milliers)
 // [AFFICHAGE P&L CUMULE · 31/07/2026] barres par paire : valeur P&L a 2 decimales (avant fmt$ arrondissait -0.05$ en '$-1' par Math.floor) + mise/exposition a 4 decimales (avant float brut a 16 chiffres)
 // [OPTION A · 31/07/2026] bunker ne met PLUS le bot en pause (pauseBot supprime : config, action, garde 09c, toggle UI) -> reduit seulement les mises et continue en AUTO ; un mode en arriere-plan (EV/RE) ne peut plus rester bloque actif+paused sans etre leve · corrige EV mort depuis le 26/07
@@ -4764,7 +4765,7 @@ function renderHome() {
     const pnlColor = (t.pnl||0) >= 0 ? 'var(--up)' : 'var(--down)';
     const usdtLine = t.stakeUsdt
       ? `<div style="font-size:9px;color:var(--t3);margin-top:2px;">
-           <span style="color:var(--t2);">$${t.stakeUsdt}</span>
+           <span style="color:var(--t2);">$${Number(t.stakeUsdt).toFixed(4)}</span>
            ${t.pnlUsdt!=null&&t.pnlUsdt!==0 ? (t.pnlUsdt>=0
              ? ' · <span style="color:var(--up)">+$'+Math.abs(t.pnlUsdt).toFixed(2)+'</span>'
              : ' · <span style="color:var(--down)">−$'+Math.abs(t.pnlUsdt).toFixed(2)+'</span>') : ''}
@@ -4774,6 +4775,11 @@ function renderHome() {
       : '';
     const entryLine = entryStr
       ? `<div style="font-size:8px;color:var(--t3);margin-top:1px;">entrée: ${entryStr} → sortie: ${priceStr}</div>`
+      : '';
+    const timeLine = isClose
+      ? `<div style="font-size:8px;color:var(--t3);margin-top:1px;">ouvert: ${fmtDT(t.entryTs)} · fermé: ${fmtDT(t.ts)}</div>`
+      : isOpen
+      ? `<div style="font-size:8px;color:var(--t3);margin-top:1px;">ouvert: ${fmtDT(t.ts)}</div>`
       : '';
 
     const pnlVal  = t.pnl != null ? t.pnl : 0;
@@ -4786,6 +4792,7 @@ function renderHome() {
       <div class="trade-pair">${t.pair} · <span class="pill ${pillCls}">${label}</span></div>
       <div class="trade-detail">${t.amount||'—'} ${cfg.sym}${!entryStr?' · @'+priceStr:''}</div>
       ${entryLine}
+      ${timeLine}
       ${usdtLine}
     </div>
     <div style="text-align:right;">

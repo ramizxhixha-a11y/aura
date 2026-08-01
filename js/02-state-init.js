@@ -1,3 +1,4 @@
+// [ENRICHISSEMENT POSITIONS/TRADES · 01/08/2026] helper fmtDT(ts)=JJ/MM HH:MM:SS · modale « Fermer les positions » : date/heure d'ouverture + mise a 4 decimales + P&L $ live a 2 decimales (rafraichi en temps reel via 08) · badge ⊗ : garde _bgResolve + reset textContent · enregistrement de cloture porte desormais entryTs/entryTime (pour l'affichage ouverture/fermeture dans Derniers Trades) · anti-flood journal battement prix 1/2min
 // [FRAIS REELS BINANCE · 28/07/2026] recordFees facture desormais l ALLER-RETOUR (entree taker + sortie maker/taker + slippage x2) au lieu d un seul cote ; taux feeConfig alignes sur Binance spot VIP 0 (0,10 % par cote, maker=taker) au lieu de 0,02/0,05 % — le cout reel d un aller-retour passe de 0,080 % a 0,260 %
 // [DECISION AU BOT · regle Rams 27/07/2026] aucun seuil ni plafond impose : le bot gere ses cloture comme il l entend ; le systeme n intervient qu a la limite physique (solde net a zero) pour que le compte ne passe jamais en negatif · [SOLVABILITE EN TEMPS REEL · regle Rams 27/07/2026] le controle se declenche A CHAQUE CHANGEMENT DE PRIX (flux WebSocket trade + kline), plus sur une horloge de 3 s — cout nul sans dette, garde anti-reentrance · frais/taxes/frais d emprunt imputes a la reserve anti-negatif (deja provisionnes en continu) : seule la dette NETTE pese sur le compte trading, le coussin ne couvre que le risque de marche · cloture totale immediate (positions, frais, impots, restitution du levier) des que le reste net ne couvre plus les couts : le compte trading s arrete a ZERO, jamais negatif · [BASE EMPRUNT = CAPITAL TRADING · regle Rams 27/07/2026] capacite calculee sur le capital de trading du debut (compte + mises engagees - dette), caisse verrouillee EXCLUE · [NETTOYAGE PERF 26/07/2026] health-check collecteur 1 s -> 5 s, dispatch taxes 1 min -> 10 min · [BASE LEVIER = CAPITAL PROPRE 26/07/2026] la capacite d emprunt suit le capital REELLEMENT possede (detenu - dette) au lieu d un instantane fige a 40.64$ qui bloquait tout a 100 % : suit les injections, immunise contre la spirale emprunt->capacite · [POLITIQUE CAPITAL volet B · Rams 06/07, livre 07/07] taxes des gains provisionnees dans la reserve ANTI-NEGATIF au fil de la session (part taxes tracee via antiNegTaxPart) puis dispatchees vers la reserve FISCALE au changement de jour (_dispatchSessionTaxes, 60s, rattrapage au boot) · [SIMULTANE · ETAPE 3] le collecteur de bougies reelles sert les modes EN PLAY (walletStore.running), plus seulement le mode affiche : EV et RE recoivent leurs prix en continu meme ecran sur AA — helper _bgPairsToWatch + health-check sans verrou d ecran + gardien des connexions a 1 s (demande Rams)
 
@@ -4911,6 +4912,13 @@ function fmt$2(n){
   return '$' + (n||0).toLocaleString('fr-FR', {minimumFractionDigits:2, maximumFractionDigits:2});
 }
 
+// Date + heure compacte (JJ/MM HH:MM:SS) depuis un timestamp ms — ouverture/fermeture des trades
+function fmtDT(ts){
+  if(!ts) return '—';
+  const d = new Date(ts), p = n => String(n).padStart(2,'0');
+  return p(d.getDate())+'/'+p(d.getMonth()+1)+' '+p(d.getHours())+':'+p(d.getMinutes())+':'+p(d.getSeconds());
+}
+
 // ── v7.1 PHASE 1 · Affichage portefeuille en EUR + live rate fetch ──
 function fmtEUR(n){
   return (Math.round((n||0)*100)/100).toLocaleString('fr-FR',{minimumFractionDigits:2,maximumFractionDigits:2}) + ' €';
@@ -5682,6 +5690,8 @@ function closePosition(id, botClose = false) {
       stakeUsdt: pos.stakeUsdt,
       pnlUsdt:   realisedUsd,
       entryPrice: pos.entryPrice,
+      entryTs:   pos.entryTs || pos.openedAt || null,
+      entryTime: pos.entryTime || null,
       ts:        Date.now(),
       time:      nowStr()
     });
@@ -6536,9 +6546,10 @@ function renderClosePositionsList() {
           <span style="font-size:8px;padding:1px 5px;border-radius:4px;background:rgba(120,130,150,.15);color:var(--t2);font-weight:600;">${modeLabel}</span>
           <span style="font-size:9px;font-weight:700;color:${sideCol};">${sideLabel}</span>
         </div>
+        <div style="font-size:9px;color:var(--t3);margin-bottom:2px;">Ouvert: ${fmtDT(pos.entryTs || pos.openedAt)}</div>
         <div style="display:flex;gap:8px;font-size:9px;color:var(--t3);">
-          <span>Mise: ${fmt$(pos.stakeUsdt)}</span>
-          <span style="color:${pnlCol};font-weight:700;">${pnlUsd >= 0 ? '+' : ''}${fmt$(pnlUsd)} (${pnlPct.toFixed(2)}%)</span>
+          <span>Mise: $${Number(pos.stakeUsdt||0).toFixed(4)}</span>
+          <span style="color:${pnlCol};font-weight:700;">${pnlUsd >= 0 ? '+' : '−'}$${Math.abs(pnlUsd).toFixed(2)} (${pnlPct.toFixed(2)}%)</span>
         </div>
       </div>
       <button onclick="confirmCloseOne('${pos.id}')" style="padding:8px 14px;background:rgba(255,61,107,.12);border:1px solid rgba(255,61,107,.35);border-radius:8px;color:var(--down);font-weight:700;font-size:10px;cursor:pointer;">Fermer</button>
@@ -6583,6 +6594,11 @@ function confirmCloseAll() {
 }
 
 function _updateCloseAllBadge() {
+  // Le badge ⊗ reflète UNIQUEMENT le mode affiché. Pendant le multiplexeur, S.tradingMode
+  // bascule transitoirement vers un mode de fond (window._bgResolve=true, remis à false après
+  // traitement) : sans ce garde, une ouverture d'un mode de fond posait SON compteur sur le
+  // badge du mode affiché → désync « 1 » vs S.openPositions=0 relevée par Guardian.
+  if (window._bgResolve === true) return;
   const btn   = document.getElementById('closeAllBtn');
   const glyph = document.getElementById('closeAllGlyph');
   const badge = document.getElementById('closeAllBadge');
@@ -6596,6 +6612,7 @@ function _updateCloseAllBadge() {
     if(btn) { btn.classList.remove('empty'); btn.classList.add('active'); }
   } else {
     // aucune position : croix grise neutre (classe empty)
+    badge.textContent = '0';   // reset : sinon l'ancien compteur (ex « 1 ») restait dans le textContent (lu par Guardian) même masqué
     badge.style.display = 'none';
     if(glyph) glyph.style.display = 'flex';
     if(btn) { btn.classList.remove('active'); btn.classList.add('empty'); }

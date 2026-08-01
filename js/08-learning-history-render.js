@@ -1,3 +1,4 @@
+// [MODALE TEMPS REEL · 01/08/2026] la modale « Fermer les positions », si visible, est re-rendue a chaque battement (P&L $ live sur le prix courant, quel que soit l'onglet)
 // [PERF BATTEMENT 26/07/2026] les modes d arriere-plan sont resolus 1 tick sur 3 (decompte x3, resultat identique) : le battement ne fait plus 3x le travail chaque seconde · [NETTOYAGE PERF 26/07/2026] le garde-fou perte max s execute dans ce battement (1 tick sur 3) au lieu d une minuterie separee · [SIMULTANE · ETAPE 1 · 06/07/2026] MULTIPLEXEUR 3 MODES : chaque mode EN PLAY bat a chaque tick quel que soit l ecran (bascule atomique, accesseurs par mode, protection SL/TP par mode, affiche traite en dernier) — conception Rams : AA apprend, EV evalue, RE surveille/agit selon Regles v2, TOUS EN MEME TEMPS
 // [FIX MAJEUR] 'portfolio drift' SUPPRIME : creation d'argent aleatoire biaisee positive (~+21%/jour composee) — les portefeuilles gonflaient sans trades (+50$ fantomes en 3 jours sur AA et EV, preuve backup Guardian 05/07) · 05/07/2026
 // ════════════════════════════════════════════════════════════
@@ -2904,6 +2905,11 @@ function simTick() {
     S.pnlHistory.push(S.portfolio);
     if(S.pnlHistory.length > 80) S.pnlHistory.shift();
   }
+
+  // Rafraîchir la modale « Fermer les positions » en TEMPS RÉEL tant qu'elle est visible
+  // (P&L $ live sur le prix courant, quel que soit l'onglet affiché).
+  { const _cpm = document.getElementById('closePositionsModal');
+    if(_cpm && _cpm.style.display === 'flex' && typeof renderClosePositionsList === 'function') renderClosePositionsList(); }
 
   // ── Render active page (throttled for performance) ──
   if(S.currentPage === 0) {
