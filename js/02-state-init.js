@@ -3455,7 +3455,15 @@ async function fetchLivePrices(force = false) {
 
     if(updated > 0) {
       // v7.0: ChainLog silencieux — pas d'affichage toast inutile
-      S.chainLog.push({ icon:'📡', desc:`Prix réels mis à jour: ${updated} paires via CoinGecko`, hash:rndHash(), time:nowStr() });
+      // [ANTI-FLOOD JOURNAL · 31/07/2026] le battement prix (toutes les ~15 s) noyait le
+      // journal plafonné à 100 et évinçait trades/gouvernance en quelques minutes. On ne
+      // journalise le battement qu'une fois toutes les 2 min ; l'indicateur "● LIVE CG HH:MM"
+      // reste la preuve CONTINUE du flux, donc rien n'est perdu côté observabilité.
+      const _nowPx = Date.now();
+      if (!S._lastPriceChainLog || _nowPx - S._lastPriceChainLog >= 120000) {
+        S._lastPriceChainLog = _nowPx;
+        S.chainLog.push({ icon:'📡', desc:`Prix réels mis à jour: ${updated} paires via CoinGecko`, hash:rndHash(), time:nowStr() });
+      }
       // Save live prices to localStorage pour restore rapide au prochain load
       try {
         const priceCache = {};
