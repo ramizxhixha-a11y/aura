@@ -1,3 +1,4 @@
+// [GEL v2 · HEAP · 02/08/2026] le log de gel ajoute la memoire heap (Chrome Android) pour trancher : heap proche de la limite = pause GC/pression memoire (fix = trimmer), heap bas = operation lourde (fix = timer les intervalles). Diagnostic confirme : gels ~15s ecran visible hors simTick (simTick 4-28ms).
 // [MONITEUR DE GEL + RENDU CONDITIONNEL · 02/08/2026] simTick journalise tout trou >3s dans chainLog (🐌 ecran visible = blocage reel + duree dernier tick ; 📴 ecran masque = throttle Android normal) pour diagnostiquer le lag sans profiler · le rendu lourd est saute quand document.hidden (trading/apprentissage continuent) : economie + pas de rattrapage brutal au retour
 // [DAO+CLASSEMENT · 02/08/2026] classement agents : 'reward'(totalReward mort) remplace par 'streak' (serie gagnante/perdante, vivante) · propositions DAO position #42/#43 purgees de l'etat + note 'le bot agit en autonome' quand aucune proposition
 // [ONGLET TRADES REEL · 02/08/2026] l'onglet Trades du journal CHAIN lit desormais l'historique reel des trades (ps.trades par paire, conserve, cape a 100/paire) au lieu du journal volatil qui les evincait sous le flot Apprentissage/Dream (plafond 200) · TRADE_ICONS/isTrade supprimes (code mort)
@@ -2638,13 +2639,24 @@ function simTick() {
       const _gap = (_now - S.perf._lastTickAt) / 1000;
       if (_gap > 3) {
         const _hidden = (typeof document !== 'undefined' && document.hidden);
+        // Heap JS (Chrome Android l'expose) : tranche entre pause GC/pression memoire
+        // (heap proche de la limite) et operation lourde (heap bas).
+        let _memStr = '';
+        try {
+          const pm = (typeof performance !== 'undefined') ? performance.memory : null;
+          if (pm && pm.usedJSHeapSize) {
+            const _u = Math.round(pm.usedJSHeapSize/1048576);
+            const _l = Math.round(pm.jsHeapSizeLimit/1048576);
+            _memStr = ` · heap ${_u}/${_l}Mo`;
+          }
+        } catch(e) {}
         S.perf.gaps    = (S.perf.gaps || 0) + 1;
         S.perf.maxGapS = Math.max(S.perf.maxGapS || 0, Math.round(_gap*10)/10);
         S.perf.lastGapS = Math.round(_gap*10)/10;
         if (S.chainLog) {
           S.chainLog.push({
             icon: _hidden ? '📴' : '🐌',
-            desc: `Gel ${_gap.toFixed(1)}s · dernier tick ${Math.round(S.perf.lastMs||0)}ms · ${_hidden ? 'ecran masque (throttle Android, normal)' : 'ecran visible (blocage reel du thread)'}`,
+            desc: `Gel ${_gap.toFixed(1)}s · tick ${Math.round(S.perf.lastMs||0)}ms · ${_hidden ? 'ecran masque (throttle Android)' : 'ecran visible (blocage reel)'}${_memStr}`,
             hash: Math.random().toString(36).slice(2,8), time: new Date().toLocaleTimeString()
           });
           if (S.chainLog.length > 100) S.chainLog.splice(0, S.chainLog.length - 100);
