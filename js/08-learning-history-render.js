@@ -1,3 +1,4 @@
+// [MONITEUR DE GEL + RENDU CONDITIONNEL · 02/08/2026] simTick journalise tout trou >3s dans chainLog (🐌 ecran visible = blocage reel + duree dernier tick ; 📴 ecran masque = throttle Android normal) pour diagnostiquer le lag sans profiler · le rendu lourd est saute quand document.hidden (trading/apprentissage continuent) : economie + pas de rattrapage brutal au retour
 // [DAO+CLASSEMENT · 02/08/2026] classement agents : 'reward'(totalReward mort) remplace par 'streak' (serie gagnante/perdante, vivante) · propositions DAO position #42/#43 purgees de l'etat + note 'le bot agit en autonome' quand aucune proposition
 // [ONGLET TRADES REEL · 02/08/2026] l'onglet Trades du journal CHAIN lit desormais l'historique reel des trades (ps.trades par paire, conserve, cape a 100/paire) au lieu du journal volatil qui les evincait sous le flot Apprentissage/Dream (plafond 200) · TRADE_ICONS/isTrade supprimes (code mort)
 // [MODALE TEMPS REEL · 01/08/2026] la modale « Fermer les positions », si visible, est re-rendue a chaque battement (P&L $ live sur le prix courant, quel que soit l'onglet)
@@ -2626,6 +2627,33 @@ function simTick() {
   const _perfStart = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
   tick++;
 
+  // [MONITEUR DE GEL · 02/08/2026] mesure le trou depuis le tick precedent. Le battement
+  // vise ~1 s ; si >3 s, on journalise la NATURE du gel pour diagnostiquer sans profiler :
+  //  - ecran masque  -> Android throttle les timers en arriere-plan (attendu, pas un bug code)
+  //  - ecran visible -> vrai blocage du thread (a corriger) + duree du dernier simTick.
+  try {
+    if (!S.perf) S.perf = {};
+    const _now = _perfStart;
+    if (S.perf._lastTickAt) {
+      const _gap = (_now - S.perf._lastTickAt) / 1000;
+      if (_gap > 3) {
+        const _hidden = (typeof document !== 'undefined' && document.hidden);
+        S.perf.gaps    = (S.perf.gaps || 0) + 1;
+        S.perf.maxGapS = Math.max(S.perf.maxGapS || 0, Math.round(_gap*10)/10);
+        S.perf.lastGapS = Math.round(_gap*10)/10;
+        if (S.chainLog) {
+          S.chainLog.push({
+            icon: _hidden ? '📴' : '🐌',
+            desc: `Gel ${_gap.toFixed(1)}s · dernier tick ${Math.round(S.perf.lastMs||0)}ms · ${_hidden ? 'ecran masque (throttle Android, normal)' : 'ecran visible (blocage reel du thread)'}`,
+            hash: Math.random().toString(36).slice(2,8), time: new Date().toLocaleTimeString()
+          });
+          if (S.chainLog.length > 100) S.chainLog.splice(0, S.chainLog.length - 100);
+        }
+      }
+    }
+    S.perf._lastTickAt = _now;
+  } catch(e) {}
+
   // ═══ MULTIPLEXEUR 3 MODES · Etape 1 du SIMULTANE (conception Rams) ═══
   // Chaque mode EN PLAY bat a CHAQUE tick, quel que soit l'ecran : bascule
   // ATOMIQUE de contexte (les accesseurs routent argent/positions/journal/
@@ -2941,8 +2969,10 @@ function simTick() {
   { const _cpm = document.getElementById('closePositionsModal');
     if(_cpm && _cpm.style.display === 'flex' && typeof renderClosePositionsList === 'function') renderClosePositionsList(); }
 
-  // ── Render active page (throttled for performance) ──
-  if(S.currentPage === 0) {
+  // ── Render active page (throttled) · SAUTÉ si l'écran est masqué : inutile de peindre une
+  //    interface invisible, et ça évite un rattrapage brutal au retour. Le trading et
+  //    l'apprentissage (au-dessus) continuent normalement — aucune donnée n'est affectée. ──
+  if(S.currentPage === 0 && !(typeof document !== 'undefined' && document.hidden)) {
     // Home: tiered rendering — price display every tick, heavy work throttled
     renderHomePrices();                          // prices + cycle timers only (fast)
     updateMarketMood();                          // v5 · mood bar (light)
