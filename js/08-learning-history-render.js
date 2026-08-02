@@ -2681,7 +2681,7 @@ let tick = 0;
 (function _auraProfileSuspects(){
   try {
     setTimeout(function(){
-      var names = ['renderChain','syncPairPresets','liveTrainAgents','triggerEvolution','buildSnapshot','redistributeFitness','runRosterAnalysis','saveState','fetchLivePrices','finalizeDream','runDreamScenario','resolvePairCycle','learnFromOutcome','_auraRotatePurge','applyFundingFees','applyLeverageBorrowFees','updateBotThoughts','updatePairAnalysisPanels','drawActionMiniCharts','getCachedCompositeSignals','renderHome','renderAnalyticsPanel','_leverageMarginCheck'];
+      var names = ['renderChain','syncPairPresets','liveTrainAgents','triggerEvolution','buildSnapshot','redistributeFitness','runRosterAnalysis','saveState','fetchLivePrices','finalizeDream','runDreamScenario','resolvePairCycle','learnFromOutcome','_auraRotatePurge','applyFundingFees','applyLeverageBorrowFees','updateBotThoughts','updatePairAnalysisPanels','drawActionMiniCharts','getCachedCompositeSignals','renderHome','renderAnalyticsPanel','_leverageMarginCheck','getTechSignals','getFundamentalSignals','_aggregateRealPrice','lmsrP','generateDebate','calcRSI','calcMACD','calcADX'];
       var _armed = 0;
       names.forEach(function(name){
         try {
@@ -2747,13 +2747,24 @@ function simTick() {
             _memStr = ` · heap ${_u}/${_l}Mo`;
           }
         } catch(e) {}
+        let _domStr = '';
+        try {
+          const _nodes = (typeof document !== 'undefined' && document.getElementsByTagName) ? document.getElementsByTagName('*').length : 0;
+          _domStr = ' · dom ' + _nodes + ' · page ' + ((typeof S!=='undefined'&&S)?S.currentPage:'?');
+        } catch(e) {}
+        let _wsStr = '';
+        try {
+          const _wsNow = (typeof window!=='undefined' && window._auraWsMsgCount) || 0;
+          const _wsDelta = _wsNow - (S.perf._wsLast || 0);
+          _wsStr = ' · ws +' + _wsDelta;
+        } catch(e) {}
         S.perf.gaps    = (S.perf.gaps || 0) + 1;
         S.perf.maxGapS = Math.max(S.perf.maxGapS || 0, Math.round(_gap*10)/10);
         S.perf.lastGapS = Math.round(_gap*10)/10;
         if (S.chainLog) {
           S.chainLog.push({
             icon: _hidden ? '📴' : '🐌',
-            desc: `Gel ${_gap.toFixed(1)}s · tick ${Math.round(S.perf.lastMs||0)}ms · ${_hidden ? 'ecran masque (throttle Android)' : 'ecran visible (blocage reel)'}${_memStr}`,
+            desc: `Gel ${_gap.toFixed(1)}s · tick ${Math.round(S.perf.lastMs||0)}ms · ${_hidden ? 'ecran masque (throttle Android)' : 'ecran visible (blocage reel)'}${_memStr}${_domStr}${_wsStr}`,
             hash: Math.random().toString(36).slice(2,8), time: new Date().toLocaleTimeString()
           });
           if (S.chainLog.length > 100) S.chainLog.splice(0, S.chainLog.length - 100);
@@ -2761,6 +2772,7 @@ function simTick() {
       }
     }
     S.perf._lastTickAt = _now;
+    try { S.perf._wsLast = (typeof window!=='undefined' && window._auraWsMsgCount) || 0; } catch(e) {}
   } catch(e) {}
 
   // ═══ MULTIPLEXEUR 3 MODES · Etape 1 du SIMULTANE (conception Rams) ═══
