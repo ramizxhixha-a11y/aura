@@ -1279,16 +1279,25 @@ function _gelVerdict(p){
   return out;
 }
 VIEWS.gel=function(){
-  let h='<div class="hint">Lit les traces de gel (🐌/📴), tâches longues (⏱) et mesures du chrono écrites par AURA dans le journal, et en déduit la cause du lag + la correction à appliquer.</div>';
+  let h='<div class="hint">Lit les traces de gel (🐌/📴), tâches longues (⏱) et mesures du chrono écrites par AURA dans le journal, et en déduit la cause du lag + la correction à appliquer. Si Guardian lit un état différent de l\'app native (ex : mode sim), importe le dump JSON de ton app native ci-dessous.</div>';
+  h+='<div class="controls" style="margin-bottom:8px"><label class="btn" style="cursor:pointer">📂 Importer un dump AURA<input type="file" id="gelFile" accept=".json,application/json" style="display:none"></label><span id="gelSrc" style="font-size:10px;color:var(--t2);margin-left:8px;align-self:center"></span></div>';
   h+='<button class="btn green wide" id="gelRun" style="width:100%">▶ Analyser les gels</button><div id="gelOut" style="margin-top:10px"></div>';
   return h;
 };
+function _gelChainFrom(src){
+  if(!src) return [];
+  if(Array.isArray(src.chainLog)) return src.chainLog;
+  if(src.aura && Array.isArray(src.aura.chainLog)) return src.aura.chainLog;
+  return [];
+}
 VIEW_INIT.gel=function(){
   const run=async function(){
     const b=document.getElementById('gelRun'); if(b){b.innerHTML='<span class="spinner"></span> analyse…';b.disabled=true;}
     try{
-      await collectState();
-      const cl=(CTX.S&&CTX.S.chainLog)||[];
+      let cl, srcLbl;
+      if(window._gelDump){ cl=_gelChainFrom(window._gelDump); srcLbl='dump importé ('+cl.length+' entrées)'; }
+      else { await collectState(); cl=(CTX.S&&CTX.S.chainLog)||[]; srcLbl='état Guardian '+(CTX.source||'')+' ('+cl.length+' entrées)'; }
+      const sp=document.getElementById('gelSrc'); if(sp) sp.textContent='source : '+srcLbl;
       const p=_gelParse(cl);
       const res=_gelVerdict(p);
       renderGel(res,p);
@@ -1299,6 +1308,13 @@ VIEW_INIT.gel=function(){
     if(b){b.innerHTML='▶ Relancer l\'analyse';b.disabled=false;}
   };
   const b=document.getElementById('gelRun'); if(b) b.onclick=run;
+  const f=document.getElementById('gelFile');
+  if(f) f.onchange=function(ev){
+    const file=ev.target.files&&ev.target.files[0]; if(!file) return;
+    const rd=new FileReader();
+    rd.onload=function(){ try{ window._gelDump=JSON.parse(rd.result); run(); }catch(e){ const o=document.getElementById('gelOut'); if(o)o.innerHTML='<div class="item crit"><span class="nm">Dump illisible: '+(e&&e.message)+'</span></div>'; } };
+    rd.readAsText(file);
+  };
   run();
 };
 function renderGel(res,p){
