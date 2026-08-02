@@ -1,3 +1,4 @@
+// [PRIX HOLD FLUIDES · 02/08/2026] tous les prix affiches a 2 decimales (priceStr HOLD 3447, priceStr2, curStr badge, priceStr trades) au lieu de Math.floor -> SOL $73 devient $73.14 et les mouvements <$1 redeviennent visibles (avant "bloque a 73") · updater mort ac2_price_ (id inexistant) retire, le prix HOLD passe par ac2_px_
 // [STABILITE CARTE ANALYSE · 02/08/2026] VALEUR & G/P NET : 2e setter concurrent (format -0.38%(-$0.0)) retire -> plus de clignotement toutes les sec ; setter unique a 2 decimales (VALEUR $x.xx, G/P "% net $") · prix (fmtP x3) affiches a 2 decimales au lieu de floores (ex $1 869 -> $1,869.50)
 // [MISE CARTE = ENGAGE REEL · 02/08/2026] la carte Analyse affiche la mise reellement engagee de la position ouverte (pos.stakeUsdt, ex 2.7496$) au lieu de la mise de base configuree (ps.stake, ex 10$) -> coherent avec la modale Fermer positions ; base affichee seulement si aucune position ouverte
 // [FLOATS BRUTS WIDGET POSITION · 02/08/2026] mise/exposition affichees a 4 decimales (avant float brut 16 chiffres ex '$2.7495971107009507') dans ops-stake-val, total expose, ac-pos-stake et levStr ; levier a 2 decimales
@@ -3444,7 +3445,7 @@ function renderActionsGrid() {
       ? ((manualPos||botPos).side==='long' ? 'buy' : 'sell')
       : action;
     const pairKey  = pair.replace('/','_');
-    const priceStr = cfg.dec>=4 ? ps.price.toFixed(cfg.dec) : ('$'+Math.floor(ps.price).toLocaleString());
+    const priceStr = cfg.dec>=4 ? ps.price.toFixed(cfg.dec) : ('$'+ps.price.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}));
     const probCol  = dispAction==='buy'?'var(--up)':dispAction==='sell'?'var(--down)':'var(--gold)';
 
     // ── Wrapper colonne (carte + positions dessous) ──
@@ -3780,7 +3781,7 @@ function renderActionsGrid() {
           const prob2    = lmsrP(ps);
           const wouldAct = prob2 > 0.60 ? 'buy' : prob2 < 0.40 ? 'sell' : 'hold';
           const sugStake = Math.max(10, Math.floor((ps.stake||20)));
-          const priceStr2 = cfg.dec>=4 ? ps.price.toFixed(cfg.dec) : '$'+Math.floor(ps.price).toLocaleString();
+          const priceStr2 = cfg.dec>=4 ? ps.price.toFixed(cfg.dec) : '$'+ps.price.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
           const convPct  = Math.round(Math.abs(prob2-0.5)*200);
           if(wouldAct === 'hold') {
             sugEl.style.display = '';
@@ -4113,7 +4114,7 @@ function renderInlinePosForPair(pair, pairKey, cfg, ps) {
     const pnlCls  = up ? 'up' : 'down';
     const pnlStr  = (up?'+':'')+pos.pnl.toFixed(2)+'%';
     const usdtStr = (up?'+':'−')+'$'+Math.abs(pos.pnlUsdt).toFixed(1);
-    const curStr  = cfg.dec>=4 ? ps.price.toFixed(cfg.dec) : '$'+Math.floor(ps.price).toLocaleString();
+    const curStr  = cfg.dec>=4 ? ps.price.toFixed(cfg.dec) : '$'+ps.price.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
     const entStr  = cfg.dec>=4 ? pos.entryPrice.toFixed(cfg.dec) : '$'+Math.floor(pos.entryPrice).toLocaleString();
     const barW    = Math.min(100, Math.abs(pos.pnl) * 8);
     const durStr  = pos.entryTs ? fmtSince(pos.entryTs) : pos.entryTime||'—';
@@ -4494,10 +4495,8 @@ function renderHomePrices() {
     const ps  = S.pairStates[pair];
     if(!ps) return;
     const k   = pair.replace('/','_');
-    const px  = document.getElementById('ac2_price_'+k);
+    // (prix HOLD mis à jour par le rendu principal via ac2_px_ ; l'ancien 'ac2_price_' n'existait pas → retiré)
     const p24 = document.getElementById('ac2_pnl24_'+k);
-    const prc = cfg.dec>=4 ? ps.price.toFixed(cfg.dec) : '$'+ps.price.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
-    if(px) px.textContent = prc;
     if(p24) {
       p24.textContent = (ps.pnl24h>=0?'+':'')+ps.pnl24h.toFixed(2)+'%';
       p24.style.color = ps.pnl24h>=0?'var(--up)':'var(--down)';
@@ -4748,7 +4747,7 @@ function renderHome() {
                   : isOpen  ? (isBuy?'LONG →':'SHORT →')
                   : (isBuy  ? 'BUY':'SELL');
     const pillCls = isBuy ? 'pill-up' : 'pill-down';
-    const priceStr= cfg.dec>=4 ? parseFloat(t.price).toFixed(cfg.dec) : '$'+Math.floor(t.price).toLocaleString();
+    const priceStr= cfg.dec>=4 ? parseFloat(t.price).toFixed(cfg.dec) : '$'+parseFloat(t.price).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
     const entryStr= isClose && t.entryPrice
       ? (cfg.dec>=4 ? parseFloat(t.entryPrice).toFixed(cfg.dec) : '$'+Math.floor(t.entryPrice).toLocaleString())
       : null;
