@@ -1,3 +1,5 @@
+// [MISE CARTE = ENGAGE REEL · 02/08/2026] la carte Analyse affiche la mise reellement engagee de la position ouverte (pos.stakeUsdt, ex 2.7496$) au lieu de la mise de base configuree (ps.stake, ex 10$) -> coherent avec la modale Fermer positions ; base affichee seulement si aucune position ouverte
+// [FLOATS BRUTS WIDGET POSITION · 02/08/2026] mise/exposition affichees a 4 decimales (avant float brut 16 chiffres ex '$2.7495971107009507') dans ops-stake-val, total expose, ac-pos-stake et levStr ; levier a 2 decimales
 // [REWARD MORT -> STREAK · 02/08/2026] page Agents : 'Reward'(totalReward, jamais incremente = mort) remplace par la serie 'streak' (vivante) · aligne/derive -> serie gagnante/perdante
 // [DERNIERS TRADES · 01/08/2026] mise affichee a 4 decimales (avant t.stakeUsdt brut -> '$2.7555188052979953')
 // [COHERENCE DECIMALES CARTES HOME · 31/07/2026] ENGAGE (capStaked, avant fmt$ floore -> '$2' vs exposition '$2.7563'), RES. FRAIS (qReserve, avant toFixed(0)) et P&L JOUR (qSessionPnl, avant toFixed(1) -> '-$0.0') passes a 2 decimales · MAX/LIBRE laisses entiers (plafonds en milliers)
@@ -3967,15 +3969,27 @@ function renderActionsGrid() {
       const gpRow     = document.getElementById('ac2_gprow_'+pairKey);
       const pos       = S.openPositions.find(p=>p.pair===pair);
 
-      // ── Stake display with leverage ──
+      // ── Stake display ──
+      // Position ouverte : afficher la mise RÉELLEMENT engagée (identique à la modale et au
+      // badge du widget), pas la mise de base configurée — l'allocateur qualité (×0.25 sur
+      // paire perdante) ou le bunker peut l'avoir réduite (ex : base $10 mais position $2.7496).
       if(stEl) {
-        const lev     = ps.pairLeverage || 1;
-        const baseStk = ps.stake || 0;
-        const effStk  = baseStk * lev;
-        if(lev > 1) {
-          stEl.innerHTML = `$${baseStk}<span style="color:var(--gold);font-size:9px;"> ×${lev}</span><span style="color:var(--up);font-size:9px;font-weight:700;"> =$${effStk}</span>`;
+        if(pos) {
+          const realStk = Number(pos.stakeUsdt || 0);
+          if(pos.levBorrowed > 0) {
+            stEl.innerHTML = `$${realStk.toFixed(4)}<span style="color:var(--up);font-size:9px;font-weight:700;"> =$${Number(pos.totalExposure||realStk).toFixed(4)}</span>`;
+          } else {
+            stEl.textContent = '$'+realStk.toFixed(4);
+          }
         } else {
-          stEl.textContent = '$'+baseStk;
+          const lev     = ps.pairLeverage || 1;
+          const baseStk = ps.stake || 0;
+          const effStk  = baseStk * lev;
+          if(lev > 1) {
+            stEl.innerHTML = `$${baseStk}<span style="color:var(--gold);font-size:9px;"> ×${lev}</span><span style="color:var(--up);font-size:9px;font-weight:700;"> =$${effStk}</span>`;
+          } else {
+            stEl.textContent = '$'+baseStk;
+          }
         }
       }
 
@@ -4146,7 +4160,7 @@ function renderInlinePosForPair(pair, pairKey, cfg, ps) {
       <div class="ac-pos-row1">
         <div style="display:flex;align-items:center;gap:5px;flex-wrap:wrap;">
           <span class="ac-pos-side ${sideCls}">${sideLabel}</span>
-          <span class="ac-pos-stake">${pos.levBorrowed > 0 ? `<span style="font-size:11px;font-weight:800;color:var(--gold);">$${pos.totalExposure||pos.stakeUsdt}</span> <span style="font-size:8px;color:var(--t3);">($${pos.stakeUsdt}+$${pos.levBorrowed} lev)</span>` : `<span style="font-size:12px;font-weight:700;color:var(--gold);">$${pos.stakeUsdt}</span>`}</span>
+          <span class="ac-pos-stake">${pos.levBorrowed > 0 ? `<span style="font-size:11px;font-weight:800;color:var(--gold);">$${Number(pos.totalExposure||pos.stakeUsdt).toFixed(4)}</span> <span style="font-size:8px;color:var(--t3);">($${Number(pos.stakeUsdt).toFixed(4)}+$${Number(pos.levBorrowed).toFixed(2)} lev)</span>` : `<span style="font-size:12px;font-weight:700;color:var(--gold);">$${Number(pos.stakeUsdt).toFixed(4)}</span>`}</span>
           ${manualBadge}
           ${editBtn}
           ${whyBtn}
@@ -4235,7 +4249,7 @@ function renderOpenPosSummary() {
     const ctDown   = ps.cycleTimer || 0;
     const nextEv   = ctDown <= 5 ? `⚡ ${fmtCountdown(ctDown)}` : `⏱ ${fmtCountdown(ctDown)}`;
     const levStr   = pos.levBorrowed > 0
-      ? ` <span style="color:var(--gold);font-size:9px;">+$${pos.levBorrowed} lev = <strong>$${exp}</strong></span>` : '';
+      ? ` <span style="color:var(--gold);font-size:9px;">+$${Number(pos.levBorrowed).toFixed(2)} lev = <strong>$${Number(exp).toFixed(4)}</strong></span>` : '';
     const cycleMode = ps.userCycleSet ? '🔒 '+fmtDur(ps.cycleMax) : '🤖 '+fmtDur(ps.cycleMax);
     const tpInfo   = pos.tp ? ` · 🎯${fmtP(pos.tp)}` : '';
     const slInfo   = pos.sl ? ` · 🛑${fmtP(pos.sl)}` : '';
@@ -4303,13 +4317,13 @@ function renderOpenPosSummary() {
         <div>
           <div class="ops-stake-label">Mise · Exposition</div>
           <div>
-            <span class="ops-stake-val">$${pos.stakeUsdt}</span>
-            ${pos.levBorrowed>0?`<span class="ops-lev-chip">⚡ +$${pos.levBorrowed} lev</span>`:''}
+            <span class="ops-stake-val">$${Number(pos.stakeUsdt).toFixed(4)}</span>
+            ${pos.levBorrowed>0?`<span class="ops-lev-chip">⚡ +$${Number(pos.levBorrowed).toFixed(2)} lev</span>`:''}
           </div>
         </div>
         ${pos.levBorrowed>0?`<div style="text-align:right;">
           <div style="font-size:8px;color:var(--t3);">Total exposé</div>
-          <div style="font-family:var(--font-mono);font-size:13px;font-weight:700;color:var(--gold);">$${exp}</div>
+          <div style="font-family:var(--font-mono);font-size:13px;font-weight:700;color:var(--gold);">$${Number(exp).toFixed(4)}</div>
         </div>`:`<div style="text-align:right;">
           <div style="font-size:8px;color:var(--t3);">Valeur</div>
           <div style="font-family:var(--font-mono);font-size:12px;font-weight:700;color:${col};">$${pos.currentVal.toFixed(1)}</div>
