@@ -2687,16 +2687,23 @@ let tick = 0;
         try {
           var orig = window[name];
           if (typeof orig !== 'function' || orig.__auraTimed) return;
+          var _nowFn = function(){ return (typeof performance!=='undefined'&&performance.now)?performance.now():Date.now(); };
           var wrapped = function(){
-            var t0 = (typeof performance!=='undefined'&&performance.now)?performance.now():Date.now();
-            try { return orig.apply(this, arguments); }
-            finally {
-              var dt = ((typeof performance!=='undefined'&&performance.now)?performance.now():Date.now()) - t0;
+            var t0 = _nowFn();
+            var _done = function(sfx){
+              var dt = _nowFn() - t0;
               if (dt > 1000 && typeof S!=='undefined' && S && S.chainLog) {
-                S.chainLog.push({ icon:'\u23F1', desc:'LENT: '+name+' '+(dt/1000).toFixed(1)+'s', hash:Math.random().toString(36).slice(2,8), time:new Date().toLocaleTimeString() });
+                S.chainLog.push({ icon:'\u23F1', desc:'LENT: '+name+(sfx||'')+' '+(dt/1000).toFixed(1)+'s', hash:Math.random().toString(36).slice(2,8), time:new Date().toLocaleTimeString() });
                 if (S.chainLog.length > 100) S.chainLog.splice(0, S.chainLog.length - 100);
               }
-            }
+            };
+            var r;
+            try { r = orig.apply(this, arguments); }
+            catch(e){ _done(' (sync/err)'); throw e; }
+            // Fonction async : mesurer aussi la continuation (jusqu'a resolution de la promesse)
+            if (r && typeof r.then === 'function') { try { r.then(function(){_done(' (async)');}, function(){_done(' (async)');}); } catch(e){} }
+            else { _done(''); }
+            return r;
           };
           wrapped.__auraTimed = true;
           window[name] = wrapped;
