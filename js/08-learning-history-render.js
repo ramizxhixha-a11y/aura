@@ -1,3 +1,4 @@
+// [WAKE LOCK · 02/08/2026] heap sain (415/954Mo) a elimine la GC : le gel n est PAS un blocage JS mais Android qui suspend les timers du WebView au premier plan (batterie) -> verrou d ecran pose pour l empecher · le log de gel reste actif pour confirmer que ca disparait
 // [GEL v2 · HEAP · 02/08/2026] le log de gel ajoute la memoire heap (Chrome Android) pour trancher : heap proche de la limite = pause GC/pression memoire (fix = trimmer), heap bas = operation lourde (fix = timer les intervalles). Diagnostic confirme : gels ~15s ecran visible hors simTick (simTick 4-28ms).
 // [MONITEUR DE GEL + RENDU CONDITIONNEL · 02/08/2026] simTick journalise tout trou >3s dans chainLog (🐌 ecran visible = blocage reel + duree dernier tick ; 📴 ecran masque = throttle Android normal) pour diagnostiquer le lag sans profiler · le rendu lourd est saute quand document.hidden (trading/apprentissage continuent) : economie + pas de rattrapage brutal au retour
 // [DAO+CLASSEMENT · 02/08/2026] classement agents : 'reward'(totalReward mort) remplace par 'streak' (serie gagnante/perdante, vivante) · propositions DAO position #42/#43 purgees de l'etat + note 'le bot agit en autonome' quand aucune proposition
@@ -2622,6 +2623,32 @@ function escHtml(s) {
 // SIMULATION TICK — multi-pair
 // ============================================================
 let tick = 0;
+
+// [WAKE LOCK ECRAN · 02/08/2026] Android (surtout Samsung) suspend les timers d'un WebView au
+// PREMIER PLAN quand l'ecran est statique/inactif (gestion batterie) -> gels de plusieurs
+// secondes alors que document.hidden reste false (d'ou les logs 'ecran visible, blocage reel'
+// avec heap sain et simTick rapide : ce n'est pas un blocage JS, c'est l'OS qui fige le JS).
+// On demande un verrou d'ecran pour empecher cette mise en veille ; il est relache quand la
+// page est masquee, on le re-acquiert au retour et periodiquement par securite.
+(function _auraScreenWakeLock(){
+  var _wl = null;
+  async function _acquire(){
+    try {
+      if (typeof document === 'undefined' || document.hidden) return;
+      if (typeof navigator !== 'undefined' && 'wakeLock' in navigator && !_wl) {
+        _wl = await navigator.wakeLock.request('screen');
+        _wl.addEventListener('release', function(){ _wl = null; });
+      }
+    } catch(e) { _wl = null; }
+  }
+  try {
+    document.addEventListener('visibilitychange', function(){
+      if (document.visibilityState === 'visible') _acquire();
+    });
+    _acquire();
+    setInterval(_acquire, 30000);
+  } catch(e) {}
+})();
 
 function simTick() {
   // v7.2 Phase 18 · Perf monitoring (rolling window, sans impact perceptible)
