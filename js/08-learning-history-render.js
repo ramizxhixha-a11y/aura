@@ -1,3 +1,4 @@
+// [DISCRIMINATEUR LONGTASK · 02/08/2026] observateur PerformanceObserver longtask : un gel 🐌 accompagne d une ligne ⏱ = vrai blocage JS (a traquer) ; un gel 🐌 SANS ⏱ = l OS a mis la boucle en pause (throttle/veille, pas un bug code). Wake Lock conserve.
 // [WAKE LOCK · 02/08/2026] heap sain (415/954Mo) a elimine la GC : le gel n est PAS un blocage JS mais Android qui suspend les timers du WebView au premier plan (batterie) -> verrou d ecran pose pour l empecher · le log de gel reste actif pour confirmer que ca disparait
 // [GEL v2 · HEAP · 02/08/2026] le log de gel ajoute la memoire heap (Chrome Android) pour trancher : heap proche de la limite = pause GC/pression memoire (fix = trimmer), heap bas = operation lourde (fix = timer les intervalles). Diagnostic confirme : gels ~15s ecran visible hors simTick (simTick 4-28ms).
 // [MONITEUR DE GEL + RENDU CONDITIONNEL · 02/08/2026] simTick journalise tout trou >3s dans chainLog (🐌 ecran visible = blocage reel + duree dernier tick ; 📴 ecran masque = throttle Android normal) pour diagnostiquer le lag sans profiler · le rendu lourd est saute quand document.hidden (trading/apprentissage continuent) : economie + pas de rattrapage brutal au retour
@@ -2647,6 +2648,28 @@ let tick = 0;
     });
     _acquire();
     setInterval(_acquire, 30000);
+  } catch(e) {}
+})();
+
+// [OBSERVATEUR TACHE LONGUE · 02/08/2026] DISCRIMINATEUR : un blocage JS reel genere une entree
+// 'longtask' ; une simple mise en veille de la boucle par l'OS n'en genere PAS. Croise avec le
+// log de gel 🐌 : gel AVEC ⏱ = vrai code a corriger ; gel SANS ⏱ = l'OS a fige la boucle (appareil).
+(function _auraLongTaskObserver(){
+  try {
+    if (typeof PerformanceObserver !== 'undefined'
+        && PerformanceObserver.supportedEntryTypes
+        && PerformanceObserver.supportedEntryTypes.indexOf('longtask') !== -1) {
+      new PerformanceObserver(function(list){
+        list.getEntries().forEach(function(e){
+          if (e.duration > 3000 && typeof S !== 'undefined' && S && S.chainLog) {
+            var _src = '';
+            try { if (e.attribution && e.attribution[0]) _src = e.attribution[0].name || e.attribution[0].containerType || e.attribution[0].containerName || ''; } catch(_){}
+            S.chainLog.push({ icon:'\u23F1', desc:'Tache JS longue ' + (e.duration/1000).toFixed(1) + 's' + (_src ? ' \u00b7 ' + _src : '') + ' (= vrai blocage code)', hash: Math.random().toString(36).slice(2,8), time: new Date().toLocaleTimeString() });
+            if (S.chainLog.length > 100) S.chainLog.splice(0, S.chainLog.length - 100);
+          }
+        });
+      }).observe({ entryTypes: ['longtask'] });
+    }
   } catch(e) {}
 })();
 
