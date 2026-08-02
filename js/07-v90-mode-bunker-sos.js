@@ -1,3 +1,4 @@
+// [REWARD MORT -> STREAK · 02/08/2026] page Agents : 'Reward'(totalReward, jamais incremente = mort) remplace par la serie 'streak' (vivante) · aligne/derive -> serie gagnante/perdante
 // [DERNIERS TRADES · 01/08/2026] mise affichee a 4 decimales (avant t.stakeUsdt brut -> '$2.7555188052979953')
 // [COHERENCE DECIMALES CARTES HOME · 31/07/2026] ENGAGE (capStaked, avant fmt$ floore -> '$2' vs exposition '$2.7563'), RES. FRAIS (qReserve, avant toFixed(0)) et P&L JOUR (qSessionPnl, avant toFixed(1) -> '-$0.0') passes a 2 decimales · MAX/LIBRE laisses entiers (plafonds en milliers)
 // [AFFICHAGE P&L CUMULE · 31/07/2026] barres par paire : valeur P&L a 2 decimales (avant fmt$ arrondissait -0.05$ en '$-1' par Math.floor) + mise/exposition a 4 decimales (avant float brut a 16 chiffres)
@@ -5069,7 +5070,7 @@ function buildAgentCards() {
         <span id="awratio_${a.id}" style="font-size:8px;color:var(--t3);">—</span>
       </div>
       <div style="display:flex;justify-content:space-between;font-size:8px;color:var(--t3);margin-top:3px;">
-        <span>Reward: <span id="arwd_${a.id}" style="color:var(--gold)">0</span></span>
+        <span>Série: <span id="arwd_${a.id}" style="color:var(--gold)">0</span></span>
         <span id="amem_${a.id}" style="color:var(--t3);font-size:7px;"></span>
       </div>
       <div id="amstrip_${a.id}" class="memory-strip" onclick="showMemoryOverlay('${a.id}')" style="display:none;">
@@ -5108,7 +5109,7 @@ function patchAgentCards() {
     const scCls = sc>.1?'pill-up':sc<-.1?'pill-down':'pill-gold';
     const fitPct = Math.min(100,(a.fitness/1500)*100);
     const events = a.learningEvents || 0;
-    const reward = a.totalReward   || 0;
+    const stk = a.streak || 0;   // reward (totalReward) mort : jamais incrémenté -> affiche la série (streak), vivante
 
     const elScore = document.getElementById('as_'+a.id);
     const elMeta  = document.getElementById('am_'+a.id);
@@ -5138,12 +5139,12 @@ function patchAgentCards() {
       elLrn.className = 'pill '+(events>20?'pill-up':events>5?'pill-ice':'pill-gold');
     }
     if(elRwd) {
-      elRwd.textContent = (reward>=0?'+':'')+reward.toFixed(0);
-      elRwd.style.color = reward>=0?'var(--up)':'var(--down)';
+      elRwd.textContent = (stk>=0?'🔥 ':'❄ ')+Math.abs(stk);
+      elRwd.style.color = stk>=0?'var(--up)':'var(--down)';
     }
     if(elRatio && events>0) {
-      elRatio.textContent = reward>=0 ? '✓ Aligné' : '✗ Dérivé';
-      elRatio.style.color = reward>=0 ? 'var(--up)' : 'var(--down)';
+      elRatio.textContent = stk>=0 ? '✓ Série gagnante' : '✗ Série perdante';
+      elRatio.style.color = stk>=0 ? 'var(--up)' : 'var(--down)';
     }
 
     // ── amem legacy element — show memory count ──

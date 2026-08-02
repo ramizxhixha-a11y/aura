@@ -1,3 +1,4 @@
+// [DAO+CLASSEMENT · 02/08/2026] classement agents : 'reward'(totalReward mort) remplace par 'streak' (serie gagnante/perdante, vivante) · propositions DAO position #42/#43 purgees de l'etat + note 'le bot agit en autonome' quand aucune proposition
 // [ONGLET TRADES REEL · 02/08/2026] l'onglet Trades du journal CHAIN lit desormais l'historique reel des trades (ps.trades par paire, conserve, cape a 100/paire) au lieu du journal volatil qui les evincait sous le flot Apprentissage/Dream (plafond 200) · TRADE_ICONS/isTrade supprimes (code mort)
 // [MODALE TEMPS REEL · 01/08/2026] la modale « Fermer les positions », si visible, est re-rendue a chaque battement (P&L $ live sur le prix courant, quel que soit l'onglet)
 // [PERF BATTEMENT 26/07/2026] les modes d arriere-plan sont resolus 1 tick sur 3 (decompte x3, resultat identique) : le battement ne fait plus 3x le travail chaque seconde · [NETTOYAGE PERF 26/07/2026] le garde-fou perte max s execute dans ce battement (1 tick sur 3) au lieu d une minuterie separee · [SIMULTANE · ETAPE 1 · 06/07/2026] MULTIPLEXEUR 3 MODES : chaque mode EN PLAY bat a chaque tick quel que soit l ecran (bascule atomique, accesseurs par mode, protection SL/TP par mode, affiche traite en dernier) — conception Rams : AA apprend, EV evalue, RE surveille/agit selon Regles v2, TOUS EN MEME TEMPS
@@ -159,6 +160,9 @@ function selectPair(pair) {
 
 function buildGovCards() {
   if(!S.proposals) S.proposals = [];
+  // [02/08/2026] purge définitive des anciennes propositions « position » codées en dur
+  // (#42/#43) : le bot agit en autonome, pas via la DAO.
+  S.proposals = S.proposals.filter(p => p.id !== 42 && p.id !== 43);
   if(!S.totalTFlows) S.totalTFlows = 0;
   const gl = document.getElementById('mobileGovList');
   gl.innerHTML = S.proposals.map(p=>`
@@ -174,7 +178,7 @@ function buildGovCards() {
         <span class="vote-stat-against" id="vs_ag_${p.id}">↓ Contre: 0 G$ (0%)</span>
       </div>
       <div id="vbtns_${p.id}" style="text-align:center;padding:6px 0;font-size:10px;color:var(--pur);">🤖 Décision bot · vote automatique</div>
-    </div>`).join('');
+    </div>`).join('') || '<div style="text-align:center;color:var(--t3);font-size:11px;padding:18px 16px;">Aucune proposition active · le bot agit en autonome (AA/EV/RE).</div>';
 
   // Wallet scoreboard — sorted by fitness desc, with bar
   const wl = document.getElementById('mobileWallets');
@@ -184,8 +188,8 @@ function buildGovCards() {
   wl.innerHTML = `<div style="background:var(--s1);border:1px solid var(--border);border-radius:14px;overflow:hidden;">
   ${sorted.map((a,i)=>{
     const pct = Math.round(a.fitness/maxFit*100);
-    const trend = (a.totalReward||0) >= 0 ? '↑' : '↓';
-    const trendCol = (a.totalReward||0) >= 0 ? 'var(--up)' : 'var(--down)';
+    const stk = a.streak || 0;
+    const trendCol = stk >= 0 ? 'var(--up)' : 'var(--down)';
     return `<div style="padding:11px 14px;border-bottom:1px solid var(--border);${i===sorted.length-1?'border-bottom:none;':''}"
       id="wrow_${a.id}">
       <div style="display:flex;align-items:center;gap:10px;">
@@ -204,7 +208,7 @@ function buildGovCards() {
           </div>
           <div style="display:flex;justify-content:space-between;margin-top:3px;">
             <span style="font-size:8px;color:var(--t3);">${a.type}</span>
-            <span style="font-size:8px;color:${trendCol};">${trend} ${Math.abs(a.totalReward||0).toFixed(0)} reward</span>
+            <span style="font-size:8px;color:${trendCol};">${stk >= 0 ? '🔥 '+stk+' gains' : '❄ '+Math.abs(stk)+' pertes'} d'affilée</span>
           </div>
         </div>
       </div>
