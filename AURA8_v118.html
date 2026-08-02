@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- [CACHE-BUST v20260802o · 02/08/2026] diag lag v8 : compteur de messages WebSocket ajouté au log de gel (ws +N = msgs avalés pendant le trou) pour détecter un flood @trade EV (02+08). Cumule : dom+page, signaux au chrono, prix 2 déc, carte stable, streak. -->
+<!-- [CACHE-BUST v20260802p · 02/08/2026] diag lag v9 : setInterval/setTimeout patchés en tête du HTML pour chronométrer TOUS les callbacks (même programmés au boot, que le chrono par-fonction ne pouvait pas voir) -> le gel se nommera « LENT interval/timeout: fn Xs ». Cumule : ws+dom+page, signaux, prix 2 déc, carte stable. -->
 <!-- [DEFAUT EV v3 · INLINE · 06/07/2026] bloc auto-prouvant dans le DOCUMENT : active les 8 paires EV si liste vide + signe dans le chainLog (contournement de la coquille qui ne recharge pas les JS) -->
 <html lang="fr">
 <head>
@@ -22,39 +22,72 @@
      AURA8 v118 · CSS Modulaire (25 fichiers)
      Ordre de chargement critique — ne pas modifier sans validation
      ═══════════════════════════════════════════════════════════ -->
-<link rel="stylesheet" href="css/01-base.css?v=20260802o">
-<link rel="stylesheet" href="css/02-layout.css?v=20260802o">
-<link rel="stylesheet" href="css/06-page-dashboard.css?v=20260802o">
-<link rel="stylesheet" href="css/07-page-agents.css?v=20260802o">
-<link rel="stylesheet" href="css/08-page-market.css?v=20260802o">
-<link rel="stylesheet" href="css/09-page-dao.css?v=20260802o">
-<link rel="stylesheet" href="css/10-page-chain.css?v=20260802o">
-<link rel="stylesheet" href="css/03-utils.css?v=20260802o">
-<link rel="stylesheet" href="css/04-install-banner.css?v=20260802o">
-<link rel="stylesheet" href="css/05-action-cards-base.css?v=20260802o">
-<link rel="stylesheet" href="css/13-v8-mood-brain-ticker.css?v=20260802o">
-<link rel="stylesheet" href="css/14-v6-controls-pending.css?v=20260802o">
-<link rel="stylesheet" href="css/15-v59-settings-modal.css?v=20260802o">
-<link rel="stylesheet" href="css/16-v56-bot-fleet.css?v=20260802o">
-<link rel="stylesheet" href="css/17-v55-swarm-21agents.css?v=20260802o">
-<link rel="stylesheet" href="css/18-v54-dialogue-mirror.css?v=20260802o">
-<link rel="stylesheet" href="css/19-v4x-action-cards-rich.css?v=20260802o">
-<link rel="stylesheet" href="css/12-page-positions.css?v=20260802o">
-<link rel="stylesheet" href="css/20-v712-stability.css?v=20260802o">
-<link rel="stylesheet" href="css/21a-v712-controls-charts.css?v=20260802o">
-<link rel="stylesheet" href="css/11-page-fiscal.css?v=20260802o">
-<link rel="stylesheet" href="css/21b-v712-luminous-cards.css?v=20260802o">
-<link rel="stylesheet" href="css/22-features-v16-v69.css?v=20260802o">
-<link rel="stylesheet" href="css/23-circular-logo.css?v=20260802o">
-<link rel="stylesheet" href="css/24-header-l1.css?v=20260802o">
-<link rel="stylesheet" href="css/25-mode-trading.css?v=20260802o">
-<link rel="stylesheet" href="css/25-settings-redesign.css?v=20260802o">
-<link rel="stylesheet" href="css/26-outils-generic.css?v=20260802o">
-<link rel="stylesheet" href="css/27-wallet-detail.css?v=20260802o">
+<link rel="stylesheet" href="css/01-base.css?v=20260802p">
+<link rel="stylesheet" href="css/02-layout.css?v=20260802p">
+<link rel="stylesheet" href="css/06-page-dashboard.css?v=20260802p">
+<link rel="stylesheet" href="css/07-page-agents.css?v=20260802p">
+<link rel="stylesheet" href="css/08-page-market.css?v=20260802p">
+<link rel="stylesheet" href="css/09-page-dao.css?v=20260802p">
+<link rel="stylesheet" href="css/10-page-chain.css?v=20260802p">
+<link rel="stylesheet" href="css/03-utils.css?v=20260802p">
+<link rel="stylesheet" href="css/04-install-banner.css?v=20260802p">
+<link rel="stylesheet" href="css/05-action-cards-base.css?v=20260802p">
+<link rel="stylesheet" href="css/13-v8-mood-brain-ticker.css?v=20260802p">
+<link rel="stylesheet" href="css/14-v6-controls-pending.css?v=20260802p">
+<link rel="stylesheet" href="css/15-v59-settings-modal.css?v=20260802p">
+<link rel="stylesheet" href="css/16-v56-bot-fleet.css?v=20260802p">
+<link rel="stylesheet" href="css/17-v55-swarm-21agents.css?v=20260802p">
+<link rel="stylesheet" href="css/18-v54-dialogue-mirror.css?v=20260802p">
+<link rel="stylesheet" href="css/19-v4x-action-cards-rich.css?v=20260802p">
+<link rel="stylesheet" href="css/12-page-positions.css?v=20260802p">
+<link rel="stylesheet" href="css/20-v712-stability.css?v=20260802p">
+<link rel="stylesheet" href="css/21a-v712-controls-charts.css?v=20260802p">
+<link rel="stylesheet" href="css/11-page-fiscal.css?v=20260802p">
+<link rel="stylesheet" href="css/21b-v712-luminous-cards.css?v=20260802p">
+<link rel="stylesheet" href="css/22-features-v16-v69.css?v=20260802p">
+<link rel="stylesheet" href="css/23-circular-logo.css?v=20260802p">
+<link rel="stylesheet" href="css/24-header-l1.css?v=20260802p">
+<link rel="stylesheet" href="css/25-mode-trading.css?v=20260802p">
+<link rel="stylesheet" href="css/25-settings-redesign.css?v=20260802p">
+<link rel="stylesheet" href="css/26-outils-generic.css?v=20260802p">
+<link rel="stylesheet" href="css/27-wallet-detail.css?v=20260802p">
 
 <meta name="mobile-web-app-capable" content="yes">
 
-<script src="js/00-backup-state.js?v=20260802o"></script>
+<script>
+/* [CHRONO TIMERS GLOBAL · 02/08/2026] enveloppe setInterval/setTimeout AVANT tout code app :
+   chaque callback est chronometre ; s'il depasse 1.5s, il se nomme dans le journal
+   (LENT interval/timeout: <nom> Xs). Attrape les callbacks programmes au boot que le
+   chrono par-fonction (installe a +3s) ne peut pas intercepter. Diagnostic temporaire. */
+(function(){
+  try{
+    var oSI=window.setInterval, oST=window.setTimeout;
+    function _now(){ return (window.performance&&performance.now)?performance.now():Date.now(); }
+    function _wrap(fn,tag){
+      if(typeof fn!=='function') return fn;
+      return function(){
+        var t0=_now();
+        try{ return fn.apply(this,arguments); }
+        finally{
+          var dt=_now()-t0;
+          if(dt>1500){
+            try{
+              var S=(0,eval)('typeof S!=="undefined"?S:null');
+              if(S&&S.chainLog){
+                S.chainLog.push({icon:'\u23F1',desc:'LENT '+tag+': '+(fn.name||'anonyme')+' '+(dt/1000).toFixed(1)+'s',hash:Math.random().toString(36).slice(2,8),time:new Date().toLocaleTimeString()});
+                if(S.chainLog.length>100) S.chainLog.splice(0,S.chainLog.length-100);
+              }
+            }catch(e){}
+          }
+        }
+      };
+    }
+    window.setInterval=function(fn){ var a=[].slice.call(arguments); a[0]=_wrap(fn,'interval'); return oSI.apply(window,a); };
+    window.setTimeout =function(fn){ var a=[].slice.call(arguments); a[0]=_wrap(fn,'timeout');  return oST.apply(window,a); };
+  }catch(e){}
+})();
+</script>
+<script src="js/00-backup-state.js?v=20260802p"></script>
 </head>
 
 <body>
@@ -1275,44 +1308,44 @@ body.real-mode-active { padding-top: 16px; }
      Ordre : 02-08 base, puis 09a→09k runtime, puis 10 fin,
              puis 00b override, puis 01 chrono en dernier.
      ════════════════════════════════════════════════ -->
-<script src="js/02-state-init.js?v=20260802o"></script>
-<script src="js/03-per-pair-position-buttons-controls-buid.js?v=20260802o"></script>
-<script src="js/04-v8-0-livraison-35-mode-max-permissif-v.js?v=20260802o"></script>
-<script src="js/05-v37-19-indicateur-de-fatigue-bot.js?v=20260802o"></script>
-<script src="js/06-v63-patterns-chartistes.js?v=20260802o"></script>
-<script src="js/07-v90-mode-bunker-sos.js?v=20260802o"></script>
-<script src="js/08-learning-history-render.js?v=20260802o"></script>
+<script src="js/02-state-init.js?v=20260802p"></script>
+<script src="js/03-per-pair-position-buttons-controls-buid.js?v=20260802p"></script>
+<script src="js/04-v8-0-livraison-35-mode-max-permissif-v.js?v=20260802p"></script>
+<script src="js/05-v37-19-indicateur-de-fatigue-bot.js?v=20260802p"></script>
+<script src="js/06-v63-patterns-chartistes.js?v=20260802p"></script>
+<script src="js/07-v90-mode-bunker-sos.js?v=20260802p"></script>
+<script src="js/08-learning-history-render.js?v=20260802p"></script>
 
-<script src="js/09a-runtime-state.js?v=20260802o"></script>
-<script src="js/09b1-build-snapshot.js?v=20260802o"></script>
-<script src="js/09b2-save-load.js?v=20260802o"></script>
-<script src="js/09b3-import-export.js?v=20260802o"></script>
-<script src="js/09c-auto-open.js?v=20260802o"></script>
-<script src="js/09d1-paper-real-core.js?v=20260802o"></script>
-<script src="js/09d2-paper-real-stats.js?v=20260802o"></script>
-<script src="js/09e-guards.js?v=20260802o"></script>
-<script src="js/09f1-bricks-action.js?v=20260802o"></script>
-<script src="js/09f2-bricks-man.js?v=20260802o"></script>
-<script src="js/09f3-bricks-pair.js?v=20260802o"></script>
-<script src="js/09f4-bricks-utils.js?v=20260802o"></script>
-<script src="js/09g-modals.js?v=20260802o"></script>
-<script src="js/09h-exports.js?v=20260802o"></script>
-<script src="js/09i-sim-control.js?v=20260802o"></script>
-<script src="js/09j-helpers.js?v=20260802o"></script>
-<script src="js/09k-init.js?v=20260802o"></script>
+<script src="js/09a-runtime-state.js?v=20260802p"></script>
+<script src="js/09b1-build-snapshot.js?v=20260802p"></script>
+<script src="js/09b2-save-load.js?v=20260802p"></script>
+<script src="js/09b3-import-export.js?v=20260802p"></script>
+<script src="js/09c-auto-open.js?v=20260802p"></script>
+<script src="js/09d1-paper-real-core.js?v=20260802p"></script>
+<script src="js/09d2-paper-real-stats.js?v=20260802p"></script>
+<script src="js/09e-guards.js?v=20260802p"></script>
+<script src="js/09f1-bricks-action.js?v=20260802p"></script>
+<script src="js/09f2-bricks-man.js?v=20260802p"></script>
+<script src="js/09f3-bricks-pair.js?v=20260802p"></script>
+<script src="js/09f4-bricks-utils.js?v=20260802p"></script>
+<script src="js/09g-modals.js?v=20260802p"></script>
+<script src="js/09h-exports.js?v=20260802p"></script>
+<script src="js/09i-sim-control.js?v=20260802p"></script>
+<script src="js/09j-helpers.js?v=20260802p"></script>
+<script src="js/09k-init.js?v=20260802p"></script>
 
-<script src="js/10-fin-bloc-restauration-v93.js?v=20260802o"></script>
+<script src="js/10-fin-bloc-restauration-v93.js?v=20260802p"></script>
 
-<script src="js/09l-window-bridge.js?v=20260802o"></script>
+<script src="js/09l-window-bridge.js?v=20260802p"></script>
 
-<script src="js/01-chrono-network.js?v=20260802o"></script>
-<script src="js/09m-wallet-detail.js?v=20260802o"></script>
+<script src="js/01-chrono-network.js?v=20260802p"></script>
+<script src="js/09m-wallet-detail.js?v=20260802p"></script>
 <!-- ░░ Pont natif : mode arrière-plan dans l'app Android (no-op en navigateur) ░░ -->
-<script src="js/native-bridge.js?v=20260802o"></script>
+<script src="js/native-bridge.js?v=20260802p"></script>
 <!-- ░░ Guardian intégré (bouton flottant + analyse live) ░░ -->
-<script src="guardian-config.js?v=20260802o"></script>
-<script src="guardian-core.js?v=20260802o"></script>
-<script src="guardian-embed.js?v=20260802o"></script>
+<script src="guardian-config.js?v=20260802p"></script>
+<script src="guardian-core.js?v=20260802p"></script>
+<script src="guardian-embed.js?v=20260802p"></script>
 <!-- ░░ Panneau Outils Avancés (reconstruit : l'élément manquait, le bouton openOutils() cliquait dans le vide) ░░ -->
 <div id="outilsPanel">
   <div id="outilsInner">
@@ -1341,7 +1374,7 @@ body.real-mode-active { padding-top: 16px; }
      chargement, ecrite des que le state est pret. -->
 <script>
 (function(){
-  var DOC_V = '20260802o';
+  var DOC_V = '20260802p';
   var t = 0;
   var iv = setInterval(function(){
     t++;
