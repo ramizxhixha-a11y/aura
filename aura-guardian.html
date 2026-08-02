@@ -407,6 +407,7 @@ const PAGES = [
   {id:'analyse',   ic:'🧠', nm:'Analyse',       desc:'Détection intelligente : incohérences UI↔état, erreurs, fichiers…', actions:['reload','json','text','backup'], grp:'diag'},
   {id:'dashboard', ic:'📊', nm:'Tableau de bord',desc:'Synthèse état, cycle, portfolio', actions:['reload','json'], grp:'diag'},
   {id:'bugs',      ic:'🐛', nm:'Bugs connus',   desc:'Catalogue + détection live', actions:['reload','json','text'], grp:'diag'},
+  {id:'gel',       ic:'🐌', nm:'Analyse Gel',   desc:'Cause du lag + correction à appliquer', actions:['reload','text'], grp:'diag'},
   {id:'historique',ic:'📈', nm:'Historique',    desc:'Mémoire persistante des scans', actions:['json','text','reload'], grp:'diag'},
   {id:'storage',   ic:'💾', nm:'Storage',       desc:'localStorage + IndexedDB', actions:['reload','json'], grp:'stock'},
   {id:'idb',       ic:'🔍', nm:'Inspecteur IDB',desc:'Toutes les bases, stores, clés', actions:['reload','text'], grp:'stock'},
@@ -1192,6 +1193,139 @@ PAGE_ACTIONS.analyse={
   text:()=>({content:GC().export.resultsText(),name:'guardian-analyse.txt'}),
   backup:()=>({content:GC().export.fullBackup(),name:'guardian-backup.json'})
 };
+
+/* ============================================================
+   ANALYSE GEL / LAG  ·  ajouté 02/08/2026
+   Lit les traces écrites par le moniteur de simTick dans le
+   chainLog (🐌 Gel, ⏱ Tâche longue, ⏱ LENT, ws/dom/page/heap)
+   et en déduit la cause probable + la correction à appliquer.
+   ============================================================ */
+function _gelParse(cl){
+  const gels=[], longs=[], lents=[]; let armed=null;
+  (cl||[]).forEach(function(e){
+    const d=String(e&&e.desc||''); const t=(e&&e.time)||'';
+    let m;
+    if((m=d.match(/^Gel ([\d.]+)s .*?tick (\d+)ms .*?(ecran (?:visible|masque))(.*)$/))){
+      const rest=m[4]||'';
+      const heap=rest.match(/heap (\d+)\/(\d+)Mo/);
+      const dom=rest.match(/dom (\d+)/);
+      const page=rest.match(/page (\S+)/);
+      const ws=rest.match(/ws \+(\d+)/);
+      gels.push({t:t, gap:parseFloat(m[1]), tickMs:parseInt(m[2],10), visible:/visible/.test(m[3]),
+        heapU:heap?parseInt(heap[1],10):null, heapL:heap?parseInt(heap[2],10):null,
+        dom:dom?parseInt(dom[1],10):null, page:page?page[1]:null, ws:ws?parseInt(ws[1],10):null});
+    } else if((m=d.match(/^Tache JS longue ([\d.]+)s/))){
+      longs.push({t:t, dur:parseFloat(m[1])});
+    } else if((m=d.match(/^LENT: (\S+)(.*?) ([\d.]+)s$/))){
+      lents.push({t:t, fn:m[1], sfx:(m[2]||'').trim(), dur:parseFloat(m[3])});
+    } else if((m=d.match(/^Profiler arme sur (\d+)\/(\d+)/))){
+      armed={n:parseInt(m[1],10), total:parseInt(m[2],10)};
+    }
+  });
+  return {gels:gels, longs:longs, lents:lents, armed:armed};
+}
+function _gelVerdict(p){
+  const vis=p.gels.filter(function(g){return g.visible;});
+  const mask=p.gels.filter(function(g){return !g.visible;});
+  const out=[];
+  out.push({level:'info', title:'Relevé',
+    detail:p.gels.length+' gels ('+vis.length+' écran visible, '+mask.length+' écran masqué) · '+
+      p.longs.length+' tâche(s) JS longue(s) · '+p.lents.length+' mesure(s) LENT'+(p.armed?' · profiler '+p.armed.n+'/'+p.armed.total:'')});
+  if(!p.gels.length){
+    out.push({level:'ok', title:'Aucun gel enregistré', detail:'Le journal ne contient aucune trace 🐌/📴 récente. Laisse tourner puis relance.'});
+    return out;
+  }
+  const maxVis=vis.reduce(function(a,g){return Math.max(a,g.gap);},0);
+  if(vis.length===0 && mask.length>0){
+    out.push({level:'warn', title:'Gels uniquement écran masqué',
+      detail:'Android suspend les timers quand l\'app passe en fond. Ce n\'est pas un bug de code.',
+      fix:'Garder l\'écran allumé (Wake Lock déjà posé) + Réglages Samsung : retirer AURA de « mise en veille des applis » et de l\'optimisation batterie.'});
+    return out;
+  }
+  const jsBlock=p.longs.some(function(l){return l.dur>3;});
+  const realLent=p.lents.filter(function(l){return l.fn!=='fetchLivePrices' && l.dur>2;});
+  if(realLent.length){
+    const worst=realLent.sort(function(a,b){return b.dur-a.dur;})[0];
+    out.push({level:'crit', title:'Fonction lente identifiée : '+worst.fn+' ('+worst.dur.toFixed(1)+'s)',
+      detail:'Le chrono nominatif a mesuré cette fonction au-delà de 2 s — c\'est la coupable du gel.',
+      fix:'Découper '+worst.fn+' (traitement par lots avec yield / setTimeout 0) ou la throttler pour qu\'elle ne dépasse jamais ~50 ms par exécution.'});
+    return out;
+  }
+  const wsVis=vis.filter(function(g){return g.ws!=null;});
+  const wsMax=wsVis.reduce(function(a,g){return Math.max(a,g.ws);},0);
+  if(wsMax>=1000){
+    out.push({level:'crit', title:'Flood WebSocket @trade ('+wsMax+' messages avalés pendant un gel)',
+      detail:'En EV, l\'app ouvre 8 WebSockets Binance @trade (chaque transaction). Quand le thread est occupé, les messages s\'accumulent puis sont traités en rafale → gel.',
+      fix:'Throttler le traitement des trades WS (au plus 1 msg/paire par ~250 ms, ignorer les intermédiaires) OU couper les WS @trade en EV et se fier au prix CoinGecko déjà récupéré.'});
+    return out;
+  }
+  const layoutVis=vis.filter(function(g){return g.dom!=null && g.dom>15000 && String(g.page)==='4';});
+  if(layoutVis.length){
+    out.push({level:'crit', title:'Layout de la page CHAIN (DOM ~'+layoutVis[0].dom+' nœuds)',
+      detail:'renderChain reconstruit tout l\'innerHTML toutes les 2 s ; le layout/paint qui suit bloque le thread (longtask « unknown »).',
+      fix:'Alléger renderChain : mise à jour ciblée au lieu de reconstruire innerHTML en entier, et/ou throttler à 1 rendu / 5 ticks au lieu de 2.'});
+    return out;
+  }
+  const memVis=vis.filter(function(g){return g.heapU&&g.heapL && (g.heapU/g.heapL)>0.85;});
+  if(memVis.length){
+    out.push({level:'crit', title:'Pression mémoire / pauses GC',
+      detail:'Le heap est proche de la limite lors des gels ('+memVis[0].heapU+'/'+memVis[0].heapL+' Mo).',
+      fix:'Réduire l\'empreinte mémoire : borner les tableaux vivants, limiter le churn d\'objets (évolution).'});
+    return out;
+  }
+  out.push({level:'warn', title:'Blocage réel confirmé ('+maxVis.toFixed(1)+'s, écran visible)'+(jsBlock?' · tâche JS longue':''),
+    detail:'Un vrai blocage du thread est confirmé, mais les gels analysés n\'ont pas encore les champs ws / dom (version antérieure).',
+    fix:'Mettre AURA à jour vers la dernière version (le log de gel doit contenir « ws +N · dom N · page P »), relancer, laisser survenir un gel, puis relancer cette analyse : la cause sera tranchée automatiquement.'});
+  return out;
+}
+VIEWS.gel=function(){
+  let h='<div class="hint">Lit les traces de gel (🐌/📴), tâches longues (⏱) et mesures du chrono écrites par AURA dans le journal, et en déduit la cause du lag + la correction à appliquer.</div>';
+  h+='<button class="btn green wide" id="gelRun" style="width:100%">▶ Analyser les gels</button><div id="gelOut" style="margin-top:10px"></div>';
+  return h;
+};
+VIEW_INIT.gel=function(){
+  const run=async function(){
+    const b=document.getElementById('gelRun'); if(b){b.innerHTML='<span class="spinner"></span> analyse…';b.disabled=true;}
+    try{
+      await collectState();
+      const cl=(CTX.S&&CTX.S.chainLog)||[];
+      const p=_gelParse(cl);
+      const res=_gelVerdict(p);
+      renderGel(res,p);
+      const crit=res.filter(function(r){return r.level==='crit';}).length;
+      const warn=res.filter(function(r){return r.level==='warn';}).length;
+      setTabBadge('gel', crit>0?'crit':(warn>0?'warn':'ok'), crit||warn||0);
+    }catch(e){ const o=document.getElementById('gelOut'); if(o)o.innerHTML='<div class="item crit"><span class="nm">Erreur: '+(e&&e.message)+'</span></div>'; }
+    if(b){b.innerHTML='▶ Relancer l\'analyse';b.disabled=false;}
+  };
+  const b=document.getElementById('gelRun'); if(b) b.onclick=run;
+  run();
+};
+function renderGel(res,p){
+  const out=document.getElementById('gelOut'); if(!out) return;
+  let h='';
+  res.forEach(function(r){
+    const ic=r.level==='ok'?'✅':r.level==='warn'?'🟡':r.level==='crit'?'🔴':'ℹ️';
+    h+='<div class="item '+r.level+'" style="flex-direction:column;align-items:stretch;gap:3px">';
+    h+='<div style="display:flex;gap:6px"><span class="ic">'+ic+'</span><span class="nm" style="font-weight:700">'+escAna(r.title)+'</span></div>';
+    if(r.detail) h+='<div style="font-size:10px;color:var(--t2);line-height:1.5">'+escAna(r.detail)+'</div>';
+    if(r.fix) h+='<div style="font-size:10px;color:var(--ice);line-height:1.5;padding:5px 7px;background:rgba(56,212,245,.06);border-radius:5px"><b style="color:var(--gold)">→ Solution à retenir :</b> '+escAna(r.fix)+'</div>';
+    h+='</div>';
+  });
+  if(p.gels.length){
+    h+='<div class="sect-label">Derniers gels</div>';
+    p.gels.slice(-8).reverse().forEach(function(g){
+      h+='<div class="item" style="font-size:10px;color:var(--t2)">'+escAna(g.t+' · '+g.gap.toFixed(1)+'s · '+(g.visible?'visible':'masqué')+' · tick '+g.tickMs+'ms'+(g.heapU?' · heap '+g.heapU+'/'+g.heapL:'')+(g.dom!=null?' · dom '+g.dom:'')+(g.page!=null?' · page '+g.page:'')+(g.ws!=null?' · ws +'+g.ws:''))+'</div>';
+    });
+  }
+  out.innerHTML=h;
+}
+PAGE_ACTIONS.gel={
+  text:function(){ const cl=(CTX.S&&CTX.S.chainLog)||[]; const p=_gelParse(cl); const res=_gelVerdict(p);
+    return {content: res.map(function(r){return '['+r.level+'] '+r.title+(r.detail?'\n  '+r.detail:'')+(r.fix?'\n  -> '+r.fix:'');}).join('\n\n'), name:'guardian-gel.txt'}; }
+};
+
+
 
 VIEWS.capacites=function(){
   if(!GC()) return '<div class="hint">core non chargé.</div>';
