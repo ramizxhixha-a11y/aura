@@ -1,3 +1,4 @@
+// [STABILITE CARTE ANALYSE · 02/08/2026] VALEUR & G/P NET : 2e setter concurrent (format -0.38%(-$0.0)) retire -> plus de clignotement toutes les sec ; setter unique a 2 decimales (VALEUR $x.xx, G/P "% net $") · prix (fmtP x3) affiches a 2 decimales au lieu de floores (ex $1 869 -> $1,869.50)
 // [MISE CARTE = ENGAGE REEL · 02/08/2026] la carte Analyse affiche la mise reellement engagee de la position ouverte (pos.stakeUsdt, ex 2.7496$) au lieu de la mise de base configuree (ps.stake, ex 10$) -> coherent avec la modale Fermer positions ; base affichee seulement si aucune position ouverte
 // [FLOATS BRUTS WIDGET POSITION · 02/08/2026] mise/exposition affichees a 4 decimales (avant float brut 16 chiffres ex '$2.7495971107009507') dans ops-stake-val, total expose, ac-pos-stake et levStr ; levier a 2 decimales
 // [REWARD MORT -> STREAK · 02/08/2026] page Agents : 'Reward'(totalReward, jamais incremente = mort) remplace par la serie 'streak' (vivante) · aligne/derive -> serie gagnante/perdante
@@ -3720,7 +3721,7 @@ function renderActionsGrid() {
           // Capital restant
           const capRestant = (S.tradingAccount || 0);
 
-          const fmtP  = v => v != null ? (cfg.dec>=4 ? v.toFixed(cfg.dec) : '$'+Math.floor(v).toLocaleString()) : '—';
+          const fmtP  = v => v != null ? (cfg.dec>=4 ? v.toFixed(cfg.dec) : '$'+v.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})) : '—';
           const fmtPct= v => v != null ? (v>=0?'+':'')+v.toFixed(2)+'%' : '—';
           const fmtUsd= v => v != null ? (v>=0?'+':'-')+'$'+Math.abs(v).toFixed(2) : '—';
 
@@ -4049,16 +4050,14 @@ function renderActionsGrid() {
         if(liveRow) liveRow.style.display = '';
         if(gpRow)   gpRow.style.display   = '';
         if(valEl) {
-          valEl.textContent = '$'+curVal.toFixed(1);
+          valEl.textContent = '$'+curVal.toFixed(2);
           valEl.style.color = pnlUsdGross>=0 ? 'var(--up)' : 'var(--down)';
         }
         if(gpEl) {
-          // Show: brut → net après frais+tax
-          const brutStr = (pnlUsdGross>=0?'+':'')+pnlUsdGross.toFixed(1)+'$';
-          const netStr  = (pnlUsdNet>=0?'+':'')+pnlUsdNet.toFixed(1)+'$';
-          gpEl.innerHTML = `<span style="color:${pnlUsdGross>=0?'var(--up)':'var(--down)'};">${brutStr}</span>`
-            + `<span style="color:var(--t3);font-size:8px;"> → net </span>`
-            + `<span style="color:${col};">${netStr}</span>`;
+          // % net + $ net après frais+tax — format UNIQUE et stable, 2 décimales
+          gpEl.innerHTML = `<span style="color:${col};">${(pnlPct>=0?'+':'')+pnlPct.toFixed(2)}%</span>`
+            + `<span style="color:var(--t3);font-size:8px;"> · net </span>`
+            + `<span style="color:${col};">${(pnlUsdNet>=0?'+':'−')}$${Math.abs(pnlUsdNet).toFixed(2)}</span>`;
           gpEl.style.color = col;
         }
         // Update pos object
@@ -4245,7 +4244,7 @@ function renderOpenPosSummary() {
     const isManual = pos.auto !== true;
     const sideCol  = pos.side==='long' ? 'var(--up)' : 'var(--down)';
     const sideLbl  = pos.side==='long' ? '↑ LONG' : '↓ SHORT';
-    const fmtP     = (p) => cfg.dec>=4 ? p.toFixed(cfg.dec) : '$'+Math.floor(p).toLocaleString();
+    const fmtP     = (p) => cfg.dec>=4 ? p.toFixed(cfg.dec) : '$'+p.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
     const ctDown   = ps.cycleTimer || 0;
     const nextEv   = ctDown <= 5 ? `⚡ ${fmtCountdown(ctDown)}` : `⏱ ${fmtCountdown(ctDown)}`;
     const levStr   = pos.levBorrowed > 0
@@ -4497,7 +4496,7 @@ function renderHomePrices() {
     const k   = pair.replace('/','_');
     const px  = document.getElementById('ac2_price_'+k);
     const p24 = document.getElementById('ac2_pnl24_'+k);
-    const prc = cfg.dec>=4 ? ps.price.toFixed(cfg.dec) : '$'+Math.floor(ps.price).toLocaleString();
+    const prc = cfg.dec>=4 ? ps.price.toFixed(cfg.dec) : '$'+ps.price.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
     if(px) px.textContent = prc;
     if(p24) {
       p24.textContent = (ps.pnl24h>=0?'+':'')+ps.pnl24h.toFixed(2)+'%';
@@ -4510,28 +4509,9 @@ function renderHomePrices() {
       timerEl.textContent = fmtCountdown(ct);
       timerEl.style.color = ct<=5?'var(--down)':ct<=Math.ceil((ps.cycleMax||30)*0.2)?'var(--gold)':'var(--ice)';
     }
-    // Live open pos PnL on action card
-    const botPos = S.openPositions.find(p => p.pair===pair && p.auto===true);
-    const manPos = S.openPositions.find(p => p.pair===pair && p.auto!==true);
-    const pos    = manPos || botPos;
-    if(pos) {
-      const exp  = pos.totalExposure || pos.stakeUsdt;
-      const pPnl = pos.side==='long'
-        ? ((ps.price - pos.entryPrice) / pos.entryPrice * 100)
-        : ((pos.entryPrice - ps.price) / pos.entryPrice * 100);
-      const pUsd = exp * (pPnl / 100);
-      const liveEl = document.getElementById('ac2_liverow_'+k);
-      const gpEl   = document.getElementById('ac2_gprow_'+k);
-      const valEl  = document.getElementById('ac2_val_'+k);
-      const gpEv   = document.getElementById('ac2_gp_'+k);
-      if(liveEl) liveEl.style.display = '';
-      if(gpEl)   gpEl.style.display   = '';
-      if(valEl)  valEl.textContent    = fmt$(pos.currentVal||exp);
-      if(gpEv) {
-        gpEv.textContent = (pPnl>=0?'+':'')+pPnl.toFixed(2)+'% ('+( pUsd>=0?'+':'−')+'$'+Math.abs(pUsd).toFixed(1)+')';
-        gpEv.style.color = pPnl>=0?'var(--up)':'var(--down)';
-      }
-    }
+    // VALEUR / G/P NET de la position : rendus UNIQUEMENT par le bloc principal de la carte
+    // (setter unique, format stable brut/net à 2 décimales). Ce 2e setter concurrent est retiré
+    // (il écrivait le même élément avec un autre format → clignotement à chaque seconde).
   });
 
   // Capital bar fast update — v15 · min visuel 2% + % en 2 décimales
