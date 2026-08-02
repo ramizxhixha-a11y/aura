@@ -2681,7 +2681,8 @@ let tick = 0;
 (function _auraProfileSuspects(){
   try {
     setTimeout(function(){
-      var names = ['renderChain','syncPairPresets','liveTrainAgents','triggerEvolution','buildSnapshot','redistributeFitness','runRosterAnalysis','saveState','fetchLivePrices'];
+      var names = ['renderChain','syncPairPresets','liveTrainAgents','triggerEvolution','buildSnapshot','redistributeFitness','runRosterAnalysis','saveState','fetchLivePrices','finalizeDream','runDreamScenario','resolvePairCycle','learnFromOutcome','_auraRotatePurge','applyFundingFees','applyLeverageBorrowFees','updateBotThoughts','updatePairAnalysisPanels','drawActionMiniCharts','getCachedCompositeSignals','renderHome','renderAnalyticsPanel','_leverageMarginCheck'];
+      var _armed = 0;
       names.forEach(function(name){
         try {
           var orig = window[name];
@@ -2691,7 +2692,7 @@ let tick = 0;
             try { return orig.apply(this, arguments); }
             finally {
               var dt = ((typeof performance!=='undefined'&&performance.now)?performance.now():Date.now()) - t0;
-              if (dt > 1500 && typeof S!=='undefined' && S && S.chainLog) {
+              if (dt > 1000 && typeof S!=='undefined' && S && S.chainLog) {
                 S.chainLog.push({ icon:'\u23F1', desc:'LENT: '+name+' '+(dt/1000).toFixed(1)+'s', hash:Math.random().toString(36).slice(2,8), time:new Date().toLocaleTimeString() });
                 if (S.chainLog.length > 100) S.chainLog.splice(0, S.chainLog.length - 100);
               }
@@ -2699,8 +2700,15 @@ let tick = 0;
           };
           wrapped.__auraTimed = true;
           window[name] = wrapped;
+          _armed++;
         } catch(e) {}
       });
+      try {
+        if (typeof S!=='undefined' && S && S.chainLog) {
+          S.chainLog.push({ icon:'\u23F1', desc:'Profiler arme sur '+_armed+'/'+names.length+' fonctions', hash:Math.random().toString(36).slice(2,8), time:new Date().toLocaleTimeString() });
+          if (S.chainLog.length > 100) S.chainLog.splice(0, S.chainLog.length - 100);
+        }
+      } catch(e) {}
     }, 3000);
   } catch(e) {}
 })();
