@@ -1,3 +1,4 @@
+// [CHRONO NOMINATIF · 02/08/2026] longtask a PROUVE un vrai blocage code (~9s, attribution unknown) -> chrono pose sur les fonctions synchrones suspectes pour la NOMMER au prochain gel (⏱ LENT: fn Xs). Temporaire.
 // [DISCRIMINATEUR LONGTASK · 02/08/2026] observateur PerformanceObserver longtask : un gel 🐌 accompagne d une ligne ⏱ = vrai blocage JS (a traquer) ; un gel 🐌 SANS ⏱ = l OS a mis la boucle en pause (throttle/veille, pas un bug code). Wake Lock conserve.
 // [WAKE LOCK · 02/08/2026] heap sain (415/954Mo) a elimine la GC : le gel n est PAS un blocage JS mais Android qui suspend les timers du WebView au premier plan (batterie) -> verrou d ecran pose pour l empecher · le log de gel reste actif pour confirmer que ca disparait
 // [GEL v2 · HEAP · 02/08/2026] le log de gel ajoute la memoire heap (Chrome Android) pour trancher : heap proche de la limite = pause GC/pression memoire (fix = trimmer), heap bas = operation lourde (fix = timer les intervalles). Diagnostic confirme : gels ~15s ecran visible hors simTick (simTick 4-28ms).
@@ -2670,6 +2671,37 @@ let tick = 0;
         });
       }).observe({ entryTypes: ['longtask'] });
     }
+  } catch(e) {}
+})();
+
+// [CHRONO NOMINATIF DES SUSPECTS · 02/08/2026] enveloppe les fonctions synchrones susceptibles
+// de bloquer le thread hors simTick ; si l'une depasse 1.5s, elle se nomme dans le journal
+// (⏱ LENT: <fonction> Xs). Installe 3s apres le boot pour que tous les fichiers soient charges.
+// DIAGNOSTIC TEMPORAIRE : a retirer une fois la coupable identifiee et corrigee.
+(function _auraProfileSuspects(){
+  try {
+    setTimeout(function(){
+      var names = ['renderChain','syncPairPresets','liveTrainAgents','triggerEvolution','buildSnapshot','redistributeFitness','runRosterAnalysis','saveState','fetchLivePrices'];
+      names.forEach(function(name){
+        try {
+          var orig = window[name];
+          if (typeof orig !== 'function' || orig.__auraTimed) return;
+          var wrapped = function(){
+            var t0 = (typeof performance!=='undefined'&&performance.now)?performance.now():Date.now();
+            try { return orig.apply(this, arguments); }
+            finally {
+              var dt = ((typeof performance!=='undefined'&&performance.now)?performance.now():Date.now()) - t0;
+              if (dt > 1500 && typeof S!=='undefined' && S && S.chainLog) {
+                S.chainLog.push({ icon:'\u23F1', desc:'LENT: '+name+' '+(dt/1000).toFixed(1)+'s', hash:Math.random().toString(36).slice(2,8), time:new Date().toLocaleTimeString() });
+                if (S.chainLog.length > 100) S.chainLog.splice(0, S.chainLog.length - 100);
+              }
+            }
+          };
+          wrapped.__auraTimed = true;
+          window[name] = wrapped;
+        } catch(e) {}
+      });
+    }, 3000);
   } catch(e) {}
 })();
 
