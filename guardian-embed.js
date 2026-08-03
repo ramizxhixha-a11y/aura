@@ -70,7 +70,22 @@ ready(function(){
   document.body.appendChild(ov);
 
   function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
-  function dl(c,n,t){const b=new Blob([typeof c==='string'?c:JSON.stringify(c,null,2)],{type:t||'text/plain'});const u=URL.createObjectURL(b);const a=document.createElement('a');a.href=u;a.download=n;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(u);document.body.removeChild(a);},200);}
+  function dl(c,n,t){
+    const content = (typeof c==='string') ? c : JSON.stringify(c,null,2);
+    // 1) natif d'abord : _fsWriteBackup (09b3, prouve sur cet appareil -> Download/AURA).
+    //    Le blob <a>.click() est muet dans le WebView natif : sans ceci, les boutons
+    //    JSON/Texte/Backup ne produisaient AUCUN fichier en natif.
+    if (typeof window._fsWriteBackup === 'function' && (window.Capacitor || window.cordova)) {
+      window._fsWriteBackup(content, n).then(function(ok){
+        if(ok){ try{ alert('Fichier ecrit : Download/AURA/'+n); }catch(e){} }
+        else {
+          const b=new Blob([content],{type:t||'text/plain'});const u=URL.createObjectURL(b);const a=document.createElement('a');a.href=u;a.download=n;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(u);document.body.removeChild(a);},200);
+        }
+      }).catch(function(){});
+      return;
+    }
+    const b=new Blob([content],{type:t||'text/plain'});const u=URL.createObjectURL(b);const a=document.createElement('a');a.href=u;a.download=n;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(u);document.body.removeChild(a);},200);
+  }
 
   let last=null;
   function render(rep){
@@ -120,7 +135,13 @@ ready(function(){
       const stamp=new Date().toISOString().slice(0,19).replace(/[:T]/g,'-');
       if(a==='json') dl(E.resultsJSON(),'guardian-'+stamp+'.json','application/json');
       if(a==='text') dl(E.resultsText(),'guardian-'+stamp+'.txt');
-      if(a==='backup') dl(E.fullBackup(),'guardian-backup-'+stamp+'.json','application/json');
+      if(a==='backup'){
+        // Utilise le pipeline officiel (grabFull + ecriture native + trace journal + nom
+        // aura_guardian_full_* accepte par le filtre DriveSync) au lieu d'un blob au nom hors filtre.
+        const dd = window.GuardianCore && window.GuardianCore.dataDownload;
+        if(dd && dd.now){ dd.now().then(ok=>{ try{ alert(ok ? 'Backup FULL ecrit (voir journal 🛡)' : 'Echec ecriture backup'); }catch(e){} }); }
+        else dl(E.fullBackup(),'aura_guardian_full_'+stamp.replace(/-/g,'')+'.json','application/json');
+      }
     };
   });
 
