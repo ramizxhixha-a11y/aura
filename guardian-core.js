@@ -362,12 +362,143 @@ async function probeIdbHealth(){
 /* ============================================================
    RUN ALL
    ============================================================ */
+
+/* SONDE GEL / LAG — lit les traces 🐌 écrites par le moniteur de simTick dans le chainLog
+   (live, dans l'app) et en déduit la cause du lag + la correction à appliquer. */
+function probeGel(snap){
+  const out = [];
+  const S = snap.S;
+  const cl = (S && Array.isArray(S.chainLog)) ? S.chainLog : [];
+  const gels = [];
+  cl.forEach(function(e){
+    const d = String(e && e.desc || '');
+    let m;
+    if((m = d.match(/^Gel ([\d.]+)s .*?tick (\d+)ms .*?(ecran (?:visible|masque))(.*)$/))){
+      const r = m[4] || '';
+      const heap = r.match(/heap (\d+)\/(\d+)Mo/);
+      const dom  = r.match(/dom (\d+)/);
+      const page = r.match(/page (\S+)/);
+      const ws   = r.match(/ws \+(\d+)/);
+      gels.push({ gap:parseFloat(m[1]), tickMs:parseInt(m[2],10), visible:/visible/.test(m[3]),
+        heapU:heap?parseInt(heap[1],10):null, heapL:heap?parseInt(heap[2],10):null,
+        dom:dom?parseInt(dom[1],10):null, page:page?page[1]:null, ws:ws?parseInt(ws[1],10):null });
+    }
+  });
+  if(!gels.length){
+    out.push(R('ok','Gel / Lag','Aucun gel récent','Le journal ne contient aucune trace 🐌 récente.',''));
+    return out;
+  }
+  const vis  = gels.filter(function(g){return g.visible;});
+  const mask = gels.filter(function(g){return !g.visible;});
+  const maxVis = vis.reduce(function(a,g){return Math.max(a,g.gap);},0);
+  out.push(R('info','Gel / Lag','Relevé',
+    gels.length+' gels ('+vis.length+' écran visible, '+mask.length+' écran masqué) · pire blocage visible '+maxVis.toFixed(1)+'s',''));
+  if(vis.length === 0){
+    out.push(R('warn','Gel / Lag','Gels uniquement écran masqué',
+      'Android suspend les timers du WebView en arrière-plan. Ce n\'est pas un bug de code.',
+      'Garder l\'écran allumé (Wake Lock déjà posé) + Réglages Samsung : retirer AURA de la mise en veille des applis et de l\'optimisation batterie.'));
+    return out;
+  }
+  const wsMax  = vis.reduce(function(a,g){return Math.max(a,g.ws||0);},0);
+  const domMax = vis.reduce(function(a,g){return Math.max(a,g.dom||0);},0);
+  const heapHi = vis.some(function(g){return g.heapU && g.heapL && (g.heapU/g.heapL)>0.85;});
+  if(wsMax >= 1000){
+    out.push(R('crit','Gel / Lag','Flood WebSocket @trade ('+wsMax+' messages/gel)',
+      'En EV, l\'app ouvre 8 WebSockets Binance @trade (chaque transaction) : les messages s\'accumulent puis sont traités en rafale.',
+      'Throttler le traitement des trades WS (1 msg/paire par ~250 ms) ou couper les WS @trade en EV et se fier au prix CoinGecko.'));
+    return out;
+  }
+  if(domMax > 15000){
+    out.push(R('crit','Gel / Lag','Layout page CHAIN (DOM '+domMax+' nœuds)',
+      'renderChain reconstruit tout l\'innerHTML toutes les 2 s ; le layout/paint qui suit bloque le thread.',
+      'Alléger renderChain : mise à jour ciblée au lieu de reconstruire innerHTML, throttler à 1 rendu / 5 ticks.'));
+    return out;
+  }
+  if(heapHi){
+    out.push(R('crit','Gel / Lag','Pression mémoire / pauses GC',
+      'Le heap est proche de la limite lors des gels.',
+      'Réduire l\'empreinte mémoire : borner les tableaux vivants, limiter le churn d\'objets.'));
+    return out;
+  }
+  // ni WS, ni DOM, ni heap saturé, mais blocage réel écran visible :
+  // diagnostic du 02/08 = pause GC sous churn (ni fonction, ni timer, ni rAF).
+  out.push(R('crit','Gel / Lag','Blocage thread '+maxVis.toFixed(1)+'s (écran visible) · pause GC probable',
+    'Diagnostic 02/08 : le blocage n\'est ni une fonction, ni un timer, ni un rAF, ni un flood WS, ni le DOM. Le pipeline de rendu stalle et le heap chute → pause GC sous churn d\'objets. L\'évolution génétique tourne très vite (~19 fusions/min).',
+    'Réduire le churn : throttler l\'évolution génétique et les Dream Cycles (moins de fusions/min, moins d\'allocations) pour soulager la mémoire et supprimer les pauses GC.'));
+  return out;
+}
+
+
+/* SONDE SAUVEGARDE — détecte l'environnement natif, les plugins fichier réellement
+   présents dans l'APK, l'état de l'auto-backup, et dit pourquoi ça ne sauvegarde pas
+   + quoi faire. Lecture seule (rien n'est écrit). */
+function probeBackupCapability(snap){
+  const out = [];
+  const G = 'Sauvegarde';
+  const W = (typeof window !== 'undefined') ? window : {};
+  const cap  = W.Capacitor || null;
+  const cord = W.cordova || null;
+  const isNative = !!(cap || cord) || !!(cap && typeof cap.isNativePlatform === 'function' && cap.isNativePlatform());
+  const plugins = (cap && cap.Plugins) ? Object.keys(cap.Plugins) : [];
+  const has = function(n){ return plugins.indexOf(n) !== -1; };
+
+  const fileMethods = [];
+  if(has('Filesystem')) fileMethods.push('Capacitor Filesystem');
+  if(has('FileSharer') || has('CapacitorFileSharer')) fileMethods.push('capacitor-file-sharer');
+  if(has('Share')) fileMethods.push('Capacitor Share');
+  if(cord && cord.file) fileMethods.push('cordova-plugin-file');
+  if(W.AndroidBackup || W.AndroidInterface) fileMethods.push('bridge Android natif');
+
+  // méta de l'auto-backup FULL (guardian_datadl_meta)
+  let meta = null;
+  try { meta = JSON.parse(localStorage.getItem('guardian_datadl_meta')); } catch(e){}
+  meta = meta || { enabled:true, everyMin:180, last:0 };
+  const now = Date.now();
+  const dueMin = meta.everyMin || 180;
+  const overdueMin = meta.last ? Math.round((now - meta.last)/60000) : null;
+
+  // 1) environnement + plugins
+  out.push(R('info', G, 'Environnement de sauvegarde',
+    (isNative ? 'app native · plugins Capacitor : ' + (plugins.length ? plugins.join(', ') : 'AUCUN')
+              : 'navigateur (pas natif)'), ''));
+
+  // 2) statut auto-backup
+  if(meta.enabled === false){
+    out.push(R('warn', G, 'Auto-backup DÉSACTIVÉ',
+      'Le backup automatique est éteint dans les réglages Guardian.',
+      'Réactiver le toggle « Backup auto » (section Sauvegarde des réglages).'));
+  } else {
+    const lastStr = meta.last ? new Date(meta.last).toLocaleString() : 'jamais';
+    const overdue = (overdueMin != null && overdueMin > dueMin * 1.5) || meta.last === 0;
+    out.push(R(overdue ? 'crit' : 'ok', G, overdue ? 'Auto-backup EN RETARD / jamais exécuté' : 'Auto-backup à jour',
+      'Intervalle ' + dueMin + ' min · dernier backup : ' + lastStr + (overdueMin != null ? ' (il y a ' + overdueMin + ' min)' : ''),
+      overdue ? 'Aucun fichier produit depuis longtemps → la méthode d\'écriture échoue (voir ci-dessous).' : ''));
+  }
+
+  // 3) méthode d'écriture réelle -> LE diagnostic clé
+  if(!isNative){
+    out.push(R('info', G, 'Méthode : download blob (navigateur)',
+      'En navigateur, <a download>.click() écrit dans Téléchargements — fonctionne dans Chrome.', ''));
+  } else if(fileMethods.length){
+    out.push(R('ok', G, 'Méthode fichier native DISPONIBLE',
+      'Plugin(s) détecté(s) : ' + fileMethods.join(', ') + '. On peut écrire un vrai fichier dans Download.',
+      'Câbler le backup FULL sur ' + fileMethods[0] + ' avec cible « Download » public : FolderSync le verra et l\'enverra sur Drive.'));
+  } else {
+    out.push(R('crit', G, 'CAUSE : aucune méthode fichier native dans l\'APK',
+      'App native SANS plugin fichier. Le backup retombe sur un download blob <a>.click() qui NE SE DÉCLENCHE PAS dans le WebView Capacitor → aucun fichier écrit → rien à synchroniser → « ça ne sauvegarde plus sur Drive ».',
+      'Ajouter un plugin fichier à l\'APK (recommandé : @capgo/capacitor-file-sharer, saveDirectory:\'downloads\', sans permission sur Android 10+), puis je câble le backup dessus. Sans plugin, le JS seul ne peut pas écrire dans Download.'));
+  }
+  return out;
+}
+
 Core.runAll = async function(){
   const snap = await loadStateSnapshot();
   const mode = detectMode();
   let res = [];
   res = res.concat(probeCoherence(snap));
   res = res.concat(probeSanity(snap));
+  res = res.concat(probeGel(snap));
+  res = res.concat(probeBackupCapability(snap));
   res = res.concat(await probeStorageSync(snap));
   res = res.concat(probeSaveFresh(snap));
   res = res.concat(probeJsErrors());
