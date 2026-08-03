@@ -853,6 +853,28 @@ Core.describeCapabilities = describeCapabilities;
   async function download(fixedName, preData){
     try {
       const data = preData || await grabFull();
+      // ⛔ GARDE ANTI-PÉRIMÉ DURE [04/08/2026] — source unique, couvre TOUS les exports
+      // (backup auto, bouton ⬇ Backup, Export pour Claude). Un Guardian ouvert dans le
+      // MAUVAIS navigateur (ex. Chrome avec l'instance figée du 28/07, cycle 65153) a
+      // produit 4 fois des dumps piégés horodatés du jour mais au contenu mort.
+      // Règle : l'app native sauve son état toutes les ~25 s ; si l'état lisible ici a
+      // plus de 30 min (ou pas de walletStore), ce navigateur n'héberge PAS l'app
+      // vivante → export REFUSÉ net (pas de confirm contournable), rien n'est écrit.
+      {
+        const _a = data && data.aura;
+        let _stale = null;
+        if(!_a) _stale = "AURA n'a jamais tourné dans ce navigateur.";
+        else {
+          const _ts = Date.parse(_a.savedAt || '') || 0;
+          const _age = _ts ? Math.round((Date.now() - _ts)/60000) : null;
+          if(!_a.walletStore) _stale = 'état ancien sans walletStore (' + String(_a.savedAt||'?').slice(0,10) + ')';
+          else if(_age === null || _age > 30) _stale = 'état sauvé il y a ' + (_age===null?'?':_age+' min') + ' · cycle ' + (data.auraCycle||'?');
+        }
+        if(_stale){
+          try { alert('⛔ Export REFUSÉ — ' + _stale + '\n\nCeci n\'est PAS l\'app vivante (elle sauve toutes les ~25 s).\nFais l\'export depuis le bouclier Guardian DANS l\'app native.'); } catch(e){}
+          return false;
+        }
+      }
       const dt = new Date(); const pad = n => (n<10?'0':'')+n;
       const stamp = dt.getFullYear()+pad(dt.getMonth()+1)+pad(dt.getDate())+'-'+pad(dt.getHours())+pad(dt.getMinutes())+pad(dt.getSeconds());
       const fname = fixedName || ('aura_guardian_full_' + stamp + '.json');
@@ -904,27 +926,10 @@ Core.describeCapabilities = describeCapabilities;
     disable: ()=>{ const m=getMeta(); m.enabled=false; setMeta(m); },
     now: ()=>{ return download(); },
     // Export pour Claude : identique au backup complet, nom FIXE 'aura_live.json'.
-    // ★ GARDE ANTI-PERIME : si l'etat AURA de CE navigateur est vieux (>30 min),
-    // sans walletStore (structure d'avant la separation) ou absent, l'export a
-    // deja trompe une fois (snapshot du 28/06 exporte le 05/07 : Guardian ouvert
-    // dans le MAUVAIS navigateur). On previent et on demande confirmation au
-    // lieu d'exporter silencieusement un etat perime.
-    forClaude: async ()=>{
-      const data = await grabFull();
-      let warn = null;
-      if(!data.aura) warn = 'AURA n\'a jamais tourné dans CE navigateur.';
-      else {
-        const ts = Date.parse(data.aura.savedAt || '') || 0;
-        const ageMin = ts ? Math.round((Date.now() - ts)/60000) : null;
-        if(!data.aura.walletStore) warn = 'État SANS walletStore (structure ancienne, datée du ' + String(data.aura.savedAt||'?').slice(0,10) + ').';
-        else if(ageMin === null || ageMin > 30) warn = 'État daté de ' + (ageMin===null?'?':ageMin+' min') + ' (cycle ' + (data.auraCycle||'?') + ').';
-      }
-      if(warn){
-        const msg = '⚠ ' + warn + '\n\nAURA tourne probablement dans un AUTRE navigateur.\nOuvre Guardian dans le MÊME navigateur qu\'AURA, ou ouvre AURA ici puis réessaie.\n\nExporter quand même cet état périmé ?';
-        if(!window.confirm(msg)) return false;
-      }
-      return download('aura_live.json', data);
-    }
+    // [04/08/2026] la garde anti-périmé vit désormais DANS download() (dure, non
+    // contournable, couvre aussi le backup auto et le bouton ⬇ Backup) — l'ancien
+    // confirm() « exporter quand même ? » laissait passer le piège en un tap.
+    forClaude: async ()=>{ return download('aura_live.json'); }
   };
 })();
 
