@@ -2616,9 +2616,18 @@ function bumpVersion(reason) {
 
 // ── Évolution d'un agent sous-performant ──────────────────────
 function triggerEvolution(weak) {
+  // [ANTI-CHURN GC · 03/08/2026] limiteur temporel UNIQUE, ici à la source pour couvrir
+  // TOUS les sites d'appel (08: évolution continue x2 ; 03: remplacement immédiat,
+  // évolution cyclique, amélioration continue — c'est de là que venaient les rafales de
+  // 2 fusions/seconde) : 1 fusion / 60 s MAX. Avant ~19/min → allocations ADN + agents +
+  // journal en continu → churn → pauses GC de plusieurs secondes (diagnostic Guardian).
+  // 60 fusions/h suffisent largement — intelligence par la PROFONDEUR, pas le volume.
+  const _EVO_COOLDOWN_MS = 60000;
+  if(S._lastEvolutionAt && (Date.now() - S._lastEvolutionAt) < _EVO_COOLDOWN_MS) return;
   const candidates = [...S.agents].filter(a=>!a.isBot&&!a.isMeta&&a.id!==weak.id)
                                    .sort((a,b)=>b.fitness-a.fitness);
   if(candidates.length < 2) return;
+  S._lastEvolutionAt = Date.now();
 
   // ── ÉVOLUEUR ADAPTATIF ──────────────────────────────────────────────
   // Le nombre de parents (2 à 6) et la mutation s'adaptent à la DIVERSITÉ de
@@ -2732,6 +2741,13 @@ function shouldTriggerDream(pair) {
 
 function triggerDreamCycle() {
   if(S.dreamActive) return;
+  // [ANTI-CHURN GC · 03/08/2026] limiteur temporel : 1 Dream Cycle / 4 min MAX (avant
+  // redéclenché dès 5 holds consécutifs ≈ toutes les ~40 s en régime CALM : 3 scénarios
+  // simulés + allocations à chaque fois → churn → pauses GC). Le garde vit ICI pour couvrir
+  // tous les chemins d'appel.
+  const _DREAM_COOLDOWN_MS = 240000;
+  if(S._lastDreamAt && (Date.now() - S._lastDreamAt) < _DREAM_COOLDOWN_MS) return;
+  S._lastDreamAt  = Date.now();
   S.dreamActive   = true;
   S.dreamProgress = 0;
 

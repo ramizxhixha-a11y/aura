@@ -3045,7 +3045,9 @@ function simTick() {
     if(tick % 3 === 0) { drawActionMiniCharts(); updatePairBtnStates(); updateAllPairCtrlLabels(); updateBotThoughts(); }
     if(tick % 4 === 0) { updatePairAnalysisPanels(); try{Object.keys(PAIRS).forEach(ac2UpdateXInd);}catch(e){} syncPairPresets(); updateIntelBanner(); updateStreakBadge(); try { renderHome(); updateFiscalMini(); renderAnalyticsPanel(); if(typeof renderPendingActions === 'function') renderPendingActions(); } catch(e) { console.warn('tick render:', e); }
 
-    // v6.9: Évolution continue — vérification chaque 15 ticks
+    // v6.9: Évolution continue — vérification chaque 8 ticks
+    // [ANTI-CHURN GC · 03/08/2026] le limiteur 1 fusion/60s vit DANS triggerEvolution (07),
+    // à la source, pour couvrir aussi les 3 appels par-décision du fichier 03.
     if(tick % 8 === 0) {
       try {
         // Période de grâce : un agent né il y a moins de 60 cycles n'est PAS évolué
