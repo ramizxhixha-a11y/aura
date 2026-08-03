@@ -853,17 +853,35 @@ Core.describeCapabilities = describeCapabilities;
   async function download(fixedName, preData){
     try {
       const data = preData || await grabFull();
-      const blob = new Blob([JSON.stringify(data)], { type:'application/json' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
       const dt = new Date(); const pad = n => (n<10?'0':'')+n;
       const stamp = dt.getFullYear()+pad(dt.getMonth()+1)+pad(dt.getDate())+'-'+pad(dt.getHours())+pad(dt.getMinutes())+pad(dt.getSeconds());
-      // fixedName (ex. 'aura_live.json') : meme contenu, nom FIXE — pour l'upload
-      // GitHub a lien stable que Claude lit seul a chaque session.
-      a.href = url; a.download = fixedName || ('aura_guardian_full_' + stamp + '.json');
+      const fname = fixedName || ('aura_guardian_full_' + stamp + '.json');
+      const json = JSON.stringify(data);
+      // 1) ECRITURE NATIVE d'abord (reutilise _fsWriteBackup de 09b3, deja prouvee sur cet
+      //    appareil : les nexus_save_* atterrissent bien dans Download/AURA). Le nom
+      //    aura_guardian_full_* correspond au filtre DriveSync -> part sur le Drive.
+      //    L'ancien blob <a>.click() ne se declenche pas dans le WebView natif : il
+      //    retournait true sans rien ecrire, et l'auto-backup se croyait a jour.
+      if (typeof window._fsWriteBackup === 'function') {
+        try {
+          const fsRes = await window._fsWriteBackup(json, fname);
+          if (fsRes) {
+            try { const S0 = getLiveS(); if (S0 && S0.chainLog) { S0.chainLog.push({ icon:'\ud83d\udee1', desc:'Backup Guardian ecrit (natif) : '+fname, hash:Math.random().toString(36).slice(2,8), time:new Date().toLocaleTimeString() }); if (S0.chainLog.length>100) S0.chainLog.splice(0,S0.chainLog.length-100); } } catch(e){}
+            return true;
+          }
+        } catch(e){}
+      }
+      // 2) Repli navigateur : blob (fonctionne dans Chrome, pas dans le WebView natif)
+      const blob = new Blob([json], { type:'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = fname;
       document.body.appendChild(a); a.click();
       setTimeout(()=>{ try{document.body.removeChild(a);}catch(e){} try{URL.revokeObjectURL(url);}catch(e){} }, 100);
-      return true;
+      // en natif sans _fsWriteBackup, le blob est silencieusement ignore : ne pas
+      // pretendre au succes (sinon meta.last avance sans fichier).
+      const isNative = !!(window.Capacitor || window.cordova);
+      return !isNative;
     } catch(e){ return false; }
   }
   function tick(){
