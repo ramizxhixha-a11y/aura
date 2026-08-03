@@ -394,14 +394,21 @@ function renderChain() {
   //    dans l'état, capé à 100/paire). Le journal volatil (plafond 200) évinçait sinon les
   //    trades sous le flot Apprentissage/Dream. Ouvertures + clôtures, format de ligne identique.
   const _fmtPx = v => { if(v==null) return '?'; const n=Number(v); return n>=100?n.toFixed(2):(n>=1?n.toFixed(4):n.toPrecision(4)); };
-  const _rawTrades = [];
   const _ps = S.pairStates || {};
+  // Comptage LÉGER pour le badge d'onglet (aucune allocation de lignes).
+  let _tradeCount = 0;
+  Object.keys(_ps).forEach(p => { _tradeCount += ((_ps[p] && _ps[p].trades) || []).length; });
+  // [ANTI-CHURN 04/08/2026] les lignes ne sont construites (tri + mapping ~800 objets) QUE
+  // quand l'onglet Trades est affiché — avant, c'était refait à CHAQUE rendu du journal.
+  let tradeRows = [];
+  if(_chainFilter === 'trade'){
+  const _rawTrades = [];
   Object.keys(_ps).forEach(pair => {
     const arr = (_ps[pair] && _ps[pair].trades) || [];
     arr.forEach(t => _rawTrades.push({ pair, t }));
   });
   _rawTrades.sort((a,b) => (b.t.ts||0) - (a.t.ts||0));
-  const tradeRows = _rawTrades.map(({pair, t}) => {
+  tradeRows = _rawTrades.map(({pair, t}) => {
     const isClose = t.type !== 'open';
     const dir  = t.side === 'buy' ? 'LONG' : 'SHORT';
     const pnl  = Number(t.pnlUsdt);
@@ -415,13 +422,14 @@ function renderChain() {
     }
     return { icon, desc, hash:'', time:(typeof fmtDT === 'function' ? fmtDT(t.ts) : (t.time||'')) };
   });
+  }
 
   const allReversed = S.chainLog.slice().reverse();
 
   // B. Count per category (for badges)
   const counts = {
     all: allReversed.length,
-    trade: tradeRows.length,
+    trade: _tradeCount,
     learn: allReversed.filter(isLearn).length,
     dao: allReversed.filter(isDao).length,
   };
@@ -3022,6 +3030,14 @@ function simTick() {
   { const _cpm = document.getElementById('closePositionsModal');
     if(_cpm && _cpm.style.display === 'flex' && typeof renderClosePositionsList === 'function') renderClosePositionsList(); }
 
+  // Badge ⊗ de l'EN-TÊTE : visible sur TOUTES les pages, donc rafraîchi ici quelle que soit
+  // la page affichée. [FIX 04/08/2026] avant, il n'était rafraîchi que dans le bloc HOME :
+  // une clôture survenue pendant qu'on regardait CHAIN laissait le badge figé à « 1 »
+  // (incohérence UI=1 vs S=0 relevée par Guardian, revenue deux fois).
+  if(tick % 2 === 0 && !(typeof document !== 'undefined' && document.hidden)) {
+    if(typeof _updateCloseAllBadge === 'function') _updateCloseAllBadge();
+  }
+
   // ── Render active page (throttled) · SAUTÉ si l'écran est masqué : inutile de peindre une
   //    interface invisible, et ça évite un rattrapage brutal au retour. Le trading et
   //    l'apprentissage (au-dessus) continuent normalement — aucune donnée n'est affectée. ──
@@ -3029,7 +3045,7 @@ function simTick() {
     // Home: tiered rendering — price display every tick, heavy work throttled
     renderHomePrices();                          // prices + cycle timers only (fast)
     updateMarketMood();                          // v5 · mood bar (light)
-    if(tick % 2 === 0) { renderPositions(); renderActionsGrid(); renderPairPnl();  if(typeof _updateCloseAllBadge==="function") _updateCloseAllBadge();}
+    if(tick % 2 === 0) { renderPositions(); renderActionsGrid(); renderPairPnl(); }
     // v6.8: roster analysis chaque tick sur TOUTES les paires — consensus max
     if(tick % 1 === 0) {
       try {
@@ -3091,7 +3107,7 @@ function simTick() {
     if(tick % 5 === 0) renderDAO();
   }
   else if(S.currentPage === 4) {
-    if(tick % 2 === 0) renderChain();
+    if(tick % 5 === 0) renderChain();   // [ANTI-CHURN 04/08/2026] 5s suffisent pour un journal ; à 2s, la reconstruction innerHTML + historique trades générait du churn résiduel (gel 6.1s vu sur page 4)
   }
   else if(S.currentPage === 5) {
     if(tick % 3 === 0) {
