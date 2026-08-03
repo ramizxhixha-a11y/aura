@@ -422,9 +422,9 @@ function probeGel(snap){
   }
   // ni WS, ni DOM, ni heap saturé, mais blocage réel écran visible :
   // diagnostic du 02/08 = pause GC sous churn (ni fonction, ni timer, ni rAF).
-  out.push(R('crit','Gel / Lag','Blocage thread '+maxVis.toFixed(1)+'s (écran visible) · pause GC probable',
-    'Diagnostic 02/08 : le blocage n\'est ni une fonction, ni un timer, ni un rAF, ni un flood WS, ni le DOM. Le pipeline de rendu stalle et le heap chute → pause GC sous churn d\'objets. L\'évolution génétique tourne très vite (~19 fusions/min).',
-    'Réduire le churn : throttler l\'évolution génétique et les Dream Cycles (moins de fusions/min, moins d\'allocations) pour soulager la mémoire et supprimer les pauses GC.'));
+  out.push(R('crit','Gel / Lag','Blocage thread '+maxVis.toFixed(1)+'s (écran visible) · pause GC sous churn',
+    'Correctifs déjà posés : évolution 1 fusion/60s + Dream 1/4min (03/08), rendu CHAIN allégé (04/08). NB : ce relevé inclut les gels CONSERVÉS dans le journal, y compris d\'avant les correctifs — regarder l\'heure des 🐌 récents pour juger.',
+    'Si des 🐌 écran-visible POSTÉRIEURS aux correctifs persistent : churn résiduel à traquer (prochaine source d\'allocations). Sinon, considérer le dossier clos.'));
   return out;
 }
 
