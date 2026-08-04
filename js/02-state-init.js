@@ -1232,8 +1232,8 @@ function _rcConnectWS(pair) {
               if (window._leverageMarginCheck) window._leverageMarginCheck();
             } catch(e) {}
             // Pour les autres timeframes (pas la sélectionnée), on continue d'aggréger via trades
-            // (le stream kline ne couvre que la timeframe courante)
-            _aggregateRealPriceOtherIntervals(_realCandlesState.selectedPair, price, msg.T);
+            // (le stream kline ne couvre que la timeframe courante) — porté par la porte 250 ms/paire
+            if (_wsAggGate(_realCandlesState.selectedPair)) _aggregateRealPriceOtherIntervals(_realCandlesState.selectedPair, price, msg.T);
             if (typeof _rcRenderThrottled === 'function') _rcRenderThrottled();
           }
         }
@@ -3220,6 +3220,21 @@ window._upsertKlineCandle = _upsertKlineCandle;
 
 // v7.12 LIVRAISON 6 · Agrège un prix dans toutes les granularités SAUF la sélectionnée
 // (la timeframe sélectionnée reçoit les klines officielles via _upsertKlineCandle)
+// [ANTI-FLOOD WS · 05/08/2026] correction prescrite par la sonde Gel de Guardian
+// (« Flood WebSocket @trade · 1434 messages/gel ») : l'AGRÉGATION BOUGIES est limitée à
+// 1 passage / 250 ms / paire. En marché actif, les 8 flux @trade délivrent des centaines de
+// transactions/s ; agréger chacune (boucle sur tous les intervalles + allocations) créait le
+// churn → pauses GC → gels ~10 s. 4 échantillons/s suffisent largement pour des bougies.
+// NE THROTTLE PAS : ps.price ni _leverageMarginCheck — la solvabilité du levier reste
+// vérifiée À CHAQUE tick de prix (règle du 27/07, intouchée).
+var _wsAggLastByPair = {};
+function _wsAggGate(pair){
+  const _n = Date.now();
+  if (_wsAggLastByPair[pair] && (_n - _wsAggLastByPair[pair]) < 250) return false;
+  _wsAggLastByPair[pair] = _n;
+  return true;
+}
+
 function _aggregateRealPriceOtherIntervals(pair, price, ts) {
   if (!pair || !isFinite(price) || price <= 0) return;
   if (!ts) ts = Date.now();
@@ -4490,7 +4505,7 @@ function _openBgWs(pair) {
       const price = parseFloat(msg.p);
       if (!isFinite(price) || price <= 0) return;
       if (_realCandlesState && _realCandlesState.wsConnected && _realCandlesState.wsPair === pair) return;
-      try { _aggregateRealPrice(pair, price, msg.T); } catch(e) {}
+      try { if (_wsAggGate(pair)) _aggregateRealPrice(pair, price, msg.T); } catch(e) {}
       try {
         const ps = (S && S.pairStates) ? S.pairStates[pair] : null;
         if (ps) ps.price = price;
