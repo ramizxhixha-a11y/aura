@@ -212,7 +212,7 @@ let FILES = {
     '25-mode-trading.css','25-settings-redesign.css'
   ],
   js: [
-    '00-backup-state.js','00b-persistance-override.js','01-chrono-network.js','02-state-init.js',
+    '00-backup-state.js','01-chrono-network.js','02-state-init.js',
     '03-per-pair-position-buttons-controls-buid.js','04-v8-0-livraison-35-mode-max-permissif-v.js',
     '05-v37-19-indicateur-de-fatigue-bot.js','06-v63-patterns-chartistes.js','07-v90-mode-bunker-sos.js',
     '08-learning-history-render.js','09a-runtime-state.js','09b1-build-snapshot.js','09b2-save-load.js',
@@ -1274,8 +1274,8 @@ function _gelVerdict(p){
     return out;
   }
   out.push({level:'warn', title:'Blocage réel confirmé ('+maxVis.toFixed(1)+'s, écran visible)'+(jsBlock?' · tâche JS longue':''),
-    detail:'Un vrai blocage du thread est confirmé, mais les gels analysés n\'ont pas encore les champs ws / dom (version antérieure).',
-    fix:'Mettre AURA à jour vers la dernière version (le log de gel doit contenir « ws +N · dom N · page P »), relancer, laisser survenir un gel, puis relancer cette analyse : la cause sera tranchée automatiquement.'});
+    detail:'Blocage réel écran visible, mais ws/dom/heap sont sains sur ces gels : aucune cause simple ne ressort. Correctifs déjà posés : évolution 1 fusion/60s + Dream 1/4min (03/08), rendu CHAIN allégé (04/08), agrégation WS 1/250ms/paire (05/08). Ce relevé inclut les gels CONSERVÉS dans le journal, y compris d\'avant les correctifs.',
+    fix:'Juger sur les 🐌 POSTÉRIEURS aux correctifs : s\'il en reste, churn résiduel à traquer (le journal ⚠️ « Rendu HOME » peut nommer une erreur) ; sinon considérer le dossier clos.'});
   return out;
 }
 VIEWS.gel=function(){

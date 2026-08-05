@@ -66,7 +66,7 @@ ready(function(){
     +'<div class="gdnActions">'
     +'<button data-a="json">⬇ JSON</button><button data-a="text">⬇ Texte</button>'
     +'<button data-a="backup">⬇ Backup</button><button data-a="reload">↻ Relancer</button>'
-    +'<button data-a="full" style="grid-column:1 / -1;border-color:#38d4f5;color:#38d4f5;font-weight:700;">🧭 AURA Guardian complet (état LIVE)</button>'
+    +'<button data-a="full" style="grid-column:1 / -1;border-color:#38d4f5;color:#38d4f5;font-weight:700;display:flex;align-items:center;justify-content:center;gap:6px;">'+_gdnLogo+' AURA Guardian complet (état LIVE)</button>'
     +'</div></div>';
   document.body.appendChild(ov);
 
@@ -143,7 +143,7 @@ ready(function(){
           fo.id='gFullOverlay';
           fo.style.cssText='position:fixed;inset:0;z-index:2147483000;background:#05080f;display:flex;flex-direction:column;';
           fo.innerHTML='<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 12px;background:#0a1020;border-bottom:1px solid #1c2740;flex:0 0 auto;">'
-            +'<span style="color:#38d4f5;font-weight:700;font-family:monospace;font-size:13px;">🛡 AURA Guardian · complet · état LIVE de l\'app</span>'
+            +'<span style="color:#38d4f5;font-weight:700;font-family:monospace;font-size:13px;display:flex;align-items:center;gap:6px;">'+_gdnLogo+' AURA Guardian · complet · état LIVE de l\'app</span>'
             +'<button id="gFullClose" style="background:#2a1020;color:#ff5b7f;border:1px solid #ff5b7f;border-radius:8px;padding:6px 14px;font-weight:700;">Fermer ✕</button></div>'
             +'<iframe src="aura-guardian.html" style="flex:1 1 auto;border:0;width:100%;background:#05080f;"></iframe>';
           document.body.appendChild(fo);
