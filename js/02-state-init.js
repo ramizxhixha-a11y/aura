@@ -692,6 +692,11 @@ function redistributeFitness() {
     // à nourrir : un agent dominant ne doit jamais rester collé à 2000 par inertie.
     if (strong.length === 0) return;
 
+    // [FIX 05/08/2026] Sans destinataire, on ne prélève RIEN : l'ancienne « dissipation »
+    // brûlait 130-230 T$ par passage en boucle (log « X forts → 0 faibles » toutes les ~45 s)
+    // dès que tous les agents étaient forts — cas massif après l'incident Plein Régime qui
+    // avait égalisé toutes les fitness à 2000.
+    if (weak.length === 0) return;
     // 1+2. Érosion des forts (2% de l'excédent au-dessus de 1600) → pot commun
     let pot = 0;
     strong.forEach(a => {

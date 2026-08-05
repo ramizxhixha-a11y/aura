@@ -1,5 +1,21 @@
 // [PRIX HOLD FLUIDES · 02/08/2026] tous les prix affiches a 2 decimales (priceStr HOLD 3447, priceStr2, curStr badge, priceStr trades) au lieu de Math.floor -> SOL $73 devient $73.14 et les mouvements <$1 redeviennent visibles (avant "bloque a 73") · updater mort ac2_price_ (id inexistant) retire, le prix HOLD passe par ac2_px_
 // [STABILITE CARTE ANALYSE · 02/08/2026] VALEUR & G/P NET : 2e setter concurrent (format -0.38%(-$0.0)) retire -> plus de clignotement toutes les sec ; setter unique a 2 decimales (VALEUR $x.xx, G/P "% net $") · prix (fmtP x3) affiches a 2 decimales au lieu de floores (ex $1 869 -> $1,869.50)
+// [RENDU HOME RESILIENT · 05/08/2026] _qhErr : toute exception d'une section du rendu HOME
+// est SIGNALEE dans le journal (⚠️ Rendu HOME · section : message, anti-spam 60 s) au lieu de
+// mourir en silence — c'est ce silence qui a fait « disparaitre » chips + Derniers Trades.
+function _qhErr(where, e){
+  try{
+    window.__qhErrLast = window.__qhErrLast || {};
+    const k = where + ':' + (e && e.message);
+    const now = Date.now();
+    if(window.__qhErrLast[k] && now - window.__qhErrLast[k] < 60000) return;
+    window.__qhErrLast[k] = now;
+    if(typeof S !== 'undefined' && S && S.chainLog){
+      S.chainLog.push({ icon:'\u26a0\ufe0f', desc:'Rendu HOME · '+where+' : '+((e&&e.message)||e), hash:Math.random().toString(36).slice(2,8), time:new Date().toLocaleTimeString() });
+      if(S.chainLog.length > 100) S.chainLog.splice(0, S.chainLog.length - 100);
+    }
+  }catch(_){}
+}
 // [MISE CARTE = ENGAGE REEL · 02/08/2026] la carte Analyse affiche la mise reellement engagee de la position ouverte (pos.stakeUsdt, ex 2.7496$) au lieu de la mise de base configuree (ps.stake, ex 10$) -> coherent avec la modale Fermer positions ; base affichee seulement si aucune position ouverte
 // [FLOATS BRUTS WIDGET POSITION · 02/08/2026] mise/exposition affichees a 4 decimales (avant float brut 16 chiffres ex '$2.7495971107009507') dans ops-stake-val, total expose, ac-pos-stake et levStr ; levier a 2 decimales
 // [REWARD MORT -> STREAK · 02/08/2026] page Agents : 'Reward'(totalReward, jamais incremente = mort) remplace par la serie 'streak' (vivante) · aligne/derive -> serie gagnante/perdante
@@ -4750,7 +4766,7 @@ function renderHome() {
     .slice(0, 5);
 
   const tl = document.getElementById('mobileTradeList');
-  tl.innerHTML = allT.map(t => {
+  if (tl) try { tl.innerHTML = allT.map(t => {
     const isClose = t.type === 'position';
     const isOpen  = t.type === 'open';
     const isPos   = isClose || isOpen;
@@ -4810,7 +4826,7 @@ function renderHome() {
       <div class="trade-time">${t.time||''}</div>
     </div>
   </div>`;
-  }).join('') || '<div style="color:var(--t3);font-size:11px;padding:12px 0;text-align:center;">Aucun trade pour l\'instant…</div>';
+  }).join('') || '<div style="color:var(--t3);font-size:11px;padding:12px 0;text-align:center;">Aucun trade pour l\'instant…</div>'; } catch(_eTL){ _qhErr('liste Derniers Trades', _eTL); }
 
   // Portfolio drift removed from renderHome — handled in simTick only
 
@@ -4841,9 +4857,10 @@ function renderHome() {
   }
 
   // ── Stats row 2 : frais, efficacité, P&L net, réserve ──
-  const f       = S.fees;
-  const taxLive = calcTaxProvision();
-  const netPnl  = f.totalPnlGross - f.totalGross - taxLive;
+  const f       = S.fees || {};
+  let taxLive = 0;
+  try { taxLive = calcTaxProvision(); } catch(_eTx){ _qhErr('calcTaxProvision', _eTx); }
+  const netPnl  = (f.totalPnlGross||0) - (f.totalGross||0) - taxLive;
   // v8.0 LIVRAISON 27 FIX · Efficacité visible même quand P&L global négatif
   // Formule : % du P&L brut retenu après frais. Si P&L brut négatif, on affiche
   // le ratio frais/pertes comme indicateur de coût.
@@ -4865,7 +4882,7 @@ function renderHome() {
   const resEl   = document.getElementById('qReserve');
 
   if(feesEl) {
-    feesEl.textContent = '-$'+f.totalGross.toFixed(2);
+    feesEl.textContent = '-$'+(f.totalGross||0).toFixed(2);
     feesEl.style.color = 'var(--down)';
   }
   if(effEl) {
@@ -4888,7 +4905,7 @@ function renderHome() {
     netEl.title = 'P&L NET = trades fermés - frais - taxes. Différent du P&L SESSION qui inclut les positions ouvertes.';
   }
   if(resEl) {
-    resEl.textContent = '$'+Number(f.feeReserveAccount).toFixed(2);
+    resEl.textContent = '$'+Number(f.feeReserveAccount||0).toFixed(2);
   }
 
   // ── Stats row 3 : best agent, avg cycle, generations, composite signal ──
@@ -4897,7 +4914,7 @@ function renderHome() {
   const avgCycleMs = Object.values(S.pairStates).reduce((s,ps)=>s+ps.cycleMax,0)/Object.keys(PAIRS).length;
   // Live LMSR consensus across all pairs
   const pairKeys = Object.keys(PAIRS);
-  const avgLmsr  = pairKeys.reduce((s,p) => s + lmsrP(S.pairStates[p]||{}), 0) / Math.max(1, pairKeys.length);
+  const avgLmsr  = pairKeys.reduce((s,p) => { try { return s + lmsrP(S.pairStates[p]||{}); } catch(_eL){ _qhErr('lmsrP('+p+')', _eL); return s + 0.5; } }, 0) / Math.max(1, pairKeys.length);
   const avgComp  = (avgLmsr - 0.5) * 2;  // -1 to +1
 
   setEl('qBestAgent', best ? best.emoji+' '+best.name.split(' ')[0]+' '+Math.floor(best.fitness)+'T$' : '—');

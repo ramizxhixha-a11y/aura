@@ -2524,16 +2524,14 @@ function enableFullPowerMode() {
   S._fpInitialCapital = initCap;
   S._fpStopTriggered = false;
   
-  let count = 0;
-  S.agents.forEach(a => {
-    a.conf = 0.99;
-    a.fitness = 2000;
-    a.streak = Math.max(a.streak || 0, 3);
-    a.errors = 0;
-    a.corrections = Math.max(a.corrections || 0, 5);
-    count++;
-  });
-  S.botAutoMode = true;
+  // [FIX BUG-002 + PROTECTION DONNEES · 05/08/2026]
+  // 1) S.botAutoMode est l'axe UTILISATEUR : le bot/les modes n'y touchent JAMAIS (retire).
+  // 2) L'ancienne version ECRASAIT la fitness de TOUS les agents a 2000, conf 0.99,
+  //    erreurs 0 — destruction irreversible de l'apprentissage (a garder « a vie »),
+  //    et effet domino : tout le monde « fort » -> redistributions « X forts -> 0
+  //    faibles » brulant 130-230 T$ en boucle. Plein Regime est desormais un FLAG
+  //    (S.fullPowerMode) que les ouvreurs consultent — il ne falsifie plus les donnees.
+  const count = S.agents.length;
   S.fullPowerMode = true;
   S.fullPowerSince = Date.now();
   
