@@ -948,3 +948,49 @@ setTimeout(_auraRotatePurge, 20000);
     } catch(e) {}
   }, 500);
 })();
+
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   RESTAURATION FITNESS · one-shot · 05/08/2026
+   Contexte : l'activation de Plein Régime (avant le fix v20260805c) écrasait la
+   fitness/confiance/erreurs des 31 agents (2000 / 0.99 / 0), détruisant le
+   classement appris. Cette migration restaure CES CHAMPS UNIQUEMENT depuis le
+   backup auto pré-incident (aura_guardian_full_20260805-013554 · 01:35 ·
+   cycle 151777), apparié PAR NOM.
+   · Ne touche à rien d'autre : ADN, leçons, trades, comptes, historique intacts.
+   · Agents nés APRÈS le backup (non appariés) : laissés tels quels (fitness
+     légitime de naissance).
+   · S'exécute UNE seule fois (flag localStorage), attend l'hydratation de
+     l'état, se journalise (🔄) puis sauvegarde immédiatement.
+   ═══════════════════════════════════════════════════════════════════════════ */
+(function _fitnessRestore20260805(){
+  var FLAG = 'aura_fitness_restore_20260805';
+  try { if (localStorage.getItem(FLAG)) return; } catch(e){}
+  var TABLE = [{"n": "Hybrid Gen-74770", "f": 284.7, "c": 0.7, "e": 0, "k": 0, "s": 0}, {"n": "Hybrid Gen-74764", "f": 349.3, "c": 0.65, "e": 0, "k": 0, "s": 0}, {"n": "Hybrid Gen-74011", "f": 396.2, "c": 0.72, "e": 6, "k": 38, "s": 0}, {"n": "Hybrid Gen-74771", "f": 308.9, "c": 0.72, "e": 0, "k": 0, "s": 0}, {"n": "Hybrid Gen-74780", "f": 254.1, "c": 0.5, "e": 0, "k": 0, "s": 0}, {"n": "Hybrid Gen-74774", "f": 140.1, "c": 0.8, "e": 0, "k": 0, "s": 0}, {"n": "Hybrid Gen-74777", "f": 241.4, "c": 0.6, "e": 0, "k": 0, "s": 0}, {"n": "Hybrid Gen-74782", "f": 246.0, "c": 0.6, "e": 0, "k": 0, "s": 0}, {"n": "Hybrid Gen-74767", "f": 190.7, "c": 0.7, "e": 0, "k": 0, "s": 0}, {"n": "Hybrid Gen-53997", "f": 1582.2, "c": 0.5, "e": 9, "k": 24921, "s": 0}, {"n": "Bot Exécution", "f": 567.0, "c": 0.99, "e": 0, "k": 5, "s": 0}, {"n": "Bot Gestion Risque", "f": 335.0, "c": 0.99, "e": 0, "k": 5, "s": 3}, {"n": "Bot Arbitrage", "f": 1572.6, "c": 0.99, "e": 0, "k": 5, "s": 3}, {"n": "Bot Scalper·HF", "f": 82.2, "c": 0.99, "e": 0, "k": 5, "s": 3}, {"n": "Évolueur·Méta-IA", "f": 253.0, "c": 0.99, "e": 0, "k": 5, "s": 3}, {"n": "Hybrid Gen-74775", "f": 123.7, "c": 0.45, "e": 0, "k": 0, "s": 0}, {"n": "Hybrid Gen-74768", "f": 292.5, "c": 0.5, "e": 0, "k": 0, "s": 0}, {"n": "Hybrid Gen-74778", "f": 147.2, "c": 0.2, "e": 0, "k": 0, "s": 0}, {"n": "Hybrid Gen-74769", "f": 157.3, "c": 0.72, "e": 0, "k": 0, "s": 0}, {"n": "Hybrid Gen-74779", "f": 225.2, "c": 0.65, "e": 0, "k": 0, "s": 0}, {"n": "Hybrid Gen-53031", "f": 774.9, "c": 0.49, "e": 3, "k": 34803, "s": 0}, {"n": "Hybrid Gen-74781", "f": 345.1, "c": 0.54, "e": 0, "k": 0, "s": 0}, {"n": "Hybrid Gen-74773", "f": 108.4, "c": 0.63, "e": 0, "k": 0, "s": 0}, {"n": "Contrarian·Council", "f": 1600.0, "c": 0.5, "e": 0, "k": 78362, "s": 0}, {"n": "Hybrid Gen-74783", "f": 269.1, "c": 0.63, "e": 0, "k": 0, "s": 0}, {"n": "Hybrid Gen-74776", "f": 350.0, "c": 0.7, "e": 0, "k": 0, "s": 0}, {"n": "Bot Optimiseur Fiscal", "f": 1598.0, "c": 0.99, "e": 0, "k": 5, "s": 3}, {"n": "Bot DCA·Grid", "f": 1598.0, "c": 0.99, "e": 0, "k": 5, "s": 3}, {"n": "Bot Sauvetage", "f": 520.7, "c": 0.99, "e": 0, "k": 5, "s": 3}, {"n": "Bot Rééquilibrage", "f": 329.7, "c": 0.99, "e": 0, "k": 5, "s": 0}, {"n": "Bot Smart Sizer", "f": 136.1, "c": 0.99, "e": 0, "k": 5, "s": 0}];
+  var tries = 0;
+  var timer = setInterval(function(){
+    tries++;
+    if (tries > 180) { clearInterval(timer); return; }   // abandon après ~3 min
+    var ready = false;
+    try { ready = (typeof S !== 'undefined') && S && Array.isArray(S.agents) && S.agents.length > 0 && (S.cycle|0) > 0; } catch(e){}
+    if (!ready) return;
+    clearInterval(timer);
+    try {
+      var byName = {};
+      TABLE.forEach(function(r){ byName[r.n] = r; });
+      var hit = 0;
+      S.agents.forEach(function(a){
+        var r = byName[a.name];
+        if (!r) return;
+        a.fitness = r.f; a.conf = r.c; a.errors = r.e; a.corrections = r.k; a.streak = r.s;
+        hit++;
+      });
+      try { localStorage.setItem(FLAG, '1'); } catch(e){}
+      if (S.chainLog) {
+        S.chainLog.push({ icon:'\ud83d\udd04', desc:'Fitness restaurée depuis le backup 01:35 (pré-incident Plein Régime) · ' + hit + '/' + S.agents.length + ' agents appariés', hash:Math.random().toString(36).slice(2,8), time:new Date().toLocaleTimeString() });
+        if (S.chainLog.length > 100) S.chainLog.splice(0, S.chainLog.length - 100);
+      }
+      if (typeof saveState === 'function') { try { saveState(); } catch(e){} }
+    } catch(e){}
+  }, 1000);
+})();
