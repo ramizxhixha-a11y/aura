@@ -425,10 +425,7 @@ const S = {
   activePair:'BTC/USDT',
   pairStates:{},
   openPositions:[],
-  proposals:[
-    { id:42, desc:'Augmenter taille position BTC 0.01→0.02', forVotes:1850, againstVotes:1094, status:'active', userVoted:false },
-    { id:43, desc:'Ouvrir position SOL/USDT 5% du capital',  forVotes:980,  againstVotes:410,  status:'active', userVoted:false }
-  ],
+  proposals:[],   // [RESTAURÉ 05/08] propositions « position » retirées : le bot agit en autonome
 
   // ── AGENT MEMORY & METAPHORS ─────────────────────────────
   globalMemoryPool: [],   // Shared cross-agent knowledge base (metaphors)
@@ -3475,7 +3472,13 @@ async function fetchLivePrices(force = false) {
 
     if(updated > 0) {
       // v7.0: ChainLog silencieux — pas d'affichage toast inutile
-      S.chainLog.push({ icon:'📡', desc:`Prix réels mis à jour: ${updated} paires via CoinGecko`, hash:rndHash(), time:nowStr() });
+      // [RESTAURÉ 05/08 · régression du 04/08] battement prix journalisé 1×/2min max :
+      // à ~15 s il noyait le journal plafonné (l'indicateur ● LIVE reste la preuve continue).
+      const _nowPx = Date.now();
+      if (!S._lastPriceChainLog || _nowPx - S._lastPriceChainLog >= 120000) {
+        S._lastPriceChainLog = _nowPx;
+        S.chainLog.push({ icon:'📡', desc:`Prix réels mis à jour: ${updated} paires via CoinGecko`, hash:rndHash(), time:nowStr() });
+      }
       // Save live prices to localStorage pour restore rapide au prochain load
       try {
         const priceCache = {};
@@ -4924,6 +4927,16 @@ function fmt$2(n){
   return '$' + (n||0).toLocaleString('fr-FR', {minimumFractionDigits:2, maximumFractionDigits:2});
 }
 
+// [RESTAURÉ 05/08 · régression du 04/08] Date + heure compacte (JJ/MM HH:MM:SS) — utilisé par
+// la modale (02), Derniers Trades (07) et l'onglet Trades (08). Exporté sur window pour être
+// garanti visible depuis tous les fichiers quel que soit le scope d'ici.
+function fmtDT(ts){
+  if(!ts) return '—';
+  const d = new Date(ts), p = n => String(n).padStart(2,'0');
+  return p(d.getDate())+'/'+p(d.getMonth()+1)+' '+p(d.getHours())+':'+p(d.getMinutes())+':'+p(d.getSeconds());
+}
+window.fmtDT = fmtDT;
+
 // ── v7.1 PHASE 1 · Affichage portefeuille en EUR + live rate fetch ──
 function fmtEUR(n){
   return (Math.round((n||0)*100)/100).toLocaleString('fr-FR',{minimumFractionDigits:2,maximumFractionDigits:2}) + ' €';
@@ -5695,6 +5708,8 @@ function closePosition(id, botClose = false) {
       stakeUsdt: pos.stakeUsdt,
       pnlUsdt:   realisedUsd,
       entryPrice: pos.entryPrice,
+      entryTs:   pos.entryTs || pos.openedAt || null,
+      entryTime: pos.entryTime || null,
       ts:        Date.now(),
       time:      nowStr()
     });
@@ -6549,9 +6564,10 @@ function renderClosePositionsList() {
           <span style="font-size:8px;padding:1px 5px;border-radius:4px;background:rgba(120,130,150,.15);color:var(--t2);font-weight:600;">${modeLabel}</span>
           <span style="font-size:9px;font-weight:700;color:${sideCol};">${sideLabel}</span>
         </div>
+        <div style="font-size:9px;color:var(--t3);margin-bottom:2px;">Ouvert: ${fmtDT(pos.entryTs || pos.openedAt)}</div>
         <div style="display:flex;gap:8px;font-size:9px;color:var(--t3);">
-          <span>Mise: ${fmt$(pos.stakeUsdt)}</span>
-          <span style="color:${pnlCol};font-weight:700;">${pnlUsd >= 0 ? '+' : ''}${fmt$(pnlUsd)} (${pnlPct.toFixed(2)}%)</span>
+          <span>Mise: $${Number(pos.stakeUsdt||0).toFixed(4)}</span>
+          <span style="color:${pnlCol};font-weight:700;">${pnlUsd >= 0 ? '+' : '−'}$${Math.abs(pnlUsd).toFixed(2)} (${pnlPct.toFixed(2)}%)</span>
         </div>
       </div>
       <button onclick="confirmCloseOne('${pos.id}')" style="padding:8px 14px;background:rgba(255,61,107,.12);border:1px solid rgba(255,61,107,.35);border-radius:8px;color:var(--down);font-weight:700;font-size:10px;cursor:pointer;">Fermer</button>
@@ -6596,6 +6612,9 @@ function confirmCloseAll() {
 }
 
 function _updateCloseAllBadge() {
+  // [RESTAURÉ 05/08] Le badge ⊗ reflète UNIQUEMENT le mode affiché : pendant le multiplexeur
+  // (window._bgResolve=true), une ouverture d'un mode de fond ne doit pas poser SON compteur.
+  if (window._bgResolve === true) return;
   const btn   = document.getElementById('closeAllBtn');
   const glyph = document.getElementById('closeAllGlyph');
   const badge = document.getElementById('closeAllBadge');
@@ -6609,6 +6628,7 @@ function _updateCloseAllBadge() {
     if(btn) { btn.classList.remove('empty'); btn.classList.add('active'); }
   } else {
     // aucune position : croix grise neutre (classe empty)
+    badge.textContent = '0';   // reset : sinon l'ancien compteur restait lisible (Guardian) même masqué
     badge.style.display = 'none';
     if(glyph) glyph.style.display = 'flex';
     if(btn) { btn.classList.remove('active'); btn.classList.add('empty'); }
