@@ -3776,12 +3776,20 @@ function councilVote(councilId, pair, scoutResults) {
 function guardianCheck(guardianId, verdict, pair, stake) {
   switch(guardianId) {
     case 'risk_bot_v1': {
+      // [POLITIQUE CAPITAL · 08/08/2026] L'ancienne formule jugeait (cumul + stake)/portfolio :
+      // avec la politique capital (Rams 06/07, quasi-totalité du compte investie), TOUT stake
+      // conforme pesait 68-83% du portfolio → veto permanent (29/30 vetos au brainLog, plus
+      // aucune ouverture AUTO). Même contradiction que le seuil « compte < 20$ » déjà corrigé
+      // dans 09c. La garde protège désormais ce qu'elle doit protéger : le CUMUL de positions
+      // déjà ouvertes (bot + manuelles) avant d'en AJOUTER une. Le stake unitaire, lui, reste
+      // contrôlé par la politique capital (résiduel), validateAntiNegative (SL provisionné)
+      // et le plafond du compte trading — vérifiés à chaque ouverture dans 09c.
       const totalExp = (S.openPositions || []).reduce((s,p) => s + (p.stakeUsdt || 0), 0);
       const portfolio = S.portfolio || 1;
-      const expPct = (totalExp + (stake || 0)) / portfolio * 100;
-      if(expPct > 65) return { status:'veto', reasoning:`Exposition ${expPct.toFixed(0)}% > 65%. Trade refusé.` };
-      if(expPct > 50) return { status:'warn', reasoning:`Exposition élevée (${expPct.toFixed(0)}%). Attention.` };
-      return { status:'approve', reasoning:`Exposition OK (${expPct.toFixed(0)}%).` };
+      const expPct = totalExp / portfolio * 100;
+      if(expPct > 65) return { status:'veto', reasoning:`Cumul positions ${expPct.toFixed(0)}% > 65% du portfolio. Pas d'ajout.` };
+      if(expPct > 50) return { status:'warn', reasoning:`Cumul positions élevé (${expPct.toFixed(0)}%). Attention.` };
+      return { status:'approve', reasoning:`Cumul positions OK (${expPct.toFixed(0)}%).` };
     }
     case 'security_v1': {
       const ps = S.pairStates?.[pair];
