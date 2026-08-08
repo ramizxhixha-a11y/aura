@@ -364,9 +364,13 @@ function autoOpenPosition(pair, side, stakeOverride) {
       }
 
       // 3. Modulation du stake selon le consensus
+      // [PLEIN RÉGIME · 08/08/2026] effet réel du flag S.fullPowerMode (BUG-002 : l'ancien
+      // mode falsifiait les données ; celui-ci module les paramètres, jamais les données).
+      // FP relève les BONUS (1.25→1.5, 1.10→1.25) ; le malus prudence 0.70 reste INTACT.
+      const _fp = (S.fullPowerMode === true);
       if (!_brainVeto) {
-        if (roster.coalition && roster.consensus >= 0.7)      _brainMult = 1.25;
-        else if (roster.coalition)                             _brainMult = 1.10;
+        if (roster.coalition && roster.consensus >= 0.7)      _brainMult = _fp ? 1.5 : 1.25;
+        else if (roster.coalition)                             _brainMult = _fp ? 1.25 : 1.10;
         else if (roster.consensus < 0.30)                      _brainMult = 0.70;
         // Pas de réduction sur HOLD majority — LMSR peut encore donner un signal valable
 
@@ -376,14 +380,23 @@ function autoOpenPosition(pair, side, stakeOverride) {
       }
 
       // 4. SKIP si tout le conseil vote HOLD ET LMSR neutre ET pas de conviction externe forte
-      const externalConvStrong = (tech?.atScore && Math.abs(tech.atScore) >= 0.35);
+      // [PLEIN RÉGIME · 08/08/2026] FP resserre la bande « neutre » (0.08→0.05) et abaisse le
+      // seuil de conviction externe (0.35→0.25) : plus de signaux faibles-mais-présents passent.
+      // Toute ouverture rendue possible UNIQUEMENT par FP est tracée « FP » dans le brainLog.
+      const externalConvStrong = (tech?.atScore && Math.abs(tech.atScore) >= (_fp ? 0.25 : 0.35));
       if (!_brainVeto && roster.votes.hold === roster.votes.total && !externalConvStrong) {
-        const lmsrNeutral = Math.abs(lmsrP(ps) - 0.5) < 0.08;
+        const _lmsrDist = Math.abs(lmsrP(ps) - 0.5);
+        const lmsrNeutral = _lmsrDist < (_fp ? 0.05 : 0.08);
         if (lmsrNeutral) {
           _brainVeto   = true;
           _brainReason = 'Conseil HOLD + LMSR neutre · pas de signal';
           if (!S.brainLog) S.brainLog = [];
           S.brainLog.unshift({ ts: Date.now(), pair, event: 'SKIP', side, reason: _brainReason });
+          if (S.brainLog.length > 30) S.brainLog.length = 30;
+        } else if (_fp && _lmsrDist < 0.08) {
+          // hors FP, ce trade aurait été SKIP : trace de la prise de risque FP
+          if (!S.brainLog) S.brainLog = [];
+          S.brainLog.unshift({ ts: Date.now(), pair, event: 'FP', side, reason: 'Ouverture permise par Plein Régime (LMSR ' + (0.5 + (lmsrP(ps) >= 0.5 ? _lmsrDist : -_lmsrDist)).toFixed(3) + ', bande réduite)' });
           if (S.brainLog.length > 30) S.brainLog.length = 30;
         }
       }

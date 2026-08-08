@@ -2018,6 +2018,11 @@ function _resolvePaperRealCycle(pair, ps) {
   } else {
     cooldownMs = cfg.cooldownMs || 30 * 60 * 1000;
   }
+  // [PLEIN RÉGIME · 08/08/2026] FP PLAFONNE le cooldown à 15 min (30 min nominal, adaptatif
+  // inclus) : plus d'opportunités par heure. Math.min : FP ne rallonge jamais un cooldown
+  // adaptatif déjà court. Toutes les autres portes (movePct, fraîcheur, maxConcurrentPos,
+  // killswitch, pause globale) restent INTOUCHÉES.
+  if (S.fullPowerMode === true) cooldownMs = Math.min(cooldownMs, 15 * 60 * 1000);
   const lastClose = (S.paperRealLastClose || {})[pair] || 0;
   if (lastClose > 0 && (now - lastClose) < cooldownMs) return;
 
