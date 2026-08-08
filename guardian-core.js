@@ -501,7 +501,7 @@ function probeBackupCapability(snap){
   } else if(fileMethods.length){
     out.push(R('ok', G, 'Méthode fichier native DISPONIBLE',
       'Plugin(s) détecté(s) : ' + fileMethods.join(', ') + '. On peut écrire un vrai fichier dans Download.',
-      'Câbler le backup FULL sur ' + fileMethods[0] + ' avec cible « Download » public : FolderSync le verra et l\'enverra sur Drive.'));
+      'Déjà câblé et opérationnel : le backup FULL écrit en natif via _fsWriteBackup (Download/AURA), DriveSync l\'envoie sur le Drive (validé bout-en-bout le 05/08).'));
   } else {
     out.push(R('crit', G, 'CAUSE : aucune méthode fichier native dans l\'APK',
       'App native SANS plugin fichier. Le backup retombe sur un download blob <a>.click() qui NE SE DÉCLENCHE PAS dans le WebView Capacitor → aucun fichier écrit → rien à synchroniser → « ça ne sauvegarde plus sur Drive ».',
