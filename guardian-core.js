@@ -724,14 +724,31 @@ async function abRun(force){
       const tx = db.transaction(AB.STORE, 'readwrite');
       const store = tx.objectStore(AB.STORE);
       store.add(rec);
-      // rotation par âge : supprimer tout backup plus vieux que maxAgeH (défaut 24h)
+      // [FIX GEL 08/08/2026 · coupable prouvé par la sonde longtask] L'ancienne rotation
+      // faisait store.getAll() : TOUS les backups (chacun = un état complet ~1,4 Mo) étaient
+      // désérialisés en UNE SEULE tâche → longtask 7-13 s à chaque backup auto (gels « op
+      // guardianAutoBackup »). Remplacée par un CURSEUR : un enregistrement par tâche, le
+      // thread respire entre chaque. Les ids étant auto-incrémentés (= chronologiques), on
+      // s'arrête au premier enregistrement à conserver. Plafond de sécurité : 16 backups max
+      // (nominal 24h/3h = 8), les plus vieux partent d'abord.
       const maxAgeMs = (meta.maxAgeH || 24) * 3600000;
       const cutoff = now - maxAgeMs;
-      const allRec = store.getAll();
-      allRec.onsuccess = () => {
-        (allRec.result || []).forEach(r => {
-          if(r && r.ts && r.ts < cutoff){ try { store.delete(r.id); } catch(e){} }
-        });
+      const KEEP_MAX = 16;
+      const cntReq = store.count();
+      cntReq.onsuccess = () => {
+        let toDrop = Math.max(0, (cntReq.result || 0) - KEEP_MAX);
+        const cur = store.openCursor();   // ids croissants = du plus vieux au plus récent
+        cur.onsuccess = () => {
+          const c = cur.result;
+          if (!c) return;
+          const v = c.value;
+          if (toDrop > 0 || (v && v.ts && v.ts < cutoff)) {
+            if (toDrop > 0) toDrop--;
+            try { c.delete(); } catch(e){}
+            try { c.continue(); } catch(e){}
+          }
+          // sinon : premier enregistrement à garder → tous les suivants sont plus récents, stop.
+        };
       };
       tx.oncomplete = () => {
         meta.lastRun = now; abSetMeta(meta);
@@ -747,15 +764,25 @@ async function abList(){
   const db = await abOpen(); if(!db) return [];
   return await new Promise(resolve=>{
     try {
+      // [FIX GEL 08/08/2026] même bombe que la rotation : getAll() désérialisait tous les
+      // états complets d'un coup pour n'en garder que les métadonnées. Curseur : un
+      // enregistrement par tâche, mêmes métadonnées, aucun bloc monolithique.
       const tx = db.transaction(AB.STORE, 'readonly');
-      const r = tx.objectStore(AB.STORE).getAll();
-      r.onsuccess = () => {
-        const list = (r.result||[]).map(x=>({ id:x.id, ts:x.ts, date:x.date, cycle:x.cycle, portfolio:x.portfolio }));
+      const cur = tx.objectStore(AB.STORE).openCursor();
+      const list = [];
+      cur.onsuccess = () => {
+        const c = cur.result;
+        if (c) {
+          const x = c.value || {};
+          list.push({ id:x.id, ts:x.ts, date:x.date, cycle:x.cycle, portfolio:x.portfolio });
+          try { c.continue(); } catch(e){ resolve(list); }
+          return;
+        }
         list.sort((a,b)=>b.ts-a.ts);
         try{db.close();}catch(e){}
         resolve(list);
       };
-      r.onerror = () => { try{db.close();}catch(e){} resolve([]); };
+      cur.onerror = () => { try{db.close();}catch(e){} resolve([]); };
     } catch(e){ resolve([]); }
   });
 }
