@@ -94,6 +94,14 @@ async function saveState(silent = false) {
     return false;
   }
 
+  // [CHRONO · 08/08/2026] annonce l'op (sonde longtask de 08 la nommera dans un gel)
+  // + mesure chaque phase synchrone ; si le total dépasse ~800 ms, une ligne ⏱ est
+  // journalisée avec le détail (snapshot / clone IDB / stringify LS).
+  const _svT0 = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+  const _svNow = function(){ return (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now(); };
+  try { if (typeof window !== 'undefined' && window._perfOp) window._perfOp('saveState'); } catch(e){}
+  let _svSnapMs = 0, _svIdbMs = 0, _svLsMs = 0;
+
   let snap;
   try {
     snap = buildSnapshot();
@@ -101,6 +109,7 @@ async function saveState(silent = false) {
     console.warn('[saveState] buildSnapshot a planté:', e);
     return false;
   }
+  _svSnapMs = Math.round(_svNow() - _svT0);
   if (!snap) return false;
 
   // ─── GARDE-FOU ANTI-RÉGRESSION ──────────────────────────────────────
@@ -149,12 +158,14 @@ async function saveState(silent = false) {
         const tx    = db.transaction(RT.STORE_STATE, 'readwrite');
         const store = tx.objectStore(RT.STORE_STATE);
         let req;
+        const _svIdbT = _svNow();   // le clone structuré de snap est SYNCHRONE dans put()
         if (store.keyPath) {
           if (!snap.key) snap.key = RT.SAVE_KEY;
           req = store.put(snap);
         } else {
           req = store.put(snap, RT.SAVE_KEY);
         }
+        _svIdbMs = Math.round(_svNow() - _svIdbT);
         req.onsuccess = () => res(true);
         req.onerror   = () => res(false);
         tx.onerror    = () => res(false);
@@ -170,7 +181,9 @@ async function saveState(silent = false) {
   // le quota mobile (~5 Mo) et ferait planter toutes les écritures suivantes. Mieux
   // vaut un LS léger fiable (les grosses clés repartent dans l'IDB au cycle suivant).
   try {
+    const _svLsT = _svNow();
     localStorage.setItem(RT.SAVE_KEY, JSON.stringify(_lightSnapshot(snap)));
+    _svLsMs = Math.round(_svNow() - _svLsT);
     lsOk = true;
   } catch (e) {
     console.warn('[saveState] localStorage error:', e.message);
@@ -181,6 +194,25 @@ async function saveState(silent = false) {
       lsOk = true;
     } catch (e2) {}
   }
+
+  // [CHRONO · 08/08/2026] bilan : phases synchrones cumulées (les await ne comptent pas
+  // comme blocage). Publie S.perf.saveMs à chaque fois ; journalise ⏱ si > 800 ms.
+  try {
+    const _svSync = _svSnapMs + _svIdbMs + _svLsMs;
+    if (typeof S !== 'undefined' && S) {
+      if (!S.perf) S.perf = {};
+      S.perf.saveMs = _svSync;
+      S.perf.saveDetail = { snap: _svSnapMs, idb: _svIdbMs, ls: _svLsMs };
+      if (_svSync > 800 && S.chainLog) {
+        S.chainLog.push({
+          icon: '⏱',
+          desc: 'LENT: saveState ' + (_svSync/1000).toFixed(1) + 's (snapshot ' + _svSnapMs + 'ms · clone IDB ' + _svIdbMs + 'ms · LS ' + _svLsMs + 'ms)',
+          hash: Math.random().toString(36).slice(2,8), time: new Date().toLocaleTimeString()
+        });
+        if (S.chainLog.length > 100) S.chainLog.splice(0, S.chainLog.length - 100);
+      }
+    }
+  } catch(e) {}
 
   if ((idbOk || lsOk) && !silent && typeof updateSaveIndicator === 'function') {
     try { updateSaveIndicator('saved'); } catch(e) {}

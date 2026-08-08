@@ -2640,6 +2640,39 @@ let tick = 0;
 // avec heap sain et simTick rapide : ce n'est pas un blocage JS, c'est l'OS qui fige le JS).
 // On demande un verrou d'ecran pour empecher cette mise en veille ; il est relache quand la
 // page est masquee, on le re-acquiert au retour et periodiquement par securite.
+// [SONDE LONGTASK PERMANENTE · 08/08/2026] L'observateur longtask et le chrono nominatif
+// annonces dans les entetes du fichier avaient DISPARU du code (seuls les commentaires
+// restaient) -> tous les gels "ecran visible" etaient inattribues. Reinstalles ici, en
+// PERMANENT : le verdict est ecrit DANS la ligne de gel elle-meme.
+//  - "JS ⏱ Xs/N · op nom" = vrai blocage JS de X s cumulees sur N longtasks, la derniere
+//    operation lourde annoncee via _perfOp est nommee.
+//  - "JS inactif (suspension OS)" = aucun longtask pendant le trou : l'OS a fige la boucle
+//    (Samsung suspend les timers d'un WebView meme au premier plan) — pas un bug code.
+(function _auraLongTaskProbe(){
+  try {
+    if (typeof PerformanceObserver === 'undefined') return;
+    window._auraLongTasks = window._auraLongTasks || [];
+    var _obs = new PerformanceObserver(function(list){
+      try {
+        list.getEntries().forEach(function(e){
+          window._auraLongTasks.push({ start: e.startTime, dur: e.duration });
+        });
+        if (window._auraLongTasks.length > 40) window._auraLongTasks.splice(0, window._auraLongTasks.length - 40);
+      } catch(err){}
+    });
+    _obs.observe({ entryTypes: ['longtask'] });
+  } catch(e){}
+})();
+// Marqueur d'operation lourde : chaque fonction suspecte s'annonce (saveState, backups
+// Guardian, etc.) pour que le prochain gel porte son NOM au lieu de "unknown".
+if (typeof window !== 'undefined' && !window._perfOp) {
+  window._perfOp = function(name){
+    try {
+      window._auraLastOp = { name: String(name), at: (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now() };
+    } catch(e){}
+  };
+}
+
 (function _auraScreenWakeLock(){
   var _wl = null;
   async function _acquire(){
@@ -2698,13 +2731,32 @@ function simTick() {
           const _wsDelta = _wsNow - (S.perf._wsLast || 0);
           _wsStr = ' · ws +' + _wsDelta;
         } catch(e) {}
+        // [VERDICT LONGTASK · 08/08/2026] somme les longtasks tombes DANS le trou :
+        // couverture significative = blocage JS (nomme via _auraLastOp) ; sinon = OS.
+        let _ltStr = '';
+        try {
+          const _lts = (typeof window !== 'undefined' && window._auraLongTasks) || [];
+          const _gapStart = _now - _gap * 1000;
+          let _ltSum = 0, _ltN = 0;
+          _lts.forEach(function(t){
+            if ((t.start + t.dur) > _gapStart && t.start < _now) { _ltSum += t.dur; _ltN++; }
+          });
+          if (_ltSum > 500) {
+            let _opStr = '';
+            const _op = (typeof window !== 'undefined') ? window._auraLastOp : null;
+            if (_op && _op.at > (_gapStart - 2000) && _op.at < _now) _opStr = ' · op ' + _op.name;
+            _ltStr = ' · JS ⏱ ' + (_ltSum/1000).toFixed(1) + 's/' + _ltN + _opStr;
+          } else if (!_hidden) {
+            _ltStr = ' · JS inactif (suspension OS)';
+          }
+        } catch(e) {}
         S.perf.gaps    = (S.perf.gaps || 0) + 1;
         S.perf.maxGapS = Math.max(S.perf.maxGapS || 0, Math.round(_gap*10)/10);
         S.perf.lastGapS = Math.round(_gap*10)/10;
         if (S.chainLog) {
           S.chainLog.push({
             icon: _hidden ? '📴' : '🐌',
-            desc: `Gel ${_gap.toFixed(1)}s · tick ${Math.round(S.perf.lastMs||0)}ms · ${_hidden ? 'ecran masque (throttle Android)' : 'ecran visible (blocage reel)'}${_memStr}${_domStr}${_wsStr}`,
+            desc: `Gel ${_gap.toFixed(1)}s · tick ${Math.round(S.perf.lastMs||0)}ms · ${_hidden ? 'ecran masque (throttle Android)' : 'ecran visible'}${_ltStr}${_memStr}${_domStr}${_wsStr}`,
             hash: Math.random().toString(36).slice(2,8), time: new Date().toLocaleTimeString()
           });
           if (S.chainLog.length > 100) S.chainLog.splice(0, S.chainLog.length - 100);
