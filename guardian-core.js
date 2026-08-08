@@ -379,9 +379,12 @@ function probeGel(snap){
       const dom  = r.match(/dom (\d+)/);
       const page = r.match(/page (\S+)/);
       const ws   = r.match(/ws \+(\d+)/);
+      const js  = r.match(/JS ⏱ ([\d.]+)s\/(\d+)/);
+      const op  = r.match(/· op (\S+)/);
       gels.push({ gap:parseFloat(m[1]), tickMs:parseInt(m[2],10), visible:/visible/.test(m[3]),
         heapU:heap?parseInt(heap[1],10):null, heapL:heap?parseInt(heap[2],10):null,
-        dom:dom?parseInt(dom[1],10):null, page:page?page[1]:null, ws:ws?parseInt(ws[1],10):null });
+        dom:dom?parseInt(dom[1],10):null, page:page?page[1]:null, ws:ws?parseInt(ws[1],10):null,
+        jsSum:js?parseFloat(js[1]):null, op:op?op[1]:null, osIdle:/JS inactif/.test(r) });
     }
   });
   if(!gels.length){
@@ -420,11 +423,27 @@ function probeGel(snap){
       'Réduire l\'empreinte mémoire : borner les tableaux vivants, limiter le churn d\'objets.'));
     return out;
   }
-  // ni WS, ni DOM, ni heap saturé, mais blocage réel écran visible :
-  // diagnostic du 02/08 = pause GC sous churn (ni fonction, ni timer, ni rAF).
-  out.push(R('crit','Gel / Lag','Blocage thread '+maxVis.toFixed(1)+'s (écran visible) · pause GC sous churn',
-    'Correctifs déjà posés : évolution 1 fusion/60s + Dream 1/4min (03/08), rendu CHAIN allégé (04/08). NB : ce relevé inclut les gels CONSERVÉS dans le journal, y compris d\'avant les correctifs — regarder l\'heure des 🐌 récents pour juger.',
-    'Si des 🐌 écran-visible POSTÉRIEURS aux correctifs persistent : churn résiduel à traquer (prochaine source d\'allocations). Sinon, considérer le dossier clos.'));
+  // [08/08/2026] Verdicts basés sur la sonde longtask (verdict écrit dans la ligne de gel).
+  const jsGels = vis.filter(function(g){ return g.jsSum != null; });
+  const osGels = vis.filter(function(g){ return g.osIdle; });
+  if(jsGels.length){
+    const named = jsGels.filter(function(g){ return g.op; });
+    const opTxt = named.length ? (' · opération nommée : ' + named.map(function(g){ return g.op; }).filter(function(v,i,a){ return a.indexOf(v)===i; }).join(', ')) : ' · aucune opération marquée (_perfOp) dans la fenêtre';
+    out.push(R('crit','Gel / Lag','Blocage JS confirmé par longtask ('+jsGels.length+' gel(s))',
+      'La sonde longtask a mesuré du JS bloquant pendant le(s) trou(s)'+opTxt+'.',
+      named.length ? 'Corriger l\'opération nommée (livrer le fix à Claude avec cette ligne de gel).' : 'Ajouter des marqueurs _perfOp sur les prochaines fonctions suspectes pour la nommer.'));
+    return out;
+  }
+  if(osGels.length && osGels.length === vis.length){
+    out.push(R('warn','Gel / Lag','Suspension OS malgré écran allumé ('+osGels.length+' gel(s), 0 longtask)',
+      'Aucun longtask pendant les trous : le code ne bloque pas, c\'est Android/Samsung qui fige les timers du WebView même au premier plan (gestion batterie).',
+      'Réglages Samsung : retirer AURA de la mise en veille des applis + désactiver l\'optimisation batterie pour AURA (Wake Lock déjà posé côté code).'));
+    return out;
+  }
+  // Gels antérieurs à la sonde (pas de champ JS dans la ligne) : ne pas conclure.
+  out.push(R('info','Gel / Lag','Gels sans verdict longtask (antérieurs à la sonde du 08/08)',
+    'Ces lignes de gel ne portent pas encore le champ « JS ⏱ / JS inactif ». Le prochain gel sera auto-diagnostiqué.',
+    'Juger sur les 🐌 postérieurs à la mise à jour du 08/08.'));
   return out;
 }
 
@@ -680,7 +699,20 @@ async function abRun(force){
   if(!force && meta.lastRun && (now - meta.lastRun) < intervalMs){
     return { ok:false, reason:'intervalle non écoulé' };
   }
+  // [CHRONO · 08/08/2026] annonce l'op (sonde longtask de 08) + mesure abGrabState
+  try { if (typeof window !== 'undefined' && window._perfOp) window._perfOp('guardianAutoBackup'); } catch(e){}
+  const _abT0 = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
   const snap = abGrabState();
+  const _abMs = Math.round(((typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now()) - _abT0);
+  try {
+    if (_abMs > 800) {
+      const S0 = getLiveS();
+      if (S0 && S0.chainLog) {
+        S0.chainLog.push({ icon:'⏱', desc:'LENT: backup auto Guardian (snapshot ' + (_abMs/1000).toFixed(1) + 's)', hash:Math.random().toString(36).slice(2,8), time:new Date().toLocaleTimeString() });
+        if (S0.chainLog.length > 100) S0.chainLog.splice(0, S0.chainLog.length - 100);
+      }
+    }
+  } catch(e){}
   if(!snap || typeof snap.cycle !== 'number'){ return { ok:false, reason:'état AURA indisponible' }; }
   const db = await abOpen();
   if(!db){ return { ok:false, reason:'IDB inaccessible' }; }
@@ -878,7 +910,20 @@ Core.describeCapabilities = describeCapabilities;
       const dt = new Date(); const pad = n => (n<10?'0':'')+n;
       const stamp = dt.getFullYear()+pad(dt.getMonth()+1)+pad(dt.getDate())+'-'+pad(dt.getHours())+pad(dt.getMinutes())+pad(dt.getSeconds());
       const fname = fixedName || ('aura_guardian_full_' + stamp + '.json');
+      // [CHRONO · 08/08/2026] annonce l'op + mesure la sérialisation ; taille tracée
+      try { if (typeof window !== 'undefined' && window._perfOp) window._perfOp('guardianDownload'); } catch(e){}
+      const _gdT0 = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
       const json = JSON.stringify(data);
+      try {
+        const _gdMs = Math.round(((typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now()) - _gdT0);
+        if (_gdMs > 800) {
+          const S1 = getLiveS();
+          if (S1 && S1.chainLog) {
+            S1.chainLog.push({ icon:'⏱', desc:'LENT: export Guardian (stringify ' + (_gdMs/1000).toFixed(1) + 's · ' + Math.round(json.length/1024) + 'Ko)', hash:Math.random().toString(36).slice(2,8), time:new Date().toLocaleTimeString() });
+            if (S1.chainLog.length > 100) S1.chainLog.splice(0, S1.chainLog.length - 100);
+          }
+        }
+      } catch(e){}
       // 1) ECRITURE NATIVE d'abord (reutilise _fsWriteBackup de 09b3, deja prouvee sur cet
       //    appareil : les nexus_save_* atterrissent bien dans Download/AURA). Le nom
       //    aura_guardian_full_* correspond au filtre DriveSync -> part sur le Drive.
