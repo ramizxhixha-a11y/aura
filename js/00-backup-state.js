@@ -83,3 +83,80 @@
   console.log('[backup-state v126] preload terminé');
 
 })();
+
+// ════════════════════════════════════════════════════════════════════════
+// [CHRONO TIMERS GLOBAL · 08/08/2026] La sonde longtask a confirmé un vrai
+// blocage JS (7,1 s en UN SEUL longtask) sans opération marquée : le fautif
+// est un rappel de timer non instrumenté. Ce wrapper, chargé AVANT tous les
+// autres modules, enveloppe setTimeout / setInterval / requestAnimationFrame :
+// le SITE d'enregistrement (fichier:ligne) est capturé à l'inscription, et
+// tout rappel qui bloque > 1 s est journalisé « ⏱ LENT: timer fichier:ligne »
+// + nommé dans window._auraLastOp (repris par la ligne de gel de 08).
+// Coût nominal : négligeable (un chrono par rappel). Aucune logique modifiée :
+// les rappels s'exécutent à l'identique, les ids restent ceux d'origine.
+// ════════════════════════════════════════════════════════════════════════
+(function _auraTimerChrono() {
+  try {
+    if (typeof window === 'undefined' || window._auraTimerChronoOn) return;
+    window._auraTimerChronoOn = true;
+    var _now = function () {
+      return (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+    };
+    function _site() {
+      try {
+        var frames = String(new Error().stack || '').split('\n');
+        for (var i = 0; i < frames.length; i++) {
+          var m = frames[i].match(/\/([\w.\-]+\.(?:js|html))(?:\?[^:)\s]*)?:(\d+):\d+/);
+          if (m && m[1].indexOf('00-backup-state') === -1) return m[1] + ':' + m[2];
+        }
+      } catch (e) {}
+      return 'site inconnu';
+    }
+    function _report(name, dur) {
+      try {
+        window._auraLastOp = { name: name, at: _now() };
+        window._auraSlowTimers = window._auraSlowTimers || [];
+        window._auraSlowTimers.push({ name: name, dur: Math.round(dur), at: Date.now() });
+        if (window._auraSlowTimers.length > 20) window._auraSlowTimers.splice(0, window._auraSlowTimers.length - 20);
+        var S0 = null;
+        try { S0 = (0, eval)('S'); } catch (e) {}
+        if (S0 && S0.chainLog) {
+          S0.chainLog.push({
+            icon: '⏱',
+            desc: 'LENT: timer ' + name + ' ' + (dur / 1000).toFixed(1) + 's',
+            hash: Math.random().toString(36).slice(2, 8),
+            time: new Date().toLocaleTimeString()
+          });
+          if (S0.chainLog.length > 100) S0.chainLog.splice(0, S0.chainLog.length - 100);
+        }
+      } catch (e) {}
+    }
+    function _wrapFn(fn, name) {
+      if (typeof fn !== 'function') return fn;   // timers « chaîne » : inchangés
+      return function () {
+        var t0 = _now();
+        try { return fn.apply(this, arguments); }
+        finally {
+          var d = _now() - t0;
+          if (d > 1000) _report(name, d);
+        }
+      };
+    }
+    var _oST = window.setTimeout, _oSI = window.setInterval, _oRAF = window.requestAnimationFrame;
+    window.setTimeout = function (fn) {
+      var args = Array.prototype.slice.call(arguments);
+      args[0] = _wrapFn(fn, 'setTimeout@' + _site());
+      return _oST.apply(window, args);
+    };
+    window.setInterval = function (fn) {
+      var args = Array.prototype.slice.call(arguments);
+      args[0] = _wrapFn(fn, 'setInterval@' + _site());
+      return _oSI.apply(window, args);
+    };
+    if (typeof _oRAF === 'function') {
+      window.requestAnimationFrame = function (fn) {
+        return _oRAF.call(window, _wrapFn(fn, 'rAF@' + _site()));
+      };
+    }
+  } catch (e) {}
+})();
