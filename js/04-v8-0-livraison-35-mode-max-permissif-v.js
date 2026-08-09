@@ -3706,10 +3706,10 @@ function predictNextCandle(pair) {
   } else if(ps.priceHistory && ps.priceHistory.length >= 10) {
     closes = ps.priceHistory.slice(-50);
   } else {
-    // Génèrer depuis le prix actuel + atr
-    const p = ps.price||1;
-    closes = Array.from({length:20},(_,i)=>p*(1+(Math.random()-0.5)*0.005));
-    closes.push(p);
+    // [AUDIT VÉRITÉ · 09/08/2026] l'ancien fallback FABRIQUAIT 20 prix aléatoires
+    // (±0.25%) et lançait les 4 modèles dessus : prédictions fondées sur du bruit,
+    // présentées comme analyse. Pas assez de données réelles = pas d'analyse.
+    return null;
   }
 
   const cur = closes[closes.length-1] || ps.price || 0;
