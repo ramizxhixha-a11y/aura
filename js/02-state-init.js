@@ -6175,7 +6175,7 @@ function setBotMode(isAuto) {
     modeBtn.className = isAuto ? 'auto' : 'manual';
   }
   if(modeLabel) {
-    modeLabel.textContent = isAuto ? 'AUTO' : 'MAN';
+    modeLabel.textContent = isAuto ? 'AUTO' : 'MANU';
   }
   const chip = document.getElementById('heroModeChip');
   if(chip) {
