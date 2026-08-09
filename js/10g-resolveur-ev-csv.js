@@ -57,7 +57,9 @@ function _resolvePaperRealCycle(pair, ps) {
     if (movePct > maxMove) return;
   }
 
-  const maxConcurrent = cfg.maxConcurrentPos || 1;
+  // [ÉTAGE 1 · 09/08/2026] RE verrouillé à 1 position EN DUR — le passage à 3 slots ne
+  // concerne que AA/EV jusqu'à validation sur données (décision Rams : « garde à l'œil »).
+  const maxConcurrent = (S.tradingMode === 'real') ? 1 : (cfg.maxConcurrentPos || 1);
   const openPositions = (S.openPositions || []).filter(p => p.auto === true);
   if (openPositions.length >= maxConcurrent) return;
 

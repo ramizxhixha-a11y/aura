@@ -298,7 +298,10 @@ const S = {
   paperRealConsecLosses: 0,     // pertes consécutives toutes paires confondues
   paperRealGlobalPauseUntil: 0, // pause globale 2h après 3 pertes consécutives
   paperRealConfig: {            // règles modifiables (défaut conservateur)
-    maxConcurrentPos: 1,        // 1 position ouverte max simultanée
+    maxConcurrentPos: 3,        // [ÉTAGE 1 · 09/08/2026, décision Rams] 3 positions simultanées
+                                // en AA/EV (paires différentes, garde anti-corrélation + cumul 65%
+                                // actives). RE reste verrouillé à 1 EN DUR au point d'application
+                                // (10g) tant que l'étage 1 n'a pas fait ses preuves sur backup.
     stopLossPct: 3.0,           // arrêt de perte fallback à -3% (si ATR pas calculable)
     takeProfitPct: 2.0,         // prise bénéfice fallback à +2%
     cooldownMs: 30 * 60 * 1000, // 30 min pause de référence (auto-ajustée)

@@ -465,7 +465,12 @@ function autoOpenPosition(pair, side, stakeOverride) {
     if (baseStake > S.tradingAccount * 0.95) {
       // POLITIQUE DE CAPITAL (Rams 06/07) : quasi-totalite investie — on borne
       // au disponible moins la couverture des frais, plus de repli arbitraire a 25 %.
-      baseStake = Math.max(_stakeFloor(), _stakeRound(S.tradingAccount - Math.max(1, S.tradingAccount * 0.02)));
+      // [ÉTAGE 1 · 09/08/2026] l'enveloppe quasi-totale se divise par les SLOTS LIBRES
+      // (plafond 3 en AA/EV, 1 en RE) : la première position ne mange plus tout le compte,
+      // les suivantes gardent leur part. Un seul slot libre = comportement d'avant, inchangé.
+      const _slotsMax  = (S.tradingMode === 'real') ? 1 : ((S.paperRealConfig && S.paperRealConfig.maxConcurrentPos) || 1);
+      const _slotsFree = Math.max(1, _slotsMax - ((S.openPositions && S.openPositions.length) || 0));
+      baseStake = Math.max(_stakeFloor(), _stakeRound((S.tradingAccount - Math.max(1, S.tradingAccount * 0.02)) / _slotsFree));
     }
   }
 
@@ -627,6 +632,24 @@ function autoOpenPosition(pair, side, stakeOverride) {
   if (_execChunks > 1 && S.tradingMode !== 'real') {
     _twapPlan = { n: _execChunks, filled: 1, sumPrice: ps.price, p0: ps.price, nextAt: Date.now() + 20000 };
   }
+
+  // [ÉTAGE 1 · 09/08/2026] trace des ouvertures multi : position N/max + corrélation max
+  // avec les positions déjà ouvertes — la matière du « garde à l'œil » au backup.
+  try {
+    const _nOpen = (S.openPositions && S.openPositions.length) || 0;
+    if (_nOpen >= 1 && S.chainLog) {
+      let _cmax = null;
+      if (typeof _getPairCorrelation === 'function') {
+        S.openPositions.forEach(function(op){
+          const c = _getPairCorrelation(pair, op.pair);
+          if (typeof c === 'number' && (_cmax === null || Math.abs(c) > Math.abs(_cmax))) _cmax = c;
+        });
+      }
+      const _mx = (S.tradingMode === 'real') ? 1 : ((S.paperRealConfig && S.paperRealConfig.maxConcurrentPos) || 1);
+      S.chainLog.push({ icon:'📊', desc:'Position ' + (_nOpen+1) + '/' + _mx + ' · ' + pair + (_cmax !== null ? ' · corr max ' + _cmax.toFixed(2) + ' avec l\u2019existant' : ''), hash:Math.random().toString(36).slice(2,8), time:new Date().toLocaleTimeString() });
+      if (S.chainLog.length > 100) S.chainLog.splice(0, S.chainLog.length - 100);
+    }
+  } catch(e) { try{window._decErr&&window._decErr(e)}catch(_e){} }
 
   S.openPositions.push({
     id, pair, side,
