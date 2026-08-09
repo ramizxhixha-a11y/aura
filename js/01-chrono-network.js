@@ -403,7 +403,17 @@ window._auraGetGlobalS = _auraGetGlobalS;
     _toast('⏸ ' + modeInfo.name + ' en pause', modeInfo.type);
   };
   window.toggleSim = function toggleSim() {
-    if (window._auraSimState.running) window.stopSim();
+    // [FIX SIMULTANÉ · 09/08/2026] le toggle décidait sur l'état GLOBAL du moteur :
+    // EV en play → presser ▶ en AA appelait stopSim() (sans effet, EV vivant) →
+    // impossible de démarrer AA tant qu'un autre mode tournait (bug signalé par Rams).
+    // startSim (rejoint le battement) et stopSim (pause sans tuer le moteur) étaient
+    // déjà corrects par-mode — seul cet aiguillage était global. Décision par MODE
+    // AFFICHÉ : son état à lui commande le bouton.
+    var _pm = (window.AuraChrono && window.AuraChrono.getCurrentMode) ? window.AuraChrono.getCurrentMode() : 'sim';
+    var _modeRuns = false;
+    try { _modeRuns = window._isModeRunning ? !!window._isModeRunning(_pm) : !!window._auraSimState.running; }
+    catch (e) { _modeRuns = !!(window._auraSimState && window._auraSimState.running); }
+    if (_modeRuns) window.stopSim();
     else window.startSim();
   };
 })();

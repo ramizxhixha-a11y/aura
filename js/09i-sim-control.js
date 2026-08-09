@@ -1,7 +1,7 @@
 // ════════════════════════════════════════════════════════════════════════
 // ▓▓▓ AURA8 — 09i-sim-control.js ▓▓▓
 // ════════════════════════════════════════════════════════════════════════
-// Sim Control — toggleSim, stopSim, toggleBar.
+// Sim Control — stopSim, toggleBar. (toggleSim vit dans 01-chrono-network — version par-mode)
 //
 // Dépend de 09a-runtime-state.js (accès via window.RT).
 // ════════════════════════════════════════════════════════════════════════
@@ -10,21 +10,10 @@
 // ════════════════════════════════════════════════════════════════════════
 // SECTION Sim Control
 // Contrôle de la simulation et des barres UI :
-//  - toggleSim          : bascule démarrage/arrêt de la sim
 //  - stopSim            : arrête la sim, sauvegarde, libère le Wake Lock
 //  - toggleFullPower    : bascule le mode "Plein régime"
 //  - toggleBar(barName) : ouvre/ferme les barres auto/man/param
 // ════════════════════════════════════════════════════════════════════════
-
-
-// ──────────────────────────────────────────────────────────────────────
-// Bascule démarrage / arrêt de la simulation
-// ──────────────────────────────────────────────────────────────────────
-function toggleSim() {
-  if (RT._simRunning) stopSim();
-  else             startSim();
-}
-window.toggleSim = toggleSim;
 
 
 // ──────────────────────────────────────────────────────────────────────
