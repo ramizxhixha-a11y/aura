@@ -5082,7 +5082,7 @@ function buildAgentCards() {
       <div class="agent-fitness-wrap">
         <div class="agent-fitness-label">
           <span>T$: <strong class="fit-val" id="af_${a.id}" style="color:var(--gold)">0</strong></span>
-          <span>Conf: <span id="aconf_${a.id}">0</span>%</span>
+          <span>${(S.botFleet && S.botFleet[a.id]) ? 'Contribs' : 'Conf'}: <span id="aconf_${a.id}">0</span>${(S.botFleet && S.botFleet[a.id]) ? '' : '%'}</span>
           <span id="aerr_${a.id}" style="color:var(--t3);font-size:8px;"></span>
         </div>
         <div class="agent-fitness-bar">
@@ -5161,6 +5161,21 @@ function patchAgentCards() {
     if(elMeta)  { elMeta.textContent = 'Score: '+scStr; elMeta.className = 'pill '+scCls; }
     if(elFit)   elFit.textContent  = Math.floor(a.fitness);
     if(elConf)  elConf.textContent = (a.conf*100).toFixed(0);
+    // [OPTION A · 09/08/2026, choix Rams] cartes des bots de la flotte : SCORE +0.000 et
+    // Conf 99% étaient des métriques MORTES (jamais alimentées). Branchées sur le réel de
+    // S.botFleet : score = apport net en $ (pnlContrib), Contribs = compteur d'interventions.
+    // Gestion Risque n'a pas d'entrée flotte → garde l'affichage agent (son instrumentation
+    // viendra avec l'audit métier des bots).
+    const fb = S.botFleet && S.botFleet[a.id];
+    if (fb) {
+      const usd = Number(fb.pnlContrib) || 0;
+      const usdStr = (usd >= 0 ? '+$' : '-$') + Math.abs(usd).toFixed(2);
+      const usdCls = usd > 0.005 ? 'pill-up' : usd < -0.005 ? 'pill-down' : 'pill-gold';
+      elScore.textContent = usdStr;
+      elScore.className = 'pill ' + usdCls;
+      if(elMeta) { elMeta.textContent = 'Apport: ' + usdStr; elMeta.className = 'pill ' + usdCls; }
+      if(elConf) elConf.textContent = String(fb.contributions || 0);
+    }
     if(elBar)   elBar.style.width  = fitPct+'%';
     if(elName)  elName.textContent = a.name;
     if(elType)  elType.textContent = a.type+' · '+a.source;
