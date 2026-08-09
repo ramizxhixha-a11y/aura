@@ -402,7 +402,23 @@ function autoOpenPosition(pair, side, stakeOverride) {
       }
     } catch (e) {
       console.warn('brain gate error:', e);
+      // [OBSERVABILITÉ · 09/08/2026] un crash du gate était avalé ici en silence
+      // (console.warn invisible sans DevTools) : ouvertures SANS conseil ni veto,
+      // indistinguables d'approbations légitimes. Désormais visible au brainLog.
+      if (!S.brainLog) S.brainLog = [];
+      S.brainLog.unshift({ ts: Date.now(), pair, event: 'ERR', side, reason: 'Brain gate crashé · ' + String(e && e.message || e).slice(0, 80) });
+      if (S.brainLog.length > 30) S.brainLog.length = 30;
     }
+  }
+
+  // [OBSERVABILITÉ · 09/08/2026] signe de vie : chaque évaluation qui TRAVERSE le gate
+  // (approbation comprise) laisse une trace compacte. Sans elle, le brainLog figé du
+  // 30/07 a fait passer 10 jours d'approbations silencieuses pour un gate mort.
+  if (!_brainVeto && S._lastBrainAnalysis) {
+    const _r = S._lastBrainAnalysis;
+    if (!S.brainLog) S.brainLog = [];
+    S.brainLog.unshift({ ts: Date.now(), pair, event: 'EVAL', side, reason: (_r.verdict || '?') + ' · consensus ' + Math.round((_r.consensus || 0) * 100) + '% · stake ×' + _brainMult });
+    if (S.brainLog.length > 30) S.brainLog.length = 30;
   }
 
   // Veto déclenché → on abandonne
