@@ -5121,10 +5121,16 @@ function buildAgentCards() {
 function patchAgentCards() {
   // Record fitness history every call (throttled to avoid too many points)
   // v6.9: record fitness every tick for real-time Pearson (capped at 100 pts)
+  // [VÉRITÉ DONNÉES · 09/08/2026] l'ancienne ligne poussait fitness + (Math.random()-0.5)*0.5
+  // « to avoid flat line » : les vagues des cartes agents étaient du BRUIT fabriqué (fitness
+  // stable → min/max = bruit pur normalisé sur toute la hauteur → ondulations et couleur
+  // rouge/vert aléatoires à chaque rendu), et ce bruit était ÉCRIT dans a.fitnessHistory,
+  // donnée d'agent sauvegardée. Même famille que BUG-002 : maquillage interdit. On pousse la
+  // fitness VRAIE ; une fitness stable trace une ligne plate, et c'est la vérité.
   if(tick % 1 === 0) {
     S.agents.forEach(a => {
       if(!a.fitnessHistory) a.fitnessHistory = [a.fitness, a.fitness];
-      a.fitnessHistory.push(a.fitness + (Math.random()-0.5)*0.5);  // tiny noise to avoid flat line
+      a.fitnessHistory.push(a.fitness);
       if(a.fitnessHistory.length > 60) a.fitnessHistory.shift();
     });
   }
@@ -5169,8 +5175,9 @@ function patchAgentCards() {
       elRwd.style.color = stk>=0?'var(--up)':'var(--down)';
     }
     if(elRatio && events>0) {
-      elRatio.textContent = stk>=0 ? '✓ Série gagnante' : '✗ Série perdante';
-      elRatio.style.color = stk>=0 ? 'var(--up)' : 'var(--down)';
+      // [09/08/2026] streak 0 affichait « ✓ Série gagnante » : un neutre n'est ni gagnant ni perdant
+      elRatio.textContent = stk>0 ? '✓ Série gagnante' : stk<0 ? '✗ Série perdante' : '· Série neutre';
+      elRatio.style.color = stk>0 ? 'var(--up)' : stk<0 ? 'var(--down)' : 'var(--t3)';
     }
 
     // ── amem legacy element — show memory count ──
@@ -5212,7 +5219,10 @@ function patchAgentCards() {
       const W = cW, H = cH;
       const data = a.fitnessHistory;
       const mn = Math.min(...data), mx = Math.max(...data);
-      const rng = mx - mn || 1;
+      // [VÉRITÉ DONNÉES · 09/08/2026] amplitude plancher 1 T$ : sans elle, une variation
+      // réelle mais infime (0.1 T$) serait étirée sur toute la hauteur — même illusion
+      // que le bruit supprimé. Les vrais mouvements (>1 T$) restent pleinement visibles.
+      const rng = Math.max(mx - mn, 1);
       ctx.clearRect(0, 0, W, H);
       const pts = data.map((v,i) => ({ x:(i/(data.length-1))*W, y:H-((v-mn)/rng)*(H-4)-2 }));
       const up  = data[data.length-1] >= data[0];
