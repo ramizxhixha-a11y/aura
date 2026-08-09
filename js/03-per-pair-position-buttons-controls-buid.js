@@ -4276,6 +4276,8 @@ function botArb() {
 }
 
 // ── 3. SCALPER BOT · scanner d'opportunités scalp ──
+// [NUTRITION · 09/08/2026] libellé « L2·OrderBook » retiré des statuts : le système n'a
+// AUCUNE donnée L2 (flux WS trade/kline uniquement). Le bot dit ce qu'il mange : LMSR + vol.
 // [AUDIT FLOTTE · 09/08/2026] L'ancien code était un GÉNÉRATEUR DE HASARD : 30% de
 // chance par cycle de fabriquer un « micro-scalp » au PnL tiré au sort
 // ((Math.random()-0.5+skew)×0.4 sur 2 $ virtuels) crédité dans pnlContrib — ses
@@ -4324,18 +4326,33 @@ function botScalper() {
     }
     _setBot('scalper_bot_v1', 'active', `Signal scalp ${best.pair} ${best.side.toUpperCase()} · proposition créée`);
   } else {
-    _setBot('scalper_bot_v1', 'scanning', `Surveillance L2·Order Flow`);
+    _setBot('scalper_bot_v1', 'scanning', `Scan LMSR + volatilité · pas de signal scalp`);
     if(S.pendingActions) S.pendingActions = S.pendingActions.filter(a => a.type !== 'scalp');
   }
 }
 
 // ── 4. FISCAL BOT · Tax-loss harvest (v6.0 · proposition actionnable) ──
+// [NUTRITION · 09/08/2026] l'ancien bot était nourri de constantes : seuil 40 $ codé en
+// dur (jamais atteint sur un compte de ~50 $) et « économie ~30% » forfaitaire — il
+// aurait proposé des harvests à valeur fiscale RÉELLE nulle (perte annuelle nette =
+// impôt dû 0, franchise ignorée). Branché sur la formule d'impôt UNIQUE du système
+// (_computeMarginalTax) : l'économie affichée = la baisse RÉELLE d'impôt marginal si la
+// perte est réalisée. Pas d'économie réelle positive = pas de proposition.
 function botFiscal() {
   const realizedGain = S.fees?.totalPnlGross || 0;
   const openLosers = (S.openPositions || []).filter(p => (p.pnlUsdt || 0) < -3);
-  if(realizedGain > 40 && openLosers.length > 0) {
+  if(openLosers.length > 0 && typeof _computeMarginalTax === 'function') {
     const worst = openLosers.sort((a,b) => (a.pnlUsdt || 0) - (b.pnlUsdt || 0))[0];
-    const harvestSavings = Math.abs(worst.pnlUsdt || 0) * 0.30;
+    // Économie réelle : impôt marginal évité en réalisant cette perte maintenant.
+    // _computeMarginalTax(x) donne l'impôt marginal d'un gain x ; pour une perte, la
+    // baisse d'impôt = impôt(0) − impôt(perte) sur le cumul = tax(−perte) symétrique :
+    // on la mesure comme l'impôt que paierait un gain équivalent au-dessus du cumul.
+    const harvestSavings = _computeMarginalTax(Math.abs(worst.pnlUsdt || 0));
+    if(!(harvestSavings > 0.01)) {
+      _setBot('fiscal_bot_v1', 'idle', `Perte dispo ${worst.pnlUsdt.toFixed(2)}$ · aucun impôt marginal à économiser (franchise/cumul)`);
+      if(S.pendingActions) S.pendingActions = S.pendingActions.filter(a => a.type !== 'harvest');
+      return null;
+    }
     // v6.0 · Publie une proposition actionnable
     if(!S.pendingActions) S.pendingActions = [];
     const already = S.pendingActions.find(a => a.type === 'harvest' && a.posId === worst.id);
@@ -4358,11 +4375,7 @@ function botFiscal() {
     _setBot('fiscal_bot_v1', 'active', `Proposition harvest ${worst.pair} · économie estimée ~${harvestSavings.toFixed(2)}$`);
     return { pos: worst, savings: harvestSavings };
   }
-  if(realizedGain > 40) {
-    _setBot('fiscal_bot_v1', 'scanning', `Gain réalisé +${realizedGain.toFixed(0)}$ · en recherche de perte à récolter`);
-  } else {
-    _setBot('fiscal_bot_v1', 'idle', `Gain insuffisant pour harvest (+${realizedGain.toFixed(0)}$)`);
-  }
+  _setBot('fiscal_bot_v1', 'idle', `Aucune perte ouverte à récolter · cumul réalisé ${realizedGain>=0?'+':''}${realizedGain.toFixed(0)}$`);
   // Clear stale proposals
   if(S.pendingActions) {
     S.pendingActions = S.pendingActions.filter(a => a.type !== 'harvest' || (a.posId && S.openPositions.find(p => p.id === a.posId)));
