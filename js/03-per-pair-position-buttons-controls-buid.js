@@ -4162,19 +4162,42 @@ function initBotFleet() {
 }
 if(typeof S !== 'undefined') initBotFleet();
 
-// [PURGE VÉRITÉ · 09/08/2026 · une seule fois] Les cumuls d'exec_bot (2054 contribs /
+// [PURGE VÉRITÉ · 09/08/2026, corrigée 09/08 soir] Les cumuls d'exec_bot (2054 contribs /
 // +403 $ fabriqués par la boucle de statut), de scalper_bot (PnL tiré au sort) et du
 // smart_sizer (crédit forfaitaire 5%) sont des données FABRIQUÉES — purgées pour
 // repartir sur du vrai. Les cumuls légitimes (rescue = flattens réels) sont conservés.
-if(typeof S !== 'undefined' && S.botFleet && !S._fleetTruthReset0908) {
-  try {
-    ['exec_bot_v1','scalper_bot_v1'].forEach(id => {
-      if(S.botFleet[id]) { S.botFleet[id].contributions = 0; S.botFleet[id].pnlContrib = 0; }
-    });
-    if(S.botFleet.smart_sizer_v1) S.botFleet.smart_sizer_v1.pnlContrib = 0;
-    S._fleetTruthReset0908 = true;
-  } catch(e) {}
-}
+// FIX v2 : la première version purgait au CHARGEMENT du script, AVANT loadState — elle
+// nettoyait l'état vierge puis la restauration ré-écrasait les vieux cumuls (prouvé par
+// le backup 16:31 : compteurs intacts). Pattern des migrations éprouvées (_upgradeFeeRates,
+// 09b2) : attendre _stateReady, purger l'état RESTAURÉ, flag en localStorage, sauvegarder.
+(function _fleetTruthPurge(){
+  var FLAG = 'aura_fleet_truth_reset_20260809';
+  var _t = 0;
+  var _iv = setInterval(function(){
+    _t++;
+    var ready = false;
+    try { ready = !!window._stateReady; } catch(e) {}
+    if (!ready && _t < 120) return;
+    clearInterval(_iv);
+    try {
+      if (typeof S === 'undefined' || !S || !S.botFleet) return;
+      if (localStorage.getItem(FLAG)) return;
+      ['exec_bot_v1','scalper_bot_v1'].forEach(function(id){
+        if(S.botFleet[id]) { S.botFleet[id].contributions = 0; S.botFleet[id].pnlContrib = 0; }
+      });
+      if(S.botFleet.smart_sizer_v1) S.botFleet.smart_sizer_v1.pnlContrib = 0;
+      localStorage.setItem(FLAG, '1');
+      try {
+        if (S.chainLog) {
+          S.chainLog.push({ icon:'🧹', desc:'Compteurs flotte purgés : exec (2054 contribs fabriqués par la boucle de statut), scalper (PnL tiré au sort), sizer (crédit forfaitaire 5%) — repartent sur du réel', hash:Math.random().toString(36).slice(2,8), time:new Date().toLocaleTimeString() });
+          if (S.chainLog.length > 100) S.chainLog.splice(0, S.chainLog.length - 100);
+        }
+      } catch(e) {}
+      try { if (typeof showToast === 'function') showToast('🧹 Compteurs flotte purgés · les chiffres repartent sur du réel', 5000, 'warn'); } catch(e) {}
+      try { if (typeof saveState === 'function') saveState(true); } catch(e) {}
+    } catch(e) {}
+  }, 500);
+})();
 
 // Helper
 function _setBot(id, status, action) {
