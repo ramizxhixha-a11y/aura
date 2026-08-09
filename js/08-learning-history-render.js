@@ -2074,6 +2074,26 @@ function getTechSignals(pair) {
     };
   }
 
+  // [NUTRITION · 09/08/2026] les patterns chartistes de 06 (_detectPatterns) n'étaient
+  // consommés QUE par l'affichage — aucune décision ne les mangeait. Le meilleur pattern
+  // détecté (conf max) entre au score pondéré comme un signal, poids = sa confiance
+  // (0.6-0.77, dans la gamme des autres poids). Il nourrit ainsi atScore → agents,
+  // conseil, composite, gate. Visible dans signals.pattern (label = nom du pattern).
+  try {
+    if (typeof _detectPatterns === 'function') {
+      const _pats = _detectPatterns(closes);
+      if (_pats && _pats.length && _pats[0].signal !== 'neu') {
+        const _bp = _pats[0];
+        signals.pattern = {
+          signal: _bp.signal === 'bull' ? 'bull' : 'bear',
+          label:  `${_bp.icon} ${_bp.name}`,
+          detail: `Pattern chartiste · conf ${( _bp.conf*100).toFixed(0)}%`,
+          weight: _bp.conf
+        };
+      }
+    }
+  } catch(e) { try{window._decErr&&window._decErr(e)}catch(_e){} }
+
   // ── Score pondéré ──────────────────────────────────────────
   let scoreSum=0, weightSum=0;
   Object.values(signals).forEach(s => {

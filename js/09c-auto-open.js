@@ -433,7 +433,7 @@ function autoOpenPosition(pair, side, stakeOverride) {
   let _appliedSizerMult = null;
   if (typeof runBotFleet === 'function') {
     try {
-      const fleetResult = runBotFleet('pre_trade', { stake: baseStake });
+      const fleetResult = runBotFleet('pre_trade', { stake: baseStake, pair });   // [nutrition 09/08] la paire nourrit le Sharpe du Sizer
       if (fleetResult?.sizer?.mult && Math.abs(fleetResult.sizer.mult - 1) > 0.01) {
         const adjusted = baseStake * fleetResult.sizer.mult;
         baseStake = Math.max(_stakeFloor(), _stakeRound(adjusted));

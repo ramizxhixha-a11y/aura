@@ -4222,57 +4222,78 @@ function botExec(stakeUsd, statusOnly) {
     _setBot('exec_bot_v1', 'idle', `Taille ${stakeUsd?.toFixed(0) || 0}$ — exécution directe`);
     return { chunks: 1, savings: 0 };
   }
-  const chunks = stakeUsd > 200 ? 3 : stakeUsd > 100 ? 2 : 1;
-  _setBot('exec_bot_v1', 'executing', `Split TWAP ${chunks}x recommandé sur ${stakeUsd.toFixed(0)}$ (exécution en chunks : chantier)`);
+  // [NUTRITION · 09/08/2026] les chunks ignoraient le marché : nourris par la
+  // volatilité médiane (_getMarketVolatilityMedian) — marché nerveux (cv>2%) = un
+  // chunk de plus pour lisser l'exécution. Toujours 0 $ revendiqué (split réel : chantier).
+  let chunks = stakeUsd > 200 ? 3 : stakeUsd > 100 ? 2 : 1;
+  let volStr = '';
+  try {
+    const mv = (typeof _getMarketVolatilityMedian === 'function') ? _getMarketVolatilityMedian() : null;
+    if (typeof mv === 'number' && mv > 0.02) { chunks++; volStr = ` · vol ${(mv*100).toFixed(1)}% → +1 chunk`; }
+  } catch(e) { try{window._decErr&&window._decErr(e)}catch(_e){} }
+  _setBot('exec_bot_v1', 'executing', `Split TWAP ${chunks}x recommandé sur ${stakeUsd.toFixed(0)}$${volStr} (exécution en chunks : chantier)`);
   if(!statusOnly) {
     S.botFleet.exec_bot_v1.contributions++;
   }
   return { chunks, savings: 0 };
 }
 
-// ── 2. ARB BOT · cross-pair scanner (v6.0 · proposition actionnable) ──
+// ── 2. ARB BOT · Stat·Arb par corrélations (v7 · nutrition 09/08/2026) ──
+// L'ancien bot « Stat·Arb » ne mangeait AUCUNE corrélation : il scannait un composite
+// directionnel (tech+fond > 0.45) — doublon du travail du conseil et du scalper.
+// Remplacé par son vrai métier, nourri par _getPairCorrelation (déjà calculée, mangée
+// par personne d'autre que la garde EV) : détecter deux paires historiquement corrélées
+// (>0.65) dont les performances récentes ont divergé (>2.5%), et PROPOSER la jambe de
+// convergence — long le retardataire. La proposition passe par le circuit complet
+// (brain gate, vetos, anti-négatif). Ce que ça retire : le scan directionnel composite.
 function botArb() {
   const pairs = Object.keys(PAIRS || {});
   let best = null;
-  pairs.forEach(p => {
-    const ps = S.pairStates?.[p];
-    const tech = typeof getTechSignals === 'function' ? getTechSignals(p) : null;
-    const fund = typeof getFundamentalSignals === 'function' ? getFundamentalSignals(p) : null;
-    if(!tech || !fund) return;
-    const composite = Math.abs((tech.atScore || 0) * 0.6 + (fund.fundScore || 0) * 0.4);
-    const hasPosition = (S.openPositions || []).some(pos => pos.pair === p);
-    if(composite > 0.45 && !hasPosition) {
-      if(!best || composite > best.score) best = { pair: p, score: composite, direction: (tech.atScore > 0 ? 'long' : 'short') };
+  try {
+    for (let i = 0; i < pairs.length; i++) {
+      for (let j = i + 1; j < pairs.length; j++) {
+        const corr = (typeof _getPairCorrelation === 'function') ? _getPairCorrelation(pairs[i], pairs[j]) : null;
+        if (!(typeof corr === 'number' && corr > 0.65)) continue;
+        const rA = (typeof _getPairReturns === 'function') ? _getPairReturns(pairs[i]) : null;
+        const rB = (typeof _getPairReturns === 'function') ? _getPairReturns(pairs[j]) : null;
+        if (!rA || !rB || rA.length < 10 || rB.length < 10) continue;
+        const perfA = rA.slice(-20).reduce((s, x) => s + x, 0);
+        const perfB = rB.slice(-20).reduce((s, x) => s + x, 0);
+        const div = perfA - perfB;   // divergence de performance récente
+        if (Math.abs(div) > 0.025) {
+          const lag = div > 0 ? pairs[j] : pairs[i];   // le retardataire
+          const lead = div > 0 ? pairs[i] : pairs[j];
+          if (!best || Math.abs(div) > Math.abs(best.div)) best = { lag, lead, corr, div };
+        }
+      }
     }
-  });
-  if(best) {
-    _setBot('arb_bot_v1', 'active', `${best.pair} ${best.direction.toUpperCase()} · conviction ${(best.score*100).toFixed(0)}%`);
-    // v6.0 · Publie une proposition de trade
+  } catch(e) { try{window._decErr&&window._decErr(e)}catch(_e){} }
+  if (best) {
     if(!S.pendingActions) S.pendingActions = [];
-    const already = S.pendingActions.find(a => a.type === 'arb' && a.pair === best.pair && a.side === best.direction);
+    const already = S.pendingActions.find(a => a.type === 'arb' && a.pair === best.lag);
     if(!already) {
-      // Clear other arb proposals first (one opportunity at a time)
       S.pendingActions = S.pendingActions.filter(a => a.type !== 'arb');
       S.pendingActions.unshift({
-        id: 'ab' + Date.now().toString(36),
+        id: 'ar' + Date.now().toString(36),
         type: 'arb',
-        pair: best.pair,
-        side: best.direction,
+        pair: best.lag,
+        side: 'long',
         ts: Date.now(),
         source: 'arb_bot_v1',
-        title: `Opportunité ${best.pair}`,
-        detail: `${best.direction.toUpperCase()} · conviction ${(best.score*100).toFixed(0)}%`,
+        title: `Convergence ${best.lag}`,
+        detail: `corr ${best.corr.toFixed(2)} avec ${best.lead} · divergence ${(Math.abs(best.div)*100).toFixed(1)}% · long retardataire`,
         action: 'open_trade',
-        payload: { pair: best.pair, side: best.direction }
+        payload: { pair: best.lag, side: 'long' }
       });
       if(S.pendingActions.length > 10) S.pendingActions.length = 10;
-      S.botFleet.arb_bot_v1.contributions++;   // [audit 09/08] une proposition publiée = une intervention réelle
+      S.botFleet.arb_bot_v1.contributions++;   // proposition publiée = intervention réelle
     }
-  } else {
-    _setBot('arb_bot_v1', 'scanning', 'Balayage cross-pair · rien au-dessus du seuil 45%');
-    if(S.pendingActions) S.pendingActions = S.pendingActions.filter(a => a.type !== 'arb');
+    _setBot('arb_bot_v1', 'active', `Convergence ${best.lag}/${best.lead} · corr ${best.corr.toFixed(2)} · div ${(Math.abs(best.div)*100).toFixed(1)}%`);
+    return best;
   }
-  return best;
+  _setBot('arb_bot_v1', 'scanning', `Scan corrélations · aucune divergence >2.5% sur paires corrélées`);
+  if(S.pendingActions) S.pendingActions = S.pendingActions.filter(a => a.type !== 'arb');
+  return null;
 }
 
 // ── 3. SCALPER BOT · scanner d'opportunités scalp ──
@@ -4491,7 +4512,14 @@ function botRebalance() {
 }
 
 // ── 8. SMART SIZER · Kelly-inspired position sizing ──
-function botSmartSizer() {
+// [NUTRITION · 09/08/2026] le Sizer ne mangeait que le WR des 10 derniers trades.
+// Branché sur deux données que le système calculait déjà pour personne :
+//  · WR EFFECTIF EV (_getEffectiveWR, cumul wins/losses paperReal) — source WR
+//    prioritaire quand ≥10 trades EV existent, plus stable que la fenêtre de 10 ;
+//  · SHARPE PAR PAIRE (_computePairSharpe) — second facteur multiplicatif borné :
+//    ×0.85 si le Sharpe de LA paire tradée est mauvais (<−0.5), ×1.10 s'il est bon
+//    (>0.5). Résultat total borné [0.5, 1.4]. Chaque facteur est tracé dans lastAction.
+function botSmartSizer(pair) {
   const recent = Object.values(S.pairStates || {})
     .flatMap(p => (p.trades || []))
     .filter(t => t.type === 'position' && t.pnlUsdt != null)
@@ -4501,7 +4529,12 @@ function botSmartSizer() {
     return { mult: 1.0, wr: null };
   }
   const wins = recent.filter(t => t.pnlUsdt > 0).length;
-  const wr = wins / recent.length;
+  let wr = wins / recent.length;
+  let wrSrc = recent.length + ' trades';
+  try {
+    const effWR = (typeof _getEffectiveWR === 'function') ? _getEffectiveWR() : null;
+    if (typeof effWR === 'number') { wr = effWR; wrSrc = 'WR effectif EV'; }
+  } catch(e) { try{window._decErr&&window._decErr(e)}catch(_e){} }
   let mult, action;
   if(wr >= 0.7) {
     mult = 1.25;
@@ -4520,6 +4553,19 @@ function botSmartSizer() {
     action = `WR ${(wr*100).toFixed(0)}% · size normal (neutre)`;
     _setBot('smart_sizer_v1', 'idle', action);
   }
+  // Facteur Sharpe de la paire tradée (si connue)
+  let shMult = 1.0, shStr = '';
+  try {
+    if (pair && typeof _computePairSharpe === 'function') {
+      const sh = _computePairSharpe(pair);
+      if (typeof sh === 'number' && isFinite(sh)) {
+        if (sh < -0.5) { shMult = 0.85; shStr = ` · Sharpe ${pair} ${sh.toFixed(2)} → ×0.85`; }
+        else if (sh > 0.5) { shMult = 1.10; shStr = ` · Sharpe ${pair} ${sh.toFixed(2)} → ×1.10`; }
+      }
+    }
+  } catch(e) { try{window._decErr&&window._decErr(e)}catch(_e){} }
+  mult = Math.max(0.5, Math.min(1.4, mult * shMult));
+  if (shStr) _setBot('smart_sizer_v1', 'active', action + shStr + ` (${wrSrc})`);
   S.botFleet.smart_sizer_v1.contributions = recent.length;
   return { mult, wr };
 }
@@ -4540,7 +4586,7 @@ function runBotFleet(event, context) {
       try { botSmartSizer(); } catch(e) {}
       break;
     case 'pre_trade': {
-      const sizer = botSmartSizer();
+      const sizer = botSmartSizer(context.pair);   // [nutrition 09/08] la paire nourrit le Sharpe
       const exec = botExec(context.stake || 0);
       return { sizer, exec };
     }
