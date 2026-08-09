@@ -81,8 +81,8 @@ const _LT_PHRASES = {
     'nexusSnap_A','nexusSnap_B','nexusSnap_C','nexusSnap_latest',
     'nexusInternal_1','nexusInternal_2','nexusInternal_3','nexusInternal_4','nexusInternal_5'
   ];
-  obsoletes.forEach(k => { try { localStorage.removeItem(k); } catch(e) {} });
-  try { sessionStorage.removeItem('nexusSnap_current'); } catch(e) {}
+  obsoletes.forEach(k => { try { localStorage.removeItem(k); } catch(e){ try{window._decErr&&window._decErr(e)}catch(_e){} } });
+  try { sessionStorage.removeItem('nexusSnap_current'); } catch(e){ try{window._decErr&&window._decErr(e)}catch(_e){} }
 })();
 
 let _currentDetailPair = null;
@@ -123,7 +123,7 @@ function _computeVolatilityScore(pair) {
         atrValid = true;
       }
     }
-  } catch(e) {}
+  } catch(e){ try{window._decErr&&window._decErr(e)}catch(_e){} }
   
   // Méthode 2 : Écart-type des prix sur 20 bougies (en % du prix)
   let stdPct = 0;
@@ -148,7 +148,7 @@ function _computeVolatilityScore(pair) {
         }
       }
     }
-  } catch(e) {}
+  } catch(e){ try{window._decErr&&window._decErr(e)}catch(_e){} }
   
   // Méthode 3 : Mouvement 24h absolu
   let move24Pct = 0;
@@ -561,13 +561,13 @@ function _abComputeVerdict() {
       time: typeof nowStr==='function' ? nowStr() : ''
     });
     if (S.chainLog.length > 100) S.chainLog.splice(0, S.chainLog.length - 100);
-  } catch(e) {}
+  } catch(e){ try{window._decErr&&window._decErr(e)}catch(_e){} }
   
   try {
     if (typeof showToast === 'function') {
       showToast('🧬 A/B Gen ' + verdict.generation + ' · ' + winner + ' gagne (' + verdict.winnerWR + '%)', 5000, 'win');
     }
-  } catch(e) {}
+  } catch(e){ try{window._decErr&&window._decErr(e)}catch(_e){} }
 }
 window._abComputeVerdict = _abComputeVerdict;
 if(typeof _abComputeVerdict==='function') window._abComputeVerdict = _abComputeVerdict;
@@ -652,7 +652,7 @@ function _captureTradeContext(pair, side, stakeUsdt) {
           fitness: a.fitness || 0
         }));
     }
-  } catch(e) {}
+  } catch(e){ try{window._decErr&&window._decErr(e)}catch(_e){} }
   
   return ctx;
 }
@@ -745,13 +745,13 @@ function _checkHedgingTrigger() {
         time: typeof nowStr==='function' ? nowStr() : ''
       });
       if (S.chainLog.length > 100) S.chainLog.splice(0, S.chainLog.length - 100);
-    } catch(e) {}
+    } catch(e){ try{window._decErr&&window._decErr(e)}catch(_e){} }
     
     try {
       if (typeof showToast === 'function') {
         showToast('🛡️ Hedge suggéré sur ' + candidate.split('/')[0] + ' SHORT', 5000, 'warn');
       }
-    } catch(e) {}
+    } catch(e){ try{window._decErr&&window._decErr(e)}catch(_e){} }
   }
 }
 window._checkHedgingTrigger = _checkHedgingTrigger;
@@ -801,7 +801,7 @@ function _checkReversalsAndClose() {
       if (typeof closePosition === 'function') {
         closePosition(pos.id, true);
       }
-    } catch(e) {}
+    } catch(e){ try{window._decErr&&window._decErr(e)}catch(_e){} }
   });
 }
 window._checkReversalsAndClose = _checkReversalsAndClose;
@@ -1283,7 +1283,7 @@ window._giveBackToBot = _giveBackToBot;
 if(typeof _giveBackToBot==='function') window._giveBackToBot = _giveBackToBot;
 
 function _initNetIndicator() {
-  try { _updateNetIndicator(); } catch(e) {}
+  try { _updateNetIndicator(); } catch(e){ try{window._decErr&&window._decErr(e)}catch(_e){} }
 }
 if(typeof _initNetIndicator==='function') window._initNetIndicator = _initNetIndicator;
 
@@ -1738,7 +1738,7 @@ function _resolvePairCycleCore(pair, ps) {
         if (S.chainLog.length > 100) S.chainLog.splice(0, S.chainLog.length - 100);
       }
     }
-  } catch(e) {}
+  } catch(e){ try{window._decErr&&window._decErr(e)}catch(_e){} }
   // Gain visé (même formule que le TP réel tpPctE plus bas), en fraction.
   const _tpFrac     = Math.max(0.6, effectiveConviction * 3.2 * (1 + volCV * 9)) / 100;
   // Gain net espéré = gain - frais aller-retour - impôt sur le gain net de frais.
@@ -1768,7 +1768,7 @@ function _resolvePairCycleCore(pair, ps) {
           var _psL = _wsL[_mk] && _wsL[_mk].pairStates && _wsL[_mk].pairStates[pair];
           if (_psL && typeof _psL.totalPnlUsd === 'number') _learned += _psL.totalPnlUsd;
         });
-      } catch(e) {}
+      } catch(e){ try{window._decErr&&window._decErr(e)}catch(_e){} }
       _reSolid = _learned > 0;
     }
     if (!_reSolid) {
@@ -1804,7 +1804,7 @@ function _resolvePairCycleCore(pair, ps) {
       _pairWatch = _pairExp < -0.15;
       _pairGood  = _pairExp > 0.03;
     }
-  } catch(e) {}
+  } catch(e){ try{window._decErr&&window._decErr(e)}catch(_e){} }
   window._pairWatchMult = _pairWatch ? 0.25 : (_pairGood ? 1.8 : 1);
   const _convFloor = (0.30 - Math.min(0.04, (S._convBoost || 0) * 0.5)) + (_pairWatch ? 0.12 : 0);
   if(_gainNet < _minNetGain || effectiveConviction < _convFloor) {
@@ -1908,7 +1908,7 @@ function _resolvePairCycleCore(pair, ps) {
       return;
     }
     window._levOpenOK = _levOK;
-  } catch(e) {}
+  } catch(e){ try{window._decErr&&window._decErr(e)}catch(_e){} }
   
   let finalStake = stakeUsdt;
   if (S.tradingMode === 'paperReal' && typeof _checkPaperRealStakeLimit === 'function') {
@@ -1991,15 +1991,15 @@ window._lossCapSweep = function _lossCapSweep() {
                   hash: Math.random().toString(36).slice(2,8), time: new Date().toLocaleTimeString() });
                 if (S.chainLog.length > 100) S.chainLog.splice(0, S.chainLog.length - 100);
               }
-            } catch(e) {}
-            try { closePosition(pos.id, pos.auto === true); } catch(e) {}
-            try { showToast('\u26D4 Perte max \u00b7 ' + pos.pair + ' ' + pnlPct.toFixed(1) + '%', 4000, 'loss'); } catch(e) {}
+            } catch(e){ try{window._decErr&&window._decErr(e)}catch(_e){} }
+            try { closePosition(pos.id, pos.auto === true); } catch(e){ try{window._decErr&&window._decErr(e)}catch(_e){} }
+            try { showToast('\u26D4 Perte max \u00b7 ' + pos.pair + ' ' + pnlPct.toFixed(1) + '%', 4000, 'loss'); } catch(e){ try{window._decErr&&window._decErr(e)}catch(_e){} }
           }
         });
-      } catch(e) {}
+      } catch(e){ try{window._decErr&&window._decErr(e)}catch(_e){} }
       if (_sw) S.tradingMode = _disp;
     });
-  } catch(e) {}
+  } catch(e){ try{window._decErr&&window._decErr(e)}catch(_e){} }
 };
 
 function _resolvePaperRealCycle(pair, ps) {
@@ -2103,7 +2103,7 @@ function _showForceCloseConfirm(pair) {
   }
   if (overlay) overlay.classList.add('open');
   if (typeof navigator !== 'undefined' && navigator.vibrate) {
-    try { navigator.vibrate(20); } catch(e) {}
+    try { navigator.vibrate(20); } catch(e){ try{window._decErr&&window._decErr(e)}catch(_e){} }
   }
 }
 window._showForceCloseConfirm = _showForceCloseConfirm;
@@ -2194,7 +2194,7 @@ function changeProfitSplit(delta) {
   if (n > 100) n = 100;
   S.profitSplitCaissePct = n;
   _syncSplitDisp();
-  try { if (typeof saveState === 'function') saveState(true); } catch(e){}
+  try { if (typeof saveState === 'function') saveState(true); } catch(e){ try{window._decErr&&window._decErr(e)}catch(_e){} }
 }
 function _syncSplitDisp() {
   const n = (typeof S.profitSplitCaissePct === 'number' ? S.profitSplitCaissePct : 30);
@@ -2332,7 +2332,7 @@ function exportForClaude() {
   try {
     var snap = (typeof buildSnapshot === 'function') ? buildSnapshot()
              : (window.buildSnapshot ? window.buildSnapshot() : null);
-    if (!snap) { try { showToast('Export impossible : etat non pret', 3000, 'warn'); } catch(e) {} return; }
+    if (!snap) { try { showToast('Export impossible : etat non pret', 3000, 'warn'); } catch(e){ try{window._decErr&&window._decErr(e)}catch(_e){} } return; }
     var payload = {
       _type: 'aura_guardian_full',
       version: 'aura-embed-1',
@@ -2343,7 +2343,7 @@ function exportForClaude() {
       aura: snap,
       guardian: null
     };
-    var tk = null; try { tk = localStorage.getItem('aura_claude_gh_token') || null; } catch(e) {}
+    var tk = null; try { tk = localStorage.getItem('aura_claude_gh_token') || null; } catch(e){ try{window._decErr&&window._decErr(e)}catch(_e){} }
     if (tk) { _claudePush(payload, tk); return; }
     _claudeDrop(payload);
   } catch(e) { try { showToast('Export Claude : erreur', 3000, 'warn'); } catch(_) {} }
@@ -2362,7 +2362,7 @@ function _claudeDrop(payload) {
   var cyc = payload.auraCycle || '?';
   try {
     fetch('https://webhook.site/' + _CLAUDE_BOX, { method: 'POST', mode: 'no-cors', headers: { 'Content-Type': 'text/plain' }, body: txt })
-      .then(function(){ try { showToast('✅ [' + _PONT_V + '] Déposé pour Claude · cycle ' + cyc + ' — il confirme la réception à la lecture', 6000, 'win'); } catch(e) {} })
+      .then(function(){ try { showToast('✅ [' + _PONT_V + '] Déposé pour Claude · cycle ' + cyc + ' — il confirme la réception à la lecture', 6000, 'win'); } catch(e){ try{window._decErr&&window._decErr(e)}catch(_e){} } })
       .catch(function(){ _claudeShareOrDownload(payload); });
   } catch(e) { _claudeShareOrDownload(payload); }
 }
@@ -2374,7 +2374,7 @@ function _claudeShareOrDownload(payload) {
       var f = new File([txt], 'aura_live.json', { type: 'application/json' });
       if (navigator.canShare({ files: [f] })) {
         navigator.share({ files: [f], title: 'aura_live.json \u00b7 cycle ' + cyc })
-          .then(function(){ try { showToast('\u2705 Partag\u00e9 \u00b7 cycle ' + cyc + ' \u2014 choisis Claude (ou envoie le fichier dans le chat)', 6000, 'win'); } catch(e) {} })
+          .then(function(){ try { showToast('\u2705 Partag\u00e9 \u00b7 cycle ' + cyc + ' \u2014 choisis Claude (ou envoie le fichier dans le chat)', 6000, 'win'); } catch(e){ try{window._decErr&&window._decErr(e)}catch(_e){} } })
           .catch(function(err){
             if (err && err.name === 'AbortError') return;   // feuille fermee volontairement
             _claudeDownloadFallback(txt, cyc);
@@ -2382,13 +2382,13 @@ function _claudeShareOrDownload(payload) {
         return;
       }
     }
-  } catch(e) {}
+  } catch(e){ try{window._decErr&&window._decErr(e)}catch(_e){} }
   _claudeDownloadFallback(txt, cyc);
 }
 function _claudeDownloadFallback(txt, cyc) {
   downloadFile(txt, 'aura_live.json', 'application/json');
   var hh = new Date(); var pad = function(n){ return (n<10?'0':'')+n; };
-  try { showToast('\u2705 aura_live.json \u00b7 cycle ' + cyc + ' \u00b7 ' + pad(hh.getHours()) + ':' + pad(hh.getMinutes()) + ' \u2014 dans T\u00e9l\u00e9chargements', 6000, 'win'); } catch(e) {}
+  try { showToast('\u2705 aura_live.json \u00b7 cycle ' + cyc + ' \u00b7 ' + pad(hh.getHours()) + ':' + pad(hh.getMinutes()) + ' \u2014 dans T\u00e9l\u00e9chargements', 6000, 'win'); } catch(e){ try{window._decErr&&window._decErr(e)}catch(_e){} }
 }
 
 // Envoi DIRECT au repo (API GitHub, token fine-grained limite au repo, Contents RW).
@@ -2411,7 +2411,7 @@ function _claudeB64(str) {
 function _claudePush(payload, tk) {
   var base = 'https://api.github.com/repos/ramizxhixha-a11y/aura';
   var hdr = { 'Authorization': 'Bearer ' + tk, 'Accept': 'application/vnd.github+json' };
-  try { showToast('\u23F3 Envoi \u00e0 Claude\u2026', 2500, 'ice'); } catch(e) {}
+  try { showToast('\u23F3 Envoi \u00e0 Claude\u2026', 2500, 'ice'); } catch(e){ try{window._decErr&&window._decErr(e)}catch(_e){} }
   // Le sha du fichier existant est lu via le LISTING de la racine (fiable quelle
   // que soit la taille du fichier ; le GET direct d'un fichier proche de 1 Mo
   // peut etre refuse par l'API et aurait fait echouer la mise a jour).
@@ -2429,7 +2429,7 @@ function _claudePush(payload, tk) {
     })
     .then(function(r){
       if (!r) return;
-      if (r.status === 200 || r.status === 201) { try { showToast('\u2705 Envoy\u00e9 \u00e0 Claude \u00b7 cycle ' + (payload.auraCycle || '?') + ' \u2014 il peut le lire maintenant', 6000, 'win'); } catch(e) {} return; }
+      if (r.status === 200 || r.status === 201) { try { showToast('\u2705 Envoy\u00e9 \u00e0 Claude \u00b7 cycle ' + (payload.auraCycle || '?') + ' \u2014 il peut le lire maintenant', 6000, 'win'); } catch(e){ try{window._decErr&&window._decErr(e)}catch(_e){} } return; }
       return r.json().catch(function(){ return {}; }).then(function(j){ throw { st: r.status, gh: j && j.message }; });
     })
     .catch(function(e){
@@ -2447,7 +2447,7 @@ function _claudePush(payload, tk) {
 }
 function claudeTokenConfig() {
   try {
-    var cur = null; try { cur = localStorage.getItem('aura_claude_gh_token'); } catch(e) {}
+    var cur = null; try { cur = localStorage.getItem('aura_claude_gh_token'); } catch(e){ try{window._decErr&&window._decErr(e)}catch(_e){} }
     // ★ FIX (05/07 soir) · le champ n'est PLUS pre-rempli : l'ancien placeholder
     // « •••• » faisait ignorer EN SILENCE tout collage qui le laissait en tete —
     // les nouveaux tokens de Rams n'etaient donc JAMAIS enregistres et l'app
@@ -2461,19 +2461,19 @@ function claudeTokenConfig() {
     if (!v) {
       if (cur && window.confirm('Effacer le token enregistre ?')) {
         localStorage.removeItem('aura_claude_gh_token');
-        try { showToast('Token efface', 2500, 'ice'); } catch(e) {}
+        try { showToast('Token efface', 2500, 'ice'); } catch(e){ try{window._decErr&&window._decErr(e)}catch(_e){} }
       }
       return;
     }
     localStorage.setItem('aura_claude_gh_token', v);
-    try { showToast('\uD83D\uDCBE Token enregistre (' + v.slice(0, 10) + '\u2026) \u2014 test en cours', 2500, 'ice'); } catch(e) {}
+    try { showToast('\uD83D\uDCBE Token enregistre (' + v.slice(0, 10) + '\u2026) \u2014 test en cours', 2500, 'ice'); } catch(e){ try{window._decErr&&window._decErr(e)}catch(_e){} }
     _claudeTestToken(v);
-  } catch(e) {}
+  } catch(e){ try{window._decErr&&window._decErr(e)}catch(_e){} }
 }
 // Verdict immediat du token : voit-il le repo ? peut-il ECRIRE ?
 // (GET /repos renvoie permissions.push quand authentifie)
 function _claudeTestToken(tk) {
-  try { showToast('\u23F3 Test du token\u2026', 2000, 'ice'); } catch(e) {}
+  try { showToast('\u23F3 Test du token\u2026', 2000, 'ice'); } catch(e){ try{window._decErr&&window._decErr(e)}catch(_e){} }
   fetch('https://api.github.com/repos/ramizxhixha-a11y/aura', { headers: { 'Authorization': 'Bearer ' + tk, 'Accept': 'application/vnd.github+json' }, cache: 'no-store' })
     .then(function(r){
       if (r.status === 200) return r.json();
@@ -2482,10 +2482,10 @@ function _claudeTestToken(tk) {
     .then(function(j){
       if (j && j.permissions && j.permissions.push === true) {
         _claudeWho(tk).then(function(who){
-          try { showToast('\u2705 [' + _PONT_V + '] Token OK \u00b7 compte : ' + who + ' \u00b7 \u00e9criture confirm\u00e9e \u2014 clique \uD83D\uDCE4', 6000, 'win'); } catch(e) {}
+          try { showToast('\u2705 [' + _PONT_V + '] Token OK \u00b7 compte : ' + who + ' \u00b7 \u00e9criture confirm\u00e9e \u2014 clique \uD83D\uDCE4', 6000, 'win'); } catch(e){ try{window._decErr&&window._decErr(e)}catch(_e){} }
         });
       } else {
-        try { showToast('\u26A0 Le token LIT le repo mais ne peut pas \u00c9CRIRE \u2192 Permissions \u2192 Contents : Read and write', 9000, 'warn'); } catch(e) {}
+        try { showToast('\u26A0 Le token LIT le repo mais ne peut pas \u00c9CRIRE \u2192 Permissions \u2192 Contents : Read and write', 9000, 'warn'); } catch(e){ try{window._decErr&&window._decErr(e)}catch(_e){} }
       }
     })
     .catch(function(e){
@@ -2544,7 +2544,7 @@ function enableFullPowerMode() {
     if (typeof renderHome === 'function') renderHome();
     if (typeof updateStreakBadge === 'function') updateStreakBadge();
     if (typeof renderAgentsSection === 'function') renderAgentsSection();
-  } catch(e) {}
+  } catch(e){ try{window._decErr&&window._decErr(e)}catch(_e){} }
   
   if (typeof showToast === 'function') {
     showToast('⚡ PLEIN RÉGIME · ' + count + ' agents/bots @ 100%', 'up');

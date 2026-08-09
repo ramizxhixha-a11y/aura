@@ -160,3 +160,38 @@
     }
   } catch (e) {}
 })();
+
+// ════════════════════════════════════════════════════════════════════════
+// [COLLECTEUR D'ERREURS AVALÉES · 09/08/2026] Les chemins de décision (09c, 10)
+// contiennent des catch vides : une erreur répétée y meurt en silence — c'est le
+// mécanisme qui a caché le crash potentiel du brain gate. Chaque catch critique
+// appelle désormais _decErr(e) : compteur par message dans S._errStats, la PREMIÈRE
+// occurrence de chaque message est journalisée ⚠ au chainLog, les suivantes comptent
+// sans spammer. Zéro comportement modifié : les erreurs restent avalées (l'app ne
+// casse pas), mais elles ne sont plus INVISIBLES.
+// ════════════════════════════════════════════════════════════════════════
+(function _auraDecErrCollector() {
+  try {
+    if (typeof window === 'undefined' || window._decErr) return;
+    window._decErr = function (e) {
+      try {
+        var msg = String((e && e.message) || e || 'erreur inconnue').slice(0, 90);
+        var S0 = null;
+        try { S0 = (0, eval)('S'); } catch (err) {}
+        if (!S0) return;
+        if (!S0._errStats) S0._errStats = {};
+        var first = !S0._errStats[msg];
+        S0._errStats[msg] = (S0._errStats[msg] || 0) + 1;
+        if (first && S0.chainLog) {
+          S0.chainLog.push({
+            icon: '⚠',
+            desc: 'Erreur avalée (1re occurrence) : ' + msg,
+            hash: Math.random().toString(36).slice(2, 8),
+            time: new Date().toLocaleTimeString()
+          });
+          if (S0.chainLog.length > 100) S0.chainLog.splice(0, S0.chainLog.length - 100);
+        }
+      } catch (err) {}
+    };
+  } catch (e) {}
+})();

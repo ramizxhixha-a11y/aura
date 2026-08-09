@@ -169,9 +169,15 @@ function makePairState(cfg) {
   return {
     price:        initPrice,
     candles,
-    pnl24h:       (Math.random()-.45)*4,
-    qYes:         100+Math.floor(Math.random()*60),
-    qNo:          100+Math.floor(Math.random()*60),
+    // [AUDIT VÉRITÉ · 09/08/2026] pnl24h démarrait sur un nombre inventé (écrasé plus
+    // tard par CoinGecko) → 0 jusqu'à la vraie donnée. qYes/qNo démarraient à
+    // 100+aléa(60) chacun : le penchant LMSR initial de chaque paire (qui nourrit les
+    // DÉCISIONS via lmsrP) était tiré au sort, jusqu'à ±23% de biais directionnel de
+    // naissance. Seed symétrique 130/130 : même liquidité, penchant neutre — le biais
+    // se GAGNE par l'apprentissage. Paires existantes intactes (création uniquement).
+    pnl24h:       0,
+    qYes:         130,
+    qNo:          130,
     trades:       [], totalTrades:0, winTrades:0,
     totalPnlPct:  0,  totalPnlUsd: 0,
     bestTrade:    null, worstTrade: null,

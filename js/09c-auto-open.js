@@ -41,7 +41,7 @@ function autoOpenPosition(pair, side, stakeOverride) {
   if (S.tradingMode === 'real') {
     if (S.botAutoMode === false) return;                     // MANU : jamais d'ouverture
     var _reRun = false;
-    try { _reRun = window._isModeRunning ? !!window._isModeRunning('real') : false; } catch(e) {}
+    try { _reRun = window._isModeRunning ? !!window._isModeRunning('real') : false; } catch(e){ try{window._decErr&&window._decErr(e)}catch(_e){} }
     if (!_reRun) return;                                     // RE pas en play : pas de consentement
   }
 
@@ -51,7 +51,7 @@ function autoOpenPosition(pair, side, stakeOverride) {
   // Sauvegarde de sécurité avant action bot
   try {
     if (typeof _p5PreActionSave === 'function') _p5PreActionSave('open_bot');
-  } catch (e) {}
+  } catch(e){ try{window._decErr&&window._decErr(e)}catch(_e){} }
 
   // Gate réseau : pas d'ouverture pendant une coupure Internet
   if (S._netPaused === true) {
@@ -222,7 +222,7 @@ function autoOpenPosition(pair, side, stakeOverride) {
         return;
       }
     }
-  } catch (e) {}
+  } catch(e){ try{window._decErr&&window._decErr(e)}catch(_e){} }
 
   // ──────────────────────────────────────────────────────────────
   // Veto cohérence régime / side : bloque les trades contraires au
@@ -269,7 +269,7 @@ function autoOpenPosition(pair, side, stakeOverride) {
         return;
       }
     }
-  } catch (e) {}
+  } catch(e){ try{window._decErr&&window._decErr(e)}catch(_e){} }
 
   // ──────────────────────────────────────────────────────────────
   // Veto volume anormalement bas : évite les marchés morts où les
@@ -290,7 +290,7 @@ function autoOpenPosition(pair, side, stakeOverride) {
         return;
       }
     }
-  } catch (e) {}
+  } catch(e){ try{window._decErr&&window._decErr(e)}catch(_e){} }
 
   // ──────────────────────────────────────────────────────────────
   // Veto volatilité excessive : évite les pics de volatilité pièges
@@ -314,7 +314,7 @@ function autoOpenPosition(pair, side, stakeOverride) {
         }
       }
     }
-  } catch (e) {}
+  } catch(e){ try{window._decErr&&window._decErr(e)}catch(_e){} }
 
   // Règle métier absolue : le bot utilise SEULEMENT tradingAccount — jamais cashAccount
   // la mise venue du decideur (10) est deja proportionnee : on la respecte.
@@ -442,7 +442,7 @@ function autoOpenPosition(pair, side, stakeOverride) {
         // (remplace l'ancien « 5% de crédit revendiqué » forfaitaire).
         _appliedSizerMult = fleetResult.sizer.mult;
       }
-    } catch (e) {}
+    } catch(e){ try{window._decErr&&window._decErr(e)}catch(_e){} }
   }
 
   // Fallback levier si compte trading vide
@@ -552,7 +552,7 @@ function autoOpenPosition(pair, side, stakeOverride) {
         });
         if (S.chainLog.length > 100) S.chainLog.splice(0, S.chainLog.length - 100);
       }
-      if (levBorrowed > 0) { try { repayLeverage(levBorrowed); } catch(e){} }
+      if (levBorrowed > 0) { try { repayLeverage(levBorrowed); } catch(e){ try{window._decErr&&window._decErr(e)}catch(_e){} } }
       return;
     }
   }
@@ -645,7 +645,7 @@ function autoOpenPosition(pair, side, stakeOverride) {
           _addTradeContextToMemory(ctx);
           return ctx.contextId;
         }
-      } catch (e) {}
+      } catch(e){ try{window._decErr&&window._decErr(e)}catch(_e){} }
       return null;
     })(),
 
@@ -654,7 +654,7 @@ function autoOpenPosition(pair, side, stakeOverride) {
       if (S.tradingMode !== 'paperReal') return null;
       try {
         return _abAssignArm();
-      } catch (e) {}
+      } catch(e){ try{window._decErr&&window._decErr(e)}catch(_e){} }
       return null;
     })(),
 

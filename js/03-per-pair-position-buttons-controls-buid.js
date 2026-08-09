@@ -2283,7 +2283,7 @@ function buildThoughtPhrase() {
     `<span class="th-agent">${top.emoji||'•'} ${top.name}</span> <span class="th-sep">&middot;</span> score <span class="${actionColor}">${(top.score>=0?'+':'')}${top.score.toFixed(2)}</span> sur <span class="th-asset">${pair}</span> &agrave; ${priceStr}`,
     `<span class="th-asset">${pair}</span> &rarr; consensus agents <span class="${actionColor}">${top.score>0?'haussier':top.score<0?'baissier':'neutre'}</span> <span class="th-sep">&middot;</span> fitness <span class="th-agent">${(top.fitness||0).toFixed(0)} T$</span>`,
     `<span class="th-agent">${top.emoji||'•'} ${top.name}</span> d&eacute;tecte <span class="th-sep">&middot;</span> conv. ${Math.abs(top.score*100).toFixed(0)}% <span class="th-sep">&middot;</span> <span class="th-asset">${pair}</span>`,
-    `Analyse r&eacute;gime <span class="th-asset">${pair}</span> <span class="th-sep">&middot;</span> volatilit&eacute; ${(Math.random()*3+.5).toFixed(2)}% <span class="th-sep">&middot;</span> ${S.openPositions.length} position${S.openPositions.length>1?'s':''} ouverte${S.openPositions.length>1?'s':''}`,
+    `Analyse r&eacute;gime <span class="th-asset">${pair}</span> <span class="th-sep">&middot;</span> volatilit&eacute; ${(function(){ try { const t = typeof getTechSignals==='function' ? getTechSignals(pair) : null; const cv = t?.raw?.stddev?.cv; return (typeof cv==='number') ? (cv*100).toFixed(2)+'%' : '\u2014'; } catch(e){ return '\u2014'; } })()} <span class="th-sep">&middot;</span> ${S.openPositions.length} position${S.openPositions.length>1?'s':''} ouverte${S.openPositions.length>1?'s':''}`,
   ];
   return templates[Math.floor(Math.random()*templates.length)];
 }
