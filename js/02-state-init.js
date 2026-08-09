@@ -3999,6 +3999,27 @@ function applyLeverageBorrowFees() {
 // MOTEUR DE FRAIS & TAXES
 // ============================================================
 
+// [AUDIT FISCAL · 09/08/2026] LA formule d'impôt unique : taxe la part MARGINALE du
+// cumul annuel net au-dessus de la franchise (régime détecté, compensation des pertes
+// intégrée au cumul). Ne mute RIEN — le cumul annuel est mis à jour par recordFees seul.
+function _computeMarginalTax(netGain) {
+  try {
+    const reg = S.taxConfig.regions[S.taxConfig.region];
+    const _fr = (typeof detectFiscalRegime === 'function')
+      ? detectFiscalRegime()
+      : { rate: reg.rate, inclusion: reg.inclusion, franchise: 0 };
+    const _annualBefore = (typeof getAnnualNetRealised === 'function') ? getAnnualNetRealised() : 0;
+    const _annualAfter  = _annualBefore + netGain;
+    const _franchise    = _fr.franchise || 0;
+    const _taxableBefore = Math.max(0, _annualBefore - _franchise);
+    const _taxableAfter  = Math.max(0, _annualAfter  - _franchise);
+    const _marginal      = Math.max(0, _taxableAfter - _taxableBefore);
+    const _base = _marginal * (_fr.inclusion != null ? _fr.inclusion : reg.inclusion);
+    return _base * (_fr.rate != null ? _fr.rate : reg.rate);
+  } catch(e) { try{window._decErr&&window._decErr(e)}catch(_e){} return 0; }
+}
+if(typeof _computeMarginalTax==='function') window._computeMarginalTax = _computeMarginalTax;
+
 // Appelé à chaque fermeture de position/trade. Calcule frais + provision fiscale.
 function recordFees(pair, notionalUsdt, pnlUsd, tradeType, reservedAmount) {
   const fc  = S.feeConfig;
@@ -4025,21 +4046,10 @@ function recordFees(pair, notionalUsdt, pnlUsd, tradeType, reservedAmount) {
   // ── Provision fiscale · régime détecté + franchise annuelle + compensation nette ──
   // Gain net de ce trade (après frais) :
   const netGain    = pnlUsd - totalFee;
-  // Régime réellement applicable (normal vs spéculatif) selon comportement du bot :
-  const _fr = (typeof detectFiscalRegime === 'function')
-    ? detectFiscalRegime()
-    : { rate: reg.rate, inclusion: reg.inclusion, franchise: 0 };
-  // Cumul annuel AVANT ce trade (compensation gains/pertes déjà intégrée dans le cumul) :
-  const _annualBefore = (typeof getAnnualNetRealised === 'function') ? getAnnualNetRealised() : 0;
-  const _annualAfter  = _annualBefore + netGain;
-  // On ne taxe que la part du cumul annuel net qui DÉPASSE la franchise.
-  const _fr_franchise = _fr.franchise || 0;
-  const _taxableBefore = Math.max(0, _annualBefore - _fr_franchise);
-  const _taxableAfter  = Math.max(0, _annualAfter  - _fr_franchise);
-  // Part marginale taxable apportée par CE trade (peut être 0 sous la franchise) :
-  const _marginalTaxable = Math.max(0, _taxableAfter - _taxableBefore);
-  const taxBase    = _marginalTaxable * (_fr.inclusion != null ? _fr.inclusion : reg.inclusion);
-  const taxAmount  = taxBase * (_fr.rate != null ? _fr.rate : reg.rate);
+  // [AUDIT FISCAL · 09/08/2026] calcul marginal extrait dans _computeMarginalTax :
+  // SEULE formule d'impôt du système (franchise + compensation des pertes). Le bloc
+  // split de closePosition l'utilise en ESTIMATION ; recordFees reste le seul comptable.
+  const taxAmount  = _computeMarginalTax(netGain);
   // Mémoriser le cumul annuel mis à jour (gains ET pertes → compensation automatique) :
   if (typeof addAnnualNetRealised === 'function') addAnnualNetRealised(netGain);
 
@@ -5818,17 +5828,15 @@ function closePosition(id, botClose = false) {
       // Calcul frais + taxes pour déterminer le "vraiment net"
       const _feeConf = S.feeConfig || {};
       const _exitFee = pos.stakeUsdt * (_feeConf.takerRate || 0.001) + pos.stakeUsdt * (_feeConf.slippage || 0.0005);
-      const _taxReg = S.taxConfig?.regions?.[S.taxConfig?.region];
-      const _taxAmount = _taxReg ? (netPnl * (_taxReg.inclusion || 0) * (_taxReg.rate || 0)) : 0;
+      // [AUDIT FISCAL · 09/08/2026] l'ancienne taxe PLATE (netPnl × inclusion × taux,
+      // sans franchise ni compensation des pertes) prélevait de l'impôt sur chaque trade
+      // gagnant isolé même en perte annuelle nette (~1.87 $ prélevés à tort), et créditait
+      // fiscalReserve en DOUBLE du circuit volet B — double imposition garantie dès le
+      // dépassement de la franchise. Ici : ESTIMATION marginale (même formule que le
+      // comptable) pour dimensionner le split ; AUCUN crédit — recordFees, appelé juste
+      // après, provisionne l'impôt réel en antiNegReserve (volet B, dispatch au rollover).
+      const _taxAmount = (typeof _computeMarginalTax === 'function') ? _computeMarginalTax(netPnl - _exitFee) : 0;
       const _trulyNet = Math.max(0, netPnl - _exitFee - _taxAmount);
-
-      // Envoyer les taxes vers fiscalReserveAccount (option B — comptabilité propre)
-      if (_taxAmount > 0) {
-        S.fiscalReserveAccount = (S.fiscalReserveAccount || 0) + _taxAmount;
-        if(!S.fiscalReserveLog) S.fiscalReserveLog = [];
-        S.fiscalReserveLog.unshift({ amount:_taxAmount, source:'tax_trade_close', ts:Date.now(), time:nowStr() });
-        if(S.fiscalReserveLog.length > 200) S.fiscalReserveLog.pop();
-      }
 
       // Split du net restant
       const _splitPct = (typeof S.profitSplitCaissePct === 'number' ? S.profitSplitCaissePct : 30) / 100;
