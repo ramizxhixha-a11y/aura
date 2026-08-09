@@ -5267,12 +5267,17 @@ function patchAgentCards() {
     }
   });
 
-  // v6.4 · ACTIFS counter — agents with meaningful signal
-  const activeAgentCount = S.agents.filter(a => Math.abs(a.score||0) > 0.01).length;  // v6.9: seuil actif réduit
+  // [09/08/2026] « ACTIFS » comptait les agents à |score|>0.01 : en marché calme les
+  // scores oscillent autour de zéro → « 1 ACTIFS » alors que les 30 agents du pool
+  // évaluent/votent/apprennent à chaque cycle. Libellé mensonger corrigé : ACTIFS =
+  // agents participants (non mutés) ; le signal marqué devient un complément 🔥.
+  const _muted = new Set(S.mutedAgents || []);
+  const activeAgentCount = S.agents.filter(a => !_muted.has(a.id)).length;
+  const strongSignalCount = S.agents.filter(a => !_muted.has(a.id) && Math.abs(a.score||0) > 0.01).length;
   const acEl = document.getElementById('agentCountMobile');
   if(acEl) {
-    acEl.textContent = activeAgentCount + ' ACTIFS';
-    acEl.className = 'pill ' + (activeAgentCount >= 10 ? 'pill-up' : activeAgentCount >= 5 ? 'pill-gold' : 'pill-down');
+    acEl.textContent = activeAgentCount + ' ACTIFS' + (strongSignalCount > 0 ? ' · ' + strongSignalCount + ' 🔥' : '');
+    acEl.className = 'pill ' + (activeAgentCount >= S.agents.length ? 'pill-up' : activeAgentCount >= S.agents.length/2 ? 'pill-gold' : 'pill-down');
   }
 
   // ── Global Memory Stats Bar (Feature #1) ─────────────────
