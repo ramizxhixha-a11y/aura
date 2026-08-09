@@ -4228,8 +4228,11 @@ function botExec(stakeUsd, statusOnly) {
   let chunks = stakeUsd > 200 ? 3 : stakeUsd > 100 ? 2 : 1;
   let volStr = '';
   try {
+    // [FIX UNITÉ · 09/08/2026, attrapé par la trace « vol 200.0% » du backup] la médiane
+    // est un ATR EN POURCENTS (2.0 = 2%), pas une fraction : l'ancien seuil 0.02 était
+    // toujours vrai (+1 chunk permanent). Seuil corrigé : marché nerveux = ATR% > 2.
     const mv = (typeof _getMarketVolatilityMedian === 'function') ? _getMarketVolatilityMedian() : null;
-    if (typeof mv === 'number' && mv > 0.02) { chunks++; volStr = ` · vol ${(mv*100).toFixed(1)}% → +1 chunk`; }
+    if (typeof mv === 'number' && mv > 2.0) { chunks++; volStr = ` · vol ${mv.toFixed(1)}% → +1 chunk`; }
   } catch(e) { try{window._decErr&&window._decErr(e)}catch(_e){} }
   _setBot('exec_bot_v1', 'executing', `Split TWAP ${chunks}x recommandé sur ${stakeUsd.toFixed(0)}$${volStr} (exécution en chunks : chantier)`);
   if(!statusOnly) {
