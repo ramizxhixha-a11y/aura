@@ -431,9 +431,11 @@ function autoOpenPosition(pair, side, stakeOverride) {
 
   // Smart Sizer applique le multiplicateur Kelly AVANT les checks d'exposition
   let _appliedSizerMult = null;
+  let _execChunks = 1;   // [TWAP 09/08] chunks recommandés par le Bot Exécution, lus par le plan TWAP plus bas
   if (typeof runBotFleet === 'function') {
     try {
       const fleetResult = runBotFleet('pre_trade', { stake: baseStake, pair });   // [nutrition 09/08] la paire nourrit le Sharpe du Sizer
+      if (fleetResult?.exec?.chunks > 1) _execChunks = fleetResult.exec.chunks;
       if (fleetResult?.sizer?.mult && Math.abs(fleetResult.sizer.mult - 1) > 0.01) {
         const adjusted = baseStake * fleetResult.sizer.mult;
         baseStake = Math.max(_stakeFloor(), _stakeRound(adjusted));
@@ -613,9 +615,23 @@ function autoOpenPosition(pair, side, stakeOverride) {
   // ──────────────────────────────────────────────────────────────
   // Création de la position
   // ──────────────────────────────────────────────────────────────
+  // [TWAP RÉEL · 09/08/2026] si le Bot Exécution a recommandé un split (chunks>1) et
+  // que le mode est simulé/EV, l'ENTRÉE est moyennée sur N échantillons de prix (un
+  // toutes les ~20 s, balayeur global _twapSweep) : comptes, réserves et gardes sont
+  // inchangés (mise pleine à l'ouverture) — seul le prix d'entrée devient la moyenne
+  // TWAP, comme une vraie exécution fractionnée. À la fin du remplissage, l'économie
+  // RÉELLE et SIGNÉE vs l'entrée en un coup (prix p0) est créditée/débitée au Bot
+  // Exécution — le TWAP peut coûter, la vérité l'affichera. RE reste en entrée directe
+  // tant que l'exécution fractionnée réelle sur exchange n'existe pas (déclaré).
+  let _twapPlan = null;
+  if (_execChunks > 1 && S.tradingMode !== 'real') {
+    _twapPlan = { n: _execChunks, filled: 1, sumPrice: ps.price, p0: ps.price, nextAt: Date.now() + 20000 };
+  }
+
   S.openPositions.push({
     id, pair, side,
     _sizerMult:    _appliedSizerMult,   // impact Smart Sizer crédité à la clôture (audit 09/08)
+    _twap:         _twapPlan,
     entryPrice:    ps.price,
     openedAt:      Date.now(),
     amount:        parseFloat(amount),
@@ -703,3 +719,43 @@ function autoOpenPosition(pair, side, stakeOverride) {
   if (typeof _updateCloseAllBadge === 'function') _updateCloseAllBadge();
 }
 window.autoOpenPosition = autoOpenPosition;
+
+
+// ════════════════════════════════════════════════════════════════════════
+// [TWAP SWEEP · 09/08/2026] balayeur global (10 s) : remplit les entrées TWAP en
+// cours. Un échantillon de prix par passage dû, moyenne recalculée, entryPrice de la
+// position ré-ancré. Au dernier échantillon : économie réelle signée vs p0 créditée
+// au Bot Exécution + trace au journal. Position fermée avant la fin = plan abandonné
+// naturellement (la position n'existe plus). TP/SL posés à l'ouverture restent ancrés
+// sur p0 (déclaré : ils datent de la décision, pas de la moyenne).
+// ════════════════════════════════════════════════════════════════════════
+setInterval(function _twapSweep() {
+  try {
+    if (typeof S === 'undefined' || !S || !S.openPositions) return;
+    const now = Date.now();
+    S.openPositions.forEach(function (pos) {
+      const t = pos._twap;
+      if (!t || t.filled >= t.n || now < t.nextAt) return;
+      const ps = S.pairStates && S.pairStates[pos.pair];
+      if (!ps || !ps.price) return;
+      t.filled++;
+      t.sumPrice += ps.price;
+      t.nextAt = now + 20000;
+      pos.entryPrice = t.sumPrice / t.filled;
+      if (t.filled >= t.n) {
+        const avg = pos.entryPrice;
+        const saving = (pos.side === 'long' ? (t.p0 - avg) : (avg - t.p0)) / t.p0 * (pos.stakeUsdt || 0);
+        try {
+          if (S.botFleet && S.botFleet.exec_bot_v1) {
+            S.botFleet.exec_bot_v1.pnlContrib = (S.botFleet.exec_bot_v1.pnlContrib || 0) + saving;
+          }
+          if (S.chainLog) {
+            S.chainLog.push({ icon: '⚡', desc: 'TWAP ' + t.n + 'x ' + pos.pair + ' terminé · entrée moyenne ' + avg.toFixed(4) + ' vs spot ' + t.p0.toFixed(4) + ' · ' + (saving >= 0 ? 'économie +' : 'coût −') + '$' + Math.abs(saving).toFixed(3), hash: Math.random().toString(36).slice(2, 8), time: new Date().toLocaleTimeString() });
+            if (S.chainLog.length > 100) S.chainLog.splice(0, S.chainLog.length - 100);
+          }
+        } catch (e) { try{window._decErr&&window._decErr(e)}catch(_e){} }
+        pos._twap = null;
+      }
+    });
+  } catch (e) { try{window._decErr&&window._decErr(e)}catch(_e){} }
+}, 10000);

@@ -4404,23 +4404,62 @@ function botFiscal() {
   return null;
 }
 
-// ── 5. DCA BOT · Grid in low volatility ──
+// ── 5. DCA BOT · achat bas de range en régime plat (opérationnel 09/08/2026) ──
+// [CONSTRUCTION · 09/08/2026] l'ancien bot DÉTECTAIT le régime plat et ne faisait rien
+// du résultat (retour consommé par personne). Il devient opérationnel dans les limites
+// de l'architecture : maxConcurrentPos=1 interdit une vraie grille multi-niveaux
+// (déclaré — la grille complète attend une décision d'ouverture de ce plafond). Son
+// métier réalisable : en régime plat (cv<1.2%, ADX<20), quand le prix touche le BAS du
+// range 20 bougies (≤15% de la plage), PROPOSER l'achat — la proposition passe par le
+// circuit complet (gate, vetos, anti-négatif), comme le Scalper et l'Arb.
 function botDCA() {
   const pairs = Object.keys(PAIRS || {});
-  let lowVolCount = 0, flatTrendCount = 0, activePairs = [];
+  let lowVolCount = 0, flatTrendCount = 0;
+  let best = null;
   pairs.forEach(p => {
     const tech = typeof getTechSignals === 'function' ? getTechSignals(p) : null;
     const cv = tech?.raw?.stddev?.cv || 0.02;
     const adx = tech?.raw?.adx?.adx || 20;
     if(cv < 0.012) lowVolCount++;
     if(adx < 18) flatTrendCount++;
-    if(cv < 0.012 && adx < 20) activePairs.push(p);
+    if(!(cv < 0.012 && adx < 20)) return;
+    const ps = S.pairStates?.[p];
+    const candles = ps?.candles;
+    if(!ps || !candles || candles.length < 20) return;
+    const closes20 = candles.slice(-20).map(c => c.c);
+    const lo = Math.min(...closes20), hi = Math.max(...closes20);
+    const range = hi - lo;
+    if(!(range > 0)) return;
+    const posInRange = (ps.price - lo) / range;   // 0 = plancher, 1 = plafond
+    if(posInRange <= 0.15) {
+      if(!best || posInRange < best.posInRange) best = { pair: p, posInRange, lo, hi, cv };
+    }
   });
-  if(activePairs.length >= 2) {
-    _setBot('dca_bot_v1', 'active', `Mode DCA · ${activePairs.length} paires (${activePairs.slice(0,2).join(', ')}) en range`);
-    return { pairs: activePairs };
+  if(best) {
+    if(!S.pendingActions) S.pendingActions = [];
+    const already = S.pendingActions.find(a => a.type === 'dca' && a.pair === best.pair);
+    if(!already) {
+      S.pendingActions = S.pendingActions.filter(a => a.type !== 'dca');
+      S.pendingActions.unshift({
+        id: 'dc' + Date.now().toString(36),
+        type: 'dca',
+        pair: best.pair,
+        side: 'long',
+        ts: Date.now(),
+        source: 'dca_bot_v1',
+        title: `Achat bas de range ${best.pair}`,
+        detail: `Régime plat · prix à ${(best.posInRange*100).toFixed(0)}% du range [${best.lo.toFixed(4)}–${best.hi.toFixed(4)}]`,
+        action: 'open_trade',
+        payload: { pair: best.pair, side: 'long' }
+      });
+      if(S.pendingActions.length > 10) S.pendingActions.length = 10;
+      S.botFleet.dca_bot_v1.contributions++;   // proposition publiée = intervention réelle
+    }
+    _setBot('dca_bot_v1', 'active', `Achat bas de range proposé · ${best.pair} à ${(best.posInRange*100).toFixed(0)}% du range plat`);
+    return best;
   }
-  _setBot('dca_bot_v1', 'idle', `Marchés tendanciels · DCA inactif (${lowVolCount} vol faible, ${flatTrendCount} flat)`);
+  _setBot('dca_bot_v1', 'idle', `Aucun bas de range en régime plat (${lowVolCount} vol faible, ${flatTrendCount} flat)`);
+  if(S.pendingActions) S.pendingActions = S.pendingActions.filter(a => a.type !== 'dca');
   return null;
 }
 
