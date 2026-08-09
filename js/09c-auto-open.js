@@ -430,12 +430,17 @@ function autoOpenPosition(pair, side, stakeOverride) {
   }
 
   // Smart Sizer applique le multiplicateur Kelly AVANT les checks d'exposition
+  let _appliedSizerMult = null;
   if (typeof runBotFleet === 'function') {
     try {
       const fleetResult = runBotFleet('pre_trade', { stake: baseStake });
       if (fleetResult?.sizer?.mult && Math.abs(fleetResult.sizer.mult - 1) > 0.01) {
         const adjusted = baseStake * fleetResult.sizer.mult;
         baseStake = Math.max(_stakeFloor(), _stakeRound(adjusted));
+        // [AUDIT FLOTTE · 09/08/2026] le mult réellement appliqué est mémorisé sur la
+        // position : à la clôture, l'impact marginal RÉEL du Smart Sizer est crédité
+        // (remplace l'ancien « 5% de crédit revendiqué » forfaitaire).
+        _appliedSizerMult = fleetResult.sizer.mult;
       }
     } catch (e) {}
   }
@@ -610,6 +615,7 @@ function autoOpenPosition(pair, side, stakeOverride) {
   // ──────────────────────────────────────────────────────────────
   S.openPositions.push({
     id, pair, side,
+    _sizerMult:    _appliedSizerMult,   // impact Smart Sizer crédité à la clôture (audit 09/08)
     entryPrice:    ps.price,
     openedAt:      Date.now(),
     amount:        parseFloat(amount),

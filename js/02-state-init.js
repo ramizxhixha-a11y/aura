@@ -5901,7 +5901,7 @@ function closePosition(id, botClose = false) {
       try { if(typeof checkPnlAlerts === 'function') checkPnlAlerts(); } catch(e) {}
       try { if(typeof checkBadges === 'function') checkBadges(); } catch(e) {}
       if(typeof closeDecisionCascade  === 'function') closeDecisionCascade(pos.pair, pos.side, pos.currentPrice || pos.entryPrice, realisedUsd, realisedPct);
-      if(typeof runBotFleet           === 'function') runBotFleet('post_trade', { pnlUsd: realisedUsd });
+      if(typeof runBotFleet           === 'function') runBotFleet('post_trade', { pnlUsd: realisedUsd, sizerMult: pos._sizerMult });
 
       // v6.0 · AGENT LEARNING — update fitness of agents who voted for this direction
       if(pos._openAgents && S.agents) {

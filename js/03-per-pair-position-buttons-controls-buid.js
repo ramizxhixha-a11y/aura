@@ -4162,6 +4162,20 @@ function initBotFleet() {
 }
 if(typeof S !== 'undefined') initBotFleet();
 
+// [PURGE VÉRITÉ · 09/08/2026 · une seule fois] Les cumuls d'exec_bot (2054 contribs /
+// +403 $ fabriqués par la boucle de statut), de scalper_bot (PnL tiré au sort) et du
+// smart_sizer (crédit forfaitaire 5%) sont des données FABRIQUÉES — purgées pour
+// repartir sur du vrai. Les cumuls légitimes (rescue = flattens réels) sont conservés.
+if(typeof S !== 'undefined' && S.botFleet && !S._fleetTruthReset0908) {
+  try {
+    ['exec_bot_v1','scalper_bot_v1'].forEach(id => {
+      if(S.botFleet[id]) { S.botFleet[id].contributions = 0; S.botFleet[id].pnlContrib = 0; }
+    });
+    if(S.botFleet.smart_sizer_v1) S.botFleet.smart_sizer_v1.pnlContrib = 0;
+    S._fleetTruthReset0908 = true;
+  } catch(e) {}
+}
+
 // Helper
 function _setBot(id, status, action) {
   if(!S.botFleet?.[id]) return;
@@ -4171,17 +4185,26 @@ function _setBot(id, status, action) {
 }
 
 // ── 1. EXEC BOT · TWAP/VWAP splitting ──
-function botExec(stakeUsd) {
+// [AUDIT FLOTTE · 09/08/2026] Deux fabrications supprimées :
+//  (a) l'appel de statut à chaque tick (orchestrateur) incrémentait contributions et
+//      créditait des « économies » stake×0.12%×chunks SANS AUCUN trade — les 2054
+//      contribs / +403 $ affichés venaient de là (boucle de statut quand le compte
+//      dépassait 100 $). statusOnly=true : le statut s'affiche, rien n'est comptabilisé.
+//  (b) les « économies » étaient inventées : AUCUN split TWAP n'est réellement exécuté
+//      (personne ne consomme `chunks`). Tant que le vrai split n'existe pas (chantier
+//      roadmap), pnlContrib reste à 0 : ce bot COMPTE ses interventions réelles
+//      (pre_trade sur un vrai trade) mais ne revendique aucun dollar.
+function botExec(stakeUsd, statusOnly) {
   if(!stakeUsd || stakeUsd < 10) {
     _setBot('exec_bot_v1', 'idle', `Taille ${stakeUsd?.toFixed(0) || 0}$ — exécution directe`);
     return { chunks: 1, savings: 0 };
   }
   const chunks = stakeUsd > 200 ? 3 : stakeUsd > 100 ? 2 : 1;
-  const savings = stakeUsd * 0.0012 * chunks;  // slippage saved
-  _setBot('exec_bot_v1', 'executing', `TWAP ${chunks}x sur ${stakeUsd.toFixed(0)}$ · économie ~${savings.toFixed(2)}$`);
-  S.botFleet.exec_bot_v1.contributions++;
-  S.botFleet.exec_bot_v1.pnlContrib += savings;
-  return { chunks, savings };
+  _setBot('exec_bot_v1', 'executing', `Split TWAP ${chunks}x recommandé sur ${stakeUsd.toFixed(0)}$ (exécution en chunks : chantier)`);
+  if(!statusOnly) {
+    S.botFleet.exec_bot_v1.contributions++;
+  }
+  return { chunks, savings: 0 };
 }
 
 // ── 2. ARB BOT · cross-pair scanner (v6.0 · proposition actionnable) ──
@@ -4220,6 +4243,7 @@ function botArb() {
         payload: { pair: best.pair, side: best.direction }
       });
       if(S.pendingActions.length > 10) S.pendingActions.length = 10;
+      S.botFleet.arb_bot_v1.contributions++;   // [audit 09/08] une proposition publiée = une intervention réelle
     }
   } else {
     _setBot('arb_bot_v1', 'scanning', 'Balayage cross-pair · rien au-dessus du seuil 45%');
@@ -4228,31 +4252,57 @@ function botArb() {
   return best;
 }
 
-// ── 3. SCALPER BOT · micro-trades during idle ──
+// ── 3. SCALPER BOT · scanner d'opportunités scalp ──
+// [AUDIT FLOTTE · 09/08/2026] L'ancien code était un GÉNÉRATEUR DE HASARD : 30% de
+// chance par cycle de fabriquer un « micro-scalp » au PnL tiré au sort
+// ((Math.random()-0.5+skew)×0.4 sur 2 $ virtuels) crédité dans pnlContrib — ses
+// −2.98 $ affichés étaient des tirages au sort, aucun trade n'existait. Supprimé
+// entièrement. Le bot fait désormais son métier honnêtement : scanner un signal
+// scalp réel (LMSR décollé + volatilité présente) et PROPOSER le trade
+// (pendingActions), comme le Bot Arbitrage. Aucun dollar fabriqué.
 function botScalper() {
   const hasPositions = (S.openPositions || []).length > 0;
   if(hasPositions) {
     _setBot('scalper_bot_v1', 'idle', `${(S.openPositions || []).length} position(s) ouverte(s), scalper en pause`);
     return;
   }
-  
-  if(Math.random() < 0.3) {
-    const pairs = Object.keys(PAIRS || {});
-    const pair = pairs[Math.floor(Math.random() * pairs.length)];
+  const pairs = Object.keys(PAIRS || {});
+  let best = null;
+  pairs.forEach(pair => {
     const ps = S.pairStates?.[pair];
     const tech = typeof getTechSignals === 'function' ? getTechSignals(pair) : null;
     if(!ps || !tech) return;
-    const cv = tech.raw?.stddev?.cv || 0.015;
-    // Micro-scalp: +/- 0.1-0.3% random with skew toward lmsrP direction
+    const cv = tech.raw?.stddev?.cv || 0;
     const lmsr = typeof lmsrP === 'function' ? lmsrP(ps) : 0.5;
-    const skew = (lmsr - 0.5) * 0.3;
-    const pnlPct = (Math.random() - 0.5 + skew) * 0.4;
-    const pnlUsd = pnlPct * 2;  // virtual $2 stake
-    _setBot('scalper_bot_v1', 'executing', `Micro-scalp ${pair} · ${pnlUsd>=0?'+':''}$${pnlUsd.toFixed(2)}`);
-    S.botFleet.scalper_bot_v1.contributions++;
-    S.botFleet.scalper_bot_v1.pnlContrib += pnlUsd;
+    const edge = Math.abs(lmsr - 0.5);
+    if(edge > 0.12 && cv > 0.008) {
+      if(!best || edge > best.edge) best = { pair, edge, side: lmsr > 0.5 ? 'long' : 'short', cv };
+    }
+  });
+  if(best) {
+    if(!S.pendingActions) S.pendingActions = [];
+    const already = S.pendingActions.find(a => a.type === 'scalp' && a.pair === best.pair && a.side === best.side);
+    if(!already) {
+      S.pendingActions = S.pendingActions.filter(a => a.type !== 'scalp');
+      S.pendingActions.unshift({
+        id: 'sc' + Date.now().toString(36),
+        type: 'scalp',
+        pair: best.pair,
+        side: best.side,
+        ts: Date.now(),
+        source: 'scalper_bot_v1',
+        title: `Scalp ${best.pair}`,
+        detail: `${best.side.toUpperCase()} · LMSR ${(0.5 + (best.side==='long'?best.edge:-best.edge)).toFixed(2)} · vol ${(best.cv*100).toFixed(1)}%`,
+        action: 'open_trade',
+        payload: { pair: best.pair, side: best.side }
+      });
+      if(S.pendingActions.length > 10) S.pendingActions.length = 10;
+      S.botFleet.scalper_bot_v1.contributions++;
+    }
+    _setBot('scalper_bot_v1', 'active', `Signal scalp ${best.pair} ${best.side.toUpperCase()} · proposition créée`);
   } else {
     _setBot('scalper_bot_v1', 'scanning', `Surveillance L2·Order Flow`);
+    if(S.pendingActions) S.pendingActions = S.pendingActions.filter(a => a.type !== 'scalp');
   }
 }
 
@@ -4280,8 +4330,9 @@ function botFiscal() {
         payload: { posId: worst.id }
       });
       if(S.pendingActions.length > 10) S.pendingActions.length = 10;
+      S.botFleet.fiscal_bot_v1.contributions++;   // [audit 09/08] proposition publiée = intervention réelle
     }
-    _setBot('fiscal_bot_v1', 'active', `Proposition harvest ${worst.pair} · économie ~${harvestSavings.toFixed(2)}$`);
+    _setBot('fiscal_bot_v1', 'active', `Proposition harvest ${worst.pair} · économie estimée ~${harvestSavings.toFixed(2)}$`);
     return { pos: worst, savings: harvestSavings };
   }
   if(realizedGain > 40) {
@@ -4354,8 +4405,13 @@ function botRescue() {
 // ── 7. REBALANCE BOT · portfolio skew (v6.0 · proposition actionnable) ──
 function botRebalance() {
   const positions = S.openPositions || [];
-  if(positions.length === 0) {
-    _setBot('rebalance_bot_v1', 'idle', `Aucune position · rien à rééquilibrer`);
+  // [AUDIT FLOTTE · 09/08/2026] avec une seule position (maxConcurrentPos=1), le « skew
+  // 100% » est STRUCTUREL, pas un déséquilibre — l'ancien code proposait absurdement de
+  // fermer l'unique position « pour diversifier » (vu en prod : « Skew LINK 100% »).
+  // Le rééquilibrage n'a de sens qu'à partir de 2 positions.
+  if(positions.length < 2) {
+    _setBot('rebalance_bot_v1', 'idle', positions.length === 0 ? `Aucune position · rien à rééquilibrer` : `1 position · rééquilibrage sans objet`);
+    if(S.pendingActions) S.pendingActions = S.pendingActions.filter(a => a.type !== 'rebalance');
     return null;
   }
   const byPair = {};
@@ -4438,7 +4494,7 @@ function runBotFleet(event, context) {
   context = context || {};
   switch(event) {
     case 'tick':
-      try { botExec(S.tradingAccount * 0.1); } catch(e) {}  // keep exec status updated
+      try { botExec(S.tradingAccount * 0.1, true); } catch(e) {}  // statut seulement — ne comptabilise RIEN (audit 09/08)
       try { botArb();        } catch(e) {}
       try { botScalper();    } catch(e) {}
       try { botFiscal();     } catch(e) {}
@@ -4453,9 +4509,15 @@ function runBotFleet(event, context) {
       return { sizer, exec };
     }
     case 'post_trade':
-      // Update contribution counter
-      if(context.pnlUsd > 0 && S.botFleet.smart_sizer_v1) {
-        S.botFleet.smart_sizer_v1.pnlContrib += context.pnlUsd * 0.05;  // claim partial credit
+      // [AUDIT FLOTTE · 09/08/2026] l'ancien crédit « 5% de tout gain » était une
+      // revendication forfaitaire inventée (les +64.95 $ affichés). Remplacé par
+      // l'impact marginal RÉEL et SIGNÉ du multiplicateur appliqué à CE trade :
+      // pnl × (mult−1)/mult = la part du résultat due au sur/sous-dimensionnement.
+      // Boost sur gain → crédit ; boost sur perte → débit ; réduction sur perte →
+      // crédit (pertes évitées). Sans mult mémorisé sur la position : rien.
+      if(S.botFleet.smart_sizer_v1 && typeof context.pnlUsd === 'number' && context.sizerMult && Math.abs(context.sizerMult - 1) > 0.01) {
+        const marginal = context.pnlUsd * (context.sizerMult - 1) / context.sizerMult;
+        S.botFleet.smart_sizer_v1.pnlContrib += marginal;
       }
       break;
   }
