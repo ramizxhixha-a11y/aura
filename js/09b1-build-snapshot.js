@@ -62,6 +62,11 @@ function buildSnapshot() {
         regimeFitness:  a.regimeFitness   || {}
       })),
 
+      // [GESTION PAIRES · 11/08/2026] paires ajoutées/retirées par Rams — rejouées au
+      // boot par 11-gestion-paires.js (PAIRS muté, pairStates conservés pour les retirées)
+      customPairs:  S.customPairs  || {},
+      removedPairs: S.removedPairs || [],
+
       // Apprentissage
       learningHistory: (S.learningHistory || []).slice(-200).map((h, i, arr) =>
         i >= arr.length - 30 ? h : { ...h, adjustments: [] }
