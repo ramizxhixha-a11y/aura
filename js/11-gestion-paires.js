@@ -24,6 +24,12 @@
     if (!ready && _t < 240) return;
     clearInterval(_iv);
     try { _replayPairChanges(); } catch (e) { try{window._decErr&&window._decErr(e)}catch(_e){} }
+    // [FIX 11/08/2026] l'injection unique au boot était balayée par les re-rendus de la
+    // page Marché (contenu reconstruit → bouton détruit) : VEILLEUR permanent, ré-injecte
+    // dès que le bouton manque (test par id toutes les 2 s, coût négligeable).
+    setInterval(function () {
+      try { _injectPairManagerButton(); } catch (e) {}
+    }, 2000);
     try { _injectPairManagerButton(); } catch (e) { try{window._decErr&&window._decErr(e)}catch(_e){} }
   }, 500);
 })();
