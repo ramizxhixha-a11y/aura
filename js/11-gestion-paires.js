@@ -156,14 +156,19 @@ function _pairLog(icon, desc) {
 
 // ── UI : bouton sur la page Marché + modale ─────────────────────────────
 function _injectPairManagerButton() {
-  var anchor = document.getElementById('marketMoodWrap');
-  if (!anchor || !anchor.parentNode || document.getElementById('pairMgrBtn')) return;
+  // [FIX ANCRAGE · 11/08/2026] marketMoodWrap est sur la page HOME, pas Marché — le
+  // bouton s'injectait au mauvais endroit depuis le début (mon erreur, prouvée par les
+  // captures). Ancrage réel de la page Marché : SOUS le grand graphique (#candle-wrap-top,
+  // page2), au-dessus de « Toutes les paires ».
+  if (document.getElementById('pairMgrBtn')) return;
+  var anchor = document.getElementById('candle-wrap-top');
+  if (!anchor || !anchor.parentNode) return;
   var btn = document.createElement('button');
   btn.id = 'pairMgrBtn';
   btn.textContent = '⚖ Gérer les paires';
-  btn.style.cssText = 'display:block;margin:6px auto 10px;padding:7px 16px;background:rgba(0,232,122,.08);color:var(--up,#00e87a);border:1px solid rgba(0,232,122,.35);border-radius:9px;font-size:12px;font-family:inherit;';
+  btn.style.cssText = 'display:block;margin:10px 16px 2px auto;padding:7px 16px;background:rgba(0,232,122,.08);color:var(--up,#00e87a);border:1px solid rgba(0,232,122,.35);border-radius:9px;font-size:12px;font-family:inherit;';
   btn.onclick = openPairManager;
-  anchor.parentNode.insertBefore(btn, anchor);
+  anchor.parentNode.insertBefore(btn, anchor.nextSibling);
 }
 
 function openPairManager() {
