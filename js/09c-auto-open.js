@@ -645,7 +645,8 @@ function autoOpenPosition(pair, side, stakeOverride) {
           if (typeof c === 'number' && (_cmax === null || Math.abs(c) > Math.abs(_cmax))) _cmax = c;
         });
       }
-      const _mx = (S.tradingMode === 'real') ? 1 : ((S.paperRealConfig && S.paperRealConfig.maxConcurrentPos) || 1);
+      // [13/08] AA n'a pas de plafond (Vision XIII) : afficher ∞ au lieu du plafond EV
+      const _mx = (S.tradingMode === 'real') ? '1' : (S.tradingMode === 'sim') ? '∞' : String((S.paperRealConfig && S.paperRealConfig.maxConcurrentPos) || 1);
       S.chainLog.push({ icon:'📊', desc:'Position ' + (_nOpen+1) + '/' + _mx + ' · ' + pair + (_cmax !== null ? ' · corr max ' + _cmax.toFixed(2) + ' avec l\u2019existant' : ''), hash:Math.random().toString(36).slice(2,8), time:new Date().toLocaleTimeString() });
       if (S.chainLog.length > 100) S.chainLog.splice(0, S.chainLog.length - 100);
     }

@@ -299,6 +299,9 @@ const S = {
   paperRealGlobalPauseUntil: 0, // pause globale 2h après 3 pertes consécutives
   paperRealConfig: {            // règles modifiables (défaut conservateur)
     maxConcurrentPos: 3,        // [ÉTAGE 1 · 09/08/2026, décision Rams] 3 positions simultanées
+                                // ⚠ ce DÉFAUT ne s'applique qu'aux états neufs : la config est
+                                // persistée dans le snapshot — la migration _etage1Migration
+                                // (ci-dessous) convertit les états existants restés à 1.
                                 // en AA/EV (paires différentes, garde anti-corrélation + cumul 65%
                                 // actives). RE reste verrouillé à 1 EN DUR au point d'application
                                 // (10g) tant que l'étage 1 n'a pas fait ses preuves sur backup.
@@ -6696,3 +6699,36 @@ function _dispatchSessionTaxes() {
 // ★ 26/07 perf : 1 min -> 10 min. Le dispatch ne se declenche qu'au CHANGEMENT
 // DE JOUR : le verifier 1 440 fois par jour n'avait aucun sens.
 setInterval(_dispatchSessionTaxes, 600000);
+
+
+// ════════════════════════════════════════════════════════════════════════
+// [MIGRATION ÉTAGE 1 · 13/08/2026] Le backup du 13/08 a prouvé (ligne « 📊 Position
+// 4/1 ») que le maxConcurrentPos=1 PERSISTÉ dans les snapshots écrasait le nouveau
+// défaut 3 à chaque boot : l'étage 1 (décision Rams du 09/08) n'a jamais été actif
+// en EV. Migration one-shot : après restauration, si la config restaurée vaut encore
+// 1, elle passe à 3 — une fois, flag localStorage, journalisée. Un futur réglage
+// manuel de Rams ne sera plus jamais écrasé.
+(function _etage1Migration(){
+  var FLAG = 'aura_etage1_maxpos3_20260813';
+  var _t = 0;
+  var _iv = setInterval(function(){
+    _t++;
+    var ready = false;
+    try { ready = !!window._stateReady; } catch(e) {}
+    if (!ready && _t < 240) return;
+    clearInterval(_iv);
+    try {
+      if (localStorage.getItem(FLAG)) return;
+      if (S && S.paperRealConfig && (S.paperRealConfig.maxConcurrentPos || 1) <= 1) {
+        S.paperRealConfig.maxConcurrentPos = 3;
+        if (S.chainLog) {
+          S.chainLog.push({ icon:'📊', desc:'Étage 1 activé : maxConcurrentPos 1→3 (AA/EV) — la config persistée écrasait le défaut depuis le 09/08. RE reste verrouillé à 1.', hash:Math.random().toString(36).slice(2,8), time:new Date().toLocaleTimeString() });
+          if (S.chainLog.length > 100) S.chainLog.splice(0, S.chainLog.length - 100);
+        }
+        try { if (typeof showToast === 'function') showToast('📊 Étage 1 actif : 3 positions simultanées en AA/EV', 5000); } catch(e) {}
+        try { if (typeof saveState === 'function') saveState(true); } catch(e) {}
+      }
+      localStorage.setItem(FLAG, '1');
+    } catch(e) { try{window._decErr&&window._decErr(e)}catch(_e){} }
+  }, 500);
+})();
