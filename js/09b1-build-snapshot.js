@@ -66,6 +66,8 @@ function buildSnapshot() {
       // boot par 11-gestion-paires.js (PAIRS muté, pairStates conservés pour les retirées)
       customPairs:  S.customPairs  || {},
       removedPairs: S.removedPairs || [],
+      // [13/08/2026] compétence agent×paire — pondère le vote du conseil par paire
+      agentPairSkill: S.agentPairSkill || {},
 
       // Apprentissage
       learningHistory: (S.learningHistory || []).slice(-200).map((h, i, arr) =>

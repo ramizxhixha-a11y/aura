@@ -417,7 +417,7 @@ function autoOpenPosition(pair, side, stakeOverride) {
   if (!_brainVeto && S._lastBrainAnalysis) {
     const _r = S._lastBrainAnalysis;
     if (!S.brainLog) S.brainLog = [];
-    S.brainLog.unshift({ ts: Date.now(), pair, event: 'EVAL', side, reason: (_r.verdict || '?') + ' · consensus ' + Math.round((_r.consensus || 0) * 100) + '% · stake ×' + _brainMult });
+    S.brainLog.unshift({ ts: Date.now(), pair, event: 'EVAL', side, reason: (_r.verdict || '?') + ' · consensus ' + Math.round((_r.consensus || 0) * 100) + '% · stake ×' + _brainMult + (_r.skillWeighted ? ' · skill×' + _r.skillWeighted : '') });
     if (S.brainLog.length > 30) S.brainLog.length = 30;
   }
 

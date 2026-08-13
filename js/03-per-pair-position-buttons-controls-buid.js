@@ -1239,6 +1239,26 @@ function learnFromOutcome(source, pnlPct, pair) {
 
     const aligned       = (won && a.score > 0) || (!won && a.score < 0);
     const signalStrength= Math.abs(a.score);
+    // [COMPÉTENCE PAR PAIRE · 13/08/2026] le journal identifiait déjà le meilleur/pire
+    // agent PAR PAIRE à chaque cycle (Learn[cycle][SOL] → 🏆/⚠) puis jetait l'info.
+    // Désormais elle s'accumule : S.agentPairSkill[agent][paire] = {w,l} — et le vote
+    // du conseil la pondère (un agent excellent sur SOL pèse plus lourd SUR SOL).
+    if (pair && signalStrength > 0.05) {
+      try {
+        if (!S.agentPairSkill) S.agentPairSkill = {};
+        if (!S.agentPairSkill[a.id]) {
+          // rotation légère : purger les agents remplacés quand la table grossit
+          if (Object.keys(S.agentPairSkill).length > 80) {
+            const liveIds = new Set((S.agents || []).map(x => x.id));
+            Object.keys(S.agentPairSkill).forEach(id => { if (!liveIds.has(id)) delete S.agentPairSkill[id]; });
+          }
+          S.agentPairSkill[a.id] = {};
+        }
+        if (!S.agentPairSkill[a.id][pair]) S.agentPairSkill[a.id][pair] = { w: 0, l: 0 };
+        const _sk = S.agentPairSkill[a.id][pair];
+        if (aligned) _sk.w++; else _sk.l++;
+      } catch(e) { try{window._decErr&&window._decErr(e)}catch(_e){} }
+    }
     const prevFitness   = a.fitness;
     const prevScore     = a.score;
     const prevConf      = a.conf;
@@ -3834,6 +3854,7 @@ function runRosterAnalysis(pair) {
   let longConv = 0, shortConv = 0;
   let longWeighted = 0, shortWeighted = 0, holdWeighted = 0;  // MOD 7
   let totalWeight = 0;
+  let _skillWeighted = 0;   // [13/08] nb d'agents dont le vote a été modulé par leur compétence sur la paire
   
   Object.entries(councilResults).forEach(([cId, v]) => {
     // Compute weight from fitness: fitness 500 = weight 1.0, 1000 = 1.5, 1500 = 2.0, 1900+ = 2.5
@@ -3853,6 +3874,17 @@ function runRosterAnalysis(pair) {
         if (hitRate > 0.60) weight *= 1.3;
         else if (hitRate < 0.40) weight *= 0.6;
       }
+      // [COMPÉTENCE PAR PAIRE · 13/08/2026] la fitness est GLOBALE ; ici la compétence
+      // de CET agent sur CETTE paire module son vote : ≥10 échantillons sur la paire,
+      // taux d'alignement >60% → ×1.25, <40% → ×0.75. Borné, neutre sans historique.
+      try {
+        const _ps = S.agentPairSkill && S.agentPairSkill[cId] && S.agentPairSkill[cId][pair];
+        if (_ps && (_ps.w + _ps.l) >= 10) {
+          const _pr = _ps.w / (_ps.w + _ps.l);
+          if (_pr > 0.60) { weight *= 1.25; _skillWeighted++; }
+          else if (_pr < 0.40) { weight *= 0.75; _skillWeighted++; }
+        }
+      } catch(e) {}
     }
     totalWeight += weight;
     
@@ -3928,6 +3960,7 @@ function runRosterAnalysis(pair) {
     votes: { long:longVotes, short:shortVotes, hold:holdVotes, total:totalVotes },
     consensus,
     coalition,
+    skillWeighted: _skillWeighted,   // [13/08] observabilité de la pondération par paire
     finalDecision: anyVeto ? 'VETO' : verdict,
     anyVeto
   };
