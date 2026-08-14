@@ -1927,8 +1927,15 @@ function calcADX(candles, period=14) {
     return sum>0?Math.abs(p-diN[i])/sum*100:0;
   });
   // ADX = smoothed DX
-  const adxSeries = smooth(dx, period);
-  const adx  = adxSeries[adxSeries.length-1];
+  // [FIX ADX · 14/08/2026] l'ADX était la SOMME lissée de DX (le smooth de Wilder ci-
+  // dessus est une somme — correct pour TR/DM car DI est un ratio où l'échelle s'annule,
+  // FAUX pour l'ADX) : valeurs ~14× trop hautes (209.6 vu en prod = vrai ADX ~15).
+  // Depuis toujours : « adx<20 » jamais vrai → gate DCA muet ; « adx>25 » toujours vrai
+  // → poids tendance du composite renforcé à tort. Moyenne de Wilder exacte :
+  const _pA = Math.min(period, dx.length);
+  let _adxV = dx.slice(0, _pA).reduce((a,b)=>a+b,0) / _pA;
+  for (let i = _pA; i < dx.length; i++) _adxV = (_adxV * (_pA - 1) + dx[i]) / _pA;
+  const adx = _adxV;
   const diPl = diP[diP.length-1];
   const diNl = diN[diN.length-1];
   const trend = adx > 25 ? (diPl > diNl ? 'bull' : 'bear') : 'ranging';
