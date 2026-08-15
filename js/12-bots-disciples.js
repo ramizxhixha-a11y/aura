@@ -385,30 +385,29 @@ window._judgeDisciples = function (pos, pnlUsd) {
     if (!pos || !pos._jury || !pos._jury.length) return;
     var verdicts = {};
     verdicts.direction = pnlUsd > 0 ? 1 : pnlUsd < 0 ? -1 : 0;
-    // timing : pire excursion contre le side dans les 2 bougies suivant l'ouverture
+    // [v2 · 15/08 soir] timing : pire prix suivi sur la position pendant ses 3 premières
+    // minutes (balayeur 09c) — les bougies sim n'ont pas de timestamp, prouvé au backup.
     verdicts.timing = 0;
     try {
-      var ps = S.pairStates && S.pairStates[pos.pair];
-      var cds = (ps && ps.candles || []).filter(function (c) { return (c.t || 0) >= (pos.openedAt || pos.entryTs || pos.ts || 0); }).slice(0, 2);
-      if (cds.length && pos.entryPrice) {
-        var worst = pos.side === 'long'
-          ? Math.min.apply(null, cds.map(function (c) { return c.l != null ? c.l : c.c; }))
-          : Math.max.apply(null, cds.map(function (c) { return c.h != null ? c.h : c.c; }));
-        var adverse = Math.abs(worst - pos.entryPrice) / pos.entryPrice;
+      if (pos._worstPx != null && pos.entryPrice) {
+        var adverse = Math.abs(pos._worstPx - pos.entryPrice) / pos.entryPrice;
         verdicts.timing = adverse < 0.002 ? 1 : adverse > 0.006 ? -1 : 0;
       }
     } catch (e) {}
-    // conditions : volatilité réalisée pendant le trade vs lue à l'ouverture
+    // [v2 · 15/08 soir] conditions : MOBILITÉ réalisée du trade — l'ancien juge dépendait
+    // du CV (cassé à ~0 en prod, audit en file) et comparait des échelles incompatibles.
+    // Mesure directe : un marché qui a bougé (|pnl%| ≥ 0.15%) donnait raison à « favorable » ;
+    // un marché mort (< 0.05%) donnait raison à « défavorable ». Entre les deux : pas de verdict.
     verdicts.conditions = 0;
     try {
-      if (typeof pos._cvOpen === 'number' && pos._cvOpen > 0 && pos.entryPrice) {
-        var ps2 = S.pairStates && S.pairStates[pos.pair];
-        var px = ps2 && ps2.price;
-        if (px) {
-          var realized = Math.abs(px - pos.entryPrice) / pos.entryPrice;
-          var ratio = realized / Math.max(0.0005, pos._cvOpen);
-          verdicts.conditions = (ratio >= 0.3 && ratio <= 3) ? 1 : -1;
-        }
+      // [v3 · 15/08, trou attrapé par Rams] la v2 mesurait la mobilité via le PnL, qui
+      // inclut LES FRAIS : un marché mort donnait PnL ≈ −0.15% (frais seuls) → le juge
+      // aurait dit « mobile » sur un marché immobile. Mesure au PRIX PUR : le prix de
+      // clôture (ps.price à l'instant du juge) vs le prix d'entrée, sans frais.
+      var psx = S.pairStates && S.pairStates[pos.pair];
+      if (pos.entryPrice && psx && psx.price) {
+        var movePct = Math.abs(psx.price - pos.entryPrice) / pos.entryPrice;
+        verdicts.conditions = movePct >= 0.0015 ? 1 : movePct < 0.0005 ? -1 : 0;
       }
     } catch (e) {}
     if (!S.discipleTaskSkill) S.discipleTaskSkill = {};

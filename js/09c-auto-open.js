@@ -786,6 +786,19 @@ setInterval(function _twapSweep() {
     if (typeof S === 'undefined' || !S || !S.openPositions) return;
     const now = Date.now();
     S.openPositions.forEach(function (pos) {
+      // [SPÉCIALISATION v2 · 15/08] suivi du PIRE prix pendant les 3 premières minutes
+      // (les bougies sim n'ont pas de timestamp — prouvé au backup 23:31) : c'est la
+      // matière du juge « timing » (excursion défavorable après l'entrée).
+      try {
+        if (pos.openedAt && (now - pos.openedAt) <= 180000) {
+          const psw = S.pairStates && S.pairStates[pos.pair];
+          if (psw && psw.price) {
+            if (pos._worstPx == null) pos._worstPx = psw.price;
+            if (pos.side === 'long'  && psw.price < pos._worstPx) pos._worstPx = psw.price;
+            if (pos.side === 'short' && psw.price > pos._worstPx) pos._worstPx = psw.price;
+          }
+        }
+      } catch(e) {}
       const t = pos._twap;
       if (!t || t.filled >= t.n || now < t.nextAt) return;
       const ps = S.pairStates && S.pairStates[pos.pair];
