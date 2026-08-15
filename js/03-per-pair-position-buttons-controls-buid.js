@@ -1220,13 +1220,27 @@ function learnFromOutcome(source, pnlPct, pair) {
   S.agents.forEach(a => {
     // Bots d'exécution : leur score reste 0 (role neutre), mais leur fitness évolue
     if(a.isBot) {
-      let botReward = won ? mag * 5 : -mag * 1.2;  // v7.3 OPT · récompense ×2.5, pénalité /1.25
-      // Plafond souple : un gain près de 2000 rapporte de moins en moins, pour
-      // qu'un bot performant ne reste pas collé au maximum. Les pertes restent pleines.
-      if(won) { const _headroom = Math.max(0.05, (2000 - (a.fitness || 0)) / 2000); botReward *= _headroom; }
-      a.fitness = Math.max(50, Math.min(2000, a.fitness + botReward));  // v8.0 LIVRAISON 30 · FIX #2 · borne min unifiée à 50
-      a.totalReward = (a.totalReward || 0) + botReward;  // v7.3 OPT · affichage réel dans l'UI
-      a.learningEvents = (a.learningEvents || 0) + 1;  // v7.3 OPT · compteur visible
+      // [ÉCONOMIE BOTS · 15/08/2026] (1) plafond souple bot-only SUPPRIMÉ : près de 1600
+      // un bot ne touchait plus que 20% de sa récompense (un hybride 100%) — même trade,
+      // 4-5× moins de T$. Même règle pour tous ; le plafond 1600 est géré par le VERSEMENT
+      // (02). (2) crédit par MÉRITE MESURÉ : la récompense collective (le trade a gagné)
+      // est complétée par l'apport propre du bot depuis le dernier passage — delta de
+      // pnlContrib (TWAP signé, impact Sizer, etc.), en T$ à 40 T$/$ (échelle des
+      // récompenses mag×5). Un bot qui rapporte monte, un bot qui coûte descend.
+      let botReward = won ? mag * 5 : -mag * 1.2;
+      try {
+        const fb = S.botFleet && S.botFleet[a.id];
+        if (fb) {
+          const cur = Number(fb.pnlContrib) || 0;
+          const prev = (typeof a._lastPnlContrib === 'number') ? a._lastPnlContrib : cur;
+          const delta = cur - prev;
+          if (Math.abs(delta) > 0.0005) botReward += Math.max(-60, Math.min(60, delta * 40));
+          a._lastPnlContrib = cur;
+        }
+      } catch(e) { try{window._decErr&&window._decErr(e)}catch(_e){} }
+      a.fitness = Math.max(50, Math.min(2000, a.fitness + botReward));
+      a.totalReward = (a.totalReward || 0) + botReward;
+      a.learningEvents = (a.learningEvents || 0) + 1;
       return;
     }
     if(a.isMeta) {
@@ -3807,7 +3821,19 @@ function guardianCheck(guardianId, verdict, pair, stake) {
       const totalExp = (S.openPositions || []).reduce((s,p) => s + (p.stakeUsdt || 0), 0);
       const portfolio = S.portfolio || 1;
       const expPct = totalExp / portfolio * 100;
-      if(expPct > 65) return { status:'veto', reasoning:`Cumul positions ${expPct.toFixed(0)}% > 65% du portfolio. Pas d'ajout.` };
+      if(expPct > 65) {
+        // [ÉCONOMIE BOTS · 15/08/2026] mérite du veto : mémorisé (paire, side, prix, ts) ;
+        // _riskVetoAudit juge 30 min plus tard si le trade refusé aurait perdu → crédit.
+        try {
+          const _ps0 = S.pairStates && S.pairStates[pair];
+          if (_ps0 && _ps0.price) {
+            if (!S._riskVetoes) S._riskVetoes = [];
+            S._riskVetoes.push({ pair, side, price: _ps0.price, ts: Date.now() });
+            if (S._riskVetoes.length > 30) S._riskVetoes.splice(0, S._riskVetoes.length - 30);
+          }
+        } catch(e) {}
+        return { status:'veto', reasoning:`Cumul positions ${expPct.toFixed(0)}% > 65% du portfolio. Pas d'ajout.` };
+      }
       if(expPct > 50) return { status:'warn', reasoning:`Cumul positions élevé (${expPct.toFixed(0)}%). Attention.` };
       return { status:'approve', reasoning:`Cumul positions OK (${expPct.toFixed(0)}%).` };
     }
@@ -5779,3 +5805,37 @@ window.exportBackup = exportBackup;
 
 // Import sélectif (Q1=B : config seulement, pas de données)
 
+
+
+// ════════════════════════════════════════════════════════════════════════
+// [ÉCONOMIE BOTS · 15/08/2026] Audit des vetos du Risk Bot : 30 min après un veto, si
+// le trade refusé AURAIT perdu (prix contre le side > 0.3%), le Bot Gestion Risque est
+// crédité (+8 T$, plafonné) ; s'il aurait gagné > 0.3%, débité (−4 T$) — un garde-fou
+// trop frileux coûte aussi. Le mérite du veto devient mesurable, comme le pnlContrib.
+// ════════════════════════════════════════════════════════════════════════
+setInterval(function _riskVetoAudit() {
+  try {
+    if (typeof S === 'undefined' || !S || !S._riskVetoes || !S._riskVetoes.length) return;
+    const now = Date.now();
+    const bot = (S.agents || []).find(a => a.id === 'risk_bot_v1');
+    if (!bot) return;
+    const keep = [];
+    S._riskVetoes.forEach(v => {
+      if (now - v.ts < 30 * 60 * 1000) { keep.push(v); return; }
+      const ps = S.pairStates && S.pairStates[v.pair];
+      if (!ps || !ps.price || !v.price) return;
+      const move = (ps.price - v.price) / v.price * (v.side === 'short' ? -1 : 1);   // >0 = le trade aurait gagné
+      let d = 0;
+      if (move < -0.003) d = 8; else if (move > 0.003) d = -4;
+      if (d) {
+        bot.fitness = Math.max(50, Math.min(2000, (bot.fitness || 0) + d));
+        bot.totalReward = (bot.totalReward || 0) + d;
+        if (!S.botFleet) S.botFleet = {};
+        if (!S.botFleet.risk_bot_v1) S.botFleet.risk_bot_v1 = { contributions: 0, pnlContrib: 0 };
+        S.botFleet.risk_bot_v1.contributions = (S.botFleet.risk_bot_v1.contributions || 0) + 1;
+        if (d > 0) S.botFleet.risk_bot_v1.pnlContrib = (S.botFleet.risk_bot_v1.pnlContrib || 0) + Math.abs(move) * 10;  // perte évitée sur ~10 $ de mise
+      }
+    });
+    S._riskVetoes = keep;
+  } catch (e) { try{window._decErr&&window._decErr(e)}catch(_e){} }
+}, 60000);

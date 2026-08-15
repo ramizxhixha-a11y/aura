@@ -683,13 +683,21 @@ function updateRegimeFitness(agent, regime, pnlPct) {
 //     (pas d'ADN unique). Les bots et le méta sont exclus.
 function redistributeFitness() {
   try {
-    // Érosion des BOTS saturés (≥1600) : eux aussi redescendent vers 1600 pour
-    // ne pas rester collés à 2000. Leur "pot" se dissipe (un bot ne transmet pas
-    // sa fitness aux agents : rôles distincts). Couplé au plafond souple du
-    // fichier 03, ça empêche tout bot de coller au maximum.
-    (S.agents || []).filter(a => a.isBot && (a.fitness || 0) >= 1600).forEach(a => {
-      const skim = (a.fitness - 1600) * 0.02 + 4;
-      a.fitness = Math.max(1600, a.fitness - skim);
+    // [ÉCONOMIE BOTS · 15/08/2026, architecture Rams] Le surplus d'un bot au-dessus de
+    // 1600 n'est plus DISSIPÉ (l'ancien code le brûlait : les bots étaient ponctionnés
+    // dans le vide pendant que les hybrides gardaient leur richesse en circuit fermé —
+    // biais structurel du classement DAO). Il est VERSÉ : (B) à ses 3 hybrides dédiés
+    // selon leur mérite sur leur tâche, sinon (A, ce jour) au pot des hybrides libres
+    // (la pépinière), qui se nourrit du surplus de TOUS les maîtres. Le bot revient à
+    // 1600 : plafond, pas plafond de verre — il reste classé par son apport réel.
+    let botSurplusPot = 0;
+    (S.agents || []).filter(a => a.isBot && (a.fitness || 0) > 1600).forEach(a => {
+      const surplus = a.fitness - 1600;
+      a.fitness = 1600;
+      botSurplusPot += surplus;
+      if (typeof window._payBotSurplus === 'function') {
+        try { botSurplusPot -= (window._payBotSurplus(a, surplus) || 0); } catch(e) {}
+      }
     });
 
     const pool = (S.agents || []).filter(a => !a.isBot && !a.isMeta);
@@ -699,15 +707,21 @@ function redistributeFitness() {
     const weak   = pool.filter(a => (a.fitness || 0) <= 300);
     // L'érosion des saturés s'applique dès qu'il y a des forts, même sans faibles
     // à nourrir : un agent dominant ne doit jamais rester collé à 2000 par inertie.
-    if (strong.length === 0) return;
+    if (strong.length === 0 && botSurplusPot <= 0) return;
 
     // [FIX 05/08/2026] Sans destinataire, on ne prélève RIEN : l'ancienne « dissipation »
     // brûlait 130-230 T$ par passage en boucle (log « X forts → 0 faibles » toutes les ~45 s)
     // dès que tous les agents étaient forts — cas massif après l'incident Plein Régime qui
     // avait égalisé toutes les fitness à 2000.
-    if (weak.length === 0) return;
+    if (weak.length === 0) {
+      // [15/08] pas de faible à nourrir : le surplus bot est mis en réserve pour le
+      // prochain passage (jamais brûlé)
+      S._botSurplusCarry = (S._botSurplusCarry || 0) + botSurplusPot;
+      return;
+    }
+    if (S._botSurplusCarry) { botSurplusPot += S._botSurplusCarry; S._botSurplusCarry = 0; }
     // 1+2. Érosion des forts (2% de l'excédent au-dessus de 1600) → pot commun
-    let pot = 0;
+    let pot = botSurplusPot;   // [15/08] le surplus non versé des bots nourrit la pépinière
     strong.forEach(a => {
       const skim = (a.fitness - 1600) * 0.02 + 4;   // petit prélèvement
       a.fitness = Math.max(1600, a.fitness - skim);
@@ -730,7 +744,7 @@ function redistributeFitness() {
     }
 
     if (S.chainLog) {
-      S.chainLog.push({ icon:'⚖️', desc:`Redistribution : ${strong.length} forts → ${weak.length} faibles (${Math.round(pot)} T$ · apprentissage doux)`, hash:rndHash(), time:nowStr() });
+      S.chainLog.push({ icon:'⚖️', desc:`Redistribution : ${strong.length} forts → ${weak.length} faibles (${Math.round(pot)} T$ · apprentissage doux${botSurplusPot>0?' · dont '+Math.round(botSurplusPot)+' T$ de surplus bots':''})`, hash:rndHash(), time:nowStr() });
       if (S.chainLog.length > 100) S.chainLog.splice(0, S.chainLog.length - 100);
     }
   } catch(e) { console.warn('redistributeFitness:', e && e.message); }
