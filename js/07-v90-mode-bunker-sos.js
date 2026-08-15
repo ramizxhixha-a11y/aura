@@ -2701,6 +2701,16 @@ function triggerEvolution(weak) {
   weak.score   = _scoreMix + (Math.random() - 0.5) * _mutation * 2;
   weak.conf    = Math.min(0.80, _confMix);
   weak.color   = p1.color;
+  // [DISCIPLES · 15/08/2026] avant le reset : si l'agent recyclé était le disciple d'un
+  // bot, son savoir (mémoire + compétence×paire) est capturé pour l'héritier de la
+  // pépinière — le module 12 traite la succession (vision Rams : l'héritier reprend le
+  // siège PARFAITEMENT formé, le nouveau-né repart en pépinière).
+  try {
+    if (typeof window._onAgentEvolved === 'function') {
+      const _skillCopy = (S.agentPairSkill && S.agentPairSkill[weak.id]) ? JSON.parse(JSON.stringify(S.agentPairSkill[weak.id])) : null;
+      window._onAgentEvolved(weak.id, prevName, (weak.memory || []).slice(), _skillCopy);
+    }
+  } catch(e) { try{window._decErr&&window._decErr(e)}catch(_e){} }
   weak.errors  = 0; weak.corrections = 0; weak.streak = 0;
   weak.memory  = [];
   weak.fitnessHistory = [350];

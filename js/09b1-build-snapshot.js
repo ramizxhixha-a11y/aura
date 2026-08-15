@@ -68,6 +68,7 @@ function buildSnapshot() {
       removedPairs: S.removedPairs || [],
       // [13/08/2026] compétence agent×paire — pondère le vote du conseil par paire
       agentPairSkill: S.agentPairSkill || {},
+      botDisciples:   S.botDisciples   || {},   // [15/08] sièges des disciples par bot
 
       // Apprentissage
       learningHistory: (S.learningHistory || []).slice(-200).map((h, i, arr) =>
