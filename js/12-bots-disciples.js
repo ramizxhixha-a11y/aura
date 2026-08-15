@@ -236,3 +236,68 @@ window._onAgentEvolved = function (deadId, prevName, memory, skillCopy) {
   }, 500);
 })();
 window._ensureDisciples = _ensureDisciples;
+
+
+// ════════════════════════════════════════════════════════════════════════
+// [(D) FILIATION VISIBLE · 15/08/2026] Décorateur des pages DAO et Agents :
+//  · disciple  → « 🎓 disciple de {Bot} · “{tâche}” »
+//  · bot       → « 🎓 N disciple(s) : noms »
+//  · libre     → « 🌱 pépinière »
+// Injection idempotente sous chaque ligne (wrow_{id} au DAO, at_{id} sur Agents),
+// veilleur 3 s (survit aux re-rendus), zéro modification des templates existants.
+// ════════════════════════════════════════════════════════════════════════
+function _filiationLabel(a) {
+  try {
+    if (a.isMeta) return null;
+    if (a.isBot) {
+      var ids = (S.botDisciples && S.botDisciples[a.id] || []).filter(Boolean);
+      if (!ids.length) return { txt: '\ud83c\udf93 aucun disciple (p\u00e9pini\u00e8re insuffisante)', col: '#667' };
+      var names = ids.map(function (id) {
+        var d = (S.agents || []).find(function (x) { return x.id === id; });
+        return d ? String(d.name).replace('Hybrid ', '') : '?';
+      });
+      return { txt: '\ud83c\udf93 ' + ids.length + ' disciple(s) : ' + names.join(', '), col: '#5cd6c0' };
+    }
+    if (String(a.name || '').indexOf('Hybrid') !== 0) return null;   // Contrarian etc. : rien
+    var master = null;
+    Object.keys(S.botDisciples || {}).forEach(function (b) {
+      if ((S.botDisciples[b] || []).indexOf(a.id) !== -1) master = b;
+    });
+    if (master) {
+      var bAgent = (S.agents || []).find(function (x) { return x.id === master; });
+      var task = (S.discipleTasks && S.discipleTasks[a.id]) || '';
+      return { txt: '\ud83c\udf93 disciple de ' + (bAgent ? bAgent.name : master) + (task ? ' \u00b7 \u00ab ' + task + ' \u00bb' : ''), col: '#b48cff' };
+    }
+    return { txt: '\ud83c\udf31 p\u00e9pini\u00e8re', col: '#7bd88f' };
+  } catch (e) { return null; }
+}
+
+function _decorateFiliation() {
+  try {
+    if (typeof S === 'undefined' || !S || !S.agents) return;
+    S.agents.forEach(function (a) {
+      var lab = _filiationLabel(a);
+      ['wrow_', 'at_'].forEach(function (prefix) {
+        var host = document.getElementById(prefix + a.id);
+        if (!host) return;
+        var fid = 'fil_' + prefix + a.id;
+        var el = document.getElementById(fid);
+        if (!lab) { if (el) el.remove(); return; }
+        if (!el) {
+          el = document.createElement('div');
+          el.id = fid;
+          el.style.cssText = 'font-size:8px;margin-top:2px;letter-spacing:.02em;';
+          if (prefix === 'wrow_') {
+            var inner = host.querySelector('div[style*="flex:1"]') || host;
+            inner.appendChild(el);
+          } else {
+            host.insertAdjacentElement('afterend', el);
+          }
+        }
+        if (el.textContent !== lab.txt) el.textContent = lab.txt;
+        el.style.color = lab.col;
+      });
+    });
+  } catch (e) {}
+}
+setInterval(function () { try { _decorateFiliation(); } catch (e) {} }, 3000);
