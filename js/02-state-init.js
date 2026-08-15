@@ -3656,14 +3656,27 @@ function applyAutoLeverageBorrow(newIndex, prevIndex) {
       });
     }
     S._autoLevBase = 0;
+    // [RÈGLE RAMS 15/08] le Plein Régime allumé PAR LE BOT s'éteint avec le levier.
+    // Un FP allumé par Rams (bouton) n'est jamais touché ici.
+    try {
+      if (S._fpByBot && S.fullPowerMode && typeof disableFullPowerMode === 'function') {
+        disableFullPowerMode();
+        S._fpByBot = false;
+        S.chainLog.push({ icon:'↩', desc:'Plein Régime éteint : le levier bot est retombé à zéro', hash:rndHash(), time:nowStr() });
+      }
+    } catch(e) { try{window._decErr&&window._decErr(e)}catch(_e){} }
     return { ok:true, action:'disable', repaid:toRepay };
   }
 
-  // v7.6 NEW FORMULA · targetBorrow = base × mult × newIndex (somme totale de la réserve)
-  // Cas activation initiale (0 → N>0) : snapshot du trading AVANT transfert
+  // [FIX LEVIER · 15/08/2026, prouvé par le log « ×1 activé · 638$ · capital 63$ »]
+  // L'ancienne formule cachait un ×10 : targetBorrow = capital × 10 × index — « ×1 »
+  // empruntait 10× le capital propre (exposition 11×), « ×3 » aurait fait 30×. En RE,
+  // ruine mécanique. Sémantique honnête : « ×N » = emprunt de N× le capital propre
+  // (exposition N+1). leverageMaxMult (10) redevient le PLAFOND de l'index, plus un
+  // multiplicateur caché. La dette existante est réalignée par le one-shot ci-dessous.
   if(prevIndex === 0 && newIndex > 0) {
     S._autoLevBase = S.tradingAccount || 0;
-    const targetBorrow = _tradingCapitalBase() * mult * newIndex;  // reserve = capital PROPRE x 10 x index
+    const targetBorrow = _tradingCapitalBase() * Math.min(newIndex, mult);
     if(targetBorrow > 0) {
       S.tradingAccount    += targetBorrow;
       S.leverageBorrowed  = (S.leverageBorrowed || 0) + targetBorrow;
@@ -3685,7 +3698,7 @@ function applyAutoLeverageBorrow(newIndex, prevIndex) {
 
   // Cas ajustement (N>0 → M>0) : diff par rapport à la base initiale
   const base = _tradingCapitalBase();
-  const targetBorrow = base * mult * newIndex;  // v7.6 · nouvelle formule
+  const targetBorrow = base * Math.min(newIndex, mult);   // [fix levier 15/08] N× le capital, plus ×10 caché
   const delta = targetBorrow - (S._autoLevBorrowed || 0);
 
   if(delta > 0) {
@@ -3742,7 +3755,7 @@ function setLeverageByBot(newIndex, reason) {
       // Baisse partielle → vérifier la faisabilité
       const mult = S.leverageMaxMult || 10;
       const base = _tradingCapitalBase();
-      const targetBorrow = base * mult * newIndex;
+      const targetBorrow = base * Math.min(newIndex, mult);   // [fix levier 15/08] N× le capital, plus ×10 caché
       const needsRepay = (S._autoLevBorrowed || 0) - targetBorrow;
       if (needsRepay > 0 && needsRepay > (S.tradingAccount || 0)) {
         S.chainLog.push({
@@ -6404,7 +6417,7 @@ function changeLeverage(delta) {
       // Vérifier que le remboursement partiel ne va pas créer une dette orpheline
       const mult = S.leverageMaxMult || 10;
       const base = _tradingCapitalBase();
-      const targetBorrow = base * mult * newIndex;
+      const targetBorrow = base * Math.min(newIndex, mult);   // [fix levier 15/08] N× le capital, plus ×10 caché
       const needsRepay = (S._autoLevBorrowed || 0) - targetBorrow;
       if (needsRepay > 0 && needsRepay > (S.tradingAccount || 0)) {
         showToast('⚠ Baisse levier risquée · trading insuffisant ($' + (S.tradingAccount||0).toFixed(0) + ') pour rembourser $' + needsRepay.toFixed(0) + ' · fermez des positions', 5000, 'critical');
@@ -6743,6 +6756,46 @@ setInterval(_dispatchSessionTaxes, 600000);
         try { if (typeof saveState === 'function') saveState(true); } catch(e) {}
       }
       localStorage.setItem(FLAG, '1');
+    } catch(e) { try{window._decErr&&window._decErr(e)}catch(_e){} }
+  }, 500);
+})();
+
+
+// ════════════════════════════════════════════════════════════════════════
+// [RÉALIGNEMENT LEVIER · one-shot 15/08/2026] La dette auto-levier contractée sous
+// l'ancienne formule (×10 caché) est réalignée sur la sémantique honnête : cible =
+// capital propre × index. L'excédent est remboursé immédiatement dans la limite du
+// trading disponible ; le reste est marqué dette orpheline (résorbée par P2/P4).
+(function _levRealign(){
+  var FLAG = 'aura_lev_realign_20260815';
+  var _t = 0;
+  var _iv = setInterval(function(){
+    _t++;
+    var ready = false;
+    try { ready = !!window._stateReady; } catch(e) {}
+    if (!ready && _t < 240) return;
+    clearInterval(_iv);
+    try {
+      if (localStorage.getItem(FLAG)) return;
+      localStorage.setItem(FLAG, '1');
+      var idx = S.leverage || 0;
+      var borrowed = S._autoLevBorrowed || 0;
+      if (!(borrowed > 0)) return;
+      var target = _tradingCapitalBase() * idx;
+      var excess = borrowed - target;
+      if (excess > 0.01) {
+        var canRepay = Math.min(excess, S.tradingAccount || 0);
+        S.tradingAccount   = Math.max(0, (S.tradingAccount || 0) - canRepay);
+        S.leverageBorrowed = Math.max(0, (S.leverageBorrowed || 0) - canRepay);
+        S._autoLevBorrowed = Math.max(0, borrowed - canRepay);
+        if (S._autoLevBorrowed > target + 0.01) S._orphanDebtSince = Date.now();
+        if (S.chainLog) {
+          S.chainLog.push({ icon:'↩', desc:'Réalignement levier : ancienne formule ×10 corrigée · ' + canRepay.toFixed(2) + '$ remboursés (cible ×' + idx + ' = ' + target.toFixed(2) + '$' + (S._autoLevBorrowed > target + 0.01 ? ' · reste ' + (S._autoLevBorrowed - target).toFixed(2) + '$ en résorption' : '') + ')', hash:Math.random().toString(36).slice(2,8), time:new Date().toLocaleTimeString() });
+          if (S.chainLog.length > 100) S.chainLog.splice(0, S.chainLog.length - 100);
+        }
+        try { if (typeof syncLeverageReserve === 'function') syncLeverageReserve(); } catch(e) {}
+        try { if (typeof saveState === 'function') saveState(true); } catch(e) {}
+      }
     } catch(e) { try{window._decErr&&window._decErr(e)}catch(_e){} }
   }, 500);
 })();

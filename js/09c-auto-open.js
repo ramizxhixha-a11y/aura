@@ -486,10 +486,16 @@ function autoOpenPosition(pair, side, stakeOverride) {
   let capCheck = validateTotalExposure(baseStake, levBorrowed, _convForValidate);
 
   if (!capCheck.ok) {
-    // En mode auto, avant de suspendre, tenter de monter l'index levier
-    if (S.botAutoMode === true && (S.leverage || 0) < (S.leverageMaxMult || 10)) {
+    // En mode auto, avant de suspendre, tenter de monter l'index levier.
+    // [RÈGLE RAMS 06/07, garde ajoutée 15/08] le bot n'emprunte QUE si les fonds
+    // manquent (on est ici) ET si la conviction est forte (≥ 85%). Avant cette garde,
+    // il empruntait pour n'importe quel trade que le capital ne couvrait pas.
+    if (S.botAutoMode === true && _convForValidate >= 0.85 && (S.leverage || 0) < (S.leverageMaxMult || 10)) {
       const prevIdx    = S.leverage || 0;
-      const tryIndexes = [prevIdx + 1, prevIdx + 2, prevIdx + 3].filter(i => i <= (S.leverageMaxMult || 10));
+      // [RÈGLE RAMS 15/08] le bot choisit ×combien : toute la plage jusqu'au plafond,
+      // il s'arrête au PREMIER cran qui suffit (emprunt minimal nécessaire, jamais plus).
+      const tryIndexes = [];
+      for (let _i = prevIdx + 1; _i <= (S.leverageMaxMult || 10); _i++) tryIndexes.push(_i);
 
       for (const newIdx of tryIndexes) {
         try {
@@ -500,9 +506,19 @@ function autoOpenPosition(pair, side, stakeOverride) {
           if (capCheck.ok) {
             S.chainLog.push({
               icon: '🤖⚡',
-              desc: `Bot anticipation: levier ${prevIdx}→${newIdx} pour ouvrir ${pair}`,
+              desc: `Bot anticipation: levier ${prevIdx}→${newIdx} pour ouvrir ${pair} (conviction ${Math.round(_convForValidate*100)}%)`,
               hash: rndHash(), time: nowStr()
             });
+            // [RÈGLE RAMS 15/08] levier activé par le bot = Plein Régime s'allume avec :
+            // conviction forte + argent emprunté = il met le paquet. FP retombera avec
+            // le levier (couplage dans 02). Le stop d'urgence FP (-5%) reste le filet.
+            try {
+              if (!S.fullPowerMode && typeof enableFullPowerMode === 'function') {
+                enableFullPowerMode();
+                S._fpByBot = true;
+                S.chainLog.push({ icon:'🤖⚡', desc:'Plein Régime activé avec le levier (règle du 15/08) · retombera quand le levier retombera', hash:rndHash(), time:nowStr() });
+              }
+            } catch(e) { try{window._decErr&&window._decErr(e)}catch(_e){} }
             break;
           }
         } catch (e) {
