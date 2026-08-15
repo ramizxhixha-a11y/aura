@@ -70,6 +70,8 @@ function buildSnapshot() {
       agentPairSkill: S.agentPairSkill || {},
       botDisciples:   S.botDisciples   || {},   // [15/08] sièges des disciples par bot
       discipleTasks:  S.discipleTasks  || {},   // [15/08] tâche élue de chaque disciple
+      discipleAngles: S.discipleAngles || {},   // [15/08] angle mesurable de chaque disciple
+      discipleTaskSkill: S.discipleTaskSkill || {},   // [15/08] mérite par tâche (jugé à chaque clôture)
 
       // Apprentissage
       learningHistory: (S.learningHistory || []).slice(-200).map((h, i, arr) =>

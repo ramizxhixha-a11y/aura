@@ -668,10 +668,22 @@ function autoOpenPosition(pair, side, stakeOverride) {
     }
   } catch(e) { try{window._decErr&&window._decErr(e)}catch(_e){} }
 
+  // [SPÉCIALISATION · 15/08/2026] jury des disciples capturé à l'ouverture : chaque
+  // disciple assis répond sur SON angle (direction/timing/conditions) — trois juges
+  // trancheront à la clôture et créditeront le mérite PAR TÂCHE (module 12).
+  let _juryPlan = null, _cvOpen = null;
+  try {
+    if (typeof window._discipleJurySnapshot === 'function') _juryPlan = window._discipleJurySnapshot(pair, side, null);
+    const _tj = (typeof getTechSignals === 'function') ? getTechSignals(pair) : null;
+    _cvOpen = _tj?.raw?.stddev?.cv ?? null;
+  } catch(e) { try{window._decErr&&window._decErr(e)}catch(_e){} }
+
   S.openPositions.push({
     id, pair, side,
     _sizerMult:    _appliedSizerMult,   // impact Smart Sizer crédité à la clôture (audit 09/08)
     _twap:         _twapPlan,
+    _jury:         _juryPlan,           // réponses des spécialistes à l'ouverture (spécialisation 15/08)
+    _cvOpen:       _cvOpen,             // volatilité lue à l'ouverture — juge « conditions »
     entryPrice:    ps.price,
     openedAt:      Date.now(),
     amount:        parseFloat(amount),

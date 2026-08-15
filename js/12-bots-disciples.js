@@ -32,6 +32,46 @@ var _BOT_TASKS = {
   smart_sizer_v1:   ['win-rate', 'sharpe par paire', 'kelly']
 };
 
+// ── SPÉCIALISATION (15/08, soirée) : 3 ANGLES universels et MESURABLES ──
+// Chaque tâche du catalogue porte un angle : siège 0 = direction (jugée par le PnL),
+// siège 1 = timing (jugé par l'excursion défavorable après l'entrée), siège 2 =
+// conditions (jugées par la volatilité réalisée vs celle lue à l'ouverture).
+// Trois questions différentes, trois sources de données différentes, trois juges.
+var _ANGLES = ['direction', 'timing', 'conditions'];
+
+// Réponse d'un disciple SELON SON ANGLE, pour (paire, side) — sources distinctes :
+//  direction  → le SIGNE de son signal (accord avec le side)
+//  timing     → la FORCE de sa conviction (|score| fort = « agis maintenant »)
+//  conditions → sa MÉMOIRE DE RÉGIME (win-rate dans le régime de marché actuel)
+function _angleAnswer(a, angle, pair, side) {
+  try {
+    if (angle === 'direction') {
+      var dir = (a.score || 0) > 0.02 ? 1 : (a.score || 0) < -0.02 ? -1 : 0;
+      if (!dir || (side !== 'long' && side !== 'short')) return 0;
+      return dir * (side === 'long' ? 1 : -1);
+    }
+    if (angle === 'timing') {
+      var st = Math.abs(a.score || 0);
+      return st >= 0.06 ? 1 : st < 0.02 ? -1 : 0;
+    }
+    if (angle === 'conditions') {
+      var regime = (typeof detectMarketRegime === 'function') ? detectMarketRegime(pair) : null;
+      var rf = regime && a.regimeFitness && a.regimeFitness[regime];
+      if (!rf || (rf.total || 0) < 5) return 0;
+      var wr = rf.wins / rf.total;
+      return wr > 0.55 ? 1 : wr < 0.45 ? -1 : 0;
+    }
+  } catch (e) {}
+  return 0;
+}
+
+// Mérite PAR TÂCHE : S.discipleTaskSkill[id][angle] = {w,l}, alimenté par les juges
+function _taskMerit(id, angle) {
+  var t = S.discipleTaskSkill && S.discipleTaskSkill[id] && S.discipleTaskSkill[id][angle];
+  if (!t || (t.w + t.l) < 8) return null;
+  return t.w / (t.w + t.l);
+}
+
 // Mérite d'un disciple : taux d'alignement global (le même que le versement) + conf
 function _discipleMerit(a) {
   var h = a.corrections || 0, m = a.errors || 0;
@@ -50,14 +90,28 @@ function _electTasks() {
       var tasks = _BOT_TASKS[botId] || [];
       var ds = (S.botDisciples[botId] || []).filter(Boolean)
         .map(function (id) { return (S.agents || []).find(function (a) { return a.id === id; }); })
-        .filter(Boolean)
-        .sort(function (x, y) { return _discipleMerit(y) - _discipleMerit(x); });
-      ds.forEach(function (a, i) {
-        var task = tasks[i] || tasks[tasks.length - 1] || 'g\u00e9n\u00e9raliste';
-        if (S.discipleTasks[a.id] !== task) {
-          S.discipleTasks[a.id] = task;
-          changes.push(a.name + ' \u2192 \u00ab ' + task + ' \u00bb');
+        .filter(Boolean);
+      // [SPÉCIALISATION] assignation gloutonne : la meilleure paire (disciple, angle)
+      // d'abord, par MÉRITE SUR L'ANGLE (≥8 échantillons), sinon mérite global.
+      var pairsScored = [];
+      ds.forEach(function (a) {
+        _ANGLES.forEach(function (angle, ai) {
+          var tm = _taskMerit(a.id, angle);
+          pairsScored.push({ a: a, ai: ai, score: (tm !== null ? tm : _discipleMerit(a) * 0.8) });
+        });
+      });
+      pairsScored.sort(function (x, y) { return y.score - x.score; });
+      var usedA = new Set(), usedI = new Set();
+      pairsScored.forEach(function (pc) {
+        if (usedA.has(pc.a.id) || usedI.has(pc.ai)) return;
+        usedA.add(pc.a.id); usedI.add(pc.ai);
+        var task = tasks[pc.ai] || _ANGLES[pc.ai];
+        if (S.discipleTasks[pc.a.id] !== task) {
+          S.discipleTasks[pc.a.id] = task;
+          changes.push(pc.a.name + ' \u2192 \u00ab ' + task + ' \u00bb');
         }
+        if (!S.discipleAngles) S.discipleAngles = {};
+        S.discipleAngles[pc.a.id] = _ANGLES[pc.ai];
       });
     });
     if (changes.length && S.chainLog) {
@@ -81,19 +135,18 @@ window._consultDisciples = function (botId, pair, side) {
     ids.forEach(function (id) {
       var a = (S.agents || []).find(function (x) { return x.id === id; });
       if (!a) return;
-      var dir = (a.score || 0) > 0.02 ? 1 : (a.score || 0) < -0.02 ? -1 : 0;
-      if (!dir) return;
+      // [SPÉCIALISATION] le disciple répond sur SON angle (trois questions différentes),
+      // pondéré par sa compétence sur la paire ET son mérite prouvé sur l'angle.
+      var angle = (S.discipleAngles && S.discipleAngles[id]) || 'direction';
+      var ans = _angleAnswer(a, angle, pair, (side === 'long' || side === 'short') ? side : 'long');
+      if (!ans) return;
       var w = (a.conf || 0.5);
       var sk = S.agentPairSkill && S.agentPairSkill[id] && S.agentPairSkill[id][pair];
       if (sk && (sk.w + sk.l) >= 10) w *= (1 + Math.max(-0.4, Math.min(0.5, (sk.w / (sk.w + sk.l) - 0.5))));
-      if (side === 'long' || side === 'short') {
-        var want = side === 'long' ? 1 : -1;
-        num += dir * want * w; den += w;
-        if (dir * want > 0) out.up++; else out.down++;
-      } else {
-        num += dir * w; den += w;   // cohérence interne (Sizer)
-        if (dir > 0) out.up++; else out.down++;
-      }
+      var tm = _taskMerit(id, angle);
+      if (tm !== null) w *= (0.6 + tm);   // un spécialiste prouvé pèse jusqu'à ×1.6
+      num += ans * w; den += w;
+      if (ans > 0) out.up++; else out.down++;
     });
     if (den > 0) {
       var net = num / den;
@@ -301,3 +354,71 @@ function _decorateFiliation() {
   } catch (e) {}
 }
 setInterval(function () { try { _decorateFiliation(); } catch (e) {} }, 3000);
+
+
+// ════════════════════════════════════════════════════════════════════════
+// [JURY & JUGES · 15/08/2026] À l'OUVERTURE d'une position (appelé par 09c) : chaque
+// disciple assis répond sur SON angle → jury attaché à la position. À la CLÔTURE
+// (appelé par 02) : trois juges tranchent séparément — direction (signe du PnL),
+// timing (excursion défavorable dans les 2 bougies suivant l'entrée), conditions
+// (volatilité réalisée vs lue). Chaque bonne réponse crédite le mérite du disciple
+// SUR SON ANGLE (S.discipleTaskSkill) — la matière du vote des tâches.
+// ════════════════════════════════════════════════════════════════════════
+window._discipleJurySnapshot = function (pair, side, cvOpen) {
+  try {
+    var jury = [];
+    Object.keys(S.botDisciples || {}).forEach(function (botId) {
+      (S.botDisciples[botId] || []).filter(Boolean).forEach(function (id) {
+        var a = (S.agents || []).find(function (x) { return x.id === id; });
+        if (!a) return;
+        var angle = (S.discipleAngles && S.discipleAngles[id]) || 'direction';
+        var ans = _angleAnswer(a, angle, pair, side);
+        if (ans) jury.push({ id: id, angle: angle, ans: ans });
+      });
+    });
+    return jury.length ? jury : null;
+  } catch (e) { return null; }
+};
+
+window._judgeDisciples = function (pos, pnlUsd) {
+  try {
+    if (!pos || !pos._jury || !pos._jury.length) return;
+    var verdicts = {};
+    verdicts.direction = pnlUsd > 0 ? 1 : pnlUsd < 0 ? -1 : 0;
+    // timing : pire excursion contre le side dans les 2 bougies suivant l'ouverture
+    verdicts.timing = 0;
+    try {
+      var ps = S.pairStates && S.pairStates[pos.pair];
+      var cds = (ps && ps.candles || []).filter(function (c) { return (c.t || 0) >= (pos.openedAt || pos.entryTs || pos.ts || 0); }).slice(0, 2);
+      if (cds.length && pos.entryPrice) {
+        var worst = pos.side === 'long'
+          ? Math.min.apply(null, cds.map(function (c) { return c.l != null ? c.l : c.c; }))
+          : Math.max.apply(null, cds.map(function (c) { return c.h != null ? c.h : c.c; }));
+        var adverse = Math.abs(worst - pos.entryPrice) / pos.entryPrice;
+        verdicts.timing = adverse < 0.002 ? 1 : adverse > 0.006 ? -1 : 0;
+      }
+    } catch (e) {}
+    // conditions : volatilité réalisée pendant le trade vs lue à l'ouverture
+    verdicts.conditions = 0;
+    try {
+      if (typeof pos._cvOpen === 'number' && pos._cvOpen > 0 && pos.entryPrice) {
+        var ps2 = S.pairStates && S.pairStates[pos.pair];
+        var px = ps2 && ps2.price;
+        if (px) {
+          var realized = Math.abs(px - pos.entryPrice) / pos.entryPrice;
+          var ratio = realized / Math.max(0.0005, pos._cvOpen);
+          verdicts.conditions = (ratio >= 0.3 && ratio <= 3) ? 1 : -1;
+        }
+      }
+    } catch (e) {}
+    if (!S.discipleTaskSkill) S.discipleTaskSkill = {};
+    pos._jury.forEach(function (j) {
+      var v = verdicts[j.angle];
+      if (!v) return;                        // pas de verdict mesurable : pas de note
+      if (!S.discipleTaskSkill[j.id]) S.discipleTaskSkill[j.id] = {};
+      if (!S.discipleTaskSkill[j.id][j.angle]) S.discipleTaskSkill[j.id][j.angle] = { w: 0, l: 0 };
+      var t = S.discipleTaskSkill[j.id][j.angle];
+      if (j.ans === v) t.w++; else t.l++;    // le disciple avait dit oui/non : le juge tranche
+    });
+  } catch (e) { try{window._decErr&&window._decErr(e)}catch(_e){} }
+};

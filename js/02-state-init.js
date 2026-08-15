@@ -5949,6 +5949,9 @@ function closePosition(id, botClose = false) {
       try { if(typeof checkBadges === 'function') checkBadges(); } catch(e) {}
       if(typeof closeDecisionCascade  === 'function') closeDecisionCascade(pos.pair, pos.side, pos.currentPrice || pos.entryPrice, realisedUsd, realisedPct);
       if(typeof runBotFleet           === 'function') runBotFleet('post_trade', { pnlUsd: realisedUsd, sizerMult: pos._sizerMult });
+      // [SPÉCIALISATION · 15/08/2026] les trois juges notent les réponses du jury
+      // capturé à l'ouverture — mérite par tâche des disciples (module 12).
+      try { if (typeof window._judgeDisciples === 'function') window._judgeDisciples(pos, realisedUsd); } catch(e) {}
 
       // v6.0 · AGENT LEARNING — update fitness of agents who voted for this direction
       if(pos._openAgents && S.agents) {
