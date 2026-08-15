@@ -69,6 +69,7 @@ function buildSnapshot() {
       // [13/08/2026] compétence agent×paire — pondère le vote du conseil par paire
       agentPairSkill: S.agentPairSkill || {},
       botDisciples:   S.botDisciples   || {},   // [15/08] sièges des disciples par bot
+      discipleTasks:  S.discipleTasks  || {},   // [15/08] tâche élue de chaque disciple
 
       // Apprentissage
       learningHistory: (S.learningHistory || []).slice(-200).map((h, i, arr) =>

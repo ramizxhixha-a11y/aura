@@ -4331,6 +4331,14 @@ function botArb() {
     }
   } catch(e) { try{window._decErr&&window._decErr(e)}catch(_e){} }
   if (best) {
+    // [CONSULTATION · 15/08/2026] avis des disciples sur la jambe de convergence
+    let _dc = { mod: 1, detail: '' };
+    try { if (typeof window._consultDisciples === 'function') _dc = window._consultDisciples('arb_bot_v1', best.lag, 'long'); } catch(e) {}
+    if (_dc.mod < 0.92) {
+      _setBot('arb_bot_v1', 'idle', `Convergence ${best.lag} retenue · disciples contre (${_dc.detail})`);
+      if(S.pendingActions) S.pendingActions = S.pendingActions.filter(a => a.type !== 'arb');
+      return null;
+    }
     if(!S.pendingActions) S.pendingActions = [];
     const already = S.pendingActions.find(a => a.type === 'arb' && a.pair === best.lag);
     if(!already) {
@@ -4388,6 +4396,15 @@ function botScalper() {
     }
   });
   if(best) {
+    // [CONSULTATION · 15/08/2026] avis des disciples sur (paire, side) : désaccord fort
+    // (mod < 0.92) = proposition retenue, statut honnête. Accord tracé dans le détail.
+    let _dc = { mod: 1, detail: '' };
+    try { if (typeof window._consultDisciples === 'function') _dc = window._consultDisciples('scalper_bot_v1', best.pair, best.side); } catch(e) {}
+    if (_dc.mod < 0.92) {
+      _setBot('scalper_bot_v1', 'idle', `Signal ${best.pair} ${best.side.toUpperCase()} retenu · disciples contre (${_dc.detail})`);
+      if(S.pendingActions) S.pendingActions = S.pendingActions.filter(a => a.type !== 'scalp');
+      return;
+    }
     if(!S.pendingActions) S.pendingActions = [];
     const already = S.pendingActions.find(a => a.type === 'scalp' && a.pair === best.pair && a.side === best.side);
     if(!already) {
@@ -4400,7 +4417,7 @@ function botScalper() {
         ts: Date.now(),
         source: 'scalper_bot_v1',
         title: `Scalp ${best.pair}`,
-        detail: `${best.side.toUpperCase()} · LMSR ${(0.5 + (best.side==='long'?best.edge:-best.edge)).toFixed(2)} · vol ${(best.cv*100).toFixed(1)}%`,
+        detail: `${best.side.toUpperCase()} · LMSR ${(0.5 + (best.side==='long'?best.edge:-best.edge)).toFixed(2)} · vol ${(best.cv*100).toFixed(1)}%${_dc.detail ? ' · disciples ' + _dc.detail : ''}`,
         action: 'open_trade',
         payload: { pair: best.pair, side: best.side }
       });
@@ -4498,6 +4515,14 @@ function botDCA() {
     }
   });
   if(best) {
+    // [CONSULTATION · 15/08/2026] avis des disciples avant l'achat bas de range
+    let _dc = { mod: 1, detail: '' };
+    try { if (typeof window._consultDisciples === 'function') _dc = window._consultDisciples('dca_bot_v1', best.pair, 'long'); } catch(e) {}
+    if (_dc.mod < 0.92) {
+      _setBot('dca_bot_v1', 'idle', `Bas de range ${best.pair} retenu · disciples contre (${_dc.detail})`);
+      if(S.pendingActions) S.pendingActions = S.pendingActions.filter(a => a.type !== 'dca');
+      return null;
+    }
     if(!S.pendingActions) S.pendingActions = [];
     const already = S.pendingActions.find(a => a.type === 'dca' && a.pair === best.pair);
     if(!already) {
@@ -4665,8 +4690,16 @@ function botSmartSizer(pair) {
       }
     }
   } catch(e) { try{window._decErr&&window._decErr(e)}catch(_e){} }
+  // [CONSULTATION · 15/08/2026] les disciples du Sizer donnent leur cohérence sur la
+  // paire : disciples alignés = confiance ×1.1 max, disciples en conflit = prudence
+  // ×0.9. Tracé dans le statut.
+  let dcStr = '';
+  try {
+    const c = (typeof window._consultDisciples === 'function' && pair) ? window._consultDisciples('smart_sizer_v1', pair, null) : null;
+    if (c && c.detail) { mult *= c.mod; dcStr = ` · disciples ${c.detail}`; }
+  } catch(e) {}
   mult = Math.max(0.5, Math.min(1.4, mult * shMult));
-  if (shStr) _setBot('smart_sizer_v1', 'active', action + shStr + ` (${wrSrc})`);
+  if (shStr || dcStr) _setBot('smart_sizer_v1', 'active', action + shStr + dcStr + ` (${wrSrc})`);
   S.botFleet.smart_sizer_v1.contributions = recent.length;
   return { mult, wr };
 }

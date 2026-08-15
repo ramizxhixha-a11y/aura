@@ -17,6 +17,94 @@
 var _DISCIPLE_BOTS = ['exec_bot_v1','risk_bot_v1','arb_bot_v1','scalper_bot_v1','fiscal_bot_v1','dca_bot_v1','rescue_bot_v1','rebalance_bot_v1','smart_sizer_v1'];
 var _PEPINIERE_MIN = 7;
 
+// ── (C) Catalogue des tâches par bot — le VOTE assigne chaque tâche au disciple ──
+// le plus méritant (élection rejouée toutes les 10 min : un disciple qui faiblit
+// perd sa tâche au profit d'un frère).
+var _BOT_TASKS = {
+  exec_bot_v1:      ['timing d\u2019ex\u00e9cution', 'lecture volatilit\u00e9', 'taille des chunks'],
+  risk_bot_v1:      ['cumul exposition', 'corr\u00e9lation', 'drawdown'],
+  arb_bot_v1:       ['d\u00e9tection divergence', 'force corr\u00e9lation', 'timing convergence'],
+  scalper_bot_v1:   ['signal LMSR', 'volatilit\u00e9 scalp', 'timing entr\u00e9e'],
+  fiscal_bot_v1:    ['timing harvest', 's\u00e9lection perte', 'impact fiscal'],
+  dca_bot_v1:       ['d\u00e9tection range', 'bas de range', 'r\u00e9gime plat'],
+  rescue_bot_v1:    ['seuil drawdown', 'timing flatten', 'gravit\u00e9'],
+  rebalance_bot_v1: ['skew portefeuille', 's\u00e9lection paire', 'timing'],
+  smart_sizer_v1:   ['win-rate', 'sharpe par paire', 'kelly']
+};
+
+// Mérite d'un disciple : taux d'alignement global (le même que le versement) + conf
+function _discipleMerit(a) {
+  var h = a.corrections || 0, m = a.errors || 0;
+  var rate = (h + m) >= 5 ? h / (h + m) : 0.5;
+  return rate * 0.7 + (a.conf || 0.5) * 0.3;
+}
+
+// ── Élection des tâches : les disciples d'un bot sont classés par mérite (le vote),
+// la tâche 1 (principale) va au plus méritant, etc. Journalisée si changement. ──
+function _electTasks() {
+  try {
+    if (!S.botDisciples) return;
+    if (!S.discipleTasks) S.discipleTasks = {};
+    var changes = [];
+    Object.keys(S.botDisciples).forEach(function (botId) {
+      var tasks = _BOT_TASKS[botId] || [];
+      var ds = (S.botDisciples[botId] || []).filter(Boolean)
+        .map(function (id) { return (S.agents || []).find(function (a) { return a.id === id; }); })
+        .filter(Boolean)
+        .sort(function (x, y) { return _discipleMerit(y) - _discipleMerit(x); });
+      ds.forEach(function (a, i) {
+        var task = tasks[i] || tasks[tasks.length - 1] || 'g\u00e9n\u00e9raliste';
+        if (S.discipleTasks[a.id] !== task) {
+          S.discipleTasks[a.id] = task;
+          changes.push(a.name + ' \u2192 \u00ab ' + task + ' \u00bb');
+        }
+      });
+    });
+    if (changes.length && S.chainLog) {
+      S.chainLog.push({ icon: '\ud83d\uddf3', desc: 'Vote des t\u00e2ches : ' + changes.slice(0, 4).join(' \u00b7 ') + (changes.length > 4 ? ' \u00b7 +' + (changes.length - 4) : ''), hash: Math.random().toString(36).slice(2, 8), time: new Date().toLocaleTimeString() });
+      if (S.chainLog.length > 100) S.chainLog.splice(0, S.chainLog.length - 100);
+    }
+  } catch (e) { try{window._decErr&&window._decErr(e)}catch(_e){} }
+}
+
+// ── Consultation : le bot demande l'avis de SES disciples sur (paire, side) ──
+// Chaque disciple pèse par sa confiance × (1 + bonus compétence sur LA paire).
+// side connu : accord/désaccord directionnel → mod \u2208 [0.85, 1.15].
+// side null (Sizer) : cohérence interne des disciples → confiance dans le sizing.
+// Les bots de PROTECTION n'appellent jamais ceci : leurs gardes ne s'adoucissent pas.
+window._consultDisciples = function (botId, pair, side) {
+  var out = { mod: 1.0, up: 0, down: 0, detail: '' };
+  try {
+    var ids = (S.botDisciples && S.botDisciples[botId] || []).filter(Boolean);
+    if (!ids.length) return out;
+    var num = 0, den = 0;
+    ids.forEach(function (id) {
+      var a = (S.agents || []).find(function (x) { return x.id === id; });
+      if (!a) return;
+      var dir = (a.score || 0) > 0.02 ? 1 : (a.score || 0) < -0.02 ? -1 : 0;
+      if (!dir) return;
+      var w = (a.conf || 0.5);
+      var sk = S.agentPairSkill && S.agentPairSkill[id] && S.agentPairSkill[id][pair];
+      if (sk && (sk.w + sk.l) >= 10) w *= (1 + Math.max(-0.4, Math.min(0.5, (sk.w / (sk.w + sk.l) - 0.5))));
+      if (side === 'long' || side === 'short') {
+        var want = side === 'long' ? 1 : -1;
+        num += dir * want * w; den += w;
+        if (dir * want > 0) out.up++; else out.down++;
+      } else {
+        num += dir * w; den += w;   // cohérence interne (Sizer)
+        if (dir > 0) out.up++; else out.down++;
+      }
+    });
+    if (den > 0) {
+      var net = num / den;
+      if (side === 'long' || side === 'short') out.mod = Math.max(0.85, Math.min(1.15, 1 + net * 0.15));
+      else out.mod = Math.max(0.9, Math.min(1.1, 1 + Math.abs(net) * 0.1 * (Math.abs(net) > 0.5 ? 1 : -1)));
+      out.detail = out.up + '\u2191' + out.down + '\u2193 \u00d7' + out.mod.toFixed(2);
+    }
+  } catch (e) { try{window._decErr&&window._decErr(e)}catch(_e){} }
+  return out;
+};
+
 function _assignableHybrids() {
   return (S.agents || []).filter(function (a) {
     return !a.isBot && !a.isMeta && String(a.name || '').indexOf('Hybrid') === 0;
@@ -141,8 +229,10 @@ window._onAgentEvolved = function (deadId, prevName, memory, skillCopy) {
     if (!ready && _t < 240) return;
     clearInterval(_iv);
     try { _ensureDisciples(); } catch (e) { try{window._decErr&&window._decErr(e)}catch(_e){} }
-    // comblement périodique (nouveaux hybrides, sièges libérés) : toutes les 5 min
+    try { _electTasks(); } catch (e) {}
+    // comblement périodique (5 min) + réélection des tâches (10 min)
     setInterval(function () { try { _ensureDisciples(); } catch (e) {} }, 300000);
+    setInterval(function () { try { _electTasks(); } catch (e) {} }, 600000);
   }, 500);
 })();
 window._ensureDisciples = _ensureDisciples;
