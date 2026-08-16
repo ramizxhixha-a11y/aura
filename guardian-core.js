@@ -104,6 +104,30 @@ if(!window.__guardianErrHook){
    ============================================================ */
 
 /* SONDE 1 — Incohérences UI ↔ état (le coeur, ton exemple Plein Régime) */
+// [GUARDIAN v2 · 16/08/2026] Sonde PERSISTANCE : toute clé produite par buildSnapshot()
+// et absente du manifeste de relecture (_APPLYSNAP_MANIFEST, 09b2) sera PERDUE au
+// prochain boot. C'est le bug qui a coûté 7 clés le 16/08 — désormais détecté avant.
+function probePersistence(){
+  const out=[];
+  try{
+    const bs = (typeof buildSnapshot==='function') ? buildSnapshot() : null;
+    const man = (typeof window!=='undefined' && window._APPLYSNAP_MANIFEST) || null;
+    if(!bs || !man){
+      out.push(R('info','Persistance','Sonde indisponible','buildSnapshot ou manifeste absent de ce contexte.','Vérifier que 09b1/09b2 à jour sont chargés.'));
+      return out;
+    }
+    const orphans = Object.keys(bs).filter(k => man.indexOf(k) === -1);
+    if(orphans.length){
+      out.push(R('crit','Persistance','Clé(s) sauvegardée(s) mais JAMAIS relue(s) : '+orphans.join(', '),
+        'Ces données seront PERDUES à la prochaine relance : buildSnapshot les écrit, applySnap ne les relit pas (même mécanique que le bug du 16/08).',
+        'Ajouter chaque clé à applySnap ET au manifeste dans 09b2 (livrer à Claude avec cette ligne).'));
+    } else {
+      out.push(R('ok','Persistance','Toutes les clés du snapshot sont relues ('+Object.keys(bs).length+' clés)','Sauvegarde et relecture alignées.',''));
+    }
+  }catch(e){ out.push(R('warn','Persistance','Sonde en erreur',String(e&&e.message||e).slice(0,80),'')); }
+  return out;
+}
+
 function probeCoherence(snap){
   const out = [];
   const S = snap.S;
@@ -518,6 +542,7 @@ Core.runAll = async function(){
   res = res.concat(probeSanity(snap));
   res = res.concat(probeGel(snap));
   res = res.concat(probeBackupCapability(snap));
+  res = res.concat(probePersistence());   // [Guardian v2 · 16/08] clés sauvegardées vs relues
   res = res.concat(await probeStorageSync(snap));
   res = res.concat(probeSaveFresh(snap));
   res = res.concat(probeJsErrors());
