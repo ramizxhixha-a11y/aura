@@ -1140,6 +1140,7 @@ function _drawActionMiniChartsInner() {
     if(canvas.width !== W) canvas.width = W;
     canvas.height = H;
     const ctx = canvas.getContext('2d');
+    if(!ps || !ps.candles) return;   // [16/08, attrapé par Guardian] paire custom sans état dans ce mode : sparkline muette plutôt que crash
     const data = ps.candles.slice(-20);
     if(data.length < 2) return;
     ctx.clearRect(0,0,W,H);
