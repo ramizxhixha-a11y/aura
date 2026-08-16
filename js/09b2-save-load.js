@@ -370,6 +370,18 @@ async function loadState() {
     if (snap.archives)         S.archives         = snap.archives;
     if (snap.brainLog)         S.brainLog         = snap.brainLog;
     if (snap.pendingActions)   S.pendingActions   = snap.pendingActions;
+    // [PERSISTANCE 11-12 · 16/08/2026] LEÇON : buildSnapshot (09b1) et cette liste vont
+    // PAR PAIRE — toute clé ajoutée là-bas DOIT être relue ici. Sept clés des livraisons
+    // du 09-15/08 étaient sauvegardées mais jamais restaurées : compétence×paire, paires
+    // custom, sièges des disciples, tâches, angles et mérites par tâche repartaient de
+    // ZÉRO à chaque relance (prouvé par le reset entre les backups 02:31 et 06:32).
+    if (snap.agentPairSkill)    S.agentPairSkill    = snap.agentPairSkill;
+    if (snap.customPairs)       S.customPairs       = snap.customPairs;
+    if (snap.removedPairs)      S.removedPairs      = snap.removedPairs;
+    if (snap.botDisciples)      S.botDisciples      = snap.botDisciples;
+    if (snap.discipleTasks)     S.discipleTasks     = snap.discipleTasks;
+    if (snap.discipleAngles)    S.discipleAngles    = snap.discipleAngles;
+    if (snap.discipleTaskSkill) S.discipleTaskSkill = snap.discipleTaskSkill;
     if (snap.mutedAgents)      S.mutedAgents      = snap.mutedAgents;
     if (snap.botFleet)         Object.assign(S.botFleet || {}, snap.botFleet);
     if (Array.isArray(snap.agentLessons)) S.agentLessons = snap.agentLessons;
