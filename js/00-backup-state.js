@@ -195,3 +195,51 @@
     };
   } catch (e) {}
 })();
+
+// ════════════════════════════════════════════════════════════════════════
+// [ANTI-THROTTLING WEBVIEW · 16/08/2026, signalé par Rams] Le renderer WebView se
+// throttle après inactivité TACTILE même écran allumé et batterie exclue (Chromium).
+// (1) KEEPALIVE : oscillateur audio inaudible (gain 0.001) démarré au premier toucher
+//     — un renderer « audible » n'est jamais throttlé. Coût batterie négligeable.
+// (2) SONDE HORS-ROTATION : battement 5s ; tout trou >20s est horodaté dans
+//     localStorage 'aura_throttle_log' (50 max) — la rotation du journal ne peut plus
+//     effacer les nuits de blocage. Relu et affiché au journal à chaque réveil.
+// ════════════════════════════════════════════════════════════════════════
+(function _antiThrottle() {
+  try {
+    if (typeof window === 'undefined') return;
+    var _ac = null;
+    function _startAudio() {
+      try {
+        if (_ac) return;
+        var AC = window.AudioContext || window.webkitAudioContext;
+        if (!AC) return;
+        _ac = new AC();
+        var osc = _ac.createOscillator(), g = _ac.createGain();
+        g.gain.value = 0.001; osc.frequency.value = 30;
+        osc.connect(g); g.connect(_ac.destination); osc.start();
+      } catch (e) {}
+    }
+    document.addEventListener('touchstart', _startAudio, { once: true, passive: true });
+    document.addEventListener('click', _startAudio, { once: true });
+
+    var _last = Date.now();
+    setInterval(function () {
+      var now = Date.now(), gap = now - _last;
+      _last = now;
+      if (gap > 20000) {
+        try {
+          var log = JSON.parse(localStorage.getItem('aura_throttle_log') || '[]');
+          log.unshift({ t: new Date(now - gap).toLocaleString(), gapS: Math.round(gap / 1000) });
+          if (log.length > 50) log.length = 50;
+          localStorage.setItem('aura_throttle_log', JSON.stringify(log));
+          var S0 = null; try { S0 = (0, eval)('S'); } catch (e) {}
+          if (S0 && S0.chainLog) {
+            S0.chainLog.push({ icon: '🧊', desc: 'WebView throttlée ' + Math.round(gap / 1000) + 's (écran inactif) · journal permanent: aura_throttle_log', hash: Math.random().toString(36).slice(2, 8), time: new Date().toLocaleTimeString() });
+            if (S0.chainLog.length > 100) S0.chainLog.splice(0, S0.chainLog.length - 100);
+          }
+        } catch (e) {}
+      }
+    }, 5000);
+  } catch (e) {}
+})();
