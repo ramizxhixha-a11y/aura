@@ -383,6 +383,7 @@ async function loadState() {
     if (snap.discipleTasks)     S.discipleTasks     = snap.discipleTasks;
     if (snap.discipleAngles)    S.discipleAngles    = snap.discipleAngles;
     if (snap.discipleTaskSkill) S.discipleTaskSkill = snap.discipleTaskSkill;
+    try { window._applySnapDone = Object.keys(snap); } catch(e) {}   // [sonde persistance] clés vues au dernier boot
     if (snap.mutedAgents)      S.mutedAgents      = snap.mutedAgents;
     if (snap.botFleet)         Object.assign(S.botFleet || {}, snap.botFleet);
     if (Array.isArray(snap.agentLessons)) S.agentLessons = snap.agentLessons;
@@ -1058,3 +1059,11 @@ setTimeout(_auraRotatePurge, 20000);
     } catch(e){}
   }, 1000);
 })();
+
+
+// [GUARDIAN v2 · SONDE PERSISTANCE · 16/08/2026] Manifeste des clés que applySnap sait
+// RELIRE. Guardian compare à chaque analyse ce manifeste aux clés réellement produites
+// par buildSnapshot() : toute clé sauvegardée mais absente d'ici = CRIT « clé jamais
+// relue » — le bug du 16/08 (7 clés perdues à chaque boot) devient structurellement
+// détectable. RÈGLE : toute clé ajoutée à 09b1 s'ajoute à applySnap ET ici.
+window._APPLYSNAP_MANIFEST = ['key','cycle','cycleMax','chainLog','learningHistory','evoLog','agents','pairStates','walletStore','openPositions','pendingActions','botFleet','paperRealConfig','adaptiveState','abTesting','taxConfig','realCandles','preRealSnapshotPaperReal','heatmap','shadow','archives','paperRealStats','realStatsByPair','paperRealActivePairs','fees','tradeContextMemory','agentPairSkill','customPairs','removedPairs','botDisciples','discipleTasks','discipleAngles','discipleTaskSkill','savedAt','version','tradingMode','botAutoMode','fullPowerMode','leverage','_autoLevBorrowed','leverageBorrowed','cashAccount','tradingAccount','fiscalReserveAccount','antiNegReserve','_startPortfolio','_fleetTruthReset0908','_totalCompounded','brainLog','_errStats','_riskVetoes','_botSurplusCarry','_fpByBot'];
