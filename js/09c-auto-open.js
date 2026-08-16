@@ -146,6 +146,22 @@ function autoOpenPosition(pair, side, stakeOverride) {
   // ci-dessus). Le nombre de trades simultanés = nombre de paires favorables.
   // Vision XIII : pas de capital qui dort, autant de paires que favorables, ≤1/paire.
 
+  // [PLAFOND AU FUNNEL · 16/08/2026] le plafond de positions (3 en EV, 1 en RE, ∞ en AA)
+  // vivait dans le résolveur EV seulement : les PROPOSITIONS acceptées (Scalper, DCA,
+  // Arb → open_trade) appelaient cet ouvreur directement et le contournaient — prouvé
+  // par le badge « 4 » en mode EV le 16/08. La garde vit désormais ICI, l'entonnoir
+  // unique par lequel passe TOUTE ouverture, quel que soit le chemin.
+  if (S.tradingMode !== 'sim') {
+    const _capMax = (S.tradingMode === 'real') ? 1 : ((S.paperRealConfig && S.paperRealConfig.maxConcurrentPos) || 3);
+    if ((S.openPositions || []).length >= _capMax) {
+      if (Math.random() < 0.15 && S.chainLog) {
+        S.chainLog.push({ icon:'🛡️', desc:`Ouverture ${pair} refusée · plafond ${_capMax} position(s) atteint (${S.tradingMode === 'real' ? 'RE' : 'EV'})`, hash:Math.random().toString(36).slice(2,8), time:new Date().toLocaleTimeString() });
+        if (S.chainLog.length > 100) S.chainLog.splice(0, S.chainLog.length - 100);
+      }
+      return null;
+    }
+  }
+
   // Filtre série de pertes : 3 pertes consécutives → pause 30 min
   if (!S._lossStreaks) S._lossStreaks = {};
   const streak = S._lossStreaks[pair];
