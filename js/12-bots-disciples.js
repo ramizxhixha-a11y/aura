@@ -330,7 +330,10 @@ function _decorateFiliation() {
     if (typeof S === 'undefined' || !S || !S.agents) return;
     S.agents.forEach(function (a) {
       var lab = _filiationLabel(a);
-      ['wrow_', 'at_'].forEach(function (prefix) {
+      // [16/08 soir, signalé par Rams] le DAO se re-rend en continu : l'injection/ré-
+      // injection y faisait sauter la hauteur des lignes (écran instable). La filiation
+      // vit désormais sur la page AGENTS seule (stable) + les lignes 🎓 du journal.
+      ['at_'].forEach(function (prefix) {
         var host = document.getElementById(prefix + a.id);
         if (!host) return;
         var fid = 'fil_' + prefix + a.id;
