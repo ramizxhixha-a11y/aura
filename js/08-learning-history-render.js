@@ -2771,7 +2771,7 @@ function simTick() {
           if (_ltSum > 500) {
             let _opStr = '';
             const _op = (typeof window !== 'undefined') ? window._auraLastOp : null;
-            if (_op && _op.at > (_gapStart - 2000) && _op.at < _now) _opStr = ' · op ' + _op.name;
+            if (_op && _op.at > (_gapStart - 5000) && _op.at < _now) _opStr = ' · op ' + _op.name;   // fenêtre élargie 2→5s (16/08)
             _ltStr = ' · JS ⏱ ' + (_ltSum/1000).toFixed(1) + 's/' + _ltN + _opStr;
           } else if (!_hidden) {
             _ltStr = ' · JS inactif (suspension OS)';

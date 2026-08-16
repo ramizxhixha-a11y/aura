@@ -186,12 +186,22 @@ async function init() {
   try { setTimeout(() => { try { if (typeof updatePairAnalysisPanels === 'function') updatePairAnalysisPanels(); } catch(e){} }, 300); } catch(e){}
 
   if (restored) {
-    try { if (typeof window._perfOp === 'function') window._perfOp('boot·buildAgentCards'); } catch(e){}
-    try { if (typeof buildAgentCards === 'function') buildAgentCards(); } catch(e){}
-    try { if (typeof window._perfOp === 'function') window._perfOp('boot·renderAll'); } catch(e){}
-    try { if (typeof patchAgentCards === 'function') patchAgentCards(); } catch(e){}
-    try { if (typeof renderAll === 'function') renderAll(); } catch(e){}
-    try { _renderWalletCards(); } catch(e){}
+    // [MESURE DIRECTE · 16/08/2026] les gels de boot (2× ~3s à chaque démarrage)
+    // échappaient à l'attribution : chaque étape est CHRONOMÉTRÉE — au-delà de 1 s,
+    // ligne ⏱ LENT avec son nom et sa durée exacte. Plus de devinette.
+    const _bt = (n, fn) => {
+      const t0 = performance.now();
+      try { fn(); } catch(e){}
+      const ms = performance.now() - t0;
+      if (ms > 1000 && S && S.chainLog) {
+        S.chainLog.push({ icon:'⏱', desc:'LENT: boot·' + n + ' ' + (ms/1000).toFixed(1) + 's', hash:Math.random().toString(36).slice(2,8), time:new Date().toLocaleTimeString() });
+        if (S.chainLog.length > 100) S.chainLog.splice(0, S.chainLog.length - 100);
+      }
+    };
+    _bt('buildAgentCards', () => { if (typeof buildAgentCards === 'function') buildAgentCards(); });
+    _bt('patchAgentCards', () => { if (typeof patchAgentCards === 'function') patchAgentCards(); });
+    _bt('renderAll',       () => { if (typeof renderAll === 'function') renderAll(); });
+    _bt('walletCards',     () => { _renderWalletCards(); });
     try { if (typeof showToast === 'function') showToast('✅ Session restaurée · cycle #' + S.cycle); } catch(e){}
   }
 
