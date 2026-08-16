@@ -3514,8 +3514,19 @@ async function fetchLivePrices(force = false) {
         });
         localStorage.setItem('nexus_price_cache', JSON.stringify(priceCache));
       } catch(e) {}
-      syncPairPresets();
-      if(typeof liveTrainAgents === 'function') liveTrainAgents();
+      // [CHRONO · 16/08] les deux derniers suspects du gel « traitement CoinGecko » (3.1s),
+      // chronométrés au chiffre : ligne ⏱ LENT au-delà de 1 s.
+      const _cgT = (n, fn) => {
+        const t0 = performance.now();
+        try { fn(); } catch(e){}
+        const ms = performance.now() - t0;
+        if (ms > 1000 && S.chainLog) {
+          S.chainLog.push({ icon:'⏱', desc:'LENT: ' + n + ' ' + (ms/1000).toFixed(1) + 's', hash:rndHash(), time:nowStr() });
+          if (S.chainLog.length > 100) S.chainLog.splice(0, S.chainLog.length - 100);
+        }
+      };
+      _cgT('syncPairPresets', () => syncPairPresets());
+      _cgT('liveTrainAgents', () => { if(typeof liveTrainAgents === 'function') liveTrainAgents(); });
     }
 
   } catch(err) {
