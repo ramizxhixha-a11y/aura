@@ -370,6 +370,7 @@ async function loadState() {
     if (snap.archives)         S.archives         = snap.archives;
     if (snap.brainLog)         S.brainLog         = snap.brainLog;
     if (snap.pendingActions)   S.pendingActions   = snap.pendingActions;
+    try { if (typeof window !== 'undefined' && window._perfOp) window._perfOp('applySnap (hydratation boot)'); } catch(e) {}
     // [PERSISTANCE 11-12 · 16/08/2026] LEÇON : buildSnapshot (09b1) et cette liste vont
     // PAR PAIRE — toute clé ajoutée là-bas DOIT être relue ici. Sept clés des livraisons
     // du 09-15/08 étaient sauvegardées mais jamais restaurées : compétence×paire, paires
