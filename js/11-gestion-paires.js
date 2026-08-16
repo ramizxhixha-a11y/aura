@@ -201,3 +201,23 @@ function openPairManager() {
   document.body.appendChild(ov);
 }
 window.openPairManager = openPairManager;
+
+// ════════════════════════════════════════════════════════════════════════
+// [AFFICHAGE TICK · 16/08/2026, demande Rams] Les prix WS arrivent tick par tick dans
+// ps.price ; l'écran, lui, suivait par vagues. Ce pousseur met à jour UNIQUEMENT le
+// TEXTE des étiquettes prix des mini-cartes Marché (mc_px_*), 3×/seconde — coût quasi
+// nul (pas de re-rendu, pas de layout), le ressenti Quantfury sans réveiller les gels.
+// ════════════════════════════════════════════════════════════════════════
+setInterval(function _tickPricePush() {
+  try {
+    if (typeof S === 'undefined' || !S || !S.pairStates || document.hidden) return;
+    Object.keys(PAIRS || {}).forEach(function (p) {
+      var el = document.getElementById('mc_px_' + p);
+      var ps = S.pairStates[p];
+      if (!el || !ps || !ps.price) return;
+      var d = (PAIRS[p] && PAIRS[p].dec != null) ? PAIRS[p].dec : (ps.price >= 100 ? 0 : 4);
+      var txt = '$' + ps.price.toLocaleString('fr-BE', { minimumFractionDigits: d > 2 ? d : 0, maximumFractionDigits: d });
+      if (el.textContent !== txt) el.textContent = txt;
+    });
+  } catch (e) {}
+}, 333);
