@@ -3446,6 +3446,7 @@ async function fetchLivePrices(force = false) {
 
     if(!resp.ok) throw new Error('HTTP '+resp.status);
     const data  = await resp.json();
+    try { if (typeof window !== 'undefined' && window._perfOp) window._perfOp('traitement CoinGecko'); } catch(e) {}   // [16/08] continuation réseau marquée pour la sonde
 
     let updated = 0;
     Object.entries(COINGECKO_IDS).forEach(([pair, cgId]) => {
@@ -4667,6 +4668,12 @@ async function _fetchAndBootstrapRealCandles(pair, tf) {
     const res = await fetch(url);
     if (!res.ok) return;
     const data = await res.json();
+    // [MESURE CONTINUATION · 16/08/2026] le traitement post-réseau tourne hors timers
+    // et hors boot : invisible pour toutes les sondes. La chronologie des gels de boot
+    // (2,5-6,5 s APRÈS le boot, en deux vagues = deux lots de réponses) le désigne.
+    // Marqué pour la ligne de gel (fenêtre 5 s) + chrono direct si > 1 s.
+    const _kt0 = performance.now();
+    try { if (typeof window !== 'undefined' && window._perfOp) window._perfOp('bootstrap candles ' + pair); } catch(e) {}
     if (!Array.isArray(data) || data.length === 0) return;
     if (!S.realCandles) S.realCandles = {};
     if (!S.realCandles[pair]) S.realCandles[pair] = {};
@@ -4685,6 +4692,12 @@ async function _fetchAndBootstrapRealCandles(pair, tf) {
       S.paperRealKillSwitch[pair] = { paused:false, lossStreak: ksPr.lossStreak || 0, reason:'' };
     }
     try { if (typeof _updateRealModeBanner === 'function') _updateRealModeBanner(); } catch(e) {}
+  } catch(e) {}  try {
+    const _ktMs = performance.now() - _kt0;
+    if (_ktMs > 1000 && S && S.chainLog) {
+      S.chainLog.push({ icon:'⏱', desc:'LENT: bootstrap candles ' + pair + ' ' + (_ktMs/1000).toFixed(1) + 's', hash:Math.random().toString(36).slice(2,8), time:new Date().toLocaleTimeString() });
+      if (S.chainLog.length > 100) S.chainLog.splice(0, S.chainLog.length - 100);
+    }
   } catch(e) {}
 }
 window._fetchAndBootstrapRealCandles = _fetchAndBootstrapRealCandles;

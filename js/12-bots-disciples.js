@@ -353,7 +353,17 @@ function _decorateFiliation() {
     });
   } catch (e) {}
 }
-setInterval(function () { try { _decorateFiliation(); } catch (e) {} }, 3000);
+setInterval(function () {
+  try {
+    var t0 = performance.now();
+    _decorateFiliation();
+    var ms = performance.now() - t0;
+    if (ms > 1000 && S && S.chainLog) {
+      S.chainLog.push({ icon:'⏱', desc:'LENT: décorateur filiation ' + (ms/1000).toFixed(1) + 's', hash:Math.random().toString(36).slice(2,8), time:new Date().toLocaleTimeString() });
+      if (S.chainLog.length > 100) S.chainLog.splice(0, S.chainLog.length - 100);
+    }
+  } catch (e) {}
+}, 3000);
 
 
 // ════════════════════════════════════════════════════════════════════════
