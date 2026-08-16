@@ -383,6 +383,11 @@ async function loadState() {
     if (snap.discipleTasks)     S.discipleTasks     = snap.discipleTasks;
     if (snap.discipleAngles)    S.discipleAngles    = snap.discipleAngles;
     if (snap.discipleTaskSkill) S.discipleTaskSkill = snap.discipleTaskSkill;
+    // [AUDIT 37 CLÉS · 16/08] les 3 vraies orphelines (le reste : miroirs walletStore
+    // ou déjà relu — le manifeste était incomplet, pas la relecture) :
+    if (snap.feeConfig)     S.feeConfig     = Object.assign(S.feeConfig || {}, snap.feeConfig);
+    if (snap.vMinor != null) S.vMinor       = snap.vMinor;
+    if (snap.pairBestWorst) S.pairBestWorst = snap.pairBestWorst;
     try { window._applySnapDone = Object.keys(snap); } catch(e) {}   // [sonde persistance] clés vues au dernier boot
     if (snap.mutedAgents)      S.mutedAgents      = snap.mutedAgents;
     if (snap.botFleet)         Object.assign(S.botFleet || {}, snap.botFleet);
@@ -1066,4 +1071,5 @@ setTimeout(_auraRotatePurge, 20000);
 // par buildSnapshot() : toute clé sauvegardée mais absente d'ici = CRIT « clé jamais
 // relue » — le bug du 16/08 (7 clés perdues à chaque boot) devient structurellement
 // détectable. RÈGLE : toute clé ajoutée à 09b1 s'ajoute à applySnap ET ici.
-window._APPLYSNAP_MANIFEST = ['key','cycle','cycleMax','chainLog','learningHistory','evoLog','agents','pairStates','walletStore','openPositions','pendingActions','botFleet','paperRealConfig','adaptiveState','abTesting','taxConfig','realCandles','preRealSnapshotPaperReal','heatmap','shadow','archives','paperRealStats','realStatsByPair','paperRealActivePairs','fees','tradeContextMemory','agentPairSkill','customPairs','removedPairs','botDisciples','discipleTasks','discipleAngles','discipleTaskSkill','savedAt','version','tradingMode','botAutoMode','fullPowerMode','leverage','_autoLevBorrowed','leverageBorrowed','cashAccount','tradingAccount','fiscalReserveAccount','antiNegReserve','_startPortfolio','_fleetTruthReset0908','_totalCompounded','brainLog','_errStats','_riskVetoes','_botSurplusCarry','_fpByBot'];
+window._WALLET_MIRRORS = ['portfolio','totalTrades','winTrades','leverageReserve','leverageTotalFees','fiscalReserveLog','cashLog','ownFundsInjected','_ownFundsLegacyEUR','ownFundsLog','_autoLevBase','dreamJournal'];
+window._APPLYSNAP_MANIFEST = ['feeConfig','vMinor','pairBestWorst','profitSplitCaissePct','vMajor','fiatConvFeePct','agentMemories','globalMemoryPool','dreams','dynamicPairKeys','pairCandidates','proposals','decisionCascade','resonanceHistory','mutedAgents','agentLessons','realTimeframe','realActivePairs','agentLessonsReal','realKillSwitch','realModeStartedAt','preRealSnapshot','agentLessonsPaperReal','paperRealTimeframe','paperRealStartedAt','paperRealKillSwitch','paperRealLastClose','paperRealConsecLosses','paperRealGlobalPauseUntil','_genCount','key','cycle','cycleMax','chainLog','learningHistory','evoLog','agents','pairStates','walletStore','openPositions','pendingActions','botFleet','paperRealConfig','adaptiveState','abTesting','taxConfig','realCandles','preRealSnapshotPaperReal','heatmap','shadow','archives','paperRealStats','realStatsByPair','paperRealActivePairs','fees','tradeContextMemory','agentPairSkill','customPairs','removedPairs','botDisciples','discipleTasks','discipleAngles','discipleTaskSkill','savedAt','version','tradingMode','botAutoMode','fullPowerMode','leverage','_autoLevBorrowed','leverageBorrowed','cashAccount','tradingAccount','fiscalReserveAccount','antiNegReserve','_startPortfolio','_fleetTruthReset0908','_totalCompounded','brainLog','_errStats','_riskVetoes','_botSurplusCarry','_fpByBot'];
