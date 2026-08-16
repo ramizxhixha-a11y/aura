@@ -186,7 +186,9 @@ async function init() {
   try { setTimeout(() => { try { if (typeof updatePairAnalysisPanels === 'function') updatePairAnalysisPanels(); } catch(e){} }, 300); } catch(e){}
 
   if (restored) {
+    try { if (typeof window._perfOp === 'function') window._perfOp('boot·buildAgentCards'); } catch(e){}
     try { if (typeof buildAgentCards === 'function') buildAgentCards(); } catch(e){}
+    try { if (typeof window._perfOp === 'function') window._perfOp('boot·renderAll'); } catch(e){}
     try { if (typeof patchAgentCards === 'function') patchAgentCards(); } catch(e){}
     try { if (typeof renderAll === 'function') renderAll(); } catch(e){}
     try { _renderWalletCards(); } catch(e){}
