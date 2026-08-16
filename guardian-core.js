@@ -116,7 +116,8 @@ function probePersistence(){
       out.push(R('info','Persistance','Sonde indisponible','buildSnapshot ou manifeste absent de ce contexte.','Vérifier que 09b1/09b2 à jour sont chargés.'));
       return out;
     }
-    const orphans = Object.keys(bs).filter(k => man.indexOf(k) === -1);
+    const mir = (typeof window!=='undefined' && window._WALLET_MIRRORS) || [];
+    const orphans = Object.keys(bs).filter(k => man.indexOf(k) === -1 && mir.indexOf(k) === -1);   // [16/08] miroirs walletStore exclus (restaurés au multiplexage)
     if(orphans.length){
       out.push(R('crit','Persistance','Clé(s) sauvegardée(s) mais JAMAIS relue(s) : '+orphans.join(', '),
         'Ces données seront PERDUES à la prochaine relance : buildSnapshot les écrit, applySnap ne les relit pas (même mécanique que le bug du 16/08).',
