@@ -107,6 +107,42 @@ if(!window.__guardianErrHook){
 // [GUARDIAN v2 · 16/08/2026] Sonde PERSISTANCE : toute clé produite par buildSnapshot()
 // et absente du manifeste de relecture (_APPLYSNAP_MANIFEST, 09b2) sera PERDUE au
 // prochain boot. C'est le bug qui a coûté 7 clés le 16/08 — désormais détecté avant.
+
+// [GUARDIAN v2 · ÉTAPE 2 · 16/08/2026] Sondes DISCIPLES : cohérence de l'architecture
+// maîtres/disciples (sièges→agents vivants, tâches élues, pépinière ≥7, plafond 1600
+// versé et non contourné, mérites par angle sains).
+function probeDisciples(){
+  const out=[];
+  try{
+    const S0 = (0, eval)('S');
+    if(!S0 || !S0.botDisciples){ out.push(R('info','Disciples','Architecture absente de ce contexte','','')); return out; }
+    const agents = S0.agents || [];
+    const ids = new Set(agents.map(a=>a.id));
+    // 1. sièges → agents vivants
+    let dead=[], seats=0;
+    Object.entries(S0.botDisciples).forEach(([b,arr])=>(arr||[]).forEach(id=>{ if(id){ seats++; if(!ids.has(id)) dead.push(b+'→'+id); }}));
+    if(dead.length) out.push(R('crit','Disciples','Siège(s) pointant vers agent(s) disparu(s) : '+dead.join(', '),'Le bot consulte le vide.','Livrer à Claude : _ensureDisciples doit nettoyer ces sièges.'));
+    else out.push(R('ok','Disciples',seats+' siège(s), tous vivants','',''));
+    // 2. tâches élues
+    let untasked=0;
+    Object.values(S0.botDisciples).forEach(arr=>(arr||[]).forEach(id=>{ if(id && !(S0.discipleTasks && S0.discipleTasks[id])) untasked++; }));
+    if(untasked) out.push(R('warn','Disciples',untasked+' disciple(s) sans tâche élue','Le vote (10 min) devrait les couvrir ; persistant = anomalie.',''));
+    // 3. pépinière ≥ 7
+    const seated = new Set(); Object.values(S0.botDisciples).forEach(arr=>(arr||[]).forEach(id=>{if(id)seated.add(id);}));
+    const pep = agents.filter(a=>!a.isBot && !a.isMeta && String(a.name||'').indexOf('Hybrid')===0 && !seated.has(a.id)).length;
+    out.push(R(pep>=7?'ok':'warn','Disciples','Pépinière : '+pep+' hybride(s) libre(s)'+(pep<7?' (< 7, règle Rams)':''), pep<7?'La relève manque : les héritages puiseront dans un vivier trop mince.':'',''));
+    // 4. plafond 1600 : aucun bot ne doit rester durablement au-dessus (versement actif)
+    const over = agents.filter(a=>a.isBot && (a.fitness||0) > 1650).map(a=>a.name);
+    if(over.length) out.push(R('warn','Disciples','Bot(s) > 1650 T$ : '+over.join(', '),'Le versement du surplus aux disciples semble inactif.','Vérifier _payBotSurplus / redistributeFitness.'));
+    else out.push(R('ok','Disciples','Plafond 1600 respecté (surplus versé)','',''));
+    // 5. mérites par angle
+    let cells=0, weird=0;
+    Object.values(S0.discipleTaskSkill||{}).forEach(angs=>Object.values(angs).forEach(t=>{ cells++; if((t.w||0)<0||(t.l||0)<0||(t.w+t.l)>100000) weird++; }));
+    out.push(R(weird? 'warn':'ok','Disciples','Mérites par angle : '+cells+' cellule(s)'+(weird?', '+weird+' aberrante(s)':''),'',''));
+  }catch(e){ out.push(R('warn','Disciples','Sonde en erreur',String(e&&e.message||e).slice(0,80),'')); }
+  return out;
+}
+
 function probePersistence(){
   const out=[];
   try{
@@ -544,6 +580,7 @@ Core.runAll = async function(){
   res = res.concat(probeGel(snap));
   res = res.concat(probeBackupCapability(snap));
   res = res.concat(probePersistence());   // [Guardian v2 · 16/08] clés sauvegardées vs relues
+  res = res.concat(probeDisciples());      // [Guardian v2 · étape 2] cohérence maîtres/disciples
   res = res.concat(await probeStorageSync(snap));
   res = res.concat(probeSaveFresh(snap));
   res = res.concat(probeJsErrors());
