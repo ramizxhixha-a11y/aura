@@ -1886,9 +1886,12 @@ function calcStdDev(candles, period=20) {
     const prev = arr[i-1];
     return Math.max(c.h-c.l, Math.abs(c.h-prev.c), Math.abs(c.l-prev.c));
   }));
-  // Annualized vol approximation (daily candle assumption)
-  const annualVol = cv * Math.sqrt(252) * 100;
-  const regime    = cv < 0.01 ? 'faible' : cv < 0.025 ? 'normal' : 'élevé';
+  // [AUDIT CV · 16/08/2026] l'annualisation supposait des bougies JOURNALIÈRES (×√252)
+  // sur des bougies courtes : AnnVol faux d'un ordre de grandeur → neutralisée (0, plus
+  // affichée). Régime recalibré sur l'échelle RÉELLE mesurée en prod (BTC calme ≈ 0.01%,
+  // marché vivant ≈ 0.1%+) — l'ancien seuil 1% rendait le régime « faible » permanent.
+  const annualVol = 0;
+  const regime    = cv < 0.001 ? 'faible' : cv < 0.0035 ? 'normal' : 'élevé';
   return { sigma, cv, atr, annualVol, regime };
 }
 
@@ -2064,9 +2067,9 @@ function getTechSignals(pair) {
   // 9. Écart-type
   if(stddev) {
     signals.sigma = {
-      signal: stddev.regime==='faible'?'neut':stddev.cv>0.03?'bear':'neut',
+      signal: stddev.regime==='faible'?'neut':stddev.cv>0.005?'bear':'neut',   // [16/08] seuil recalibré (0.5% sur 20 bougies = vraie tension)
       label:  `Vol. ${stddev.regime} (σ:${stddev.sigma.toFixed(2)})`,
-      detail: `ATR:${stddev.atr.toFixed(2)} CV:${(stddev.cv*100).toFixed(1)}% AnnVol:${stddev.annualVol.toFixed(0)}%`,
+      detail: `ATR:${stddev.atr.toFixed(2)} CV:${(stddev.cv*100).toFixed(3)}%`,
       weight: 0.7
     };
   }

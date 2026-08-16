@@ -4391,7 +4391,7 @@ function botScalper() {
     const cv = tech.raw?.stddev?.cv || 0;
     const lmsr = typeof lmsrP === 'function' ? lmsrP(ps) : 0.5;
     const edge = Math.abs(lmsr - 0.5);
-    if(edge > 0.12 && cv > 0.008) {
+    if(edge > 0.12 && cv > 0.0008) {   // [audit CV 16/08] 0.8% était inatteignable sur les majors (cv réel BTC ~0.01%)
       if(!best || edge > best.edge) best = { pair, edge, side: lmsr > 0.5 ? 'long' : 'short', cv };
     }
   });
@@ -4499,9 +4499,9 @@ function botDCA() {
     const tech = typeof getTechSignals === 'function' ? getTechSignals(p) : null;
     const cv = tech?.raw?.stddev?.cv || 0.02;
     const adx = tech?.raw?.adx?.adx || 20;
-    if(cv < 0.012) lowVolCount++;
+    if(cv < 0.0012) lowVolCount++;    // [audit CV 16/08] échelle réelle : 0.12% sur 20 bougies = calme
     if(adx < 18) flatTrendCount++;
-    if(!(cv < 0.012 && adx < 20)) return;
+    if(!(cv < 0.0012 && adx < 20)) return;
     const ps = S.pairStates?.[p];
     const candles = ps?.candles;
     if(!ps || !candles || candles.length < 20) return;
