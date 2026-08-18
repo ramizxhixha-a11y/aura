@@ -3620,7 +3620,7 @@ function syncLeverageReserve() {
   const index    = S.leverage || 0;
   const maxIdx   = S.leverageMaxMult || 10;
   const base = _tradingCapitalBase();
-  const totalCapacity = base * 10 * maxIdx;  // capacité max théorique (à ×10)
+  const totalCapacity = base * 10;   // [FIX BOUCLE LEVIER 18/08] fonds propres RÉELS ×10 — l'ancien ×10×maxIdx (=×100) alimentait la boucle dette→richesse
   S.leverageReserve   = Math.max(0, totalCapacity - (S.leverageBorrowed || 0));
 }
 
@@ -3952,6 +3952,14 @@ function estimateStakes() {
 }
 
 function borrowLeverage(amount, pair) {
+  // [FIX BOUCLE LEVIER · 18/08/2026] dette totale JAMAIS > 10× les fonds propres réels.
+  try {
+    var _cap10 = _tradingCapitalBase() * 10;
+    if (((S.leverageBorrowed || 0) + (amount || 0)) > _cap10) {
+      if (S.chainLog) { S.chainLog.push({ icon:'🛡️', desc:'Emprunt refusé : dette ' + Math.round(S.leverageBorrowed||0) + '$ + ' + Math.round(amount||0) + '$ > plafond 10× fonds propres (' + Math.round(_cap10) + '$)', hash:rndHash(), time:nowStr() }); if(S.chainLog.length>100)S.chainLog.splice(0,S.chainLog.length-100); }
+      return 0;
+    }
+  } catch(e) {}
   if(amount <= 0) return 0;
   // ═══ v7.12 · PROTECTION P10 · Pas d'emprunt si levier désactivé ═══
   // Sans ça, le bot pouvait emprunter des "bonus" depuis leverageReserve
@@ -6826,3 +6834,17 @@ setInterval(_dispatchSessionTaxes, 600000);
     } catch(e) { try{window._decErr&&window._decErr(e)}catch(_e){} }
   }, 500);
 })();
+
+(function _delev1808(){var F='aura_delev_20260818',t=0;var iv=setInterval(function(){t++;
+ var r=false;try{r=!!window._stateReady;}catch(e){}
+ if(!r&&t<240)return;clearInterval(iv);
+ try{if(localStorage.getItem(F))return;localStorage.setItem(F,'1');
+  var deb=S.leverageBorrowed||0;if(!(deb>0))return;
+  var pay=Math.min(deb,S.tradingAccount||0);
+  S.tradingAccount=Math.max(0,(S.tradingAccount||0)-pay);
+  S.leverageBorrowed=Math.max(0,deb-pay);S._autoLevBorrowed=S.leverageBorrowed;
+  S.leverage=0;try{syncLeverageReserve();}catch(e){}
+  var eq=_tradingCapitalBase();
+  if(S.chainLog){S.chainLog.push({icon:'\u21a9',desc:'DÉLEVERAGING 18/08 : '+pay.toFixed(2)+'$ remboursés · dette restante '+S.leverageBorrowed.toFixed(2)+'$ · fonds propres réels '+eq.toFixed(2)+'$ · la boucle ×100 est fermée',hash:rndHash(),time:nowStr()});if(S.chainLog.length>100)S.chainLog.splice(0,S.chainLog.length-100);}
+  try{saveState(true);}catch(e){}
+ }catch(e){try{window._decErr&&window._decErr(e)}catch(_e){}}},500);})();
