@@ -6835,16 +6835,25 @@ setInterval(_dispatchSessionTaxes, 600000);
   }, 500);
 })();
 
-(function _delev1808(){var F='aura_delev_20260818',t=0;var iv=setInterval(function(){t++;
+// [RÈGLE PERMANENTE, apprise 3 fois · 18/08] TOUT fix d'état s'applique PAR MODE sur
+// walletStore (sim/paperReal/real) ET sur l'état vivant — jamais l'un sans l'autre.
+(function _delev1808v2(){var F='aura_delev_20260818_v2',t=0;var iv=setInterval(function(){t++;
  var r=false;try{r=!!window._stateReady;}catch(e){}
  if(!r&&t<240)return;clearInterval(iv);
  try{if(localStorage.getItem(F))return;localStorage.setItem(F,'1');
-  var deb=S.leverageBorrowed||0;if(!(deb>0))return;
-  var pay=Math.min(deb,S.tradingAccount||0);
-  S.tradingAccount=Math.max(0,(S.tradingAccount||0)-pay);
-  S.leverageBorrowed=Math.max(0,deb-pay);S._autoLevBorrowed=S.leverageBorrowed;
-  S.leverage=0;try{syncLeverageReserve();}catch(e){}
-  var eq=_tradingCapitalBase();
-  if(S.chainLog){S.chainLog.push({icon:'\u21a9',desc:'DÉLEVERAGING 18/08 : '+pay.toFixed(2)+'$ remboursés · dette restante '+S.leverageBorrowed.toFixed(2)+'$ · fonds propres réels '+eq.toFixed(2)+'$ · la boucle ×100 est fermée',hash:rndHash(),time:nowStr()});if(S.chainLog.length>100)S.chainLog.splice(0,S.chainLog.length-100);}
+  function fix(w,nom){if(!w)return null;var deb=w.leverageBorrowed||0;if(!(deb>0))return null;
+   var pay=Math.min(deb,w.tradingAccount||0);
+   w.tradingAccount=Math.max(0,(w.tradingAccount||0)-pay);
+   w.leverageBorrowed=Math.max(0,deb-pay);w._autoLevBorrowed=w.leverageBorrowed;
+   w.leverage=0;
+   var eng=(w.openPositions||[]).reduce(function(a,p){return a+(Number(p.stakeUsdt)||0);},0);
+   var eq=Math.max(0,(w.tradingAccount||0)+eng-(w.leverageBorrowed||0));
+   w.leverageReserve=eq*10;
+   return nom+': '+pay.toFixed(0)+'$ remboursés, fonds propres '+eq.toFixed(2)+'$';}
+  var lignes=[];
+  Object.keys(S.walletStore||{}).forEach(function(m){var L=fix(S.walletStore[m],m);if(L)lignes.push(L);});
+  var Lv=fix(S,'mode courant');if(Lv)lignes.push(Lv);
+  try{syncLeverageReserve();}catch(e){}
+  if(S.chainLog&&lignes.length){S.chainLog.push({icon:'\u21a9',desc:'DÉLEVERAGING v2 (TOUS les modes) : '+lignes.join(' \u00b7 '),hash:rndHash(),time:nowStr()});if(S.chainLog.length>100)S.chainLog.splice(0,S.chainLog.length-100);}
   try{saveState(true);}catch(e){}
  }catch(e){try{window._decErr&&window._decErr(e)}catch(_e){}}},500);})();
