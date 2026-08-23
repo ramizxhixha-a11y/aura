@@ -4528,6 +4528,7 @@ function renderHomePrices() {
   // Live prices on action cards per pair
   Object.entries(PAIRS).forEach(([pair, cfg]) => {
     const ps  = S.pairStates[pair];
+    if (!ps) return;   // [23/08 · prouvé par la carte capital à $0] paire custom sans état dans ce mode : ps.pnl24h crashait TOUTE la fonction — le header (écrit avant) survivait, la carte capital (après) restait à $0. Même classe que le crash sparkline du 16/08.
     if(!ps) return;
     const k   = pair.replace('/','_');
     // (prix HOLD mis à jour par le rendu principal via ac2_px_ ; l'ancien 'ac2_price_' n'existait pas → retiré)
