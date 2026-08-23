@@ -4548,7 +4548,19 @@ function renderHomePrices() {
   });
 
   // Capital bar fast update — v15 · min visuel 2% + % en 2 décimales
-  const cap = getCapitalSummary();
+  // [23/08 · COHÉRENCE D'INSTANT] la carte dérive du MÊME instantané que le hero :
+  // engagé = Σ mises des positions de CE tick, max = trading + réserve recalculée de
+  // la même base. Avant, getCapitalSummary photographiait un autre instant (multiplexeur
+  // de modes) → « ENGAGÉ $0.00 avec 1 position » et « MAX » périmé sur le même écran.
+  const _capEng  = (S.openPositions||[]).reduce((a,p)=>a+(Number(p.totalExposure)||Number(p.stakeUsdt)||0),0);
+  const _capBase = (typeof _tradingCapitalBase==='function') ? _tradingCapitalBase() : ((S.tradingAccount||0)+_capEng-(S.leverageBorrowed||0));
+  const _capMaxA = (S.tradingAccount||0) + Math.max(0, _capBase*10 - (S._autoLevBorrowed||0));
+  const cap = {
+    staked:     _capEng,
+    maxAllowed: _capMaxA,
+    usedPct:    _capMaxA>0 ? Math.min(100, _capEng/_capMaxA*100) : 0,
+    free:       Math.max(0, _capMaxA - _capEng)
+  };
   const capFill = document.getElementById('capBarFill');
   if(capFill) {
     const pct = Math.round(cap.usedPct * 100) / 100;  // 2 décimales
