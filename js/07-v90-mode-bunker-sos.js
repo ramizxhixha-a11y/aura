@@ -4428,6 +4428,26 @@ function renderOpenPosSummary() {
 }
 
 // ── Fast price-only update (every tick) ─────────────────
+// [23/08 · règle Rams] EN $ = ce qui resterait EN POCHE si tout fermait maintenant :
+// trading + caisse + anti-négatif + valeur des positions (mise+latent)
+// − frais de clôture estimés (taker) − impôt anticipé sur latent positif (taux marginal)
+// − funding couru non encore prélevé sur la dette levier.
+function _computeNetUsd() {
+  const taker = (S.feeConfig && S.feeConfig.taker) || 0.001;
+  let posVal = 0, latentPos = 0, closeFees = 0;
+  (S.openPositions||[]).forEach(p => {
+    const stake = Number(p.stakeUsdt)||0;
+    const pnl$  = stake * ((Number(p.pnl)||0)/100);
+    posVal += stake + pnl$;
+    if (pnl$ > 0) latentPos += pnl$;
+    closeFees += (stake + Math.max(0,pnl$)) * taker;
+  });
+  let taxAnt = 0;
+  try { taxAnt = (latentPos>0 && typeof _computeMarginalTax==='function') ? _computeMarginalTax(latentPos) : 0; } catch(e){}
+  let fundDue = 0;
+  try { const debt=S.leverageBorrowed||0; if(debt>0&&S._lastFundingTs){ fundDue = debt*0.0001*(((Date.now()-S._lastFundingTs)/3600000)/8); } } catch(e){}
+  return Math.max(0,(S.cashAccount||0)+(S.tradingAccount||0)+(S.antiNegReserve||0)+posVal-closeFees-taxAnt-fundDue);
+}
 let _homePricesFirstRender = true;
 function renderHomePrices() {
   // Portfolio total — [23/08] canonique : l'engagé des positions compte (le rendu
@@ -4441,7 +4461,7 @@ function renderHomePrices() {
   // v7.1 P1: affichage = (caisse + réserve fiscale) × USD/EUR. S.portfolio reste interne = cash+trading.
   computePortfolioTotal();
   setEl('heroVal', fmt$2(computePortfolioTotal()));   // [23/08] la formule inline oubliée hier — le hero lit désormais LA fonction canonique, aux 2 sites
-  setEl('heroUsd', fmt$2(Math.max(0,(S.cashAccount||0)+(S.tradingAccount||0)-((S.openPositions||[]).reduce((a,p)=>a+(Number(p.stakeUsdt)||0),0)))));   // [23/08 · Rams] Portefeuille en $ = caisse+trading−trades en cours
+  setEl('heroUsd', fmt$2(_computeNetUsd()));   // [23/08 · Rams] Portefeuille en $ = net liquidatif (_computeNetUsd)
   // v5 · hero beat + tone on significant change
   // FIX flash boot : au tout premier rendu, l'écart entre le portfolio sauvegardé et le
   // total recalculé n'est PAS un vrai gain/perte (juste un recalage au chargement) → on n'anime pas.
@@ -4624,7 +4644,7 @@ function renderHome() {
   // v7.1 P1: hero value = portfolioTotal EUR (cash + fiscal × USD/EUR). S.portfolio reste interne.
   computePortfolioTotal();
   setEl('heroVal', fmt$2(computePortfolioTotal()));   // [23/08] la formule inline oubliée hier — le hero lit désormais LA fonction canonique, aux 2 sites
-  setEl('heroUsd', fmt$2(Math.max(0,(S.cashAccount||0)+(S.tradingAccount||0)-((S.openPositions||[]).reduce((a,p)=>a+(Number(p.stakeUsdt)||0),0)))));   // [23/08 · Rams] Portefeuille en $ = caisse+trading−trades en cours
+  setEl('heroUsd', fmt$2(_computeNetUsd()));   // [23/08 · Rams] Portefeuille en $ = net liquidatif (_computeNetUsd)
   // v8.0 LIVRAISON 26 · Affichage P&L par période — COHÉRENT avec P&L NET et P&L SESSION
   // On utilise periods.today qui est calibré à minuit, basé sur S.portfolio (équivaut au P&L SESSION du dashboard)
   let pnlForDisplay = 0;
