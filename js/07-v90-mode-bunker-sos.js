@@ -4432,7 +4432,7 @@ function renderOpenPosSummary() {
 // trading + caisse + anti-négatif + valeur des positions (mise+latent)
 // − frais de clôture estimés (taker) − impôt anticipé sur latent positif (taux marginal)
 // − funding couru non encore prélevé sur la dette levier.
-function _computeNetUsd() {
+function _computeNetUsdParts() {
   const taker = (S.feeConfig && S.feeConfig.taker) || 0.001;
   let posVal = 0, latentPos = 0, closeFees = 0;
   (S.openPositions||[]).forEach(p => {
@@ -4446,8 +4446,53 @@ function _computeNetUsd() {
   try { taxAnt = (latentPos>0 && typeof _computeMarginalTax==='function') ? _computeMarginalTax(latentPos) : 0; } catch(e){}
   let fundDue = 0;
   try { const debt=S.leverageBorrowed||0; if(debt>0&&S._lastFundingTs){ fundDue = debt*0.0001*(((Date.now()-S._lastFundingTs)/3600000)/8); } } catch(e){}
-  return Math.max(0,(S.cashAccount||0)+(S.tradingAccount||0)+(S.antiNegReserve||0)+posVal-closeFees-taxAnt-fundDue);
+  const net = Math.max(0,(S.cashAccount||0)+(S.tradingAccount||0)+(S.antiNegReserve||0)+posVal-closeFees-taxAnt-fundDue);
+  return { trading:(S.tradingAccount||0), cash:(S.cashAccount||0), antiNeg:(S.antiNegReserve||0), posVal, latentPos, closeFees, taxAnt, fundDue, net };
 }
+function _computeNetUsd() { return _computeNetUsdParts().net; }
+// [TUILES · 23/08, maquette validée] composition dépliable des deux portefeuilles,
+// style des cartes du HOME, valeurs recalculées à CHAQUE ouverture.
+function _tile(ic,lb,val,sub,cls){
+  const col = cls==='neg' ? '#ff4d6d' : cls==='sum' ? 'var(--up)' : cls==='cy' ? 'var(--ice)' : 'var(--t1,#dfe7ef)';
+  const bord = cls==='neg' ? 'rgba(255,77,109,.22)' : cls==='sum' ? 'rgba(0,232,122,.3)' : 'rgba(255,255,255,.06)';
+  return '<div style="background:#0a0f1a;border:1px solid '+bord+';border-radius:14px;padding:11px 12px;">'
+   +'<div style="font-size:14px;margin-bottom:5px;">'+ic+'</div>'
+   +'<div style="font-size:8.5px;color:var(--t3);text-transform:uppercase;letter-spacing:.09em;margin-bottom:4px;">'+lb+'</div>'
+   +'<div style="font-size:15px;font-weight:800;color:'+col+';font-family:var(--font-mono);">'+val+'</div>'
+   +(sub?'<div style="font-size:8px;color:var(--t4);margin-top:3px;">'+sub+'</div>':'')+'</div>';
+}
+window._toggleHeroBk = function(which){
+  try{
+    const gT=document.getElementById('heroBkTotal'), gU=document.getElementById('heroBkUsd');
+    if(!gT||!gU) return;
+    const tgt = which==='total'?gT:gU, oth = which==='total'?gU:gT;
+    oth.style.display='none';
+    if(tgt.style.display==='grid'){ tgt.style.display='none'; return; }
+    if(which==='total'){
+      tgt.innerHTML =
+        _tile('\ud83d\udcc8','Compte trading',fmt$2(S.tradingAccount||0),'')
+       +_tile('\ud83d\udfe1','Positions en cours',fmt$2((S.openPositions||[]).reduce((a,p)=>a+(Number(p.stakeUsdt)||0),0)),(S.openPositions||[]).length+' position(s)')
+       +_tile('\ud83c\udfe6','Caisse',fmt$2(S.cashAccount||0),'')
+       +_tile('\ud83c\udfdb\ufe0f','Réserve fiscale',fmt$2(S.fiscalReserveAccount||0),'')
+       +_tile('\ud83e\uddfe','Provisions taxes',fmt$2(S.antiNegTaxPart||0),'')
+       +_tile('\ud83e\ude99','Réserve frais',fmt$2((S.fees&&S.fees.feeReserveAccount)||0),'')
+       +_tile('\u23f3','Funding cumulé',fmt$2(S.fundingPaid||0),'')
+       +_tile('\u03a3','Total',fmt$2(computePortfolioTotal()),'','sum');
+    } else {
+      const p=_computeNetUsdParts();
+      tgt.innerHTML =
+        _tile('\ud83d\udcc8','Compte trading',fmt$2(p.trading),'','cy')
+       +_tile('\ud83c\udfe6','Caisse',fmt$2(p.cash),'','cy')
+       +_tile('\ud83d\udee1\ufe0f','Anti-négatif',fmt$2(p.antiNeg),'','cy')
+       +_tile('\ud83d\udfe1','Positions (mise+latent)',fmt$2(p.posVal),'latent +'+p.latentPos.toFixed(2)+'$','cy')
+       +_tile('\u2702\ufe0f','Frais de clôture est.','\u2212'+fmt$2(p.closeFees),'','neg')
+       +_tile('\ud83c\udfdb\ufe0f','Impôt anticipé','\u2212'+fmt$2(p.taxAnt),'sur latent positif','neg')
+       +_tile('\u23f3','Funding couru','\u2212'+fmt$2(p.fundDue),'dette '+fmt$2(S.leverageBorrowed||0),'neg')
+       +_tile('\u03a3','En $',fmt$2(p.net),'','sum');
+    }
+    tgt.style.display='grid';
+  }catch(e){}
+};
 let _homePricesFirstRender = true;
 function renderHomePrices() {
   // Portfolio total — [23/08] canonique : l'engagé des positions compte (le rendu
