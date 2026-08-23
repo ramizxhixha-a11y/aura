@@ -4440,7 +4440,7 @@ function renderHomePrices() {
   if (typeof _updateCloseAllBadge === 'function') _updateCloseAllBadge();
   // v7.1 P1: affichage = (caisse + réserve fiscale) × USD/EUR. S.portfolio reste interne = cash+trading.
   computePortfolioTotal();
-  setEl('heroVal', fmt$2((S.cashAccount||0)+(S.tradingAccount||0)+(S.fiscalReserveAccount||0)));
+  setEl('heroVal', fmt$2(computePortfolioTotal()));   // [23/08] la formule inline oubliée hier — le hero lit désormais LA fonction canonique, aux 2 sites
   // v5 · hero beat + tone on significant change
   // FIX flash boot : au tout premier rendu, l'écart entre le portfolio sauvegardé et le
   // total recalculé n'est PAS un vrai gain/perte (juste un recalage au chargement) → on n'anime pas.
@@ -4480,7 +4480,7 @@ function renderHomePrices() {
   }
   const pb = document.getElementById('heroPnlBadge');
   if(pb) {
-    pb.textContent = (pnl>=0?'↑ +':'↓ ')+Math.abs(pnl).toFixed(2)+'%'+(sessionGain!==0?' ('+fmt$(sessionGain)+')':'');
+    pb.textContent = (pnl>=0?'↑ +':'↓ ')+Math.abs(pnl).toFixed(2)+'%'+(sessionGain!==0?' ('+fmt$2(sessionGain)+')':'');
     pb.className = 'pnl-badge '+(pnl>=0?'up':'down');
     pb.title = 'P&L aujourd\'hui · reset auto à minuit · voir Réglages pour Semaine/Mois';
   }
@@ -4609,7 +4609,7 @@ function renderHome() {
   // Patch
   // v7.1 P1: hero value = portfolioTotal EUR (cash + fiscal × USD/EUR). S.portfolio reste interne.
   computePortfolioTotal();
-  setEl('heroVal', fmt$2((S.cashAccount||0)+(S.tradingAccount||0)+(S.fiscalReserveAccount||0)));
+  setEl('heroVal', fmt$2(computePortfolioTotal()));   // [23/08] la formule inline oubliée hier — le hero lit désormais LA fonction canonique, aux 2 sites
   // v8.0 LIVRAISON 26 · Affichage P&L par période — COHÉRENT avec P&L NET et P&L SESSION
   // On utilise periods.today qui est calibré à minuit, basé sur S.portfolio (équivaut au P&L SESSION du dashboard)
   let pnlForDisplay = 0;
@@ -4633,7 +4633,7 @@ function renderHome() {
   const pb = document.getElementById('heroPnlBadge');
   if(pb) {
     const gainStr = gainForDisplay !== 0
-      ? ` (${gainForDisplay>=0?'+':''}${fmt$(gainForDisplay)})`
+      ? ` (${gainForDisplay>=0?'+':''}${fmt$2(gainForDisplay)})`
       : '';
     pb.textContent = (pnlForDisplay>=0?'↑ +':'↓ ')+Math.abs(pnlForDisplay).toFixed(2)+'%'+gainStr;
     pb.className = 'pnl-badge '+(pnlForDisplay>=0?'up':'down');
