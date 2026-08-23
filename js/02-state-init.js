@@ -6887,3 +6887,26 @@ setInterval(_dispatchSessionTaxes, 600000);
   try{if(typeof renderAll==='function')renderAll();}catch(e){}
   try{saveState(true);}catch(e){}
  }catch(e){try{window._decErr&&window._decErr(e)}catch(_e){}}},500);})();
+
+// [RESET FEES · 23/08/2026] Les boutons du panneau ne couvrent pas le circuit des
+// frais (S.fees : cumuls de frais, économies, P&L brut) — d'où les −107$ survivants
+// et l'efficacité absurde après le reset manuel. Remise à zéro GÉNÉRIQUE de toute la
+// structure fees (nombres→0, tableaux→vides, sous-objets parcourus), sur l'état
+// vivant ET chaque mode du walletStore (règle par-mode).
+(function _resetFees2308(){var F='aura_resetfees_20260823',t=0;var iv=setInterval(function(){t++;
+ var r=false;try{r=!!window._stateReady;}catch(e){}
+ if(!r&&t<240)return;clearInterval(iv);
+ try{if(localStorage.getItem(F))return;localStorage.setItem(F,'1');
+  function zap(o,depth){if(!o||typeof o!=='object'||depth>3)return;
+   Object.keys(o).forEach(function(k){var v=o[k];
+    if(typeof v==='number')o[k]=0;
+    else if(Array.isArray(v))o[k]=[];
+    else if(v&&typeof v==='object')zap(v,(depth||0)+1);});}
+  var n=0;
+  if(S.fees){zap(S.fees,0);n++;}
+  Object.keys(S.walletStore||{}).forEach(function(m){var w=S.walletStore[m];
+   if(w&&w.fees){zap(w.fees,0);n++;}});
+  if(S.chainLog&&n){S.chainLog.push({icon:'\ud83e\uddf9',desc:'Circuit frais remis à zéro ('+n+' structure(s), tous modes) — les cartes Frais/Rés. frais/P&L net/Efficacité repartent de zéro',hash:rndHash(),time:nowStr()});if(S.chainLog.length>100)S.chainLog.splice(0,S.chainLog.length-100);}
+  try{if(typeof renderAll==='function')renderAll();}catch(e){}
+  try{saveState(true);}catch(e){}
+ }catch(e){try{window._decErr&&window._decErr(e)}catch(_e){}}},500);})();
