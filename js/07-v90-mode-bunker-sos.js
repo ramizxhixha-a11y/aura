@@ -3327,75 +3327,66 @@ window._confirmFactoryReset = _confirmFactoryReset;
 // v8.0 LIVRAISON 41 · Wrapper RESET COMPLET COHÉRENT
 
 function _confirmFullCoherentReset() {
-  const msg = 'RESET COMPLET COHÉRENT ?\n\n' +
-    'Cette action remet à zéro :\n' +
-    '• paperRealStats (compteurs trades par paire)\n' +
-    '• heatmap (statistiques par heure/jour/régime)\n' +
-    '• _lossStreaks (séries de pertes)\n' +
-    '• paperRealKillSwitch (pauses auto)\n' +
-    '• tradeContextMemory (mémoire contexte)\n' +
-    '• S.totalTrades / S.winTrades\n' +
-    '• fees.byPair (frais par paire)\n\n' +
-    'NE TOUCHE PAS À : portfolio, agents, bots, paramètres.\n\n' +
-    'Continuer ?';
+  // [RÉPARÉ À LA SOURCE · 23/08/2026, audit demandé par Rams] L'ancien bouton avait
+  // trois trous prouvés : (1) il ne remettait que 3 champs de S.fees (feesSaved,
+  // totalTaxProvision et les autres survivaient — les −107$ du 23/08) ; (2) il ne
+  // traitait QUE le mode affiché, jamais les walletStore des deux autres modes ;
+  // (3) il ignorait realStatsByPair et les compteurs cumulés des bots.
+  // Désormais : zap GÉNÉRIQUE de fees (rien ne peut survivre), application PAR MODE,
+  // et tous les magasins de stats couverts. Règle : un reset est complet ou n'est pas.
+  const msg = 'RESET COMPLET COHÉRENT (LES 3 MODES) ?\n\n' +
+    'Remet à zéro sur sim + paperReal + real :\n' +
+    '\u2022 TOUTES les stats de trades (paires, heatmap, streaks, contexte)\n' +
+    '\u2022 TOUT le circuit frais/P&L/provisions (g\u00e9n\u00e9rique, rien ne survit)\n' +
+    '\u2022 realStatsByPair + compteurs cumul\u00e9s des bots\n\n' +
+    'NE TOUCHE PAS \u00c0 : comptes/portfolio, fonds propres, agents, m\u00e9rites, param\u00e8tres.\n\nContinuer ?';
   if (!confirm(msg)) return;
-
   try {
-
-    S.paperRealStats = {};
-
-    // v8.0 LIVRAISON 41 FIX · heatmap structure réelle byHour + byWeekday
-    S.heatmap = { byHour: {}, byWeekday: {} };
-
-    // Reset loss streaks
-    S._lossStreaks = {};
-
-    // Reset kill switches
-    S.paperRealKillSwitch = {};
-
-    // v8.0 LIVRAISON 41 FIX · tradeContextMemory est un ARRAY (pas un objet)
-    S.tradeContextMemory = [];
-
-    // Reset compteurs globaux
-    S.totalTrades = 0;
-    S.winTrades = 0;
-    S.paperRealConsecLosses = 0;
-
-    // Reset fees byPair ET totaux (v11quinquies FIX)
-    if (S.fees && S.fees.byPair) {
-      Object.keys(S.fees.byPair).forEach(pair => {
-        S.fees.byPair[pair] = { tradingFees:0, slippage:0, gross:0, tax:0, pnlGross:0, pnlNet:0, trades:0, netPct:0 };
+    // zap générique : nombres→0, tableaux→vides, sous-objets parcourus (profondeur ≤3)
+    function _zap(o, depth) {
+      if (!o || typeof o !== 'object' || depth > 3) return;
+      Object.keys(o).forEach(function(k) {
+        const v = o[k];
+        if (typeof v === 'number') o[k] = 0;
+        else if (Array.isArray(v)) o[k] = [];
+        else if (v && typeof v === 'object') _zap(v, (depth || 0) + 1);
       });
     }
-    S.fees.totalFees    = 0;
-    S.fees.totalPnlGross = 0;
-    S.fees.totalPnlNet  = 0;
-
-    // v11quinquies FIX : reset pnlHistory + recalibrer _startPortfolio
-    S.pnlHistory = [];
-    const _now = (S.cashAccount||0) + (S.tradingAccount||0);
-    S._startPortfolio = _now;
-    if (S.pnlPeriod) {
-      S.pnlPeriod.todayStartPortfolio = _now;
-      S.pnlPeriod.weekStartPortfolio  = _now;
+    // nettoyage d'UN conteneur d'état (le S vivant OU un wallet du store)
+    function _clean(w) {
+      if (!w) return;
+      w.paperRealStats = {};
+      w.realStatsByPair = {};
+      w.heatmap = { byHour: {}, byWeekday: {} };
+      w._lossStreaks = {};
+      w.paperRealKillSwitch = {};
+      w.tradeContextMemory = [];
+      w.totalTrades = 0; w.winTrades = 0; w.paperRealConsecLosses = 0;
+      if (w.fees) _zap(w.fees, 0);
+      w.pnlHistory = [];
+      const _now = (w.cashAccount || 0) + (w.tradingAccount || 0);
+      w._startPortfolio = _now;
+      if (w.pnlPeriod) { w.pnlPeriod.todayStartPortfolio = _now; w.pnlPeriod.weekStartPortfolio = _now; }
+      Object.keys(w.pairStates || {}).forEach(function(pair) {
+        const ps = w.pairStates[pair];
+        if (ps.trades) ps.trades = [];
+        if (ps.totalTrades !== undefined) ps.totalTrades = 0;
+        if (ps.winTrades !== undefined) ps.winTrades = 0;
+        if (ps.totalPnlUsd !== undefined) ps.totalPnlUsd = 0;
+      });
     }
-
-    // Reset pairStates.trades (la liste des trades par paire)
-    Object.keys(S.pairStates || {}).forEach(pair => {
-      if (S.pairStates[pair].trades) S.pairStates[pair].trades = [];
-      if (S.pairStates[pair].totalTrades !== undefined) S.pairStates[pair].totalTrades = 0;
-      if (S.pairStates[pair].winTrades !== undefined) S.pairStates[pair].winTrades = 0;
-      if (S.pairStates[pair].totalPnlUsd !== undefined) S.pairStates[pair].totalPnlUsd = 0;
+    // PAR MODE (règle permanente) : les trois wallets du store + l'état vivant
+    Object.keys(S.walletStore || {}).forEach(function(m) { _clean(S.walletStore[m]); });
+    _clean(S);
+    // compteurs cumulés des bots (globaux)
+    Object.keys(S.botFleet || {}).forEach(function(k) {
+      const b = S.botFleet[k];
+      if (b) { if (b.pnlContrib !== undefined) b.pnlContrib = 0; if (b.contributions !== undefined) b.contributions = 0; }
     });
-
-    // Sauvegarde immédiate
-    if (typeof saveState === 'function') saveState();
-
-    if (typeof showToast === 'function') {
-      showToast('✅ Reset complet cohérent effectué', 4000, 'user');
-    }
-
-    // Refresh UI
+    if (typeof saveState === 'function') saveState(true);
+    if (S.chainLog) { S.chainLog.push({ icon: '\ud83e\uddf9', desc: 'Reset complet coh\u00e9rent : 3 modes, stats + circuit frais g\u00e9n\u00e9rique + bots \u2014 z\u00e9ro int\u00e9gral', hash: (Math.random().toString(36).slice(2,8)), time: new Date().toLocaleTimeString() }); if (S.chainLog.length > 100) S.chainLog.splice(0, S.chainLog.length - 100); }
+    if (typeof showToast === 'function') showToast('\u2705 Reset complet (3 modes) effectu\u00e9', 4000, 'user');
+    if (typeof renderAll === 'function') renderAll();
     if (typeof renderHome === 'function') renderHome();
     if (typeof renderSettingsPanel === 'function') renderSettingsPanel();
   } catch(e) {
