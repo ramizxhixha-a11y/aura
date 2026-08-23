@@ -4585,12 +4585,12 @@ function renderHomePrices() {
   const _capStakedStr = '$'+Number(cap.staked).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
   const capStakedEl = document.getElementById('capStaked');
   if (capStakedEl && capStakedEl.textContent !== _capStakedStr) capStakedEl.textContent = _capStakedStr;
-  const _capMaxStr = fmt$(cap.maxAllowed);
+  const _capMaxStr = fmt$2(cap.maxAllowed);   // [23/08 · banc d'essai] fmt$ affichait « $1,105 » (virgule US ambiguë)
   const capMaxEl = document.getElementById('capMax');
   if (capMaxEl && capMaxEl.textContent !== _capMaxStr) capMaxEl.textContent = _capMaxStr;
   const capFreeEl = document.getElementById('capFree');
   if(capFreeEl) {
-    const _capFreeStr = fmt$(cap.free);
+    const _capFreeStr = fmt$2(cap.free);   // [23/08 · banc d'essai] 2 décimales, format fr
     if (capFreeEl.textContent !== _capFreeStr) capFreeEl.textContent = _capFreeStr;
     const newColor = cap.free < 100 ? 'var(--down)' : 'var(--up)';
     if (capFreeEl._lastColor !== newColor) {
