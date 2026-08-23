@@ -130,7 +130,7 @@ window._computePortfolio = _computePortfolio;
 function _tradingCapitalBase() {
   try {
     var eng = (S.openPositions || []).reduce(function(a, p){ return a + (Number(p.stakeUsdt) || 0); }, 0);
-    var base = (S.tradingAccount || 0) + eng - (S.leverageBorrowed || 0);
+    var base = (S.cashAccount || 0) + (S.tradingAccount || 0) + eng - (S.leverageBorrowed || 0);   // [23/08 · règle Rams] la CAISSE compte dans le capital : MAX levier = (caisse+trading+trades en cours)×10
     return Math.max(0, base);
   } catch(e) { return Math.max(0, S.tradingAccount || 0); }
 }
@@ -5018,7 +5018,7 @@ function drawMobileChart() {
 // ============================================================
 // RENDERERS
 // ============================================================
-function fmt$(n){ return '$'+Math.floor(n).toLocaleString(); }
+function fmt$(n){ return '$'+Math.trunc(n).toLocaleString(); }   // [23/08] floor→trunc : floor(-0.11)=-1 faisait mentir de 1$ TOUT montant négatif affiché (le « ($-1) » du header pour -0,11$ réel)
 
 // ── v7.2 · Format USD avec 2 décimales (locale fr-FR pour virgule décimale) ──
 // Utilisé pour les balances wallet où la précision centime compte (trading, caisse,
@@ -5048,7 +5048,7 @@ function computePortfolioTotal(){
   // Le levier emprunté reste exclu (c'est une dette, pas un actif).
   // [23/08] canonique + fiscale : l'engagé des positions COMPTE (le hero affichait
   // trading seul dès qu'une position ouvrait — la faute du grand chiffre 86$ vs 111$)
-  const baseUSD = ((typeof _computePortfolio==='function') ? _computePortfolio() : ((S.cashAccount||0)+(S.tradingAccount||0))) + (S.fiscalReserveAccount || 0);
+  const baseUSD = ((typeof _computePortfolio==='function') ? _computePortfolio() : ((S.cashAccount||0)+(S.tradingAccount||0))) + (S.fiscalReserveAccount || 0) + (S.antiNegTaxPart || 0);   // [23/08 · Rams] + provisions d'impôts/taxes mises de côté
   S.portfolioTotal = baseUSD;  // v8 · USD (tout en $) — l'affichage € est géré séparément (ownFundsEUR)
   return S.portfolioTotal;
 }

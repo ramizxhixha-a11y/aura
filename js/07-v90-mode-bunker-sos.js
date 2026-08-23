@@ -4441,6 +4441,7 @@ function renderHomePrices() {
   // v7.1 P1: affichage = (caisse + réserve fiscale) × USD/EUR. S.portfolio reste interne = cash+trading.
   computePortfolioTotal();
   setEl('heroVal', fmt$2(computePortfolioTotal()));   // [23/08] la formule inline oubliée hier — le hero lit désormais LA fonction canonique, aux 2 sites
+  setEl('heroUsd', fmt$2(Math.max(0,(S.cashAccount||0)+(S.tradingAccount||0)-((S.openPositions||[]).reduce((a,p)=>a+(Number(p.stakeUsdt)||0),0)))));   // [23/08 · Rams] Portefeuille en $ = caisse+trading−trades en cours
   // v5 · hero beat + tone on significant change
   // FIX flash boot : au tout premier rendu, l'écart entre le portfolio sauvegardé et le
   // total recalculé n'est PAS un vrai gain/perte (juste un recalage au chargement) → on n'anime pas.
@@ -4554,12 +4555,12 @@ function renderHomePrices() {
   // de modes) → « ENGAGÉ $0.00 avec 1 position » et « MAX » périmé sur le même écran.
   const _capEng  = (S.openPositions||[]).reduce((a,p)=>a+(Number(p.totalExposure)||Number(p.stakeUsdt)||0),0);
   const _capBase = (typeof _tradingCapitalBase==='function') ? _tradingCapitalBase() : ((S.tradingAccount||0)+_capEng-(S.leverageBorrowed||0));
-  const _capMaxA = (S.tradingAccount||0) + Math.max(0, _capBase*10 - (S._autoLevBorrowed||0));
+  const _capMaxA = Math.max(0, _capBase*10 - (S._autoLevBorrowed||0));   // [23/08 · règle Rams] MAX = capacité levier seule (= réserve), jamais + trading
   const cap = {
     staked:     _capEng,
     maxAllowed: _capMaxA,
     usedPct:    _capMaxA>0 ? Math.min(100, _capEng/_capMaxA*100) : 0,
-    free:       Math.max(0, _capMaxA - _capEng)
+    free:       Math.max(0, (S.cashAccount||0)+(S.tradingAccount||0)-_capEng)   // [23/08 · Rams] LIBRE = caisse+trading−trades en cours
   };
   const capFill = document.getElementById('capBarFill');
   if(capFill) {
@@ -4622,6 +4623,7 @@ function renderHome() {
   // v7.1 P1: hero value = portfolioTotal EUR (cash + fiscal × USD/EUR). S.portfolio reste interne.
   computePortfolioTotal();
   setEl('heroVal', fmt$2(computePortfolioTotal()));   // [23/08] la formule inline oubliée hier — le hero lit désormais LA fonction canonique, aux 2 sites
+  setEl('heroUsd', fmt$2(Math.max(0,(S.cashAccount||0)+(S.tradingAccount||0)-((S.openPositions||[]).reduce((a,p)=>a+(Number(p.stakeUsdt)||0),0)))));   // [23/08 · Rams] Portefeuille en $ = caisse+trading−trades en cours
   // v8.0 LIVRAISON 26 · Affichage P&L par période — COHÉRENT avec P&L NET et P&L SESSION
   // On utilise periods.today qui est calibré à minuit, basé sur S.portfolio (équivaut au P&L SESSION du dashboard)
   let pnlForDisplay = 0;
