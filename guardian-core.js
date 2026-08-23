@@ -143,6 +143,33 @@ function probeDisciples(){
   return out;
 }
 
+
+// [GUARDIAN · 23/08/2026] Sonde COMPTEURS : si aucun trade n'est enregistré, TOUS les
+// compteurs cumulés doivent être à zéro — sinon carte rouge avec la liste exacte.
+// Réponse structurelle au « des chiffres survivent aux resets » : plus jamais silencieux.
+function probeCounters(){
+  const out=[];
+  try{
+    const S0=(0,eval)('S');
+    if(!S0){out.push(R('info','Compteurs','État inaccessible','',''));return out;}
+    let nTrades=0;
+    Object.values(S0.pairStates||{}).forEach(p=>{nTrades+=((p&&p.trades)||[]).length;});
+    if(nTrades>0){out.push(R('ok','Compteurs',nTrades+' trade(s) en historique — cumuls légitimes','',''));return out;}
+    const bad=[];
+    function scan(o,path,depth){if(!o||typeof o!=='object'||depth>3)return;
+      Object.keys(o).forEach(k=>{const v=o[k];
+        if(typeof v==='number'&&Math.abs(v)>0.01&&/fee|pnl|gross|saved|tax|frais/i.test(k))bad.push(path+k+'='+v.toFixed(2));
+        else if(v&&typeof v==='object'&&!Array.isArray(v))scan(v,path+k+'.',depth+1);});}
+    scan(S0.fees||{},'fees.',0);
+    Object.keys(S0.walletStore||{}).forEach(m=>scan((S0.walletStore[m]||{}).fees||{},m+'.fees.',0));
+    if(bad.length)out.push(R('crit','Compteurs','ZÉRO trade mais compteur(s) non nuls : '+bad.slice(0,6).join(' · ')+(bad.length>6?' · +'+(bad.length-6):''),
+      'Des cumuls survivent sans historique pour les justifier — même mécanique que les −107$ du 23/08.',
+      'Livrer cette ligne à Claude : reset ciblé de ces clés.'));
+    else out.push(R('ok','Compteurs','Zéro trade, zéro cumul — comptabilité vierge cohérente','',''));
+  }catch(e){out.push(R('warn','Compteurs','Sonde en erreur',String(e&&e.message||e).slice(0,80),''));}
+  return out;
+}
+
 function probePersistence(){
   const out=[];
   try{
@@ -581,6 +608,7 @@ Core.runAll = async function(){
   res = res.concat(probeBackupCapability(snap));
   res = res.concat(probePersistence());   // [Guardian v2 · 16/08] clés sauvegardées vs relues
   res = res.concat(probeDisciples());      // [Guardian v2 · étape 2] cohérence maîtres/disciples
+  res = res.concat(probeCounters());       // [23/08] zéro trade = zéro cumul, vérifié en permanence
   res = res.concat(await probeStorageSync(snap));
   res = res.concat(probeSaveFresh(snap));
   res = res.concat(probeJsErrors());
