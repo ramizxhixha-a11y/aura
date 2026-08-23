@@ -712,7 +712,7 @@ function urgenceCloseAll() {
       // Retirer de openPositions
       S.openPositions = (S.openPositions||[]).filter(p=>p.id!==pos.id);
       S.tradingAccount = (S.tradingAccount||0) + (pos.stakeUsdt||0) + pnlUsd;
-      S.portfolio = (S.cashAccount||0) + S.tradingAccount;
+      S.portfolio = (typeof _computePortfolio==='function') ? _computePortfolio() : ((S.cashAccount||0)+(S.tradingAccount||0));   // [23/08] canonique
 
       // Log dans chain
       S.chainLog = S.chainLog||[];

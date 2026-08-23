@@ -3095,7 +3095,7 @@ function simTick() {
   // gains ne peuvent venir QUE des trades. On garde le recalcul portfolio + P&L
   // de session (photo reelle, zero creation d'argent).
   if(tick % 5 === 0) {
-    S.portfolio = S.cashAccount + S.tradingAccount;
+    S.portfolio = (typeof _computePortfolio==='function') ? _computePortfolio() : ((S.cashAccount||0)+(S.tradingAccount||0));   // [23/08] canonique
     if(!S._startPortfolio) S._startPortfolio = S.portfolio;
     const sessionGain = S.portfolio - S._startPortfolio;
     S.pnl24h = S._startPortfolio > 0

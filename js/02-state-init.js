@@ -115,6 +115,18 @@ window._leverageMarginCheck = function _leverageMarginCheck() {
   } catch(e) {}
 };
 
+// [PORTEFEUILLE CANONIQUE · 23/08/2026, ordre Rams « plus jamais ce problème »]
+// LA seule définition du portefeuille dans tout le système : caisse + trading +
+// CAPITAL ENGAGÉ dans les positions ouvertes. Avant : six sites calculaient
+// cash+trading en comptant l'argent des positions comme disparu → « P&L jour −33$ »
+// fantôme à chaque ouverture. Toute évolution future passe par CETTE fonction.
+function _computePortfolio(w) {
+  const o = w || S;
+  const eng = (o.openPositions || []).reduce((a, p) => a + (Number(p.stakeUsdt) || 0), 0);
+  return (o.cashAccount || 0) + (o.tradingAccount || 0) + eng;
+}
+window._computePortfolio = _computePortfolio;
+
 function _tradingCapitalBase() {
   try {
     var eng = (S.openPositions || []).reduce(function(a, p){ return a + (Number(p.stakeUsdt) || 0); }, 0);
@@ -4045,7 +4057,7 @@ function applyLeverageBorrowFees() {
     time: nowStr()
   });
   if(S.fiscalReserveLog.length > 200) S.fiscalReserveLog.pop();
-  S.portfolio = S.cashAccount + S.tradingAccount;
+  S.portfolio = _computePortfolio();   // [23/08] canonique : engagé inclus
 }
 
 // ============================================================
@@ -5253,7 +5265,7 @@ function injectFundsFromFiat(fiatType, fiatAmount){
   }
   // Injection dans cashAccount (fonds propres → caisse, pas trading)
   S.cashAccount   = (S.cashAccount   || 0) + p.netUSDT;
-  S.portfolio     = S.cashAccount + S.tradingAccount;
+  S.portfolio     = _computePortfolio();   // [23/08] canonique
   // Spec: ces sommes sont exonérées d'impôt → on trace dans ownFundsInjected
   S.ownFundsInjected = (S.ownFundsInjected || 0) + p.netUSDT;
   // ★ INJECTION NEUTRE POUR LE P&L (05/07/2026) · une injection n'est PAS un gain.
@@ -5387,7 +5399,7 @@ function confirmFiatInject(){
     const netUSDT = fiatAmount - fee;
     if(netUSDT <= 0) { showToast('⚠ Montant net nul', 2800, 'critical'); return; }
     S.cashAccount = (S.cashAccount||0) + netUSDT;
-    S.portfolio = S.cashAccount + S.tradingAccount;
+    S.portfolio = _computePortfolio();   // [23/08] canonique : engagé inclus
     S.ownFundsInjected = (S.ownFundsInjected||0) + netUSDT;
     if(!S.ownFundsLog) S.ownFundsLog = [];
     S.ownFundsLog.unshift({ amount:netUSDT, fiatType:'USD', fiatAmount, rate:1, fee, feePct, ts:Date.now(), time:nowStr() });
@@ -5565,7 +5577,7 @@ function openPosition(pair, side) {
 
   // Déduire la mise propre du compte trading
   S.tradingAccount = Math.max(0, S.tradingAccount - stakeUsdt);
-  S.portfolio      = S.cashAccount + S.tradingAccount;
+  S.portfolio      = _computePortfolio();   // [23/08] canonique
   syncLeverageReserve();
 
   const amount  = (totalExposure / Math.max(0.0001, ps.price)).toFixed(cfg.dec>=4?4:6);
@@ -5934,7 +5946,7 @@ function closePosition(id, botClose = false) {
       S.tradingAccount = Math.max(0, S.tradingAccount + netPnl);
     }
 
-    S.portfolio      = S.cashAccount + S.tradingAccount;
+    S.portfolio      = _computePortfolio();   // [23/08] canonique
 
     // ═══ v7.12 · PROTECTION P2 · Appliquer le remboursement dette orpheline ═══
     if (pos._p2RepayPending && pos._p2RepayPending > 0) {
@@ -5943,7 +5955,7 @@ function closePosition(id, botClose = false) {
         S.tradingAccount   = Math.max(0, (S.tradingAccount || 0) - repay);
         S.leverageBorrowed = Math.max(0, (S.leverageBorrowed || 0) - repay);
         S._autoLevBorrowed = Math.max(0, (S._autoLevBorrowed || 0) - repay);
-        S.portfolio        = (S.cashAccount || 0) + (S.tradingAccount || 0);
+        S.portfolio        = _computePortfolio();   // [23/08] canonique
         S.chainLog.push({
           icon: '↩',
           desc: `Auto-remboursement dette orpheline · $${repay.toFixed(2)} (reste $${(S._autoLevBorrowed||0).toFixed(2)})`,
@@ -6482,7 +6494,7 @@ function changeLeverage(delta) {
   // Recalculer la réserve (disponible après emprunt)
   if(typeof syncLeverageReserve === 'function') syncLeverageReserve();
   // Sync portefeuille affiché
-  S.portfolio = (S.cashAccount || 0) + (S.tradingAccount || 0);
+  S.portfolio = (typeof _computePortfolio==='function') ? _computePortfolio() : ((S.cashAccount||0)+(S.tradingAccount||0));   // [23/08] canonique
   // Refresh UI levier
   if(typeof renderHome === 'function') { try { renderHome(); } catch(e){} }
   // Le régime fiscal dépend du levier → rafraîchir immédiatement les cartes portefeuille
@@ -6597,7 +6609,7 @@ function confirmTransfer() {
     syncLeverageReserve();
     showToast('✅ +' + fmt$(amount) + ' → Caisse' + warnMsg, 2800, 'user');
   }
-  S.portfolio = S.cashAccount + S.tradingAccount;
+  S.portfolio = _computePortfolio();   // [23/08] canonique : engagé inclus
   try{renderAll();}catch(e){}
   try{saveState();}catch(e){} // v105
   closeTransfer();

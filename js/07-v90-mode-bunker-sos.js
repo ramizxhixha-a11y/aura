@@ -2270,7 +2270,7 @@ function manuReinforce(pair) {
     showToast('⚠ Capital insuffisant pour renforcer', 2000, 'warn'); return;
   }
   S.tradingAccount -= addStake;
-  S.portfolio = S.cashAccount + S.tradingAccount;
+  S.portfolio = (typeof _computePortfolio==='function') ? _computePortfolio() : ((S.cashAccount||0)+(S.tradingAccount||0));   // [23/08] canonique
   pos.stakeUsdt     = (pos.stakeUsdt || 0) + addStake;
   pos.totalExposure = (pos.totalExposure || 0) + addStake;
   showToast('✅ '+pair+' renforcé +$'+addStake, 2000, 'win');
@@ -4430,8 +4430,9 @@ function renderOpenPosSummary() {
 // ── Fast price-only update (every tick) ─────────────────
 let _homePricesFirstRender = true;
 function renderHomePrices() {
-  // Portfolio total
-  const total = S.cashAccount + S.tradingAccount;
+  // Portfolio total — [23/08] canonique : l'engagé des positions compte (le rendu
+  // rapide du HOME était le 12e site avec sa propre formule locale, désormais unifié)
+  const total = (typeof _computePortfolio==='function') ? _computePortfolio() : ((S.cashAccount||0)+(S.tradingAccount||0));
   const _prevTotal = S.portfolio;
   S.portfolio = total;
   // FIX badge positions : resync à chaque rendu, peu importe qui modifie openPositions

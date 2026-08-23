@@ -5211,7 +5211,7 @@ function _executeAccountReset(accId) {
       break;
   }
   // Recalculer portfolio
-  S.portfolio = (S.cashAccount || 0) + (S.tradingAccount || 0);
+  S.portfolio = (typeof _computePortfolio==='function') ? _computePortfolio() : ((S.cashAccount||0)+(S.tradingAccount||0));   // [23/08] canonique
   if (typeof syncLeverageReserve === 'function') syncLeverageReserve();
   
   // Log dans chain
