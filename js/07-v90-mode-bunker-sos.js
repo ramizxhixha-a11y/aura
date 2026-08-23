@@ -3364,6 +3364,7 @@ function _confirmFullCoherentReset() {
       w.totalTrades = 0; w.winTrades = 0; w.paperRealConsecLosses = 0;
       if (w.fees) _zap(w.fees, 0);
       w.pnlHistory = [];
+      w.dreamJournal = [];   // [23/08 · Rams] le journal de bord aussi — ses récits de l'ère boucle avaient survécu à tous les resets
       const _now = (typeof _computePortfolio==='function') ? _computePortfolio(w) : ((w.cashAccount||0)+(w.tradingAccount||0));   // [23/08] baseline CANONIQUE (ma v1 reproduisait le bug : start sans l'engagé → % du jour faux)
       w._startPortfolio = _now;
       if (w.pnlPeriod) { w.pnlPeriod.todayStartPortfolio = _now; w.pnlPeriod.weekStartPortfolio = _now; }
@@ -4493,6 +4494,7 @@ window._toggleHeroBk = function(which){
     tgt.style.display='grid';
   }catch(e){}
 };
+window._tlCycle = function(){ const o=['5','24h','7j','all']; const i=o.indexOf(window._tlWin||'5'); window._tlWin=o[(i+1)%4]; try{ if(typeof renderQuickHome==='function')renderQuickHome(); }catch(e){} try{ if(typeof renderHome==='function')renderHome(); }catch(e){} };
 let _homePricesFirstRender = true;
 function renderHomePrices() {
   // Portfolio total — [23/08] canonique : l'engagé des positions compte (le rendu
@@ -4625,7 +4627,7 @@ function renderHomePrices() {
   const cap = {
     staked:     _capEng,
     maxAllowed: _capMaxA,
-    usedPct:    _capMaxA>0 ? Math.min(100, _capEng/_capMaxA*100) : 0,
+    usedPct:    ((S.tradingAccount||0)+_capEng)>0 ? Math.min(100, _capEng/((S.tradingAccount||0)+_capEng)*100) : 0,   // [23/08 · Rams] % = part de MON capital trading (trading+engagé), plus le % du MAX levier
     free:       Math.max(0, (S.cashAccount||0)+(S.tradingAccount||0)-_capEng)   // [23/08 · Rams] LIBRE = caisse+trading−trades en cours
   };
   const capFill = document.getElementById('capBarFill');
@@ -4845,10 +4847,19 @@ function renderHome() {
       if(a.time === b.time) return (b.type==='position'?1:0)-(a.type==='position'?1:0);
       return a.time < b.time ? 1 : -1;
     })
-    .slice(0, 5);
+    ;
+  // [23/08 · Rams] fenêtre au choix : 5 derniers (défaut) / 24h / 7j / Tout (plafonné
+  // à 100 lignes pour le DOM — au-delà, l'onglet Trades complet reste la référence)
+  const _w = window._tlWin || '5';
+  const _now = Date.now();
+  const allTShown = _w==='5' ? allT.slice(0,5)
+    : _w==='24h' ? allT.filter(t=>(t.ts||0)>_now-86400000).slice(0,100)
+    : _w==='7j'  ? allT.filter(t=>(t.ts||0)>_now-7*86400000).slice(0,100)
+    : allT.slice(0,100);
+  try { const _b=document.getElementById('tlWinBtn'); if(_b){ const lab={'5':'5 derniers','24h':'24h','7j':'7 jours','all':'tout'}[_w]; if(_b.textContent!==lab)_b.textContent=lab; } } catch(e){}
 
   const tl = document.getElementById('mobileTradeList');
-  if (tl) try { tl.innerHTML = allT.map(t => {
+  if (tl) try { tl.innerHTML = allTShown.map(t => {
     const isClose = t.type === 'position';
     const isOpen  = t.type === 'open';
     const isPos   = isClose || isOpen;

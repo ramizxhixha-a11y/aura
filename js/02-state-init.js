@@ -6964,3 +6964,18 @@ setInterval(_dispatchSessionTaxes, 600000);
   try{if(typeof renderAll==='function')renderAll();}catch(e){}
   try{saveState(true);}catch(e){}
  }catch(e){try{window._decErr&&window._decErr(e)}catch(_e){}}},500);})();
+
+// [PURGE JOURNAL · 23/08/2026, ordre Rams] Les récits du journal de bord de l'ère
+// boucle (juillet) avaient survécu à tous les resets (magasin dreamJournal jamais
+// couvert). Purge one-shot des 3 modes + vivant ; le bouton reset le couvre désormais.
+(function _purgeJournal2308(){var F='aura_purgejournal_20260823',t=0;var iv=setInterval(function(){t++;
+ var r=false;try{r=!!window._stateReady;}catch(e){}
+ if(!r&&t<240)return;clearInterval(iv);
+ try{if(localStorage.getItem(F))return;localStorage.setItem(F,'1');
+  var n=0;
+  Object.keys(S.walletStore||{}).forEach(function(m){var w=S.walletStore[m];
+   if(w&&w.dreamJournal&&w.dreamJournal.length){n+=w.dreamJournal.length;w.dreamJournal=[];}});
+  if(S.dreamJournal&&S.dreamJournal.length){n+=S.dreamJournal.length;S.dreamJournal=[];}
+  if(S.chainLog&&n){S.chainLog.push({icon:'\ud83e\uddf9',desc:'Journal de bord purgé ('+n+' récits de l\'ère boucle, 3 modes) — seuls les trades de l\'ère propre s\'y écriront',hash:rndHash(),time:nowStr()});if(S.chainLog.length>100)S.chainLog.splice(0,S.chainLog.length-100);}
+  try{saveState(true);}catch(e){}
+ }catch(e){try{window._decErr&&window._decErr(e)}catch(_e){}}},500);})();
