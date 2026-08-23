@@ -74,7 +74,7 @@ window._p5PreActionSave = _p5PreActionSave;
 function getCapitalSummary() {
   const staked     = S.openPositions.reduce((s, p) => s + (p.totalExposure || p.stakeUsdt || 0), 0);
   const maxAllowed = (S.leverageReserve || 0);   // [23/08 · règle Rams] MAX = la capacité du compte LEVIER seule — sans trade en cours, MAX = la réserve entière ; l'engagé se décompte de là. (L'ancien +tradingAccount était une définition erronée.)
-  const usedPct    = maxAllowed > 0 ? Math.min(100, staked / maxAllowed * 100) : 0;
+  const usedPct    = ((S.tradingAccount||0)+staked) > 0 ? Math.min(100, staked / ((S.tradingAccount||0)+staked) * 100) : 0;   // [23/08 · Rams] % du capital trading
   return {
     staked,
     maxAllowed,
