@@ -697,7 +697,7 @@ function closePartial(posId, palierIdx) {
 
   // Créditer le compte
   S.tradingAccount = (S.tradingAccount||0) + closingStake + netPnl;
-  S.portfolio      = (S.cashAccount||0) + S.tradingAccount;
+  S.portfolio      = (typeof _computePortfolio==='function') ? _computePortfolio() : ((S.cashAccount||0)+(S.tradingAccount||0));   // [23/08] canonique — le 13e site, attrapé par le grep exhaustif du repo
 
   // Log
   S.chainLog.push({ icon:'🎯', desc:`${pal.label} ${pos.pair} · fermé ${pal.size}% → +$${netPnl.toFixed(2)} net · prix ${cur.toFixed(dec)}`, hash:rndHash(), time:nowStr() });

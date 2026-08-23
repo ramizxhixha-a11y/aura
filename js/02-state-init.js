@@ -5024,6 +5024,8 @@ function fmt$(n){ return '$'+Math.floor(n).toLocaleString(); }
 // Utilisé pour les balances wallet où la précision centime compte (trading, caisse,
 // réserves) — ces comptes accumulent fréquemment des fractions après intérêts/taxes.
 function fmt$2(n){
+  if (typeof n === 'number' && Math.abs(n) < 0.005) n = 0;   // [23/08] tue le -$0.00 (zéro négatif) PARTOUT d'un coup
+
   return '$' + (n||0).toLocaleString('fr-FR', {minimumFractionDigits:2, maximumFractionDigits:2});
 }
 
@@ -5044,7 +5046,9 @@ function fmtEUR(n){
 function computePortfolioTotal(){
   // v7.5 · Formule mise à jour: (caisse + trading + réserve fiscale) × USD/EUR
   // Le levier emprunté reste exclu (c'est une dette, pas un actif).
-  const baseUSD = (S.cashAccount || 0) + (S.tradingAccount || 0) + (S.fiscalReserveAccount || 0);
+  // [23/08] canonique + fiscale : l'engagé des positions COMPTE (le hero affichait
+  // trading seul dès qu'une position ouvrait — la faute du grand chiffre 86$ vs 111$)
+  const baseUSD = ((typeof _computePortfolio==='function') ? _computePortfolio() : ((S.cashAccount||0)+(S.tradingAccount||0))) + (S.fiscalReserveAccount || 0);
   S.portfolioTotal = baseUSD;  // v8 · USD (tout en $) — l'affichage € est géré séparément (ownFundsEUR)
   return S.portfolioTotal;
 }
@@ -6919,6 +6923,22 @@ setInterval(_dispatchSessionTaxes, 600000);
   Object.keys(S.walletStore||{}).forEach(function(m){var w=S.walletStore[m];
    if(w&&w.fees){zap(w.fees,0);n++;}});
   if(S.chainLog&&n){S.chainLog.push({icon:'\ud83e\uddf9',desc:'Circuit frais remis à zéro ('+n+' structure(s), tous modes) — les cartes Frais/Rés. frais/P&L net/Efficacité repartent de zéro',hash:rndHash(),time:nowStr()});if(S.chainLog.length>100)S.chainLog.splice(0,S.chainLog.length-100);}
+  try{if(typeof renderAll==='function')renderAll();}catch(e){}
+  try{saveState(true);}catch(e){}
+ }catch(e){try{window._decErr&&window._decErr(e)}catch(_e){}}},500);})();
+
+// [RECALAGE BASELINE · 23/08/2026] Les points de départ (jour/semaine/_startPortfolio)
+// avaient été mesurés SANS l'engagé (ancienne formule) → « +47% / +35$ » fantômes après
+// l'unification. One-shot : recalés sur le portefeuille canonique, les 3 modes.
+(function _rebase2308(){var F='aura_rebase_20260823',t=0;var iv=setInterval(function(){t++;
+ var r=false;try{r=!!window._stateReady;}catch(e){}
+ if(!r&&t<240)return;clearInterval(iv);
+ try{if(localStorage.getItem(F))return;localStorage.setItem(F,'1');
+  function rb(w){if(!w)return;var v=_computePortfolio(w);
+   w._startPortfolio=v;if(w.pnlPeriod){w.pnlPeriod.todayStartPortfolio=v;w.pnlPeriod.weekStartPortfolio=v;}}
+  Object.keys(S.walletStore||{}).forEach(function(m){rb(S.walletStore[m]);});
+  rb(S);
+  if(S.chainLog){S.chainLog.push({icon:'\ud83d\udccf',desc:'Baselines recalées sur le portefeuille canonique (3 modes) — les % du jour disent vrai',hash:rndHash(),time:nowStr()});if(S.chainLog.length>100)S.chainLog.splice(0,S.chainLog.length-100);}
   try{if(typeof renderAll==='function')renderAll();}catch(e){}
   try{saveState(true);}catch(e){}
  }catch(e){try{window._decErr&&window._decErr(e)}catch(_e){}}},500);})();

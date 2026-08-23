@@ -3364,7 +3364,7 @@ function _confirmFullCoherentReset() {
       w.totalTrades = 0; w.winTrades = 0; w.paperRealConsecLosses = 0;
       if (w.fees) _zap(w.fees, 0);
       w.pnlHistory = [];
-      const _now = (w.cashAccount || 0) + (w.tradingAccount || 0);
+      const _now = (typeof _computePortfolio==='function') ? _computePortfolio(w) : ((w.cashAccount||0)+(w.tradingAccount||0));   // [23/08] baseline CANONIQUE (ma v1 reproduisait le bug : start sans l'engagé → % du jour faux)
       w._startPortfolio = _now;
       if (w.pnlPeriod) { w.pnlPeriod.todayStartPortfolio = _now; w.pnlPeriod.weekStartPortfolio = _now; }
       Object.keys(w.pairStates || {}).forEach(function(pair) {
@@ -4601,7 +4601,7 @@ function renderHome() {
   // Percentages
   const cashPct  = total > 0 ? (S.cashAccount / total * 100) : 0;
   const tradPct  = total > 0 ? (S.tradingAccount / total * 100) : 0;
-  const posPct   = total > 0 ? Math.min(20, (posVal / total * 100)) : 0;
+  const posPct   = total > 0 ? (posVal / total * 100) : 0;   // [23/08] le plafond Math.min(20,…) mentait : les positions montraient 20% max quel que soit le réel — camouflage retiré
 
   // Avg LMSR prob across all pairs
   const avgProb  = Object.values(S.pairStates).reduce((s,ps)=>s+lmsrP(ps),0) / Object.keys(PAIRS).length;
@@ -4871,10 +4871,10 @@ function renderHome() {
     if (f.totalPnlGross > 0) {
       // P&L positif : % conservé après frais
       eff = (100 - (f.totalGross + taxLive) / f.totalPnlGross * 100).toFixed(1);
-    } else {
-      // P&L négatif : frais en % des pertes (combien les frais alourdissent)
-      const totalLoss = Math.abs(f.totalPnlGross) || 0.01;
-      eff = (-(f.totalGross / totalLoss) * 100).toFixed(1);
+    } else if (Math.abs(f.totalPnlGross) >= 1) {
+      // P&L négatif : frais en % des pertes — SEULEMENT si les pertes sont ≥1$
+      // ([23/08] le fallback ||0.01 produisait des -1 076 943% sur des micro-pertes)
+      eff = (-(f.totalGross / Math.abs(f.totalPnlGross)) * 100).toFixed(1);
     }
   }
 

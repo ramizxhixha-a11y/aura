@@ -641,7 +641,7 @@ function autoOpenPosition(pair, side, stakeOverride) {
     }
   } catch (e) { console.warn('antiNeg reserve:', e); }
 
-  S.portfolio = S.cashAccount + S.tradingAccount;
+  S.portfolio = (typeof _computePortfolio==='function') ? _computePortfolio() : ((S.cashAccount||0)+(S.tradingAccount||0));   // [23/08] canonique — 14e site (l'ouvreur de positions lui-même !)
 
   // Consommer le pending de borrow pour qu'il ne reste pas en suspens
   if (S._pendingPositionBorrow) {

@@ -59,7 +59,7 @@ function _renderWalletCards() {
     }
 
     // Portefeuille total
-    const totalEUR = ((S.cashAccount||0) + (S.tradingAccount||0) + (S.fiscalReserveAccount||0)) * (S.usdEurRate||0.92);
+    const totalEUR = (((typeof _computePortfolio==='function') ? _computePortfolio() : ((S.cashAccount||0)+(S.tradingAccount||0))) + (S.fiscalReserveAccount||0)) * (S.usdEurRate||0.92);   // [23/08] canonique : engagé inclus
     const ptEl = document.querySelector('.portfolio-total-value, #portfolioTotalVal, [data-portfolio-total]');
     if (ptEl) ptEl.textContent = fmtEUR(totalEUR);
   } catch(e) {
