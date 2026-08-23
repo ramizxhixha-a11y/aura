@@ -4575,6 +4575,13 @@ function _openBgWs(pair) {
   _bgCollectorWSMap[pair] = ws;
   ws.onopen = () => { _bgCollectorRetryByPair[pair] = 1000; };
   ws.onmessage = (evt) => {
+    // [ANTI-FLOOD @trade · 23/08/2026, carte Guardian « 1775 msg/gel »] max 4 messages
+    // traités par seconde et par paire — les excédents sont jetés AVANT tout parsing
+    // (coût ≈ 0 même en rafale de reconnexion). Rien de perdu : l'affichage tick lit
+    // les prix 3×/s et les bougies s'agrègent déjà par 250 ms (fix du 08/08).
+    const _nowT = Date.now();
+    if (ws._lastMsgT && (_nowT - ws._lastMsgT) < 250) return;
+    ws._lastMsgT = _nowT;
     try {
       try { window._auraWsMsgCount = (window._auraWsMsgCount || 0) + 1; } catch(e) {}
       const msg = JSON.parse(evt.data);
