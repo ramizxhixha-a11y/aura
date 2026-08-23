@@ -6858,28 +6858,25 @@ setInterval(_dispatchSessionTaxes, 600000);
   try{saveState(true);}catch(e){}
  }catch(e){try{window._decErr&&window._decErr(e)}catch(_e){}}},500);})();
 
-// [SEED v3 · 23/08/2026] Constat backup 23/08 : les TROIS wallets à zéro depuis le
-// reset manuel du 18/08 (RE compris — il avait 54,77$ documentés au backup du 18/08),
-// les seeds c/d jamais uploadés. Réamorçage des trois : sim 50, paperReal 50, real
-// 54,77 — chacun SEULEMENT s'il est vide (garde : jamais écraser un solde vivant).
-(function _seed2308(){var F='aura_seed_20260823',t=0;var iv=setInterval(function(){t++;
+// [SEED v4 · 23/08/2026, décision Rams] ZÉRO ABSOLU sur les TROIS modes — comptes,
+// dettes, réserves, positions ET fonds propres (injections effacées). Rams réinjecte
+// lui-même via le bouton FONDS PROPRES : tout capital futur naît de ses injections,
+// circuit propre et traçable depuis le premier centime. Apprentissage conservé.
+(function _seed2308v4(){var F='aura_seed_20260823_v4',t=0;var iv=setInterval(function(){t++;
  var r=false;try{r=!!window._stateReady;}catch(e){}
  if(!r&&t<240)return;clearInterval(iv);
  try{if(localStorage.getItem(F))return;localStorage.setItem(F,'1');
-  function seed(w,nom,mont){if(!w)return null;
-   var vivant=((w.tradingAccount||0)+(w.cashAccount||0))>0.5||((w.openPositions||[]).length>0);
-   if(vivant)return nom+': solde vivant, non touché';
-   w.openPositions=[];w.cashAccount=0;w.tradingAccount=mont;
-   w.leverageBorrowed=0;w._autoLevBorrowed=0;w.leverage=0;w._autoLevBase=0;
-   w.leverageReserve=mont*10;w.portfolio=mont;w._startPortfolio=mont;
+  function zero(w,nom){if(!w)return null;
+   w.openPositions=[];w.cashAccount=0;w.tradingAccount=0;w.portfolio=0;w._startPortfolio=0;
+   w.leverageBorrowed=0;w._autoLevBorrowed=0;w.leverage=0;w._autoLevBase=0;w.leverageReserve=0;
    w.antiNegReserve=0;w.antiNegTaxPart=0;w.fiscalReserveAccount=0;
-   return nom+': réamorcé à '+mont+'$';}
+   w.ownFundsInjected=0;w._ownFundsLegacyEUR=0;w.ownFundsLog=[];
+   return nom+': zéro absolu';}
   var lignes=[];
-  var plan={sim:50,paperReal:50,real:54.77};
-  Object.keys(plan).forEach(function(m){var L=seed((S.walletStore||{})[m],m,plan[m]);if(L)lignes.push(L);});
-  if(plan[S.tradingMode]!=null){var Lv=seed(S,'mode courant',plan[S.tradingMode]);if(Lv)lignes.push(Lv);}
+  ['sim','paperReal','real'].forEach(function(m){var L=zero((S.walletStore||{})[m],m);if(L)lignes.push(L);});
+  var Lv=zero(S,'mode courant');if(Lv)lignes.push(Lv);
   try{syncLeverageReserve();}catch(e){}
-  if(S.chainLog&&lignes.length){S.chainLog.push({icon:'\ud83c\udf31',desc:'SEED v3 : '+lignes.join(' \u00b7 ')+' \u00b7 apprentissage conservé \u00b7 le trading peut reprendre',hash:rndHash(),time:nowStr()});if(S.chainLog.length>100)S.chainLog.splice(0,S.chainLog.length-100);}
+  if(S.chainLog){S.chainLog.push({icon:'\ud83c\udf31',desc:'SEED v4 · ZÉRO ABSOLU sur les 3 modes (fonds propres compris) \u00b7 injecte ton capital via FONDS PROPRES \u00b7 apprentissage conservé',hash:rndHash(),time:nowStr()});if(S.chainLog.length>100)S.chainLog.splice(0,S.chainLog.length-100);}
   try{if(typeof renderAll==='function')renderAll();}catch(e){}
   try{saveState(true);}catch(e){}
  }catch(e){try{window._decErr&&window._decErr(e)}catch(_e){}}},500);})();
