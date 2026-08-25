@@ -4445,10 +4445,12 @@ function _computeNetUsdParts() {
   });
   let taxAnt = 0;
   try { taxAnt = (latentPos>0 && typeof _computeMarginalTax==='function') ? _computeMarginalTax(latentPos) : 0; } catch(e){}
-  let fundDue = 0;
-  try { const debt=S.leverageBorrowed||0; if(debt>0&&S._lastFundingTs){ fundDue = debt*0.0001*(((Date.now()-S._lastFundingTs)/3600000)/8); } } catch(e){}
-  const net = Math.max(0,(S.cashAccount||0)+(S.tradingAccount||0)+(S.antiNegReserve||0)+posVal-closeFees-taxAnt-fundDue);
-  return { trading:(S.tradingAccount||0), cash:(S.cashAccount||0), antiNeg:(S.antiNegReserve||0), posVal, latentPos, closeFees, taxAnt, fundDue, net };
+  // [S1 25/08] fundDue retiré : le circuit préexistant prélève funding+intérêts toutes
+  // les 30 s directement du trading — le résidu couru est ≤30 s ≈ 0, le déduire encore
+  // aurait été un double comptage. fundCum = compteur cumulé réel (informatif).
+  const fundCum = ((S.fees&&S.fees.totalFunding)||0) + (S.leverageTotalFees||0);
+  const net = Math.max(0,(S.cashAccount||0)+(S.tradingAccount||0)+(S.antiNegReserve||0)+posVal-closeFees-taxAnt);
+  return { trading:(S.tradingAccount||0), cash:(S.cashAccount||0), antiNeg:(S.antiNegReserve||0), posVal, latentPos, closeFees, taxAnt, fundCum, net };
 }
 function _computeNetUsd() { return _computeNetUsdParts().net; }
 // [TUILES · 23/08, maquette validée] composition dépliable des deux portefeuilles,
@@ -4477,7 +4479,7 @@ window._toggleHeroBk = function(which){
        +_tile('\ud83c\udfdb\ufe0f','Réserve fiscale',fmt$2(S.fiscalReserveAccount||0),'')
        +_tile('\ud83e\uddfe','Provisions taxes',fmt$2(S.antiNegTaxPart||0),'')
        +_tile('\ud83e\ude99','Réserve frais',fmt$2((S.fees&&S.fees.feeReserveAccount)||0),'')
-       +_tile('\u23f3','Funding cumulé',fmt$2(S.fundingPaid||0),'')
+       +_tile('\u23f3','Funding payé (info)',fmt$2(((S.fees&&S.fees.totalFunding)||0)+(S.leverageTotalFees||0)),'déjà provisionné : réserves fiscale+frais')
        +_tile('\u03a3','Total',fmt$2(computePortfolioTotal()),'','sum');
     } else {
       const p=_computeNetUsdParts();
@@ -4488,7 +4490,7 @@ window._toggleHeroBk = function(which){
        +_tile('\ud83d\udfe1','Positions (mise+latent)',fmt$2(p.posVal),'latent +'+p.latentPos.toFixed(2)+'$','cy')
        +_tile('\u2702\ufe0f','Frais de clôture est.','\u2212'+fmt$2(p.closeFees),'','neg')
        +_tile('\ud83c\udfdb\ufe0f','Impôt anticipé','\u2212'+fmt$2(p.taxAnt),'sur latent positif','neg')
-       +_tile('\u23f3','Funding couru','\u2212'+fmt$2(p.fundDue),'dette '+fmt$2(S.leverageBorrowed||0),'neg')
+       +_tile('\u23f3','Funding payé (cumul)',fmt$2(p.fundCum),'prélevé en continu du trading','cy')
        +_tile('\u03a3','En $',fmt$2(p.net),'','sum');
     }
     tgt.style.display='grid';

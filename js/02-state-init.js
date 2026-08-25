@@ -120,27 +120,11 @@ window._leverageMarginCheck = function _leverageMarginCheck() {
 // CAPITAL ENGAGÉ dans les positions ouvertes. Avant : six sites calculaient
 // cash+trading en comptant l'argent des positions comme disparu → « P&L jour −33$ »
 // fantôme à chaque ouverture. Toute évolution future passe par CETTE fonction.
-// [FUNDING · 23/08/2026, règle Rams] Le levier a un LOYER, comme en réel : 0,01% de
-// la dette active par période de 8h, couru au fil du temps, prélevé du compte trading
-// et CUMULÉ dans S.fundingPaid (par mode). Le bot apprend que l'argent emprunté coûte.
-const FUNDING_RATE_8H = 0.0001;
-function _accrueFunding() {
-  try {
-    const now = Date.now();
-    if (!S._lastFundingTs) { S._lastFundingTs = now; return; }
-    const debt = S.leverageBorrowed || 0;
-    const dtH = (now - S._lastFundingTs) / 3600000;
-    if (dtH < 0.05) return;
-    S._lastFundingTs = now;
-    if (debt <= 0) return;
-    const due = debt * FUNDING_RATE_8H * (dtH / 8);
-    if (due <= 0) return;
-    S.tradingAccount = Math.max(0, (S.tradingAccount || 0) - due);
-    S.fundingPaid = (S.fundingPaid || 0) + due;
-    if (due > 0.01 && S.chainLog) { S.chainLog.push({ icon:'\u23f3', desc:'Funding levier: -'+due.toFixed(4)+'$ (dette '+debt.toFixed(0)+'$ \u00b7 0,01%/8h) \u00b7 cumul '+S.fundingPaid.toFixed(2)+'$', hash:rndHash(), time:nowStr() }); if(S.chainLog.length>100)S.chainLog.splice(0,S.chainLog.length-100); }
-  } catch(e) {}
-}
-setInterval(function(){ try{ _accrueFunding(); }catch(e){} }, 60000);
+// [S1 · 25/08/2026] Mon moteur funding du 23/08 est RETIRÉ : l'audit S1 a prouvé
+// qu'un circuit complet préexistait (applyFundingFees 30s sur les positions +
+// applyLeverageBorrowFees sur la dette, intérêts routés en réserve fiscale) — le
+// mien aurait DOUBLE-prélevé la dette au premier emprunt. La règle de Rams (funding
+// réaliste) est déjà servie par l'existant, mieux intégré.
 
 function _computePortfolio(w) {
   const o = w || S;
@@ -5070,7 +5054,7 @@ function computePortfolioTotal(){
   // Le levier emprunté reste exclu (c'est une dette, pas un actif).
   // [23/08] canonique + fiscale : l'engagé des positions COMPTE (le hero affichait
   // trading seul dès qu'une position ouvrait — la faute du grand chiffre 86$ vs 111$)
-  const baseUSD = ((typeof _computePortfolio==='function') ? _computePortfolio() : ((S.cashAccount||0)+(S.tradingAccount||0))) + (S.fiscalReserveAccount || 0) + (S.antiNegTaxPart || 0) + ((S.fees&&S.fees.feeReserveAccount)||0) + (S.fundingPaid || 0);   // [23/08 · Rams] + provisions taxes + réserve frais + funding cumulé
+  const baseUSD = ((typeof _computePortfolio==='function') ? _computePortfolio() : ((S.cashAccount||0)+(S.tradingAccount||0))) + (S.fiscalReserveAccount || 0) + (S.antiNegTaxPart || 0) + ((S.fees&&S.fees.feeReserveAccount)||0);   // [23/08 · Rams] + provisions taxes + réserve frais (le funding y est déjà provisionné : intérêts→fiscale, funding positions→frais — S1 25/08)
   S.portfolioTotal = baseUSD;  // v8 · USD (tout en $) — l'affichage € est géré séparément (ownFundsEUR)
   return S.portfolioTotal;
 }
