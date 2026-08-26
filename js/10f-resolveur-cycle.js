@@ -113,11 +113,19 @@ function _resolvePairCycleCore(pair, ps) {
 
   const adjProb = lmsrP(ps);
 
-  const convGate = effectiveConviction >= (0.18 - (S._convBoost || 0));
-  const dirGate  = Math.abs(finalSignalWithMem) >= (0.10 - (S._convBoost || 0) * 0.5);
+  // [S2 · 26/08/2026, ordre Rams] PORTE PAR RÉGIME — l'audit a prouvé que le seuil
+  // unique 0.18 laissait le bruit du composite ouvrir en continu en marché plat
+  // (270 trades/45h, brut −13$, frais 12$). En CALM le marché ne paie pas les frais :
+  // on exige une vraie conviction. L'exploration reste où la volatilité la finance.
+  const _mktReg = (typeof detectMarketRegime==='function' ? detectMarketRegime() : 'calm') || 'calm';
+  const _gates = (_mktReg==='calm') ? {conv:0.35, dir:0.20}
+               : (_mktReg==='volatile'||_mktReg==='volatile_bull'||_mktReg==='volatile_bear') ? {conv:0.18, dir:0.10}
+               : {conv:0.25, dir:0.15};   // bull / bear / autres
+  const convGate = effectiveConviction >= (_gates.conv - (S._convBoost || 0));
+  const dirGate  = Math.abs(finalSignalWithMem) >= (_gates.dir - (S._convBoost || 0) * 0.5);
   const lmsrAlignBuy  = adjProb > 0.50;
   const lmsrAlignSell = adjProb < 0.50;
-  const convOverride  = effectiveConviction > 0.25;
+  const convOverride  = effectiveConviction > 0.40;   // [S2] 0.25→0.40 : le LMSR ne se contourne qu'en vraie conviction
 
   const isBuy  = finalSignalWithMem > 0 && convGate && dirGate && (lmsrAlignBuy  || convOverride);
   const isSell = finalSignalWithMem < 0 && convGate && dirGate && (lmsrAlignSell || convOverride);
@@ -125,12 +133,11 @@ function _resolvePairCycleCore(pair, ps) {
   ps.lastAction = action;
   if(action==='hold'){if(!ps.holdStartTs)ps.holdStartTs=Date.now();}else{ps.holdStartTs=0;}
 
-  if(tick%6===0){
-    S.agents.forEach(a=>{
-      const pull=finalSignalWithMem*0.005*(a.conf||0.5);
-      a.score=Math.max(-1,Math.min(1,a.score+pull+(Math.random()-0.5)*0.001));
-    });
-  }
+  // [S2 · 26/08/2026] Le « pull » agents←signal est SUPPRIMÉ : il tirait chaque agent
+  // vers le composite toutes les 6 s, alors que le composite intègre le consensus des
+  // agents (LMSR 14% + _agCons) → boucle auto-réalisatrice fabriquant un faux accord.
+  // L'apprentissage légitime des agents passe par learnFromOutcome (résultats réels),
+  // jamais par imitation du signal. Le consensus redevient une information.
 
   const manualPos=S.openPositions.find(p=>p.pair===pair&&p.auto!==true);
   if(manualPos){

@@ -2151,39 +2151,11 @@ function getFundamentalSignals(pair) {
   // Dans une vraie intégration : fetch FRED, Bloomberg, Alpha Vantage, etc.
   // Ici chaque indicateur est calculé/estimé à partir des données disponibles
 
-  // 1. EPS — Bénéfice par Action (crypto: proxy via market cap / supply)
-  const epsScore = ch24 > 1 ? 0.5 : ch24 < -1 ? -0.5 : ch24 * 0.4;
-
-  // 2. P/E — Ratio Cours/Bénéfice (crypto: NVT ratio proxy)
-  const peScore  = volAvg > 0 ? Math.max(-1, Math.min(1, (cur / volAvg - 1) * 0.3)) : 0;
-
-  // 3. Taux banques centrales (macro agent — composante taux)
-  const rateScore = macro.score * 0.8;
-
-  // 4. CPI / Inflation (macro agent — composante inflation)
-  const cpiScore  = macro.score * -0.6;  // hausse CPI → bearish crypto
-
-  // 5. NFP — Rapport Emploi (macro agent — proxy emploi US)
-  const nfpScore  = macro.score * 0.5;
-
-  // 6. EV/EBITDA — Valorisation relative (prix/volume proxy)
-  const evScore   = ch24 > 0 ? Math.min(1, ch24 * 0.15) : Math.max(-1, ch24 * 0.15);
-
-  // 7. Marge bénéficiaire nette (volatilité spread proxy)
-  const marginScore = ps.candles && ps.candles.length > 0
-    ? Math.max(-1, Math.min(1, (ps.candles[ps.candles.length-1].c - ps.candles[ps.candles.length-1].o)
-        / (ps.candles[ps.candles.length-1].c || 1) * 10)) : 0;
-
-  // 8. Ratio Endettement Debt/Equity (sécurité on-chain proxy)
-  const debtScore = sec.score * 0.7;
-
-  // 9. Sentiment NLP (agent sentiment enrichi)
-  const nlpScore  = sent.score;
-
-  // 10. Croissance CA (volume 24h vs moyenne 7j)
-  const recentVol  = ps.candles ? ps.candles.slice(-4).reduce((s,c)=>s+c.v,0)/4 : 1;
-  const avgVol7    = ps.candles ? ps.candles.slice(-28).reduce((s,c)=>s+c.v,0)/28 : 1;
-  const growthScore = avgVol7 > 0 ? Math.max(-1, Math.min(1, (recentVol/avgVol7-1)*2)) : 0;
+  // [S2 · 26/08/2026] Les 8 « fondamentaux » proxys (EPS/PE/rate/CPI/NFP/EV/marge/
+  // croissance) sont SUPPRIMÉS : c'étaient la variation 24h, le volume et macro.score
+  // recomptés sous d'autres noms (audit S2). Restent les sources réellement distinctes.
+  const debtScore = sec.score * 0.7;      // Debt/Equity (security agent)
+  const nlpScore  = sent.score;           // Sentiment NLP
 
   // ── LMSR + corrélation BTC ─────────────────────────────────────────────
   // v6.5: LMSR score enriched with live agent consensus (not just qYes/qNo ratio)
@@ -2199,16 +2171,15 @@ function getFundamentalSignals(pair) {
 
   // ── Score fondamental pondéré — 10 indicateurs + 8 agents spécialisés ──
   const fundScore = Math.max(-1, Math.min(1,
-    epsScore    * 0.05 +   // 1. EPS
-    peScore     * 0.04 +   // 2. P/E
-    rateScore   * 0.07 +   // 3. Taux BC (macro agent)
-    cpiScore    * 0.06 +   // 4. CPI (macro agent)
-    nfpScore    * 0.04 +   // 5. NFP (macro agent)
-    evScore     * 0.04 +   // 6. EV/EBITDA (fundamental agent)
-    marginScore * 0.04 +   // 7. Marge nette
-    debtScore   * 0.04 +   // 8. Debt/Equity (security agent)
-    nlpScore    * 0.09 +   // 9. NLP sentiment (nlp agent)
-    growthScore * 0.05 +   // 10. Croissance CA (volume agent)
+    // [S2 · 26/08/2026, audit] AF DÉDUPLIQUÉE — avant : macro.score compté 3×
+    // (rate/cpi/nfp, signes s'annulant) et 5 proxys du PRIX déguisés en fondamentaux
+    // (eps/pe/ev/margin/growth = variation 24h & volume sous d'autres noms) : le
+    // composite re-pesait le momentum en se croyant diversifié. Désormais : macro ×1,
+    // un SEUL terme momentum honnête, poids libérés vers les sources indépendantes.
+    (macro.score * 0.7) * 0.12 +            // Macro (UN terme : taux/CPI/NFP agrégés par l'agent)
+    (ch24 > 1 ? 0.5 : ch24 < -1 ? -0.5 : ch24 * 0.4) * 0.08 +  // Momentum 24h (ex eps/pe/ev/margin/growth, assumé)
+    debtScore   * 0.04 +   // Debt/Equity (security agent)
+    nlpScore    * 0.09 +   // NLP sentiment (nlp agent)
     lmsrScore   * 0.14 +   // LMSR consensus interne
     sent.score  * 0.07 +   // Sentiment social (sentiment agent)
     geo.score   * 0.05 +   // Géopolitique
@@ -2222,16 +2193,11 @@ function getFundamentalSignals(pair) {
 
   const result = {
     // 10 indicateurs fondamentaux officiels
-    eps:     { score:epsScore,       conf:0.65,         label:'EPS',             detail:'Bénéfice par Action · proxy mkt cap/supply' },
-    pe:      { score:peScore,        conf:0.60,         label:'P/E Ratio',       detail:'NVT ratio (proxy crypto)' },
-    rates:   { score:rateScore,      conf:macro.conf,   label:'Taux BC',         detail:'Fed / BCE · taux directeurs' },
-    cpi:     { score:cpiScore,       conf:macro.conf,   label:'CPI / Inflation', detail:'Inflation → crypto hedge' },
-    nfp:     { score:nfpScore,       conf:macro.conf,   label:'NFP Emploi',      detail:'Rapport emploi US (NFP)' },
-    ev:      { score:evScore,        conf:fund.conf,    label:'EV/EBITDA',       detail:'Valorisation relative · '+fund.name },
-    margin:  { score:marginScore,    conf:0.55,         label:'Marge Nette',     detail:'Rentabilité intrinsèque spreads' },
+    // [S2 · 26/08] Les 8 tuiles « fondamentales » proxys sont remplacées par la vérité :
+    momentum:{ score:(ch24 > 1 ? 0.5 : ch24 < -1 ? -0.5 : ch24 * 0.4), conf:0.70, label:'Momentum 24h', detail:'Variation prix 24h (ex-proxys EPS/PE/EV/marge, assumé)' },
+    macroAgg:{ score:macro.score*0.7, conf:macro.conf,  label:'Macro (agrégé)',  detail:'Taux/CPI/NFP · agent macro, compté UNE fois' },
     debt:    { score:debtScore,      conf:sec.conf,     label:'Debt/Equity',     detail:'Ratio endettement · '+sec.name },
     nlp:     { score:nlpScore,       conf:nlp.conf,     label:'Sentiment NLP',   detail:'Analyse NLP news & earnings · '+nlp.name },
-    growth:  { score:growthScore,    conf:vol.conf,     label:'Croissance CA',   detail:'Volume 24h vs moy. 7j · '+vol.name },
     // Facteurs contextuels agents
     lmsr:    { score:lmsrScore,      conf:1.0,          label:'LMSR marché',     detail:'Consensus agents interne ×'+S.agents.length },
     sentiment:{ score:sent.score,   conf:sent.conf,    label:'Sentiment Social', detail:'Twitter/Reddit · '+sent.name },
