@@ -721,10 +721,17 @@ function redistributeFitness() {
     const pool = (S.agents || []).filter(a => !a.isBot && !a.isMeta);
     if (pool.length < 4) return;
 
+    // [03/09/2026, règle Rams] UN SEUL PLAFOND POUR TOUS : les hybrides plafonnaient à
+    // 2000 avec une érosion douce de 2 % pendant que les maîtres étaient scalpés net à
+    // 1600 → élèves structurellement plus riches que les maîtres, « Meilleur agent »
+    // toujours un Hybrid, classement DAO biaisé. Désormais le surplus des hybrides est
+    // VERSÉ au pot exactement comme celui des bots. L'érosion douce (obsolète) est retirée.
+    pool.filter(a => (a.fitness || 0) > 1600).forEach(a => {
+      botSurplusPot += a.fitness - 1600;
+      a.fitness = 1600;
+    });
     const strong = pool.filter(a => (a.fitness || 0) >= 1600);
     const weak   = pool.filter(a => (a.fitness || 0) <= 300);
-    // L'érosion des saturés s'applique dès qu'il y a des forts, même sans faibles
-    // à nourrir : un agent dominant ne doit jamais rester collé à 2000 par inertie.
     if (strong.length === 0 && botSurplusPot <= 0) return;
 
     // [FIX 05/08/2026] Sans destinataire, on ne prélève RIEN : l'ancienne « dissipation »
@@ -738,13 +745,7 @@ function redistributeFitness() {
       return;
     }
     if (S._botSurplusCarry) { botSurplusPot += S._botSurplusCarry; S._botSurplusCarry = 0; }
-    // 1+2. Érosion des forts (2% de l'excédent au-dessus de 1600) → pot commun
-    let pot = botSurplusPot;   // [15/08] le surplus non versé des bots nourrit la pépinière
-    strong.forEach(a => {
-      const skim = (a.fitness - 1600) * 0.02 + 4;   // petit prélèvement
-      a.fitness = Math.max(1600, a.fitness - skim);
-      pot += skim;
-    });
+    let pot = botSurplusPot;   // surplus des maîtres ET des hybrides, versé aux faibles
 
     // Comportement moyen des forts (pour l'apprentissage doux)
     const strongMeanScore = strong.reduce((s,a)=>s+(a.score||0),0) / strong.length;
@@ -755,7 +756,7 @@ function redistributeFitness() {
     if (weak.length > 0) {
       const share = pot / weak.length;
       weak.forEach(a => {
-        a.fitness = Math.min(2000, (a.fitness || 50) + share);
+        a.fitness = Math.min(1600, (a.fitness || 50) + share);   // [03/09] même plafond que les maîtres
         // glisse doucement vers le comportement des forts SANS se cloner (diversité préservée)
         a.score = (a.score || 0) * 0.90 + strongMeanScore * 0.10;
       });
