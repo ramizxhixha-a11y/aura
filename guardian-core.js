@@ -132,8 +132,8 @@ function probeDisciples(){
     const pep = agents.filter(a=>!a.isBot && !a.isMeta && String(a.name||'').indexOf('Hybrid')===0 && !seated.has(a.id)).length;
     out.push(R(pep>=7?'ok':'warn','Disciples','Pépinière : '+pep+' hybride(s) libre(s)'+(pep<7?' (< 7, règle Rams)':''), pep<7?'La relève manque : les héritages puiseront dans un vivier trop mince.':'',''));
     // 4. plafond 1600 : aucun bot ne doit rester durablement au-dessus (versement actif)
-    const over = agents.filter(a=>a.isBot && (a.fitness||0) > 1650).map(a=>a.name);
-    if(over.length) out.push(R('warn','Disciples','Bot(s) > 1650 T$ : '+over.join(', '),'Le versement du surplus aux disciples semble inactif.','Vérifier _payBotSurplus / redistributeFitness.'));
+    const over = agents.filter(a=>!a.isMeta && (a.fitness||0) > 1650).map(a=>(a.isBot?'':'Hybrid ')+a.name);   // [03/09] plafond unique : bots ET hybrides
+    if(over.length) out.push(R('warn','Disciples','Agent(s) > 1650 T$ (plafond unique 1600) : '+over.slice(0,6).join(', ')+(over.length>6?' +'+(over.length-6):''),'Le versement du surplus au pot semble inactif (bots ou hybrides).','Vérifier redistributeFitness (02:705+).'));
     else out.push(R('ok','Disciples','Plafond 1600 respecté (surplus versé)','',''));
     // 5. mérites par angle
     let cells=0, weird=0;
