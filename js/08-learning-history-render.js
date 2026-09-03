@@ -2176,14 +2176,16 @@ function getFundamentalSignals(pair) {
     // (eps/pe/ev/margin/growth = variation 24h & volume sous d'autres noms) : le
     // composite re-pesait le momentum en se croyant diversifié. Désormais : macro ×1,
     // un SEUL terme momentum honnête, poids libérés vers les sources indépendantes.
-    (macro.score * 0.7) * 0.12 +            // Macro (UN terme : taux/CPI/NFP agrégés par l'agent)
-    (ch24 > 1 ? 0.5 : ch24 < -1 ? -0.5 : ch24 * 0.4) * 0.08 +  // Momentum 24h (ex eps/pe/ev/margin/growth, assumé)
+    // [S3 · 03/09/2026] macro (0.12) et nlp (0.09) RETIRÉS : l'audit a prouvé que
+    // ces agents lisaient fundScore lui-même (circularité AF→agent→AF, aucune source
+    // externe). Poids réalloués aux sources RÉELLES : momentum, sentiment (momentum
+    // court), volatilité/volume/corr, tendance BTC. L'AF est plus petite et VRAIE.
+    (ch24 > 1 ? 0.5 : ch24 < -1 ? -0.5 : ch24 * 0.4) * 0.12 +  // Momentum 24h (assumé)
     debtScore   * 0.04 +   // Debt/Equity (security agent)
-    nlpScore    * 0.09 +   // NLP sentiment (nlp agent)
     lmsrScore   * 0.14 +   // LMSR consensus interne
-    sent.score  * 0.07 +   // Sentiment social (sentiment agent)
-    geo.score   * 0.05 +   // Géopolitique
-    onchain.score * 0.05 + // On-Chain analytics
+    sent.score  * 0.12 +   // Momentum court (ex « sentiment social », proxy assumé)
+    geo.score   * 0.06 +   // Régime de volatilité (ex « géopolitique »)
+    onchain.score * 0.06 + // Accumulation/distribution bougies (ex « on-chain »)
     sec.score   * 0.03 +   // Sécurité
     vol.score   * 0.04 +   // Volume/Flux
     corr.score  * 0.04 +   // Corrélation cross-asset
@@ -2404,17 +2406,9 @@ function renderCompositePanel() {
     }
   });
 
-  // Agent score drift toward composite consensus (every 15 ticks)
-  if(tick % 15 === 0) {
-    pairs.forEach(pair => {
-      const comp = allSigs[pair];
-      if(!comp) return;
-      S.agents.filter(a => !a.isBot && !a.isMeta).forEach(a => {
-        const pull = comp.composite * 0.005 * a.conf;
-        a.score    = Math.max(-1, Math.min(1, a.score + pull + (Math.random()-0.5)*0.002));
-      });
-    });
-  }
+  // [S3 · 03/09/2026] Le tirage des agents vers le composite (tick%15, avec bruit
+  // aléatoire) est SUPPRIMÉ — 2e tête de la boucle de faux consensus (la 1re tranchée
+  // en S2). Les agents n'apprennent que par learnFromOutcome (03) et lessonNudge.
 
   // ── Render per-pair grid ──
   el.innerHTML = `
@@ -2851,11 +2845,9 @@ function simTick() {
     S.agents.forEach(a => {
       // v7.3 OPT · Bots & Meta : score verrouillé à 0 (role neutre par design, évite dérive)
       if(a.isBot || a.isMeta) { a.score = 0; return; }
-      // v7.3 OPT · Mean-reversion SEULEMENT sur signaux faibles — préserve les fortes convictions
-      if(Math.abs(a.score || 0) < 0.30) {
-        const pull = avgComp2 * 0.004 * (a.conf || 0.5);
-        a.score = Math.max(-1, Math.min(1, a.score + pull));
-      }
+      // [S3 · 03/09/2026] 3e tête de la boucle supprimée : plus aucun tirage des
+      // scores faibles vers la moyenne du composite. Un score faible reste faible
+      // tant que les RÉSULTATS ne l'ont pas fait bouger.
       // v7.3 OPT · Conf auto-recovery supprimée — la conf doit refléter la perf réelle
       // v7.3 OPT · MÉMOIRE INTER-AGENTS : les agents consultent les leçons récentes
       // Leçons de < 50 cycles et pertinentes (sévérité > 0.15) → légère influence sur le score

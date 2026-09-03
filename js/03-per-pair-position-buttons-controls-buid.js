@@ -3566,31 +3566,14 @@ function scoutAnalysis(agentId, pair) {
   const price   = ps.price || 0;
 
   switch(agentId) {
-    case 'macro_v1': {
-      const af = fund?.fundScore || 0;
-      return {
-        score: Math.max(-1, Math.min(1, af * 1.5)),
-        conf: 0.7,
-        reasoning: af > 0.2 ? 'Macro favorable (Fed/liquidité)' : af < -0.2 ? 'Macro défavorable (risk-off global)' : 'Macro neutre'
-      };
-    }
-    case 'fundamental_v1': {
-      const af = fund?.fundScore || 0;
-      const bonus = fund?.raw?.btcDom ? (fund.raw.btcDom - 50) * -0.02 : 0;
-      return {
-        score: Math.max(-1, Math.min(1, af + bonus)),
-        conf: 0.65,
-        reasoning: af > 0.15 ? 'Fondamentaux alignés' : af < -0.15 ? 'Rotation en cours' : 'Équilibre fondamental'
-      };
-    }
-    case 'nlp_v1': {
-      const af = fund?.fundScore || 0;
-      return {
-        score: af * 0.8,
-        conf: 0.72,
-        reasoning: af > 0.2 ? 'Narrative haussière dominante' : af < -0.2 ? 'Narrative baissière' : 'Pas de consensus narratif'
-      };
-    }
+    // [S3 · 03/09/2026] macro_v1 / fundamental_v1 / nlp_v1 NEUTRALISÉS : ils lisaient
+    // fundScore (le score qu'ils alimentent) — circularité pure, aucune source externe.
+    // Score 0 / conf 0 = ils ne pèsent plus rien et le disent. Ils reprendront vie le
+    // jour où Nyx (worker Cloudflare) leur servira un vrai flux macro / news.
+    case 'macro_v1':
+    case 'fundamental_v1':
+    case 'nlp_v1':
+      return { score: 0, conf: 0, reasoning: 'Pas de source externe — neutralisé (S3). En attente d\'un flux réel via Nyx.' };
     case 'sentiment_v2': {
       // v6.7: Real sentiment — price momentum + RSI bias as social proxy
       const candles2 = ps?.candles || [];

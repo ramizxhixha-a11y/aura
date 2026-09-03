@@ -121,7 +121,15 @@ function _resolvePairCycleCore(pair, ps) {
   const _gates = (_mktReg==='calm') ? {conv:0.35, dir:0.20}
                : (_mktReg==='volatile'||_mktReg==='volatile_bull'||_mktReg==='volatile_bear') ? {conv:0.18, dir:0.10}
                : {conv:0.25, dir:0.15};   // bull / bear / autres
-  const convGate = effectiveConviction >= (_gates.conv - (S._convBoost || 0));
+  // [S3+ · 03/09/2026] PORTE D'EXPECTANCY PAR PAIRE — le système possédait l'historique
+  // de chaque paire sans le consulter à l'ouverture (PEPE : 114 trades, −17,9$, rouvert
+  // sans cesse). Les 20 dernières clôtures de LA paire, dans LE mode courant, décident :
+  // si leur net cumulé est < −0,50$, la paire doit prouver +0,10 de conviction en plus.
+  // Une paire qui perd doit convaincre davantage — c'est ce qu'un trader ferait.
+  const _recentCloses = (ps.trades || []).filter(t => t && t.type === 'position').slice(-20);
+  const _recentNet    = _recentCloses.reduce((a, t) => a + (Number(t.pnlUsdt) || 0), 0);
+  const _expPenalty   = (_recentCloses.length >= 8 && _recentNet < -0.5) ? 0.10 : 0;
+  const convGate = effectiveConviction >= (_gates.conv + _expPenalty - (S._convBoost || 0));
   const dirGate  = Math.abs(finalSignalWithMem) >= (_gates.dir - (S._convBoost || 0) * 0.5);
   const lmsrAlignBuy  = adjProb > 0.50;
   const lmsrAlignSell = adjProb < 0.50;
