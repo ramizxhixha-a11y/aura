@@ -1,4 +1,5 @@
-// ▓▓▓ VERSION 20260906a ▓▓▓
+// ▓▓▓ VERSION 20260906c ▓▓▓
+// [P4 · 06/09/2026] BRIQUE 4 DU PONT : GARDES COMPORTEMENTALES dans l'entonnoir unique (après le veto ECO) — source 10e4 (ps.trades par mode) : cooldown 15 min sur la paire après une perte + plafond d'ouvertures/jour par régime (CALM 40, bull/bear 80, volatil libre) = veto journalisé dans EVAL (brainLog BEHAV) + journal (🧊, 1 fois/5 min/paire) + toast ; mise ≤ mise précédente après une perte, appliquée avant l'anti-négatif (journal 🧊 à chaque application).
 // [P2 · 06/09/2026] BRIQUE 2 DU PONT : veto CALENDRIER ÉCO dans l'entonnoir unique (après le veto CORR) — annonce à impact FORT (FOMC, CPI, expiration Deribit) dans les 30 min = aucune ouverture bot, refus journalisé dans EVAL (brainLog ECO) + journal (📅, 1 fois/5 min/paire) + toast. Le malus +0.10 dans la fenêtre ±2 h vit dans les portes 10f.
 // [P1 · 05/09/2026] BRIQUE 1 DU PONT ANALYTICS→DÉCISION : veto ANTI-DOUBLON par corrélation dans l'entonnoir unique (après le FLIP du conseil) — corrélation effective > 0.80 avec une position ouverte = même pari deux fois → refus journalisé dans EVAL (brainLog CORR) + journal (🔗, 1 fois/5 min/paire) + toast. Le bonus de diversification vit dans les portes 10f.
 // [OPTION A · 31/07/2026] garde d ouverture 'Bunker actif -> return' supprimee : le bunker ne bloque plus les ouvertures (il reduit les mises via 07). Debloque EV coince en bunker paused depuis le 26/07.
@@ -21,6 +22,8 @@ function _stakeRound(x) { return Math.round((Number(x) || 0) * 10) / 10; }
 const _corrVetoLogTs = {};
 // [P2 · 06/09/2026] même anti-flood pour le veto calendrier éco (📅).
 const _ecoVetoLogTs = {};
+// [P4 · 06/09/2026] même anti-flood pour les gardes comportementales (🧊).
+const _behavVetoLogTs = {};
 // [SEPARATION COMPLETE 3 MODES · 02/07/2026] GARDE MODE REEL : aucune ouverture automatique en 'real' (analyse/suggestions continuent, trades manuels libres) + gate bunker lu par mode
 // ════════════════════════════════════════════════════════════════════════
 // ▓▓▓ AURA8 — 09c-auto-open.js ▓▓▓
@@ -504,6 +507,31 @@ function autoOpenPosition(pair, side, stakeOverride) {
     }
   } catch(e){ try{window._decErr&&window._decErr(e)}catch(_e){} }
 
+  // ──────────────────────────────────────────────────────────────
+  // [P4 · 06/09/2026] BRIQUE 4 DU PONT — GARDES COMPORTEMENTALES
+  // Source unique 10e4 (ps.trades du wallet actif → par mode). Cooldown 15 min sur la paire
+  // après une clôture perdante ; plafond d'ouvertures du jour local par régime (CALM 40,
+  // bull/bear 80, volatil libre). Tous les chemins (cycle 10f, propositions, FORCE) passent ici.
+  // Le plafond de mise « ≤ mise précédente après perte » est appliqué plus bas, avant l'anti-négatif.
+  // ──────────────────────────────────────────────────────────────
+  let _bg = null;
+  try {
+    _bg = _behavGateForOpen(pair);
+    if (_bg.veto) {
+      const _why = _bg.reason;
+      if (!S.brainLog) S.brainLog = [];
+      S.brainLog.unshift({ ts: Date.now(), pair, event: 'BEHAV', side, reason: _why });
+      if (S.brainLog.length > 30) S.brainLog.length = 30;
+      if ((Date.now() - (_behavVetoLogTs[pair] || 0)) > 5 * 60 * 1000) {
+        _behavVetoLogTs[pair] = Date.now();
+        S.chainLog.push({ icon: '🧊', desc: `Garde comportementale · ${pair} ${side.toUpperCase()} refusé · ${_why}`, hash: rndHash(), time: nowStr() });
+        if (S.chainLog.length > 100) S.chainLog.splice(0, S.chainLog.length - 100);
+        if (typeof showToast === 'function') showToast('🧊 ' + pair + ' ' + side.toUpperCase() + ' refusé · ' + (_why.length > 70 ? _why.slice(0, 67) + '…' : _why));
+      }
+      return;
+    }
+  } catch(e){ try{window._decErr&&window._decErr(e)}catch(_e){} }
+
   // Smart Sizer applique le multiplicateur Kelly AVANT les checks d'exposition
   let _appliedSizerMult = null;
   let _execChunks = 1;   // [TWAP 09/08] chunks recommandés par le Bot Exécution, lus par le plan TWAP plus bas
@@ -610,6 +638,19 @@ function autoOpenPosition(pair, side, stakeOverride) {
         return;
       }
       baseStake = Math.max(_stakeFloor(), _stakeRound(baseStake * scaleFactor));
+    }
+  }
+
+  // [P4 · 06/09/2026] MISE ≤ PRÉCÉDENTE APRÈS PERTE (garde comportementale, source 10e4) :
+  // après le Smart Sizer et le bornage capital, avant l'anti-négatif qui ne peut que réduire
+  // encore. Le plancher proportionnel reste respecté. Une ouverture est un événement rare :
+  // chaque application est journalisée (pas d'anti-flood).
+  if (_bg && _bg.stakeCap > 0 && baseStake > _bg.stakeCap) {
+    const _capped = Math.max(_stakeFloor(), _stakeRound(_bg.stakeCap));
+    if (_capped < baseStake) {
+      S.chainLog.push({ icon: '🧊', desc: `Garde comportementale · ${pair} · mise $${baseStake} → $${_capped} (≤ mise précédente après perte −$${Math.abs(_bg.lastLossUsd).toFixed(2)})`, hash: rndHash(), time: nowStr() });
+      if (S.chainLog.length > 100) S.chainLog.splice(0, S.chainLog.length - 100);
+      baseStake = _capped;
     }
   }
 
