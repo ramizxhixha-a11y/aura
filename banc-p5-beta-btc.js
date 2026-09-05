@@ -2,7 +2,8 @@
 // Charge les modules LIVRÉS 10e (pour _getPairReturns) et 10e5 en vm avec une horloge, une timeframe
 // et un S pilotés (bougies synthétiques puis bougies Binance réelles de aura_live.json), puis rejoue
 // le texte LIVRÉ de 09c (veto BETA dans l'entonnoir + mise ×0.5 avant l'anti-négatif), vérifie la
-// source vivante (02), le HTML (76 ressources) et l'intégrité de 10f.
+// source vivante (02), le HTML (toutes les ressources au token DOC_V, ≥ 76) et l'intégrité de 10f.
+// [adapté P6 · 06/09/2026] 10e5 n'est plus relivré : son en-tête garde son token de livraison (20260906d) ; HTML = 77 ressources.
 // Lancer à la racine du dépôt : node banc-p5-beta-btc.js
 const fs = require('fs'), vm = require('vm'), assert = require('assert');
 let ok = 0, ko = 0;
@@ -148,16 +149,16 @@ T('10e5 : module ≤ 500 lignes, lit uniquement S.realCandles / S.pairStates', (
 });
 T('10f NON touché : aucune référence bêta', () => { assert.ok(!fs.readFileSync('js/10f-resolveur-cycle.js', 'utf8').includes('_beta')); });
 const html = fs.readFileSync('AURA8_v118.html', 'utf8');
-T('HTML : 10e5 chargé juste après 10e4 et avant 10f, même token que DOC_V sur 76 ressources, anciens tokens absents', () => {
+T('HTML : 10e5 chargé juste après 10e4 et avant 10f, même token que DOC_V sur toutes les ressources (≥ 76), anciens tokens absents', () => {
   const tok = (html.match(/DOC_V = '([0-9a-z]+)'/) || [])[1]; assert.ok(tok);
   const i4 = html.indexOf('js/10e4-gardes-comportementales.js?v=' + tok), i5 = html.indexOf('js/10e5-beta-btc.js?v=' + tok), iF = html.indexOf('js/10f-resolveur-cycle.js?v=' + tok);
   assert.ok(i4 > 0 && i5 > i4 && iF > i5);
-  assert.strictEqual((html.match(new RegExp('\\?v=' + tok, 'g')) || []).length, 76);
+  assert.ok((html.match(new RegExp('\\?v=' + tok, 'g')) || []).length >= 76);
   assert.ok(!html.includes('20260906c') && !html.includes('20260906b') && !html.includes('20260906a'));
 });
 T('versions en tête : 10e5 et 09c = token DOC_V', () => {
   const tok = (html.match(/DOC_V = '([0-9a-z]+)'/) || [])[1];
-  assert.ok(fs.readFileSync('js/10e5-beta-btc.js', 'utf8').startsWith('// ▓▓▓ VERSION ' + tok + ' ▓▓▓'));
+  assert.ok(fs.readFileSync('js/10e5-beta-btc.js', 'utf8').startsWith('// ▓▓▓ VERSION 20260906d ▓▓▓'));
   assert.ok(src09c.startsWith('// ▓▓▓ VERSION ' + tok + ' ▓▓▓'));
 });
 
