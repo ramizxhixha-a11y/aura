@@ -1,3 +1,4 @@
+// [P0 RÉGIME UNIFIÉ · 05/09/2026] lectures de régime en direct via detectMarketRegime() (source unique, 02) ; fantôme S.regime (jamais écrit) supprimé.
 // [PRIX HOLD FLUIDES · 02/08/2026] tous les prix affiches a 2 decimales (priceStr HOLD 3447, priceStr2, curStr badge, priceStr trades) au lieu de Math.floor -> SOL $73 devient $73.14 et les mouvements <$1 redeviennent visibles (avant "bloque a 73") · updater mort ac2_price_ (id inexistant) retire, le prix HOLD passe par ac2_px_
 // [STABILITE CARTE ANALYSE · 02/08/2026] VALEUR & G/P NET : 2e setter concurrent (format -0.38%(-$0.0)) retire -> plus de clignotement toutes les sec ; setter unique a 2 decimales (VALEUR $x.xx, G/P "% net $") · prix (fmtP x3) affiches a 2 decimales au lieu de floores (ex $1 869 -> $1,869.50)
 // [RENDU HOME RESILIENT · 05/08/2026] _qhErr : toute exception d'une section du rendu HOME
@@ -1587,7 +1588,7 @@ function computeVeilleSentiment() {
   }
 
   // 3. Régime marché interne AURA (poids 40%)
-  const regime = typeof detectMarketRegime === 'function' ? detectMarketRegime() : (S._paperRealCurrentRegime || 'calm');
+  const regime = typeof detectMarketRegime === 'function' ? detectMarketRegime() : 'calm'; // [P0] source unique
   const regimeScores = {
     bull:          { score: 40, label: '▲ BULL interne',     col: 'var(--up)' },
     volatile_bull: { score: 20, label: '▲▲ Volatile+',       col: '#84cc16' },
@@ -2157,7 +2158,7 @@ function computeTrustScore() {
   }
 
   // 7. Régime marché défavorable (max -5 pts)
-  const regime = S._paperRealCurrentRegime || S.regime || 'calm';
+  const regime = typeof detectMarketRegime === 'function' ? detectMarketRegime() : 'calm'; // [P0] source unique (S.regime : fantôme jamais écrit, supprimé)
   if (regime === 'volatile_bear' || regime === 'bear') {
     score -= 5; reasons.push('Régime baissier');
   }

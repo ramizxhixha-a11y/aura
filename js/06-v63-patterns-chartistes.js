@@ -1,5 +1,6 @@
 // ════════════════════════════════════════════════════════════
 // AURA8 — module consolidé 06/10
+// [P0 RÉGIME UNIFIÉ · 05/09/2026] toutes les lectures de régime (risque, grâce, cockpit, telegram, benchmarks, météo) passent par detectMarketRegime() (source unique, 02).
 // Contient : v63-patterns-chartistes, v71-correlation-live-btc-impact, v78-sons-personnalises-win-loss, v84-anti-revenge-trading
 // ════════════════════════════════════════════════════════════
 // ═══ v63 · PATTERNS CHARTISTES ═══
@@ -1563,7 +1564,7 @@ function computeRiskScore() {
   const agents = S.agents||[];
   const fees   = S.fees||{};
   const m      = typeof computeAdvancedMetrics==='function'?computeAdvancedMetrics():null;
-  const regime = S._paperRealCurrentRegime||'calm';
+  const regime = (typeof detectMarketRegime==='function'?detectMarketRegime():'calm');
   const allT   = Object.values(S.pairStates||{}).flatMap(ps=>(ps.trades||[]).filter(t=>t.type==='position'));
 
   const factors = [];
@@ -2522,7 +2523,7 @@ async function testTelegram() {
 📊 <b>État actuel :</b>
 💰 Capital : <code>$${cap.toFixed(2)}</code>
 🎯 Win Rate : <code>${wr}%</code> sur ${n} trades
-📈 Régime : <code>${(S._paperRealCurrentRegime||'calm').toUpperCase()}</code>
+📈 Régime : <code>${(typeof detectMarketRegime==='function'?detectMarketRegime():'calm').toUpperCase()}</code>
 🤖 Agents : <code>${(S.agents||[]).length}</code> actifs
 
 <i>AURA ∞ — Adaptive Universal Risk Architect</i>`;
@@ -2546,7 +2547,7 @@ async function sendHebdoTelegram() {
 🎯 Win Rate : <code>${wr}%</code> (${n} trades)
 📐 Sharpe : <code>${m?m.sharpe.toFixed(2):'—'}</code>
 📉 Max DD : <code>${m?m.maxDDPct.toFixed(1):'—'}%</code>
-🤖 Agents : <code>${(S.agents||[]).length}</code> · Régime : <code>${(S._paperRealCurrentRegime||'calm').toUpperCase()}</code>
+🤖 Agents : <code>${(S.agents||[]).length}</code> · Régime : <code>${(typeof detectMarketRegime==='function'?detectMarketRegime():'calm').toUpperCase()}</code>
 
 <i>Rapport automatique AURA ∞</i>`;
   const ok = await sendTelegram(msg, true);
@@ -2970,7 +2971,7 @@ function _updateCompactWidget() {
   const pnl24= S.pnl24h||0;
   const cap  = S.tradingAccount||0;
   const openPos= (S.openPositions||[]).length;
-  const regime = S._paperRealCurrentRegime||'calm';
+  const regime = (typeof detectMarketRegime==='function'?detectMarketRegime():'calm');
   const regLabel={bull:'▲BULL',volatile_bull:'▲VOLT+',calm:'◌CALM',volatile:'◈VOLT',volatile_bear:'▼VOLT−',bear:'▼BEAR'}[regime]||'CALM';
   const regColor= regime.includes('bull')?'var(--up)':regime.includes('bear')?'var(--down)':'var(--t3)';
   const pnlCol  = pnl24>=0?'var(--up)':'var(--down)';
@@ -3114,7 +3115,7 @@ async function _lbFetchBenchmarks() {
     _LB_BENCHMARKS[0].perf24h = btcChg24;
     _LB_BENCHMARKS[1].perf24h = ethChg24;
     // Perf annuelle estimée (basée sur cycle bull/bear actuel)
-    const regime = S._paperRealCurrentRegime||'calm';
+    const regime = (typeof detectMarketRegime==='function'?detectMarketRegime():'calm');
     const btcAnnual = regime.includes('bull')?65:regime.includes('bear')?-45:12;
     const ethAnnual = regime.includes('bull')?80:regime.includes('bear')?-55:8;
     _LB_BENCHMARKS[0].annualReturnPct = btcAnnual;
@@ -3691,7 +3692,7 @@ let _grHistory = [];
 function _grGetData() {
   const n    = S.totalTrades||0;
   const wr   = n>0?Math.round((S.winTrades||0)/n*100):50;
-  const regime= S._paperRealCurrentRegime||'calm';
+  const regime= (typeof detectMarketRegime==='function'?detectMarketRegime():'calm');
   const h    = new Date().getHours();
   const agents= S.agents||[];
 
@@ -3821,7 +3822,7 @@ function renderGraceSection() {
       <div style="background:var(--s2);border-radius:8px;padding:8px;margin:8px 0;font-size:9px;">
         <div style="font-weight:700;color:var(--t3);margin-bottom:4px;text-transform:uppercase;letter-spacing:.06em;font-size:8px;">Contexte actuel</div>
         ${[
-          {l:'Régime',  v:(S._paperRealCurrentRegime||'calm').toUpperCase(), col:S._paperRealCurrentRegime?.includes('bull')?'var(--up)':S._paperRealCurrentRegime?.includes('bear')?'var(--down)':'var(--t3)'},
+          {l:'Régime',  v:(d.regime||'calm').toUpperCase(), col:(d.regime||'').includes('bull')?'var(--up)':(d.regime||'').includes('bear')?'var(--down)':'var(--t3)'},
           {l:'WR',      v:d.wr+'%', col:d.wr>=60?'var(--up)':d.wr>=50?'var(--gold)':'var(--down)'},
           {l:'Consensus agents', v:Math.round(d.agentConsensus*100)+'%', col:d.agentConsensus>=0.7?'var(--up)':'var(--t3)'},
           {l:'Score risque', v:d.riskScore+'/100', col:d.riskScore<=35?'var(--up)':d.riskScore<=60?'var(--gold)':'var(--down)'},
@@ -4245,7 +4246,7 @@ function memRecordSession() {
   const n    = S.totalTrades||0;
   const wr   = n>0?Math.round((S.winTrades||0)/n*100):null;
   const cap  = S.tradingAccount||0;
-  const regime= S._paperRealCurrentRegime||'calm';
+  const regime= (typeof detectMarketRegime==='function'?detectMarketRegime():'calm');
   const openPos=(S.openPositions||[]).length;
 
   // Session summary
@@ -4461,7 +4462,7 @@ window.renderMemorySection = renderMemorySection;
 function _wxCompute() {
   const n      = S.totalTrades||0;
   const wr     = n>0?(S.winTrades||0)/n:0.5;
-  const regime = S._paperRealCurrentRegime||'calm';
+  const regime = (typeof detectMarketRegime==='function'?detectMarketRegime():'calm');
   const pnl24  = S.pnl24h||0;
   const cap    = S.tradingAccount||0;
   const openPos= (S.openPositions||[]).length;
@@ -4634,7 +4635,7 @@ function _cinUpdate() {
   const wr   = n>0?Math.round((S.winTrades||0)/n*100):null;
   const openPos= S.openPositions||[];
   const agents = S.agents||[];
-  const regime = S._paperRealCurrentRegime||'calm';
+  const regime = (typeof detectMarketRegime==='function'?detectMarketRegime():'calm');
   const risk   = typeof computeRiskScore==='function'?computeRiskScore().globalScore:null;
 
   // Couleurs dynamiques

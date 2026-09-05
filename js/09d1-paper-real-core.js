@@ -1,5 +1,6 @@
 // ════════════════════════════════════════════════════════════════════════
 // ▓▓▓ AURA8 — 09d1-paper-real-core.js ▓▓▓
+// [P0 RÉGIME UNIFIÉ · 05/09/2026] stress bear systémique lu en direct via detectMarketRegime() (source unique, 02).
 // ════════════════════════════════════════════════════════════════════════
 // PaperReal — protection TP/SL ATR, refus contextuel, limite corrélation,
 // combine multi-mode stats, P&L par période, stress bear, enrich close.
@@ -258,8 +259,7 @@ window._computePnlByPeriod = _computePnlByPeriod;
 // Détection de stress bear systémique (streak de cycles bear consécutifs)
 // ──────────────────────────────────────────────────────────────────────
 function _detectSystemicBearStress() {
-  const regime = S._paperRealCurrentRegime
-              || (typeof detectMarketRegime === 'function' ? detectMarketRegime() : 'calm');
+  const regime = (typeof detectMarketRegime === 'function') ? detectMarketRegime() : 'calm'; // [P0] source unique
   const isBear = regime === 'bear' || regime === 'volatile_bear';
 
   if (isBear) {

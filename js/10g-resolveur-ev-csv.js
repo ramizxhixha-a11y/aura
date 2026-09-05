@@ -1,4 +1,4 @@
-// ▓▓▓ VERSION 20260809k ▓▓▓
+// ▓▓▓ VERSION 20260905a ▓▓▓ · [P0 RÉGIME UNIFIÉ · 05/09/2026] écriture de S._paperRealCurrentRegime supprimée (photo périmée) — le régime se lit partout en direct via detectMarketRegime()
 // 10g-resolveur-ev-csv.js — Résolveur EV (_resolvePaperRealCycle), consignes MAN, force-close UI, indicateur réseau, profit split, exports CSV, modales, disable FP
 // [DÉCOUPE 10 · 09/08/2026] Tranche BYTE-IDENTIQUE de 10-fin-bloc-restauration-v93.js
 // (lignes 2004-2316 de l'original). Aucun code réécrit. Ordre de chargement OBLIGATOIRE :
@@ -62,9 +62,6 @@ function _resolvePaperRealCycle(pair, ps) {
   const maxConcurrent = (S.tradingMode === 'real') ? 1 : (cfg.maxConcurrentPos || 1);
   const openPositions = (S.openPositions || []).filter(p => p.auto === true);
   if (openPositions.length >= maxConcurrent) return;
-
-  const _regime = (typeof detectMarketRegime === 'function') ? detectMarketRegime() : 'calm';
-  S._paperRealCurrentRegime = _regime;
 
   return _resolvePairCycleCore(pair, ps);
 }

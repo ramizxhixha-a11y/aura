@@ -1,3 +1,4 @@
+// [P0 RÉGIME UNIFIÉ · 05/09/2026] detectMarketRegime() = SOURCE UNIQUE du régime, consommée partout (header, portes S2, risque, grâce, cockpit, exports). S._paperRealCurrentRegime (photo périmée des cycles EV) supprimé de tout le code chargé. Correctif interne : volatilité moyennée sur volCount (paires avec bougies) et non plus sur countValid (paires avec pnl24h). Mode Démo : force le régime via S._regimeOverride (posé/retiré par enterDemoMode/exitDemoMode dans 05).
 // [FRAIS REELS BINANCE · 28/07/2026] recordFees facture desormais l ALLER-RETOUR (entree taker + sortie maker/taker + slippage x2) au lieu d un seul cote ; taux feeConfig alignes sur Binance spot VIP 0 (0,10 % par cote, maker=taker) au lieu de 0,02/0,05 % — le cout reel d un aller-retour passe de 0,080 % a 0,260 %
 // [DECISION AU BOT · regle Rams 27/07/2026] aucun seuil ni plafond impose : le bot gere ses cloture comme il l entend ; le systeme n intervient qu a la limite physique (solde net a zero) pour que le compte ne passe jamais en negatif · [SOLVABILITE EN TEMPS REEL · regle Rams 27/07/2026] le controle se declenche A CHAQUE CHANGEMENT DE PRIX (flux WebSocket trade + kline), plus sur une horloge de 3 s — cout nul sans dette, garde anti-reentrance · frais/taxes/frais d emprunt imputes a la reserve anti-negatif (deja provisionnes en continu) : seule la dette NETTE pese sur le compte trading, le coussin ne couvre que le risque de marche · cloture totale immediate (positions, frais, impots, restitution du levier) des que le reste net ne couvre plus les couts : le compte trading s arrete a ZERO, jamais negatif · [BASE EMPRUNT = CAPITAL TRADING · regle Rams 27/07/2026] capacite calculee sur le capital de trading du debut (compte + mises engagees - dette), caisse verrouillee EXCLUE · [NETTOYAGE PERF 26/07/2026] health-check collecteur 1 s -> 5 s, dispatch taxes 1 min -> 10 min · [BASE LEVIER = CAPITAL PROPRE 26/07/2026] la capacite d emprunt suit le capital REELLEMENT possede (detenu - dette) au lieu d un instantane fige a 40.64$ qui bloquait tout a 100 % : suit les injections, immunise contre la spirale emprunt->capacite · [POLITIQUE CAPITAL volet B · Rams 06/07, livre 07/07] taxes des gains provisionnees dans la reserve ANTI-NEGATIF au fil de la session (part taxes tracee via antiNegTaxPart) puis dispatchees vers la reserve FISCALE au changement de jour (_dispatchSessionTaxes, 60s, rattrapage au boot) · [SIMULTANE · ETAPE 3] le collecteur de bougies reelles sert les modes EN PLAY (walletStore.running), plus seulement le mode affiche : EV et RE recoivent leurs prix en continu meme ecran sur AA — helper _bgPairsToWatch + health-check sans verrou d ecran + gardien des connexions a 1 s (demande Rams)
 
@@ -641,12 +642,15 @@ function ACFG() { return PAIRS[S.activePair]; }
 // v7.0: MARKET REGIME DETECTION — détecte le contexte actuel du marché
 // Classifie en: 'bull' (hausse forte), 'bear' (baisse forte), 'volatile' (agité), 'calm' (stable)
 function detectMarketRegime() {
+  // [P0 · 05/09/2026] SOURCE UNIQUE du régime. L'override ci-dessous appartient au
+  // Mode Démo (v51, fichier 05) : posé par enterDemoMode, retiré par exitDemoMode.
+  if (S._regimeOverride) return S._regimeOverride;
   if(!S.pairStates) return 'calm';
   const pairs = Object.values(S.pairStates);
   if(pairs.length === 0) return 'calm';
 
   // Agrégats cross-paires
-  let avgPnl24 = 0, avgVol = 0, countValid = 0;
+  let avgPnl24 = 0, avgVol = 0, countValid = 0, volCount = 0;
   pairs.forEach(ps => {
     if(typeof ps.pnl24h === 'number' && !isNaN(ps.pnl24h)) {
       avgPnl24 += ps.pnl24h;
@@ -659,11 +663,12 @@ function detectMarketRegime() {
       const variance = closes.reduce((a,b)=>a+(b-mean)**2,0) / closes.length;
       const cv = mean > 0 ? Math.sqrt(variance) / mean : 0;
       avgVol += cv;
+      volCount++;
     }
   });
   if(countValid === 0) return 'calm';
   avgPnl24 /= countValid;
-  avgVol /= countValid;
+  avgVol = volCount > 0 ? avgVol / volCount : 0;
 
   // Classification
   const isVolatile = avgVol > 0.02;   // >2% de variance relative
@@ -5499,7 +5504,7 @@ function openPosition(pair, side) {
   // v7.12 LIVRAISON 13 · ANTI-CONTRE-TENDANCE en mode Réel
   // Refuse LONG en BEAR, SHORT en BULL pour éviter les pertes en marché défavorable
   if (S.tradingMode === 'paperReal') {
-    const regime = S._paperRealCurrentRegime || (typeof detectMarketRegime === 'function' ? detectMarketRegime() : 'calm');
+    const regime = detectMarketRegime(); // [P0] source unique, en direct
     const isBear = regime === 'bear' || regime === 'volatile_bear';
     const isBull = regime === 'bull' || regime === 'volatile_bull';
     if (side === 'long' && isBear) {

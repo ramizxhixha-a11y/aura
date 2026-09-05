@@ -1,4 +1,4 @@
-// ▓▓▓ VERSION 20260809k ▓▓▓
+// ▓▓▓ VERSION 20260905a ▓▓▓ · [P0 RÉGIME UNIFIÉ · 05/09/2026] régime lu en direct via detectMarketRegime() (source unique, 02)
 // 10b-lettre-agents.js — Lettre des agents : voix, construction, export, rendu
 // [DÉCOUPE 10 · 09/08/2026] Tranche BYTE-IDENTIQUE de 10-fin-bloc-restauration-v93.js
 // (lignes 223-442 de l'original). Aucun code réécrit. Ordre de chargement OBLIGATOIRE :
@@ -35,7 +35,7 @@ function _ltBuildLetter() {
   const initCap = S.initialCapital||1000;
   const pnl     = cap-initCap;
   const pnlPct  = initCap>0?(pnl/initCap*100):0;
-  const regime  = S._paperRealCurrentRegime||'calm';
+  const regime  = (typeof detectMarketRegime==='function') ? detectMarketRegime() : 'calm'; // [P0] source unique
   const pseudo  = S.avatar?.pseudo||'Trader';
   const allA    = agents.length;
   const topFit  = Math.floor(top.fitness||0);

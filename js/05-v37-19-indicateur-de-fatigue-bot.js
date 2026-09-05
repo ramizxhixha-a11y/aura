@@ -1,3 +1,4 @@
+// [P0 RÉGIME UNIFIÉ · 05/09/2026] toutes les lectures de régime passent par detectMarketRegime() (source unique, 02). Mode Démo : les presets forcent le régime via S._regimeOverride (clé preset renommée regime).
 // ════════════════════════════════════════════════════════════
 // AURA8 — module consolidé 05/10
 // Contient : v37-19-indicateur-de-fatigue-bot, v43-13-export-rapport-pdf-mensuel, v47-mode-zen, v55-picture-in-picture
@@ -1758,7 +1759,7 @@ function buildExcelData() {
       ['Nb agents', agents.length, ''],
       ['Fitness moyenne', agents.length>0?(agents.reduce((s,a)=>s+(a.fitness||0),0)/agents.length).toFixed(0)+' T$':'—', ''],
       ['Agents élites', agents.filter(a=>(a.fitness||0)>=1900).length, 'fitness ≥ 1900'],
-      ['Régime marché', S._paperRealCurrentRegime||'—', ''],
+      ['Régime marché', (typeof detectMarketRegime==='function'?detectMarketRegime():'calm'), ''],
     ]
   );
 
@@ -2344,7 +2345,7 @@ function _updateZen() {
   const wr   = n > 0 ? Math.round(wins/n*100) : null;
 
   // Régime
-  const regime = S._paperRealCurrentRegime || 'calm';
+  const regime = (typeof detectMarketRegime==='function'?detectMarketRegime():'calm');
   const regimeEmoji = {bull:'▲ BULL', volatile_bull:'▲ VOLATILE+', calm:'◌ CALM',
                        volatile:'◈ VOLATILE', volatile_bear:'▼ VOLATILE−', bear:'▼ BEAR'}[regime] || 'CALM';
 
@@ -2792,7 +2793,7 @@ const _DEMO_PRESETS = {
     portfolio: 523.40, tradingAccount: 521.80, cashAccount: 1.60,
     totalTrades: 15, winTrades: 8,
     pnl24h: 3.20, tradingMode: 'real',
-    _paperRealCurrentRegime: 'calm',
+    regime: 'calm',
     trades: [
       {pair:'BTC/USDT',side:'buy',pnlUsdt:4.20,pnl:0.84,ts:Date.now()-3600000*2,time:'Il y a 2h',type:'position'},
       {pair:'ETH/USDT',side:'sell',pnlUsdt:-2.10,pnl:-0.42,ts:Date.now()-3600000*5,time:'Il y a 5h',type:'position'},
@@ -2806,7 +2807,7 @@ const _DEMO_PRESETS = {
     portfolio: 8542.30, tradingAccount: 8400.00, cashAccount: 142.30,
     totalTrades: 284, winTrades: 202,
     pnl24h: 127.50, tradingMode: 'real',
-    _paperRealCurrentRegime: 'bull',
+    regime: 'bull',
     trades: [
       {pair:'BTC/USDT',side:'buy',pnlUsdt:85.20,pnl:1.02,ts:Date.now()-1800000,time:'Il y a 30min',type:'position'},
       {pair:'ETH/USDT',side:'buy',pnlUsdt:42.10,pnl:0.84,ts:Date.now()-3600000,time:'Il y a 1h',type:'position'},
@@ -2820,7 +2821,7 @@ const _DEMO_PRESETS = {
     portfolio: 880.20, tradingAccount: 875.00, cashAccount: 5.20,
     totalTrades: 47, winTrades: 21,
     pnl24h: -34.80, tradingMode: 'real',
-    _paperRealCurrentRegime: 'bear',
+    regime: 'bear',
     trades: [
       {pair:'BTC/USDT',side:'buy',pnlUsdt:-28.40,pnl:-0.57,ts:Date.now()-900000,time:'Il y a 15min',type:'position'},
       {pair:'DOGE/USDT',side:'buy',pnlUsdt:-12.60,pnl:-0.25,ts:Date.now()-3600000,time:'Il y a 1h',type:'position'},
@@ -2839,7 +2840,7 @@ function enterDemoMode(presetKey) {
     portfolio: S.portfolio, tradingAccount: S.tradingAccount,
     cashAccount: S.cashAccount, totalTrades: S.totalTrades,
     winTrades: S.winTrades, pnl24h: S.pnl24h,
-    tradingMode: S.tradingMode, _paperRealCurrentRegime: S._paperRealCurrentRegime,
+    tradingMode: S.tradingMode, _regimeOverride: S._regimeOverride,
     agents: JSON.parse(JSON.stringify(S.agents||[])),
     pairStates: JSON.parse(JSON.stringify(S.pairStates||{})),
     openPositions: JSON.parse(JSON.stringify(S.openPositions||[])),
@@ -2852,7 +2853,7 @@ function enterDemoMode(presetKey) {
   S.totalTrades     = preset.totalTrades;
   S.winTrades       = preset.winTrades;
   S.pnl24h          = preset.pnl24h;
-  S._paperRealCurrentRegime = preset._paperRealCurrentRegime;
+  S._regimeOverride = preset.regime; // [P0] la démo force le régime via l'override de la source unique
 
   // Peupler les trades dans les pairStates
   Object.values(S.pairStates||{}).forEach((ps,i)=>{
@@ -2878,7 +2879,7 @@ function enterDemoMode(presetKey) {
 window.enterDemoMode = enterDemoMode;
 
 function exitDemoMode() {
-  if(!_demoBackup) { _demoActive=false; document.getElementById('demoBanner')?.classList.remove('show'); return; }
+  if(!_demoBackup) { _demoActive=false; S._regimeOverride = undefined; document.getElementById('demoBanner')?.classList.remove('show'); return; }
 
   // Restaurer le vrai state
   S.portfolio       = _demoBackup.portfolio;
@@ -2888,7 +2889,7 @@ function exitDemoMode() {
   S.winTrades       = _demoBackup.winTrades;
   S.pnl24h          = _demoBackup.pnl24h;
   S.tradingMode     = _demoBackup.tradingMode;
-  S._paperRealCurrentRegime = _demoBackup._paperRealCurrentRegime;
+  S._regimeOverride = _demoBackup._regimeOverride;
   S.agents          = _demoBackup.agents;
   S.pairStates      = _demoBackup.pairStates;
   S.openPositions   = _demoBackup.openPositions;
@@ -2986,7 +2987,7 @@ function generateDashboardHTML() {
   const n     = S.totalTrades||0;
   const wr    = n>0 ? Math.round((S.winTrades||0)/n*100) : 0;
   const totalPnl = Object.values(S.pairStates||{}).reduce((s,ps)=>s+(ps.totalPnlUsd||0),0);
-  const regime= S._paperRealCurrentRegime||'calm';
+  const regime= (typeof detectMarketRegime==='function'?detectMarketRegime():'calm');
   const now   = new Date().toLocaleDateString('fr-FR',{day:'numeric',month:'long',year:'numeric'});
 
   const pairRows = Object.entries(S.pairStates||{}).filter(([,ps])=>ps.totalTrades>0)
@@ -3406,7 +3407,7 @@ function _buildWidgetHTML() {
   const wr     = n > 0 ? Math.round(wins/n*100) : 0;
   const pnl24h = S.pnl24h || 0;
   const capital= S.tradingAccount || 0;
-  const regime = S._paperRealCurrentRegime || 'calm';
+  const regime = (typeof detectMarketRegime==='function'?detectMarketRegime():'calm');
   const openPos= (S.openPositions||[]).length;
   const agents = S.agents || [];
   const avgFit = agents.length>0 ? Math.round(agents.reduce((s,a)=>s+(a.fitness||0),0)/agents.length) : 0;
@@ -3630,7 +3631,7 @@ function _updatePip() {
   const pnl24h = S.pnl24h||0;
   const capital= S.tradingAccount||0;
   const openPos= (S.openPositions||[]).length;
-  const regime = S._paperRealCurrentRegime||'calm';
+  const regime = (typeof detectMarketRegime==='function'?detectMarketRegime():'calm');
   const regLabel={bull:'▲ BULL',volatile_bull:'▲ VOLT+',calm:'◌ CALM',volatile:'◈ VOLT',volatile_bear:'▼ VOLT−',bear:'▼ BEAR'}[regime]||'CALM';
   const regColor= regime.includes('bull')?'#00e87a':regime.includes('bear')?'#ff3d6b':'#38d4f5';
   const pnlCol  = pnl24h>=0?'#00e87a':'#ff3d6b';
@@ -3790,7 +3791,7 @@ function _updateAod() {
   const startP = S._startPortfolio || S.portfolio || 0;
   const pnl    = (S.portfolio||0) - startP;
   const capital= S.tradingAccount||0;
-  const regime = S._paperRealCurrentRegime||'calm';
+  const regime = (typeof detectMarketRegime==='function'?detectMarketRegime():'calm');
   const regLabel={bull:'▲ BULL',volatile_bull:'▲ VOLATILE+',calm:'◌ CALM',volatile:'◈ VOLATILE',volatile_bear:'▼ VOLATILE−',bear:'▼ BEAR'}[regime]||'CALM';
   const pnlCol = pnl>=0?'rgba(0,232,122,.9)':'rgba(255,61,107,.9)';
   const wrCol  = wr>=55?'rgba(0,232,122,.7)':'rgba(255,61,107,.7)';
@@ -3940,7 +3941,7 @@ function exportGsResume() {
     ['Max Drawdown %', m?m.maxDDPct.toFixed(2):'—', now],
     ['Profit Factor', m?m.profitFactor.toFixed(2):'—', now],
     ['Nb agents', (S.agents||[]).length, now],
-    ['Régime marché', S._paperRealCurrentRegime||'calm', now],
+    ['Régime marché', (typeof detectMarketRegime==='function'?detectMarketRegime():'calm'), now],
     ['Frais totaux $', (S.fees?.totalGross||0).toFixed(2), now],
   ]);
   _downloadCSV(csv, 'AURA_resume.csv');
@@ -3982,7 +3983,7 @@ function importAuraData() {
     ['P&L 24h','${pnl24h>=0?'+':''}${pnl24h.toFixed(2)}',now],
     ['P&L Net Total','${totalPnl.toFixed(2)}',now],
     ['Agents actifs',${(S.agents||[]).length},now],
-    ['Régime','${S._paperRealCurrentRegime||'calm'}',now],
+    ['Régime','${typeof detectMarketRegime==='function'?detectMarketRegime():'calm'}',now],
     ['Frais totaux','${(S.fees?.totalGross||0).toFixed(2)}',now],
     ['Mode','${S.tradingMode||'sim'}',now],
     ['Version','AURA v${typeof S?.version!==undefined?'8.57':'8.57'}',now],
@@ -4113,7 +4114,7 @@ function _apiResponse(endpoint) {
     '/status': {
       status:'ok', version:'AURA v8.57',
       timestamp:ts, mode:S.tradingMode||'sim',
-      regime:S._paperRealCurrentRegime||'calm',
+      regime:(typeof detectMarketRegime==='function'?detectMarketRegime():'calm'),
       botActive:S.botAutoMode||false,
     },
     '/portfolio': {
