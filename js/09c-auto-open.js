@@ -1,4 +1,5 @@
-// ▓▓▓ VERSION 20260906d ▓▓▓
+// ▓▓▓ VERSION 20260906e ▓▓▓
+// [P6 · 06/09/2026] BRIQUE 6 DU PONT : FRAIS + SLIPPAGE dans l'entonnoir unique (après le veto BETA) — source 10e6 (S.feeConfig = barème facturé par recordFees, ps.trades par mode) : gain attendu − coût aller-retour < 0,15 % net = veto ; en Réel, expectancy nette ≤ −2× le coût sur ≥ 10 clôtures = veto ; expectancy nette < 0 (≥ 10 clôtures) = mise ×0.5 avant l'anti-négatif. brainLog COST, journal 💸 1×/5 min/paire.
 // [P5 · 06/09/2026] BRIQUE 5 DU PONT : BÊTA BTC dans l'entonnoir unique (après le veto BEHAV) — source 10e5 (bougies réelles Binance, timeframe active) : BTC ≤ −1 % sur 5 bougies + β > 0.5 = veto LONG journalisé dans EVAL (brainLog BETA) + journal (₿, 1 fois/5 min/paire) + toast ; |β| > 3 = mise ×0.5, appliquée après le plafond comportemental et avant l'anti-négatif (journal ₿ à chaque application).
 // [P4 · 06/09/2026] BRIQUE 4 DU PONT : GARDES COMPORTEMENTALES dans l'entonnoir unique (après le veto ECO) — source 10e4 (ps.trades par mode) : cooldown 15 min sur la paire après une perte + plafond d'ouvertures/jour par régime (CALM 40, bull/bear 80, volatil libre) = veto journalisé dans EVAL (brainLog BEHAV) + journal (🧊, 1 fois/5 min/paire) + toast ; mise ≤ mise précédente après une perte, appliquée avant l'anti-négatif (journal 🧊 à chaque application).
 // [P2 · 06/09/2026] BRIQUE 2 DU PONT : veto CALENDRIER ÉCO dans l'entonnoir unique (après le veto CORR) — annonce à impact FORT (FOMC, CPI, expiration Deribit) dans les 30 min = aucune ouverture bot, refus journalisé dans EVAL (brainLog ECO) + journal (📅, 1 fois/5 min/paire) + toast. Le malus +0.10 dans la fenêtre ±2 h vit dans les portes 10f.
@@ -27,6 +28,8 @@ const _ecoVetoLogTs = {};
 const _behavVetoLogTs = {};
 // [P5 · 06/09/2026] même anti-flood pour le veto bêta BTC (₿).
 const _betaVetoLogTs = {};
+// [P6 · 06/09/2026] même anti-flood pour le veto frais + slippage (💸).
+const _costVetoLogTs = {};
 // [SEPARATION COMPLETE 3 MODES · 02/07/2026] GARDE MODE REEL : aucune ouverture automatique en 'real' (analyse/suggestions continuent, trades manuels libres) + gate bunker lu par mode
 // ════════════════════════════════════════════════════════════════════════
 // ▓▓▓ AURA8 — 09c-auto-open.js ▓▓▓
@@ -561,6 +564,27 @@ function autoOpenPosition(pair, side, stakeOverride) {
     }
   } catch(e){ try{window._decErr&&window._decErr(e)}catch(_e){} }
 
+  // ── [P6 · 06/09/2026] VETO FRAIS + SLIPPAGE (10e6) — après BETA, avant le Smart Sizer ──
+  // Coût aller-retour (barème S.feeConfig facturé par recordFees + funding + intérêts levier envisagé)
+  // vs gain attendu (TP visé, estimation basse) ; en Réel, paire perdante NETTE sur ≥ 10 clôtures = veto.
+  let _ct = null;
+  try {
+    _ct = _costGateForOpen(pair, baseStake, ps._leverageBonus || 0);
+    if (_ct.veto) {
+      const _why = _ct.reason;
+      if (!S.brainLog) S.brainLog = [];
+      S.brainLog.unshift({ ts: Date.now(), pair, event: 'COST', side, reason: _why });
+      if (S.brainLog.length > 30) S.brainLog.length = 30;
+      if ((Date.now() - (_costVetoLogTs[pair] || 0)) > 5 * 60 * 1000) {
+        _costVetoLogTs[pair] = Date.now();
+        S.chainLog.push({ icon: '💸', desc: `Frais + slippage · ${pair} ${side.toUpperCase()} refusé · ${_why}`, hash: rndHash(), time: nowStr() });
+        if (S.chainLog.length > 100) S.chainLog.splice(0, S.chainLog.length - 100);
+        if (typeof showToast === 'function') showToast('💸 ' + pair + ' ' + side.toUpperCase() + ' refusé · ' + (_why.length > 70 ? _why.slice(0, 67) + '…' : _why));
+      }
+      return;
+    }
+  } catch(e){ try{window._decErr&&window._decErr(e)}catch(_e){} }
+
   // Smart Sizer applique le multiplicateur Kelly AVANT les checks d'exposition
   let _appliedSizerMult = null;
   let _execChunks = 1;   // [TWAP 09/08] chunks recommandés par le Bot Exécution, lus par le plan TWAP plus bas
@@ -692,6 +716,16 @@ function autoOpenPosition(pair, side, stakeOverride) {
       S.chainLog.push({ icon: '₿', desc: `Bêta BTC · ${pair} · mise $${baseStake} → $${_red} (${_bt.stakeReason})`, hash: rndHash(), time: nowStr() });
       if (S.chainLog.length > 100) S.chainLog.splice(0, S.chainLog.length - 100);
       baseStake = _red;
+    }
+  }
+  // [P6 · 06/09/2026] mise ×0.5 si l'expectancy NETTE de la paire (mode courant, ≥ 10 clôtures) est négative —
+  // après le bêta, avant l'anti-négatif qui ne peut que réduire ; plancher _stakeFloor() respecté.
+  if (_ct && _ct.stakeFactor < 1) {
+    const _redC = Math.max(_stakeFloor(), _stakeRound(baseStake * _ct.stakeFactor));
+    if (_redC < baseStake) {
+      S.chainLog.push({ icon: '💸', desc: `Frais + slippage · ${pair} · mise $${baseStake} → $${_redC} (${_ct.stakeReason})`, hash: rndHash(), time: nowStr() });
+      if (S.chainLog.length > 100) S.chainLog.splice(0, S.chainLog.length - 100);
+      baseStake = _redC;
     }
   }
 
