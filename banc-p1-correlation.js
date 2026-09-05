@@ -1,4 +1,6 @@
 // ▓▓▓ BANC D'ESSAI P1 · CORRÉLATION ANTI-DOUBLON (05/09/2026) ▓▓▓
+// [P2 · 06/09/2026] les textes rejoués de 10f et 09c appellent désormais _ecoGateForOpen (brique 2) : stubbée NEUTRE ici
+// (ce banc teste P1 seul, indépendamment de la date de lancement) ; la porte éco est testée par banc-p2-calendrier.js.
 // À lancer à la RACINE du dépôt (node banc-p1-correlation.js). Charge le VRAI fichier 10e livré dans un contexte node avec les stubs minimaux,
 // nourri par les bougies Binance réelles du snapshot aura_live.json,
 // puis rejoue le texte LIVRÉ des portes 10f et du veto 09c.
@@ -107,7 +109,7 @@ const floorTxt = src10f.slice(src10f.indexOf("  const _convFloor ="), src10f.ind
 function runGates(o){
   const c = Object.assign(Object.create(ctx), o);
   const code = 'var out={};(function(){' + gateTxt + floorTxt + 'out.convGate=convGate;out.req=_gates.conv+_expPenalty-_corrBonus;out.floor=_convFloor;out.dec=_corrDecisive;out.bonus=_corrBonus;})();out';
-  return vm.runInNewContext(code, { S: c.S, PAIRS, detectMarketRegime: () => c.regime, _corrGateForOpen: ctx._corrGateForOpen,
+  return vm.runInNewContext(code, { S: c.S, PAIRS, detectMarketRegime: () => c.regime, _corrGateForOpen: ctx._corrGateForOpen, _ecoGateForOpen: () => ({ veto:false, malus:0, event:null, minutes:null }),
     ps: c.ps, pair: c.pair, effectiveConviction: c.conv, finalSignalWithMem: c.sig, _pairWatch: false, Math, Number });
 }
 T('CALM 0.35 · conv 0.33 · BTC SHORT vs ETH LONG (anti-corrélé) → porte 0.32 passe, DÉCISIF', () => {
@@ -143,7 +145,7 @@ console.log('\n── D · 09c livré : veto dans l’entonnoir (texte réel) �
 const src09c = fs.readFileSync('js/09c-auto-open.js','utf8');
 const vetoTxt = src09c.slice(src09c.indexOf("  try {\n    const _cg = _corrGateForOpen(pair, side);"), src09c.indexOf("  // Smart Sizer applique"));
 const declTxt = src09c.slice(src09c.indexOf("const _corrVetoLogTs = {};"), src09c.indexOf("const _corrVetoLogTs = {};") + "const _corrVetoLogTs = {};".length);
-const c09 = { S, _corrGateForOpen: ctx._corrGateForOpen, rndHash: () => 'h', nowStr: () => 't', window: ctx, showToast: ctx.showToast, Date, String, Math };
+const c09 = { S, _corrGateForOpen: ctx._corrGateForOpen, _ecoGateForOpen: () => ({ veto:false, malus:0, event:null, minutes:null }), _ecoVetoLogTs: {}, rndHash: () => 'h', nowStr: () => 't', window: ctx, showToast: ctx.showToast, Date, String, Math };
 vm.createContext(c09);
 vm.runInContext(declTxt + '\nfunction _open(pair, side){' + vetoTxt + '\nreturn "OUVERT";}', c09);
 T('ETH LONG ouvert → autoOpen BTC LONG refusé : EVAL reçoit CORR, journal 🔗 + toast', () => {
