@@ -74,7 +74,7 @@ const gateTxt  = src10f.slice(src10f.indexOf("  const _mktReg ="), src10f.indexO
 const floorTxt = src10f.slice(src10f.indexOf("  const _convFloor ="), src10f.indexOf("  if(_gainNet < _minNetGain"));
 function gates(conv, regime, malus, corrBonus){
   const c = { S:{ _convBoost:0, openPositions:[] }, effectiveConviction:conv, ps:{ trades:[] }, pair:'BTC/USDT',
-    detectMarketRegime:()=>regime, _corrGateForOpen:()=>({bonus:corrBonus||0, corr:null}), _ecoGateForOpen:()=>({malus:malus, veto:false}),
+    detectMarketRegime:()=>regime, _corrGateForOpen:()=>({bonus:corrBonus||0, corr:null}), _ecoGateForOpen:()=>({malus:malus, veto:false}), _heatGateForOpen:()=>({delta:0, hour:0, wr:null, count:0, tag:null}),
     finalSignalWithMem:0.5, _pairWatch:false, Math };
   vm.createContext(c);
   vm.runInContext(gateTxt + 'var __cg = convGate;', c);
@@ -123,11 +123,11 @@ T('_getRecurringEvents définie UNE seule fois dans tout js/ (10e2)', () => {
   assert.deepStrictEqual(defs, ['10e2-calendrier-eco.js']);
 });
 T('10e non touché : aucune référence ECO', () => { assert.ok(!src10e.includes('_ecoGateForOpen')); assert.ok(!src10e.includes('ECO_')); });
-T('HTML : 10e2 chargé juste après 10e et avant 10f, token 20260906a sur toutes les ressources + DOC_V', () => {
-  const i1 = html.indexOf('js/10e-helpers-adaptatifs.js?v=20260906a'), i2 = html.indexOf('js/10e2-calendrier-eco.js?v=20260906a'), i3 = html.indexOf('js/10f-resolveur-cycle.js?v=20260906a');
+T('HTML : 10e2 chargé juste après 10e et avant 10f (token courant lu dans DOC_V, comptage délégué au banc P3)', () => {
+  const tok = (html.match(/DOC_V = '([0-9a-z]+)'/)||[])[1]; assert.ok(tok);
+  const i1 = html.indexOf('js/10e-helpers-adaptatifs.js?v='+tok), i2 = html.indexOf('js/10e2-calendrier-eco.js?v='+tok), i3 = html.indexOf('js/10f-resolveur-cycle.js?v='+tok);
   assert.ok(i1 > 0 && i2 > i1 && i3 > i2);
-  assert.ok(!html.includes('20260905b')); assert.ok(html.includes("DOC_V = '20260906a'"));
-  assert.strictEqual((html.match(/\?v=20260906a/g)||[]).length, 73);
+  assert.ok(!html.includes('20260905b'));
 });
 T('10e2 : module ≤ 500 lignes, sans dépendance à S', () => {
   const src = fs.readFileSync('js/10e2-calendrier-eco.js','utf8');

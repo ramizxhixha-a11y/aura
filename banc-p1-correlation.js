@@ -1,4 +1,5 @@
 // ▓▓▓ BANC D'ESSAI P1 · CORRÉLATION ANTI-DOUBLON (05/09/2026) ▓▓▓
+// [P3 · 06/09/2026] idem pour _heatGateForOpen (brique 3) : stubbée NEUTRE.
 // [P2 · 06/09/2026] les textes rejoués de 10f et 09c appellent désormais _ecoGateForOpen (brique 2) : stubbée NEUTRE ici
 // (ce banc teste P1 seul, indépendamment de la date de lancement) ; la porte éco est testée par banc-p2-calendrier.js.
 // À lancer à la RACINE du dépôt (node banc-p1-correlation.js). Charge le VRAI fichier 10e livré dans un contexte node avec les stubs minimaux,
@@ -109,7 +110,7 @@ const floorTxt = src10f.slice(src10f.indexOf("  const _convFloor ="), src10f.ind
 function runGates(o){
   const c = Object.assign(Object.create(ctx), o);
   const code = 'var out={};(function(){' + gateTxt + floorTxt + 'out.convGate=convGate;out.req=_gates.conv+_expPenalty-_corrBonus;out.floor=_convFloor;out.dec=_corrDecisive;out.bonus=_corrBonus;})();out';
-  return vm.runInNewContext(code, { S: c.S, PAIRS, detectMarketRegime: () => c.regime, _corrGateForOpen: ctx._corrGateForOpen, _ecoGateForOpen: () => ({ veto:false, malus:0, event:null, minutes:null }),
+  return vm.runInNewContext(code, { S: c.S, PAIRS, detectMarketRegime: () => c.regime, _corrGateForOpen: ctx._corrGateForOpen, _ecoGateForOpen: () => ({ veto:false, malus:0, event:null, minutes:null }), _heatGateForOpen: () => ({ delta:0, hour:0, wr:null, count:0, tag:null }),
     ps: c.ps, pair: c.pair, effectiveConviction: c.conv, finalSignalWithMem: c.sig, _pairWatch: false, Math, Number });
 }
 T('CALM 0.35 · conv 0.33 · BTC SHORT vs ETH LONG (anti-corrélé) → porte 0.32 passe, DÉCISIF', () => {
