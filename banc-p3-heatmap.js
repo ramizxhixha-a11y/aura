@@ -109,11 +109,12 @@ T('10e3 : module ≤ 500 lignes, lit uniquement S.heatmap', () => {
   assert.deepStrictEqual([...new Set(src.match(/\bS\.[a-zA-Z_]+/g))], ['S.heatmap']);
 });
 const html = fs.readFileSync('AURA8_v118.html', 'utf8');
-T('HTML : 10e3 chargé juste après 10e2 et avant 10f, token 20260906b sur 74 ressources + DOC_V, ancien token absent', () => {
-  const i2 = html.indexOf('js/10e2-calendrier-eco.js?v=20260906b'), i3 = html.indexOf('js/10e3-heatmap-horaire.js?v=20260906b'), i4 = html.indexOf('js/10f-resolveur-cycle.js?v=20260906b');
+// [P4 · 06/09/2026] le token est lu dans DOC_V ; le comptage des ressources est délégué au banc P4.
+T('HTML : 10e3 chargé juste après 10e2 et avant 10f, même token que DOC_V, anciens tokens absents', () => {
+  const tok = (html.match(/DOC_V = '([0-9a-z]+)'/) || [])[1]; assert.ok(tok);
+  const i2 = html.indexOf('js/10e2-calendrier-eco.js?v=' + tok), i3 = html.indexOf('js/10e3-heatmap-horaire.js?v=' + tok), i4 = html.indexOf('js/10f-resolveur-cycle.js?v=' + tok);
   assert.ok(i2 > 0 && i3 > i2 && i4 > i3);
-  assert.strictEqual((html.match(/\?v=20260906b/g) || []).length, 74);
-  assert.ok(html.includes("DOC_V = '20260906b'")); assert.ok(!html.includes('20260906a'));
+  assert.ok(!html.includes('20260906a') && !html.includes('20260906b'));
 });
 T('10e et 10e2 non touchés : aucune référence HEAT', () => {
   assert.ok(!fs.readFileSync('js/10e-helpers-adaptatifs.js', 'utf8').includes('_heat'));
