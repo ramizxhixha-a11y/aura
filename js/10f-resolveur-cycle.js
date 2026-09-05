@@ -1,5 +1,8 @@
-// ▓▓▓ VERSION 20260809k ▓▓▓
+// ▓▓▓ VERSION 20260905b ▓▓▓
 // 10f-resolveur-cycle.js — Cœur : _resolvePairCycleCore + garde-fou perte max (_lossCapSweep)
+// [P1 · 05/09/2026] BRIQUE 1 DU PONT : bonus de diversification −0.03 sur les portes de
+// conviction (paire anti-corrélée < −0.80 à une position ouverte) ; le veto anti-doublon
+// (> +0.80) vit dans l'entonnoir 09c. Journalisé au moment où le bonus a été décisif.
 // [DÉCOUPE 10 · 09/08/2026] Tranche BYTE-IDENTIQUE de 10-fin-bloc-restauration-v93.js
 // (lignes 1516-2003 de l'original). Aucun code réécrit. Ordre de chargement OBLIGATOIRE :
 // 10a → 10h, à la place exacte de l'ancien fichier 10 dans le HTML.
@@ -129,7 +132,18 @@ function _resolvePairCycleCore(pair, ps) {
   const _recentCloses = (ps.trades || []).filter(t => t && t.type === 'position').slice(-20);
   const _recentNet    = _recentCloses.reduce((a, t) => a + (Number(t.pnlUsdt) || 0), 0);
   const _expPenalty   = (_recentCloses.length >= 8 && _recentNet < -0.5) ? 0.10 : 0;
-  const convGate = effectiveConviction >= (_gates.conv + _expPenalty - (S._convBoost || 0));
+  // [P1 · 05/09/2026] BRIQUE 1 DU PONT — BONUS DE DIVERSIFICATION : si le pari candidat
+  // (sens du signal) est anti-corrélé (< −0.80, corrélation effective = Pearson des
+  // retours × sens) à une position ouverte, il diversifie le livre : il doit convaincre
+  // 0.03 de moins (porte par régime ET plancher 0.30 ci-dessous). Évalué seulement quand
+  // la paire n'a pas de position (une position ouverte se GÈRE, elle ne s'ouvre pas :
+  // le sens de clôture sigRev reste intact). Le REFUS du doublon (> +0.80) vit dans
+  // l'entonnoir unique 09c, traversé par tous les chemins d'ouverture bot.
+  const _corrG = (S.openPositions || []).some(p => p && p.pair === pair)
+    ? { veto: false, bonus: 0, corr: null, withPair: null, withSide: null }
+    : _corrGateForOpen(pair, finalSignalWithMem > 0 ? 'long' : 'short');
+  const _corrBonus = _corrG.bonus || 0;
+  const convGate = effectiveConviction >= (_gates.conv + _expPenalty - _corrBonus - (S._convBoost || 0));
   const dirGate  = Math.abs(finalSignalWithMem) >= (_gates.dir - (S._convBoost || 0) * 0.5);
   const lmsrAlignBuy  = adjProb > 0.50;
   const lmsrAlignSell = adjProb < 0.50;
@@ -312,7 +326,11 @@ function _resolvePairCycleCore(pair, ps) {
     }
   } catch(e){ try{window._decErr&&window._decErr(e)}catch(_e){} }
   window._pairWatchMult = _pairWatch ? 0.25 : (_pairGood ? 1.8 : 1);
-  const _convFloor = (0.30 - Math.min(0.04, (S._convBoost || 0) * 0.5)) + (_pairWatch ? 0.12 : 0);
+  const _convFloor = (0.30 - Math.min(0.04, (S._convBoost || 0) * 0.5)) + (_pairWatch ? 0.12 : 0) - _corrBonus;
+  // [P1] le bonus a-t-il été DÉCISIF ? (le trade passe avec, il n'aurait pas passé sans)
+  const _corrDecisive = _corrBonus > 0 && (
+    effectiveConviction < (_gates.conv + _expPenalty - (S._convBoost || 0)) ||
+    effectiveConviction < (_convFloor + _corrBonus));
   if(_gainNet < _minNetGain || effectiveConviction < _convFloor) {
     learnFromOutcome('cycle', 0, pair);
     ps.qYes = Math.max(20, 100 + (ps.qYes - 100) * 0.95);
@@ -439,6 +457,12 @@ function _resolvePairCycleCore(pair, ps) {
   // fantomes annoncant un trade qui n'existe pas.
   if(!np) return;
   np.tp=tpE; np.sl=slE; np._holdCycles=0;
+  // [P1] trace de diversification : ouverture obtenue grâce au bonus anti-corrélé
+  if(_corrDecisive){
+    S.chainLog.push({icon:'🔗',
+      desc:`Diversification · ${pair} ${side.toUpperCase()} ouvert grâce au bonus −${CORR_DIVERSIFY_BONUS.toFixed(2)} · corr ${(_corrG.corr>=0?'+':'')}${_corrG.corr.toFixed(2)} avec ${_corrG.withPair} ${String(_corrG.withSide).toUpperCase()}`,
+      hash:rndHash(),time:nowStr()});
+  }
 
   const pt=cfg.dec>=4?ps.price.toFixed(cfg.dec):Math.floor(ps.price).toLocaleString();
   const tt=cfg.dec>=4?tpE.toFixed(cfg.dec):Math.floor(tpE).toLocaleString();

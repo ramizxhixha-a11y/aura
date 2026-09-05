@@ -1,3 +1,5 @@
+// ▓▓▓ VERSION 20260905b ▓▓▓
+// [P1 · 05/09/2026] BRIQUE 1 DU PONT ANALYTICS→DÉCISION : veto ANTI-DOUBLON par corrélation dans l'entonnoir unique (après le FLIP du conseil) — corrélation effective > 0.80 avec une position ouverte = même pari deux fois → refus journalisé dans EVAL (brainLog CORR) + journal (🔗, 1 fois/5 min/paire) + toast. Le bonus de diversification vit dans les portes 10f.
 // [OPTION A · 31/07/2026] garde d ouverture 'Bunker actif -> return' supprimee : le bunker ne bloque plus les ouvertures (il reduit les mises via 07). Debloque EV coince en bunker paused depuis le 26/07.
 // [PLANCHER PROPORTIONNEL 26/07/2026] les 9 planchers 10$ et 4 arrondis par paliers de 10 supprimes d un bloc (le correctif partiel du 06/07 en laissait 7 : inoperant par construction) — plancher = 5 % du compte, min 2$, arrondi au dixieme ; gate <20$ et clamp 25 % alignes sur la politique de capital · [REGLES REEL v2 · edictees par Rams 05/07/2026] en MANU jamais d ouverture ; en AUTO ouverture RE permise UNIQUEMENT si RE est en play (consentement) — remplace le blocage total du 02/07
 
@@ -13,6 +15,9 @@ function _stakeFloor() {
 }
 // arrondi au DIXIEME (les paliers de 10 $ n'ont plus de sens a cette echelle)
 function _stakeRound(x) { return Math.round((Number(x) || 0) * 10) / 10; }
+// [P1 · 05/09/2026] horodatage du dernier journal 🔗 par paire (RAM seule : anti-flood du
+// journal 100 lignes pendant qu'une position corrélée reste ouverte — EVAL reçoit tout).
+const _corrVetoLogTs = {};
 // [SEPARATION COMPLETE 3 MODES · 02/07/2026] GARDE MODE REEL : aucune ouverture automatique en 'real' (analyse/suggestions continuent, trades manuels libres) + gate bunker lu par mode
 // ════════════════════════════════════════════════════════════════════════
 // ▓▓▓ AURA8 — 09c-auto-open.js ▓▓▓
@@ -444,6 +449,33 @@ function autoOpenPosition(pair, side, stakeOverride) {
     }
     return;
   }
+
+  // ──────────────────────────────────────────────────────────────
+  // [P1 · 05/09/2026] BRIQUE 1 DU PONT — ANTI-DOUBLON PAR CORRÉLATION
+  // Ici parce que c'est l'entonnoir unique : le cycle (10f), les propositions
+  // Arb/Scalper/DCA (open_trade) et FORCE passent tous par autoOpenPosition, et le
+  // conseil vient éventuellement de RENVERSER le sens (FLIP) — le sens jugé est le
+  // sens final. Corrélation effective = Pearson des retours × (même sens ? +1 : −1) :
+  // > 0.80 avec une position ouverte (bot ou manuelle) = le même pari deux fois
+  // (SOL/AVAX 0.93, BTC/ETH 0.86 sur le backup) → refus, raison visible dans EVAL.
+  // Le bonus de diversification (< −0.80) est appliqué par les portes 10f.
+  // ──────────────────────────────────────────────────────────────
+  try {
+    const _cg = _corrGateForOpen(pair, side);
+    if (_cg.veto) {
+      const _why = 'Doublon refusé · corr ' + (_cg.corr >= 0 ? '+' : '') + _cg.corr.toFixed(2) + ' avec ' + _cg.withPair + ' ' + String(_cg.withSide).toUpperCase() + ' (même pari · seuil 0.80)';
+      if (!S.brainLog) S.brainLog = [];
+      S.brainLog.unshift({ ts: Date.now(), pair, event: 'CORR', side, reason: _why });
+      if (S.brainLog.length > 30) S.brainLog.length = 30;
+      if ((Date.now() - (_corrVetoLogTs[pair] || 0)) > 5 * 60 * 1000) {
+        _corrVetoLogTs[pair] = Date.now();
+        S.chainLog.push({ icon: '🔗', desc: `Anti-doublon · ${pair} ${side.toUpperCase()} refusé · ${_why}`, hash: rndHash(), time: nowStr() });
+        if (S.chainLog.length > 100) S.chainLog.splice(0, S.chainLog.length - 100);
+        if (typeof showToast === 'function') showToast('🔗 Anti-doublon · ' + pair + ' ' + side.toUpperCase() + ' · corr ' + _cg.corr.toFixed(2) + ' avec ' + _cg.withPair);
+      }
+      return;
+    }
+  } catch(e){ try{window._decErr&&window._decErr(e)}catch(_e){} }
 
   // Smart Sizer applique le multiplicateur Kelly AVANT les checks d'exposition
   let _appliedSizerMult = null;
