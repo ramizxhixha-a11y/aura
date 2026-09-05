@@ -1,4 +1,5 @@
-// ▓▓▓ VERSION 20260906c ▓▓▓
+// ▓▓▓ VERSION 20260906d ▓▓▓
+// [P5 · 06/09/2026] BRIQUE 5 DU PONT : BÊTA BTC dans l'entonnoir unique (après le veto BEHAV) — source 10e5 (bougies réelles Binance, timeframe active) : BTC ≤ −1 % sur 5 bougies + β > 0.5 = veto LONG journalisé dans EVAL (brainLog BETA) + journal (₿, 1 fois/5 min/paire) + toast ; |β| > 3 = mise ×0.5, appliquée après le plafond comportemental et avant l'anti-négatif (journal ₿ à chaque application).
 // [P4 · 06/09/2026] BRIQUE 4 DU PONT : GARDES COMPORTEMENTALES dans l'entonnoir unique (après le veto ECO) — source 10e4 (ps.trades par mode) : cooldown 15 min sur la paire après une perte + plafond d'ouvertures/jour par régime (CALM 40, bull/bear 80, volatil libre) = veto journalisé dans EVAL (brainLog BEHAV) + journal (🧊, 1 fois/5 min/paire) + toast ; mise ≤ mise précédente après une perte, appliquée avant l'anti-négatif (journal 🧊 à chaque application).
 // [P2 · 06/09/2026] BRIQUE 2 DU PONT : veto CALENDRIER ÉCO dans l'entonnoir unique (après le veto CORR) — annonce à impact FORT (FOMC, CPI, expiration Deribit) dans les 30 min = aucune ouverture bot, refus journalisé dans EVAL (brainLog ECO) + journal (📅, 1 fois/5 min/paire) + toast. Le malus +0.10 dans la fenêtre ±2 h vit dans les portes 10f.
 // [P1 · 05/09/2026] BRIQUE 1 DU PONT ANALYTICS→DÉCISION : veto ANTI-DOUBLON par corrélation dans l'entonnoir unique (après le FLIP du conseil) — corrélation effective > 0.80 avec une position ouverte = même pari deux fois → refus journalisé dans EVAL (brainLog CORR) + journal (🔗, 1 fois/5 min/paire) + toast. Le bonus de diversification vit dans les portes 10f.
@@ -24,6 +25,8 @@ const _corrVetoLogTs = {};
 const _ecoVetoLogTs = {};
 // [P4 · 06/09/2026] même anti-flood pour les gardes comportementales (🧊).
 const _behavVetoLogTs = {};
+// [P5 · 06/09/2026] même anti-flood pour le veto bêta BTC (₿).
+const _betaVetoLogTs = {};
 // [SEPARATION COMPLETE 3 MODES · 02/07/2026] GARDE MODE REEL : aucune ouverture automatique en 'real' (analyse/suggestions continuent, trades manuels libres) + gate bunker lu par mode
 // ════════════════════════════════════════════════════════════════════════
 // ▓▓▓ AURA8 — 09c-auto-open.js ▓▓▓
@@ -532,6 +535,32 @@ function autoOpenPosition(pair, side, stakeOverride) {
     }
   } catch(e){ try{window._decErr&&window._decErr(e)}catch(_e){} }
 
+  // ──────────────────────────────────────────────────────────────
+  // [P5 · 06/09/2026] BRIQUE 5 DU PONT — BÊTA BTC
+  // Source unique 10e5 (bougies réelles Binance sur la timeframe active, même matière que la
+  // corrélation P1). BTC ≤ −1 % sur les 5 dernières bougies ET la paire suit BTC (β > 0.5) :
+  // un LONG ouvre contre la vague, aucune ouverture quel que soit le chemin (cycle 10f,
+  // propositions, FORCE). La mise ×0.5 des paires très sensibles (|β| > 3) est appliquée
+  // plus bas, après le plafond comportemental et avant l'anti-négatif. Raison visible dans EVAL.
+  // ──────────────────────────────────────────────────────────────
+  let _bt = null;
+  try {
+    _bt = _betaGateForOpen(pair, side);
+    if (_bt.veto) {
+      const _why = _bt.reason;
+      if (!S.brainLog) S.brainLog = [];
+      S.brainLog.unshift({ ts: Date.now(), pair, event: 'BETA', side, reason: _why });
+      if (S.brainLog.length > 30) S.brainLog.length = 30;
+      if ((Date.now() - (_betaVetoLogTs[pair] || 0)) > 5 * 60 * 1000) {
+        _betaVetoLogTs[pair] = Date.now();
+        S.chainLog.push({ icon: '₿', desc: `Bêta BTC · ${pair} ${side.toUpperCase()} refusé · ${_why}`, hash: rndHash(), time: nowStr() });
+        if (S.chainLog.length > 100) S.chainLog.splice(0, S.chainLog.length - 100);
+        if (typeof showToast === 'function') showToast('₿ ' + pair + ' ' + side.toUpperCase() + ' refusé · ' + (_why.length > 70 ? _why.slice(0, 67) + '…' : _why));
+      }
+      return;
+    }
+  } catch(e){ try{window._decErr&&window._decErr(e)}catch(_e){} }
+
   // Smart Sizer applique le multiplicateur Kelly AVANT les checks d'exposition
   let _appliedSizerMult = null;
   let _execChunks = 1;   // [TWAP 09/08] chunks recommandés par le Bot Exécution, lus par le plan TWAP plus bas
@@ -651,6 +680,18 @@ function autoOpenPosition(pair, side, stakeOverride) {
       S.chainLog.push({ icon: '🧊', desc: `Garde comportementale · ${pair} · mise $${baseStake} → $${_capped} (≤ mise précédente après perte −$${Math.abs(_bg.lastLossUsd).toFixed(2)})`, hash: rndHash(), time: nowStr() });
       if (S.chainLog.length > 100) S.chainLog.splice(0, S.chainLog.length - 100);
       baseStake = _capped;
+    }
+  }
+
+  // [P5 · 06/09/2026] MISE ×0.5 SI |β| > 3 (bêta BTC, source 10e5) : après le plafond
+  // comportemental, avant l'anti-négatif qui ne peut que réduire encore. Le plancher
+  // proportionnel reste respecté. Chaque application est journalisée (pas d'anti-flood).
+  if (_bt && _bt.stakeFactor < 1) {
+    const _red = Math.max(_stakeFloor(), _stakeRound(baseStake * _bt.stakeFactor));
+    if (_red < baseStake) {
+      S.chainLog.push({ icon: '₿', desc: `Bêta BTC · ${pair} · mise $${baseStake} → $${_red} (${_bt.stakeReason})`, hash: rndHash(), time: nowStr() });
+      if (S.chainLog.length > 100) S.chainLog.splice(0, S.chainLog.length - 100);
+      baseStake = _red;
     }
   }
 
