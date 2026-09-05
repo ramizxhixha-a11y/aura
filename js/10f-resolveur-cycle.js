@@ -1,5 +1,8 @@
-// ▓▓▓ VERSION 20260906a ▓▓▓
+// ▓▓▓ VERSION 20260906b ▓▓▓
 // 10f-resolveur-cycle.js — Cœur : _resolvePairCycleCore + garde-fou perte max (_lossCapSweep)
+// [P3 · 06/09/2026] BRIQUE 3 DU PONT : delta heatmap horaire sur les portes de conviction (porte par
+// régime ET plancher 0.30) — créneau froid +0.08 / créneau d'or −0.03 (source unique 10e3, heure
+// locale comme l'écrivain 03). Journalisé quand le delta a été décisif (retenu ou ouvert grâce à lui).
 // [P2 · 06/09/2026] BRIQUE 2 DU PONT : malus calendrier éco +0.10 sur les portes de conviction
 // (porte par régime ET plancher 0.30) dans la fenêtre ±2 h d'une annonce à impact FORT (source
 // unique 10e2) ; le veto 30 min avant vit dans l'entonnoir 09c. Journalisé quand le malus a été décisif.
@@ -14,6 +17,19 @@
 // [P2 · 06/09/2026] trace journal (📅, 1 fois/5 min/paire, RAM) quand le malus éco a été décisif :
 // la paire aurait ouvert sans lui. EVAL n'est pas écrit ici (aucune ouverture n'atteint 09c).
 const _ecoMalusLogTs = {};
+// [P3 · 06/09/2026] trace journal (🕐, 1 fois/5 min/paire, RAM) quand le delta heatmap a été décisif.
+const _heatLogTs = {};
+function _heatTrace(pair, hg, opened) {
+  const now = Date.now();
+  if ((now - (_heatLogTs[pair] || 0)) < 5 * 60 * 1000) return;
+  _heatLogTs[pair] = now;
+  const wrTxt = Math.round(hg.wr * 100) + '% WR sur ' + hg.count + ' trades';
+  const desc = opened
+    ? `Heatmap · ${pair} ouvert grâce au créneau d'or ${hg.hour}h (${wrTxt}) · conviction requise −${HEAT_GOLD_BONUS.toFixed(2)}`
+    : `Heatmap · ${pair} retenu · créneau froid ${hg.hour}h (${wrTxt}) · conviction requise +${HEAT_COLD_MALUS.toFixed(2)}`;
+  S.chainLog.push({ icon:'🕐', desc, hash:rndHash(), time:nowStr() });
+  if (S.chainLog.length > 100) S.chainLog.splice(0, S.chainLog.length - 100);
+}
 function _ecoMalusTrace(pair, eg) {
   const now = Date.now();
   if ((now - (_ecoMalusLogTs[pair] || 0)) < 5 * 60 * 1000) return;
@@ -164,7 +180,12 @@ function _resolvePairCycleCore(pair, ps) {
   // (porte par régime ET plancher 0.30). Le refus total des 30 dernières minutes vit en 09c.
   const _ecoG = _ecoGateForOpen();
   const _ecoMalus = _ecoG.malus || 0;
-  const convGate = effectiveConviction >= (_gates.conv + _expPenalty + _ecoMalus - _corrBonus - (S._convBoost || 0));
+  // [P3 · 06/09/2026] BRIQUE 3 DU PONT — DELTA HEATMAP HORAIRE : le créneau courant (heure locale)
+  // a une histoire (S.heatmap.byHour, ≥ 20 trades) ; froid (WR < 40 %) → +0.08, d'or (WR ≥ 60 %,
+  // pnl > 0) → −0.03, sur la porte par régime ET le plancher 0.30. Source unique 10e3.
+  const _heatG = _heatGateForOpen();
+  const _heatDelta = _heatG.delta || 0;
+  const convGate = effectiveConviction >= (_gates.conv + _expPenalty + _ecoMalus + _heatDelta - _corrBonus - (S._convBoost || 0));
   const dirGate  = Math.abs(finalSignalWithMem) >= (_gates.dir - (S._convBoost || 0) * 0.5);
   const lmsrAlignBuy  = adjProb > 0.50;
   const lmsrAlignSell = adjProb < 0.50;
@@ -247,7 +268,10 @@ function _resolvePairCycleCore(pair, ps) {
   if(action==='hold' || effectiveConviction < 0.15) {
     // [P2] la porte par régime a-t-elle fermé À CAUSE du malus éco ? (passe sans, refusé avec)
     if(_ecoMalus > 0 && finalSignalWithMem !== 0 && !convGate && dirGate &&
-       effectiveConviction >= (_gates.conv + _expPenalty - _corrBonus - (S._convBoost || 0))) _ecoMalusTrace(pair, _ecoG);
+       effectiveConviction >= (_gates.conv + _expPenalty + _heatDelta - _corrBonus - (S._convBoost || 0))) _ecoMalusTrace(pair, _ecoG);
+    // [P3] la porte par régime a-t-elle fermé À CAUSE du créneau froid ? (passe sans, refusé avec)
+    if(_heatDelta > 0 && finalSignalWithMem !== 0 && !convGate && dirGate &&
+       effectiveConviction >= (_gates.conv + _expPenalty + _ecoMalus - _corrBonus - (S._convBoost || 0))) _heatTrace(pair, _heatG, false);
     const candles=ps.candles;
     const move=candles.length>1?(candles[candles.length-1].c-candles[candles.length-2].c)/ps.price*100:0;
     learnFromOutcome('cycle',move,pair);
@@ -350,14 +374,20 @@ function _resolvePairCycleCore(pair, ps) {
     }
   } catch(e){ try{window._decErr&&window._decErr(e)}catch(_e){} }
   window._pairWatchMult = _pairWatch ? 0.25 : (_pairGood ? 1.8 : 1);
-  const _convFloor = (0.30 - Math.min(0.04, (S._convBoost || 0) * 0.5)) + (_pairWatch ? 0.12 : 0) - _corrBonus + _ecoMalus;
+  const _convFloor = (0.30 - Math.min(0.04, (S._convBoost || 0) * 0.5)) + (_pairWatch ? 0.12 : 0) - _corrBonus + _ecoMalus + _heatDelta;
   // [P1] le bonus a-t-il été DÉCISIF ? (le trade passe avec, il n'aurait pas passé sans)
   const _corrDecisive = _corrBonus > 0 && (
-    effectiveConviction < (_gates.conv + _expPenalty + _ecoMalus - (S._convBoost || 0)) ||
+    effectiveConviction < (_gates.conv + _expPenalty + _ecoMalus + _heatDelta - (S._convBoost || 0)) ||
     effectiveConviction < (_convFloor + _corrBonus));
+  // [P3] le créneau d'or a-t-il été DÉCISIF ? (le trade passe avec, il n'aurait pas passé sans)
+  const _heatDecisive = _heatDelta < 0 && (
+    effectiveConviction < (_gates.conv + _expPenalty + _ecoMalus - _corrBonus - (S._convBoost || 0)) ||
+    effectiveConviction < (_convFloor - _heatDelta));
   if(_gainNet < _minNetGain || effectiveConviction < _convFloor) {
     // [P2] le plancher a-t-il fermé À CAUSE du malus éco ?
     if(_ecoMalus > 0 && _gainNet >= _minNetGain && effectiveConviction >= (_convFloor - _ecoMalus)) _ecoMalusTrace(pair, _ecoG);
+    // [P3] le plancher a-t-il fermé À CAUSE du créneau froid ?
+    if(_heatDelta > 0 && _gainNet >= _minNetGain && effectiveConviction >= (_convFloor - _heatDelta)) _heatTrace(pair, _heatG, false);
     learnFromOutcome('cycle', 0, pair);
     ps.qYes = Math.max(20, 100 + (ps.qYes - 100) * 0.95);
     ps.qNo  = Math.max(20, 100 + (ps.qNo  - 100) * 0.95);
@@ -489,6 +519,8 @@ function _resolvePairCycleCore(pair, ps) {
       desc:`Diversification · ${pair} ${side.toUpperCase()} ouvert grâce au bonus −${CORR_DIVERSIFY_BONUS.toFixed(2)} · corr ${(_corrG.corr>=0?'+':'')}${_corrG.corr.toFixed(2)} avec ${_corrG.withPair} ${String(_corrG.withSide).toUpperCase()}`,
       hash:rndHash(),time:nowStr()});
   }
+  // [P3] trace heatmap : ouverture obtenue grâce au créneau d'or
+  if(_heatDecisive) _heatTrace(pair, _heatG, true);
 
   const pt=cfg.dec>=4?ps.price.toFixed(cfg.dec):Math.floor(ps.price).toLocaleString();
   const tt=cfg.dec>=4?tpE.toFixed(cfg.dec):Math.floor(tpE).toLocaleString();
