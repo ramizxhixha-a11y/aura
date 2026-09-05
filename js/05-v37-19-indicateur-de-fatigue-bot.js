@@ -1,3 +1,5 @@
+// ▓▓▓ VERSION 20260906a ▓▓▓
+// [P2 · 06/09/2026] calendrier v60 : _getRecurringEvents déplacée dans 10e2-calendrier-eco.js (source unique décision+affichage) ; renderCalSection inchangé, compte à rebours « En cours » dans la fenêtre post-annonce.
 // [P0 RÉGIME UNIFIÉ · 05/09/2026] toutes les lectures de régime passent par detectMarketRegime() (source unique, 02). Mode Démo : les presets forcent le régime via S._regimeOverride (clé preset renommée regime).
 // ════════════════════════════════════════════════════════════
 // AURA8 — module consolidé 05/10
@@ -4506,127 +4508,12 @@ window.renderCorrSection = renderCorrSection;
 
 let _calFilter = 'all'; // 'all' | 'high' | 'crypto'
 
-// Base d'événements récurrents crypto (connus à l'avance)
-function _getRecurringEvents() {
-  const now    = new Date();
-  const year   = now.getFullYear();
-  const month  = now.getMonth();
-  const events = [];
-
-  // Expiration options BTC (dernier vendredi du mois)
-  const lastFriday = d => {
-    const last = new Date(d.getFullYear(), d.getMonth()+1, 0);
-    last.setDate(last.getDate() - ((last.getDay()+2)%7));
-    return last;
-  };
-
-  // Prochains 3 mois
-  for(let m=0; m<3; m++) {
-    const target = new Date(year, month+m, 1);
-    const lf     = lastFriday(target);
-    if(lf > now) {
-      events.push({
-        ts: lf.getTime(), date:lf,
-        name:'Expiration Options BTC/ETH (Deribit)',
-        impact:'high', category:'crypto',
-        desc:'Fortes variations possibles. Les market makers couvrent leurs positions.',
-        icon:'⚠️',
-      });
-    }
-  }
-
-  // CPI US (toujours 2e ou 3e mercredi du mois)
-  for(let m=0; m<2; m++) {
-    const d = new Date(year, month+m, 1);
-    let wed = 0, count=0;
-    while(count<2) { if(d.getDay()===3) count++; if(count<2) d.setDate(d.getDate()+1); }
-    d.setHours(14,30,0,0); // 14h30 UTC
-    if(d > now) {
-      events.push({
-        ts:d.getTime(), date:new Date(d),
-        name:'CPI USA (Inflation)',
-        impact:'high', category:'macro',
-        desc:'Impact fort sur BTC/ETH. Inflation plus haute = pression baissière crypto.',
-        icon:'🇺🇸',
-      });
-    }
-  }
-
-  // FOMC (environ 8 fois /an — dates approximatives)
-  const fomcDates2026 = [
-    new Date('2026-01-28'), new Date('2026-03-18'),
-    new Date('2026-04-29'), new Date('2026-06-10'),
-    new Date('2026-07-29'), new Date('2026-09-16'),
-    new Date('2026-10-28'), new Date('2026-12-09'),
-  ];
-  fomcDates2026.forEach(d=>{
-    if(d>now && d<new Date(now.getTime()+90*86400000)) {
-      events.push({
-        ts:d.getTime(), date:d,
-        name:'Décision taux Fed (FOMC)',
-        impact:'high', category:'macro',
-        desc:'Impact majeur. Hausse des taux = baissier crypto. Baisse = haussier.',
-        icon:'🏦',
-      });
-    }
-  });
-
-  // Funding rates Binance (toutes les 8h : 00h, 08h, 16h UTC)
-  const nextFunding = () => {
-    const h = now.getHours();
-    const hours = [0,8,16];
-    const next  = hours.find(hh=>hh>h) ?? 24;
-    const d     = new Date(now);
-    d.setHours(next===24?0:next,0,0,0);
-    if(next===24) d.setDate(d.getDate()+1);
-    return d;
-  };
-  const nf = nextFunding();
-  events.push({
-    ts:nf.getTime(), date:nf,
-    name:'Funding Rate Binance',
-    impact:'low', category:'crypto',
-    desc:'Rééquilibrage des positions futures. Impact mineur sauf taux extrêmes.',
-    icon:'💸',
-  });
-
-  // Halving BTC (prochain ~2028)
-  const halvingDate = new Date('2028-04-15');
-  const daysToHalving = Math.round((halvingDate-now)/86400000);
-  events.push({
-    ts:halvingDate.getTime(), date:halvingDate,
-    name:`Halving Bitcoin (dans ${daysToHalving} jours)`,
-    impact:'high', category:'crypto',
-    desc:'Réduction de 50% des récompenses mineurs. Historiquement très haussier.',
-    icon:'₿',
-    special:true,
-  });
-
-  // ETF Options (troisième vendredi du mois — opex)
-  const thirdFriday = d => {
-    const first = new Date(d.getFullYear(), d.getMonth(), 1);
-    const fri   = (12-first.getDay())%7;
-    return new Date(d.getFullYear(), d.getMonth(), fri+1+14);
-  };
-  for(let m=0; m<2; m++) {
-    const tf = thirdFriday(new Date(year,month+m,1));
-    if(tf>now) {
-      events.push({
-        ts:tf.getTime(), date:tf,
-        name:'OpEx ETF Bitcoin (3e vendredi)',
-        impact:'med', category:'crypto',
-        desc:'Expiration des options ETF spot BTC. Souvent volatile 24-48h avant.',
-        icon:'📊',
-      });
-    }
-  }
-
-  return events.sort((a,b)=>a.ts-b.ts);
-}
+// [P2 · 06/09/2026] _getRecurringEvents vit désormais dans 10e2-calendrier-eco.js (source unique :
+// dates officielles 2026 en UTC, lue ici pour l'affichage et par 09c/10f pour la décision).
 
 function _fmtCountdown(ts) {
   const diff = ts - Date.now();
-  if(diff<0) return 'Passé';
+  if(diff<0) return 'En cours';   // [P2] visible jusqu'à 2 h après l'annonce (fenêtre de prudence)
   const d = Math.floor(diff/86400000);
   const h = Math.floor((diff%86400000)/3600000);
   const m = Math.floor((diff%3600000)/60000);

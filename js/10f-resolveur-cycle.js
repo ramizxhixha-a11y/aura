@@ -1,5 +1,8 @@
-// ▓▓▓ VERSION 20260905b ▓▓▓
+// ▓▓▓ VERSION 20260906a ▓▓▓
 // 10f-resolveur-cycle.js — Cœur : _resolvePairCycleCore + garde-fou perte max (_lossCapSweep)
+// [P2 · 06/09/2026] BRIQUE 2 DU PONT : malus calendrier éco +0.10 sur les portes de conviction
+// (porte par régime ET plancher 0.30) dans la fenêtre ±2 h d'une annonce à impact FORT (source
+// unique 10e2) ; le veto 30 min avant vit dans l'entonnoir 09c. Journalisé quand le malus a été décisif.
 // [P1 · 05/09/2026] BRIQUE 1 DU PONT : bonus de diversification −0.03 sur les portes de
 // conviction (paire anti-corrélée < −0.80 à une position ouverte) ; le veto anti-doublon
 // (> +0.80) vit dans l'entonnoir 09c. Journalisé au moment où le bonus a été décisif.
@@ -7,6 +10,18 @@
 // (lignes 1516-2003 de l'original). Aucun code réécrit. Ordre de chargement OBLIGATOIRE :
 // 10a → 10h, à la place exacte de l'ancien fichier 10 dans le HTML.
 
+
+// [P2 · 06/09/2026] trace journal (📅, 1 fois/5 min/paire, RAM) quand le malus éco a été décisif :
+// la paire aurait ouvert sans lui. EVAL n'est pas écrit ici (aucune ouverture n'atteint 09c).
+const _ecoMalusLogTs = {};
+function _ecoMalusTrace(pair, eg) {
+  const now = Date.now();
+  if ((now - (_ecoMalusLogTs[pair] || 0)) < 5 * 60 * 1000) return;
+  _ecoMalusLogTs[pair] = now;
+  const when = eg.minutes >= 0 ? ('dans ' + eg.minutes + ' min') : ('il y a ' + (-eg.minutes) + ' min');
+  S.chainLog.push({ icon:'📅', desc:`Calendrier éco · ${pair} retenu · ${eg.event.name} ${when} · conviction requise +${ECO_CAUTION_MALUS.toFixed(2)}`, hash:rndHash(), time:nowStr() });
+  if (S.chainLog.length > 100) S.chainLog.splice(0, S.chainLog.length - 100);
+}
 
 function _resolvePairCycleCore(pair, ps) {
   const cfg = PAIRS[pair];
@@ -143,7 +158,13 @@ function _resolvePairCycleCore(pair, ps) {
     ? { veto: false, bonus: 0, corr: null, withPair: null, withSide: null }
     : _corrGateForOpen(pair, finalSignalWithMem > 0 ? 'long' : 'short');
   const _corrBonus = _corrG.bonus || 0;
-  const convGate = effectiveConviction >= (_gates.conv + _expPenalty - _corrBonus - (S._convBoost || 0));
+  // [P2 · 06/09/2026] BRIQUE 2 DU PONT — MALUS CALENDRIER ÉCO : dans la fenêtre ±2 h d'une
+  // annonce à impact FORT (FOMC, CPI, expiration Deribit — dates officielles, source unique
+  // 10e2), le bruit d'annonce se déguise en signal : la paire doit convaincre 0.10 de plus
+  // (porte par régime ET plancher 0.30). Le refus total des 30 dernières minutes vit en 09c.
+  const _ecoG = _ecoGateForOpen();
+  const _ecoMalus = _ecoG.malus || 0;
+  const convGate = effectiveConviction >= (_gates.conv + _expPenalty + _ecoMalus - _corrBonus - (S._convBoost || 0));
   const dirGate  = Math.abs(finalSignalWithMem) >= (_gates.dir - (S._convBoost || 0) * 0.5);
   const lmsrAlignBuy  = adjProb > 0.50;
   const lmsrAlignSell = adjProb < 0.50;
@@ -224,6 +245,9 @@ function _resolvePairCycleCore(pair, ps) {
   }
 
   if(action==='hold' || effectiveConviction < 0.15) {
+    // [P2] la porte par régime a-t-elle fermé À CAUSE du malus éco ? (passe sans, refusé avec)
+    if(_ecoMalus > 0 && finalSignalWithMem !== 0 && !convGate && dirGate &&
+       effectiveConviction >= (_gates.conv + _expPenalty - _corrBonus - (S._convBoost || 0))) _ecoMalusTrace(pair, _ecoG);
     const candles=ps.candles;
     const move=candles.length>1?(candles[candles.length-1].c-candles[candles.length-2].c)/ps.price*100:0;
     learnFromOutcome('cycle',move,pair);
@@ -326,12 +350,14 @@ function _resolvePairCycleCore(pair, ps) {
     }
   } catch(e){ try{window._decErr&&window._decErr(e)}catch(_e){} }
   window._pairWatchMult = _pairWatch ? 0.25 : (_pairGood ? 1.8 : 1);
-  const _convFloor = (0.30 - Math.min(0.04, (S._convBoost || 0) * 0.5)) + (_pairWatch ? 0.12 : 0) - _corrBonus;
+  const _convFloor = (0.30 - Math.min(0.04, (S._convBoost || 0) * 0.5)) + (_pairWatch ? 0.12 : 0) - _corrBonus + _ecoMalus;
   // [P1] le bonus a-t-il été DÉCISIF ? (le trade passe avec, il n'aurait pas passé sans)
   const _corrDecisive = _corrBonus > 0 && (
-    effectiveConviction < (_gates.conv + _expPenalty - (S._convBoost || 0)) ||
+    effectiveConviction < (_gates.conv + _expPenalty + _ecoMalus - (S._convBoost || 0)) ||
     effectiveConviction < (_convFloor + _corrBonus));
   if(_gainNet < _minNetGain || effectiveConviction < _convFloor) {
+    // [P2] le plancher a-t-il fermé À CAUSE du malus éco ?
+    if(_ecoMalus > 0 && _gainNet >= _minNetGain && effectiveConviction >= (_convFloor - _ecoMalus)) _ecoMalusTrace(pair, _ecoG);
     learnFromOutcome('cycle', 0, pair);
     ps.qYes = Math.max(20, 100 + (ps.qYes - 100) * 0.95);
     ps.qNo  = Math.max(20, 100 + (ps.qNo  - 100) * 0.95);

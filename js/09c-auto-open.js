@@ -1,4 +1,5 @@
-// ▓▓▓ VERSION 20260905b ▓▓▓
+// ▓▓▓ VERSION 20260906a ▓▓▓
+// [P2 · 06/09/2026] BRIQUE 2 DU PONT : veto CALENDRIER ÉCO dans l'entonnoir unique (après le veto CORR) — annonce à impact FORT (FOMC, CPI, expiration Deribit) dans les 30 min = aucune ouverture bot, refus journalisé dans EVAL (brainLog ECO) + journal (📅, 1 fois/5 min/paire) + toast. Le malus +0.10 dans la fenêtre ±2 h vit dans les portes 10f.
 // [P1 · 05/09/2026] BRIQUE 1 DU PONT ANALYTICS→DÉCISION : veto ANTI-DOUBLON par corrélation dans l'entonnoir unique (après le FLIP du conseil) — corrélation effective > 0.80 avec une position ouverte = même pari deux fois → refus journalisé dans EVAL (brainLog CORR) + journal (🔗, 1 fois/5 min/paire) + toast. Le bonus de diversification vit dans les portes 10f.
 // [OPTION A · 31/07/2026] garde d ouverture 'Bunker actif -> return' supprimee : le bunker ne bloque plus les ouvertures (il reduit les mises via 07). Debloque EV coince en bunker paused depuis le 26/07.
 // [PLANCHER PROPORTIONNEL 26/07/2026] les 9 planchers 10$ et 4 arrondis par paliers de 10 supprimes d un bloc (le correctif partiel du 06/07 en laissait 7 : inoperant par construction) — plancher = 5 % du compte, min 2$, arrondi au dixieme ; gate <20$ et clamp 25 % alignes sur la politique de capital · [REGLES REEL v2 · edictees par Rams 05/07/2026] en MANU jamais d ouverture ; en AUTO ouverture RE permise UNIQUEMENT si RE est en play (consentement) — remplace le blocage total du 02/07
@@ -18,6 +19,8 @@ function _stakeRound(x) { return Math.round((Number(x) || 0) * 10) / 10; }
 // [P1 · 05/09/2026] horodatage du dernier journal 🔗 par paire (RAM seule : anti-flood du
 // journal 100 lignes pendant qu'une position corrélée reste ouverte — EVAL reçoit tout).
 const _corrVetoLogTs = {};
+// [P2 · 06/09/2026] même anti-flood pour le veto calendrier éco (📅).
+const _ecoVetoLogTs = {};
 // [SEPARATION COMPLETE 3 MODES · 02/07/2026] GARDE MODE REEL : aucune ouverture automatique en 'real' (analyse/suggestions continuent, trades manuels libres) + gate bunker lu par mode
 // ════════════════════════════════════════════════════════════════════════
 // ▓▓▓ AURA8 — 09c-auto-open.js ▓▓▓
@@ -472,6 +475,30 @@ function autoOpenPosition(pair, side, stakeOverride) {
         S.chainLog.push({ icon: '🔗', desc: `Anti-doublon · ${pair} ${side.toUpperCase()} refusé · ${_why}`, hash: rndHash(), time: nowStr() });
         if (S.chainLog.length > 100) S.chainLog.splice(0, S.chainLog.length - 100);
         if (typeof showToast === 'function') showToast('🔗 Anti-doublon · ' + pair + ' ' + side.toUpperCase() + ' · corr ' + _cg.corr.toFixed(2) + ' avec ' + _cg.withPair);
+      }
+      return;
+    }
+  } catch(e){ try{window._decErr&&window._decErr(e)}catch(_e){} }
+
+  // ──────────────────────────────────────────────────────────────
+  // [P2 · 06/09/2026] BRIQUE 2 DU PONT — VETO CALENDRIER ÉCONOMIQUE
+  // Source unique 10e2 (dates officielles 2026 en UTC). Annonce à impact FORT (FOMC, CPI,
+  // expiration Deribit) dans les 30 minutes : le marché est un tirage au sort, aucune
+  // ouverture bot, quel que soit le chemin (cycle 10f, propositions, FORCE). Le malus
+  // +0.10 de la fenêtre ±2 h est appliqué par les portes 10f. Raison visible dans EVAL.
+  // ──────────────────────────────────────────────────────────────
+  try {
+    const _eg = _ecoGateForOpen();
+    if (_eg.veto) {
+      const _why = 'Annonce éco imminente · ' + _eg.event.name + ' dans ' + _eg.minutes + ' min (aucune ouverture 30 min avant)';
+      if (!S.brainLog) S.brainLog = [];
+      S.brainLog.unshift({ ts: Date.now(), pair, event: 'ECO', side, reason: _why });
+      if (S.brainLog.length > 30) S.brainLog.length = 30;
+      if ((Date.now() - (_ecoVetoLogTs[pair] || 0)) > 5 * 60 * 1000) {
+        _ecoVetoLogTs[pair] = Date.now();
+        S.chainLog.push({ icon: '📅', desc: `Calendrier éco · ${pair} ${side.toUpperCase()} refusé · ${_why}`, hash: rndHash(), time: nowStr() });
+        if (S.chainLog.length > 100) S.chainLog.splice(0, S.chainLog.length - 100);
+        if (typeof showToast === 'function') showToast('📅 Annonce éco · ' + _eg.event.name + ' dans ' + _eg.minutes + ' min · ouverture ' + pair + ' refusée');
       }
       return;
     }
