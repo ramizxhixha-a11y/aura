@@ -1,5 +1,6 @@
 // ▓▓▓ BANC D'ESSAI P1 · CORRÉLATION ANTI-DOUBLON (05/09/2026) ▓▓▓
 // [P4 · 06/09/2026] idem pour _behavGateForOpen (brique 4, bloc rejoué dans le texte 09c) : stubbée NEUTRE.
+// [P5 · 06/09/2026] idem pour _betaGateForOpen (brique 5, bloc rejoué dans le texte 09c) : stubbée NEUTRE.
 // [P3 · 06/09/2026] idem pour _heatGateForOpen (brique 3) : stubbée NEUTRE.
 // [P2 · 06/09/2026] les textes rejoués de 10f et 09c appellent désormais _ecoGateForOpen (brique 2) : stubbée NEUTRE ici
 // (ce banc teste P1 seul, indépendamment de la date de lancement) ; la porte éco est testée par banc-p2-calendrier.js.
@@ -147,7 +148,7 @@ console.log('\n── D · 09c livré : veto dans l’entonnoir (texte réel) �
 const src09c = fs.readFileSync('js/09c-auto-open.js','utf8');
 const vetoTxt = src09c.slice(src09c.indexOf("  try {\n    const _cg = _corrGateForOpen(pair, side);"), src09c.indexOf("  // Smart Sizer applique"));
 const declTxt = src09c.slice(src09c.indexOf("const _corrVetoLogTs = {};"), src09c.indexOf("const _corrVetoLogTs = {};") + "const _corrVetoLogTs = {};".length);
-const c09 = { S, _corrGateForOpen: ctx._corrGateForOpen, _ecoGateForOpen: () => ({ veto:false, malus:0, event:null, minutes:null }), _ecoVetoLogTs: {}, _behavVetoLogTs: {}, _behavGateForOpen: () => ({ veto:false, reason:null, coolLeftMin:0, stakeCap:0, lastLossUsd:0, dayCount:0, dayCap:Infinity }), rndHash: () => 'h', nowStr: () => 't', window: ctx, showToast: ctx.showToast, Date, String, Math };
+const c09 = { S, _corrGateForOpen: ctx._corrGateForOpen, _ecoGateForOpen: () => ({ veto:false, malus:0, event:null, minutes:null }), _ecoVetoLogTs: {}, _behavVetoLogTs: {}, _behavGateForOpen: () => ({ veto:false, reason:null, coolLeftMin:0, stakeCap:0, lastLossUsd:0, dayCount:0, dayCap:Infinity }), _betaVetoLogTs: {}, _betaGateForOpen: () => ({ veto:false, reason:null, beta:null, btcMovePct:null, stakeFactor:1, stakeReason:null }), rndHash: () => 'h', nowStr: () => 't', window: ctx, showToast: ctx.showToast, Date, String, Math };
 vm.createContext(c09);
 vm.runInContext(declTxt + '\nfunction _open(pair, side){' + vetoTxt + '\nreturn "OUVERT";}', c09);
 T('ETH LONG ouvert → autoOpen BTC LONG refusé : EVAL reçoit CORR, journal 🔗 + toast', () => {

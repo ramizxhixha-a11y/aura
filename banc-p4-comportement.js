@@ -65,7 +65,8 @@ const vetoTxt = src09c.slice(src09c.indexOf('  let _bg = null;'), src09c.indexOf
 const capTxt  = src09c.slice(src09c.indexOf('  if (_bg && _bg.stakeCap > 0'), src09c.indexOf('  // ──────────────────────────────────────────────────────────────\n  // VALIDATION ANTI-NÉGATIF'));
 const declTxt = 'const _behavVetoLogTs = {};';
 let _gate = { veto: false, reason: null, stakeCap: 0, lastLossUsd: 0 };
-const c09 = { S, _behavGateForOpen: () => _gate, rndHash: () => 'h', nowStr: () => 't', window: {}, _toasts: [], Date: ctx.Date, String, Math, Number,
+// [P5 · 06/09/2026] le texte rejoué de 09c contient désormais le bloc bêta BTC (brique 5) : stubbé NEUTRE.
+const c09 = { S, _behavGateForOpen: () => _gate, _betaVetoLogTs: {}, _betaGateForOpen: () => ({ veto:false, reason:null, beta:null, btcMovePct:null, stakeFactor:1, stakeReason:null }), rndHash: () => 'h', nowStr: () => 't', window: {}, _toasts: [], Date: ctx.Date, String, Math, Number,
   _stakeFloor: () => 2, _stakeRound: x => Math.round(x * 10) / 10 };
 c09.showToast = m => c09._toasts.push(m);
 vm.createContext(c09);
@@ -109,15 +110,17 @@ T('10e4 : module ≤ 500 lignes, lit uniquement S.pairStates, une seule horloge 
 });
 T('10f NON touché : aucune référence BEHAV', () => { assert.ok(!fs.readFileSync('js/10f-resolveur-cycle.js', 'utf8').includes('_behav')); });
 const html = fs.readFileSync('AURA8_v118.html', 'utf8');
-T('HTML : 10e4 chargé juste après 10e3 et avant 10f, token 20260906c sur 75 ressources + DOC_V, anciens tokens absents', () => {
-  const i3 = html.indexOf('js/10e3-heatmap-horaire.js?v=20260906c'), i4 = html.indexOf('js/10e4-gardes-comportementales.js?v=20260906c'), i5 = html.indexOf('js/10f-resolveur-cycle.js?v=20260906c');
+// [P5 · 06/09/2026] le token est lu dans DOC_V ; le comptage des ressources est délégué au banc P5.
+T('HTML : 10e4 chargé juste après 10e3 et avant 10f, même token que DOC_V, anciens tokens absents', () => {
+  const tok = (html.match(/DOC_V = '([0-9a-z]+)'/) || [])[1]; assert.ok(tok);
+  const i3 = html.indexOf('js/10e3-heatmap-horaire.js?v=' + tok), i4 = html.indexOf('js/10e4-gardes-comportementales.js?v=' + tok), i5 = html.indexOf('js/10f-resolveur-cycle.js?v=' + tok);
   assert.ok(i3 > 0 && i4 > i3 && i5 > i4);
-  assert.strictEqual((html.match(/\?v=20260906c/g) || []).length, 75);
-  assert.ok(html.includes("DOC_V = '20260906c'")); assert.ok(!html.includes('20260906b') && !html.includes('20260906a'));
+  assert.ok(!html.includes('20260906c') && !html.includes('20260906b') && !html.includes('20260906a'));
 });
-T('versions en tête : 10e4 et 09c = 20260906c', () => {
+T('versions en tête : 10e4 = 20260906c (non relivré en P5) ; 09c = token DOC_V', () => {
+  const tok = (html.match(/DOC_V = '([0-9a-z]+)'/) || [])[1];
   assert.ok(fs.readFileSync('js/10e4-gardes-comportementales.js', 'utf8').startsWith('// ▓▓▓ VERSION 20260906c ▓▓▓'));
-  assert.ok(src09c.startsWith('// ▓▓▓ VERSION 20260906c ▓▓▓'));
+  assert.ok(src09c.startsWith('// ▓▓▓ VERSION ' + tok + ' ▓▓▓'));
 });
 
 console.log('\n' + ok + '/' + (ok + ko) + ' tests passés' + (ko ? ' · ' + ko + ' ÉCHEC(S)' : ''));
