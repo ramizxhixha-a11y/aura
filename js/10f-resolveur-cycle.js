@@ -1,5 +1,9 @@
-// ▓▓▓ VERSION 20260906b ▓▓▓
+// ▓▓▓ VERSION 20260906f ▓▓▓
 // 10f-resolveur-cycle.js — Cœur : _resolvePairCycleCore + garde-fou perte max (_lossCapSweep)
+// [NET · 06/09/2026] EXPECTANCY NETTE : les 4 lecteurs de l'expérience de la paire (porte S3 +0.10, disjoncteur
+// x0.25/x1.8, _perfMult, bases solides RE) lisaient ps.totalPnlPct / totalPnlUsd, BRUTS de frais (pnlUsdt =
+// realisedUsd avant recordFees). Ils lisent désormais la source unique 10e6 (_pairNetExpectancy / _learnedNetUsd :
+// 20 dernières clôtures du mode, brut − coût aller-retour), la même que le veto/demi-mise 09c.
 // [P3 · 06/09/2026] BRIQUE 3 DU PONT : delta heatmap horaire sur les portes de conviction (porte par
 // régime ET plancher 0.30) — créneau froid +0.08 / créneau d'or −0.03 (source unique 10e3, heure
 // locale comme l'écrivain 03). Journalisé quand le delta a été décisif (retenu ou ouvert grâce à lui).
@@ -155,14 +159,14 @@ function _resolvePairCycleCore(pair, ps) {
   const _gates = (_mktReg==='calm') ? {conv:0.35, dir:0.20}
                : (_mktReg==='volatile'||_mktReg==='volatile_bull'||_mktReg==='volatile_bear') ? {conv:0.18, dir:0.10}
                : {conv:0.25, dir:0.15};   // bull / bear / autres
-  // [S3+ · 03/09/2026] PORTE D'EXPECTANCY PAR PAIRE — le système possédait l'historique
-  // de chaque paire sans le consulter à l'ouverture (PEPE : 114 trades, −17,9$, rouvert
-  // sans cesse). Les 20 dernières clôtures de LA paire, dans LE mode courant, décident :
-  // si leur net cumulé est < −0,50$, la paire doit prouver +0,10 de conviction en plus.
-  // Une paire qui perd doit convaincre davantage — c'est ce qu'un trader ferait.
-  const _recentCloses = (ps.trades || []).filter(t => t && t.type === 'position').slice(-20);
-  const _recentNet    = _recentCloses.reduce((a, t) => a + (Number(t.pnlUsdt) || 0), 0);
-  const _expPenalty   = (_recentCloses.length >= 8 && _recentNet < -0.5) ? 0.10 : 0;
+  // [S3+ · 03/09/2026, NET 06/09/2026] PORTE D'EXPECTANCY PAR PAIRE — le système possédait l'historique
+  // de chaque paire sans le consulter à l'ouverture (PEPE : 114 trades, −17,9$, rouvert sans cesse).
+  // Les 20 dernières clôtures de LA paire, dans LE mode courant, décident — NETTES de frais (source unique
+  // 10e6 : brut % de la mise − coût aller-retour taker+slippage×2 + funding×3) : expectancy nette < 0
+  // → la paire doit prouver +0,10 de conviction en plus. Même déclencheur que la demi-mise 09c.
+  // Moins de 10 clôtures = neutre. Une paire qui perd NET doit convaincre davantage.
+  const _netExp     = _pairNetExpectancy(ps);
+  const _expPenalty = (_netExp && _netExp.netPct < 0) ? 0.10 : 0;
   // [P1 · 05/09/2026] BRIQUE 1 DU PONT — BONUS DE DIVERSIFICATION : si le pari candidat
   // (sens du signal) est anti-corrélé (< −0.80, corrélation effective = Pearson des
   // retours × sens) à une position ouverte, il diversifie le livre : il doit convaincre
@@ -324,20 +328,15 @@ function _resolvePairCycleCore(pair, ps) {
   // trades + plus d'apprentissage reel, risque par trade contenu.
   // ★ REGLES REEL v2 (Rams 05/07) · en Reel, pas de zone exploratoire ni de
   // paris : ouverture seulement a conviction PLEINE (>= 0.40) ET sur une paire
-  // dont l'expectancy APPRISE (P&L nets cumules en AA + EV) est positive —
-  // "tenter une session gagnante avec des bases solides".
+  // dont l'expectancy APPRISE est positive NETTE de frais (20 dernieres clotures
+  // AA + EV, source unique 10e6 _learnedNetUsd) — "tenter une session gagnante
+  // avec des bases solides". Moins de 10 clotures apprises = pas de base = pas d'ouverture.
   if (S.tradingMode === 'real') {
     var _reSolid = false;
     if (effectiveConviction >= 0.40) {
-      var _learned = 0;
-      try {
-        var _wsL = S.walletStore || {};
-        ['sim','paperReal'].forEach(function(_mk){
-          var _psL = _wsL[_mk] && _wsL[_mk].pairStates && _wsL[_mk].pairStates[pair];
-          if (_psL && typeof _psL.totalPnlUsd === 'number') _learned += _psL.totalPnlUsd;
-        });
-      } catch(e){ try{window._decErr&&window._decErr(e)}catch(_e){} }
-      _reSolid = _learned > 0;
+      var _learnedNet = null;
+      try { _learnedNet = _learnedNetUsd(pair); } catch(e){ try{window._decErr&&window._decErr(e)}catch(_e){} }
+      _reSolid = !!(_learnedNet && _learnedNet.netUsd > 0);
     }
     if (!_reSolid) {
       learnFromOutcome('cycle', 0, pair);
@@ -349,9 +348,9 @@ function _resolvePairCycleCore(pair, ps) {
   // ═══ DISJONCTEUR PAR PAIRE (26/07/2026) ═══
   // Constat sur 251 trades : SOL (-0.536 %/trade), AVAX (-0.370), DOGE (-0.264)
   // et ETH (-0.444) concentrent 89 % des pertes — le bot avait leur esperance
-  // dans ses propres donnees (ps.totalPnlPct / ps.totalTrades) sans jamais s'en
-  // servir pour moduler son engagement. Desormais une paire dont l'esperance
-  // APPRISE est nettement negative sur un echantillon significatif doit fournir
+  // dans ses propres donnees sans jamais s'en servir pour moduler son engagement.
+  // NET 06/09 : l'esperance lue est NETTE de frais (10e6, 20 dernieres clotures
+  // du mode, >= 10). Une paire dont l'esperance nette est nettement negative doit fournir
   // une conviction plus forte, et n'engage qu'un quart de la mise (mode
   // observation : l'ecole continue d'apprendre, le portefeuille ne paie plus).
   // Reversible seul : des que l'esperance repasse au-dessus du seuil, tout
@@ -365,14 +364,11 @@ function _resolvePairCycleCore(pair, ps) {
   // Le plafond global (compte moins la couverture des frais) borne toujours
   // l'ensemble : concentrer n'est pas sur-engager.
   var _pairExp = 0, _pairWatch = false, _pairGood = false;
-  try {
-    var _pt = ps.totalTrades || 0;
-    if (_pt >= 15 && typeof ps.totalPnlPct === 'number') {
-      _pairExp = ps.totalPnlPct / _pt;
-      _pairWatch = _pairExp < -0.15;
-      _pairGood  = _pairExp > 0.03;
-    }
-  } catch(e){ try{window._decErr&&window._decErr(e)}catch(_e){} }
+  if (_netExp) {
+    _pairExp   = _netExp.netPct;
+    _pairWatch = _pairExp < -0.15;
+    _pairGood  = _pairExp > 0.03;
+  }
   window._pairWatchMult = _pairWatch ? 0.25 : (_pairGood ? 1.8 : 1);
   const _convFloor = (0.30 - Math.min(0.04, (S._convBoost || 0) * 0.5)) + (_pairWatch ? 0.12 : 0) - _corrBonus + _ecoMalus + _heatDelta;
   // [P1] le bonus a-t-il été DÉCISIF ? (le trade passe avec, il n'aurait pas passé sans)
@@ -444,16 +440,12 @@ function _resolvePairCycleCore(pair, ps) {
   const convScale  = 0.40 + (0.60 * effectiveConviction);
   // ── Throttle par PERFORMANCE de paire ──────────────────────────────────────
   //   On mise MOINS sur les paires qui perdent durablement (signal = expectancy
-  //   % par trade = totalPnlPct/totalTrades, independant de la mise). Asymetrique
-  //   securite : reduit les perdantes (plancher 0.35, jamais coupe -> continue
-  //   d'apprendre), ne booste JAMAIS les gagnantes (plafond 1.0). Ne s'active
-  //   qu'avec un echantillon significatif (>=20 trades) pour eviter le bruit.
-  //   Sur backup reel : ADA -0.61%/tr -> x0.70, XRP -0.56% -> x0.72,
-  //   DOGE -1.19% -> x0.41 ; les gagnantes restent a x1.0.
+  //   NETTE % de la mise par trade, 10e6, 20 dernieres clotures du mode, >= 10).
+  //   Asymetrique securite : reduit les perdantes (plancher 0.35, jamais coupe ->
+  //   continue d'apprendre), ne booste JAMAIS les gagnantes (plafond 1.0).
+  //   Ex. : -0.61 %/tr net -> x0.70, -1.19 % -> x0.41 ; les gagnantes restent a x1.0.
   let _perfMult = 1.0;
-  if ((ps.totalTrades || 0) >= 20) {
-    _perfMult = Math.max(0.35, Math.min(1.0, 1 + ((ps.totalPnlPct || 0) / ps.totalTrades) * 0.5));
-  }
+  if (_netExp) _perfMult = Math.max(0.35, Math.min(1.0, 1 + _netExp.netPct * 0.5));
   // Mise progressive de la zone exploratoire : 50% a 0.30, 100% a partir de 0.40.
   const _convStakeMult = effectiveConviction >= 0.40 ? 1.0
     : Math.max(0.5, 0.5 + 0.5 * (effectiveConviction - 0.30) / 0.10);

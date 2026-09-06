@@ -1,7 +1,10 @@
-// ▓▓▓ VERSION 20260906e ▓▓▓
+// ▓▓▓ VERSION 20260906f ▓▓▓
 // 10e6-frais-slippage.js — Coût aller-retour (frais taker + slippage + funding + intérêts levier)
 // → gain attendu NET et expectancy NETTE de la paire → décision 09c.
-// [P6 · 06/09/2026] BRIQUE 6 DU PONT ANALYTICS→DÉCISION. Module dédié (10f = 590 l., non touché).
+// [NET · 06/09/2026] SOURCE UNIQUE de l'expectancy nette : 09c (veto RE, demi-mise) ET 10f (porte S3 +0.10,
+// disjoncteur x0.25/x1.8, _perfMult, bases solides RE) lisent désormais le MÊME calcul (_pairNetExpectancy,
+// _learnedNetUsd). Plus aucune décision ne lit ps.totalPnlPct / ps.totalPnlUsd (bruts de frais).
+// [P6 · 06/09/2026] BRIQUE 6 DU PONT ANALYTICS→DÉCISION. Module dédié.
 // Ordre de chargement OBLIGATOIRE : juste après 10e5, avant 10f (dans le HTML).
 // Sources VIVANTES :
 //   · S.feeConfig (02, persisté au snapshot, plancher 0,10 % appliqué au chargement par 09b2) — le MÊME
@@ -40,19 +43,41 @@ function _expectedGainPct(conviction, volCV) {
   const v = isFinite(volCV) && volCV > 0 ? volCV : 0.015;
   return Math.round(Math.max(0.6, c * 3.2 * (1 + v * 9)) * 1000) / 1000;
 }
-// Expectancy NETTE (% de la mise par trade) sur les COST_EXP_TRADES dernières clôtures ; null si < COST_EXP_MIN_TRADES.
-function _netExpectancyPct(trades, costPct) {
-  if (!Array.isArray(trades)) return null;
+// Les COST_EXP_TRADES dernières clôtures exploitables (type 'position', mise > 0), plus récente en premier.
+function _lastCloses(trades) {
   const closes = [];
+  if (!Array.isArray(trades)) return closes;
   for (let i = trades.length - 1; i >= 0 && closes.length < COST_EXP_TRADES; i--) {
     const t = trades[i];
     if (t && t.type === 'position' && isFinite(t.pnlUsdt) && isFinite(t.stakeUsdt) && t.stakeUsdt > 0) closes.push(t);
   }
+  return closes;
+}
+// Expectancy NETTE (% de la mise par trade) sur les COST_EXP_TRADES dernières clôtures ; null si < COST_EXP_MIN_TRADES.
+function _netExpectancyPct(trades, costPct) {
+  const closes = _lastCloses(trades);
   if (closes.length < COST_EXP_MIN_TRADES) return null;
   let gross = 0;
   for (const t of closes) gross += (t.pnlUsdt / t.stakeUsdt) * 100;
   gross /= closes.length;
   return { n: closes.length, grossPct: Math.round(gross * 1000) / 1000, netPct: Math.round((gross - costPct) * 1000) / 1000 };
+}
+// Coût aller-retour de la MISE PROPRE (levier 0 : le décideur 10f ne connaît pas encore l'emprunt).
+function _ownStakeCostPct() { return _roundTripCostPct(S.feeConfig, 0, S.leverageBorrowRate); }
+// Expectancy NETTE de la paire dans le mode courant (ps multiplexé) — lue par les 3 modulateurs 10f.
+function _pairNetExpectancy(ps) { return _netExpectancyPct(ps && ps.trades, _ownStakeCostPct()); }
+// Bases solides RÉEL : net cumulé en $ des dernières clôtures AA + EV de la paire (walletStore sim + paperReal,
+// lu hors mode courant) ; net = brut − mise × coût. null si < COST_EXP_MIN_TRADES clôtures au total.
+function _learnedNetUsd(pair) {
+  const costPct = _ownStakeCostPct();
+  const ws = S.walletStore || {};
+  let n = 0, grossUsd = 0, netUsd = 0;
+  ['sim', 'paperReal'].forEach(mk => {
+    const p = ws[mk] && ws[mk].pairStates && ws[mk].pairStates[pair];
+    for (const t of _lastCloses(p && p.trades)) { n++; grossUsd += t.pnlUsdt; netUsd += t.pnlUsdt - t.stakeUsdt * costPct / 100; }
+  });
+  if (n < COST_EXP_MIN_TRADES) return null;
+  return { n: n, grossUsd: Math.round(grossUsd * 1000) / 1000, netUsd: Math.round(netUsd * 1000) / 1000 };
 }
 // Verdict pur : {veto, reason, costPct, gainPct, netGainPct, exp, stakeFactor, stakeReason}.
 function _costVerdict(costPct, gainPct, exp, mode) {
@@ -93,5 +118,8 @@ function _costGateForOpen(pair, stakeUsdt, levBorrowed) {
 window._roundTripCostPct = _roundTripCostPct;
 window._expectedGainPct = _expectedGainPct;
 window._netExpectancyPct = _netExpectancyPct;
+window._ownStakeCostPct = _ownStakeCostPct;
+window._pairNetExpectancy = _pairNetExpectancy;
+window._learnedNetUsd = _learnedNetUsd;
 window._costVerdict = _costVerdict;
 window._costGateForOpen = _costGateForOpen;
