@@ -69,12 +69,15 @@ T('CPI 11/09 à 12:00 UTC (30 min avant 12:30) : veto ; à 11:00 : malus ; à 10
 });
 
 console.log('\n── C · 10f livré : portes avec malus (texte réel) ──');
+// [NET 06/09/2026] 10f lit _pairNetExpectancy (10e6) : module LIVRE charge tel quel (S = bareme plancher)
+const _c10e6 = { S: { feeConfig: { makerRate:0.001, takerRate:0.001, fundingRate:0.00005, slippage:0.0003 }, leverageBorrowRate: 0.0002 }, window: {}, Math, Number, Array, isFinite };
+vm.createContext(_c10e6); vm.runInContext(fs.readFileSync('js/10e6-frais-slippage.js','utf8'), _c10e6);
 const src10f = fs.readFileSync('js/10f-resolveur-cycle.js','utf8');
 const gateTxt  = src10f.slice(src10f.indexOf("  const _mktReg ="), src10f.indexOf("  const dirGate"));
 const floorTxt = src10f.slice(src10f.indexOf("  const _convFloor ="), src10f.indexOf("  if(_gainNet < _minNetGain"));
 function gates(conv, regime, malus, corrBonus){
   const c = { S:{ _convBoost:0, openPositions:[] }, effectiveConviction:conv, ps:{ trades:[] }, pair:'BTC/USDT',
-    detectMarketRegime:()=>regime, _corrGateForOpen:()=>({bonus:corrBonus||0, corr:null}), _ecoGateForOpen:()=>({malus:malus, veto:false}), _heatGateForOpen:()=>({delta:0, hour:0, wr:null, count:0, tag:null}),
+    detectMarketRegime:()=>regime, _corrGateForOpen:()=>({bonus:corrBonus||0, corr:null}), _ecoGateForOpen:()=>({malus:malus, veto:false}), _heatGateForOpen:()=>({delta:0, hour:0, wr:null, count:0, tag:null}), _pairNetExpectancy:_c10e6._pairNetExpectancy,
     finalSignalWithMem:0.5, _pairWatch:false, Math };
   vm.createContext(c);
   vm.runInContext(gateTxt + 'var __cg = convGate;', c);

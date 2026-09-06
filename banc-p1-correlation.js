@@ -106,13 +106,16 @@ T('seuil strict : eff = 0.80 exactement → pas de veto', () => {
 });
 
 console.log('\n── C · 10f livré : portes avec bonus (texte réel) ──');
+// [NET 06/09/2026] 10f lit _pairNetExpectancy (10e6) : module LIVRE charge tel quel (S = bareme plancher)
+const _c10e6 = { S: { feeConfig: { makerRate:0.001, takerRate:0.001, fundingRate:0.00005, slippage:0.0003 }, leverageBorrowRate: 0.0002 }, window: {}, Math, Number, Array, isFinite };
+vm.createContext(_c10e6); vm.runInContext(fs.readFileSync('js/10e6-frais-slippage.js','utf8'), _c10e6);
 const src10f = fs.readFileSync('js/10f-resolveur-cycle.js','utf8');
 const gateTxt = src10f.slice(src10f.indexOf("  const _mktReg ="), src10f.indexOf("  const dirGate"));
 const floorTxt = src10f.slice(src10f.indexOf("  const _convFloor ="), src10f.indexOf("  if(_gainNet < _minNetGain"));
 function runGates(o){
   const c = Object.assign(Object.create(ctx), o);
   const code = 'var out={};(function(){' + gateTxt + floorTxt + 'out.convGate=convGate;out.req=_gates.conv+_expPenalty-_corrBonus;out.floor=_convFloor;out.dec=_corrDecisive;out.bonus=_corrBonus;})();out';
-  return vm.runInNewContext(code, { S: c.S, PAIRS, detectMarketRegime: () => c.regime, _corrGateForOpen: ctx._corrGateForOpen, _ecoGateForOpen: () => ({ veto:false, malus:0, event:null, minutes:null }), _heatGateForOpen: () => ({ delta:0, hour:0, wr:null, count:0, tag:null }),
+  return vm.runInNewContext(code, { S: c.S, PAIRS, detectMarketRegime: () => c.regime, _corrGateForOpen: ctx._corrGateForOpen, _ecoGateForOpen: () => ({ veto:false, malus:0, event:null, minutes:null }), _heatGateForOpen: () => ({ delta:0, hour:0, wr:null, count:0, tag:null }), _pairNetExpectancy: _c10e6._pairNetExpectancy,
     ps: c.ps, pair: c.pair, effectiveConviction: c.conv, finalSignalWithMem: c.sig, _pairWatch: false, Math, Number });
 }
 T('CALM 0.35 · conv 0.33 · BTC SHORT vs ETH LONG (anti-corrélé) → porte 0.32 passe, DÉCISIF', () => {
@@ -139,7 +142,7 @@ T('paire ayant déjà une position → brique non évaluée (gestion, pas ouvert
 });
 T('pénalité d’expectancy et bonus se cumulent (0.35 + 0.10 − 0.03 = 0.42)', () => {
   S.openPositions = [{ pair:'ETH/USDT', side:'long' }];
-  const trades = Array.from({length:10}, () => ({ type:'position', pnlUsdt:-0.2 }));
+  const trades = Array.from({length:10}, () => ({ type:'position', stakeUsdt:10, pnlUsdt:-0.2 }));   // [NET] 10 clotures, -2 %/trade net < 0 -> +0.10
   const r = runGates({ S, regime:'calm', ps:{ trades }, pair:'BTC/USDT', conv:0.41, sig:-0.5 });
   assert.ok(Math.abs(r.req - 0.42) < 1e-9); assert.strictEqual(r.convGate, false);
 });

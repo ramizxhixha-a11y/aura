@@ -120,7 +120,7 @@ T('HTML : 10e4 chargé juste après 10e3 et avant 10f, même token que DOC_V, an
 T('versions en tête : 10e4 = 20260906c (non relivré en P5) ; 09c = token DOC_V', () => {
   const tok = (html.match(/DOC_V = '([0-9a-z]+)'/) || [])[1];
   assert.ok(fs.readFileSync('js/10e4-gardes-comportementales.js', 'utf8').startsWith('// ▓▓▓ VERSION 20260906c ▓▓▓'));
-  assert.ok(src09c.startsWith('// ▓▓▓ VERSION ' + tok + ' ▓▓▓'));
+  assert.ok(src09c.startsWith('// ▓▓▓ VERSION 20260906e ▓▓▓'));   // [NET 06/09] 09c non relivre
 });
 
 console.log('\n' + ok + '/' + (ok + ko) + ' tests passés' + (ko ? ' · ' + ko + ' ÉCHEC(S)' : ''));
