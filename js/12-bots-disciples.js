@@ -1,3 +1,4 @@
+// [SKILL BORNÉ · 06/09/2026] VERSION 20260906i — héritage agentPairSkill plafonné 500/cellule (halving) ; mérite par tâche plafonné 500/cellule
 // ▓▓▓ VERSION 20260815b ▓▓▓
 // 12-bots-disciples.js — Disciples des bots (architecture Rams, 15/08/2026)
 // ════════════════════════════════════════════════════════════════════════
@@ -260,6 +261,9 @@ window._onAgentEvolved = function (deadId, prevName, memory, skillCopy) {
         if (!S.agentPairSkill[heir.id][pair]) S.agentPairSkill[heir.id][pair] = { w: 0, l: 0 };
         S.agentPairSkill[heir.id][pair].w += skillCopy[pair].w || 0;
         S.agentPairSkill[heir.id][pair].l += skillCopy[pair].l || 0;
+        // [SKILL BORNÉ · 06/09] plafond 500 échantillons par cellule (halving, ratio préservé)
+        var _hc = S.agentPairSkill[heir.id][pair];
+        while (_hc.w + _hc.l > 500) { _hc.w = Math.round(_hc.w / 2); _hc.l = Math.round(_hc.l / 2); }
         cells++;
       });
     }
@@ -431,6 +435,7 @@ window._judgeDisciples = function (pos, pnlUsd) {
       if (!S.discipleTaskSkill[j.id][j.angle]) S.discipleTaskSkill[j.id][j.angle] = { w: 0, l: 0 };
       var t = S.discipleTaskSkill[j.id][j.angle];
       if (j.ans === v) t.w++; else t.l++;    // le disciple avait dit oui/non : le juge tranche
+      if (t.w + t.l > 500) { t.w = Math.round(t.w / 2); t.l = Math.round(t.l / 2); }   // [SKILL BORNÉ · 06/09] plafond 500
     });
   } catch (e) { try{window._decErr&&window._decErr(e)}catch(_e){} }
 };

@@ -1,3 +1,4 @@
+// [SKILL BORNÉ · 06/09/2026] VERSION 20260906i — applySnap : _saneSkill sur agentPairSkill + discipleTaskSkill (corrompu > 2000 → 0 ; halving ≤ 500)
 // [P7b · 06/09/2026] VERSION 20260906h — newsApiKey ajoutée à _APPLYSNAP_MANIFEST (sonde Guardian « jamais relue » : la restauration l.~425 existait, le manifeste manquait)
 // [P7 · 06/09/2026] VERSION 20260906g — restauration : + newsApiKey (clé CoinStats, 10e7), ajoutée à _LIGHT_KEYS
 // [MIGRATION FRAIS REELS · one-shot 28/07/2026] feeConfig etant persiste (_LIGHT_KEYS), la nouvelle valeur par defaut de 02 serait ecrasee au boot : cette migration releve makerRate/takerRate au plancher Binance 0,10 % dans le state sauvegarde (ne baisse jamais un taux deja superieur)
@@ -379,13 +380,29 @@ async function loadState() {
     // du 09-15/08 étaient sauvegardées mais jamais restaurées : compétence×paire, paires
     // custom, sièges des disciples, tâches, angles et mérites par tâche repartaient de
     // ZÉRO à chaque relance (prouvé par le reset entre les backups 02:31 et 06:32).
-    if (snap.agentPairSkill)    S.agentPairSkill    = snap.agentPairSkill;
+    // [SKILL BORNÉ · 06/09/2026] assainissement idempotent des tables {w,l} : cellule non finie
+    // ou > 4×plafond = corrompue (héritage exponentiel, 1e81…1e92) → remise à zéro ; sinon
+    // halving jusqu'au plafond 500 (ratio préservé). Les cellules saines passent intactes.
+    const _saneSkill = (t, cap) => {
+      const out = {};
+      Object.keys(t || {}).forEach(id => {
+        out[id] = {};
+        Object.keys(t[id] || {}).forEach(k => {
+          let w = Number((t[id][k] || {}).w), l = Number((t[id][k] || {}).l);
+          if (!isFinite(w) || !isFinite(l) || w < 0 || l < 0 || (w + l) > 4 * cap) { w = 0; l = 0; }
+          while (w + l > cap) { w = Math.round(w / 2); l = Math.round(l / 2); }
+          out[id][k] = { w: w, l: l };
+        });
+      });
+      return out;
+    };
+    if (snap.agentPairSkill)    S.agentPairSkill    = _saneSkill(snap.agentPairSkill, 500);
     if (snap.customPairs)       S.customPairs       = snap.customPairs;
     if (snap.removedPairs)      S.removedPairs      = snap.removedPairs;
     if (snap.botDisciples)      S.botDisciples      = snap.botDisciples;
     if (snap.discipleTasks)     S.discipleTasks     = snap.discipleTasks;
     if (snap.discipleAngles)    S.discipleAngles    = snap.discipleAngles;
-    if (snap.discipleTaskSkill) S.discipleTaskSkill = snap.discipleTaskSkill;
+    if (snap.discipleTaskSkill) S.discipleTaskSkill = _saneSkill(snap.discipleTaskSkill, 500);
     // [AUDIT 37 CLÉS · 16/08] les 3 vraies orphelines (le reste : miroirs walletStore
     // ou déjà relu — le manifeste était incomplet, pas la relecture) :
     if (snap.feeConfig)     S.feeConfig     = Object.assign(S.feeConfig || {}, snap.feeConfig);

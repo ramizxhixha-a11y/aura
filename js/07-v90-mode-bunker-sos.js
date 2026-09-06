@@ -1,3 +1,4 @@
+// [SKILL BORNÉ · 06/09/2026] VERSION 20260906i — triggerEvolution : reset agentPairSkill + discipleTaskSkill du siège recyclé après copie à l'héritier (fin de l'explosion exponentielle)
 // [P0 RÉGIME UNIFIÉ · 05/09/2026] lectures de régime en direct via detectMarketRegime() (source unique, 02) ; fantôme S.regime (jamais écrit) supprimé.
 // [PRIX HOLD FLUIDES · 02/08/2026] tous les prix affiches a 2 decimales (priceStr HOLD 3447, priceStr2, curStr badge, priceStr trades) au lieu de Math.floor -> SOL $73 devient $73.14 et les mouvements <$1 redeviennent visibles (avant "bloque a 73") · updater mort ac2_price_ (id inexistant) retire, le prix HOLD passe par ac2_px_
 // [STABILITE CARTE ANALYSE · 02/08/2026] VALEUR & G/P NET : 2e setter concurrent (format -0.38%(-$0.0)) retire -> plus de clignotement toutes les sec ; setter unique a 2 decimales (VALEUR $x.xx, G/P "% net $") · prix (fmtP x3) affiches a 2 decimales au lieu de floores (ex $1 869 -> $1,869.50)
@@ -2714,6 +2715,13 @@ function triggerEvolution(weak) {
   } catch(e) { try{window._decErr&&window._decErr(e)}catch(_e){} }
   weak.errors  = 0; weak.corrections = 0; weak.streak = 0;
   weak.memory  = [];
+  // [SKILL BORNÉ · 06/09/2026] l'id du siège est réutilisé par le nouveau-né : sans ce reset,
+  // la compétence-paire du défunt restait sur le siège APRÈS avoir été copiée à l'héritier
+  // (12) → la masse doublait à chaque succession (420 cellules à 1e81…1e92, ratios
+  // identiques pour tous les agents = apprentissage par paire mort). Même règle pour le
+  // mérite par tâche (discipleTaskSkill) : le nouveau-né ne porte pas les notes du défunt.
+  if (S.agentPairSkill    && S.agentPairSkill[weak.id])    delete S.agentPairSkill[weak.id];
+  if (S.discipleTaskSkill && S.discipleTaskSkill[weak.id]) delete S.discipleTaskSkill[weak.id];
   weak.fitnessHistory = [350];
   // v7.3 OPT · Hériter le regimeFitness du meilleur parent (fusion pondérée 60/40)
   const mergeRegimeFit = (rf1, rf2) => {

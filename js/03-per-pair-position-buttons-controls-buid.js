@@ -1,3 +1,4 @@
+// [SKILL BORNÉ · 06/09/2026] VERSION 20260906i — learnFromOutcome : agentPairSkill plafonné 500/cellule (halving)
 // [P7 · 06/09/2026] VERSION 20260906g — scoutAnalysis : nlp_v1 RAVIVÉ sur le signal news par paire (10e7), macro_v1/fundamental_v1 restent neutralisés (S3)
 // [FEEDBACK REEL · 07/07/2026] la realite pese plus lourd que la simulation dans learnFromOutcome : Evaluation x3, Reel x5, ecole x1 (multiplexeur garantit le mode au moment de l appel) — les vrais trades forgent enfin la fitness des agents
 // [ETAPE 5] journal de bord : max 10 entrees affichees (etait 20) · 01/07/2026
@@ -1273,6 +1274,8 @@ function learnFromOutcome(source, pnlPct, pair) {
         if (!S.agentPairSkill[a.id][pair]) S.agentPairSkill[a.id][pair] = { w: 0, l: 0 };
         const _sk = S.agentPairSkill[a.id][pair];
         if (aligned) _sk.w++; else _sk.l++;
+        // [SKILL BORNÉ · 06/09] plafond 500 échantillons (halving) : fenêtre glissante, plus d'accumulation à vie
+        if (_sk.w + _sk.l > 500) { _sk.w = Math.round(_sk.w / 2); _sk.l = Math.round(_sk.l / 2); }
       } catch(e) { try{window._decErr&&window._decErr(e)}catch(_e){} }
     }
     const prevFitness   = a.fitness;
