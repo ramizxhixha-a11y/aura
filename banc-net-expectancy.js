@@ -9,7 +9,7 @@ let ok = 0, ko = 0;
 function T(name, fn) { try { fn(); ok++; console.log('  ✅ ' + name); } catch (e) { ko++; console.log('  ❌ ' + name + '\n     ' + (e && e.message)); } }
 const TOK_10E6 = '20260906f';   // 10e6 NON relivré en P7
 const TOK_10F = '20260906g';   // 10f livré en P7, NON relivré en P7b
-const TOK = '20260906h';   // [P7 06/09/2026] token courant (10f relivré avec la porte news)
+const TOK = '20260906i';   // [SKILL BORNÉ 06/09/2026] token courant (HTML rebump, 10f NON relivré)
 const FC = { makerRate: 0.001, takerRate: 0.001, fundingRate: 0.00005, slippage: 0.0003 };
 const SRC = fs.readFileSync('js/10e6-frais-slippage.js', 'utf8');
 function mk(over) {

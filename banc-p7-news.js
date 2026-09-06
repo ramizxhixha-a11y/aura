@@ -7,7 +7,7 @@ const fs = require('fs'), vm = require('vm'), assert = require('assert');
 let ok = 0, ko = 0;
 function T(name, fn) { try { const r = fn(); if (r && typeof r.then === 'function') return r.then(() => { ok++; console.log('  ✓ ' + name); }, e => { ko++; console.log('  ✗ ' + name + '\n     ' + (e && e.message)); }); ok++; console.log('  ✓ ' + name); } catch (e) { ko++; console.log('  ✗ ' + name + '\n     ' + (e && e.message)); } return Promise.resolve(); }
 const TOK = '20260906g';   // 10e7 / 10f (P7)
-const TOK_HTML = '20260906h';   // [P7b] 09b2 relivré (manifeste) → HTML rebumpé
+const TOK_HTML = '20260906i';   // [SKILL BORNÉ 06/09] HTML rebump
 const PAYLOAD = JSON.parse(fs.readFileSync('banc-p7-news-payload.json', 'utf8'));
 const ART = PAYLOAD.result;
 const T0 = Math.max.apply(null, ART.map(a => a.feedDate)) + 60 * 1000;   // « maintenant » = 1 min après l'article le plus récent
