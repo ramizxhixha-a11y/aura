@@ -1,3 +1,4 @@
+// [FIX GEL · 06/09/2026] VERSION 20260906l — saveState : GuardianCore.autoBackup.run(false) au lieu de run(true) (backup complet IDB force toutes les 2 min -> intervalle Guardian)
 // [SKILL BORNÉ · 06/09/2026] VERSION 20260906i — applySnap : _saneSkill sur agentPairSkill + discipleTaskSkill (corrompu > 2000 → 0 ; halving ≤ 500)
 // [P7b · 06/09/2026] VERSION 20260906h — newsApiKey ajoutée à _APPLYSNAP_MANIFEST (sonde Guardian « jamais relue » : la restauration l.~425 existait, le manifeste manquait)
 // [P7 · 06/09/2026] VERSION 20260906g — restauration : + newsApiKey (clé CoinStats, 10e7), ajoutée à _LIGHT_KEYS
@@ -247,8 +248,13 @@ async function saveState(silent = false) {
       const now = Date.now();
       if (typeof window !== 'undefined' && (!window._auraLastOffsiteBk || (now - window._auraLastOffsiteBk) > 120000)) {
         window._auraLastOffsiteBk = now;
+        // [FIX GEL 06/09/2026] run(true) FORCAIT le backup complet Guardian (buildSnapshot
+        // + add IDB ~1,4 Mo + curseur de rotation = 2 etats complets deserialises) TOUTES
+        // LES 2 MIN, en ignorant l'intervalle Guardian (3 h par defaut). Ce travail tourne
+        // dans les callbacks IDB, invisibles au chrono. run(false) : Guardian applique
+        // son propre intervalle (reglable dans ses options).
         if (window.GuardianCore && window.GuardianCore.autoBackup) {
-          window.GuardianCore.autoBackup.run(true).catch(()=>{});
+          window.GuardianCore.autoBackup.run(false).catch(()=>{});
         }
       }
     }
