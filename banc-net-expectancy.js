@@ -7,7 +7,8 @@
 const fs = require('fs'), vm = require('vm'), assert = require('assert');
 let ok = 0, ko = 0;
 function T(name, fn) { try { fn(); ok++; console.log('  ✅ ' + name); } catch (e) { ko++; console.log('  ❌ ' + name + '\n     ' + (e && e.message)); } }
-const TOK = '20260906f';
+const TOK_10E6 = '20260906f';   // 10e6 NON relivré en P7
+const TOK = '20260906g';   // [P7 06/09/2026] token courant (10f relivré avec la porte news)
 const FC = { makerRate: 0.001, takerRate: 0.001, fundingRate: 0.00005, slippage: 0.0003 };
 const SRC = fs.readFileSync('js/10e6-frais-slippage.js', 'utf8');
 function mk(over) {
@@ -32,8 +33,8 @@ const live = JSON.parse(fs.readFileSync('aura_live.json', 'utf8')).aura;
 const COST_LIVE = 0.175;   // barème du backup (taker 0.0005), levier 0
 
 console.log('━━ A · 10e6 livré : module et non-régression ━━');
-T('10e6 : version ' + TOK + ', ≤ 500 lignes, exports window des 3 nouvelles fonctions + _lastCloses interne', () => {
-  assert.ok(SRC.startsWith('// ▓▓▓ VERSION ' + TOK + ' ▓▓▓'));
+T('10e6 : version ' + TOK_10E6 + ', ≤ 500 lignes, exports window des 3 nouvelles fonctions + _lastCloses interne', () => {
+  assert.ok(SRC.startsWith('// ▓▓▓ VERSION ' + TOK_10E6 + ' ▓▓▓'));
   assert.ok(SRC.split('\n').length <= 500);
   const c = mk();
   ['_ownStakeCostPct', '_pairNetExpectancy', '_learnedNetUsd', '_netExpectancyPct', '_costGateForOpen'].forEach(f => assert.strictEqual(typeof c.window[f], 'function', f));
@@ -86,9 +87,9 @@ T('50 clôtures par mode → seulement les 20 dernières de chaque mode comptent
 console.log('━━ C · texte LIVRÉ de 10f : 4 sites alignés, plus aucune lecture brute ━━');
 const F = fs.readFileSync('js/10f-resolveur-cycle.js', 'utf8');
 const codeLines = F.split('\n').filter(l => !/^\s*\/\//.test(l));
-T('10f : version ' + TOK + ', ≤ 500 lignes de code hors commentaires ? non — 583 lignes totales (module hérité, non redécoupé ici), 0 lecture de totalPnlPct / totalPnlUsd / _recentNet / _learned hors commentaires', () => {
+T('10f : version ' + TOK + ', ≤ 500 lignes de code hors commentaires ? non — 601 lignes totales (module hérité, non redécoupé ici ; [P7] +18 : 10 de code, 8 de commentaires), 0 lecture de totalPnlPct / totalPnlUsd / _recentNet / _learned hors commentaires', () => {
   assert.ok(F.startsWith('// ▓▓▓ VERSION ' + TOK + ' ▓▓▓'));
-  assert.strictEqual(F.split('\n').length, 583);
+  assert.strictEqual(F.split('\n').length, 601);
   const code = codeLines.join('\n');
   ['totalPnlPct', 'totalPnlUsd', '_recentNet', '_recentCloses', '_learned ', '_learned +=', 'ps.totalTrades || 0) >= 20', '_pt >= 15'].forEach(k => assert.strictEqual(code.split(k).length - 1, 0, k));
 });
@@ -162,8 +163,8 @@ T('bases solides RE sur le backup (AA = backup, EV vide) : AVAX brut +273 $ à v
 });
 console.log('━━ E · HTML ━━');
 const html = fs.readFileSync('AURA8_v118.html', 'utf8');
-T('HTML : 77 × v=' + TOK + ', DOC_V = ' + TOK + ', 0 × 20260906e, 10e6 chargé UNE fois entre 10e5 et 10f', () => {
-  assert.strictEqual(html.split('v=' + TOK).length - 1, 77); assert.strictEqual(html.split('20260906e').length - 1, 0);
+T('HTML : 78 × v=' + TOK + ' ([P7] +10e7), DOC_V = ' + TOK + ', 0 × 20260906f, 10e6 chargé UNE fois entre 10e5 et 10f', () => {
+  assert.strictEqual(html.split('v=' + TOK).length - 1, 78); assert.strictEqual(html.split('20260906f').length - 1, 0);
   assert.ok(html.includes("var DOC_V = '" + TOK + "';"));
   const a = html.indexOf('js/10e5-beta-btc.js'), b = html.indexOf('js/10e6-frais-slippage.js'), d = html.indexOf('js/10f-resolveur-cycle.js');
   assert.ok(a > 0 && b > a && d > b); assert.strictEqual(html.split('js/10e6-frais-slippage.js').length - 1, 1);

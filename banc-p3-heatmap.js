@@ -49,6 +49,7 @@ const floorTxt = src10f.slice(src10f.indexOf("  const _convFloor ="), src10f.ind
 function gates(conv, regime, delta, eco, corr) {
   const c = { S: { _convBoost: 0, openPositions: [] }, effectiveConviction: conv, ps: { trades: [] }, pair: 'BTC/USDT',
     detectMarketRegime: () => regime, _corrGateForOpen: () => ({ bonus: corr || 0, corr: null }), _ecoGateForOpen: () => ({ malus: eco || 0, veto: false }),
+    _newsGateForOpen: () => ({ delta: 0, tag: null }),   // [P7] brique 7 stubbée NEUTRE
     _heatGateForOpen: () => ({ delta: delta || 0, hour: 3, wr: 0.3, count: 25, tag: delta > 0 ? 'froid' : delta < 0 ? 'or' : null }), _pairNetExpectancy: _c10e6._pairNetExpectancy,
     finalSignalWithMem: 0.5, _pairWatch: false, Math };
   vm.createContext(c);
@@ -70,9 +71,9 @@ T('P1 intact : bonus corr décisif calculé AVEC le delta (0.41 passe grâce à 
 T('P2 intact : éco +0.10 seul, CALM 0.40 fermée, plancher 0.40', () => { const g = gates(0.40, 'calm', 0, 0.10); assert.strictEqual(g.convGate, false); assert.ok(Math.abs(g.floor - 0.40) < 1e-9); });
 
 console.log('\n── C · 10f livré : traces et structure ──');
-T('un seul appel _heatGateForOpen dans 10f, 10 usages de _heatDelta (déclaration + 9 lectures)', () => {
+T('un seul appel _heatGateForOpen dans 10f, 12 usages de _heatDelta (déclaration + 11 lectures ; [P7] +2 : trace news du hold, _newsDecisive)', () => {
   assert.strictEqual((src10f.match(/_heatGateForOpen\(/g) || []).length, 1);
-  assert.strictEqual((src10f.match(/_heatDelta/g) || []).length, 10);
+  assert.strictEqual((src10f.match(/_heatDelta/g) || []).length, 12);
 });
 T('trace froid dans le hold (porte régime) et au plancher ; trace or à l’ouverture', () => {
   assert.strictEqual((src10f.match(/_heatTrace\(pair, _heatG, false\)/g) || []).length, 2);
@@ -90,7 +91,7 @@ T('_heatTrace : 1×/5 min/paire, icône 🕐, plafond 100 chainLog', () => {
   assert.ok(c.S.chainLog[1].desc.includes("créneau d'or 14h") && c.S.chainLog[1].desc.includes('−0.03'));
 });
 T('trace éco du hold recalculée avec le delta heatmap (seul l’éco est isolé)', () => {
-  assert.ok(src10f.includes('effectiveConviction >= (_gates.conv + _expPenalty + _heatDelta - _corrBonus - (S._convBoost || 0))) _ecoMalusTrace'));
+  assert.ok(src10f.includes('effectiveConviction >= (_gates.conv + _expPenalty + _heatDelta + _newsDelta - _corrBonus - (S._convBoost || 0))) _ecoMalusTrace'));
 });
 T('_heatDecisive exclut le delta du seuil de référence (porte ET plancher)', () => {
   assert.ok(src10f.includes('effectiveConviction < (_convFloor - _heatDelta));'));

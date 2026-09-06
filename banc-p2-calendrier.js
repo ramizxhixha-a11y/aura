@@ -77,7 +77,7 @@ const gateTxt  = src10f.slice(src10f.indexOf("  const _mktReg ="), src10f.indexO
 const floorTxt = src10f.slice(src10f.indexOf("  const _convFloor ="), src10f.indexOf("  if(_gainNet < _minNetGain"));
 function gates(conv, regime, malus, corrBonus){
   const c = { S:{ _convBoost:0, openPositions:[] }, effectiveConviction:conv, ps:{ trades:[] }, pair:'BTC/USDT',
-    detectMarketRegime:()=>regime, _corrGateForOpen:()=>({bonus:corrBonus||0, corr:null}), _ecoGateForOpen:()=>({malus:malus, veto:false}), _heatGateForOpen:()=>({delta:0, hour:0, wr:null, count:0, tag:null}), _pairNetExpectancy:_c10e6._pairNetExpectancy,
+    detectMarketRegime:()=>regime, _corrGateForOpen:()=>({bonus:corrBonus||0, corr:null}), _ecoGateForOpen:()=>({malus:malus, veto:false}), _newsGateForOpen:()=>({delta:0, tag:null}), _heatGateForOpen:()=>({delta:0, hour:0, wr:null, count:0, tag:null}), _pairNetExpectancy:_c10e6._pairNetExpectancy,
     finalSignalWithMem:0.5, _pairWatch:false, Math };
   vm.createContext(c);
   vm.runInContext(gateTxt + 'var __cg = convGate;', c);

@@ -115,7 +115,7 @@ const floorTxt = src10f.slice(src10f.indexOf("  const _convFloor ="), src10f.ind
 function runGates(o){
   const c = Object.assign(Object.create(ctx), o);
   const code = 'var out={};(function(){' + gateTxt + floorTxt + 'out.convGate=convGate;out.req=_gates.conv+_expPenalty-_corrBonus;out.floor=_convFloor;out.dec=_corrDecisive;out.bonus=_corrBonus;})();out';
-  return vm.runInNewContext(code, { S: c.S, PAIRS, detectMarketRegime: () => c.regime, _corrGateForOpen: ctx._corrGateForOpen, _ecoGateForOpen: () => ({ veto:false, malus:0, event:null, minutes:null }), _heatGateForOpen: () => ({ delta:0, hour:0, wr:null, count:0, tag:null }), _pairNetExpectancy: _c10e6._pairNetExpectancy,
+  return vm.runInNewContext(code, { S: c.S, PAIRS, detectMarketRegime: () => c.regime, _corrGateForOpen: ctx._corrGateForOpen, _newsGateForOpen: () => ({ delta:0, tag:null }), _ecoGateForOpen: () => ({ veto:false, malus:0, event:null, minutes:null }), _heatGateForOpen: () => ({ delta:0, hour:0, wr:null, count:0, tag:null }), _pairNetExpectancy: _c10e6._pairNetExpectancy,
     ps: c.ps, pair: c.pair, effectiveConviction: c.conv, finalSignalWithMem: c.sig, _pairWatch: false, Math, Number });
 }
 T('CALM 0.35 · conv 0.33 · BTC SHORT vs ETH LONG (anti-corrélé) → porte 0.32 passe, DÉCISIF', () => {
@@ -151,7 +151,7 @@ console.log('\n── D · 09c livré : veto dans l’entonnoir (texte réel) �
 const src09c = fs.readFileSync('js/09c-auto-open.js','utf8');
 const vetoTxt = src09c.slice(src09c.indexOf("  try {\n    const _cg = _corrGateForOpen(pair, side);"), src09c.indexOf("  // Smart Sizer applique"));
 const declTxt = src09c.slice(src09c.indexOf("const _corrVetoLogTs = {};"), src09c.indexOf("const _corrVetoLogTs = {};") + "const _corrVetoLogTs = {};".length);
-const c09 = { S, _corrGateForOpen: ctx._corrGateForOpen, _ecoGateForOpen: () => ({ veto:false, malus:0, event:null, minutes:null }), _ecoVetoLogTs: {}, _behavVetoLogTs: {}, _behavGateForOpen: () => ({ veto:false, reason:null, coolLeftMin:0, stakeCap:0, lastLossUsd:0, dayCount:0, dayCap:Infinity }), _betaVetoLogTs: {}, _betaGateForOpen: () => ({ veto:false, reason:null, beta:null, btcMovePct:null, stakeFactor:1, stakeReason:null }), rndHash: () => 'h', nowStr: () => 't', window: ctx, showToast: ctx.showToast, Date, String, Math };
+const c09 = { S, _corrGateForOpen: ctx._corrGateForOpen, _newsGateForOpen: () => ({ delta:0, tag:null }), _ecoGateForOpen: () => ({ veto:false, malus:0, event:null, minutes:null }), _ecoVetoLogTs: {}, _behavVetoLogTs: {}, _behavGateForOpen: () => ({ veto:false, reason:null, coolLeftMin:0, stakeCap:0, lastLossUsd:0, dayCount:0, dayCap:Infinity }), _betaVetoLogTs: {}, _betaGateForOpen: () => ({ veto:false, reason:null, beta:null, btcMovePct:null, stakeFactor:1, stakeReason:null }), rndHash: () => 'h', nowStr: () => 't', window: ctx, showToast: ctx.showToast, Date, String, Math };
 vm.createContext(c09);
 vm.runInContext(declTxt + '\nfunction _open(pair, side){' + vetoTxt + '\nreturn "OUVERT";}', c09);
 T('ETH LONG ouvert → autoOpen BTC LONG refusé : EVAL reçoit CORR, journal 🔗 + toast', () => {
