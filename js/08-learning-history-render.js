@@ -2687,6 +2687,10 @@ function simTick() {
   // v7.2 Phase 18 · Perf monitoring (rolling window, sans impact perceptible)
   const _perfStart = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
   tick++;
+  // [PHASES DU TICK — 06/09/2026] chrono par phase : la plus lente du tick est
+  // conservee dans S.perf.slowest et reprise par la ligne « LENT: timer » (00).
+  var _phLast = _perfStart, _phMax = { name: '', ms: 0 };
+  function _phEnd(name){ try { var t = performance.now(); var d = t - _phLast; if (d > _phMax.ms) _phMax = { name: name, ms: d }; _phLast = t; } catch(e) {} }
 
   // [MONITEUR DE GEL · 02/08/2026] mesure le trou depuis le tick precedent. Le battement
   // vise ~1 s ; si >3 s, on journalise la NATURE du gel pour diagnostiquer sans profiler :
@@ -2812,7 +2816,8 @@ function simTick() {
     if (_isBg) { S.tradingMode = _mDisp; window._bgResolve = false; }
   });
 
-  // ── Global ring timer (display only — BTC/USDT reference) ──
+  _phEnd('cycles paires + protection');
+  //  Global ring timer (display only — BTC/USDT reference) ──
   // S.cycleMax is the user-chosen global display reference — DO NOT overwrite it from per-pair
   const refPs = S.pairStates['BTC/USDT'] || Object.values(S.pairStates)[0];
   if(refPs) {
@@ -2866,6 +2871,7 @@ function simTick() {
     });
   }
 
+  _phEnd('nudge scores + frais + redistribution');
   // LMSR orders — agents votent sur toutes les paires (toutes les 6s)
   if(tick % 6 === 0) {
     const pairList  = Object.keys(PAIRS);
@@ -2902,6 +2908,7 @@ function simTick() {
     });
   }
 
+  _phEnd('votes LMSR');
   // v7.3 OPT · Soft learning plus rapide (5→3 ticks, ~1.5s à 500ms/tick)
   if(tick % 3 === 0) {
     learnFromOpenPositions();
@@ -2909,6 +2916,7 @@ function simTick() {
     updateAllPairCtrlLabels();   // Sync affichage steppers
   }
 
+  _phEnd('learnFromOpenPositions + estimateStakes');
   // ── DREAM TRIGGER (Feature #2) — check after every pair resolution ──
   if(tick % 8 === 0 && !S.dreamActive) {
     Object.keys(S.pairStates).forEach(pair => {
@@ -2976,6 +2984,7 @@ function simTick() {
     }
   }
 
+  _phEnd('dream trigger + regime badge');
   // Blend real prices smoothly every tick
   blendRealPrices();
 
@@ -3078,6 +3087,7 @@ function simTick() {
     if(typeof _updateCloseAllBadge === 'function') _updateCloseAllBadge();
   }
 
+  _phEnd('bougies + briques + portfolio');
   // ── Render active page (throttled) · SAUTÉ si l'écran est masqué : inutile de peindre une
   //    interface invisible, et ça évite un rattrapage brutal au retour. Le trading et
   //    l'apprentissage (au-dessus) continuent normalement — aucune donnée n'est affectée. ──
@@ -3101,6 +3111,7 @@ function simTick() {
     if(tick % 3 === 0) { drawActionMiniCharts(); updatePairBtnStates(); updateAllPairCtrlLabels(); updateBotThoughts(); }
     if(tick % 4 === 0) { updatePairAnalysisPanels(); try{Object.keys(PAIRS).forEach(ac2UpdateXInd);}catch(e){} syncPairPresets(); updateIntelBanner(); updateStreakBadge(); try { renderHome(); updateFiscalMini(); renderAnalyticsPanel(); if(typeof renderPendingActions === 'function') renderPendingActions(); } catch(e) { console.warn('tick render:', e); }
 
+    _phEnd('rendus home');
     // v6.9: Évolution continue — vérification chaque 8 ticks
     // [ANTI-CHURN GC · 03/08/2026] le limiteur 1 fusion/60s vit DANS triggerEvolution (07),
     // à la source, pour couvrir aussi les 3 appels par-décision du fichier 03.
@@ -3118,6 +3129,7 @@ function simTick() {
         if(_stagnant && tick % 24 === 0) triggerEvolution(_stagnant);
       } catch(_e) {}
     }
+  _phEnd('evolution');
   // v6.3 · Refresh roster scores every 4 ticks so agent panel shows live scores
   try {
     if(typeof runRosterAnalysis === 'function' && typeof window.runRosterAnalysis === 'function') {
@@ -3166,6 +3178,8 @@ function simTick() {
     S.perf.avgMs = S.perf.tickDurations.reduce((a,b)=>a+b,0) / S.perf.samples;
     S.perf.maxMs = Math.max(...S.perf.tickDurations);
     S.perf.lastMs = _dur;
+    _phEnd('rendus page ' + S.currentPage);
+    S.perf.slowest = { name: _phMax.name, ms: Math.round(_phMax.ms) };
   } catch(e) {}
 }
 

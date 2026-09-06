@@ -123,7 +123,8 @@
         if (S0 && S0.chainLog) {
           S0.chainLog.push({
             icon: '⏱',
-            desc: 'LENT: timer ' + name + ' ' + (dur / 1000).toFixed(1) + 's',
+            desc: 'LENT: timer ' + name + ' ' + (dur / 1000).toFixed(1) + 's'
+              + ((S0.perf && S0.perf.slowest && S0.perf.slowest.ms > 300) ? ' \u00B7 phase ' + S0.perf.slowest.name + ' ' + (S0.perf.slowest.ms / 1000).toFixed(1) + 's' : ''),   // [06/09] phase la plus lente du tick (08)
             hash: Math.random().toString(36).slice(2, 8),
             time: new Date().toLocaleTimeString()
           });
