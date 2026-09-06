@@ -6,7 +6,8 @@
 const fs = require('fs'), vm = require('vm'), assert = require('assert');
 let ok = 0, ko = 0;
 function T(name, fn) { try { const r = fn(); if (r && typeof r.then === 'function') return r.then(() => { ok++; console.log('  ✓ ' + name); }, e => { ko++; console.log('  ✗ ' + name + '\n     ' + (e && e.message)); }); ok++; console.log('  ✓ ' + name); } catch (e) { ko++; console.log('  ✗ ' + name + '\n     ' + (e && e.message)); } return Promise.resolve(); }
-const TOK = '20260906g';
+const TOK = '20260906g';   // 10e7 / 10f (P7)
+const TOK_HTML = '20260906h';   // [P7b] 09b2 relivré (manifeste) → HTML rebumpé
 const PAYLOAD = JSON.parse(fs.readFileSync('banc-p7-news-payload.json', 'utf8'));
 const ART = PAYLOAD.result;
 const T0 = Math.max.apply(null, ART.map(a => a.feedDate)) + 60 * 1000;   // « maintenant » = 1 min après l'article le plus récent
@@ -307,14 +308,21 @@ await T('sans clé : aucun fetch, lastError = no_key, source inactive, signaux n
     assert.ok(b1.includes("newsApiKey:                (typeof S.newsApiKey === 'string') ? S.newsApiKey : ''"));
     assert.ok(b2.includes("if (typeof snap.newsApiKey       === 'string') S.newsApiKey       = snap.newsApiKey;"));
     assert.ok(/'realTimeframe',\s*'newsApiKey'/.test(b2));
+    // [P7b] sonde Guardian probePersistence : toute clé de buildSnapshot doit être dans _APPLYSNAP_MANIFEST
+    const man = b2.match(/window\._APPLYSNAP_MANIFEST = \[([^\]]*)\]/)[1].split(',').map(x => x.trim().replace(/'/g, ''));
+    assert.ok(man.indexOf('newsApiKey') !== -1, 'newsApiKey absente du manifeste');
+    const snapKeys = (b1.match(/^\s{6}([A-Za-z_][A-Za-z0-9_]*):/gm) || []).map(x => x.trim().replace(':', ''));
+    const mirrors = b2.match(/window\._WALLET_MIRRORS = \[([^\]]*)\]/)[1].split(',').map(x => x.trim().replace(/'/g, ''));
+    const orphans = snapKeys.filter(k => man.indexOf(k) === -1 && mirrors.indexOf(k) === -1);
+    assert.deepStrictEqual(orphans, [], 'clés snapshot jamais relues : ' + orphans.join(','));
     assert.ok(!b1.includes('telegramCfg'), 'constat : telegramCfg non persisté (hors périmètre, documenté)');
   });
 
   console.log('\n═ F · HTML ═');
   const html = fs.readFileSync('AURA8_v118.html', 'utf8');
-  T('HTML : 78 × v=' + TOK + ' (77 + 10e7), 0 × 20260906f, DOC_V = ' + TOK + ', 10e7 chargé UNE fois entre 10e6 et 10f', () => {
-    assert.strictEqual(html.split('v=' + TOK).length - 1, 78); assert.strictEqual(html.split('20260906f').length - 1, 0);
-    assert.ok(html.includes("var DOC_V = '" + TOK + "';"));
+  T('HTML : 78 × v=' + TOK_HTML + ' (77 + 10e7), 0 × 20260906g, DOC_V = ' + TOK_HTML + ', 10e7 chargé UNE fois entre 10e6 et 10f', () => {
+    assert.strictEqual(html.split('v=' + TOK_HTML).length - 1, 78); assert.strictEqual(html.split('20260906g').length - 1, 0);
+    assert.ok(html.includes("var DOC_V = '" + TOK_HTML + "';"));
     assert.strictEqual((html.match(/js\/10e7-news-nlp\.js/g) || []).length, 1);
     const a = html.indexOf('js/10e6-frais-slippage.js'), b = html.indexOf('js/10e7-news-nlp.js'), d = html.indexOf('js/10f-resolveur-cycle.js');
     assert.ok(a < b && b < d);

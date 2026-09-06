@@ -8,7 +8,8 @@ const fs = require('fs'), vm = require('vm'), assert = require('assert');
 let ok = 0, ko = 0;
 function T(name, fn) { try { fn(); ok++; console.log('  ✅ ' + name); } catch (e) { ko++; console.log('  ❌ ' + name + '\n     ' + (e && e.message)); } }
 const TOK_10E6 = '20260906f';   // 10e6 NON relivré en P7
-const TOK = '20260906g';   // [P7 06/09/2026] token courant (10f relivré avec la porte news)
+const TOK_10F = '20260906g';   // 10f livré en P7, NON relivré en P7b
+const TOK = '20260906h';   // [P7 06/09/2026] token courant (10f relivré avec la porte news)
 const FC = { makerRate: 0.001, takerRate: 0.001, fundingRate: 0.00005, slippage: 0.0003 };
 const SRC = fs.readFileSync('js/10e6-frais-slippage.js', 'utf8');
 function mk(over) {
@@ -87,8 +88,8 @@ T('50 clôtures par mode → seulement les 20 dernières de chaque mode comptent
 console.log('━━ C · texte LIVRÉ de 10f : 4 sites alignés, plus aucune lecture brute ━━');
 const F = fs.readFileSync('js/10f-resolveur-cycle.js', 'utf8');
 const codeLines = F.split('\n').filter(l => !/^\s*\/\//.test(l));
-T('10f : version ' + TOK + ', ≤ 500 lignes de code hors commentaires ? non — 601 lignes totales (module hérité, non redécoupé ici ; [P7] +18 : 10 de code, 8 de commentaires), 0 lecture de totalPnlPct / totalPnlUsd / _recentNet / _learned hors commentaires', () => {
-  assert.ok(F.startsWith('// ▓▓▓ VERSION ' + TOK + ' ▓▓▓'));
+T('10f : version ' + TOK_10F + ', ≤ 500 lignes de code hors commentaires ? non — 601 lignes totales (module hérité, non redécoupé ici ; [P7] +18 : 10 de code, 8 de commentaires), 0 lecture de totalPnlPct / totalPnlUsd / _recentNet / _learned hors commentaires', () => {
+  assert.ok(F.startsWith('// ▓▓▓ VERSION ' + TOK_10F + ' ▓▓▓'));
   assert.strictEqual(F.split('\n').length, 601);
   const code = codeLines.join('\n');
   ['totalPnlPct', 'totalPnlUsd', '_recentNet', '_recentCloses', '_learned ', '_learned +=', 'ps.totalTrades || 0) >= 20', '_pt >= 15'].forEach(k => assert.strictEqual(code.split(k).length - 1, 0, k));
@@ -163,8 +164,8 @@ T('bases solides RE sur le backup (AA = backup, EV vide) : AVAX brut +273 $ à v
 });
 console.log('━━ E · HTML ━━');
 const html = fs.readFileSync('AURA8_v118.html', 'utf8');
-T('HTML : 78 × v=' + TOK + ' ([P7] +10e7), DOC_V = ' + TOK + ', 0 × 20260906f, 10e6 chargé UNE fois entre 10e5 et 10f', () => {
-  assert.strictEqual(html.split('v=' + TOK).length - 1, 78); assert.strictEqual(html.split('20260906f').length - 1, 0);
+T('HTML : 78 × v=' + TOK + ' ([P7] +10e7), DOC_V = ' + TOK + ', 0 × 20260906g, 10e6 chargé UNE fois entre 10e5 et 10f', () => {
+  assert.strictEqual(html.split('v=' + TOK).length - 1, 78); assert.strictEqual(html.split('20260906g').length - 1, 0);
   assert.ok(html.includes("var DOC_V = '" + TOK + "';"));
   const a = html.indexOf('js/10e5-beta-btc.js'), b = html.indexOf('js/10e6-frais-slippage.js'), d = html.indexOf('js/10f-resolveur-cycle.js');
   assert.ok(a > 0 && b > a && d > b); assert.strictEqual(html.split('js/10e6-frais-slippage.js').length - 1, 1);
