@@ -123,7 +123,7 @@
         if (S0 && S0.chainLog) {
           S0.chainLog.push({
             icon: '⏱',
-            desc: 'LENT: timer ' + name + ' ' + (dur / 1000).toFixed(1) + 's'
+            desc: 'LENT: ' + name + ' ' + (dur / 1000).toFixed(1) + 's'
               + ((S0.perf && S0.perf.slowest && S0.perf.slowest.ms > 300) ? ' \u00B7 phase ' + S0.perf.slowest.name + ' ' + (S0.perf.slowest.ms / 1000).toFixed(1) + 's' : ''),   // [06/09] phase la plus lente du tick (08)
             hash: Math.random().toString(36).slice(2, 8),
             time: new Date().toLocaleTimeString()
@@ -146,19 +146,62 @@
     var _oST = window.setTimeout, _oSI = window.setInterval, _oRAF = window.requestAnimationFrame;
     window.setTimeout = function (fn) {
       var args = Array.prototype.slice.call(arguments);
-      args[0] = _wrapFn(fn, 'setTimeout@' + _site());
+      args[0] = _wrapFn(fn, 'timer setTimeout@' + _site());
       return _oST.apply(window, args);
     };
     window.setInterval = function (fn) {
       var args = Array.prototype.slice.call(arguments);
-      args[0] = _wrapFn(fn, 'setInterval@' + _site());
+      args[0] = _wrapFn(fn, 'timer setInterval@' + _site());
       return _oSI.apply(window, args);
     };
     if (typeof _oRAF === 'function') {
       window.requestAnimationFrame = function (fn) {
-        return _oRAF.call(window, _wrapFn(fn, 'rAF@' + _site()));
+        return _oRAF.call(window, _wrapFn(fn, 'timer rAF@' + _site()));
       };
     }
+    // [06/09/2026] EXTENSION : la capture Rams 14:34 montre deux gels JS (5.4 s / 6.1 s) SANS
+    // aucune ligne LENT -> le bloqueur n'est pas un timer. Trois entrees jamais chronometrees :
+    //  1) fetch : marqueur _auraLastOp a la resolution ('fetch url') et du .json() ('json url'),
+    //     repris par la ligne Gel de 08 (couvre les continuations async/await, non enveloppables) ;
+    //  2) WebSocket onmessage/onopen/onclose : chrono + site (setter du prototype) ;
+    //  3) Promise.prototype.then : chrono + site des rappels.
+    var _oFetch = window.fetch;
+    if (typeof _oFetch === 'function') {
+      window.fetch = function (input) {
+        var u = '';
+        try { u = String((input && input.url) || input || '').replace(/^https?:\/\//, '').split('?')[0].slice(0, 60); } catch (e) {}
+        return _oFetch.apply(window, arguments).then(function (res) {
+          try {
+            window._auraLastOp = { name: 'fetch ' + u, at: _now() };
+            if (res && typeof res.json === 'function') {
+              var _oj = res.json;
+              res.json = function () {
+                return _oj.apply(res, arguments).then(function (v) {
+                  window._auraLastOp = { name: 'json ' + u, at: _now() };
+                  return v;
+                });
+              };
+            }
+          } catch (e) {}
+          return res;
+        });
+      };
+    }
+    if (typeof WebSocket !== 'undefined' && WebSocket.prototype) {
+      ['onmessage', 'onopen', 'onclose'].forEach(function (ev) {
+        var d = Object.getOwnPropertyDescriptor(WebSocket.prototype, ev);
+        if (!d || !d.set) return;
+        Object.defineProperty(WebSocket.prototype, ev, {
+          configurable: true, enumerable: d.enumerable, get: d.get,
+          set: function (fn) { d.set.call(this, _wrapFn(fn, 'ws.' + ev + '@' + _site())); }
+        });
+      });
+    }
+    var _oThen = Promise.prototype.then;
+    Promise.prototype.then = function (a, b) {
+      var sn = (typeof a === 'function' || typeof b === 'function') ? 'then@' + _site() : null;
+      return _oThen.call(this, sn ? _wrapFn(a, sn) : a, sn ? _wrapFn(b, sn) : b);
+    };
   } catch (e) {}
 })();
 
