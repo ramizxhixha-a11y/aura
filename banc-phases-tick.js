@@ -42,15 +42,15 @@ function loadReport(S0){
   return ctx._report;
 }
 t('00 : LENT sans phase quand slowest absent', ()=>{
-  const S={chainLog:[],perf:{}}; loadReport(S)('setInterval@x.js:1',1500);
+  const S={chainLog:[],perf:{}}; loadReport(S)('timer setInterval@x.js:1',1500);
   assert.strictEqual(S.chainLog[0].desc,'LENT: timer setInterval@x.js:1 1.5s');
 });
 t('00 : LENT sans phase quand slowest <= 300 ms', ()=>{
-  const S={chainLog:[],perf:{slowest:{name:'rendus home',ms:300}}}; loadReport(S)('setInterval@x.js:1',1200);
+  const S={chainLog:[],perf:{slowest:{name:'rendus home',ms:300}}}; loadReport(S)('timer setInterval@x.js:1',1200);
   assert.strictEqual(S.chainLog[0].desc,'LENT: timer setInterval@x.js:1 1.2s');
 });
 t('00 : LENT avec phase quand slowest > 300 ms', ()=>{
-  const S={chainLog:[],perf:{slowest:{name:'evolution',ms:1234}}}; loadReport(S)('setInterval@01-chrono-network.js:350',1500);
+  const S={chainLog:[],perf:{slowest:{name:'evolution',ms:1234}}}; loadReport(S)('timer setInterval@01-chrono-network.js:350',1500);
   assert.strictEqual(S.chainLog[0].desc,'LENT: timer setInterval@01-chrono-network.js:350 1.5s \u00B7 phase evolution 1.2s');
 });
 t('00 : rotation chainLog 100 conservee', ()=>{
