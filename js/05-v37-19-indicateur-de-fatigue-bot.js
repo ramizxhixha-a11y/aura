@@ -1,4 +1,5 @@
-// ▓▓▓ VERSION 20260906a ▓▓▓
+// ▓▓▓ VERSION 20260906g ▓▓▓
+// [P7 · 06/09/2026] Scoring News par Coin : fetch CryptoCompare mort + NLP local SUPPRIMÉS, rendu sur la source unique 10e7
 // [P2 · 06/09/2026] calendrier v60 : _getRecurringEvents déplacée dans 10e2-calendrier-eco.js (source unique décision+affichage) ; renderCalSection inchangé, compte à rebours « En cours » dans la fenêtre post-annonce.
 // [P0 RÉGIME UNIFIÉ · 05/09/2026] toutes les lectures de régime passent par detectMarketRegime() (source unique, 02). Mode Démo : les presets forcent le régime via S._regimeOverride (clé preset renommée regime).
 // ════════════════════════════════════════════════════════════
@@ -4587,149 +4588,65 @@ function renderCalSection() {
 }
 window.renderCalSection = renderCalSection;
 // ═══ v61 · SCORING NEWS CRYPTO PAR COIN ═══
-// Score individuel pour chaque paire AURA
-// Fetch CryptoCompare News → filtre par coin → NLP → score 0-100
-
-const _NS_CACHE = { data:{}, lastFetch:0, isFetching:false };
-const _NS_TTL   = 10 * 60 * 1000; // 10min
-
-// Mapping paires → mots-clés de recherche
-const _NS_KEYWORDS = {
-  'BTC/USDT': ['bitcoin','btc','satoshi','cryptocurrency'],
-  'ETH/USDT': ['ethereum','eth','ether','defi','vitalik'],
-  'XRP/USDT': ['xrp','ripple','garlinghouse'],
-  'SOL/USDT': ['solana','sol','anatoly'],
-  'DOGE/USDT':['dogecoin','doge','elon','musk'],
-  'ADA/USDT': ['cardano','ada','hoskinson'],
-  'AVAX/USDT':['avalanche','avax','subnet'],
-  'LINK/USDT':['chainlink','link','oracle','sergey'],
-};
-
-const _NS_BULL = ['bull','surge','pump','ath','rally','gain','adoption','approval','upgrade','breakout','listing','partnership','launch','positive'];
-const _NS_BEAR = ['bear','crash','dump','hack','ban','sec','lawsuit','fraud','scam','fear','delisting','exploit','vulnerability','penalty','fine'];
-
-function _nsScore(text) {
-  const t = (text||'').toLowerCase();
-  let bull=0, bear=0;
-  _NS_BULL.forEach(w=>{if(t.includes(w)) bull++;});
-  _NS_BEAR.forEach(w=>{if(t.includes(w)) bear++;});
-  return {bull, bear, score:bull+bear>0?(bull-bear)/(bull+bear):0};
-}
-
-async function refreshNewsScores(force) {
-  const now = Date.now();
-  if(!force && _NS_CACHE.lastFetch>0 && (now-_NS_CACHE.lastFetch)<_NS_TTL) {
-    renderNewsScoreSection(); return;
-  }
-  if(_NS_CACHE.isFetching) return;
-  _NS_CACHE.isFetching = true;
-
-  const el = document.getElementById('newsScoreSection');
-  if(el) el.innerHTML = '<div class="ns-section"><div class="ns-title">📰 Scoring News</div><div style="text-align:center;padding:20px;font-size:10px;color:var(--t3);">⏳ Chargement…</div></div>';
-
-  try {
-    const res  = await fetch('https://min-api.cryptocompare.com/data/v2/news/?lang=EN&sortOrder=latest&limit=50',
-      { signal: AbortSignal.timeout(12000) });
-    const data = await res.json();
-    const articles = data.Data || [];
-
-    // Scorer chaque paire
-    const pairs = Object.keys(PAIRS||{});
-    pairs.forEach(pair=>{
-      const keywords = _NS_KEYWORDS[pair] || [pair.replace('/USDT','').toLowerCase()];
-      const relevant = articles.filter(a=>{
-        const t = ((a.title||'')+(a.body||'').slice(0,300)).toLowerCase();
-        return keywords.some(k=>t.includes(k));
-      });
-
-      let totalBull=0, totalBear=0;
-      const top = relevant.slice(0,5).map(a=>{
-        const ns = _nsScore(a.title+(a.body||'').slice(0,200));
-        totalBull += ns.bull; totalBear += ns.bear;
-        return { title:(a.title||'').slice(0,60), ...ns,
-          source:a.source_info?.name||a.source||'', age:a.published_on };
-      });
-
-      const total = totalBull+totalBear;
-      const rawScore = total>0 ? (totalBull-totalBear)/total : 0;
-      const score = Math.round((rawScore+1)/2*100);
-
-      _NS_CACHE.data[pair] = {
-        score, rawScore, totalBull, totalBear,
-        articles:top, count:relevant.length,
-        label: score>=70?'HAUSSIER':score>=55?'POSITIF':score>=45?'NEUTRE':score>=35?'NÉGATIF':'BAISSIER',
-      };
-    });
-
-    _NS_CACHE.lastFetch = Date.now();
-    _NS_CACHE.isFetching = false;
-
-    // Stocker dans S.veilleData pour les bots
-    if(!S.veilleData) S.veilleData={};
-    S.veilleData.newsByPair = _NS_CACHE.data;
-    S.veilleData.newsByPairTs = Date.now();
-
-  } catch(e) {
-    _NS_CACHE.isFetching = false;
-    const el2 = document.getElementById('newsScoreSection');
-    if(el2) el2.innerHTML = `<div class="ns-section"><div class="ns-title">📰 Scoring News</div><div style="text-align:center;padding:16px;font-size:10px;color:var(--down);">⚠ Erreur : ${e.message}</div></div>`;
-    return;
-  }
-  renderNewsScoreSection();
-}
-window.refreshNewsScores = refreshNewsScores;
+// [P7 · 06/09/2026] Source unique 10e7 : le fetch CryptoCompare (mort, HTTP 401), le NLP local `_nsScore`
+// et le mapping par mots-clés `_NS_KEYWORDS` sont SUPPRIMÉS d'ici. Paire ↔ coin via `relatedCoins` CoinStats.
+// Cette section n'est plus qu'un RENDU de `_newsView().pairs` : les 8 paires sont toujours affichées,
+// une paire sous le seuil d'articles scorés est montrée « neutre », elle ne disparaît plus.
 
 function renderNewsScoreSection() {
   const el = document.getElementById('newsScoreSection');
   if(!el) return;
+  const v = (typeof _newsView === 'function') ? _newsView() : null;
 
-  const hasData = Object.keys(_NS_CACHE.data).length > 0;
-  const ago = _NS_CACHE.lastFetch>0?Math.floor((Date.now()-_NS_CACHE.lastFetch)/60000)+'min':'—';
-
-  if(!hasData) {
+  if(!v || !v.hasKey || !v.alive) {
+    const why = !v ? 'Module 10e7 absent'
+      : !v.hasKey ? 'Aucune clé API CoinStats — saisis-la dans « Sentiment News & Social ».'
+      : v.isFetching ? 'Chargement…'
+      : v.http === 401 ? 'Clé refusée (HTTP 401).'
+      : v.http === 429 ? 'Quota/rythme dépassé (HTTP 429) — nouvel essai dans 30 min.'
+      : v.error ? ('Erreur : ' + v.error)
+      : 'En attente du premier chargement (≤ 60 s après le démarrage).';
     el.innerHTML = `
       <div class="ns-section">
-        <div class="ns-title">📰 Scoring News par Coin</div>
-        <div style="text-align:center;padding:16px;">
-          <div style="font-size:10px;color:var(--t3);margin-bottom:10px;">Score NLP individuel pour chaque paire · 50 articles analysés</div>
-          <button onclick="refreshNewsScores(true)" style="background:rgba(56,212,245,.12);border:1px solid rgba(56,212,245,.3);border-radius:8px;color:var(--ice);font-size:11px;font-weight:700;padding:8px 20px;cursor:pointer;font-family:inherit;">📡 Charger les scores</button>
-        </div>
+        <div class="ns-title">📊 Scoring News par Coin</div>
+        <div style="text-align:center;padding:16px;font-size:10px;color:var(--t3);">${why}</div>
       </div>`;
     return;
   }
 
-  // Trier par score décroissant
-  const sorted = Object.entries(_NS_CACHE.data)
-    .sort((a,b)=>b[1].score-a[1].score);
+  const sorted = Object.entries(v.pairs || {})
+    .sort((a,b)=>(b[1].nScored>=v.minScored?1:0)-(a[1].nScored>=v.minScored?1:0) || b[1].score-a[1].score);
 
   el.innerHTML = `
     <div class="ns-section">
       <div class="ns-title">
-        📰 Scoring News par Coin
-        <button onclick="refreshNewsScores(true)" style="font-size:8px;background:rgba(255,255,255,.06);border:1px solid var(--border);border-radius:5px;color:var(--t3);padding:2px 7px;cursor:pointer;font-family:inherit;">🔄 ${ago}</button>
+        📊 Scoring News par Coin
+        <span style="margin-left:auto;font-size:8px;color:var(--t3);">24 h · demi-vie 6 h · il y a ${v.ageMin} min</span>
+        <button onclick="refreshNews(true)" style="font-size:8px;background:rgba(255,255,255,.06);border:1px solid var(--border);border-radius:5px;color:var(--t3);padding:2px 7px;cursor:pointer;margin-left:6px;">↻</button>
       </div>
 
       ${sorted.map(([pair,d])=>{
-        const col = d.score>=70?'var(--up)':d.score>=55?'#84cc16':d.score>=45?'var(--gold)':d.score>=35?'#f97316':'var(--down)';
-        const bgBadge = d.score>=70?'rgba(0,232,122,.12)':d.score>=55?'rgba(132,204,22,.12)':d.score>=45?'rgba(245,200,66,.12)':d.score>=35?'rgba(249,115,22,.12)':'rgba(255,61,107,.12)';
+        const active = d.nScored >= v.minScored;
+        const col = !active ? 'var(--t3)' : d.score>=70?'var(--up)':d.score>=55?'#84cc16':d.score>=45?'var(--gold)':d.score>=35?'#f97316':'var(--down)';
+        const bgBadge = !active ? 'rgba(255,255,255,.06)' : d.score>=70?'rgba(0,232,122,.12)':d.score>=55?'rgba(132,204,22,.12)':d.score>=45?'rgba(245,200,66,.12)':d.score>=35?'rgba(249,115,22,.12)':'rgba(255,61,107,.12)';
         const pairColor = PAIRS[pair]?.color||'var(--t1)';
         return `<div class="ns-coin-card">
           <div class="ns-coin-header">
             <span class="ns-coin-name" style="color:${pairColor};">${pair.replace('/USDT','')}</span>
-            <span style="font-size:9px;color:var(--t3);">${d.count} articles</span>
+            <span style="font-size:9px;color:var(--t3);">${d.n} art. · ${d.nScored} scorés</span>
             <div style="flex:1;"></div>
-            <span class="ns-score-badge" style="background:${bgBadge};color:${col};">${d.score} · ${d.label}</span>
+            <span class="ns-score-badge" style="background:${bgBadge};color:${col};">${active ? (d.score + ' · ' + d.label) : 'neutre (n < ' + v.minScored + ')'}</span>
           </div>
           <div class="ns-bar">
-            <div class="ns-bar-fill" style="width:${d.score}%;background:${col};"></div>
+            <div class="ns-bar-fill" style="width:${active ? d.score : 50}%;background:${col};"></div>
           </div>
           <div style="display:flex;justify-content:space-between;font-size:7px;color:var(--t3);margin-bottom:4px;">
-            <span>🟢 ${d.totalBull} bull</span>
-            <span>🔴 ${d.totalBear} bear</span>
+            <span>▲ ${d.bull} bull</span>
+            <span>▼ ${d.bear} bear</span>
           </div>
-          ${d.articles.slice(0,2).map(a=>`
+          ${(d.top||[]).slice(0,2).map(a=>`
             <div class="ns-article">
-              ${a.rawScore>0.1?'<span class="ns-keyword ns-kw-bull">↑</span>':a.rawScore<-0.1?'<span class="ns-keyword ns-kw-bear">↓</span>':''}
+              ${a.s>0.1?'<span class="ns-keyword ns-kw-bull">▲</span>':a.s<-0.1?'<span class="ns-keyword ns-kw-bear">▼</span>':''}
               ${a.title}
             </div>`).join('')}
         </div>`;

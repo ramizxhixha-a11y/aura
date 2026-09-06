@@ -1,3 +1,4 @@
+// [P7 · 06/09/2026] VERSION 20260906g — restauration : + newsApiKey (clé CoinStats, 10e7), ajoutée à _LIGHT_KEYS
 // [MIGRATION FRAIS REELS · one-shot 28/07/2026] feeConfig etant persiste (_LIGHT_KEYS), la nouvelle valeur par defaut de 02 serait ecrasee au boot : cette migration releve makerRate/takerRate au plancher Binance 0,10 % dans le state sauvegarde (ne baisse jamais un taux deja superieur)
 // [ASSAINISSEMENT DETTE ORPHELINE · one-shot 27/07/2026] efface le residu d emprunt non adosse a une position (62 $ issus du calcul de capacite defaillant, corrige depuis) — drapeau persistant, ne s execute qu une fois · [PERFORMANCE 26/07/2026] purge de rotation toutes les 2 min (bougies 60/tf, trades 40/paire, historiques bornes, texte narratif tronque au-dela des 5 derniers souvenirs) + sauvegarde 10s -> 25s : etat 1.38 Mo -> ~0.8 Mo, charge de sauvegarde divisee par ~4 · [DEFAUT EV v2 · AUTO-PROUVANT · 06/07/2026] bloc AUTONOME (agit des que l etat est pret, independant du chemin de boot) qui active les paires EV si la liste est vide ET signe chargement+action dans le chainLog (visible dans chaque depot) — remplace la v1 logee dans loadState · paperRealActivePairs vide depuis l origine (la 1re garde du moteur EV rejetait tout) : au boot, liste vide => toutes les paires activees (miroir du Reel) — EV peut enfin trader · [ASSAINISSEMENT ONE-SHOT] comptes remis au REEL (injections + vrais P&L journalises) : purge de l argent du drift (+51 fantomes AA et EV), compensation du trou de migration RE (+10.76), cumuls recales sur les vrais gains · fiscal/caisse/intelligence intacts · 05/07/2026
 // [FIX SEPARATION] recalage session/jour PAR WALLET a chaque boot + purge one-shot des bases et cumuls pollues par le legacy (~5000) · 02/07/2026
@@ -60,7 +61,8 @@ const _LIGHT_KEYS = [
   'tradingMode','botAutoMode','_mcActiveSlot',
   'totalTrades','winTrades','_genCount','_totalCompounded','_startPortfolio',
   'taxConfig','feeConfig','region','regions','toastVerbose','suggestionsEnabled',
-  'b','userStake','realTimeframe'
+  'b','userStake','realTimeframe',
+  'newsApiKey'   // [P7] clé CoinStats (10e7) : petite, vitale au boot
 ];
 
 // Copie allegee pour le LS : UNIQUEMENT les cles de la liste blanche.
@@ -420,6 +422,7 @@ async function loadState() {
     if (Array.isArray(snap.tradeContextMemory))                                    S.tradeContextMemory         = snap.tradeContextMemory.slice(-500);
     if (snap.abTesting                  && typeof snap.abTesting                  === 'object') S.abTesting                  = Object.assign(S.abTesting       || {}, snap.abTesting);
     if (typeof snap._genCount        === 'number') S._genCount        = snap._genCount;
+    if (typeof snap.newsApiKey       === 'string') S.newsApiKey       = snap.newsApiKey;   // [P7] clé CoinStats (10e7)
     if (snap.preRealSnapshotPaperReal   && typeof snap.preRealSnapshotPaperReal   === 'object') S.preRealSnapshotPaperReal   = snap.preRealSnapshotPaperReal;
   } catch(e) { dbg.push('paperReal:err'); }
 

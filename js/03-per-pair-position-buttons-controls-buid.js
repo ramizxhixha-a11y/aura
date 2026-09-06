@@ -1,3 +1,4 @@
+// [P7 · 06/09/2026] VERSION 20260906g — scoutAnalysis : nlp_v1 RAVIVÉ sur le signal news par paire (10e7), macro_v1/fundamental_v1 restent neutralisés (S3)
 // [FEEDBACK REEL · 07/07/2026] la realite pese plus lourd que la simulation dans learnFromOutcome : Evaluation x3, Reel x5, ecole x1 (multiplexeur garantit le mode au moment de l appel) — les vrais trades forgent enfin la fitness des agents
 // [ETAPE 5] journal de bord : max 10 entrees affichees (etait 20) · 01/07/2026
 // ════════════════════════════════════════════════════════════
@@ -3566,14 +3567,24 @@ function scoutAnalysis(agentId, pair) {
   const price   = ps.price || 0;
 
   switch(agentId) {
-    // [S3 · 03/09/2026] macro_v1 / fundamental_v1 / nlp_v1 NEUTRALISÉS : ils lisaient
-    // fundScore (le score qu'ils alimentent) — circularité pure, aucune source externe.
+    // [S3 · 03/09/2026] macro_v1 / fundamental_v1 NEUTRALISÉS : ils lisaient
+    // fundScore (le score qu'ils alimentent) → circularité pure, aucune source externe.
     // Score 0 / conf 0 = ils ne pèsent plus rien et le disent. Ils reprendront vie le
-    // jour où Nyx (worker Cloudflare) leur servira un vrai flux macro / news.
+    // jour où Nyx (worker Cloudflare) leur servira un vrai flux macro.
     case 'macro_v1':
     case 'fundamental_v1':
-    case 'nlp_v1':
       return { score: 0, conf: 0, reasoning: 'Pas de source externe — neutralisé (S3). En attente d\'un flux réel via Nyx.' };
+    // [P7 · 06/09/2026] nlp_v1 RAVIVÉ sur une source RÉELLE : signal news par paire (10e7, CoinStats,
+    // 24 h glissantes, ≥ 5 articles scorés). Sans clé / sans volume → 0 / 0 avec le vrai motif.
+    case 'nlp_v1': {
+      const ns = (typeof _newsPairSignal === 'function') ? _newsPairSignal(pair) : null;
+      if(!ns) {
+        const alive = (typeof _newsSourceAlive === 'function') && _newsSourceAlive();
+        return { score: 0, conf: 0, reasoning: alive ? 'News : moins de 5 articles scorés sur 24 h — neutre' : 'News : source inactive (clé CoinStats absente ou flux hors service)' };
+      }
+      const sc = Math.max(-1, Math.min(1, (ns.score - 50) / 50));
+      return { score: sc, conf: Math.min(0.7, 0.3 + ns.nScored * 0.04), reasoning: `News 24 h ${ns.label} (${ns.score}/100, ${ns.nScored} art. scorés)` };
+    }
     case 'sentiment_v2': {
       // v6.7: Real sentiment — price momentum + RSI bias as social proxy
       const candles2 = ps?.candles || [];

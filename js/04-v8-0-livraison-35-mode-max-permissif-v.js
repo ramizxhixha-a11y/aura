@@ -1,3 +1,4 @@
+// [P7 · 06/09/2026] VERSION 20260906g — Sentiment News : fetch CryptoCompare mort + NLP local SUPPRIMÉS, champ clé CoinStats, rendu sur la source unique 10e7
 // [REGLAGES v2 · ETAPE 1 · 07/07/2026] le panneau 'MODE REEL test securise' retrouve son vrai nom (MODE EVALUATION, l examen : vrais prix sans argent reel), ses paires recoivent leurs INTERRUPTEURS (togglePaperRealPair), les deux listes de paires sont renommees sans ambiguite (Evaluation vs MODE REEL argent reel), le texte GBM clarifie — etape 2 a venir : boutons legacy confirmSwitch*
 // ════════════════════════════════════════════════════════════
 // AURA8 — module consolidé 04/10
@@ -3414,193 +3415,96 @@ function renderPairScoreSection() {
 }
 window.renderPairScoreSection = renderPairScoreSection;
 // ═══ v31 · #23 SENTIMENT NEWS & SOCIAL ═══
-// Sources : CryptoCompare News (gratuit, no key) + NLP mots-clés
-// + enrichissement de la Veille Marché
-
-const _SN_CACHE = { articles:[], score:50, label:'NEUTRE', lastFetch:0 };
-const _SN_TTL   = 8 * 60 * 1000; // 8 min cache
-
-// Dictionnaire NLP mots-clés bullish/bearish
-const _NLP_BULL = ['bull','bullish','surge','rally','pump','gain','rise','ath','record','adoption','approval','launch','partnership','growth','positive','buy','long','moon','breakout','recovery','support','accumulate','upgrade','listing'];
-const _NLP_BEAR = ['bear','bearish','crash','dump','drop','fall','decline','hack','scam','fraud','ban','regulatory','sec','lawsuit','fear','sell','short','panic','correction','resistance','liquidation','exploit','vulnerability','delisting'];
-
-function _nlpScore(text) {
-  const t = (text||'').toLowerCase();
-  let bull=0, bear=0;
-  _NLP_BULL.forEach(w=>{ if(t.includes(w)) bull++; });
-  _NLP_BEAR.forEach(w=>{ if(t.includes(w)) bear++; });
-  const total = bull+bear;
-  if(total===0) return { score:0, bull, bear, words:[] };
-  const score = (bull-bear)/total; // -1 à +1
-  const words = [
-    ..._NLP_BULL.filter(w=>t.includes(w)).slice(0,3).map(w=>({w,type:'bull'})),
-    ..._NLP_BEAR.filter(w=>t.includes(w)).slice(0,3).map(w=>({w,type:'bear'})),
-  ];
-  return { score, bull, bear, words };
-}
-
-// Fetch CryptoCompare News (gratuit, CORS OK)
-async function _fetchCryptoNews() {
-  try {
-    const res = await fetch('https://min-api.cryptocompare.com/data/v2/news/?lang=EN&sortOrder=latest&limit=20', {
-      signal: AbortSignal.timeout(10000)
-    });
-    if(!res.ok) throw new Error('HTTP '+res.status);
-    const data = await res.json();
-    return data.Data || [];
-  } catch(e) {
-    console.warn('[SentimentNews] fetch error:', e.message);
-    return null;
-  }
-}
-
-// Calculer le score global de sentiment des news
-function _computeNewsScore(articles) {
-  if(!articles||articles.length===0) return 50;
-  let totalScore=0, count=0;
-  articles.forEach(a=>{
-    const text  = (a.title||'')+(a.body||'').slice(0,200);
-    const nlp   = _nlpScore(text);
-    if(nlp.bull+nlp.bear > 0) {
-      totalScore += nlp.score;
-      count++;
-    }
-  });
-  if(count===0) return 50;
-  // Normaliser -1..+1 → 0..100
-  const avg = totalScore/count;
-  return Math.round((avg+1)/2*100);
-}
-
-async function refreshSentimentNews(force) {
-  const now = Date.now();
-  if(!force && _SN_CACHE.lastFetch>0 && (now-_SN_CACHE.lastFetch)<_SN_TTL) {
-    renderSentimentNewsSection();
-    return;
-  }
-
-  // Afficher loading
-  const el = document.getElementById('sentimentNewsSection');
-  if(el) el.innerHTML='<div class="sn-section"><div class="sn-title">📰 Sentiment News</div><div style="text-align:center;padding:20px;font-size:var(--fs-10);color:var(--t3);">⏳ Chargement des news…</div></div>';
-
-  const articles = await _fetchCryptoNews();
-  if(Array.isArray(articles) && articles.length) {
-    _SN_CACHE.articles  = articles;
-    _SN_CACHE.score     = _computeNewsScore(articles);
-    _SN_CACHE.lastFetch = Date.now();
-    // Label
-    const s = _SN_CACHE.score;
-    _SN_CACHE.label = s>=70?'TRÈS HAUSSIER':s>=60?'HAUSSIER':s>=45?'NEUTRE':s>=35?'BAISSIER':'TRÈS BAISSIER';
-    _SN_CACHE.color = s>=70?'var(--up)':s>=60?'#84cc16':s>=45?'var(--gold)':s>=35?'#f97316':'var(--down)';
-
-    // Stocker dans S.veilleData pour les bots
-    if(!S.veilleData) S.veilleData={};
-    S.veilleData.newsSentimentScore = _SN_CACHE.score;
-    S.veilleData.newsSentimentLabel = _SN_CACHE.label;
-    S.veilleData.newsSentimentTs    = Date.now();
-  }
-  renderSentimentNewsSection();
-}
-window.refreshSentimentNews = refreshSentimentNews;
+// [P7 · 06/09/2026] Source unique 10e7 (CoinStats /news, clé S.newsApiKey, magasin 24 h, refresh auto
+// 15 min). Le fetch CryptoCompare (mort : clé exigée, HTTP 401) et le NLP local `_nlpScore` sont
+// SUPPRIMÉS d'ici — cette section n'est plus qu'un RENDU de `_newsView()`.
 
 function renderSentimentNewsSection() {
   const el = document.getElementById('sentimentNewsSection');
   if(!el) return;
+  const v = (typeof _newsView === 'function') ? _newsView() : null;
+  const keyVal = String((S && S.newsApiKey) || '').replace(/&/g,'&amp;').replace(/"/g,'&quot;');
+  const keyRow = `
+      <div style="display:flex;gap:6px;align-items:center;margin:6px 0 10px;">
+        <input type="password" value="${keyVal}" placeholder="Clé API CoinStats (openapi.coinstats.app · gratuite)"
+          onchange="updateNewsApiKey(this.value)" autocomplete="off"
+          style="flex:1;min-width:0;background:rgba(255,255,255,.05);border:1px solid var(--border);border-radius:6px;color:var(--t1);font-size:var(--fs-10);padding:5px 7px;">
+        <button onclick="refreshNews(true)" style="font-size:var(--fs-8);background:rgba(56,212,245,.12);border:1px solid rgba(56,212,245,.3);border-radius:5px;color:var(--ice);padding:4px 8px;cursor:pointer;">↻</button>
+      </div>`;
 
-  const hasData = _SN_CACHE.lastFetch > 0 && _SN_CACHE.articles.length > 0;
-
-  if(!hasData) {
+  if(!v || !v.hasKey || !v.alive) {
+    const why = !v ? 'Module 10e7 absent'
+      : !v.hasKey ? 'Aucune clé API — la source news est INACTIVE (porte 10f et agent nlp_v1 neutres).'
+      : v.isFetching ? 'Chargement…'
+      : v.error === 'no_key' ? 'Clé absente.'
+      : v.http === 401 ? 'Clé refusée (HTTP 401) — vérifie la clé.'
+      : v.http === 429 ? 'Quota/rythme dépassé (HTTP 429) — nouvel essai dans 30 min.'
+      : v.error ? ('Erreur : ' + v.error)
+      : 'En attente du premier chargement (≤ 60 s après le démarrage).';
     el.innerHTML = `
       <div class="sn-section">
         <div class="sn-title">📰 Sentiment News & Social</div>
-        <div style="text-align:center;padding:16px;">
-          <div style="font-size:var(--fs-10);color:var(--t3);margin-bottom:10px;">Analyse NLP des dernières actualités crypto (CryptoCompare)</div>
-          <button onclick="refreshSentimentNews(true)" style="background:rgba(56,212,245,.12);border:1px solid rgba(56,212,245,.3);border-radius:8px;color:var(--ice);font-size:var(--fs-11);font-weight:700;padding:8px 20px;cursor:pointer;font-family:inherit;">📡 Charger les news</button>
-        </div>
+        ${keyRow}
+        <div style="text-align:center;padding:10px;font-size:var(--fs-10);color:var(--t3);">${why}</div>
       </div>`;
     return;
   }
 
-  const s = _SN_CACHE.score;
-  const col = _SN_CACHE.color;
-  const pct = ((s/100)*100).toFixed(1);
-
-  // Analyser les articles avec NLP
-  const analyzed = (Array.isArray(_SN_CACHE.articles)?_SN_CACHE.articles:[]).slice(0,15).map(a=>{
-    const text = (a.title||'')+(a.body||'').slice(0,300);
-    const nlp  = _nlpScore(text);
-    return { ...a, nlp, sentiment: nlp.score>0.2?'bull':nlp.score<-0.2?'bear':'neut' };
-  }).sort((a,b)=>Math.abs(b.nlp.score)-Math.abs(a.nlp.score));
-
-  // Score par catégorie/paire
-  const pairMentions = {};
-  Object.keys(PAIRS||{}).forEach(pair=>{
-    const sym = pair.replace('/USDT','').toLowerCase();
-    const name = {btc:'bitcoin',eth:'ethereum',xrp:'ripple',sol:'solana',doge:'dogecoin',ada:'cardano',avax:'avalanche',link:'chainlink'}[sym]||sym;
-    let bull=0,bear=0,count=0;
-    (Array.isArray(_SN_CACHE.articles)?_SN_CACHE.articles:[]).forEach(a=>{
-      const t=(a.title||a.body||'').toLowerCase();
-      if(t.includes(sym)||t.includes(name)){
-        count++;
-        const n=_nlpScore(t);
-        bull+=n.bull; bear+=n.bear;
-      }
-    });
-    if(count>0) pairMentions[pair]={count,bull,bear,score:bull+bear>0?(bull-bear)/(bull+bear):0};
-  });
-
-  const ago = _SN_CACHE.lastFetch>0 ? Math.floor((Date.now()-_SN_CACHE.lastFetch)/60000)+'min' : '—';
+  const g = v.global;
+  const s = g.score;
+  const col = s>=70?'var(--up)':s>=55?'#84cc16':s>=45?'var(--gold)':s>=35?'#f97316':'var(--down)';
+  const pairs = Object.entries(v.pairs || {}).sort((a,b)=>b[1].nScored-a[1].nScored);
 
   el.innerHTML = `
     <div class="sn-section">
       <div class="sn-title">
         📰 Sentiment News & Social
-        <button onclick="refreshSentimentNews(true)" style="font-size:var(--fs-8);background:rgba(255,255,255,.06);border:1px solid var(--border);border-radius:5px;color:var(--t3);padding:2px 7px;cursor:pointer;font-family:inherit;">🔄 ${ago}</button>
+        <span style="margin-left:auto;font-size:var(--fs-8);color:var(--t3);">${v.count} art. / 24 h · il y a ${v.ageMin} min · ${v.calls} appels</span>
       </div>
+      ${keyRow}
 
       <!-- Score global -->
       <div class="sn-score-wrap">
         <div class="sn-score-num" style="color:${col};">${s}</div>
-        <div class="sn-score-lbl" style="color:${col};">${_SN_CACHE.label}</div>
+        <div class="sn-score-lbl" style="color:${col};">${g.label} · ${g.nScored} scorés / ${g.n}</div>
       </div>
       <div class="sn-gauge">
-        <div class="sn-gauge-cursor" style="left:${pct}%;color:${col};"></div>
+        <div class="sn-gauge-cursor" style="left:${s}%;color:${col};"></div>
       </div>
       <div style="display:flex;justify-content:space-between;font-size:var(--fs-8);color:var(--t3);margin-bottom:10px;">
-        <span>0 — Très baissier</span><span>50 — Neutre</span><span>100 — Très haussier</span>
+        <span>0 · Baissier</span><span>50 · Neutre</span><span>100 · Haussier</span>
       </div>
 
-      <!-- Mentions par paire -->
-      ${Object.keys(pairMentions).length>0?`
-        <div style="font-size:var(--fs-9);color:var(--t3);margin-bottom:5px;">Mentions par paire dans les news</div>
-        ${Object.entries(pairMentions).sort((a,b)=>b[1].count-a[1].count).slice(0,5).map(([pair,d])=>{
-          const sentCol = d.score>0.2?'var(--up)':d.score<-0.2?'var(--down)':'var(--t3)';
-          const sentLbl = d.score>0.2?'📈':d.score<-0.2?'📉':'➡️';
-          return `<div class="sn-pair-row">
-            <span style="font-weight:700;color:${PAIRS[pair]?.color||'var(--t1)'};">${pair.replace('/USDT','')}</span>
-            <span style="color:var(--t3);">${d.count} articles</span>
-            <span style="color:${sentCol};font-weight:700;">${sentLbl} ${(d.score*100>0?'+':'')}${(d.score*100).toFixed(0)}%</span>
-          </div>`;
-        }).join('')}
-        <div style="margin-bottom:8px;"></div>
-      `:''}
+      <!-- Par paire (relatedCoins CoinStats, 24 h, demi-vie 6 h) -->
+      <div style="font-size:var(--fs-9);color:var(--t3);margin-bottom:5px;">Par paire · signal actif dès ${v.minScored} articles scorés</div>
+      ${pairs.map(([pair,d])=>{
+        const active = d.nScored >= v.minScored;
+        const pc = active ? (d.score>=70?'var(--up)':d.score>=55?'#84cc16':d.score>=45?'var(--gold)':d.score>=35?'#f97316':'var(--down)') : 'var(--t3)';
+        return `<div class="sn-pair-row">
+          <span style="font-weight:700;color:${PAIRS[pair]?.color||'var(--t1)'};">${pair.replace('/USDT','')}</span>
+          <span style="color:var(--t3);">${d.n} art. · ${d.nScored} scorés</span>
+          <span style="color:${pc};font-weight:700;">${active ? (d.score + ' · ' + d.label) : 'n < ' + v.minScored + ' · neutre'}</span>
+        </div>`;
+      }).join('')}
+      <div style="margin-bottom:8px;"></div>
 
-      <!-- Articles récents analysés -->
-      <div style="font-size:var(--fs-9);color:var(--t3);margin-bottom:5px;">Dernières actualités analysées (${analyzed.length})</div>
-      ${analyzed.slice(0,8).map(a=>{
-        const sentCol = a.sentiment==='bull'?'var(--up)':a.sentiment==='bear'?'var(--down)':'var(--t3)';
-        const ago2 = a.published_on ? Math.floor((Date.now()/1000-a.published_on)/3600)+'h' : '—';
+      <!-- Articles scorés les plus marqués -->
+      <div style="font-size:var(--fs-9);color:var(--t3);margin-bottom:5px;">Titres scorés les plus marqués (${v.recent.length})</div>
+      ${v.recent.slice(0,8).map(a=>{
+        const sentiment = a.s>0.2?'bull':a.s<-0.2?'bear':'neut';
+        const sentCol = sentiment==='bull'?'var(--up)':sentiment==='bear'?'var(--down)':'var(--t3)';
+        const ago2 = Math.floor((Date.now()-a.ts)/3600000)+'h';
         return `<div class="sn-article">
           <div style="display:flex;align-items:flex-start;gap:6px;">
-            <span class="sn-article-badge ${a.sentiment}">${a.sentiment==='bull'?'↑ BULL':a.sentiment==='bear'?'↓ BEAR':'→ NEUT'}</span>
+            <span class="sn-article-badge ${sentiment}">${sentiment==='bull'?'▲ BULL':sentiment==='bear'?'▼ BEAR':'● NEUT'}</span>
             <div>
-              <div class="sn-article-title">${(a.title||'').slice(0,80)}${(a.title||'').length>80?'…':''}</div>
+              <div class="sn-article-title">${a.title.slice(0,80)}${a.title.length>80?'…':''}</div>
               <div class="sn-article-meta">
-                <span>${a.source_info?.name||a.source||'—'}</span>
+                <span>${a.source}</span>
                 <span>il y a ${ago2}</span>
-                <span style="color:${sentCol};">bull:${a.nlp.bull} bear:${a.nlp.bear}</span>
+                <span style="color:${sentCol};">bull:${a.bull} bear:${a.bear}</span>
               </div>
-              ${a.nlp.words.length>0?`<div style="margin-top:3px;">${a.nlp.words.map(w=>`<span class="sn-keyword ${w.type}">${w.w}</span>`).join('')}</div>`:''}
+              ${a.words.length>0?`<div style="margin-top:3px;">${a.words.map(w=>`<span class="sn-keyword ${w.type}">${w.w}</span>`).join('')}</div>`:''}
             </div>
           </div>
         </div>`;

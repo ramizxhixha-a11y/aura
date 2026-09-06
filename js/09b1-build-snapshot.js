@@ -1,3 +1,4 @@
+// [P7 · 06/09/2026] VERSION 20260906g — snapshot : + newsApiKey (clé CoinStats, 10e7)
 // [SEPARATION COMPLETE 3 MODES · 02/07/2026] flat openPositions/pnl24h/pnlHistory/pnlPeriod retires (walletStore les porte par mode)
 // [ETAPE 1 · SEPARATION 3 MODES] walletStore additif dormant · 01/07/2026
 // ════════════════════════════════════════════════════════════════════════
@@ -206,6 +207,7 @@ function buildSnapshot() {
       adaptiveState:             S.adaptiveState || {},
       tradeContextMemory:        (S.tradeContextMemory || []).slice(-500),
       abTesting:                 S.abTesting || null,
+      newsApiKey:                (typeof S.newsApiKey === 'string') ? S.newsApiKey : '',   // [P7] clé CoinStats (10e7)
 
       preRealSnapshotPaperReal: (S.tradingMode === 'paperReal') ? (S.preRealSnapshotPaperReal || null) : null,
 

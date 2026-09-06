@@ -1,5 +1,8 @@
-// ▓▓▓ VERSION 20260906f ▓▓▓
+// ▓▓▓ VERSION 20260906g ▓▓▓
 // 10f-resolveur-cycle.js — Cœur : _resolvePairCycleCore + garde-fou perte max (_lossCapSweep)
+// [P7 · 06/09/2026] BRIQUE 7 DU PONT : delta news NLP sur les portes de conviction (porte par régime ET
+// plancher 0.30), symétrique au sens du pari — contre le pari ≤ 35 → +0.05, ≤ 25 → +0.08 ; pour le pari
+// ≥ 70 → −0.02 (source unique 10e7, CoinStats 24 h, ≥ 5 articles scorés). Journalisé quand décisif (trace en 10e7).
 // [NET · 06/09/2026] EXPECTANCY NETTE : les 4 lecteurs de l'expérience de la paire (porte S3 +0.10, disjoncteur
 // x0.25/x1.8, _perfMult, bases solides RE) lisaient ps.totalPnlPct / totalPnlUsd, BRUTS de frais (pnlUsdt =
 // realisedUsd avant recordFees). Ils lisent désormais la source unique 10e6 (_pairNetExpectancy / _learnedNetUsd :
@@ -189,7 +192,11 @@ function _resolvePairCycleCore(pair, ps) {
   // pnl > 0) → −0.03, sur la porte par régime ET le plancher 0.30. Source unique 10e3.
   const _heatG = _heatGateForOpen();
   const _heatDelta = _heatG.delta || 0;
-  const convGate = effectiveConviction >= (_gates.conv + _expPenalty + _ecoMalus + _heatDelta - _corrBonus - (S._convBoost || 0));
+  // [P7 · 06/09/2026] BRIQUE 7 DU PONT — DELTA NEWS NLP : les news des 24 h sur LA paire (source unique 10e7,
+  // ≥ 5 articles scorés), lues dans le SENS du pari : contre lui → +0.05 / +0.08, pour lui → −0.02.
+  const _newsG = _newsGateForOpen(pair, finalSignalWithMem > 0 ? 'long' : 'short');
+  const _newsDelta = _newsG.delta || 0;
+  const convGate = effectiveConviction >= (_gates.conv + _expPenalty + _ecoMalus + _heatDelta + _newsDelta - _corrBonus - (S._convBoost || 0));
   const dirGate  = Math.abs(finalSignalWithMem) >= (_gates.dir - (S._convBoost || 0) * 0.5);
   const lmsrAlignBuy  = adjProb > 0.50;
   const lmsrAlignSell = adjProb < 0.50;
@@ -272,10 +279,13 @@ function _resolvePairCycleCore(pair, ps) {
   if(action==='hold' || effectiveConviction < 0.15) {
     // [P2] la porte par régime a-t-elle fermé À CAUSE du malus éco ? (passe sans, refusé avec)
     if(_ecoMalus > 0 && finalSignalWithMem !== 0 && !convGate && dirGate &&
-       effectiveConviction >= (_gates.conv + _expPenalty + _heatDelta - _corrBonus - (S._convBoost || 0))) _ecoMalusTrace(pair, _ecoG);
+       effectiveConviction >= (_gates.conv + _expPenalty + _heatDelta + _newsDelta - _corrBonus - (S._convBoost || 0))) _ecoMalusTrace(pair, _ecoG);
     // [P3] la porte par régime a-t-elle fermé À CAUSE du créneau froid ? (passe sans, refusé avec)
     if(_heatDelta > 0 && finalSignalWithMem !== 0 && !convGate && dirGate &&
-       effectiveConviction >= (_gates.conv + _expPenalty + _ecoMalus - _corrBonus - (S._convBoost || 0))) _heatTrace(pair, _heatG, false);
+       effectiveConviction >= (_gates.conv + _expPenalty + _ecoMalus + _newsDelta - _corrBonus - (S._convBoost || 0))) _heatTrace(pair, _heatG, false);
+    // [P7] la porte par régime a-t-elle fermé à CAUSE des news contre le pari ? (passe sans, refus avec)
+    if(_newsDelta > 0 && finalSignalWithMem !== 0 && !convGate && dirGate &&
+       effectiveConviction >= (_gates.conv + _expPenalty + _ecoMalus + _heatDelta - _corrBonus - (S._convBoost || 0))) _newsTrace(pair, _newsG, false);
     const candles=ps.candles;
     const move=candles.length>1?(candles[candles.length-1].c-candles[candles.length-2].c)/ps.price*100:0;
     learnFromOutcome('cycle',move,pair);
@@ -370,20 +380,26 @@ function _resolvePairCycleCore(pair, ps) {
     _pairGood  = _pairExp > 0.03;
   }
   window._pairWatchMult = _pairWatch ? 0.25 : (_pairGood ? 1.8 : 1);
-  const _convFloor = (0.30 - Math.min(0.04, (S._convBoost || 0) * 0.5)) + (_pairWatch ? 0.12 : 0) - _corrBonus + _ecoMalus + _heatDelta;
+  const _convFloor = (0.30 - Math.min(0.04, (S._convBoost || 0) * 0.5)) + (_pairWatch ? 0.12 : 0) - _corrBonus + _ecoMalus + _heatDelta + _newsDelta;
   // [P1] le bonus a-t-il été DÉCISIF ? (le trade passe avec, il n'aurait pas passé sans)
   const _corrDecisive = _corrBonus > 0 && (
-    effectiveConviction < (_gates.conv + _expPenalty + _ecoMalus + _heatDelta - (S._convBoost || 0)) ||
+    effectiveConviction < (_gates.conv + _expPenalty + _ecoMalus + _heatDelta + _newsDelta - (S._convBoost || 0)) ||
     effectiveConviction < (_convFloor + _corrBonus));
   // [P3] le créneau d'or a-t-il été DÉCISIF ? (le trade passe avec, il n'aurait pas passé sans)
   const _heatDecisive = _heatDelta < 0 && (
-    effectiveConviction < (_gates.conv + _expPenalty + _ecoMalus - _corrBonus - (S._convBoost || 0)) ||
+    effectiveConviction < (_gates.conv + _expPenalty + _ecoMalus + _newsDelta - _corrBonus - (S._convBoost || 0)) ||
     effectiveConviction < (_convFloor - _heatDelta));
+  // [P7] les news pour le pari ont-elles été DÉCISIVES ? (le trade passe avec, il n'aurait pas passé sans)
+  const _newsDecisive = _newsDelta < 0 && (
+    effectiveConviction < (_gates.conv + _expPenalty + _ecoMalus + _heatDelta - _corrBonus - (S._convBoost || 0)) ||
+    effectiveConviction < (_convFloor - _newsDelta));
   if(_gainNet < _minNetGain || effectiveConviction < _convFloor) {
     // [P2] le plancher a-t-il fermé À CAUSE du malus éco ?
     if(_ecoMalus > 0 && _gainNet >= _minNetGain && effectiveConviction >= (_convFloor - _ecoMalus)) _ecoMalusTrace(pair, _ecoG);
     // [P3] le plancher a-t-il fermé À CAUSE du créneau froid ?
     if(_heatDelta > 0 && _gainNet >= _minNetGain && effectiveConviction >= (_convFloor - _heatDelta)) _heatTrace(pair, _heatG, false);
+    // [P7] le plancher a-t-il fermé à CAUSE des news contre le pari ?
+    if(_newsDelta > 0 && _gainNet >= _minNetGain && effectiveConviction >= (_convFloor - _newsDelta)) _newsTrace(pair, _newsG, false);
     learnFromOutcome('cycle', 0, pair);
     ps.qYes = Math.max(20, 100 + (ps.qYes - 100) * 0.95);
     ps.qNo  = Math.max(20, 100 + (ps.qNo  - 100) * 0.95);
@@ -513,6 +529,8 @@ function _resolvePairCycleCore(pair, ps) {
   }
   // [P3] trace heatmap : ouverture obtenue grâce au créneau d'or
   if(_heatDecisive) _heatTrace(pair, _heatG, true);
+  // [P7] trace news : ouverture obtenue grâce aux news pour le pari
+  if(_newsDecisive) _newsTrace(pair, _newsG, true);
 
   const pt=cfg.dec>=4?ps.price.toFixed(cfg.dec):Math.floor(ps.price).toLocaleString();
   const tt=cfg.dec>=4?tpE.toFixed(cfg.dec):Math.floor(tpE).toLocaleString();
