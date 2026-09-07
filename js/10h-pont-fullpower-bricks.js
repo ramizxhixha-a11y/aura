@@ -1,23 +1,23 @@
-// ▓▓▓ VERSION 20260809k ▓▓▓
+// ▓▓▓ VERSION 20260908a ▓▓▓
 // 10h-pont-fullpower-bricks.js — Pont Claude, Plein Régime (enable), loadAllTrades, détail MAN, briques d'action
-// [DÉCOUPE 10 · 09/08/2026] Tranche BYTE-IDENTIQUE de 10-fin-bloc-restauration-v93.js
-// (lignes 2317-2792 de l'original). Aucun code réécrit. Ordre de chargement OBLIGATOIRE :
-// 10a → 10h, à la place exacte de l'ancien fichier 10 dans le HTML.
+// [DÉCOUPE 10 · 09/08/2026] Tranche de 10-fin-bloc-restauration-v93.js (lignes 2317-2792 de l'original).
+// Ordre de chargement OBLIGATOIRE : 10a → 10h, à la place exacte de l'ancien fichier 10 dans le HTML.
+// [PHASE 0 · 08/09/2026] Bloc « Pont Claude » réécrit (sécurité) : voie « boîte de dépôt publique » et
+// voie « token GitHub » retirées. Tout le reste (enableFullPowerMode → renderActionBricks) est byte-identique à la tranche d'origine.
 
 
-// ═══ PONT CLAUDE · EXPORT DEPUIS AURA (05/07/2026) ═══
-// Le bouton vit DANS AURA : cette page EST l'etat vivant, donc l'export est
-// frais PAR CONSTRUCTION — plus jamais le piege du "mauvais navigateur" (les
-// exports Guardian photographiaient un vieil IDB du 28/06). Enveloppe identique
-// au backup Guardian -> meme lecteur cote Claude. Nom FIXE : aura_live.json.
-var _PONT_V = 'v4.0';
-// Boite de depot Claude (webhook.site) : URL fixe, ecriture par POST 'simple'
-// (text/plain) que le navigateur envoie SANS preflight ni permission — teste le
-// 05/07 avec le fichier reel de 938 Ko, relu intact cote Claude.
-var _CLAUDE_BOX = 'a48904e7-79e7-4477-855b-1f2d69c7b7a5';   // ★ VERSION VISIBLE : affichee dans la barre et les toasts.
-// Une capture d'ecran suffit desormais a savoir QUELLE version tourne reellement
-// (la PWA a servi du code perime toute la soiree du 05/07 pendant que les fixes
-// etaient en ligne — indetectable sans ce marqueur).
+// ═══ PONT CLAUDE · EXPORT DEPUIS AURA (05/07/2026 · réécrit phase 0, 08/09/2026) ═══
+// Le bouton vit DANS AURA : cette page EST l'état vivant, donc l'export est
+// frais PAR CONSTRUCTION. Enveloppe identique au backup Guardian -> même lecteur
+// côté Claude. Nom FIXE : aura_live.json.
+// Phase 0 : le fichier ne quitte plus l'appareil tout seul (plus de dépôt sur une
+// boîte publique tierce, plus de push GitHub par jeton en localStorage).
+// Une seule voie, celle du backup (09b3 _shareOrDownloadJSON) : écriture native
+// Download/AURA (APK), sinon feuille de partage Android, sinon téléchargement
+// (navigateur). Rams joint ensuite aura_live.json à la conversation Claude.
+var _PONT_V = 'v5.0';   // ★ VERSION VISIBLE dans la barre et les toasts : une capture suffit à savoir quel code tourne.
+// [A20] Jeton GitHub résiduel des Ponts ≤ v4.0 (envoi direct au repo, retiré) : purgé à chaque lancement.
+try { localStorage.removeItem('aura_claude_gh_token'); } catch(e){}
 function exportForClaude() {
   try {
     var snap = (typeof buildSnapshot === 'function') ? buildSnapshot()
@@ -33,163 +33,18 @@ function exportForClaude() {
       aura: snap,
       guardian: null
     };
-    var tk = null; try { tk = localStorage.getItem('aura_claude_gh_token') || null; } catch(e){ try{window._decErr&&window._decErr(e)}catch(_e){} }
-    if (tk) { _claudePush(payload, tk); return; }
-    _claudeDrop(payload);
+    var cyc = payload.auraCycle || '?';
+    _shareOrDownloadJSON(JSON.stringify(payload), 'aura_live.json').then(function(res){
+      var m;
+      if (res === 'fs-written')      m = '\u2705 [' + _PONT_V + '] aura_live.json \u00b7 cycle ' + cyc + ' \u2014 Download/AURA \u00b7 joins-le \u00e0 Claude';
+      else if (res === 'shared')     m = '\u2705 [' + _PONT_V + '] Partag\u00e9 \u00b7 cycle ' + cyc + ' \u2014 choisis Claude';
+      else if (res === 'downloaded') m = '\u2705 [' + _PONT_V + '] aura_live.json \u00b7 cycle ' + cyc + ' \u2014 dans T\u00e9l\u00e9chargements';
+      else if (res === 'cancelled')  return;
+      else                            m = '\u26D4 [' + _PONT_V + '] Export \u00e9chou\u00e9 \u00b7 ' + String(window._fsLastDiag || 'aucune voie disponible').slice(0, 160);
+      try { showToast(m, 6000, (res === 'fs-written' || res === 'shared' || res === 'downloaded') ? 'win' : 'warn'); } catch(e){ try{window._decErr&&window._decErr(e)}catch(_e){} }
+    });
   } catch(e) { try { showToast('Export Claude : erreur', 3000, 'warn'); } catch(_) {} }
 }
-
-// SANS token : feuille de PARTAGE Android (marche en PWA, la ou le telechargement
-// est ignore). L'utilisateur choisit l'appli Claude -> le fichier arrive dans le
-// chat. Fallback final : telechargement classique (onglet navigateur).
-// DEPOT SANS RIEN : POST 'simple' vers la boite fixe. mode:'no-cors' = le
-// navigateur envoie sans exiger de permission du serveur ; la reponse est
-// opaque (on ne peut pas la lire), donc le toast dit 'Depose' — c'est Claude
-// qui CONFIRME la reception en lisant la boite (verifie une fois en reel).
-// Si le reseau rejette : bascule sur partage/telechargement.
-function _claudeDrop(payload) {
-  var txt = JSON.stringify(payload);
-  var cyc = payload.auraCycle || '?';
-  try {
-    fetch('https://webhook.site/' + _CLAUDE_BOX, { method: 'POST', mode: 'no-cors', headers: { 'Content-Type': 'text/plain' }, body: txt })
-      .then(function(){ try { showToast('✅ [' + _PONT_V + '] Déposé pour Claude · cycle ' + cyc + ' — il confirme la réception à la lecture', 6000, 'win'); } catch(e){ try{window._decErr&&window._decErr(e)}catch(_e){} } })
-      .catch(function(){ _claudeShareOrDownload(payload); });
-  } catch(e) { _claudeShareOrDownload(payload); }
-}
-function _claudeShareOrDownload(payload) {
-  var txt = JSON.stringify(payload);
-  var cyc = payload.auraCycle || '?';
-  try {
-    if (navigator.canShare && typeof File === 'function') {
-      var f = new File([txt], 'aura_live.json', { type: 'application/json' });
-      if (navigator.canShare({ files: [f] })) {
-        navigator.share({ files: [f], title: 'aura_live.json \u00b7 cycle ' + cyc })
-          .then(function(){ try { showToast('\u2705 Partag\u00e9 \u00b7 cycle ' + cyc + ' \u2014 choisis Claude (ou envoie le fichier dans le chat)', 6000, 'win'); } catch(e){ try{window._decErr&&window._decErr(e)}catch(_e){} } })
-          .catch(function(err){
-            if (err && err.name === 'AbortError') return;   // feuille fermee volontairement
-            _claudeDownloadFallback(txt, cyc);
-          });
-        return;
-      }
-    }
-  } catch(e){ try{window._decErr&&window._decErr(e)}catch(_e){} }
-  _claudeDownloadFallback(txt, cyc);
-}
-function _claudeDownloadFallback(txt, cyc) {
-  downloadFile(txt, 'aura_live.json', 'application/json');
-  var hh = new Date(); var pad = function(n){ return (n<10?'0':'')+n; };
-  try { showToast('\u2705 aura_live.json \u00b7 cycle ' + cyc + ' \u00b7 ' + pad(hh.getHours()) + ':' + pad(hh.getMinutes()) + ' \u2014 dans T\u00e9l\u00e9chargements', 6000, 'win'); } catch(e){ try{window._decErr&&window._decErr(e)}catch(_e){} }
-}
-
-// Envoi DIRECT au repo (API GitHub, token fine-grained limite au repo, Contents RW).
-// Un clic : GET sha du fichier existant puis PUT du nouveau contenu. Zero
-// telechargement, zero upload manuel, zero Commit — le repo recoit tout seul.
-// A quel compte GitHub appartient le token ? (GET /user -> login).
-// Un fine-grained ne peut JAMAIS acceder aux repos d'un autre compte : si le
-// login affiche n'est pas ramizxhixha-a11y, TOUTES les editions de droits sont
-// vaines — c'est la cause racine, prouvee a l'ecran.
-function _claudeWho(tk) {
-  return fetch('https://api.github.com/user', { headers: { 'Authorization': 'Bearer ' + tk, 'Accept': 'application/vnd.github+json' }, cache: 'no-store' })
-    .then(function(r){ return r.status === 200 ? r.json() : null; })
-    .then(function(j){ return (j && j.login) ? j.login : '?'; })
-    .catch(function(){ return '?'; });
-}
-function _claudeB64(str) {
-  // base64 sur du UTF-8 (btoa seul casse sur les accents)
-  return btoa(unescape(encodeURIComponent(str)));
-}
-function _claudePush(payload, tk) {
-  var base = 'https://api.github.com/repos/ramizxhixha-a11y/aura';
-  var hdr = { 'Authorization': 'Bearer ' + tk, 'Accept': 'application/vnd.github+json' };
-  try { showToast('\u23F3 Envoi \u00e0 Claude\u2026', 2500, 'ice'); } catch(e){ try{window._decErr&&window._decErr(e)}catch(_e){} }
-  // Le sha du fichier existant est lu via le LISTING de la racine (fiable quelle
-  // que soit la taille du fichier ; le GET direct d'un fichier proche de 1 Mo
-  // peut etre refuse par l'API et aurait fait echouer la mise a jour).
-  fetch(base + '/contents/?ref=main', { headers: hdr, cache: 'no-store' })
-    .then(function(r){
-      if (r.status !== 200) return r.json().catch(function(){ return {}; }).then(function(j){ throw { st: r.status, gh: j && j.message }; });
-      return r.json();
-    })
-    .then(function(list){
-      var sha = null;
-      if (Array.isArray(list)) { for (var i = 0; i < list.length; i++) { if (list[i] && list[i].name === 'aura_live.json') { sha = list[i].sha; break; } } }
-      var body = { message: 'aura_live via AURA \u00b7 cycle ' + (payload.auraCycle || '?'), content: _claudeB64(JSON.stringify(payload)) };
-      if (sha) body.sha = sha;
-      return fetch(base + '/contents/aura_live.json', { method: 'PUT', headers: Object.assign({ 'Content-Type': 'application/json' }, hdr), body: JSON.stringify(body) });
-    })
-    .then(function(r){
-      if (!r) return;
-      if (r.status === 200 || r.status === 201) { try { showToast('\u2705 Envoy\u00e9 \u00e0 Claude \u00b7 cycle ' + (payload.auraCycle || '?') + ' \u2014 il peut le lire maintenant', 6000, 'win'); } catch(e){ try{window._decErr&&window._decErr(e)}catch(_e){} } return; }
-      return r.json().catch(function(){ return {}; }).then(function(j){ throw { st: r.status, gh: j && j.message }; });
-    })
-    .catch(function(e){
-      var st = e && e.st, gh = e && e.gh;
-      var msg = st ? ('GitHub ' + st + (gh ? (' \u00b7 \u00ab ' + String(gh).slice(0, 90) + ' \u00bb') : '')) : 'r\u00e9seau coup\u00e9';
-      // ★ v3.5 · INSTRUMENT DE VERITE : montrer QUEL token l'app utilise reellement
-      // (12 premiers caracteres — non sensible sur ~90). ghp_ = classic,
-      // github_pat_ = fine-grained. La capture de CE toast identifie le token
-      // sans aucune ambiguite possible.
-      _claudeWho(tk).then(function(who){
-        var alerte = (who !== '?' && who !== 'ramizxhixha-a11y') ? ' \u26A0 PAS le proprietaire du repo !' : '';
-        try { showToast('\u26D4 [' + _PONT_V + '] ' + msg + ' \u00b7 token : ' + String(tk).slice(0, 12) + '\u2026 \u00b7 compte du token : ' + who + alerte + ' \u2014 capture CE message', 12000, 'warn'); } catch(_) {}
-      });
-    });
-}
-function claudeTokenConfig() {
-  try {
-    var cur = null; try { cur = localStorage.getItem('aura_claude_gh_token'); } catch(e){ try{window._decErr&&window._decErr(e)}catch(_e){} }
-    // ★ FIX (05/07 soir) · le champ n'est PLUS pre-rempli : l'ancien placeholder
-    // « •••• » faisait ignorer EN SILENCE tout collage qui le laissait en tete —
-    // les nouveaux tokens de Rams n'etaient donc JAMAIS enregistres et l'app
-    // poussait toujours avec le premier token rate. Desormais : champ VIDE,
-    // tout collage non vide est enregistre puis TESTE immediatement.
-    var msg = cur ? 'Un token est deja enregistre.\n\nColle le NOUVEAU token pour le remplacer (il sera teste aussitot).\nLaisse vide + OK pour EFFACER le token actuel.'
-                  : 'Colle ton token GitHub (il sera teste aussitot).';
-    var v = window.prompt(msg, '');
-    if (v === null) return;                       // Annuler : rien ne change
-    v = (v || '').replace(/\s+/g, '');           // espaces/retours du clavier retires
-    if (!v) {
-      if (cur && window.confirm('Effacer le token enregistre ?')) {
-        localStorage.removeItem('aura_claude_gh_token');
-        try { showToast('Token efface', 2500, 'ice'); } catch(e){ try{window._decErr&&window._decErr(e)}catch(_e){} }
-      }
-      return;
-    }
-    localStorage.setItem('aura_claude_gh_token', v);
-    try { showToast('\uD83D\uDCBE Token enregistre (' + v.slice(0, 10) + '\u2026) \u2014 test en cours', 2500, 'ice'); } catch(e){ try{window._decErr&&window._decErr(e)}catch(_e){} }
-    _claudeTestToken(v);
-  } catch(e){ try{window._decErr&&window._decErr(e)}catch(_e){} }
-}
-// Verdict immediat du token : voit-il le repo ? peut-il ECRIRE ?
-// (GET /repos renvoie permissions.push quand authentifie)
-function _claudeTestToken(tk) {
-  try { showToast('\u23F3 Test du token\u2026', 2000, 'ice'); } catch(e){ try{window._decErr&&window._decErr(e)}catch(_e){} }
-  fetch('https://api.github.com/repos/ramizxhixha-a11y/aura', { headers: { 'Authorization': 'Bearer ' + tk, 'Accept': 'application/vnd.github+json' }, cache: 'no-store' })
-    .then(function(r){
-      if (r.status === 200) return r.json();
-      return r.json().catch(function(){ return {}; }).then(function(j){ throw { st: r.status, gh: j && j.message }; });
-    })
-    .then(function(j){
-      if (j && j.permissions && j.permissions.push === true) {
-        _claudeWho(tk).then(function(who){
-          try { showToast('\u2705 [' + _PONT_V + '] Token OK \u00b7 compte : ' + who + ' \u00b7 \u00e9criture confirm\u00e9e \u2014 clique \uD83D\uDCE4', 6000, 'win'); } catch(e){ try{window._decErr&&window._decErr(e)}catch(_e){} }
-        });
-      } else {
-        try { showToast('\u26A0 Le token LIT le repo mais ne peut pas \u00c9CRIRE \u2192 Permissions \u2192 Contents : Read and write', 9000, 'warn'); } catch(e){ try{window._decErr&&window._decErr(e)}catch(_e){} }
-      }
-    })
-    .catch(function(e){
-      var st = e && e.st, gh = e && e.gh ? (' \u00b7 \u00ab ' + String(e.gh).slice(0, 80) + ' \u00bb') : '';
-      var hint = (st === 401) ? ' \u2192 token mal coll\u00e9 ou expir\u00e9'
-               : (st === 404 || st === 403) ? ' \u2192 ce token ne voit pas le repo aura'
-               : '';
-      _claudeWho(tk).then(function(who){
-        var alerte = (who !== '?' && who !== 'ramizxhixha-a11y') ? ' \u26A0 PAS le proprietaire du repo !' : '';
-        try { showToast('\u26D4 [' + _PONT_V + '] GitHub ' + (st || '?') + gh + hint + ' \u00b7 compte du token : ' + who + alerte + ' \u2014 capture CE message', 12000, 'warn'); } catch(_) {}
-      });
-    });
-}
-window.claudeTokenConfig = claudeTokenConfig;
 window.exportForClaude = exportForClaude;
 
 // Bouton injecte dans le panneau Outils Avances (sous les onglets, visible partout)
@@ -203,8 +58,7 @@ window.exportForClaude = exportForClaude;
       bar.id = 'claudeExportBar';
       bar.style.cssText = 'padding:8px 14px;display:flex;align-items:center;gap:10px;border-bottom:1px solid rgba(120,180,255,.12);';
       bar.innerHTML = '<button onclick="exportForClaude()" style="flex:0 0 auto;padding:7px 12px;border-radius:9px;border:1.5px solid rgba(56,212,245,.5);background:rgba(56,212,245,.10);color:#38d4f5;font-weight:800;font-size:12px;">\uD83D\uDCE4 Export pour Claude</button>'
-        + '<button onclick="claudeTokenConfig()" title="Configurer le token GitHub (envoi direct)" style="flex:0 0 auto;padding:7px 10px;border-radius:9px;border:1.5px solid rgba(136,153,170,.4);background:transparent;color:#8899aa;font-size:12px;">\u2699</button>'
-        + '<span style="font-size:10px;color:var(--t3,#8899aa);line-height:1.35;"><b style="color:#38d4f5;">Pont ' + _PONT_V + '</b> \u00b7 aura_live.json \u00b7 \u00e9tat VIVANT \u00b7 avec token \u2699 : envoi DIRECT au repo (sinon t\u00e9l\u00e9chargement)</span>';
+        + '<span style="font-size:10px;color:var(--t3,#8899aa);line-height:1.35;"><b style="color:#38d4f5;">Pont ' + _PONT_V + '</b> \u00b7 aura_live.json \u00b7 \u00e9tat VIVANT \u00b7 \u00e9crit dans Download/AURA (natif), sinon partage / t\u00e9l\u00e9chargement</span>';
       tabs.insertAdjacentElement('afterend', bar);
       return true;
     } catch(e) { return false; }
