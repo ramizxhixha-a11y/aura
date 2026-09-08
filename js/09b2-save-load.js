@@ -1,5 +1,6 @@
 // [FIX GEL · 06/09/2026] VERSION 20260906l — saveState : GuardianCore.autoBackup.run(false) au lieu de run(true) (backup complet IDB force toutes les 2 min -> intervalle Guardian)
 // [SKILL BORNÉ · 06/09/2026] VERSION 20260906i — applySnap : _saneSkill sur agentPairSkill + discipleTaskSkill (corrompu > 2000 → 0 ; halving ≤ 500)
+// [P0b · 08/09/2026] VERSION 20260908b · newsApiKey RETIRÉE de _LIGHT_KEYS, de la restauration et de _APPLYSNAP_MANIFEST (clé hors snapshot/backup ; 10e7 -> aura_news_key)
 // [P7b · 06/09/2026] VERSION 20260906h — newsApiKey ajoutée à _APPLYSNAP_MANIFEST (sonde Guardian « jamais relue » : la restauration l.~425 existait, le manifeste manquait)
 // [P7 · 06/09/2026] VERSION 20260906g — restauration : + newsApiKey (clé CoinStats, 10e7), ajoutée à _LIGHT_KEYS
 // [MIGRATION FRAIS REELS · one-shot 28/07/2026] feeConfig etant persiste (_LIGHT_KEYS), la nouvelle valeur par defaut de 02 serait ecrasee au boot : cette migration releve makerRate/takerRate au plancher Binance 0,10 % dans le state sauvegarde (ne baisse jamais un taux deja superieur)
@@ -64,8 +65,7 @@ const _LIGHT_KEYS = [
   'tradingMode','botAutoMode','_mcActiveSlot',
   'totalTrades','winTrades','_genCount','_totalCompounded','_startPortfolio',
   'taxConfig','feeConfig','region','regions','toastVerbose','suggestionsEnabled',
-  'b','userStake','realTimeframe',
-  'newsApiKey'   // [P7] clé CoinStats (10e7) : petite, vitale au boot
+  'b','userStake','realTimeframe'
 ];
 
 // Copie allegee pour le LS : UNIQUEMENT les cles de la liste blanche.
@@ -446,7 +446,6 @@ async function loadState() {
     if (Array.isArray(snap.tradeContextMemory))                                    S.tradeContextMemory         = snap.tradeContextMemory.slice(-500);
     if (snap.abTesting                  && typeof snap.abTesting                  === 'object') S.abTesting                  = Object.assign(S.abTesting       || {}, snap.abTesting);
     if (typeof snap._genCount        === 'number') S._genCount        = snap._genCount;
-    if (typeof snap.newsApiKey       === 'string') S.newsApiKey       = snap.newsApiKey;   // [P7] clé CoinStats (10e7)
     if (snap.preRealSnapshotPaperReal   && typeof snap.preRealSnapshotPaperReal   === 'object') S.preRealSnapshotPaperReal   = snap.preRealSnapshotPaperReal;
   } catch(e) { dbg.push('paperReal:err'); }
 
@@ -1099,4 +1098,4 @@ setTimeout(_auraRotatePurge, 20000);
 // relue » — le bug du 16/08 (7 clés perdues à chaque boot) devient structurellement
 // détectable. RÈGLE : toute clé ajoutée à 09b1 s'ajoute à applySnap ET ici.
 window._WALLET_MIRRORS = ['portfolio','totalTrades','winTrades','leverageReserve','leverageTotalFees','fiscalReserveLog','cashLog','ownFundsInjected','_ownFundsLegacyEUR','ownFundsLog','_autoLevBase','dreamJournal'];
-window._APPLYSNAP_MANIFEST = ['feeConfig','vMinor','pairBestWorst','profitSplitCaissePct','vMajor','fiatConvFeePct','agentMemories','globalMemoryPool','dreams','dynamicPairKeys','pairCandidates','proposals','decisionCascade','resonanceHistory','mutedAgents','agentLessons','realTimeframe','realActivePairs','agentLessonsReal','realKillSwitch','realModeStartedAt','preRealSnapshot','agentLessonsPaperReal','paperRealTimeframe','paperRealStartedAt','paperRealKillSwitch','paperRealLastClose','paperRealConsecLosses','paperRealGlobalPauseUntil','_genCount','key','cycle','cycleMax','chainLog','learningHistory','evoLog','agents','pairStates','walletStore','openPositions','pendingActions','botFleet','paperRealConfig','adaptiveState','abTesting','taxConfig','realCandles','preRealSnapshotPaperReal','heatmap','shadow','archives','paperRealStats','realStatsByPair','paperRealActivePairs','fees','tradeContextMemory','agentPairSkill','customPairs','removedPairs','botDisciples','discipleTasks','discipleAngles','discipleTaskSkill','savedAt','version','tradingMode','botAutoMode','fullPowerMode','leverage','_autoLevBorrowed','leverageBorrowed','cashAccount','tradingAccount','fiscalReserveAccount','antiNegReserve','_startPortfolio','_fleetTruthReset0908','_totalCompounded','brainLog','_errStats','_riskVetoes','_botSurplusCarry','_fpByBot','newsApiKey'];
+window._APPLYSNAP_MANIFEST = ['feeConfig','vMinor','pairBestWorst','profitSplitCaissePct','vMajor','fiatConvFeePct','agentMemories','globalMemoryPool','dreams','dynamicPairKeys','pairCandidates','proposals','decisionCascade','resonanceHistory','mutedAgents','agentLessons','realTimeframe','realActivePairs','agentLessonsReal','realKillSwitch','realModeStartedAt','preRealSnapshot','agentLessonsPaperReal','paperRealTimeframe','paperRealStartedAt','paperRealKillSwitch','paperRealLastClose','paperRealConsecLosses','paperRealGlobalPauseUntil','_genCount','key','cycle','cycleMax','chainLog','learningHistory','evoLog','agents','pairStates','walletStore','openPositions','pendingActions','botFleet','paperRealConfig','adaptiveState','abTesting','taxConfig','realCandles','preRealSnapshotPaperReal','heatmap','shadow','archives','paperRealStats','realStatsByPair','paperRealActivePairs','fees','tradeContextMemory','agentPairSkill','customPairs','removedPairs','botDisciples','discipleTasks','discipleAngles','discipleTaskSkill','savedAt','version','tradingMode','botAutoMode','fullPowerMode','leverage','_autoLevBorrowed','leverageBorrowed','cashAccount','tradingAccount','fiscalReserveAccount','antiNegReserve','_startPortfolio','_fleetTruthReset0908','_totalCompounded','brainLog','_errStats','_riskVetoes','_botSurplusCarry','_fpByBot'];

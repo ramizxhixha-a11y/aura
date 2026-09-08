@@ -1,3 +1,5 @@
+// [P0b · 08/09/2026] VERSION 20260908b · clé CoinStats hors snapshot : persistance dédiée localStorage `aura_news_key`
+//   (_newsKeyLoad au chargement + migration one-shot depuis nexus_state_v2 ; updateNewsApiKey écrit/efface la clé). Plus jamais dans 09b1/09b2/backups/aura_live.json.
 // ▓▓▓ VERSION 20260906g ▓▓▓
 // 10e7-news-nlp.js — News NLP : source unique (fetch, magasin 24 h, scores global + paire, porte 10f)
 // [P7 · 06/09/2026] BRIQUE 7 DU PONT ANALYTICS→DÉCISION. Module dédié (≤ 500 l.).
@@ -10,7 +12,7 @@
 //
 // SOURCE VIVANTE : CoinStats `GET /news` (openapiv1.coinstats.app, header X-API-KEY, 5 crédits/appel,
 // CORS `*` vérifié). Clé gratuite (20 000 crédits/mois, 2 req/s) saisie dans la section Sentiment News
-// (04) → `S.newsApiKey` (persistée : 09b1 snapshot, 09b2 restauration + _LIGHT_KEYS).
+// (04) → `S.newsApiKey` (RAM) ; persistée UNIQUEMENT dans localStorage `aura_news_key` [P0b] — jamais dans le snapshot.
 // Réponse : { result:[ { id, title, description (vide en pratique), source, feedDate (ms),
 // relatedCoins:['bitcoin','ripple',…], searchKeyWords:[…] } ] }. Paire ↔ coin via relatedCoins (identifiants
 // CoinStats), plus de matching par mots-clés (`elon`/`musk` → DOGE).
@@ -33,6 +35,7 @@
 // SOL ≈ 9, ADA/DOGE ≈ 5, AVAX/LINK ≈ 0–2 sur 24 h. Après filtrage lexical, la porte n'agit en pratique
 // que sur BTC / ETH / XRP ; les autres restent neutres faute de volume.
 const NEWS_API_BASE     = 'https://openapiv1.coinstats.app/news';
+const NEWS_KEY_LS       = 'aura_news_key';   // [P0b] seule persistance de la clé (hors snapshot/backup)
 const NEWS_TTL_MS       = 15 * 60 * 1000;
 const NEWS_WINDOW_MS    = 24 * 3600 * 1000;
 const NEWS_HALF_LIFE_MS = 6 * 3600 * 1000;
@@ -148,6 +151,28 @@ function _newsAggregates(now) {
   }
   _newsAggCache.ts = now; _newsAggCache.fetch = _newsStore.lastFetch; _newsAggCache.global = global; _newsAggCache.pairs = pairs;
   return _newsAggCache;
+}
+
+// ─ Clé : persistance dédiée [P0b] ─
+function _newsKeyStore(v) {
+  if (typeof localStorage === 'undefined') return;
+  try { if (v) localStorage.setItem(NEWS_KEY_LS, v); else localStorage.removeItem(NEWS_KEY_LS); } catch(e) {}
+}
+function _newsKeyLoad() {
+  if (typeof localStorage === 'undefined') return '';
+  let k = '';
+  try { k = String(localStorage.getItem(NEWS_KEY_LS) || '').trim(); } catch(e) {}
+  if (!k) {
+    // migration one-shot : les snapshots antérieurs à P0b portaient la clé (09b1 + _LIGHT_KEYS). Une seule lecture, au boot.
+    try {
+      const raw = localStorage.getItem('nexus_state_v2');
+      const snap = raw ? JSON.parse(raw) : null;
+      if (snap && typeof snap.newsApiKey === 'string') k = snap.newsApiKey.trim();
+    } catch(e) {}
+    if (k) _newsKeyStore(k);
+  }
+  if (typeof S !== 'undefined' && S) S.newsApiKey = k;
+  return k;
 }
 
 // ─ État de la source ─
@@ -278,6 +303,7 @@ function updateNewsApiKey(val) {
   const v = String(val || '').trim();
   const changed = v !== (S.newsApiKey || '');
   S.newsApiKey = v;
+  _newsKeyStore(v);   // [P0b] seule persistance de la clé
   if (changed) {
     _newsStore.byId = {}; _newsStore.count = 0; _newsStore.lastFetch = 0; _newsStore.lastHttp = 0;
     _newsStore.lastError = null; _newsStore.booted = false;
@@ -302,7 +328,9 @@ function _newsView() {
   };
 }
 
-// ─ Planificateur : vérifie chaque minute (TTL 15 min), attend l'état restauré (clé lue depuis l'IDB) ─
+_newsKeyLoad();   // [P0b] clé lue au chargement du module (S existe : 02 chargé avant 10e7)
+
+// ─ Planificateur : vérifie chaque minute (TTL 15 min), attend l'état restauré (_stateReady) ─
 if (typeof setInterval === 'function' && typeof window !== 'undefined') {
   setInterval(function () {
     try { if (window._stateReady && _newsHasKey()) refreshNews(false); } catch(e) {}
@@ -319,5 +347,6 @@ window._newsPairSignal   = _newsPairSignal;
 window._newsGateForOpen  = _newsGateForOpen;
 window._newsTrace        = _newsTrace;
 window._newsView         = _newsView;
+window._newsKeyLoad      = _newsKeyLoad;
 window.refreshNews       = refreshNews;
 window.updateNewsApiKey  = updateNewsApiKey;
