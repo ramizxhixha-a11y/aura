@@ -16,10 +16,10 @@ const SRC = fs.readFileSync('js/10e7-news-nlp.js', 'utf8');
 
 function mkCtx(opts) {
   opts = opts || {};
-  const S = { newsApiKey: opts.key === undefined ? 'b952ecc80cac426ea2c8b6625efc0fb5cc05cb22cdcf' : opts.key, chainLog: [] };
+  const S = { newsApiKey: opts.key === undefined ? 'cle-factice-banc-0123456789abcdef0123' : opts.key, chainLog: [] };
   const fetchLog = [];
   const ctx = {
-    S, window: { _stateReady: true }, console, Math, Number, String, Object, Array, JSON, Promise, RegExp, Error,
+    S, window: { _stateReady: true }, localStorage: (function(){ const m={}; return { getItem:k=>(k in m?m[k]:null), setItem:(k,v)=>{m[k]=String(v);}, removeItem:k=>{delete m[k];} }; })(), console, Math, Number, String, Object, Array, JSON, Promise, RegExp, Error,
     setInterval: () => 0, setTimeout: (fn) => { fn(); return 0; }, AbortSignal: { timeout: () => null },
     rndHash: () => 'h', nowStr: () => 't',
     Date: class extends Date { constructor(...a) { super(a.length ? a[0] : _fakeNow); } static now() { return _fakeNow; } },
@@ -100,7 +100,7 @@ await T('sans clé : aucun fetch, lastError = no_key, source inactive, signaux n
   T('boot : header X-API-KEY = S.newsApiKey, page 1 ingère 100, page 2 (identique) n\'apporte rien → arrêt (2 appels, pas 5)', () => {
     assert.strictEqual(added, 100);
     assert.strictEqual(REAL.window.fetchLog.length, 2);
-    assert.strictEqual(REAL.window.fetchLog[0].key, 'b952ecc80cac426ea2c8b6625efc0fb5cc05cb22cdcf');
+    assert.strictEqual(REAL.window.fetchLog[0].key, 'cle-factice-banc-0123456789abcdef0123');
     assert.ok(REAL.window.fetchLog[0].url.startsWith('https://openapiv1.coinstats.app/news?limit=100&page=1'));
   });
   await T('TTL 15 min : un second refresh non forcé dans les 15 min ne fetch pas ; à 15 min il fetch UNE page', async () => {
@@ -303,14 +303,14 @@ await T('sans clé : aucun fetch, lastError = no_key, source inactive, signaux n
     vm.runInContext(b05 + '\nrenderNewsScoreSection();', c);
     assert.ok(el.innerHTML.includes('Scoring News') && el.innerHTML.includes('AVAX') && el.innerHTML.includes('neutre (n &lt; 5)') || el.innerHTML.includes('neutre (n < 5)'));
   });
-  T('09b1 : newsApiKey dans buildSnapshot ; 09b2 : restauration + _LIGHT_KEYS', () => {
+  T('[P0b] 09b1/09b2 : newsApiKey ABSENTE du snapshot, de la restauration, de _LIGHT_KEYS et du manifeste', () => {
     const b1 = fs.readFileSync('js/09b1-build-snapshot.js', 'utf8'), b2 = fs.readFileSync('js/09b2-save-load.js', 'utf8');
-    assert.ok(b1.includes("newsApiKey:                (typeof S.newsApiKey === 'string') ? S.newsApiKey : ''"));
-    assert.ok(b2.includes("if (typeof snap.newsApiKey       === 'string') S.newsApiKey       = snap.newsApiKey;"));
-    assert.ok(/'realTimeframe',\s*'newsApiKey'/.test(b2));
+    assert.ok(!/^\s+newsApiKey\s*:/m.test(b1), 'newsApiKey encore dans buildSnapshot');
+    assert.ok(!b2.includes('snap.newsApiKey'), 'newsApiKey encore restauree');
+    assert.ok(!/_LIGHT_KEYS = \[[^\]]*newsApiKey/.test(b2), 'newsApiKey encore dans _LIGHT_KEYS');
     // [P7b] sonde Guardian probePersistence : toute clé de buildSnapshot doit être dans _APPLYSNAP_MANIFEST
     const man = b2.match(/window\._APPLYSNAP_MANIFEST = \[([^\]]*)\]/)[1].split(',').map(x => x.trim().replace(/'/g, ''));
-    assert.ok(man.indexOf('newsApiKey') !== -1, 'newsApiKey absente du manifeste');
+    assert.ok(man.indexOf('newsApiKey') === -1, 'newsApiKey encore dans le manifeste');
     const snapKeys = (b1.match(/^\s{6}([A-Za-z_][A-Za-z0-9_]*):/gm) || []).map(x => x.trim().replace(':', ''));
     const mirrors = b2.match(/window\._WALLET_MIRRORS = \[([^\]]*)\]/)[1].split(',').map(x => x.trim().replace(/'/g, ''));
     const orphans = snapKeys.filter(k => man.indexOf(k) === -1 && mirrors.indexOf(k) === -1);
