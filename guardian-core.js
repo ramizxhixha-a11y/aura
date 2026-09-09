@@ -1,3 +1,4 @@
+// [GEL 09/09/2026] VERSION 20260909a · sondes de code une fois par session (plus 49 fetchs no-store toutes les 2 min), fichier par fichier avec respiration, _perfOp('guardianScan') · sondes Fonctions/Variables/Doublons ressuscitées (muettes depuis les tokens ?v=)
 // [PONT CLAUDE v2] source du snapshot tracee dans le fichier (live/idb/ls-light + date interne) + garde anti-perime : alerte si l etat de CE navigateur est vieux/ancien/absent (evite d exporter un etat du mauvais navigateur) · 05/07/2026
 // [PONT CLAUDE] dataDownload.forClaude() : meme backup complet, nom FIXE aura_live.json (upload racine repo -> lien stable lu par Claude) · 05/07/2026
 /* ============================================================
@@ -312,25 +313,55 @@ function probeQuota(){
   return out;
 }
 
-/* SONDE 8 — Fichiers : lit le VRAI HTML pour la liste réelle (Niveau 1 intelligent) */
-async function probeFiles(){
-  const out=[];
+/* ============================================================
+   SONDES DE CODE — fichiers déclarés, fonctions critiques, constantes, doublons
+   [GEL 09/09/2026] Ces sondes lisent le CODE, pas l'état : le code ne change pas
+   pendant une session (nouveaux fichiers = relancement de l'app). Constats vérifiés :
+   1) probeFiles était relancée TOUTES LES 2 MIN par l'embed (+ à chaque ouverture du
+      panneau) : HTML + 49 fetchs no-store dont les corps n'étaient jamais lus (≈ 2,9 Mo
+      de réseau et de tampons par scan, ≈ 85 Mo/h) pour un code immuable en session.
+   2) probeFunctions / probeUndefinedVars / probeDuplicates étaient MUETTES en production
+      depuis l'arrivée des tokens : le filtre endsWith('.js') portait sur l'URL brute
+      (js/x.js?v=…) → aucune source analysée, aucun résultat affiché (aucun groupe
+      Fonctions/Variables/Doublons dans le rapport). Leur logique d'analyse, reprise à
+      l'identique, aurait coûté 200–350 ms de regex monolithiques sur desktop.
+   3) Journal du 09/09 (20:08–20:09) : gel 13,4 s = boîte alert() du bouton Backup de
+      l'embed ; longtask de 7,7 s sans nom, ni timer, ni then, ni saveState (aucun
+      ⏱ LENT: saveState, snapshot 1,44 Mo) avec heap 468/954 Mo — cause restant à nommer.
+   Maintenant : sondes de code UNE fois par session (mémorisées, refaites sur « Relancer »),
+   un seul fetch par fichier (texte gardé pour les JS seulement), commentaires strippés une
+   fois par fichier, analyse fichier par fichier avec respiration (setTimeout 0) entre
+   chaque, opération annoncée via _perfOp('guardianScan'). Le texte des sources n'est pas
+   conservé. Un scan réseau incomplet (statut 0 = pas de réponse) n'est pas mémorisé.
+   ============================================================ */
+function _guardianOp(name){ try { if(typeof window!=='undefined' && window._perfOp) window._perfOp(name); } catch(e){} }
+function _breathe(){ return new Promise(resolve=>setTimeout(resolve,0)); }
+let _codeReport = null;   // résultats des sondes de code de la session (null tant qu'aucun scan complet n'a abouti)
+
+/* lit le VRAI HTML, teste chaque fichier déclaré UNE fois ; garde le texte des JS pour l'analyse */
+async function fetchDeclared(){
   let html=null;
   try { const r = await fetch(CFG.appUrl,{cache:'no-store'}); if(r.ok) html = await r.text(); } catch(e){}
-  if(!html){
-    out.push(R('info','Fichiers','Impossible de lire '+CFG.appUrl,'Lance Guardian depuis la même origine que l\'app (GitHub Pages).',''));
-    return { results: out, declared: [] };
-  }
-  // extraire les <script src> et <link href>
+  if(!html) return null;
   const scripts = [...html.matchAll(/<script[^>]+src=["']([^"']+)["']/gi)].map(m=>m[1]);
   const links   = [...html.matchAll(/<link[^>]+href=["']([^"']+\.css)["']/gi)].map(m=>m[1]);
   const declared = scripts.concat(links).filter(u=>!/^https?:/.test(u));
-  // tester chacun
-  const tested = await Promise.all(declared.map(async u=>{
+  const tested=[], perFile={};
+  for(const u of declared){
     const clean = u.split('?')[0];
-    let ok=false,status=0; try { const r=await fetch(clean,{cache:'no-store'}); ok=r.ok; status=r.status; } catch(e){}
-    return { url:clean, ok, status };
-  }));
+    let ok=false, status=0;
+    try {
+      const r = await fetch(clean,{cache:'no-store'}); ok=r.ok; status=r.status;
+      if(ok && clean.endsWith('.js')) perFile[clean] = await r.text();
+    } catch(e){}
+    tested.push({ url:clean, ok, status });
+  }
+  return { declared, tested, perFile };
+}
+
+/* SONDE 8 — Fichiers : déclaré dans le HTML mais absent (404) vs présent */
+function probeFilesResults(tested){
+  const out=[];
   const missing = tested.filter(t=>!t.ok);
   if(missing.length===0){
     out.push(R('ok','Fichiers','Tous les fichiers déclarés répondent', tested.length+' fichiers (script+css) tous en HTTP 200.',''));
@@ -341,96 +372,91 @@ async function probeFiles(){
         'Soit uploader le fichier, soit retirer sa balise du HTML s\'il est inutile.'));
     });
   }
-  return { results: out, declared, tested };
+  return out;
 }
 
-/* SONDE 9 — Fonctions critiques : définie ? appelée ? (Niveau 2)
-   nécessite de scanner le code des fichiers déclarés */
-async function probeFunctions(declared){
-  const out=[];
-  if(!declared || !declared.length){ return out; }
-  const jsFiles = declared.filter(u=>u.endsWith('.js'));
-  // télécharger tout le code JS (concaténé) une fois
-  let allCode=''; const perFile={};
-  for(const u of jsFiles){
-    try { const r=await fetch(u.split('?')[0],{cache:'no-store'}); if(r.ok){ const t=await r.text(); perFile[u]=t; allCode+='\n'+t; } } catch(e){}
-  }
-  if(!allCode){ return out; }
-  // Détection robuste : on cherche sur le code BRUT (le strip de chaînes sur du gros JS
-  // est trop fragile et avalait des portions de code). Une vraie définition "function X("
-  // dans un commentaire est rarissime et sans conséquence.
-  for(const fn of (CFG.criticalFunctions||[])){
-    const defRe = new RegExp('(function\\s+'+fn+'\\b|\\b'+fn+'\\s*=\\s*function|\\b'+fn+'\\s*=\\s*async\\s+function|\\b'+fn+'\\s*:\\s*function|window\\.'+fn+'\\s*=)');
-    const defined = defRe.test(allCode);
-    const callRe = new RegExp('\\b'+fn+'\\s*\\(','g');
-    const calls = (allCode.match(callRe)||[]).length;
-    if(defined && calls>1){ /* ok */ }
-    else if(!defined && calls>0){
-      out.push(R('crit','Fonctions','⚠ '+fn+'() appelée mais jamais définie',
-        'Appelée '+calls+'× dans le code chargé mais aucune définition trouvée → ReferenceError au runtime.',
-        'Définir '+fn+' ou corriger le nom. Cherche son fichier d\'origine.'));
-    }
-    else if(defined && calls<=1){
-      out.push(R('warn','Fonctions',''+fn+'() définie mais peu/pas appelée',
-        'Trouvée mais '+calls+' appel(s). Soit code mort, soit appelée dynamiquement.',
-        'Vérifier si '+fn+' est encore utile.'));
-    }
-  }
-  if(!out.length) out.push(R('ok','Fonctions','Fonctions critiques OK','Toutes définies et appelées.',''));
-  return { results: out, perFile, allCode };
-}
-
-/* SONDE 10 — Variables non définies (Niveau 3, ex. le bug DB_NAME) */
-function probeUndefinedVars(perFile){
-  const out=[];
-  if(!perFile){ return out; }
-  // Approche CIBLÉE et fiable : on ne scanne pas tous les mots majuscules (trop de bruit
-  // avec les chaînes), on vérifie une liste précise de constantes système critiques —
-  // exactement le type de bug qu'on veut attraper (ex. DB_NAME is not defined).
+/* SONDES 9 + 10 + 11 — fonctions critiques (définie ? appelée ?), constantes surveillées
+   (ex. le bug DB_NAME), doublons (définie dans 2 fichiers) : un passage par fichier,
+   respiration entre chaque fichier, mêmes regex qu'avant. */
+async function analyseCode(perFile){
+  const files = Object.keys(perFile);
+  if(!files.length) return [];
+  const fns = CFG.criticalFunctions||[];
   const WATCH = (CFG.watchedConstants || ['DB_NAME','SAVE_KEY','STORE','DB_VERSION','STORE_STATE','STORE_TRADES','STORE_FEES']);
-  let allCode=''; for(const f of Object.keys(perFile)){ allCode+='\n'+perFile[f]; }
-  for(const f of Object.keys(perFile)){
+  const re = fns.map(fn=>({ fn,
+    def:  new RegExp('(function\\s+'+fn+'\\b|\\b'+fn+'\\s*=\\s*function|\\b'+fn+'\\s*=\\s*async\\s+function|\\b'+fn+'\\s*:\\s*function|window\\.'+fn+'\\s*=)'),
+    call: new RegExp('\\b'+fn+'\\s*\\(','g'),
+    dup:  new RegExp('function\\s+'+fn+'\\s*\\(|\\b'+fn+'\\s*=\\s*function|\\b'+fn+'\\s*:\\s*function'),
+    defined:false, calls:0, files:[] }));
+  const gdef = {};   // constante exposée globalement (window./RT./globalThis.) quelque part dans le code
+  WATCH.forEach(v=>{ gdef[v] = { re:new RegExp('(window|RT|globalThis)\\.'+v+'\\s*='), hit:false }; });
+  const undef = [];
+  for(const f of files){
+    _guardianOp('guardianScan');
     const code = perFile[f];
+    const bare = code.replace(/\/\*[\s\S]*?\*\//g,' ').replace(/\/\/[^\n]*/g,' ');   // commentaires retirés UNE fois par fichier
+    const short = f.split('/').pop();
+    for(const r of re){
+      if(!r.defined && r.def.test(code)) r.defined = true;
+      const m = code.match(r.call); if(m) r.calls += m.length;
+      if(r.dup.test(bare)) r.files.push(short);
+    }
     for(const v of WATCH){
+      if(!gdef[v].hit && gdef[v].re.test(code)) gdef[v].hit = true;
       // utilisée dans CE fichier comme variable (pas en chaîne/clé) : open(DB_NAME, X) etc.
       const usedRe = new RegExp('[^\\w\'"\\.]'+v+'\\s*(\\)|,|;|\\.|\\]|\\s*[=<>+])');
       if(!usedRe.test(code)) continue;
       // définie/importée dans CE fichier ? (const/let/var/RT.X/window.X/= X)
       const declHere = new RegExp('(const|let|var)\\s+'+v+'\\b|(RT|window)\\.'+v+'\\b|'+v+'\\s*=\\s*[\'"]').test(code);
       if(declHere) continue;
-      // définie ailleurs ET exposée globalement (window./RT.) ?
-      const globalElsewhere = new RegExp('(window|RT|globalThis)\\.'+v+'\\s*=').test(allCode);
-      if(globalElsewhere) continue;
-      // sinon : utilisée mais pas définie localement ni exposée → vrai risque type DB_NAME
-      out.push(R('warn','Variables','Constante possiblement non définie : '+v,
-        'Utilisée dans '+f.split('/').pop()+' mais ni déclarée localement, ni exposée globalement (window./RT.). Risque de ReferenceError (comme le bug DB_NAME du 01/06).',
-        'Dans '+f.split('/').pop()+' : déclarer '+v+' localement, ou utiliser RT.'+v+' si elle vient de 09a-runtime-state.'));
+      undef.push({ v, short });
+    }
+    await _breathe();
+  }
+  const out=[];
+  for(const r of re){
+    if(r.defined && r.calls>1){ /* ok */ }
+    else if(!r.defined && r.calls>0){
+      out.push(R('crit','Fonctions','⚠ '+r.fn+'() appelée mais jamais définie',
+        'Appelée '+r.calls+'× dans le code chargé mais aucune définition trouvée → ReferenceError au runtime.',
+        'Définir '+r.fn+' ou corriger le nom. Cherche son fichier d\'origine.'));
+    }
+    else if(r.defined && r.calls<=1){
+      out.push(R('warn','Fonctions',''+r.fn+'() définie mais peu/pas appelée',
+        'Trouvée mais '+r.calls+' appel(s). Soit code mort, soit appelée dynamiquement.',
+        'Vérifier si '+r.fn+' est encore utile.'));
     }
   }
+  if(!out.length) out.push(R('ok','Fonctions','Fonctions critiques OK','Toutes définies et appelées.',''));
+  // utilisée mais ni déclarée localement ni exposée globalement → vrai risque type DB_NAME
+  undef.filter(u=>!gdef[u.v].hit).forEach(u=>{
+    out.push(R('warn','Variables','Constante possiblement non définie : '+u.v,
+      'Utilisée dans '+u.short+' mais ni déclarée localement, ni exposée globalement (window./RT.). Risque de ReferenceError (comme le bug DB_NAME du 01/06).',
+      'Dans '+u.short+' : déclarer '+u.v+' localement, ou utiliser RT.'+u.v+' si elle vient de 09a-runtime-state.'));
+  });
+  let dups=0;
+  for(const r of re){
+    if(r.files.length>1){
+      dups++;
+      out.push(R('warn','Doublons','⚠ '+r.fn+'() définie dans '+r.files.length+' fichiers',
+        r.files.join(', ')+' → risque de conflit (la dernière chargée gagne).',
+        'Garder une seule définition de '+r.fn+'.'));
+    }
+  }
+  if(!dups) out.push(R('ok','Doublons','Pas de doublon de fonction critique','',''));
   return out;
 }
 
-/* SONDE 11 — Doublons de fonctions (définie dans 2 fichiers) */
-function probeDuplicates(perFile){
-  const out=[];
-  if(!perFile) return out;
-  function strip(src){
-    return src.replace(/\/\*[\s\S]*?\*\//g,' ').replace(/\/\/[^\n]*/g,' ');
+/* point d'entrée des sondes de code : mémorisées pour la session, refaites sur refresh */
+async function probeCode(refresh){
+  if(_codeReport && !refresh) return _codeReport;
+  _guardianOp('guardianScan');
+  const files = await fetchDeclared();
+  if(!files){
+    return [R('info','Fichiers','Impossible de lire '+CFG.appUrl,'Lance Guardian depuis la même origine que l\'app (GitHub Pages).','')];
   }
-  for(const fn of (CFG.criticalFunctions||[])){
-    const files=[];
-    for(const f of Object.keys(perFile)){
-      const code = strip(perFile[f]);
-      // vraie définition : function X(  ou  X = function  ou  X: function
-      if(new RegExp('function\\s+'+fn+'\\s*\\(|\\b'+fn+'\\s*=\\s*function|\\b'+fn+'\\s*:\\s*function').test(code)) files.push(f.split('/').pop());
-    }
-    if(files.length>1){
-      out.push(R('warn','Doublons','⚠ '+fn+'() définie dans '+files.length+' fichiers',
-        files.join(', ')+' → risque de conflit (la dernière chargée gagne).',
-        'Garder une seule définition de '+fn+'.'));
-    }
-  }
-  if(!out.length) out.push(R('ok','Doublons','Pas de doublon de fonction critique','',''));
+  const out = probeFilesResults(files.tested).concat(await analyseCode(files.perFile));
+  if(files.tested.every(t=>t.status>0)) _codeReport = out;   // scan complet uniquement
   return out;
 }
 
@@ -598,7 +624,9 @@ function probeBackupCapability(snap){
   return out;
 }
 
-Core.runAll = async function(){
+Core.runAll = async function(opts){
+  opts = opts || {};   // { refreshCode:true } = refaire les sondes de code (bouton Relancer)
+  _guardianOp('guardianScan');
   const snap = await loadStateSnapshot();
   const mode = detectMode();
   let res = [];
@@ -615,12 +643,7 @@ Core.runAll = async function(){
   res = res.concat(probeLearning(snap));
   res = res.concat(probeQuota());
   res = res.concat(await probeIdbHealth());
-  const pf = await probeFiles();
-  res = res.concat(pf.results);
-  const fn = await probeFunctions(pf.declared);
-  if(fn.results) res = res.concat(fn.results);
-  res = res.concat(probeUndefinedVars(fn.perFile));
-  res = res.concat(probeDuplicates(fn.perFile));
+  res = res.concat(await probeCode(opts.refreshCode === true));
 
   Core.results = res;
   Core.lastRun = Date.now();

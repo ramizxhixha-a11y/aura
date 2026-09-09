@@ -1,3 +1,4 @@
+// [GEL 09/09/2026] VERSION 20260909a · scan de code une fois par session (runAll en cache) · Relancer = code inclus · boîtes modales alert remplacées par des toasts (une boîte bloquait le bot 13,4 s)
 /* ============================================================
    GUARDIAN EMBED · bouton flottant + panneau DANS AURA · maj 11/06/2026 (auto-scan périodique + toast)
    Charge après guardian-config.js + guardian-core.js.
@@ -78,7 +79,7 @@ ready(function(){
     //    JSON/Texte/Backup ne produisaient AUCUN fichier en natif.
     if (typeof window._fsWriteBackup === 'function' && (window.Capacitor || window.cordova)) {
       window._fsWriteBackup(content, n).then(function(ok){
-        if(ok){ try{ alert('Fichier ecrit : Download/AURA/'+n); }catch(e){} }
+        if(ok){ _gdnToast('Fichier ecrit : Download/AURA/'+n, true); }
         else {
           const b=new Blob([content],{type:t||'text/plain'});const u=URL.createObjectURL(b);const a=document.createElement('a');a.href=u;a.download=n;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(u);document.body.removeChild(a);},200);
         }
@@ -117,21 +118,21 @@ ready(function(){
     else if(warn>0){ fab.classList.add('warn'); dot.style.display='flex'; dot.style.background='#ffb830'; dot.style.color='#000'; dot.textContent=warn; }
     else { dot.style.display='none'; }
   }
-  async function run(){
+  async function run(refreshCode){   // refreshCode : refaire aussi les sondes de code (Relancer) ; sinon celles de la session
     const btn=document.getElementById('gdnRun'); btn.textContent='⏳ analyse…'; btn.disabled=true;
-    try{ last=await window.GuardianCore.runAll(); render(last); updateFab(last); }
+    try{ last=await window.GuardianCore.runAll({ refreshCode: refreshCode === true }); render(last); updateFab(last); }
     catch(e){ document.getElementById('gdnOut').innerHTML='<div class="gdnItem crit"><div class="t">Erreur: '+esc(e&&e.message)+'</div></div>'; }
     btn.textContent='▶ Relancer l\'analyse'; btn.disabled=false;
   }
 
-  fab.onclick=()=>{ ov.classList.add('open'); run(); };  // analyse fraîche à chaque ouverture
+  fab.onclick=()=>{ ov.classList.add('open'); run(); };  // état frais à chaque ouverture ; le code vient du scan de session
   document.getElementById('gdnClose').onclick=()=>ov.classList.remove('open');
   ov.onclick=e=>{ if(e.target===ov) ov.classList.remove('open'); };
-  document.getElementById('gdnRun').onclick=run;
+  document.getElementById('gdnRun').onclick=()=>run(true);
   ov.querySelectorAll('.gdnActions button').forEach(b=>{
     b.onclick=()=>{
       const a=b.getAttribute('data-a'); const E=window.GuardianCore.export;
-      if(a==='reload') return run();
+      if(a==='reload') return run(true);
       if(a==='full'){
         // [05/08/2026] AURA Guardian COMPLET (Inspecteur IDB, Recherche code, Restauration,
         // Nettoyage, Historique…) ouvert DANS le WebView natif via iframe même-origine :
@@ -151,7 +152,7 @@ ready(function(){
         }
         return;
       }
-      if(!last){ alert('Lance d\'abord l\'analyse.'); return; }
+      if(!last){ _gdnToast('Lance d\'abord l\'analyse.'); return; }
       const stamp=new Date().toISOString().slice(0,19).replace(/[:T]/g,'-');
       if(a==='json') dl(E.resultsJSON(),'guardian-'+stamp+'.json','application/json');
       if(a==='text') dl(E.resultsText(),'guardian-'+stamp+'.txt');
@@ -159,7 +160,7 @@ ready(function(){
         // Utilise le pipeline officiel (grabFull + ecriture native + trace journal + nom
         // aura_guardian_full_* accepte par le filtre DriveSync) au lieu d'un blob au nom hors filtre.
         const dd = window.GuardianCore && window.GuardianCore.dataDownload;
-        if(dd && dd.now){ dd.now().then(ok=>{ try{ alert(ok ? 'Backup FULL ecrit (voir journal 🛡)' : 'Echec ecriture backup'); }catch(e){} }); }
+        if(dd && dd.now){ dd.now().then(ok=>{ _gdnToast(ok ? 'Backup FULL ecrit (voir journal 🛡)' : 'Echec ecriture backup', ok); }); }
         else dl(E.fullBackup(),'aura_guardian_full_'+stamp.replace(/-/g,'')+'.json','application/json');
       }
     };
@@ -169,12 +170,12 @@ ready(function(){
      Met à jour la pastille du bouclier sans ouvrir le panneau. Toast UNIQUEMENT sur un
      NOUVEAU problème (anti-spam). Cadence modérée (2 min) + au focus → économe en batterie. */
   let _gdnPrevCrit = 0;
-  function _gdnToast(msg){
+  function _gdnToast(msg, ok){   // ok=true : vert (succès) ; sinon rouge (problème). Jamais de boîte modale alert : elle bloque tout le JS du bot tant qu'elle est affichée (13,4 s mesurées le 09/09).
     try{
       const t=document.createElement('div');
       t.textContent=msg;
       t.style.cssText='position:fixed;left:50%;bottom:88px;transform:translateX(-50%);z-index:2147483647;'
-        +'background:#2a0d12;border:1px solid #ff4d6e;color:#ffe;padding:10px 14px;border-radius:10px;'
+        +(ok ? 'background:#0b2418;border:1px solid #00e87a;' : 'background:#2a0d12;border:1px solid #ff4d6e;')+'color:#ffe;padding:10px 14px;border-radius:10px;'
         +'font:600 13px/1.35 system-ui,sans-serif;box-shadow:0 6px 22px rgba(0,0,0,.55);max-width:84vw;text-align:center;';
       document.body.appendChild(t);
       setTimeout(()=>{ t.style.transition='opacity .4s'; t.style.opacity='0'; setTimeout(()=>{ if(t.parentNode) t.remove(); },420); },4500);
