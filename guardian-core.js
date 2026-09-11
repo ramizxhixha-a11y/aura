@@ -1,3 +1,4 @@
+// [GEL BOOT · 11/09/2026] VERSION 20260911a · plus aucun travail de code au boot ni en scan silencieux (sonde Fichiers sans réseau via performance.getEntriesByType('resource')) · code = ouverture du bouclier / Relancer uniquement · probeGel lit S.perfLog.gels (durable, 30 gels, nom d'op complet, attribution LoAF) · sonde Mémoire (pente Mo/h)
 // [GEL 09/09/2026] VERSION 20260909a · sondes de code une fois par session (plus 49 fetchs no-store toutes les 2 min), fichier par fichier avec respiration, _perfOp('guardianScan') · sondes Fonctions/Variables/Doublons ressuscitées (muettes depuis les tokens ?v=)
 // [PONT CLAUDE v2] source du snapshot tracee dans le fichier (live/idb/ls-light + date interne) + garde anti-perime : alerte si l etat de CE navigateur est vieux/ancien/absent (evite d exporter un etat du mauvais navigateur) · 05/07/2026
 // [PONT CLAUDE] dataDownload.forClaude() : meme backup complet, nom FIXE aura_live.json (upload racine repo -> lien stable lu par Claude) · 05/07/2026
@@ -359,15 +360,56 @@ async function fetchDeclared(){
   return { declared, tested, perFile };
 }
 
-/* SONDE 8 — Fichiers : déclaré dans le HTML mais absent (404) vs présent */
+/* SONDE 8 — Fichiers (SANS RÉSEAU) : ce que le WebView a RÉELLEMENT chargé pour ce document.
+   [GEL BOOT 11/09/2026] Au boot et à chaque scan silencieux, cette sonde remplace l'ancien
+   scan réseau (HTML + 49 fetchs no-store + 2,9 Mo de sources lus 4 s après le boot : les
+   deux gels de démarrage de 6-8 s, 16/08, 09/09, 10/09, portaient tous « op fetch js/… »).
+   document.scripts / link[rel=stylesheet] = la liste déclarée (même document que l'app),
+   performance.getEntriesByType('resource') = le statut HTTP réel de chaque chargement
+   (responseStatus, Chrome ≥ 109). Zéro requête, synchrone, ~1 ms. Un fichier apparu ou
+   disparu APRÈS le chargement n'est vu qu'au prochain Relancer (sonde réseau ci-dessous). */
+function probeFilesResources(){
+  const out=[];
+  if(typeof document==='undefined' || !document.scripts) return out;
+  const declared=[];
+  try {
+    Array.prototype.forEach.call(document.scripts, s=>{ const raw=s.getAttribute('src'); if(raw && !/^https?:/i.test(raw)) declared.push({ raw, abs:s.src }); });
+    Array.prototype.forEach.call(document.querySelectorAll('link[rel="stylesheet"]'), l=>{ const raw=l.getAttribute('href'); if(raw && !/^https?:/i.test(raw)) declared.push({ raw, abs:l.href }); });
+  } catch(e){}
+  if(!declared.length) return out;
+  let entries=[];
+  try { if(typeof performance!=='undefined' && typeof performance.getEntriesByType==='function') entries=performance.getEntriesByType('resource')||[]; } catch(e){}
+  const byName={}; entries.forEach(e=>{ if(e && e.name) byName[e.name]=e; });
+  const missing=[], unknown=[];
+  declared.forEach(d=>{
+    const e=byName[d.abs];
+    const st=(e && typeof e.responseStatus==='number') ? e.responseStatus : null;
+    if(st===null || st===0){ unknown.push(d); return; }
+    if(st>=400) missing.push({ url:d.raw.split('?')[0], status:st });
+  });
+  if(missing.length===0){
+    out.push(R('ok','Fichiers','Tous les fichiers déclarés sont chargés par le WebView',
+      declared.length+' fichiers (script+css) déclarés dans ce document'+(unknown.length?' · '+unknown.length+' sans statut exposé (WebView < Chrome 109 ou hors tampon)':' · statut HTTP lu sans aucune requête')+'.',''));
+  } else {
+    missing.forEach(m=>{
+      out.push(R('crit','Fichiers','⚠ Déclaré mais absent au chargement : '+m.url.split('/').pop(),
+        'Le WebView a reçu HTTP '+m.status+' pour '+m.url+' au chargement de ce document : le fichier est introuvable et le système l\'appelle.',
+        'Uploader le fichier (ou retirer sa balise du HTML s\'il est inutile), puis relancer l\'app.'));
+    });
+  }
+  return out;
+}
+
+/* SONDE 8 bis — Fichiers (RÉSEAU) : déclaré dans le HTML mais absent (404) vs présent —
+   vérité réseau du moment, uniquement après un vrai scan de code (Relancer / 1re ouverture). */
 function probeFilesResults(tested){
   const out=[];
   const missing = tested.filter(t=>!t.ok);
   if(missing.length===0){
-    out.push(R('ok','Fichiers','Tous les fichiers déclarés répondent', tested.length+' fichiers (script+css) tous en HTTP 200.',''));
+    out.push(R('ok','Fichiers (réseau)','Tous les fichiers déclarés répondent', tested.length+' fichiers (script+css) tous en HTTP 200.',''));
   } else {
     missing.forEach(m=>{
-      out.push(R('crit','Fichiers','⚠ Déclaré mais absent : '+m.url.split('/').pop(),
+      out.push(R('crit','Fichiers (réseau)','⚠ Déclaré mais absent : '+m.url.split('/').pop(),
         'Le HTML charge '+m.url+' (HTTP '+(m.status||0)+') mais le fichier est introuvable. C\'est une vraie alerte car le système l\'appelle.',
         'Soit uploader le fichier, soit retirer sa balise du HTML s\'il est inutile.'));
     });
@@ -453,7 +495,7 @@ async function probeCode(refresh){
   _guardianOp('guardianScan');
   const files = await fetchDeclared();
   if(!files){
-    return [R('info','Fichiers','Impossible de lire '+CFG.appUrl,'Lance Guardian depuis la même origine que l\'app (GitHub Pages).','')];
+    return [R('info','Fichiers (réseau)','Impossible de lire '+CFG.appUrl,'Lance Guardian depuis la même origine que l\'app (GitHub Pages).','')];
   }
   const out = probeFilesResults(files.tested).concat(await analyseCode(files.perFile));
   if(files.tested.every(t=>t.status>0)) _codeReport = out;   // scan complet uniquement
@@ -477,48 +519,78 @@ async function probeIdbHealth(){
    RUN ALL
    ============================================================ */
 
-/* SONDE GEL / LAG — lit les traces 🐌 écrites par le moniteur de simTick dans le chainLog
-   (live, dans l'app) et en déduit la cause du lag + la correction à appliquer. */
+/* SONDE GEL / LAG — [GEL BOOT 11/09/2026] lit d'abord S.perfLog.gels (mémoire durable écrite par
+   le moniteur de simTick de 08 : 30 derniers gels, nom d'op COMPLET, attribution LoAF, persistée
+   dans le snapshot donc dans chaque backup), sinon les traces 🐌 du chainLog (volatile : 100
+   lignes, ~4 min en pleine activité — c'est ce qui faisait disparaître les gels avant lecture).
+   Relevé = tous les gels connus ; verdicts = gels des 24 dernières heures. */
+function _gelFromRecord(r){
+  return { gap:Number(r.gap)||0, tickMs:Number(r.tickMs)||0, visible:!r.hidden,
+    heapU:(r.heapU!=null?Number(r.heapU):null), heapL:(r.heapL!=null?Number(r.heapL):null),
+    dom:(r.dom!=null?Number(r.dom):null), page:(r.page!=null?String(r.page):null), ws:(r.ws!=null?Number(r.ws):null),
+    jsSum:(r.jsSum!=null?Number(r.jsSum):null), op:(r.op?String(r.op):null), osIdle:!!r.osIdle,
+    loaf:(r.loaf&&typeof r.loaf==='object')?r.loaf:null, t:(Number(r.t)||0), time:(r.time?String(r.time):'') };
+}
+function _gelFromChainLine(d){
+  let m;
+  if(!(m = d.match(/^Gel ([\d.]+)s .*?tick (\d+)ms .*?(ecran (?:visible|masque))(.*)$/))) return null;
+  const r = m[4] || '';
+  const heap = r.match(/heap (\d+)\/(\d+)Mo/);
+  const dom  = r.match(/dom (\d+)/);
+  const page = r.match(/page (\S+)/);
+  const ws   = r.match(/ws \+(\d+)/);
+  const js   = r.match(/JS ⏱ ([\d.]+)s\/(\d+)/);
+  const op   = r.match(/· op (.+?)(?: · |$)/);   // [11/09] nom complet (l'ancien \S+ coupait « fetch js/… » au premier espace)
+  return { gap:parseFloat(m[1]), tickMs:parseInt(m[2],10), visible:/visible/.test(m[3]),
+    heapU:heap?parseInt(heap[1],10):null, heapL:heap?parseInt(heap[2],10):null,
+    dom:dom?parseInt(dom[1],10):null, page:page?page[1]:null, ws:ws?parseInt(ws[1],10):null,
+    jsSum:js?parseFloat(js[1]):null, op:op?op[1].trim():null, osIdle:/JS inactif/.test(r), loaf:null, t:0, time:'' };
+}
 function probeGel(snap){
   const out = [];
   const S = snap.S;
-  const cl = (S && Array.isArray(S.chainLog)) ? S.chainLog : [];
-  const gels = [];
-  cl.forEach(function(e){
-    const d = String(e && e.desc || '');
-    let m;
-    if((m = d.match(/^Gel ([\d.]+)s .*?tick (\d+)ms .*?(ecran (?:visible|masque))(.*)$/))){
-      const r = m[4] || '';
-      const heap = r.match(/heap (\d+)\/(\d+)Mo/);
-      const dom  = r.match(/dom (\d+)/);
-      const page = r.match(/page (\S+)/);
-      const ws   = r.match(/ws \+(\d+)/);
-      const js  = r.match(/JS ⏱ ([\d.]+)s\/(\d+)/);
-      const op  = r.match(/· op (\S+)/);
-      gels.push({ gap:parseFloat(m[1]), tickMs:parseInt(m[2],10), visible:/visible/.test(m[3]),
-        heapU:heap?parseInt(heap[1],10):null, heapL:heap?parseInt(heap[2],10):null,
-        dom:dom?parseInt(dom[1],10):null, page:page?page[1]:null, ws:ws?parseInt(ws[1],10):null,
-        jsSum:js?parseFloat(js[1]):null, op:op?op[1]:null, osIdle:/JS inactif/.test(r) });
-    }
-  });
+  const durable = (S && S.perfLog && Array.isArray(S.perfLog.gels)) ? S.perfLog.gels.filter(function(r){ return r && typeof r === 'object' && r.gap != null; }) : [];
+  let gels = [], source = '';
+  if(durable.length){
+    gels = durable.map(_gelFromRecord); source = 'mémoire durable S.perfLog.gels';
+  } else {
+    const cl = (S && Array.isArray(S.chainLog)) ? S.chainLog : [];
+    cl.forEach(function(e){ const g = _gelFromChainLine(String(e && e.desc || '')); if(g) gels.push(g); });
+    source = 'journal (volatile)';
+  }
+  if(typeof window !== 'undefined' && window._auraLoafSupported === false){
+    out.push(R('info','Gel / Lag','LoAF non supporté par ce WebView',
+      'long-animation-frame absent (WebView < Chrome 123) : attribution limitée à longtask + _perfOp.',
+      'Mettre à jour Android System WebView (Play Store) pour obtenir le nom du script bloquant.'));
+  }
   if(!gels.length){
-    out.push(R('ok','Gel / Lag','Aucun gel récent','Le journal ne contient aucune trace 🐌 récente.',''));
+    out.push(R('ok','Gel / Lag','Aucun gel récent','Ni mémoire durable ni trace 🐌 récente dans le journal.',''));
     return out;
   }
   const vis  = gels.filter(function(g){return g.visible;});
   const mask = gels.filter(function(g){return !g.visible;});
   const maxVis = vis.reduce(function(a,g){return Math.max(a,g.gap);},0);
-  out.push(R('info','Gel / Lag','Relevé',
-    gels.length+' gels ('+vis.length+' écran visible, '+mask.length+' écran masqué) · pire blocage visible '+maxVis.toFixed(1)+'s',''));
-  if(vis.length === 0){
-    out.push(R('warn','Gel / Lag','Gels uniquement écran masqué',
-      'Android suspend les timers du WebView en arrière-plan. Ce n\'est pas un bug de code.',
-      'Garder l\'écran allumé (Wake Lock déjà posé) + Réglages Samsung : retirer AURA de la mise en veille des applis et de l\'optimisation batterie.'));
+  const first = gels[0], lastG = gels[gels.length-1];
+  const span = (first.time && lastG.time) ? (' · du '+first.time+' au '+lastG.time) : '';
+  out.push(R('info','Gel / Lag','Relevé ('+source+')',
+    gels.length+' gels ('+vis.length+' écran visible, '+mask.length+' écran masqué) · pire blocage visible '+maxVis.toFixed(1)+'s'+span,''));
+  // verdicts sur les 24 dernières heures (les enregistrements datés) ou sur tout (journal non daté)
+  const cut = Date.now() - 86400000;
+  const recent = gels.filter(function(g){ return !g.t || g.t >= cut; });
+  const rvis = recent.filter(function(g){return g.visible;});
+  if(rvis.length === 0){
+    if(vis.length === 0){
+      out.push(R('warn','Gel / Lag','Gels uniquement écran masqué',
+        'Android suspend les timers du WebView en arrière-plan. Ce n\'est pas un bug de code.',
+        'Garder l\'écran allumé (Wake Lock déjà posé) + Réglages Samsung : retirer AURA de la mise en veille des applis et de l\'optimisation batterie.'));
+    } else {
+      out.push(R('ok','Gel / Lag','Aucun gel écran visible depuis 24 h','Les gels du relevé sont antérieurs à 24 h.',''));
+    }
     return out;
   }
-  const wsMax  = vis.reduce(function(a,g){return Math.max(a,g.ws||0);},0);
-  const domMax = vis.reduce(function(a,g){return Math.max(a,g.dom||0);},0);
-  const heapHi = vis.some(function(g){return g.heapU && g.heapL && (g.heapU/g.heapL)>0.85;});
+  const wsMax  = rvis.reduce(function(a,g){return Math.max(a,g.ws||0);},0);
+  const domMax = rvis.reduce(function(a,g){return Math.max(a,g.dom||0);},0);
+  const heapHi = rvis.some(function(g){return g.heapU && g.heapL && (g.heapU/g.heapL)>0.85;});
   if(wsMax >= 1000){
     out.push(R('crit','Gel / Lag','Flood WebSocket @trade ('+wsMax+' messages/gel)',
       'En EV, l\'app ouvre 8 WebSockets Binance @trade (chaque transaction) : les messages s\'accumulent puis sont traités en rafale.',
@@ -538,17 +610,28 @@ function probeGel(snap){
     return out;
   }
   // [08/08/2026] Verdicts basés sur la sonde longtask (verdict écrit dans la ligne de gel).
-  const jsGels = vis.filter(function(g){ return g.jsSum != null; });
-  const osGels = vis.filter(function(g){ return g.osIdle; });
+  // [11/09/2026] + attribution LoAF : le navigateur nomme le script (fichier:position, fonction, appelant).
+  const jsGels = rvis.filter(function(g){ return g.jsSum != null; });
+  const osGels = rvis.filter(function(g){ return g.osIdle; });
   if(jsGels.length){
     const named = jsGels.filter(function(g){ return g.op; });
     const opTxt = named.length ? (' · opération nommée : ' + named.map(function(g){ return g.op; }).filter(function(v,i,a){ return a.indexOf(v)===i; }).join(', ')) : ' · aucune opération marquée (_perfOp) dans la fenêtre';
+    const tops = {};
+    jsGels.forEach(function(g){
+      const sc = g.loaf && Array.isArray(g.loaf.scripts) ? g.loaf.scripts[0] : null;
+      if(!sc) return;
+      const k = (sc.src||'?')+':'+(sc.fn||'anonyme')+'@'+(sc.pos!=null?sc.pos:'?')+' ← '+(sc.inv||sc.type||'?');
+      tops[k] = Math.max(tops[k]||0, Number(sc.dur)||0);
+    });
+    const topKeys = Object.keys(tops).sort(function(a,b){ return tops[b]-tops[a]; }).slice(0,3);
+    const loafTxt = topKeys.length ? (' · LoAF : ' + topKeys.map(function(k){ return k+' ('+(tops[k]/1000).toFixed(1)+' s)'; }).join(' ; ')) : '';
+    const renderOnly = jsGels.filter(function(g){ return g.loaf && !(g.loaf.scripts && g.loaf.scripts.length) && g.loaf.render > 500; }).length;
     out.push(R('crit','Gel / Lag','Blocage JS confirmé par longtask ('+jsGels.length+' gel(s))',
-      'La sonde longtask a mesuré du JS bloquant pendant le(s) trou(s)'+opTxt+'.',
-      named.length ? 'Corriger l\'opération nommée (livrer le fix à Claude avec cette ligne de gel).' : 'Ajouter des marqueurs _perfOp sur les prochaines fonctions suspectes pour la nommer.'));
+      'La sonde longtask a mesuré du JS bloquant pendant le(s) trou(s)'+opTxt+loafTxt+(renderOnly?(' · '+renderOnly+' gel(s) sans script LoAF : temps passé en rendu (style/layout) ou GC'):'')+'.',
+      topKeys.length ? 'Corriger le script nommé par LoAF (livrer cette ligne à Claude : fichier, position, appelant).' : (named.length ? 'Corriger l\'opération nommée (livrer le fix à Claude avec cette ligne de gel).' : 'Ajouter des marqueurs _perfOp sur les prochaines fonctions suspectes pour la nommer.')));
     return out;
   }
-  if(osGels.length && osGels.length === vis.length){
+  if(osGels.length && osGels.length === rvis.length){
     out.push(R('warn','Gel / Lag','Suspension OS malgré écran allumé ('+osGels.length+' gel(s), 0 longtask)',
       'Aucun longtask pendant les trous : le code ne bloque pas, c\'est Android/Samsung qui fige les timers du WebView même au premier plan (gestion batterie).',
       'Réglages Samsung : retirer AURA de la mise en veille des applis + désactiver l\'optimisation batterie pour AURA (Wake Lock déjà posé côté code).'));
@@ -558,6 +641,39 @@ function probeGel(snap){
   out.push(R('info','Gel / Lag','Gels sans verdict longtask (antérieurs à la sonde du 08/08)',
     'Ces lignes de gel ne portent pas encore le champ « JS ⏱ / JS inactif ». Le prochain gel sera auto-diagnostiqué.',
     'Juger sur les 🐌 postérieurs à la mise à jour du 08/08.'));
+  return out;
+}
+
+/* SONDE MÉMOIRE — [GEL BOOT 11/09/2026] pente du heap JS à partir des relevés 10 min de 08
+   (S.perfLog.heap, persistant) + trace des boots (S.perfLog.boots : heure, heap au boot,
+   dernière sauvegarde de la session précédente = heure de la mort ±25 s). Lecture seule. */
+function probeMemory(snap){
+  const out = [];
+  const S = snap.S;
+  const P = (S && S.perfLog && typeof S.perfLog === 'object') ? S.perfLog : null;
+  if(!P) return out;
+  const boots = Array.isArray(P.boots) ? P.boots : [];
+  const heap  = Array.isArray(P.heap)  ? P.heap.filter(function(h){ return h && typeof h.heap === 'number' && h.t; }) : [];
+  const lastBoot = boots.length ? boots[boots.length-1] : null;
+  if(lastBoot){
+    const up = Math.round((Date.now() - (Number(lastBoot.t)||Date.now()))/60000);
+    out.push(R('info','Mémoire','Session : boot '+(lastBoot.time||'?')+' · en ligne depuis '+(up>=60?Math.floor(up/60)+' h '+(up%60)+' min':up+' min'),
+      'heap au boot '+(lastBoot.heap!=null?lastBoot.heap+' Mo':'?')+' · cycle #'+(lastBoot.cycle!=null?lastBoot.cycle:'?')+(lastBoot.prevSavedAt?(' · dernière sauvegarde de la session précédente : '+lastBoot.prevSavedAt):'')+' · '+boots.length+' boot(s) mémorisé(s)',''));
+  }
+  if(heap.length){
+    const sess = lastBoot ? heap.filter(function(h){ return Number(h.t) >= (Number(lastBoot.t)||0); }) : heap;
+    const last = heap[heap.length-1];
+    let slope = '';
+    if(sess.length >= 2){
+      const a = sess[0], b = sess[sess.length-1];
+      const hrs = (Number(b.t)-Number(a.t))/3600000;
+      if(hrs >= 0.5) slope = ' · pente '+((b.heap-a.heap)/hrs >= 0 ? '+' : '')+((b.heap-a.heap)/hrs).toFixed(1)+' Mo/h sur '+hrs.toFixed(1)+' h';
+    }
+    const ratio = (last.limit ? last.heap/last.limit : 0);
+    out.push(R(ratio > 0.85 ? 'crit' : (ratio > 0.6 ? 'warn' : 'info'),'Mémoire','Heap JS '+last.heap+(last.limit?'/'+last.limit:'')+' Mo · DOM '+(last.dom!=null?last.dom+' nœuds':'?'),
+      heap.length+' relevé(s) toutes les 10 min · dernier '+(last.time||new Date(Number(last.t)).toLocaleString())+slope,
+      ratio > 0.6 ? 'Le heap monte vers la limite : livrer ce backup à Claude (la pente et les gels LoAF désignent la fuite).' : ''));
+  }
   return out;
 }
 
@@ -625,7 +741,7 @@ function probeBackupCapability(snap){
 }
 
 Core.runAll = async function(opts){
-  opts = opts || {};   // { refreshCode:true } = refaire les sondes de code (bouton Relancer)
+  opts = opts || {};   // { code:true } = sondes de code (cache de session, sinon 1er fetch) · { refreshCode:true } = code refait (Relancer) · sans option = scan silencieux, JAMAIS de réseau
   _guardianOp('guardianScan');
   const snap = await loadStateSnapshot();
   const mode = detectMode();
@@ -643,7 +759,11 @@ Core.runAll = async function(opts){
   res = res.concat(probeLearning(snap));
   res = res.concat(probeQuota());
   res = res.concat(await probeIdbHealth());
-  res = res.concat(await probeCode(opts.refreshCode === true));
+  res = res.concat(probeMemory(snap));                 // [GEL BOOT 11/09] pente du heap (S.perfLog.heap), lecture seule
+  res = res.concat(probeFilesResources());             // [GEL BOOT 11/09] sans réseau, à chaque scan
+  if(opts.refreshCode === true)      res = res.concat(await probeCode(true));    // Relancer : code refait (fetch réel)
+  else if(opts.code === true)        res = res.concat(await probeCode(false));   // ouverture du bouclier : cache de session, sinon 1er fetch de la session
+  else if(_codeReport)               res = res.concat(_codeReport);              // scan silencieux : uniquement ce qui est déjà en cache, jamais de fetch
 
   Core.results = res;
   Core.lastRun = Date.now();
@@ -938,6 +1058,7 @@ Core.autoBackup = {
 
 Core.version = GUARDIAN_VERSION;
 Core.getLiveS = getLiveS;
+Core.codeCached = function(){ return !!_codeReport; };   // [GEL BOOT 11/09] l'embed rend l'état d'abord si le code n'est pas encore en cache
 Core.detectMode = detectMode;
 Core.describeCapabilities = describeCapabilities;
 

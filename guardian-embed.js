@@ -1,3 +1,4 @@
+// [GEL BOOT · 11/09/2026] VERSION 20260911a · PLUS RIEN au boot : 1er scan silencieux et 1er tick backup IDB à +120 s (au lieu de +4 s / +8 s, fenêtres exactes des deux gels de démarrage de 6-8 s) · scans silencieux sans code · ouverture du bouclier = état rendu d'abord, code ensuite (cache de session, sinon 1er fetch) · Relancer = code refait
 // [GEL 09/09/2026] VERSION 20260909a · scan de code une fois par session (runAll en cache) · Relancer = code inclus · boîtes modales alert remplacées par des toasts (une boîte bloquait le bot 13,4 s)
 /* ============================================================
    GUARDIAN EMBED · bouton flottant + panneau DANS AURA · maj 11/06/2026 (auto-scan périodique + toast)
@@ -118,14 +119,21 @@ ready(function(){
     else if(warn>0){ fab.classList.add('warn'); dot.style.display='flex'; dot.style.background='#ffb830'; dot.style.color='#000'; dot.textContent=warn; }
     else { dot.style.display='none'; }
   }
-  async function run(refreshCode){   // refreshCode : refaire aussi les sondes de code (Relancer) ; sinon celles de la session
+  async function run(refreshCode){   // refreshCode : refaire aussi les sondes de code (Relancer) ; sinon celles de la session (cache), et au 1er passage : état d'abord, code ensuite
     const btn=document.getElementById('gdnRun'); btn.textContent='⏳ analyse…'; btn.disabled=true;
-    try{ last=await window.GuardianCore.runAll({ refreshCode: refreshCode === true }); render(last); updateFab(last); }
+    try{
+      const G=window.GuardianCore;
+      const cached = (typeof G.codeCached==='function') ? G.codeCached() : false;
+      if(refreshCode !== true && !cached){                       // [GEL BOOT 11/09] 1re ouverture de la session : rendu immédiat de l'état (aucun réseau)…
+        last=await G.runAll(); render(last); updateFab(last);
+      }
+      last=await G.runAll({ code:true, refreshCode: refreshCode === true }); render(last); updateFab(last);   // …puis le code (cache, 1er fetch de la session, ou refait sur Relancer)
+    }
     catch(e){ document.getElementById('gdnOut').innerHTML='<div class="gdnItem crit"><div class="t">Erreur: '+esc(e&&e.message)+'</div></div>'; }
     btn.textContent='▶ Relancer l\'analyse'; btn.disabled=false;
   }
 
-  fab.onclick=()=>{ ov.classList.add('open'); run(); };  // état frais à chaque ouverture ; le code vient du scan de session
+  fab.onclick=()=>{ ov.classList.add('open'); run(); };  // état frais à chaque ouverture ; code = cache de session (1er fetch à la 1re ouverture, jamais au boot)
   document.getElementById('gdnClose').onclick=()=>ov.classList.remove('open');
   ov.onclick=e=>{ if(e.target===ov) ov.classList.remove('open'); };
   document.getElementById('gdnRun').onclick=()=>run(true);
@@ -193,8 +201,11 @@ ready(function(){
       }).catch(()=>{});
     }catch(e){}
   }
-  setTimeout(_gdnSilentScan, 4000);                                   // 1er scan au démarrage d'AURA
-  setInterval(_gdnSilentScan, 2*60*1000);                             // re-scan toutes les 2 min
+  // [GEL BOOT 11/09/2026] Le 1er scan tombait à +4 s après le boot, cache de code vide → HTML + 49
+  // fetchs no-store + 2,9 Mo de sources lus + analyse, pendant que l'app finit de démarrer : fenêtre
+  // exacte du 1er gel de boot (6-8 s, « op fetch js/… ») sur 3 boots consécutifs. Désormais rien
+  // avant +120 s, et un scan silencieux ne touche JAMAIS au code (runAll sans option).
+  setInterval(_gdnSilentScan, 2*60*1000);                             // scans silencieux toutes les 2 min, le 1er à +2 min : rien au démarrage, jamais de code
   document.addEventListener('visibilitychange', ()=>{ if(document.visibilityState==='visible') _gdnSilentScan(); }); // au retour sur AURA
 
   /* BACKUP AUTO : au démarrage (après 8s) puis toutes les 2 min, on vérifie si un
@@ -205,7 +216,8 @@ ready(function(){
     const tick = () => { try { window.GuardianCore.autoBackup.tick().then(r=>{
       if(r&&r.ok){ console.log('[Guardian] backup auto · cycle #'+r.cycle); }
     }).catch(()=>{}); } catch(e){} };
-    setTimeout(tick, 8000);
+    // [GEL BOOT 11/09/2026] le tick à +8 s (backup IDB : snapshot 1,5 Mo cloné + rotation par curseur)
+    // s'exécutait dès la fin du 1er gel = fenêtre du 2e gel de boot. Premier tick à +2 min (intervalle seul).
     setInterval(tick, 2*60*1000);
   }
 

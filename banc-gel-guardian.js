@@ -1,4 +1,5 @@
-// banc-gel-guardian.js — [GEL 09/09/2026] VERSION 20260909a
+// banc-gel-guardian.js — [GEL BOOT · 11/09/2026] VERSION 20260911a (contrat mis à jour : code = ouverture / Relancer uniquement, jamais au boot ni en scan silencieux ; sonde réseau = groupe « Fichiers (réseau) »)
+// (édition 20260909a : oracle des sondes de code, un fetch par fichier, respiration, toasts)
 // Banc AUTONOME (node banc-gel-guardian.js depuis la racine du dépôt). Vérifie que les sondes de
 // code du Guardian (fichiers / fonctions / variables / doublons) donnent EXACTEMENT les mêmes
 // résultats que l'ancienne logique d'analyse (oracle inliné ci-dessous) appliquée aux sources —
@@ -10,7 +11,7 @@
 'use strict';
 const fs = require('fs'), vm = require('vm'), assert = require('assert'), path = require('path');
 const ROOT = __dirname;
-const TOK = '20260909a';
+const TOK = '20260911a';
 let pass = 0, fail = 0;
 async function T(name, fn){ try { await fn(); pass++; console.log('  ✅', name); } catch(e){ fail++; console.log('  ❌', name, '\n     ', (e && e.stack || e).toString().split('\n').slice(0,3).join('\n      ')); } }
 process.on('unhandledRejection', e => { fail++; console.log('  ❌ rejet non géré :', e && e.message); });
@@ -46,7 +47,7 @@ function loadCore(fetchImpl){
   return ctx;
 }
 const norm = (r) => ({ level:r.level, group:r.group, title:r.title, detail:String(r.detail||'').replace(/\?v=\w+/g,''), fix:String(r.fix||'').replace(/\?v=\w+/g,'') });
-const CODE_GROUPS = ['Fichiers','Fonctions','Variables','Doublons'];
+const CODE_GROUPS = ['Fichiers (réseau)','Fonctions','Variables','Doublons'];
 const J = (x) => JSON.parse(JSON.stringify(x));   // objets cross-vm : aller-retour JSON avant deepStrictEqual
 const codePart = (res) => J(res).filter(r => CODE_GROUPS.includes(r.group)).map(norm);
 
@@ -60,8 +61,8 @@ function oracle(CFG, html, perFileDeclared, exists){
   const declared = scripts.concat(links).filter(u=>!/^https?:/.test(u));
   const tested = declared.map(u => { const clean=u.split('?')[0]; const ok = exists(clean); return { url:clean, ok, status: ok?200:404 }; });
   const missing = tested.filter(t=>!t.ok);
-  if(missing.length===0) out.push(R('ok','Fichiers','Tous les fichiers déclarés répondent', tested.length+' fichiers (script+css) tous en HTTP 200.',''));
-  else missing.forEach(m=>{ out.push(R('crit','Fichiers','⚠ Déclaré mais absent : '+m.url.split('/').pop(), 'Le HTML charge '+m.url+' (HTTP '+(m.status||0)+') mais le fichier est introuvable. C\'est une vraie alerte car le système l\'appelle.', 'Soit uploader le fichier, soit retirer sa balise du HTML s\'il est inutile.')); });
+  if(missing.length===0) out.push(R('ok','Fichiers (réseau)','Tous les fichiers déclarés répondent', tested.length+' fichiers (script+css) tous en HTTP 200.',''));
+  else missing.forEach(m=>{ out.push(R('crit','Fichiers (réseau)','⚠ Déclaré mais absent : '+m.url.split('/').pop(), 'Le HTML charge '+m.url+' (HTTP '+(m.status||0)+') mais le fichier est introuvable. C\'est une vraie alerte car le système l\'appelle.', 'Soit uploader le fichier, soit retirer sa balise du HTML s\'il est inutile.')); });
   // probeFunctions
   // filtre .js sur l'URL NETTOYÉE : l'ancien code filtrait l'URL brute (js/x.js?v=…) → jamais aucune source analysée
   const jsFiles = declared.filter(u=>u.split('?')[0].endsWith('.js'));
@@ -117,24 +118,25 @@ function oracle(CFG, html, perFileDeclared, exists){
     for (const dead of ['probeFiles(','probeFunctions(','probeUndefinedVars(','probeDuplicates(','allCode']) assert.ok(!s.includes(dead), 'résidu '+dead);
     for (const live of ['async function probeCode(','async function analyseCode(','async function fetchDeclared(','function _breathe(','opts.refreshCode === true','let _codeReport = null']) assert.strictEqual(s.split(live).length, 2, live);
     assert.strictEqual(s.split("_guardianOp('guardianScan')").length, 4, 'guardianScan annoncé 3 fois (runAll, probeCode, par fichier)');
-    assert.ok(s.startsWith('// [GEL 09/09/2026] VERSION ' + TOK));
+    assert.ok(s.startsWith('// [GEL BOOT · 11/09/2026] VERSION ' + TOK));
   });
-  await T('embed : plus aucune boîte modale alert, Relancer refait le code, ouverture non', () => {
+  await T('embed : plus aucune boîte modale alert, Relancer refait le code, ouverture = code demandé (cache ou 1er fetch), rien au boot', () => {
     const s = fs.readFileSync(path.join(ROOT,'guardian-embed.js'),'utf8');
     assert.strictEqual(s.split('alert(').length, 1, 'alert( résiduel');
     assert.strictEqual(s.split("onclick=()=>run(true);").length, 2);
     assert.strictEqual(s.split("if(a==='reload') return run(true);").length, 2);
     assert.strictEqual(s.split("fab.onclick=()=>{ ov.classList.add('open'); run(); };").length, 2);
-    assert.strictEqual(s.split("runAll({ refreshCode: refreshCode === true })").length, 2);
+    assert.strictEqual(s.split("G.runAll({ code:true, refreshCode: refreshCode === true })").length, 2);
     assert.strictEqual(s.split("window.GuardianCore.runAll().then(rep=>{").length, 2, 'scan silencieux sans argument');
-    assert.ok(s.startsWith('// [GEL 09/09/2026] VERSION ' + TOK));
+    assert.ok(!s.includes('setTimeout(_gdnSilentScan') && !s.includes('setTimeout(tick'), 'travail Guardian au boot');
+    assert.ok(s.startsWith('// [GEL BOOT · 11/09/2026] VERSION ' + TOK));
   });
   await T('HTML : DOC_V = ' + TOK + ' et tous les ?v= au même token (79)', () => {
     const h = fs.readFileSync(path.join(ROOT,'AURA8_v118.html'),'utf8');
     assert.ok(h.includes("DOC_V = '" + TOK + "'"));
     assert.strictEqual((h.match(/\?v=[0-9a-z]+/g)||[]).length, 78);
     assert.deepStrictEqual((h.match(/\?v=[0-9a-z]+/g)||[]).filter(t => t !== '?v=' + TOK), []);
-    assert.ok(!h.includes('20260908b'));
+    assert.ok(!h.includes('20260908b') && !h.includes('20260909a'));
   });
 
   /* ───── dynamique : core ───── */
@@ -147,8 +149,8 @@ function oracle(CFG, html, perFileDeclared, exists){
 
   const F = mkFetch(); const ctx = loadCore(F.fetch);
   let rep1, rep2, rep3;
-  await T('run 1 : sondes de code = ORACLE (mêmes niveaux/titres/détails/corrections, même ordre)', async () => {
-    rep1 = await ctx.GuardianCore.runAll();
+  await T('run 1 ({ code:true }, ouverture du bouclier) : sondes de code = ORACLE (mêmes niveaux/titres/détails/corrections, même ordre)', async () => {
+    rep1 = await ctx.GuardianCore.runAll({ code:true });
     assert.deepStrictEqual(codePart(rep1.results), expected);
     assert.ok(expected.length >= 3, 'oracle vide ?');   // Fichiers + Fonctions + Doublons (Variables vide si rien à signaler)
   });
@@ -181,7 +183,7 @@ function oracle(CFG, html, perFileDeclared, exists){
     const ctx2 = loadCore(F2.fetch);
     let yields = 0, lastRun = null, maxSync = 0;
     ctx2.setTimeout = (fn, ms, ...a) => { if (ms === 0) { yields++; const now = performance.now(); if (lastRun !== null) maxSync = Math.max(maxSync, now - lastRun); return setTimeout(() => { lastRun = performance.now(); fn(...a); }, 0); } return setTimeout(fn, ms, ...a); };
-    await ctx2.GuardianCore.runAll();
+    await ctx2.GuardianCore.runAll({ code:true });
     const nJs = Object.keys(perFileDisk).length;
     assert.ok(yields >= nJs, 'pauses ' + yields + ' < fichiers JS ' + nJs);
     console.log('       pauses :', yields, '· plus long segment synchrone entre deux pauses :', maxSync.toFixed(0), 'ms');
@@ -191,30 +193,30 @@ function oracle(CFG, html, perFileDeclared, exists){
     const victim = Object.keys(perFileDisk)[3];
     const fail = {}; fail[victim] = 'throw';
     const F3 = mkFetch({ fail }); const ctx3 = loadCore(F3.fetch);
-    const r = await ctx3.GuardianCore.runAll();
-    assert.ok(r.results.some(x => x.group === 'Fichiers' && x.level === 'crit' && x.title.includes(victim.split('/').pop()) && x.detail.includes('HTTP 0')));
+    const r = await ctx3.GuardianCore.runAll({ code:true });
+    assert.ok(r.results.some(x => x.group === 'Fichiers (réseau)' && x.level === 'crit' && x.title.includes(victim.split('/').pop()) && x.detail.includes('HTTP 0')));
     const n0 = F3.log.length;
-    await ctx3.GuardianCore.runAll();
+    await ctx3.GuardianCore.runAll({ code:true });
     assert.strictEqual(F3.log.length, n0 + 1 + nDeclared, 'aurait dû refaire le scan');
   });
   await T('vrai 404 : signalé ET mémorisé (le fichier manque vraiment, inutile de retélécharger toutes les 2 min)', async () => {
     const victim = Object.keys(perFileDisk)[5];
     const fail = {}; fail[victim] = 404;
     const F4 = mkFetch({ fail }); const ctx4 = loadCore(F4.fetch);
-    const r = await ctx4.GuardianCore.runAll();
-    assert.ok(r.results.some(x => x.group === 'Fichiers' && x.level === 'crit' && x.detail.includes('HTTP 404')));
+    const r = await ctx4.GuardianCore.runAll({ code:true });
+    assert.ok(r.results.some(x => x.group === 'Fichiers (réseau)' && x.level === 'crit' && x.detail.includes('HTTP 404')));
     const n0 = F4.log.length;
-    await ctx4.GuardianCore.runAll();
+    await ctx4.GuardianCore.runAll({ code:true });
     assert.strictEqual(F4.log.length, n0);
   });
   await T('HTML illisible : info « Impossible de lire », rien mémorisé, retenté au scan suivant', async () => {
     const fail = {}; fail[CFG.appUrl] = 'throw';
     const F5 = mkFetch({ fail }); const ctx5 = loadCore(F5.fetch);
-    const r = await ctx5.GuardianCore.runAll();
-    assert.ok(r.results.some(x => x.group === 'Fichiers' && x.level === 'info' && x.title.startsWith('Impossible de lire')));
+    const r = await ctx5.GuardianCore.runAll({ code:true });
+    assert.ok(r.results.some(x => x.group === 'Fichiers (réseau)' && x.level === 'info' && x.title.startsWith('Impossible de lire')));
     assert.ok(!r.results.some(x => x.group === 'Fonctions'));
     const n0 = F5.log.length;
-    await ctx5.GuardianCore.runAll();
+    await ctx5.GuardianCore.runAll({ code:true });
     assert.strictEqual(F5.log.length, n0 + 1);
   });
   await T('dépôt SYNTHÉTIQUE (404, appelée jamais définie, définie sans appel, constante non exposée, doublon) : nouveau = ORACLE', async () => {
@@ -227,14 +229,14 @@ function oracle(CFG, html, perFileDeclared, exists){
     const log = [];
     const fetchMem = async (u) => { const c = String(u).split('?')[0]; log.push(c); if (files[c] === undefined) return { ok:false, status:404, text: async () => '' }; return { ok:true, status:200, text: async () => files[c] }; };
     const ctxS = loadCore(fetchMem);
-    const r = await ctxS.GuardianCore.runAll();
+    const r = await ctxS.GuardianCore.runAll({ code:true });
     const perFile = {}; Object.keys(files).filter(k => k.endsWith('.js')).forEach(k => perFile[k] = files[k]);
     const exp = oracle(CFG, files['AURA8_v118.html'], perFile, c => files[c] !== undefined);
     const got = codePart(r.results);
     assert.deepStrictEqual(got, exp);
     // chaque branche est bien exercée
     const has = (lvl, grp, t) => got.some(x => x.level === lvl && x.group === grp && x.title.includes(t));
-    assert.ok(has('crit','Fichiers','absent.js'), '404');
+    assert.ok(has('crit','Fichiers (réseau)','absent.js'), '404');
     assert.ok(has('crit','Fonctions','buildSnapshot() appelée mais jamais définie'), 'jamais définie');
     assert.ok(has('warn','Fonctions','openDB() définie mais peu/pas appelée') === false && has('crit','Fonctions','openDB() appelée mais jamais définie'), 'openDB');
     assert.ok(has('warn','Variables','DB_NAME') && has('warn','Variables','SAVE_KEY') && !has('warn','Variables',': STORE'), 'variables');
@@ -245,11 +247,11 @@ function oracle(CFG, html, perFileDeclared, exists){
   await T('export : resultsJSON/resultsText reprennent les sondes de code mémorisées', () => {
     const j = ctx.GuardianCore.export.resultsJSON();
     assert.deepStrictEqual(codePart(j.results), expected);
-    assert.ok(ctx.GuardianCore.export.resultsText().includes('━━━ Fichiers ━━━'));
+    assert.ok(ctx.GuardianCore.export.resultsText().includes('━━━ Fichiers (réseau) ━━━'));
   });
 
   /* ───── dynamique : embed ───── */
-  await T('embed : ouverture → runAll({refreshCode:false}) · Relancer (2 boutons) → {refreshCode:true} · scan silencieux → sans argument · backup → toast vert, jamais alert', async () => {
+  await T('embed : ouverture (sans cache) → runAll() puis runAll({code:true,refreshCode:false}) · Relancer (2 boutons) → {code:true,refreshCode:true} · scan silencieux (intervalle 2 min, rien au boot) → sans argument · backup → toast vert, jamais alert', async () => {
     const calls = []; const body = []; const timers = [];
     const mkEl = (tag) => { const el = { tagName:tag, style:{}, innerHTML:'', textContent:'', children:[], attrs:{}, classList:{ add(){}, remove(){}, contains(){ return false; } },
       appendChild(c){ this.children.push(c); c.parentNode = this; return c; }, remove(){ if (this.parentNode) this.parentNode.children = this.parentNode.children.filter(x => x !== this); },
@@ -271,16 +273,17 @@ function oracle(CFG, html, perFileDeclared, exists){
     buttons.find(b => b.attrs['data-a'] === 'json').onclick();
     const t2 = body[body.length-1];
     assert.ok(t2.textContent === "Lance d'abord l'analyse." && String(t2.style.cssText).includes('#ff4d6e'), 'toast JSON sans analyse');
+    assert.strictEqual(calls.length, 0, 'runAll au chargement de l\'embed');
     await fab.onclick(); await new Promise(r => setImmediate(r));
-    assert.deepStrictEqual(J(calls[calls.length-1]), { refreshCode:false }, 'ouverture');
+    assert.deepStrictEqual(J(calls.slice(-2)), [null, { code:true, refreshCode:false }], 'ouverture : état d\'abord (sans option) puis code');
     await ids.gdnRun.onclick(); await new Promise(r => setImmediate(r));
-    assert.deepStrictEqual(J(calls[calls.length-1]), { refreshCode:true }, 'gdnRun');
+    assert.deepStrictEqual(J(calls[calls.length-1]), { code:true, refreshCode:true }, 'gdnRun');
     buttons.find(b => b.attrs['data-a'] === 'reload').onclick(); await new Promise(r => setImmediate(r));
-    assert.deepStrictEqual(J(calls[calls.length-1]), { refreshCode:true }, 'reload');
-    const silent = timers.find(t => t.ms === 4000 && !t.interval); assert.ok(silent, 'scan silencieux (4 s) non planifié');
+    assert.deepStrictEqual(J(calls[calls.length-1]), { code:true, refreshCode:true }, 'reload');
+    assert.ok(!timers.some(t => !t.interval && (t.ms === 4000 || t.ms === 8000)), 'timer de boot 4 s / 8 s résiduel');
+    const silent = timers.find(t => t.ms === 120000 && t.interval); assert.ok(silent, 'rescan 2 min absent');
     silent.fn(); await new Promise(r => setImmediate(r));
     assert.strictEqual(calls[calls.length-1], undefined, 'scan silencieux avec argument');
-    assert.ok(timers.some(t => t.ms === 120000 && t.interval), 'rescan 2 min absent');
     const before = body.length;
     buttons.find(b => b.attrs['data-a'] === 'backup').onclick(); await new Promise(r => setImmediate(r)); await new Promise(r => setImmediate(r));
     const toast = body[body.length-1];
