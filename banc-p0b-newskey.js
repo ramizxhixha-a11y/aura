@@ -4,7 +4,7 @@
 const fs = require('fs'), vm = require('vm'), assert = require('assert');
 let ok = 0, ko = 0;
 function T(name, fn) { try { fn(); ok++; console.log('  ok  ' + name); } catch (e) { ko++; console.log('  KO  ' + name + '\n      ' + e.message); } }
-const TOK = '20260911a';
+const TOK = '20260911b';
 const SRC = fs.readFileSync('js/10e7-news-nlp.js', 'utf8');
 function mkLS(init) { const m = Object.assign({}, init || {}); return { _m: m, getItem: k => (k in m ? m[k] : null), setItem: (k, v) => { m[k] = String(v); }, removeItem: k => { delete m[k]; } }; }
 function mkCtx(ls, withS) {

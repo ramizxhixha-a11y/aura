@@ -1,4 +1,4 @@
-// banc-gel-guardian.js — [GEL BOOT · 11/09/2026] VERSION 20260911a (contrat mis à jour : code = ouverture / Relancer uniquement, jamais au boot ni en scan silencieux ; sonde réseau = groupe « Fichiers (réseau) »)
+// banc-gel-guardian.js — [GEL BOOT · 11/09/2026] VERSION 20260911b (contrat mis à jour : code = ouverture / Relancer uniquement, jamais au boot ni en scan silencieux ; sonde réseau = groupe « Fichiers (réseau) »)
 // (édition 20260909a : oracle des sondes de code, un fetch par fichier, respiration, toasts)
 // Banc AUTONOME (node banc-gel-guardian.js depuis la racine du dépôt). Vérifie que les sondes de
 // code du Guardian (fichiers / fonctions / variables / doublons) donnent EXACTEMENT les mêmes
@@ -11,7 +11,7 @@
 'use strict';
 const fs = require('fs'), vm = require('vm'), assert = require('assert'), path = require('path');
 const ROOT = __dirname;
-const TOK = '20260911a';
+const TOK = '20260911b';
 let pass = 0, fail = 0;
 async function T(name, fn){ try { await fn(); pass++; console.log('  ✅', name); } catch(e){ fail++; console.log('  ❌', name, '\n     ', (e && e.stack || e).toString().split('\n').slice(0,3).join('\n      ')); } }
 process.on('unhandledRejection', e => { fail++; console.log('  ❌ rejet non géré :', e && e.message); });
@@ -129,14 +129,14 @@ function oracle(CFG, html, perFileDeclared, exists){
     assert.strictEqual(s.split("G.runAll({ code:true, refreshCode: refreshCode === true })").length, 2);
     assert.strictEqual(s.split("window.GuardianCore.runAll().then(rep=>{").length, 2, 'scan silencieux sans argument');
     assert.ok(!s.includes('setTimeout(_gdnSilentScan') && !s.includes('setTimeout(tick'), 'travail Guardian au boot');
-    assert.ok(s.startsWith('// [GEL BOOT · 11/09/2026] VERSION ' + TOK));
+    assert.ok(s.startsWith('// [GEL BOOT · 11/09/2026] VERSION 20260911a'));   // embed inchangé depuis la livraison a
   });
   await T('HTML : DOC_V = ' + TOK + ' et tous les ?v= au même token (79)', () => {
     const h = fs.readFileSync(path.join(ROOT,'AURA8_v118.html'),'utf8');
     assert.ok(h.includes("DOC_V = '" + TOK + "'"));
     assert.strictEqual((h.match(/\?v=[0-9a-z]+/g)||[]).length, 78);
     assert.deepStrictEqual((h.match(/\?v=[0-9a-z]+/g)||[]).filter(t => t !== '?v=' + TOK), []);
-    assert.ok(!h.includes('20260908b') && !h.includes('20260909a'));
+    assert.ok(!h.includes('20260908b') && !h.includes('20260909a') && !h.includes('20260911a'));
   });
 
   /* ───── dynamique : core ───── */

@@ -1,4 +1,4 @@
-// banc-gel-boot.js — [GEL BOOT · 11/09/2026] VERSION 20260911a
+// banc-gel-boot.js — [GEL BOOT · 11/09/2026] VERSION 20260911b (a : livraison initiale ; b : rattachement tardif LoAF + anneau S.perfLog.loaf)
 // Banc AUTONOME (node banc-gel-boot.js depuis la racine du dépôt). Mission « gels de boot » :
 //  1) le Guardian ne fait PLUS RIEN au boot (aucun setTimeout à +4 s / +8 s : scans silencieux et
 //     tick backup uniquement par intervalle 2 min) et un scan silencieux ne touche JAMAIS au code
@@ -11,8 +11,9 @@
 'use strict';
 const fs = require('fs'), vm = require('vm'), assert = require('assert'), path = require('path');
 const ROOT = __dirname;
-const TOK = '20260911a';
-const HEAD = '// [GEL BOOT · 11/09/2026] VERSION ' + TOK;
+const TOK = '20260911b';
+const HEAD = '// [GEL BOOT · 11/09/2026] VERSION ';
+const VER = { 'guardian-core.js':'20260911b', 'guardian-embed.js':'20260911a', 'js/00-backup-state.js':'20260911a', 'js/08-learning-history-render.js':'20260911b', 'js/09b1-build-snapshot.js':'20260911b', 'js/09b2-save-load.js':'20260911b', 'js/09k-init.js':'20260911a' };
 let pass = 0, fail = 0;
 async function T(name, fn){ try { await fn(); pass++; console.log('  ✅', name); } catch(e){ fail++; console.log('  ❌', name, '\n     ', (e && e.stack || e).toString().split('\n').slice(0,3).join('\n      ')); } }
 process.on('unhandledRejection', e => { fail++; console.log('  ❌ rejet non géré :', e && e.message); });
@@ -81,17 +82,17 @@ const grp = (res, g) => J(res).filter(r => r.group === g);
   await T('syntaxe : les 7 fichiers JS livrés compilent', () => {
     for (const f of MODIFIED_JS) new vm.Script(src(f), { filename:f });
   });
-  await T('en-têtes : chaque fichier livré commence par « ' + HEAD + ' »', () => {
-    for (const f of MODIFIED_JS) assert.ok(src(f).startsWith(HEAD), f);
+  await T('en-têtes : chaque fichier livré commence par « ' + HEAD + '<version> » (a ou b selon la livraison)', () => {
+    for (const f of MODIFIED_JS) assert.ok(src(f).startsWith(HEAD + VER[f]), f + ' attendu ' + VER[f]);
     assert.ok(src('banc-gel-guardian.js').startsWith('// banc-gel-guardian.js — [GEL BOOT · 11/09/2026] VERSION ' + TOK));
   });
-  await T('HTML : DOC_V = ' + TOK + ', 78 ?v= au même token, aucun 20260909a', () => {
+  await T('HTML : DOC_V = ' + TOK + ', 78 ?v= au même token, aucun 20260909a / 20260911a', () => {
     const h = src('AURA8_v118.html');
     assert.ok(h.includes("DOC_V = '" + TOK + "'"));
     const toks = h.match(/\?v=[0-9a-z]+/g) || [];
     assert.strictEqual(toks.length, 78);
     assert.deepStrictEqual(toks.filter(t => t !== '?v=' + TOK), []);
-    assert.ok(!h.includes('20260909a'));
+    assert.ok(!h.includes('20260909a') && !h.includes('20260911a'));
   });
   await T('embed : plus AUCUN setTimeout de scan ni de backup au boot ; intervalles 2 min seuls ; ouverture en deux temps', () => {
     const s = src('guardian-embed.js');
@@ -116,7 +117,8 @@ const grp = (res, g) => J(res).filter(r => r.group === g);
   });
   await T('09b1 : perfLog dans le snapshot (bornes 30/30/144/20) · 09b2 : perfLog relu + manifeste + _restoredSavedAt + db.close()', () => {
     const b1 = src('js/09b1-build-snapshot.js'), b2 = src('js/09b2-save-load.js');
-    assert.ok(b1.includes('perfLog: (function() {') && b1.includes('p.gels.slice(-30)') && b1.includes('p.lent.slice(-30)') && b1.includes('p.heap.slice(-144)') && b1.includes('p.boots.slice(-20)'));
+    assert.ok(b1.includes('perfLog: (function() {') && b1.includes('p.gels.slice(-30)') && b1.includes('p.lent.slice(-30)') && b1.includes('p.heap.slice(-144)') && b1.includes('p.boots.slice(-20)') && b1.includes('p.loaf.slice(-20)'));
+    assert.ok(b2.includes('_pl.loaf.slice(-20)'), 'relecture loaf');
     assert.ok(b2.includes("'_fpByBot','perfLog'];"), 'manifeste');
     assert.ok(b2.includes('S._restoredSavedAt = snap.savedAt'), '_restoredSavedAt');
     assert.ok(b2.includes('_pl.gels.slice(-30)') && b2.includes('_pl.heap.slice(-144)'), 'relecture bornée');
@@ -127,7 +129,7 @@ const grp = (res, g) => J(res).filter(r => r.group === g);
   });
   await T('08 / 00 / 09k : sonde LoAF, échantillonneur heap, enregistrements perfLog présents', () => {
     const s8 = src('js/08-learning-history-render.js'), s0 = src('js/00-backup-state.js'), sk = src('js/09k-init.js');
-    for (const live of ['(function _auraLoafProbe(){', "_obs.observe({ type: 'long-animation-frame', buffered: true });", '(function _auraHeapSampler(){', 'S.perfLog.gels.push({', 'window._auraLoafSupported = true;'])
+    for (const live of ['(function _auraLoafProbe(){', "_obs.observe({ type: 'long-animation-frame', buffered: true });", '(function _auraHeapSampler(){', 'S.perfLog.gels.push({', 'window._auraLoafSupported = true;', 'window._auraLoafAttach = function(f){', 'window._auraLoafStr = function(f){', 'S0.perfLog.loaf.push({', 'pStart: Math.round(_pStart), pEnd: Math.round(_now), hash: _hash'])
       assert.strictEqual(s8.split(live).length, 2, live);
     assert.strictEqual(s0.split('S0.perfLog.lent.push({').length, 2);
     assert.strictEqual(sk.split('S.perfLog.boots.push({').length, 2);
@@ -193,6 +195,17 @@ const grp = (res, g) => J(res).filter(r => r.group === g);
     assert.ok(v && v.detail.includes('opération nommée : fetch js/09f1-bricks-action.js.') , JSON.stringify(g));
     assert.ok(g.find(x => x.title.startsWith('Relevé')).title.includes('journal (volatile)'));
   });
+  await T('probeGel (b) : anneau S.perfLog.loaf → info « Frames longues nommées par le navigateur » avec le script en tête, même sans gel', async () => {
+    const S = { agents: [], pairStates: {}, chainLog: [], perfLog: { gels: [], lent: [], heap: [], boots: [], loaf: [
+      { t: 1, time: '11/09/2026 20:24:37', pStart: 1, dur: 5600, block: 5500, script: 5500, render: 100, scripts: [{ dur: 5500, inv: 'Window.fetch.then', type: 'resolve-promise', fn: 'fetchUsdEurRate', src: '02-state-init.js', pos: 210001, layout: 0, pause: 0 }] },
+      { t: 2, time: '11/09/2026 20:24:45', pStart: 2, dur: 7100, block: 7000, script: 0, render: 6900, scripts: [] } ] } };
+    const ctx = loadCore(mkFetch().fetch, { S });
+    const g = grp((await ctx.GuardianCore.runAll()).results, 'Gel / Lag');
+    const f = g.find(x => x.title.startsWith('Frames longues nommées par le navigateur (LoAF ≥ 1 s, 2)'));
+    assert.ok(f && f.level === 'info', JSON.stringify(g));
+    assert.strictEqual(f.detail, '11/09/2026 20:24:45 · 7.1 s · sans script (rendu 6.9 s) ; 11/09/2026 20:24:37 · 5.6 s · 02-state-init.js:fetchUsdEurRate@210001 ← Window.fetch.then 5.5 s');
+    assert.ok(g.some(x => x.level === 'ok' && x.title === 'Aucun gel récent'));
+  });
   await T('probeGel : gels datés de plus de 24 h → relevé conservé, aucun verdict crit · LoAF non supporté → info', async () => {
     const S = { agents: [], pairStates: {}, chainLog: [], perfLog: { gels: [gelRec({ t: Date.now() - 2 * 86400000 })], lent: [], heap: [], boots: [] } };
     const ctx = loadCore(mkFetch().fetch, { S, _auraLoafSupported: false });
@@ -240,6 +253,36 @@ const grp = (res, g) => J(res).filter(r => r.group === g);
     assert.strictEqual(f.scripts[1].fn, 'fetchDeclared');
     for (let i = 0; i < 45; i++) yes.fire([mk(20000 + i * 1000, 600, [])]);
     assert.strictEqual(yes.ctx._auraLoafs.length, 40);
+    assert.strictEqual(typeof no.ctx._auraLoafStr, 'function', '_auraLoafStr absent quand non supporté');
+    assert.strictEqual(typeof no.ctx._auraLoafAttach, 'function', '_auraLoafAttach absent quand non supporté');
+  });
+  await T('08 rattachement tardif (b) : la frame arrive APRÈS le gel → S.perfLog.gels[].loaf rempli, ligne 🐌 « LoAF aucun » réécrite (par hash), anneau S.perfLog.loaf (≥ 1 s, plafond 20)', () => {
+    const yes = loafCtx(true);
+    const S = { chainLog: [{ icon:'🐌', desc: 'Gel 7.7s · tick 3ms · ecran visible · JS ⏱ 7.1s/1 · op json api.binance.com/api/v3/ticker/24hr · heap 10/954Mo · dom 4882 · page 4 · ws +11 · LoAF aucun', hash: 'g6o98i', time: '20:24:45' }, { icon:'🧠', desc: 'autre', hash: 'zz', time: '' }],
+      perfLog: { gels: [{ t: 1, gap: 6.3, pStart: 90000, pEnd: 96300, hash: 'old', loaf: null }, { t: 2, gap: 7.7, pStart: 100000, pEnd: 107700, hash: 'g6o98i', loaf: null }], lent: [], heap: [], boots: [] } };
+    yes.ctx.S = S;
+    const mk = (start, dur, scripts, renderStart) => ({ startTime: start, duration: dur, blockingDuration: dur - 50, renderStart: renderStart || 0,
+      scripts: scripts.map(([d, inv, type, fn, url, pos]) => ({ duration: d, invoker: inv, invokerType: type, sourceFunctionName: fn, sourceURL: url, sourceCharPosition: pos, forcedStyleAndLayoutDuration: 0, pauseDuration: 0 })) });
+    // frame courte (700 ms) : dans _auraLoafs mais pas dans l'anneau durable ; hors fenêtre du gel
+    yes.fire([mk(50000, 700, [[600, 'TimerHandler:setTimeout', 'user-callback', 'x', 'https://x/js/a.js', 1]])]);
+    assert.strictEqual(S.perfLog.loaf, undefined, 'anneau alimenté par une frame < 1 s');
+    assert.strictEqual(S.perfLog.gels[1].loaf, null);
+    // la vraie frame : commence dans le trou, finit après le tick (100600 → 107750)
+    yes.fire([mk(100600, 7150, [[7100, 'Window.fetch.then', 'resolve-promise', 'fetchBinancePrices', 'https://x/aura/js/02-state-init.js?v=1', 39001]], 107700)]);
+    const g = J(S.perfLog.gels[1]);
+    assert.deepStrictEqual(g.loaf, { dur: 7150, block: 7100, script: 7100, render: 50, scripts: [{ dur: 7100, inv: 'Window.fetch.then', type: 'resolve-promise', fn: 'fetchBinancePrices', src: '02-state-init.js', pos: 39001, layout: 0, pause: 0 }] });
+    assert.strictEqual(J(S.perfLog.gels[0]).loaf, null, 'rattachée au mauvais gel');
+    assert.strictEqual(S.chainLog[0].desc, 'Gel 7.7s · tick 3ms · ecran visible · JS ⏱ 7.1s/1 · op json api.binance.com/api/v3/ticker/24hr · heap 10/954Mo · dom 4882 · page 4 · ws +11 · LoAF 7.2s 02-state-init.js:fetchBinancePrices@39001 ← Window.fetch.then 7.1s · rendu 0.1s');
+    assert.strictEqual(S.chainLog[1].desc, 'autre');
+    const ring = J(S.perfLog.loaf); assert.strictEqual(ring.length, 1);
+    const { t, time, ...rest } = ring[0];
+    assert.deepStrictEqual(rest, { pStart: 100600, dur: 7150, block: 7100, script: 7100, render: 50, scripts: g.loaf.scripts });
+    // une frame plus courte qui chevauche le même gel ne remplace pas la plus longue
+    yes.fire([mk(101000, 1200, [[1100, 'a', 'b', 'c', 'https://x/d.js', 2]])]);
+    assert.strictEqual(J(S.perfLog.gels[1]).loaf.dur, 7150);
+    assert.strictEqual(S.perfLog.loaf.length, 2);
+    for (let i = 0; i < 30; i++) yes.fire([mk(200000 + i * 5000, 1500, [])]);
+    assert.strictEqual(S.perfLog.loaf.length, 20);
   });
   function gelCtx(opts){
     opts = opts || {};
@@ -268,10 +311,10 @@ const grp = (res, g) => J(res).filter(r => r.group === g);
     assert.ok(d.endsWith(' · LoAF 5.8s 07-v90-mode-bunker-sos.js:_x@123 ← IDBRequest.onsuccess 5.7s · rendu 0.1s'), d);
     const r = J(ctx.S.perfLog.gels);
     assert.strictEqual(r.length, 1);
-    const { t, time, ...rest } = r[0];
-    assert.ok(t > 0 && typeof time === 'string');
+    const { t, time, hash, ...rest } = r[0];
+    assert.ok(t > 0 && typeof time === 'string' && hash === ctx.S.chainLog[0].hash, 'hash ligne ≠ hash enregistrement');
     assert.deepStrictEqual(rest, { gap: 7.5, tickMs: 76, hidden: false, jsSum: 7.2, jsN: 3, osIdle: false, op: 'fetch js/09f1-bricks-action.js', heapU: 228, heapL: 954, dom: 4186, page: 0, ws: 4,
-      loaf: { dur: 5800, block: 5750, script: 5700, render: 100, scripts: loaf.scripts } });
+      loaf: { dur: 5800, block: 5750, script: 5700, render: 100, scripts: loaf.scripts }, pStart: 100000, pEnd: 107500 });
     for (let i = 0; i < 35; i++) { ctx.S.perf._lastTickAt = 100000; ctx.gel(107500); }
     assert.strictEqual(ctx.S.perfLog.gels.length, 30);
     assert.strictEqual(ctx.S.chainLog.length, 36);
@@ -367,19 +410,19 @@ const grp = (res, g) => J(res).filter(r => r.group === g);
   await T('09b1 → 09b2 : perfLog sauvegardé borné (40 gels → 30), relu par loadState, _restoredSavedAt = savedAt du snapshot, S.perf volatile jamais sauvegardé', async () => {
     const { ctx, stored } = ctx9b();
     ctx.S.perf = { _lastTickAt: 12345 };
-    ctx.S.perfLog = { gels: Array.from({ length: 40 }, (_, i) => ({ gap: i, t: i })), lent: [{ name: 'a', dur: 1200 }], heap: Array.from({ length: 200 }, (_, i) => ({ heap: i })), boots: [{ t: 5 }] };
+    ctx.S.perfLog = { gels: Array.from({ length: 40 }, (_, i) => ({ gap: i, t: i })), lent: [{ name: 'a', dur: 1200 }], heap: Array.from({ length: 200 }, (_, i) => ({ heap: i })), boots: [{ t: 5 }], loaf: Array.from({ length: 25 }, (_, i) => ({ dur: 1000 + i })) };
     const ok = await ctx.saveState(true);
     assert.strictEqual(ok, true);
     const snap = stored.value;
     assert.ok(snap && snap.perfLog, 'perfLog absent du snapshot IDB');
     assert.strictEqual(snap.perfLog.gels.length, 30); assert.strictEqual(snap.perfLog.gels[0].gap, 10);
-    assert.strictEqual(snap.perfLog.heap.length, 144); assert.strictEqual(snap.perfLog.lent.length, 1); assert.strictEqual(snap.perfLog.boots.length, 1);
+    assert.strictEqual(snap.perfLog.heap.length, 144); assert.strictEqual(snap.perfLog.lent.length, 1); assert.strictEqual(snap.perfLog.boots.length, 1); assert.strictEqual(snap.perfLog.loaf.length, 20); assert.strictEqual(snap.perfLog.loaf[0].dur, 1005);
     assert.strictEqual(snap.perf, undefined, 'S.perf sauvegardé');
     assert.ok(ctx._APPLYSNAP_MANIFEST.includes('perfLog'));
     ctx.S.perfLog = null; ctx.S.cycle = 0; ctx.S._restoredSavedAt = undefined;
     const r = await ctx.loadState();
     assert.strictEqual(r, true);
-    assert.strictEqual(ctx.S.perfLog.gels.length, 30); assert.strictEqual(ctx.S.perfLog.heap.length, 144); assert.strictEqual(ctx.S.perfLog.lent[0].name, 'a');
+    assert.strictEqual(ctx.S.perfLog.gels.length, 30); assert.strictEqual(ctx.S.perfLog.heap.length, 144); assert.strictEqual(ctx.S.perfLog.lent[0].name, 'a'); assert.strictEqual(ctx.S.perfLog.loaf.length, 20);
     assert.strictEqual(ctx.S._restoredSavedAt, snap.savedAt);
   });
   await T('09b2 : chaque connexion IDB ouverte par saveState / loadState est refermée (fausse IDB : ouvertures = fermetures)', async () => {

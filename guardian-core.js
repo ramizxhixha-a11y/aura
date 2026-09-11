@@ -1,3 +1,4 @@
+// [GEL BOOT · 11/09/2026] VERSION 20260911b · probeGel affiche l'anneau S.perfLog.loaf (frames ≥ 1 s nommées par le navigateur, indépendantes des gels)
 // [GEL BOOT · 11/09/2026] VERSION 20260911a · plus aucun travail de code au boot ni en scan silencieux (sonde Fichiers sans réseau via performance.getEntriesByType('resource')) · code = ouverture du bouclier / Relancer uniquement · probeGel lit S.perfLog.gels (durable, 30 gels, nom d'op complet, attribution LoAF) · sonde Mémoire (pente Mo/h)
 // [GEL 09/09/2026] VERSION 20260909a · sondes de code une fois par session (plus 49 fetchs no-store toutes les 2 min), fichier par fichier avec respiration, _perfOp('guardianScan') · sondes Fonctions/Variables/Doublons ressuscitées (muettes depuis les tokens ?v=)
 // [PONT CLAUDE v2] source du snapshot tracee dans le fichier (live/idb/ls-light + date interne) + garde anti-perime : alerte si l etat de CE navigateur est vieux/ancien/absent (evite d exporter un etat du mauvais navigateur) · 05/07/2026
@@ -562,6 +563,16 @@ function probeGel(snap){
     out.push(R('info','Gel / Lag','LoAF non supporté par ce WebView',
       'long-animation-frame absent (WebView < Chrome 123) : attribution limitée à longtask + _perfOp.',
       'Mettre à jour Android System WebView (Play Store) pour obtenir le nom du script bloquant.'));
+  }
+  // [20260911b] frames longues nommées par le navigateur (anneau durable, indépendant des gels)
+  const loafRing = (S && S.perfLog && Array.isArray(S.perfLog.loaf)) ? S.perfLog.loaf.filter(function(f){ return f && typeof f.dur === 'number'; }) : [];
+  if(loafRing.length){
+    const lastF = loafRing.slice(-5).reverse().map(function(f){
+      const sc = Array.isArray(f.scripts) && f.scripts[0] ? f.scripts[0] : null;
+      return (f.time||'?')+' · '+(f.dur/1000).toFixed(1)+' s'+(sc ? (' · '+(sc.src||'?')+':'+(sc.fn||'anonyme')+'@'+(sc.pos!=null?sc.pos:'?')+' ← '+(sc.inv||sc.type||'?')+' '+((Number(sc.dur)||0)/1000).toFixed(1)+' s') : ' · sans script (rendu '+((f.render||0)/1000).toFixed(1)+' s)');
+    });
+    out.push(R('info','Gel / Lag','Frames longues nommées par le navigateur (LoAF ≥ 1 s, '+loafRing.length+')', lastF.join(' ; '),
+      'Le script en tête de chaque frame est le bloqueur : livrer cette ligne à Claude (fichier, position, appelant).'));
   }
   if(!gels.length){
     out.push(R('ok','Gel / Lag','Aucun gel récent','Ni mémoire durable ni trace 🐌 récente dans le journal.',''));
