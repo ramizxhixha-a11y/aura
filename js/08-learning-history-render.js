@@ -1,3 +1,4 @@
+// [GEL BOOT · 11/09/2026] VERSION 20260911b · correctif LoAF : la frame arrive APRÈS le tick qui écrit le gel (observé 20:24 : « LoAF aucun » sur 2 longtasks de 5,6/7,1 s) → rattachement tardif au dernier gel (S.perfLog.gels[].loaf + ligne 🐌 réécrite) + anneau durable S.perfLog.loaf (20 frames ≥ 1 s, scripts nommés) indépendant des gels
 // [GEL BOOT · 11/09/2026] VERSION 20260911a · sonde LoAF (long-animation-frame, Chrome ≥ 123) : le navigateur nomme le script bloquant (fichier:position, fonction, appelant) dans la ligne 🐌 · S.perfLog.gels = 30 derniers gels persistés (nom d'op complet, heap, dom, LoAF) · relevé heap/DOM toutes les 10 min dans S.perfLog.heap (144 pts = 24 h)
 // [CHRONO NOMINATIF · 02/08/2026] longtask a PROUVE un vrai blocage code (~9s, attribution unknown) -> chrono pose sur les fonctions synchrones suspectes pour la NOMMER au prochain gel (⏱ LENT: fn Xs). Temporaire.
 // [DISCRIMINATEUR LONGTASK · 02/08/2026] observateur PerformanceObserver longtask : un gel 🐌 accompagne d une ligne ⏱ = vrai blocage JS (a traquer) ; un gel 🐌 SANS ⏱ = l OS a mis la boucle en pause (throttle/veille, pas un bug code). Wake Lock conserve.
@@ -2663,6 +2664,42 @@ let tick = 0;
 (function _auraLoafProbe(){
   try {
     if (typeof window === 'undefined') return;
+    // texte d'attribution d'une frame (partagé : ligne 🐌 au tick, rattachement tardif)
+    window._auraLoafStr = function(f){
+      try {
+        var top = (f && f.scripts && f.scripts[0]) || null;
+        return ' · LoAF ' + (f.dur/1000).toFixed(1) + 's'
+          + (top ? (' ' + (top.src || '?') + ':' + (top.fn || 'anonyme') + '@' + top.pos + ' ← ' + (top.inv || top.type || '?') + ' ' + (top.dur/1000).toFixed(1) + 's') : ' sans script')
+          + ' · rendu ' + ((f.render || 0)/1000).toFixed(1) + 's';
+      } catch(e) { return ''; }
+    };
+    // [20260911b] RATTACHEMENT TARDIF : la frame LoAF n'est finalisée qu'après le rendu qui suit le
+    // longtask, donc APRÈS le tick de simTick qui a déjà écrit le gel (« LoAF aucun »). Quand elle
+    // arrive, on la rattache au dernier gel dont la fenêtre [pStart, pEnd] la chevauche et on
+    // réécrit la ligne 🐌 (retrouvée par son hash) si elle est encore dans le journal.
+    window._auraLoafAttach = function(f){
+      try {
+        var S0 = null; try { S0 = (0, eval)('S'); } catch(e) {}
+        if (!S0 || !S0.perfLog || !Array.isArray(S0.perfLog.gels)) return false;
+        var end = f.start + f.dur, gels = S0.perfLog.gels;
+        for (var i = gels.length - 1; i >= 0 && i >= gels.length - 5; i--) {
+          var g = gels[i];
+          if (!g || typeof g.pStart !== 'number' || typeof g.pEnd !== 'number') continue;
+          if (end > g.pStart && f.start <= g.pEnd) {
+            if (g.loaf && g.loaf.dur >= f.dur) return false;   // déjà une frame au moins aussi longue
+            g.loaf = { dur: f.dur, block: f.block, script: f.script, render: f.render, scripts: f.scripts };
+            if (g.hash && Array.isArray(S0.chainLog)) {
+              for (var k = S0.chainLog.length - 1; k >= 0; k--) {
+                var line = S0.chainLog[k];
+                if (line && line.hash === g.hash && typeof line.desc === 'string') { line.desc = line.desc.replace(/ · LoAF .*$/, '') + window._auraLoafStr(f); break; }
+              }
+            }
+            return true;
+          }
+        }
+      } catch(e) {}
+      return false;
+    };
     if (typeof PerformanceObserver === 'undefined') { window._auraLoafSupported = false; return; }
     var sup = PerformanceObserver.supportedEntryTypes;
     if (!sup || sup.indexOf('long-animation-frame') === -1) { window._auraLoafSupported = false; return; }
@@ -2691,8 +2728,23 @@ let tick = 0;
           var scriptMs = 0; scripts.forEach(function(sc){ scriptMs += sc.dur; });
           var end = e.startTime + e.duration;
           var renderMs = (e.renderStart && e.renderStart > 0) ? Math.max(0, Math.round(end - e.renderStart)) : 0;
-          window._auraLoafs.push({ start: e.startTime, dur: Math.round(e.duration), block: Math.round(e.blockingDuration || 0), script: scriptMs, render: renderMs, scripts: scripts.slice(0, 3) });
+          var rec = { start: e.startTime, dur: Math.round(e.duration), block: Math.round(e.blockingDuration || 0), script: scriptMs, render: renderMs, scripts: scripts.slice(0, 3) };
+          window._auraLoafs.push(rec);
           if (window._auraLoafs.length > 40) window._auraLoafs.splice(0, window._auraLoafs.length - 40);
+          try { window._auraLoafAttach(rec); } catch(err) {}
+          // [20260911b] anneau DURABLE des frames ≥ 1 s, indépendant des gels : même sans trou
+          // mesuré par simTick, les scripts nommés par le navigateur survivent dans le snapshot.
+          if (rec.dur >= 1000) {
+            try {
+              var S0 = null; try { S0 = (0, eval)('S'); } catch(err) {}
+              if (S0) {
+                if (!S0.perfLog || typeof S0.perfLog !== 'object') S0.perfLog = { gels: [], lent: [], heap: [], boots: [] };
+                if (!Array.isArray(S0.perfLog.loaf)) S0.perfLog.loaf = [];
+                S0.perfLog.loaf.push({ t: Date.now(), time: new Date().toLocaleString(), pStart: rec.start, dur: rec.dur, block: rec.block, script: rec.script, render: rec.render, scripts: rec.scripts });
+                if (S0.perfLog.loaf.length > 20) S0.perfLog.loaf.splice(0, S0.perfLog.loaf.length - 20);
+              }
+            } catch(err) {}
+          }
         });
       } catch(err) {}
     });
@@ -2825,19 +2877,21 @@ function simTick() {
         // [GEL BOOT · 11/09/2026] ATTRIBUTION LoAF : la plus longue frame chevauchant le trou ;
         // le navigateur nomme le script (fichier:position, fonction) et son appelant.
         let _loafStr = '', _loafRec = null;
+        const _pStart = _now - _gap * 1000;   // fenêtre du trou en performance.now (rattachement tardif LoAF)
+        const _hash = Math.random().toString(36).slice(2,8);   // hash commun ligne 🐌 / enregistrement durable
         try {
           const _lfs = (typeof window !== 'undefined' && window._auraLoafs) || [];
-          const _gs2 = _now - _gap * 1000;
           let _best = null;
-          _lfs.forEach(function(f){ if ((f.start + f.dur) > _gs2 && f.start < _now && (!_best || f.dur > _best.dur)) _best = f; });
+          _lfs.forEach(function(f){ if ((f.start + f.dur) > _pStart && f.start < _now && (!_best || f.dur > _best.dur)) _best = f; });
           if (_best) {
             const _top = (_best.scripts && _best.scripts[0]) || null;
             _loafRec = { dur: _best.dur, block: _best.block, script: _best.script, render: _best.render, scripts: _best.scripts };
-            _loafStr = ' · LoAF ' + (_best.dur/1000).toFixed(1) + 's'
-              + (_top ? (' ' + (_top.src || '?') + ':' + (_top.fn || 'anonyme') + '@' + _top.pos + ' ← ' + (_top.inv || _top.type || '?') + ' ' + (_top.dur/1000).toFixed(1) + 's') : ' sans script')
-              + ' · rendu ' + (_best.render/1000).toFixed(1) + 's';
+            _loafStr = (typeof window !== 'undefined' && typeof window._auraLoafStr === 'function') ? window._auraLoafStr(_best)
+              : (' · LoAF ' + (_best.dur/1000).toFixed(1) + 's'
+                + (_top ? (' ' + (_top.src || '?') + ':' + (_top.fn || 'anonyme') + '@' + _top.pos + ' ← ' + (_top.inv || _top.type || '?') + ' ' + (_top.dur/1000).toFixed(1) + 's') : ' sans script')
+                + ' · rendu ' + (_best.render/1000).toFixed(1) + 's');
           } else if (typeof window !== 'undefined' && window._auraLoafSupported === true) {
-            _loafStr = ' · LoAF aucun';
+            _loafStr = ' · LoAF aucun';   // la frame arrive en général après ce tick : rattachée plus tard par _auraLoafAttach
           }
         } catch(e) {}
         S.perf.gaps    = (S.perf.gaps || 0) + 1;
@@ -2847,7 +2901,7 @@ function simTick() {
           S.chainLog.push({
             icon: _hidden ? '📴' : '🐌',
             desc: `Gel ${_gap.toFixed(1)}s · tick ${Math.round(S.perf.lastMs||0)}ms · ${_hidden ? 'ecran masque (throttle Android)' : 'ecran visible'}${_ltStr}${_memStr}${_domStr}${_wsStr}${_loafStr}`,
-            hash: Math.random().toString(36).slice(2,8), time: new Date().toLocaleTimeString()
+            hash: _hash, time: new Date().toLocaleTimeString()
           });
           if (S.chainLog.length > 100) S.chainLog.splice(0, S.chainLog.length - 100);
         }
@@ -2861,7 +2915,7 @@ function simTick() {
             t: Date.now(), time: new Date().toLocaleString(), gap: Math.round(_gap*10)/10, tickMs: Math.round(S.perf.lastMs||0),
             hidden: !!_hidden, jsSum: _jsSum, jsN: _jsN, osIdle: _osIdle, op: _opFull,
             heapU: _heapU, heapL: _heapL, dom: _domN, page: (typeof S.currentPage !== 'undefined' ? S.currentPage : null), ws: _wsD,
-            loaf: _loafRec
+            loaf: _loafRec, pStart: Math.round(_pStart), pEnd: Math.round(_now), hash: _hash
           });
           if (S.perfLog.gels.length > 30) S.perfLog.gels.splice(0, S.perfLog.gels.length - 30);
         } catch(e) {}

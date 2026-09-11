@@ -1,3 +1,4 @@
+// [GEL BOOT · 11/09/2026] VERSION 20260911b · perfLog : + loaf (20 frames ≥ 1 s nommées par le navigateur)
 // [GEL BOOT · 11/09/2026] VERSION 20260911a · snapshot : + perfLog (gels 30 / lent 30 / heap 144 / boots 20), bornée, relue par applySnap (09b2) et listée dans _APPLYSNAP_MANIFEST
 // [P0b · 08/09/2026] VERSION 20260908b · newsApiKey RETIRÉE du snapshot (persistance dédiée aura_news_key dans 10e7)
 // [P7 · 06/09/2026] VERSION 20260906g — snapshot : + newsApiKey (clé CoinStats, 10e7)
@@ -226,9 +227,10 @@ function buildSnapshot() {
             gels:  Array.isArray(p.gels)  ? p.gels.slice(-30)  : [],
             lent:  Array.isArray(p.lent)  ? p.lent.slice(-30)  : [],
             heap:  Array.isArray(p.heap)  ? p.heap.slice(-144) : [],
-            boots: Array.isArray(p.boots) ? p.boots.slice(-20) : []
+            boots: Array.isArray(p.boots) ? p.boots.slice(-20) : [],
+            loaf:  Array.isArray(p.loaf)  ? p.loaf.slice(-20)  : []
           };
-        } catch(e) { return { gels: [], lent: [], heap: [], boots: [] }; }
+        } catch(e) { return { gels: [], lent: [], heap: [], boots: [], loaf: [] }; }
       })(),
 
       // Bougies temps réel

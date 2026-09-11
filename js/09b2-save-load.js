@@ -1,3 +1,4 @@
+// [GEL BOOT · 11/09/2026] VERSION 20260911b · loadState relit perfLog.loaf
 // [GEL BOOT · 11/09/2026] VERSION 20260911a · applySnap relit perfLog (+ manifeste) · db.close() sur toute connexion openDB() de ce fichier (saveState toutes les 25 s ouvrait une connexion IDB neuve jamais fermée : ~144/h)
 // [FIX GEL · 06/09/2026] VERSION 20260906l — saveState : GuardianCore.autoBackup.run(false) au lieu de run(true) (backup complet IDB force toutes les 2 min -> intervalle Guardian)
 // [SKILL BORNÉ · 06/09/2026] VERSION 20260906i — applySnap : _saneSkill sur agentPairSkill + discipleTaskSkill (corrompu > 2000 → 0 ; halving ≤ 500)
@@ -395,7 +396,8 @@ async function loadState() {
           gels:  Array.isArray(_pl.gels)  ? _pl.gels.slice(-30)  : [],
           lent:  Array.isArray(_pl.lent)  ? _pl.lent.slice(-30)  : [],
           heap:  Array.isArray(_pl.heap)  ? _pl.heap.slice(-144) : [],
-          boots: Array.isArray(_pl.boots) ? _pl.boots.slice(-20) : []
+          boots: Array.isArray(_pl.boots) ? _pl.boots.slice(-20) : [],
+          loaf:  Array.isArray(_pl.loaf)  ? _pl.loaf.slice(-20)  : []
         };
       }
     } catch(e) {}
