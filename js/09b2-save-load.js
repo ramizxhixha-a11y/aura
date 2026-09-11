@@ -1,3 +1,4 @@
+// [GEL BOOT · 11/09/2026] VERSION 20260911a · applySnap relit perfLog (+ manifeste) · db.close() sur toute connexion openDB() de ce fichier (saveState toutes les 25 s ouvrait une connexion IDB neuve jamais fermée : ~144/h)
 // [FIX GEL · 06/09/2026] VERSION 20260906l — saveState : GuardianCore.autoBackup.run(false) au lieu de run(true) (backup complet IDB force toutes les 2 min -> intervalle Guardian)
 // [SKILL BORNÉ · 06/09/2026] VERSION 20260906i — applySnap : _saneSkill sur agentPairSkill + discipleTaskSkill (corrompu > 2000 → 0 ; halving ≤ 500)
 // [P0b · 08/09/2026] VERSION 20260908b · newsApiKey RETIRÉE de _LIGHT_KEYS, de la restauration et de _APPLYSNAP_MANIFEST (clé hors snapshot/backup ; 10e7 -> aura_news_key)
@@ -190,11 +191,14 @@ async function saveState(silent = false) {
           req = store.put(snap, RT.SAVE_KEY);
         }
         _svIdbMs = Math.round(_svNow() - _svIdbT);
+        // [GEL BOOT · 11/09/2026] la connexion est refermée à la fin de la transaction : avant, une
+        // connexion IDB neuve toutes les 25 s n'était JAMAIS fermée (11 appelants d'openDB, 0 close).
+        tx.oncomplete = () => { try { db.close(); } catch(x) {} };
         req.onsuccess = () => res(true);
         req.onerror   = () => res(false);
-        tx.onerror    = () => res(false);
-        tx.onabort    = () => res(false);
-      } catch(e) { res(false); }
+        tx.onerror    = () => { res(false); try { db.close(); } catch(x) {} };
+        tx.onabort    = () => { res(false); try { db.close(); } catch(x) {} };
+      } catch(e) { res(false); try { db.close(); } catch(x) {} }
     });
   } catch (e) {}
 
@@ -287,11 +291,12 @@ async function loadState() {
     const db = await openDB();
     snapIDB = await new Promise(res => {
       try {
-        const req = db.transaction(RT.STORE_STATE, 'readonly')
-                      .objectStore(RT.STORE_STATE).get(RT.SAVE_KEY);
+        const tx = db.transaction(RT.STORE_STATE, 'readonly');
+        tx.oncomplete = tx.onerror = tx.onabort = () => { try { db.close(); } catch(x) {} };   // [GEL BOOT 11/09] connexion refermée
+        const req = tx.objectStore(RT.STORE_STATE).get(RT.SAVE_KEY);
         req.onsuccess = e => res(e.target.result || null);
         req.onerror   = () => res(null);
-      } catch(e) { res(null); }
+      } catch(e) { res(null); try { db.close(); } catch(x) {} }
     });
     dbg.push('IDB:' + (snapIDB ? '#' + snapIDB.cycle : 'vide'));
   } catch (e) {
@@ -380,6 +385,20 @@ async function loadState() {
     if (snap.archives)         S.archives         = snap.archives;
     if (snap.brainLog)         S.brainLog         = snap.brainLog;
     if (snap.pendingActions)   S.pendingActions   = snap.pendingActions;
+    // [GEL BOOT · 11/09/2026] journal de performance durable (09b1) : relu tel quel, borné.
+    // _restoredSavedAt (volatile, hors snapshot) = savedAt du snapshot relu → trace de boot (09k).
+    try { S._restoredSavedAt = snap.savedAt ? String(snap.savedAt) : null; } catch(e) {}
+    try {
+      if (snap.perfLog && typeof snap.perfLog === 'object') {
+        const _pl = snap.perfLog;
+        S.perfLog = {
+          gels:  Array.isArray(_pl.gels)  ? _pl.gels.slice(-30)  : [],
+          lent:  Array.isArray(_pl.lent)  ? _pl.lent.slice(-30)  : [],
+          heap:  Array.isArray(_pl.heap)  ? _pl.heap.slice(-144) : [],
+          boots: Array.isArray(_pl.boots) ? _pl.boots.slice(-20) : []
+        };
+      }
+    } catch(e) {}
     try { if (typeof window !== 'undefined' && window._perfOp) window._perfOp('applySnap (hydratation boot)'); } catch(e) {}
     // [PERSISTANCE 11-12 · 16/08/2026] LEÇON : buildSnapshot (09b1) et cette liste vont
     // PAR PAIRE — toute clé ajoutée là-bas DOIT être relue ici. Sept clés des livraisons
@@ -760,6 +779,7 @@ function _flushSyncOnExit(reason) {
     try {
       openDB().then(db => {
         const tx    = db.transaction(RT.STORE_STATE, 'readwrite');
+        tx.oncomplete = tx.onerror = tx.onabort = () => { try { db.close(); } catch(x) {} };   // [GEL BOOT 11/09] connexion refermée
         const store = tx.objectStore(RT.STORE_STATE);
         if (store.keyPath) {
           if (!snap.key) snap.key = RT.SAVE_KEY;
@@ -1098,4 +1118,4 @@ setTimeout(_auraRotatePurge, 20000);
 // relue » — le bug du 16/08 (7 clés perdues à chaque boot) devient structurellement
 // détectable. RÈGLE : toute clé ajoutée à 09b1 s'ajoute à applySnap ET ici.
 window._WALLET_MIRRORS = ['portfolio','totalTrades','winTrades','leverageReserve','leverageTotalFees','fiscalReserveLog','cashLog','ownFundsInjected','_ownFundsLegacyEUR','ownFundsLog','_autoLevBase','dreamJournal'];
-window._APPLYSNAP_MANIFEST = ['feeConfig','vMinor','pairBestWorst','profitSplitCaissePct','vMajor','fiatConvFeePct','agentMemories','globalMemoryPool','dreams','dynamicPairKeys','pairCandidates','proposals','decisionCascade','resonanceHistory','mutedAgents','agentLessons','realTimeframe','realActivePairs','agentLessonsReal','realKillSwitch','realModeStartedAt','preRealSnapshot','agentLessonsPaperReal','paperRealTimeframe','paperRealStartedAt','paperRealKillSwitch','paperRealLastClose','paperRealConsecLosses','paperRealGlobalPauseUntil','_genCount','key','cycle','cycleMax','chainLog','learningHistory','evoLog','agents','pairStates','walletStore','openPositions','pendingActions','botFleet','paperRealConfig','adaptiveState','abTesting','taxConfig','realCandles','preRealSnapshotPaperReal','heatmap','shadow','archives','paperRealStats','realStatsByPair','paperRealActivePairs','fees','tradeContextMemory','agentPairSkill','customPairs','removedPairs','botDisciples','discipleTasks','discipleAngles','discipleTaskSkill','savedAt','version','tradingMode','botAutoMode','fullPowerMode','leverage','_autoLevBorrowed','leverageBorrowed','cashAccount','tradingAccount','fiscalReserveAccount','antiNegReserve','_startPortfolio','_fleetTruthReset0908','_totalCompounded','brainLog','_errStats','_riskVetoes','_botSurplusCarry','_fpByBot'];
+window._APPLYSNAP_MANIFEST = ['feeConfig','vMinor','pairBestWorst','profitSplitCaissePct','vMajor','fiatConvFeePct','agentMemories','globalMemoryPool','dreams','dynamicPairKeys','pairCandidates','proposals','decisionCascade','resonanceHistory','mutedAgents','agentLessons','realTimeframe','realActivePairs','agentLessonsReal','realKillSwitch','realModeStartedAt','preRealSnapshot','agentLessonsPaperReal','paperRealTimeframe','paperRealStartedAt','paperRealKillSwitch','paperRealLastClose','paperRealConsecLosses','paperRealGlobalPauseUntil','_genCount','key','cycle','cycleMax','chainLog','learningHistory','evoLog','agents','pairStates','walletStore','openPositions','pendingActions','botFleet','paperRealConfig','adaptiveState','abTesting','taxConfig','realCandles','preRealSnapshotPaperReal','heatmap','shadow','archives','paperRealStats','realStatsByPair','paperRealActivePairs','fees','tradeContextMemory','agentPairSkill','customPairs','removedPairs','botDisciples','discipleTasks','discipleAngles','discipleTaskSkill','savedAt','version','tradingMode','botAutoMode','fullPowerMode','leverage','_autoLevBorrowed','leverageBorrowed','cashAccount','tradingAccount','fiscalReserveAccount','antiNegReserve','_startPortfolio','_fleetTruthReset0908','_totalCompounded','brainLog','_errStats','_riskVetoes','_botSurplusCarry','_fpByBot','perfLog'];

@@ -1,3 +1,4 @@
+// [GEL BOOT · 11/09/2026] VERSION 20260911a · sonde LoAF (long-animation-frame, Chrome ≥ 123) : le navigateur nomme le script bloquant (fichier:position, fonction, appelant) dans la ligne 🐌 · S.perfLog.gels = 30 derniers gels persistés (nom d'op complet, heap, dom, LoAF) · relevé heap/DOM toutes les 10 min dans S.perfLog.heap (144 pts = 24 h)
 // [CHRONO NOMINATIF · 02/08/2026] longtask a PROUVE un vrai blocage code (~9s, attribution unknown) -> chrono pose sur les fonctions synchrones suspectes pour la NOMMER au prochain gel (⏱ LENT: fn Xs). Temporaire.
 // [DISCRIMINATEUR LONGTASK · 02/08/2026] observateur PerformanceObserver longtask : un gel 🐌 accompagne d une ligne ⏱ = vrai blocage JS (a traquer) ; un gel 🐌 SANS ⏱ = l OS a mis la boucle en pause (throttle/veille, pas un bug code). Wake Lock conserve.
 // [WAKE LOCK · 02/08/2026] heap sain (415/954Mo) a elimine la GC : le gel n est PAS un blocage JS mais Android qui suspend les timers du WebView au premier plan (batterie) -> verrou d ecran pose pour l empecher · le log de gel reste actif pour confirmer que ca disparait
@@ -2653,6 +2654,77 @@ let tick = 0;
     _obs.observe({ entryTypes: ['longtask'] });
   } catch(e){}
 })();
+// [GEL BOOT · 11/09/2026] SONDE LoAF (long-animation-frame, Chrome ≥ 123 / WebView ≥ 123) :
+// pour chaque frame > 500 ms, le NAVIGATEUR nomme lui-même le script (fichier:position,
+// fonction) et son appelant (TimerHandler, event-listener, IDBRequest.onsuccess, fetch/then,
+// continuation await…), plus la part de rendu (style/layout). Couvre les continuations
+// await et les callbacks IDB, invisibles pour le chrono de 00. Reprise dans la ligne 🐌
+// et dans S.perfLog.gels (persistant). Si non supporté : _auraLoafSupported=false, rien d'autre.
+(function _auraLoafProbe(){
+  try {
+    if (typeof window === 'undefined') return;
+    if (typeof PerformanceObserver === 'undefined') { window._auraLoafSupported = false; return; }
+    var sup = PerformanceObserver.supportedEntryTypes;
+    if (!sup || sup.indexOf('long-animation-frame') === -1) { window._auraLoafSupported = false; return; }
+    window._auraLoafSupported = true;
+    window._auraLoafs = window._auraLoafs || [];
+    var _obs = new PerformanceObserver(function(list){
+      try {
+        list.getEntries().forEach(function(e){
+          if (!e || !(e.duration >= 500)) return;
+          var scripts = [];
+          try {
+            (e.scripts || []).forEach(function(sc){
+              scripts.push({
+                dur: Math.round(sc.duration || 0),
+                inv: String(sc.invoker || ''),
+                type: String(sc.invokerType || ''),
+                fn: String(sc.sourceFunctionName || ''),
+                src: String(sc.sourceURL || '').split('?')[0].split('/').pop(),
+                pos: (sc.sourceCharPosition != null) ? sc.sourceCharPosition : -1,
+                layout: Math.round(sc.forcedStyleAndLayoutDuration || 0),
+                pause: Math.round(sc.pauseDuration || 0)
+              });
+            });
+          } catch(err) {}
+          scripts.sort(function(a, b){ return b.dur - a.dur; });
+          var scriptMs = 0; scripts.forEach(function(sc){ scriptMs += sc.dur; });
+          var end = e.startTime + e.duration;
+          var renderMs = (e.renderStart && e.renderStart > 0) ? Math.max(0, Math.round(end - e.renderStart)) : 0;
+          window._auraLoafs.push({ start: e.startTime, dur: Math.round(e.duration), block: Math.round(e.blockingDuration || 0), script: scriptMs, render: renderMs, scripts: scripts.slice(0, 3) });
+          if (window._auraLoafs.length > 40) window._auraLoafs.splice(0, window._auraLoafs.length - 40);
+        });
+      } catch(err) {}
+    });
+    _obs.observe({ type: 'long-animation-frame', buffered: true });
+  } catch(e) { try { window._auraLoafSupported = false; } catch(x) {} }
+})();
+
+// [GEL BOOT · 11/09/2026] RELEVÉ MÉMOIRE PÉRIODIQUE : heap JS + nœuds DOM toutes les 10 min dans
+// S.perfLog.heap (144 points = 24 h), persistant dans le snapshot : donne la PENTE Mo/h (lue par
+// la sonde Mémoire du Guardian) au lieu d'une lecture isolée dans une ligne de gel (228 Mo au
+// boot du 10/09, 468 Mo après ~23 h le 09/09). Premier point à +1 min (état restauré).
+(function _auraHeapSampler(){
+  try {
+    if (typeof window === 'undefined' || window._auraHeapSamplerOn) return;
+    window._auraHeapSamplerOn = true;
+    function _sample(){
+      try {
+        var S0 = null; try { S0 = (0, eval)('S'); } catch(e) {}
+        if (!S0 || !S0.agents) return;
+        if (!S0.perfLog || typeof S0.perfLog !== 'object') S0.perfLog = { gels: [], lent: [], heap: [], boots: [] };
+        if (!Array.isArray(S0.perfLog.heap)) S0.perfLog.heap = [];
+        var h = null, l = null;
+        try { var pm = performance.memory; if (pm && pm.usedJSHeapSize) { h = Math.round(pm.usedJSHeapSize/1048576); l = Math.round(pm.jsHeapSizeLimit/1048576); } } catch(e) {}
+        var d = null; try { d = document.getElementsByTagName('*').length; } catch(e) {}
+        S0.perfLog.heap.push({ t: Date.now(), time: new Date().toLocaleString(), heap: h, limit: l, dom: d, cycle: S0.cycle, page: S0.currentPage });
+        if (S0.perfLog.heap.length > 144) S0.perfLog.heap.splice(0, S0.perfLog.heap.length - 144);
+      } catch(e) {}
+    }
+    setTimeout(_sample, 60000);
+    setInterval(_sample, 600000);
+  } catch(e) {}
+})();
 // Marqueur d'operation lourde : chaque fonction suspecte s'annonce (saveState, backups
 // Guardian, etc.) pour que le prochain gel porte son NOM au lieu de "unknown".
 if (typeof window !== 'undefined' && !window._perfOp) {
@@ -2705,24 +2777,28 @@ function simTick() {
         const _hidden = (typeof document !== 'undefined' && document.hidden);
         // Heap JS (Chrome Android l'expose) : tranche entre pause GC/pression memoire
         // (heap proche de la limite) et operation lourde (heap bas).
-        let _memStr = '';
+        // [GEL BOOT 11/09] les valeurs numériques sont conservées pour l'enregistrement durable S.perfLog.gels
+        let _memStr = '', _heapU = null, _heapL = null, _domN = null, _wsD = null, _jsSum = null, _jsN = 0, _osIdle = false, _opFull = null;
         try {
           const pm = (typeof performance !== 'undefined') ? performance.memory : null;
           if (pm && pm.usedJSHeapSize) {
             const _u = Math.round(pm.usedJSHeapSize/1048576);
             const _l = Math.round(pm.jsHeapSizeLimit/1048576);
+            _heapU = _u; _heapL = _l;
             _memStr = ` · heap ${_u}/${_l}Mo`;
           }
         } catch(e) {}
         let _domStr = '';
         try {
           const _nodes = (typeof document !== 'undefined' && document.getElementsByTagName) ? document.getElementsByTagName('*').length : 0;
+          _domN = _nodes;
           _domStr = ' · dom ' + _nodes + ' · page ' + ((typeof S!=='undefined'&&S)?S.currentPage:'?');
         } catch(e) {}
         let _wsStr = '';
         try {
           const _wsNow = (typeof window!=='undefined' && window._auraWsMsgCount) || 0;
           const _wsDelta = _wsNow - (S.perf._wsLast || 0);
+          _wsD = _wsDelta;
           _wsStr = ' · ws +' + _wsDelta;
         } catch(e) {}
         // [VERDICT LONGTASK · 08/08/2026] somme les longtasks tombes DANS le trou :
@@ -2738,10 +2814,30 @@ function simTick() {
           if (_ltSum > 500) {
             let _opStr = '';
             const _op = (typeof window !== 'undefined') ? window._auraLastOp : null;
-            if (_op && _op.at > (_gapStart - 5000) && _op.at < _now) _opStr = ' · op ' + _op.name;   // fenêtre élargie 2→5s (16/08)
+            if (_op && _op.at > (_gapStart - 5000) && _op.at < _now) { _opStr = ' · op ' + _op.name; _opFull = String(_op.name); }   // fenêtre élargie 2→5s (16/08)
+            _jsSum = Math.round(_ltSum/100)/10; _jsN = _ltN;
             _ltStr = ' · JS ⏱ ' + (_ltSum/1000).toFixed(1) + 's/' + _ltN + _opStr;
           } else if (!_hidden) {
+            _osIdle = true;
             _ltStr = ' · JS inactif (suspension OS)';
+          }
+        } catch(e) {}
+        // [GEL BOOT · 11/09/2026] ATTRIBUTION LoAF : la plus longue frame chevauchant le trou ;
+        // le navigateur nomme le script (fichier:position, fonction) et son appelant.
+        let _loafStr = '', _loafRec = null;
+        try {
+          const _lfs = (typeof window !== 'undefined' && window._auraLoafs) || [];
+          const _gs2 = _now - _gap * 1000;
+          let _best = null;
+          _lfs.forEach(function(f){ if ((f.start + f.dur) > _gs2 && f.start < _now && (!_best || f.dur > _best.dur)) _best = f; });
+          if (_best) {
+            const _top = (_best.scripts && _best.scripts[0]) || null;
+            _loafRec = { dur: _best.dur, block: _best.block, script: _best.script, render: _best.render, scripts: _best.scripts };
+            _loafStr = ' · LoAF ' + (_best.dur/1000).toFixed(1) + 's'
+              + (_top ? (' ' + (_top.src || '?') + ':' + (_top.fn || 'anonyme') + '@' + _top.pos + ' ← ' + (_top.inv || _top.type || '?') + ' ' + (_top.dur/1000).toFixed(1) + 's') : ' sans script')
+              + ' · rendu ' + (_best.render/1000).toFixed(1) + 's';
+          } else if (typeof window !== 'undefined' && window._auraLoafSupported === true) {
+            _loafStr = ' · LoAF aucun';
           }
         } catch(e) {}
         S.perf.gaps    = (S.perf.gaps || 0) + 1;
@@ -2750,11 +2846,25 @@ function simTick() {
         if (S.chainLog) {
           S.chainLog.push({
             icon: _hidden ? '📴' : '🐌',
-            desc: `Gel ${_gap.toFixed(1)}s · tick ${Math.round(S.perf.lastMs||0)}ms · ${_hidden ? 'ecran masque (throttle Android)' : 'ecran visible'}${_ltStr}${_memStr}${_domStr}${_wsStr}`,
+            desc: `Gel ${_gap.toFixed(1)}s · tick ${Math.round(S.perf.lastMs||0)}ms · ${_hidden ? 'ecran masque (throttle Android)' : 'ecran visible'}${_ltStr}${_memStr}${_domStr}${_wsStr}${_loafStr}`,
             hash: Math.random().toString(36).slice(2,8), time: new Date().toLocaleTimeString()
           });
           if (S.chainLog.length > 100) S.chainLog.splice(0, S.chainLog.length - 100);
         }
+        // [GEL BOOT · 11/09/2026] MÉMOIRE DURABLE : 30 derniers gels, nom d'op COMPLET (jamais tronqué),
+        // valeurs numériques + LoAF, persistés dans le snapshot (09b1) → survivent à la rotation du
+        // journal (100 lignes, ~4 min en pleine activité) et à une mort de l'app.
+        try {
+          if (!S.perfLog || typeof S.perfLog !== 'object') S.perfLog = { gels: [], lent: [], heap: [], boots: [] };
+          if (!Array.isArray(S.perfLog.gels)) S.perfLog.gels = [];
+          S.perfLog.gels.push({
+            t: Date.now(), time: new Date().toLocaleString(), gap: Math.round(_gap*10)/10, tickMs: Math.round(S.perf.lastMs||0),
+            hidden: !!_hidden, jsSum: _jsSum, jsN: _jsN, osIdle: _osIdle, op: _opFull,
+            heapU: _heapU, heapL: _heapL, dom: _domN, page: (typeof S.currentPage !== 'undefined' ? S.currentPage : null), ws: _wsD,
+            loaf: _loafRec
+          });
+          if (S.perfLog.gels.length > 30) S.perfLog.gels.splice(0, S.perfLog.gels.length - 30);
+        } catch(e) {}
       }
     }
     S.perf._lastTickAt = _now;

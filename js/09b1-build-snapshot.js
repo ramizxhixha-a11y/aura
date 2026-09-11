@@ -1,3 +1,4 @@
+// [GEL BOOT · 11/09/2026] VERSION 20260911a · snapshot : + perfLog (gels 30 / lent 30 / heap 144 / boots 20), bornée, relue par applySnap (09b2) et listée dans _APPLYSNAP_MANIFEST
 // [P0b · 08/09/2026] VERSION 20260908b · newsApiKey RETIRÉE du snapshot (persistance dédiée aura_news_key dans 10e7)
 // [P7 · 06/09/2026] VERSION 20260906g — snapshot : + newsApiKey (clé CoinStats, 10e7)
 // [SEPARATION COMPLETE 3 MODES · 02/07/2026] flat openPositions/pnl24h/pnlHistory/pnlPeriod retires (walletStore les porte par mode)
@@ -214,6 +215,21 @@ function buildSnapshot() {
       // Compounding et générations
       _totalCompounded: S._totalCompounded || 0,
       _genCount:        S._genCount        || 0,
+
+      // [GEL BOOT · 11/09/2026] journal de performance durable : gels (nom d'op complet + LoAF),
+      // LENT, relevés heap 10 min, boots. Bornes dures : 30 / 30 / 144 / 20 (~30-60 Ko max).
+      // S.perf (volatile : _lastTickAt en performance.now) n'est JAMAIS sauvegardé.
+      perfLog: (function() {
+        try {
+          const p = (S.perfLog && typeof S.perfLog === 'object') ? S.perfLog : {};
+          return {
+            gels:  Array.isArray(p.gels)  ? p.gels.slice(-30)  : [],
+            lent:  Array.isArray(p.lent)  ? p.lent.slice(-30)  : [],
+            heap:  Array.isArray(p.heap)  ? p.heap.slice(-144) : [],
+            boots: Array.isArray(p.boots) ? p.boots.slice(-20) : []
+          };
+        } catch(e) { return { gels: [], lent: [], heap: [], boots: [] }; }
+      })(),
 
       // Bougies temps réel
       realCandles: (function() {

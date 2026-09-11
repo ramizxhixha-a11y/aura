@@ -1,3 +1,4 @@
+// [GEL BOOT · 11/09/2026] VERSION 20260911a · trace de boot durable dans S.perfLog.boots (heure, heap au boot, cycle, version du document, dernière sauvegarde de la session précédente = heure de la mort ±25 s)
 // ════════════════════════════════════════════════════════════════════════
 // ▓▓▓ AURA8 — 09k-init.js · VERSION 122 · 01/06/2026 ▓▓▓
 // ════════════════════════════════════════════════════════════════════════
@@ -138,6 +139,20 @@ async function init() {
       });
     }
   } catch (e) {}
+
+  // [GEL BOOT · 11/09/2026] trace de boot durable (20 derniers boots, persistée dans le snapshot).
+  // prevSavedAt = savedAt du snapshot restauré, capturé AVANT la première sauvegarde de cette
+  // session : c'est l'heure de la dernière écriture de la session précédente (mort ± 25 s).
+  try {
+    if (!S.perfLog || typeof S.perfLog !== 'object') S.perfLog = { gels: [], lent: [], heap: [], boots: [] };
+    if (!Array.isArray(S.perfLog.boots)) S.perfLog.boots = [];
+    let _hb = null, _hl = null;
+    try { const pm = performance.memory; if (pm && pm.usedJSHeapSize) { _hb = Math.round(pm.usedJSHeapSize/1048576); _hl = Math.round(pm.jsHeapSizeLimit/1048576); } } catch(e) {}
+    S.perfLog.boots.push({ t: Date.now(), time: new Date().toLocaleString(), restored: !!restored, cycle: S.cycle,
+      heap: _hb, limit: _hl, doc: (typeof DOC_V !== 'undefined') ? String(DOC_V) : null,
+      prevSavedAt: (restored && S._restoredSavedAt) ? String(S._restoredSavedAt) : null });
+    if (S.perfLog.boots.length > 20) S.perfLog.boots.splice(0, S.perfLog.boots.length - 20);
+  } catch(e) {}
 
   try {
     const _mBtn = document.getElementById('modeToggleBtn');

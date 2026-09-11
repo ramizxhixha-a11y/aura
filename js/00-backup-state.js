@@ -1,3 +1,4 @@
+// [GEL BOOT · 11/09/2026] VERSION 20260911a · chaque ligne ⏱ LENT (timer / then / ws) est aussi enregistrée dans S.perfLog.lent (30 dernières, persistées dans le snapshot)
 // ════════════════════════════════════════════════════════════════════════
 // ▓▓▓ AURA8 — 00-backup-state.js · VERSION 126 · 22/05/2026 ▓▓▓
 // ════════════════════════════════════════════════════════════════════════
@@ -129,6 +130,14 @@
             time: new Date().toLocaleTimeString()
           });
           if (S0.chainLog.length > 100) S0.chainLog.splice(0, S0.chainLog.length - 100);
+        }
+        // [GEL BOOT · 11/09/2026] mémoire durable des LENT (30 dernières), persistée via le snapshot
+        if (S0) {
+          if (!S0.perfLog || typeof S0.perfLog !== 'object') S0.perfLog = { gels: [], lent: [], heap: [], boots: [] };
+          if (!Array.isArray(S0.perfLog.lent)) S0.perfLog.lent = [];
+          S0.perfLog.lent.push({ t: Date.now(), time: new Date().toLocaleString(), name: String(name), dur: Math.round(dur),
+            phase: (S0.perf && S0.perf.slowest && S0.perf.slowest.ms > 300) ? { name: String(S0.perf.slowest.name), ms: Math.round(S0.perf.slowest.ms) } : null });
+          if (S0.perfLog.lent.length > 30) S0.perfLog.lent.splice(0, S0.perfLog.lent.length - 30);
         }
       } catch (e) {}
     }
