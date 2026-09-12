@@ -1,3 +1,4 @@
+// [GEL BOOT · 11/09/2026] VERSION 20260911c · le timer +3 s (_checkAutoBackup + _refreshBackupsCache) était la fenêtre des deux gels de boot : liste/index à +3 s (léger), backup auto du jour à +90 s ; restoreBackup lit UN enregistrement (_getBackup)
 // [P7 · 06/09/2026] VERSION 20260906g — Sentiment News : fetch CryptoCompare mort + NLP local SUPPRIMÉS, champ clé CoinStats, rendu sur la source unique 10e7
 // [REGLAGES v2 · ETAPE 1 · 07/07/2026] le panneau 'MODE REEL test securise' retrouve son vrai nom (MODE EVALUATION, l examen : vrais prix sans argent reel), ses paires recoivent leurs INTERRUPTEURS (togglePaperRealPair), les deux listes de paires sont renommees sans ambiguite (Evaluation vs MODE REEL argent reel), le texte GBM clarifie — etape 2 a venir : boutons legacy confirmSwitch*
 // ════════════════════════════════════════════════════════════
@@ -344,9 +345,9 @@ window.importBackup = importBackup;
 // Restaurer un backup historique (depuis IndexedDB)
 async function restoreBackup(id) {
   try {
-    const backups = await _loadAllBackups();
-    const backup = backups.find(b => b.id === id);
-    if (!backup) {
+    // [GEL BOOT c] UN seul enregistrement complet lu (03 · _getBackup) : la liste (_loadAllBackups) ne porte plus l'état
+    const backup = await _getBackup(id);
+    if (!backup || !backup.state) {
       alert('Backup introuvable');
       return;
     }
@@ -437,11 +438,19 @@ function _refreshBackupsCache() {
 }
 window._refreshBackupsCache = _refreshBackupsCache;
 
-// Démarrage : backup auto + cache initial
+// Démarrage — [GEL BOOT · 11/09/2026 · c] C'ÉTAIT LE TIMER DES DEUX GELS DE BOOT (+3 s → _checkAutoBackup puis
+// _refreshBackupsCache, chacun un store.getAll() de tout aura_backups ≈ 6 s de désérialisation, LoAF 20:54).
+// Ce timer multi-lignes échappait au grep « setTimeout(…, 3000) » sur une ligne — le 3e timer de boot, c'était lui.
+//  · +3 s  : liste des backups (index backups_meta, quelques Ko) + vérification/reconstruction de l'index (un
+//            enregistrement par tâche, respiration 150 ms, une seule fois par session, rien si l'index est complet)
+//  · +90 s : backup auto du jour (clone de S ≈ 1,5 Mo + écriture IDB, une fois par jour) — hors de la fenêtre de boot
+setTimeout(() => {
+  _refreshBackupsCache();
+  if (typeof _ensureBackupIndex === 'function') _ensureBackupIndex();
+}, 3000);
 setTimeout(() => {
   _checkAutoBackup();
-  _refreshBackupsCache();
-}, 3000);
+}, 90000);
 
 function renderSettingsPanel() {
   const el = document.getElementById('settingsContent');

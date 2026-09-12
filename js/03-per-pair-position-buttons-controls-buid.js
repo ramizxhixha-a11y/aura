@@ -1,3 +1,4 @@
+// [GEL BOOT · 11/09/2026] VERSION 20260911c · double gel de boot (2 × 6 s) NOMMÉ par LoAF : `req.result` de store.getAll() sur aura_backups (rotation + liste) → index backups_meta (v2), lecture d'un seul enregistrement à la fois, enregistrements sans meta (collision 09b3) purgés
 // [SKILL BORNÉ · 06/09/2026] VERSION 20260906i — learnFromOutcome : agentPairSkill plafonné 500/cellule (halving)
 // [P7 · 06/09/2026] VERSION 20260906g — scoutAnalysis : nlp_v1 RAVIVÉ sur le signal news par paire (10e7), macro_v1/fundamental_v1 restent neutralisés (S3)
 // [FEEDBACK REEL · 07/07/2026] la realite pese plus lourd que la simulation dans learnFromOutcome : Evaluation x3, Reel x5, ecole x1 (multiplexeur garantit le mode au moment de l appel) — les vrais trades forgent enfin la fitness des agents
@@ -5574,7 +5575,9 @@ function toggleArchiveDetail(idx) {
 // ═══════════════════════════════════════════════════════════════════════════
 
 const AURA_BACKUP_DB = 'aura_backups';
-const AURA_BACKUP_STORE = 'backups';
+const AURA_BACKUP_STORE = 'backups';            // enregistrements complets { id, meta, state } (≈ 1,5 Mo chacun) — JAMAIS lus en bloc
+const AURA_BACKUP_META_STORE = 'backups_meta';  // [GEL BOOT c] index léger { id, meta } — seul store lu au boot, pour la liste et la rotation
+const AURA_BACKUP_DB_VERSION = 2;               // v1 → v2 : création de backups_meta (index reconstruit une fois, un enregistrement par tâche)
 const AURA_LAST_AUTO_KEY = 'aura_last_auto_backup_date';
 const AURA_VERSION = 'v8.0';
 
@@ -5628,11 +5631,51 @@ const AURA_IMPORT_ALLOWED_FIELDS = [
   '_agentFitnessOverrides'
 ];
 
-// Initialiser IndexedDB
+// ── [GEL BOOT · 11/09/2026 · c] LE DOUBLE GEL DE DÉMARRAGE VIVAIT ICI — PROUVÉ PAR LE NAVIGATEUR (LoAF), PAS SUPPOSÉ ──
+// Captures Rams 11/09 20:54 (DOC_V 20260911b) :
+//   🐌 Gel 6.6s … LoAF 6.0s 03-per-pair-position-buttons-controls-buid.js:anonyme@261123 ← IDBRequest.onsuccess 6.0s
+//   🐌 Gel 7.2s … LoAF 6.3s 03-per-pair-position-buttons-controls-buid.js:anonyme@262456 ← IDBRequest.onsuccess 6.1s
+// Positions 261123 / 262456 (unités UTF-16 du fichier 20260911b) = les deux `req.onsuccess = () => resolve(req.result || [])`
+// qui suivaient `store.getAll()` dans _saveBackupToDB (rotation) et _loadAllBackups (liste). `req.result` désérialise
+// TOUS les enregistrements du store d'un coup (≈ 1,5 Mo chacun) → 6 s de JS pur, deux fois, à chaque boot (+3 s, 04).
+// Pourquoi le store était énorme : 09b3 déclarait un `function _buildFullBackup()` global (sans meta) qui écrasait celui de
+// ce fichier → chaque backup auto ajoutait un enregistrement SANS meta, la rotation plantait (b.meta.type) → jamais de
+// suppression, jamais de aura_last_auto_backup_date → un enregistrement de plus À CHAQUE DÉMARRAGE depuis le 28/06.
+// Correctif : (1) 09b3 renommé _buildFullBackupFile ; (2) store d'index `backups_meta` (v2) : liste et rotation ne lisent
+// plus que les meta ; (3) les enregistrements complets ne sont lus qu'un par un, sur demande (RESTAURER) ou lors de la
+// reconstruction unique de l'index (un par tâche, respiration 150 ms) ; les enregistrements sans meta sont supprimés.
+// Interdit désormais dans ce fichier : `getAll()` sur AURA_BACKUP_STORE (banc-gel-backup.js le vérifie).
+
+function _idbReq(req) {   // promesse sur une requête IDB (le résultat n'est lu qu'ici, dans onsuccess)
+  return new Promise((resolve, reject) => {
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+function _idbTxDone(tx) {   // promesse sur la fin d'une transaction
+  return new Promise((resolve, reject) => {
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+    tx.onabort = () => reject(tx.error || new Error('transaction annulée'));
+  });
+}
+function _backupJournal(icon, desc) {
+  try {
+    if (typeof S === 'undefined' || !S || !Array.isArray(S.chainLog)) return;
+    S.chainLog.push({ icon: icon, desc: desc, hash: (typeof rndHash === 'function') ? rndHash() : Math.random().toString(36).slice(2, 8), time: (typeof nowStr === 'function') ? nowStr() : new Date().toLocaleTimeString() });
+    if (S.chainLog.length > 100) S.chainLog.splice(0, S.chainLog.length - 100);
+  } catch(e) {}
+}
+function _isValidBackupMeta(m) {
+  return !!(m && typeof m === 'object' && typeof m.date === 'number' && typeof m.type === 'string');
+}
+
+// Initialiser IndexedDB (v2 : backups + backups_meta)
 function _openBackupDB() {
   return new Promise((resolve, reject) => {
-    const req = indexedDB.open(AURA_BACKUP_DB, 1);
+    const req = indexedDB.open(AURA_BACKUP_DB, AURA_BACKUP_DB_VERSION);
     req.onerror = () => reject(req.error);
+    req.onblocked = () => { try { console.warn('aura_backups : ouverture bloquée par une autre connexion (v1 encore ouverte)'); } catch(e) {} };
     req.onsuccess = () => resolve(req.result);
     req.onupgradeneeded = (e) => {
       const db = e.target.result;
@@ -5641,8 +5684,54 @@ function _openBackupDB() {
         store.createIndex('type', 'type', { unique: false });
         store.createIndex('date', 'date', { unique: false });
       }
+      if (!db.objectStoreNames.contains(AURA_BACKUP_META_STORE)) {
+        db.createObjectStore(AURA_BACKUP_META_STORE, { keyPath: 'id' });
+        // rien d'autre ici : l'index est reconstruit APRÈS l'ouverture, un enregistrement par tâche (_ensureBackupIndex)
+      }
     };
   });
+}
+
+// Reconstruction unique de l'index (v1 → v2) : clés seules d'abord (aucune désérialisation), puis UN enregistrement
+// complet par tâche avec respiration — jamais deux d'affilée, jamais tous d'un coup. Idempotent : si count(backups) ===
+// count(backups_meta), rien à faire. Un enregistrement sans meta valide (collision 03/09b3) est supprimé.
+let _backupIndexChecked = false;   // une fois par session
+async function _ensureBackupIndex() {
+  if (_backupIndexChecked) return null;
+  _backupIndexChecked = true;
+  let db = null;
+  try {
+    db = await _openBackupDB();
+    const tx0 = db.transaction([AURA_BACKUP_STORE, AURA_BACKUP_META_STORE], 'readonly');
+    const nAll = await _idbReq(tx0.objectStore(AURA_BACKUP_STORE).count());
+    const nMeta = await _idbReq(tx0.objectStore(AURA_BACKUP_META_STORE).count());
+    if (nAll === nMeta) { db.close(); return { kept: nMeta, dropped: 0, rebuilt: false }; }
+    const keys = await new Promise((resolve, reject) => {
+      const out = [];
+      const cur = db.transaction([AURA_BACKUP_STORE], 'readonly').objectStore(AURA_BACKUP_STORE).openKeyCursor();
+      cur.onsuccess = () => { const c = cur.result; if (!c) return resolve(out); out.push(c.key); c.continue(); };
+      cur.onerror = () => reject(cur.error);
+    });
+    let kept = 0, dropped = 0;
+    for (const key of keys) {
+      await new Promise(r => setTimeout(r, 150));   // respiration : le bot et le rendu passent entre deux enregistrements
+      const tx = db.transaction([AURA_BACKUP_STORE, AURA_BACKUP_META_STORE], 'readwrite');
+      const store = tx.objectStore(AURA_BACKUP_STORE);
+      const metaStore = tx.objectStore(AURA_BACKUP_META_STORE);
+      const rec = await _idbReq(store.get(key));   // UNE désérialisation (≈ 1,5 Mo) dans cette tâche, pas plus
+      if (rec && _isValidBackupMeta(rec.meta)) { metaStore.put({ id: key, meta: rec.meta }); kept++; }
+      else { store.delete(key); metaStore.delete(key); dropped++; }
+      await _idbTxDone(tx);
+    }
+    db.close(); db = null;
+    _backupJournal('🗂', 'Index backups IDB reconstruit · ' + kept + ' backup' + (kept > 1 ? 's' : '') + ' indexé' + (kept > 1 ? 's' : '') + ' · ' + dropped + ' enregistrement' + (dropped > 1 ? 's' : '') + ' sans meta supprimé' + (dropped > 1 ? 's' : '') + ' (collision _buildFullBackup 03/09b3 : un par démarrage depuis le 28/06)');
+    if (typeof _refreshBackupsCache === 'function') { try { _refreshBackupsCache(); } catch(e) {} }
+    return { kept: kept, dropped: dropped, rebuilt: true };
+  } catch(e) {
+    console.error('Erreur index backups:', e);
+    try { if (db) db.close(); } catch(_e) {}
+    return null;
+  }
 }
 
 // Construire un backup complet de l'état AURA
@@ -5671,16 +5760,17 @@ function _buildFullBackup(label, type) {
     },
     state: {}
   };
-  // Copie défensive de toutes les propriétés de S
+  // Copie défensive de toutes les propriétés de S (UNE sérialisation : la même chaîne sert au clone et au hash)
+  let str = '';
   try {
-    backup.state = JSON.parse(JSON.stringify(S));
+    str = JSON.stringify(S);
+    backup.state = JSON.parse(str);
   } catch(e) {
     console.error('Erreur sérialisation S:', e);
-    backup.state = {};
+    backup.state = {}; str = '{}';
   }
   // Hash simple pour vérifier intégrité
   try {
-    const str = JSON.stringify(backup.state);
     let h = 0;
     for (let i = 0; i < str.length; i++) {
       h = ((h << 5) - h) + str.charCodeAt(i);
@@ -5692,47 +5782,32 @@ function _buildFullBackup(label, type) {
   return backup;
 }
 
-// Sauvegarder un backup en IndexedDB avec rotation
+// Sauvegarder un backup en IndexedDB avec rotation (rotation sur l'INDEX : aucun enregistrement complet relu)
 async function _saveBackupToDB(backup) {
   try {
+    if (!backup || !_isValidBackupMeta(backup.meta)) throw new Error('backup sans meta valide : refusé (collision _buildFullBackup ?)');
     const db = await _openBackupDB();
-    const tx = db.transaction([AURA_BACKUP_STORE], 'readwrite');
+    const tx = db.transaction([AURA_BACKUP_STORE, AURA_BACKUP_META_STORE], 'readwrite');
     const store = tx.objectStore(AURA_BACKUP_STORE);
-    
-    // Ajouter le nouveau backup
-    await new Promise((resolve, reject) => {
-      const req = store.add(backup);
-      req.onsuccess = () => resolve();
-      req.onerror = () => reject(req.error);
-    });
-    
-    // Rotation : récupérer tous les backups et trier
-    const allBackups = await new Promise((resolve, reject) => {
-      const req = store.getAll();
-      req.onsuccess = () => resolve(req.result || []);
-      req.onerror = () => reject(req.error);
-    });
-    
-    // Séparer auto et manuel
-    const autos = allBackups.filter(b => b.meta.type === 'auto').sort((a, b) => b.meta.date - a.meta.date);
-    const manuels = allBackups.filter(b => b.meta.type === 'manual').sort((a, b) => b.meta.date - a.meta.date);
-    const preImports = allBackups.filter(b => b.meta.type === 'pre-import').sort((a, b) => b.meta.date - a.meta.date);
-    
+    const metaStore = tx.objectStore(AURA_BACKUP_META_STORE);
+
+    // Ajouter le nouveau backup + sa ligne d'index (même transaction : jamais l'un sans l'autre)
+    const id = await _idbReq(store.add(backup));
+    metaStore.put({ id: id, meta: backup.meta });
+
+    // Rotation : l'index seul (quelques Ko), jamais les enregistrements complets
+    const metas = (await _idbReq(metaStore.getAll())) || [];
+    const byType = (t) => metas.filter(m => m && _isValidBackupMeta(m.meta) && m.meta.type === t).sort((a, b) => b.meta.date - a.meta.date);
+
     // Garder 7 autos, 5 manuels, 3 pre-import
     const toDelete = [
-      ...autos.slice(7),
-      ...manuels.slice(5),
-      ...preImports.slice(3)
+      ...byType('auto').slice(7),
+      ...byType('manual').slice(5),
+      ...byType('pre-import').slice(3)
     ];
-    
-    for (const old of toDelete) {
-      await new Promise((resolve) => {
-        const req = store.delete(old.id);
-        req.onsuccess = () => resolve();
-        req.onerror = () => resolve();
-      });
-    }
-    
+    for (const old of toDelete) { store.delete(old.id); metaStore.delete(old.id); }
+
+    await _idbTxDone(tx);
     db.close();
     return true;
   } catch(e) {
@@ -5741,36 +5816,44 @@ async function _saveBackupToDB(backup) {
   }
 }
 
-// Récupérer tous les backups triés par date desc
+// Récupérer la LISTE des backups triés par date desc : { id, meta } uniquement (index), jamais l'état.
+// L'état complet d'un backup se lit avec _getBackup(id), un seul à la fois, sur demande.
 async function _loadAllBackups() {
   try {
     const db = await _openBackupDB();
-    const tx = db.transaction([AURA_BACKUP_STORE], 'readonly');
-    const store = tx.objectStore(AURA_BACKUP_STORE);
-    const backups = await new Promise((resolve, reject) => {
-      const req = store.getAll();
-      req.onsuccess = () => resolve(req.result || []);
-      req.onerror = () => reject(req.error);
-    });
+    const tx = db.transaction([AURA_BACKUP_META_STORE], 'readonly');
+    const metas = (await _idbReq(tx.objectStore(AURA_BACKUP_META_STORE).getAll())) || [];
     db.close();
-    return backups.sort((a, b) => b.meta.date - a.meta.date);
+    return metas.filter(m => m && _isValidBackupMeta(m.meta)).sort((a, b) => b.meta.date - a.meta.date);
   } catch(e) {
     console.error('Erreur chargement backups:', e);
     return [];
   }
 }
 
-// Supprimer un backup par id
+// Lire UN backup complet (meta + state) par id — la seule lecture d'un enregistrement complet hors reconstruction d'index
+async function _getBackup(id) {
+  try {
+    const db = await _openBackupDB();
+    const tx = db.transaction([AURA_BACKUP_STORE], 'readonly');
+    const rec = await _idbReq(tx.objectStore(AURA_BACKUP_STORE).get(id));
+    db.close();
+    return rec || null;
+  } catch(e) {
+    console.error('Erreur lecture backup:', e);
+    return null;
+  }
+}
+window._getBackup = _getBackup;
+
+// Supprimer un backup par id (enregistrement + ligne d'index, même transaction)
 async function _deleteBackup(id) {
   try {
     const db = await _openBackupDB();
-    const tx = db.transaction([AURA_BACKUP_STORE], 'readwrite');
-    const store = tx.objectStore(AURA_BACKUP_STORE);
-    await new Promise((resolve) => {
-      const req = store.delete(id);
-      req.onsuccess = () => resolve();
-      req.onerror = () => resolve();
-    });
+    const tx = db.transaction([AURA_BACKUP_STORE, AURA_BACKUP_META_STORE], 'readwrite');
+    tx.objectStore(AURA_BACKUP_STORE).delete(id);
+    tx.objectStore(AURA_BACKUP_META_STORE).delete(id);
+    await _idbTxDone(tx);
     db.close();
     return true;
   } catch(e) {
@@ -5786,8 +5869,12 @@ async function _checkAutoBackup() {
     if (lastAutoDate === today) {
       return; // Déjà fait aujourd'hui
     }
-    // Créer le backup auto
+    // Créer le backup auto (celui de CE fichier : { meta, state } — 09b3 ne l'écrase plus)
     const backup = _buildFullBackup('Auto · ' + new Date().toLocaleString('fr-FR'), 'auto');
+    if (!backup || !_isValidBackupMeta(backup.meta)) {
+      _backupJournal('⚠️', 'Backup auto refusé : _buildFullBackup sans meta (collision de nom ?)');
+      return;
+    }
     const ok = await _saveBackupToDB(backup);
     if (ok) {
       localStorage.setItem(AURA_LAST_AUTO_KEY, today);

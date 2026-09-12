@@ -1,3 +1,4 @@
+// [GEL BOOT · 11/09/2026] VERSION 20260911c · _buildFullBackup() (backup FULL fichier) renommé _buildFullBackupFile : il écrasait _buildFullBackup(label, type) de 03 (cause racine du store aura_backups sans meta et des 2 gels de boot)
 // ════════════════════════════════════════════════════════════════════════
 // ▓▓▓ AURA8 — 09b3-import-export.js · VERSION 132 · 28/06/2026 ▓▓▓
 // ════════════════════════════════════════════════════════════════════════
@@ -115,6 +116,10 @@ window.importState = importState;
 // FolderSync synchronise ensuite ce dossier vers Drive. Retourne 'fs-written' si
 // l'ecriture native a reussi, sinon null (les replis share/blob prennent le relais).
 // -- Backup FULL : etat complet AURA (buildSnapshot) + donnees Guardian --
+// [GEL BOOT · 11/09/2026 · c] RENOMMÉ _buildFullBackupFile. L'ancien nom `_buildFullBackup` (fonction globale de script
+// classique) ÉCRASAIT `_buildFullBackup(label, type)` de 03 (chargé avant) : le backup auto quotidien de 03 recevait
+// alors cet objet SANS `meta` → enregistrement inexploitable dans aura_backups, rotation plantée, un de plus par boot
+// depuis le 28/06 → 2 × 6 s de désérialisation à chaque démarrage. Aucun autre fichier n'utilisait window._buildFullBackup.
 function _grabGuardianData() {
   try {
     var G = window.GuardianCore;
@@ -122,7 +127,7 @@ function _grabGuardianData() {
     return { history: G.history || [], lastResults: G.results || [], lastRun: G.lastRun || null };
   } catch (e) { return null; }
 }
-function _buildFullBackup() {
+function _buildFullBackupFile() {
   var snap = (typeof buildSnapshot === 'function') ? buildSnapshot() : null;
   if (!snap) return null;
   if (!snap.savedAt) snap.savedAt = new Date().toISOString();
@@ -139,7 +144,7 @@ function _fullBackupName() {
   var stamp = d.getFullYear() + pad(d.getMonth()+1) + pad(d.getDate()) + '-' + pad(d.getHours()) + pad(d.getMinutes()) + pad(d.getSeconds());
   return 'aura_guardian_full_' + stamp + '.json';
 }
-window._buildFullBackup = _buildFullBackup;
+window._buildFullBackupFile = _buildFullBackupFile;
 
 async function _fsWriteBackup(json, filename) {
   window._fsLastDiag = '';
@@ -404,7 +409,7 @@ function autoDlSetMeta(m) { try { localStorage.setItem(AUTODL_KEY, JSON.stringif
 // Télécharge l'état avec un nom unique (cycle + horodatage → jamais de conflit).
 async function autoDlDownload() {
   try {
-    const full = _buildFullBackup();
+    const full = _buildFullBackupFile();
     if (!full) return false;
     const json = JSON.stringify(full);
     const fname = _fullBackupName();
@@ -481,7 +486,7 @@ window.autoDownload = {
   // telechargement immediat (nom unique) — via partage natif (WebView) ou download
   now:     () => {
     try {
-      const full = _buildFullBackup();
+      const full = _buildFullBackupFile();
       if (!full) { try{alert('Sauvegarde indisponible : etat non pret.');}catch(e){} return false; }
       const json = JSON.stringify(full);
       const fname = _fullBackupName();
