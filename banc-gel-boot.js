@@ -1,4 +1,4 @@
-// banc-gel-boot.js — [GEL BOOT · 11/09/2026] VERSION 20260911b (a : livraison initiale ; b : rattachement tardif LoAF + anneau S.perfLog.loaf)
+// banc-gel-boot.js — [GEL BOOT · 11/09/2026] VERSION 20260911c (a : livraison initiale ; b : rattachement tardif LoAF + anneau S.perfLog.loaf ; c : token seul — le correctif des gels est dans banc-gel-backup.js)
 // Banc AUTONOME (node banc-gel-boot.js depuis la racine du dépôt). Mission « gels de boot » :
 //  1) le Guardian ne fait PLUS RIEN au boot (aucun setTimeout à +4 s / +8 s : scans silencieux et
 //     tick backup uniquement par intervalle 2 min) et un scan silencieux ne touche JAMAIS au code
@@ -11,7 +11,7 @@
 'use strict';
 const fs = require('fs'), vm = require('vm'), assert = require('assert'), path = require('path');
 const ROOT = __dirname;
-const TOK = '20260911b';
+const TOK = '20260911c';
 const HEAD = '// [GEL BOOT · 11/09/2026] VERSION ';
 const VER = { 'guardian-core.js':'20260911b', 'guardian-embed.js':'20260911a', 'js/00-backup-state.js':'20260911a', 'js/08-learning-history-render.js':'20260911b', 'js/09b1-build-snapshot.js':'20260911b', 'js/09b2-save-load.js':'20260911b', 'js/09k-init.js':'20260911a' };
 let pass = 0, fail = 0;
