@@ -5,6 +5,8 @@
 //
 // STATIQUE (tout est lu dans le dépôt, rien n'est figé ici) :
 //   1. HTML : DOC_V présent, les 78 ?v= identiques à DOC_V, chaque script/css déclaré existe sur le disque.
+//   1b. PASSATION : PASSATION-AURA8.md présente à la racine et 1re ligne portant `DOC_V` — la passation est versionnée et
+//       réécrite dans CHAQUE commit de livraison (push direct depuis le 12/09) ; l'oublier ou la laisser à l'ancien token BLOQUE.
 //   2. Syntaxe : chaque .js du dépôt (js/, racine, bancs) compile (vm.Script).
 //   3. COLLISIONS GLOBALES — la classe d'erreur la plus coûteuse de ce projet (09b3 `_buildFullBackup()` a écrasé en silence
 //      celui de 03 pendant 2 mois et demi → store IDB obèse, gels de 6 s à chaque boot) : tous les scripts chargés par le HTML
@@ -45,6 +47,16 @@ const csss = [...html.matchAll(/<link[^>]*\bhref="([^"?]+\.css)(?:\?[^"]*)?"/g)]
 const missing = scripts.concat(csss).filter(f => !fs.existsSync(path.join(ROOT, f)));
 if (!missing.length) ok(scripts.length + ' scripts + ' + csss.length + ' css déclarés, tous présents sur le disque');
 else ko('déclarés mais ABSENTS du dépôt : ' + missing.join(', '));
+
+/* ───── 1b. Passation : versionnée dans le dépôt, 1re ligne au token courant ───── */
+console.log('▶ Passation');
+const PASS = 'PASSATION-AURA8.md';
+if (!fs.existsSync(path.join(ROOT, PASS))) ko(PASS + ' ABSENTE de la racine — la passation est commitée avec chaque livraison');
+else {
+  const l1 = rd(PASS).split('\n')[0];
+  if (TOK && l1.includes('`' + TOK + '`')) ok(PASS + ' : 1re ligne au token ' + TOK);
+  else ko(PASS + ' : 1re ligne sans le token ' + TOK + ' — passation NON mise à jour : « ' + l1.slice(0, 90) + ' »');
+}
 
 /* ───── 2. Syntaxe de tous les .js du dépôt ───── */
 console.log('▶ Syntaxe');
