@@ -1,4 +1,4 @@
-// banc-gel-boot.js — [GEL BOOT · 11/09/2026] VERSION 20260911c (a : livraison initiale ; b : rattachement tardif LoAF + anneau S.perfLog.loaf ; c : token seul — le correctif des gels est dans banc-gel-backup.js)
+// banc-gel-boot.js — [GEL BOOT · 12/09/2026] VERSION 20260912a (token lu dans le HTML ; affichage LoAF du core corrigé · a : livraison initiale ; b : rattachement tardif LoAF + anneau S.perfLog.loaf ; c : token seul — le correctif des gels est dans banc-gel-backup.js)
 // Banc AUTONOME (node banc-gel-boot.js depuis la racine du dépôt). Mission « gels de boot » :
 //  1) le Guardian ne fait PLUS RIEN au boot (aucun setTimeout à +4 s / +8 s : scans silencieux et
 //     tick backup uniquement par intervalle 2 min) et un scan silencieux ne touche JAMAIS au code
@@ -11,9 +11,9 @@
 'use strict';
 const fs = require('fs'), vm = require('vm'), assert = require('assert'), path = require('path');
 const ROOT = __dirname;
-const TOK = '20260911c';
+const TOK = (function(){ const m = require('fs').readFileSync(require('path').join(__dirname, 'AURA8_v118.html'), 'utf8').match(/DOC_V = '(\d{8}[a-z])'/); if (!m) { console.error('DOC_V introuvable dans AURA8_v118.html'); process.exit(2); } return m[1]; })();   // [12/09/2026] token lu dans le HTML (source unique) : plus jamais figé dans un banc
 const HEAD = '// [GEL BOOT · 11/09/2026] VERSION ';
-const VER = { 'guardian-core.js':'20260911b', 'guardian-embed.js':'20260911a', 'js/00-backup-state.js':'20260911a', 'js/08-learning-history-render.js':'20260911b', 'js/09b1-build-snapshot.js':'20260911b', 'js/09b2-save-load.js':'20260911b', 'js/09k-init.js':'20260911a' };
+const VER = { 'guardian-core.js':'// [GEL BOOT · 12/09/2026] VERSION 20260912a', 'guardian-embed.js':'20260911a', 'js/00-backup-state.js':'20260911a', 'js/08-learning-history-render.js':'20260911b', 'js/09b1-build-snapshot.js':'20260911b', 'js/09b2-save-load.js':'20260911b', 'js/09k-init.js':'20260911a' };
 let pass = 0, fail = 0;
 async function T(name, fn){ try { await fn(); pass++; console.log('  ✅', name); } catch(e){ fail++; console.log('  ❌', name, '\n     ', (e && e.stack || e).toString().split('\n').slice(0,3).join('\n      ')); } }
 process.on('unhandledRejection', e => { fail++; console.log('  ❌ rejet non géré :', e && e.message); });
@@ -83,8 +83,8 @@ const grp = (res, g) => J(res).filter(r => r.group === g);
     for (const f of MODIFIED_JS) new vm.Script(src(f), { filename:f });
   });
   await T('en-têtes : chaque fichier livré commence par « ' + HEAD + '<version> » (a ou b selon la livraison)', () => {
-    for (const f of MODIFIED_JS) assert.ok(src(f).startsWith(HEAD + VER[f]), f + ' attendu ' + VER[f]);
-    assert.ok(src('banc-gel-guardian.js').startsWith('// banc-gel-guardian.js — [GEL BOOT · 11/09/2026] VERSION ' + TOK));
+    for (const f of MODIFIED_JS) assert.ok(src(f).startsWith(VER[f].startsWith('//') ? VER[f] : HEAD + VER[f]), f + ' attendu ' + VER[f]);
+    assert.ok(src('banc-gel-guardian.js').startsWith('// banc-gel-guardian.js — [GEL BOOT · 12/09/2026] VERSION 20260912a'));
   });
   await T('HTML : DOC_V = ' + TOK + ', 78 ?v= au même token, aucun 20260909a / 20260911a', () => {
     const h = src('AURA8_v118.html');
@@ -195,16 +195,36 @@ const grp = (res, g) => J(res).filter(r => r.group === g);
     assert.ok(v && v.detail.includes('opération nommée : fetch js/09f1-bricks-action.js.') , JSON.stringify(g));
     assert.ok(g.find(x => x.title.startsWith('Relevé')).title.includes('journal (volatile)'));
   });
-  await T('probeGel (b) : anneau S.perfLog.loaf → info « Frames longues nommées par le navigateur » avec le script en tête, même sans gel', async () => {
+  await T('probeGel (b→12/09) : anneau S.perfLog.loaf → « Frames longues (LoAF ≥ 1 s) » : bloqueur = script ≥ 50 % de la frame, sinon « sans bloqueur JS » ; sans boots = tout « depuis le boot courant »', async () => {
     const S = { agents: [], pairStates: {}, chainLog: [], perfLog: { gels: [], lent: [], heap: [], boots: [], loaf: [
       { t: 1, time: '11/09/2026 20:24:37', pStart: 1, dur: 5600, block: 5500, script: 5500, render: 100, scripts: [{ dur: 5500, inv: 'Window.fetch.then', type: 'resolve-promise', fn: 'fetchUsdEurRate', src: '02-state-init.js', pos: 210001, layout: 0, pause: 0 }] },
       { t: 2, time: '11/09/2026 20:24:45', pStart: 2, dur: 7100, block: 7000, script: 0, render: 6900, scripts: [] } ] } };
     const ctx = loadCore(mkFetch().fetch, { S });
     const g = grp((await ctx.GuardianCore.runAll()).results, 'Gel / Lag');
-    const f = g.find(x => x.title.startsWith('Frames longues nommées par le navigateur (LoAF ≥ 1 s, 2)'));
-    assert.ok(f && f.level === 'info', JSON.stringify(g));
-    assert.strictEqual(f.detail, '11/09/2026 20:24:45 · 7.1 s · sans script (rendu 6.9 s) ; 11/09/2026 20:24:37 · 5.6 s · 02-state-init.js:fetchUsdEurRate@210001 ← Window.fetch.then 5.5 s');
+    const f = g.find(x => x.title.startsWith('Frames longues (LoAF ≥ 1 s) : 2 depuis le boot courant · 1 avec bloqueur JS · 0 antérieures'));
+    assert.ok(f && f.level === 'warn', JSON.stringify(g));   // bloqueur ≥ 3 s → warn
+    assert.strictEqual(f.detail, '11/09/2026 20:24:45 · 7.1 s · sans bloqueur JS (JS 0.00 s · rendu 6.90 s · blocage 7.00 s) ; 11/09/2026 20:24:37 · 5.6 s · bloqueur 02-state-init.js:fetchUsdEurRate@210001 ← Window.fetch.then 5.5 s');
+    assert.ok(f.fix.startsWith('Seules les lignes « bloqueur » désignent un script à corriger'));
     assert.ok(g.some(x => x.level === 'ok' && x.title === 'Aucun gel récent'));
+  });
+  await T('probeGel (12/09) : données réelles du 12/09 → frames d\'avant le boot séparées (hors verdict), 11 ms de JS dans 1.3 s = « sans bloqueur JS » (00-backup-state.js n\'est plus accusé), script le plus long retenu, aucune frame → « Aucune frame longue depuis le boot courant »', async () => {
+    const boots = [{ t: 1000, time: '12/09/2026 13:07:13' }];
+    const oldF = { t: 500, time: '11/09/2026 20:54:57', dur: 6269, block: 6219, script: 6126, render: 141, scripts: [{ dur: 6126, inv: 'IDBRequest.onsuccess', type: 'event-listener', fn: '', src: '03-per-pair-position-buttons-controls-buid.js', pos: 262456 }] };
+    const f1 = { t: 2000, time: '12/09/2026 14:02:06', dur: 1317, block: 8, script: 11, render: 4, scripts: [{ dur: 11, inv: 'TimerHandler:setInterval', type: 'user-callback', fn: '', src: '00-backup-state.js', pos: 6882 }] };
+    const f2 = { t: 3000, time: '12/09/2026 14:28:02', dur: 1807, block: 178, script: 263, render: 64, scripts: [{ dur: 163, inv: 'TimerHandler:setInterval', type: 'user-callback', fn: '', src: '00-backup-state.js', pos: 6882 }, { dur: 46, inv: 'FrameRequestCallback', type: 'user-callback', fn: '', src: '00-backup-state.js', pos: 7000 }] };
+    const f3 = { t: 4000, time: '12/09/2026 15:00:00', dur: 1000, block: 950, script: 911, render: 0, scripts: [{ dur: 11, inv: 'TimerHandler:setInterval', type: 'user-callback', fn: '', src: '00-backup-state.js', pos: 6882 }, { dur: 900, inv: 'IDBRequest.onsuccess', type: 'event-listener', fn: 'x', src: '09b2-save-load.js', pos: 42 }] };
+    const run = async (loaf) => { const S = { agents: [], pairStates: {}, chainLog: [], perfLog: { gels: [], lent: [], heap: [], boots, loaf } }; return grp((await loadCore(mkFetch().fetch, { S }).GuardianCore.runAll()).results, 'Gel / Lag').find(x => x.title.startsWith('Frames longues (LoAF')); };
+    let f = await run([oldF, f1, f2]);
+    assert.strictEqual(f.title, 'Frames longues (LoAF ≥ 1 s) : 2 depuis le boot courant · 0 avec bloqueur JS · 1 antérieures'); assert.strictEqual(f.level, 'ok');
+    assert.strictEqual(f.detail, '12/09/2026 14:28:02 · 1.8 s · sans bloqueur JS (JS 0.26 s · rendu 0.06 s · blocage 0.18 s · 1er script 00-backup-state.js@6882 0.16 s) ; 12/09/2026 14:02:06 · 1.3 s · sans bloqueur JS (JS 0.01 s · rendu 0.00 s · blocage 0.01 s · 1er script 00-backup-state.js@6882 0.01 s) · antérieures au boot courant (1, hors verdict) : 11/09/2026 20:54:57 · 6.3 s · bloqueur 03-per-pair-position-buttons-controls-buid.js:anonyme@262456 ← IDBRequest.onsuccess 6.1 s');
+    assert.ok(f.fix.startsWith('Frames étirées sans JS dominant'), f.fix);
+    f = await run([oldF, f3]);   // script le plus long (900 ms / 1000) = bloqueur, pas le premier (11 ms)
+    assert.strictEqual(f.title, 'Frames longues (LoAF ≥ 1 s) : 1 depuis le boot courant · 1 avec bloqueur JS · 1 antérieures'); assert.strictEqual(f.level, 'info');
+    assert.ok(f.detail.startsWith('12/09/2026 15:00:00 · 1.0 s · bloqueur 09b2-save-load.js:x@42 ← IDBRequest.onsuccess 0.9 s'), f.detail);
+    f = await run([oldF]);
+    assert.strictEqual(f.title, 'Frames longues (LoAF ≥ 1 s) : 0 depuis le boot courant · 0 avec bloqueur JS · 1 antérieures'); assert.strictEqual(f.level, 'ok');
+    assert.ok(f.detail.startsWith('Aucune frame longue depuis le boot courant (boot 12/09/2026 13:07:13). · antérieures au boot courant (1, hors verdict) : '), f.detail);
+    assert.strictEqual(f.fix, '');
   });
   await T('probeGel : gels datés de plus de 24 h → relevé conservé, aucun verdict crit · LoAF non supporté → info', async () => {
     const S = { agents: [], pairStates: {}, chainLog: [], perfLog: { gels: [gelRec({ t: Date.now() - 2 * 86400000 })], lent: [], heap: [], boots: [] } };

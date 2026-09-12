@@ -1,3 +1,4 @@
+// [GEL BOOT · 12/09/2026] VERSION 20260912a · probeGel : frames LoAF séparées « depuis ce boot » / « antérieures » (S.perfLog.boots) ; bloqueur = script le PLUS LONG de la frame, nommé seulement s'il occupe ≥ 50 % de la frame, sinon « sans bloqueur JS » (rendu / GC / throttle Android) — corrige l'accusation à tort de 00-backup-state.js (11 ms de JS dans une frame de 1.3 s, 12/09) et l'affichage des frames d'avant le correctif c
 // [GEL BOOT · 11/09/2026] VERSION 20260911b · probeGel affiche l'anneau S.perfLog.loaf (frames ≥ 1 s nommées par le navigateur, indépendantes des gels)
 // [GEL BOOT · 11/09/2026] VERSION 20260911a · plus aucun travail de code au boot ni en scan silencieux (sonde Fichiers sans réseau via performance.getEntriesByType('resource')) · code = ouverture du bouclier / Relancer uniquement · probeGel lit S.perfLog.gels (durable, 30 gels, nom d'op complet, attribution LoAF) · sonde Mémoire (pente Mo/h)
 // [GEL 09/09/2026] VERSION 20260909a · sondes de code une fois par session (plus 49 fetchs no-store toutes les 2 min), fichier par fichier avec respiration, _perfOp('guardianScan') · sondes Fonctions/Variables/Doublons ressuscitées (muettes depuis les tokens ?v=)
@@ -525,6 +526,12 @@ async function probeIdbHealth(){
    dans le snapshot donc dans chaque backup), sinon les traces 🐌 du chainLog (volatile : 100
    lignes, ~4 min en pleine activité — c'est ce qui faisait disparaître les gels avant lecture).
    Relevé = tous les gels connus ; verdicts = gels des 24 dernières heures. */
+function _loafTop(f){   // [20260912a] script le plus long de la frame — pas le premier (le 1er faisait 11 ms dans une frame de 1.3 s)
+  const sc = (f && Array.isArray(f.scripts)) ? f.scripts : [];
+  let top = null;
+  for(let i = 0; i < sc.length; i++){ if(sc[i] && (!top || (Number(sc[i].dur)||0) > (Number(top.dur)||0))) top = sc[i]; }
+  return top;
+}
 function _gelFromRecord(r){
   return { gap:Number(r.gap)||0, tickMs:Number(r.tickMs)||0, visible:!r.hidden,
     heapU:(r.heapU!=null?Number(r.heapU):null), heapL:(r.heapL!=null?Number(r.heapL):null),
@@ -565,14 +572,31 @@ function probeGel(snap){
       'Mettre à jour Android System WebView (Play Store) pour obtenir le nom du script bloquant.'));
   }
   // [20260911b] frames longues nommées par le navigateur (anneau durable, indépendant des gels)
+  // [20260912a] séparées « depuis ce boot » / « antérieures » (S.perfLog.boots) ; bloqueur = _loafTop nommé seulement s'il occupe ≥ 50 % de la frame
   const loafRing = (S && S.perfLog && Array.isArray(S.perfLog.loaf)) ? S.perfLog.loaf.filter(function(f){ return f && typeof f.dur === 'number'; }) : [];
   if(loafRing.length){
-    const lastF = loafRing.slice(-5).reverse().map(function(f){
-      const sc = Array.isArray(f.scripts) && f.scripts[0] ? f.scripts[0] : null;
-      return (f.time||'?')+' · '+(f.dur/1000).toFixed(1)+' s'+(sc ? (' · '+(sc.src||'?')+':'+(sc.fn||'anonyme')+'@'+(sc.pos!=null?sc.pos:'?')+' ← '+(sc.inv||sc.type||'?')+' '+((Number(sc.dur)||0)/1000).toFixed(1)+' s') : ' · sans script (rendu '+((f.render||0)/1000).toFixed(1)+' s)');
-    });
-    out.push(R('info','Gel / Lag','Frames longues nommées par le navigateur (LoAF ≥ 1 s, '+loafRing.length+')', lastF.join(' ; '),
-      'Le script en tête de chaque frame est le bloqueur : livrer cette ligne à Claude (fichier, position, appelant).'));
+    const boots = (S.perfLog && Array.isArray(S.perfLog.boots)) ? S.perfLog.boots : [];
+    const lastBoot = boots.length ? boots[boots.length-1] : null;
+    const bootT = lastBoot ? (Number(lastBoot.t)||0) : 0;
+    const cur = bootT ? loafRing.filter(function(f){ return (Number(f.t)||0) >= bootT; }) : loafRing.slice();
+    const old = bootT ? loafRing.filter(function(f){ return (Number(f.t)||0) <  bootT; }) : [];
+    const isBlocker = function(f){ const sc = _loafTop(f); return !!(sc && (Number(sc.dur)||0) >= 0.5 * f.dur); };
+    const line = function(f){
+      const sc = _loafTop(f), scD = sc ? (Number(sc.dur)||0) : 0;
+      const head = (f.time||'?')+' · '+(f.dur/1000).toFixed(1)+' s';
+      if(isBlocker(f)) return head+' · bloqueur '+(sc.src||'?')+':'+(sc.fn||'anonyme')+'@'+(sc.pos!=null?sc.pos:'?')+' ← '+(sc.inv||sc.type||'?')+' '+(scD/1000).toFixed(1)+' s';
+      return head+' · sans bloqueur JS (JS '+((Number(f.script)||0)/1000).toFixed(2)+' s · rendu '+((Number(f.render)||0)/1000).toFixed(2)+' s · blocage '+((Number(f.block)||0)/1000).toFixed(2)+' s'
+        +(sc ? (' · 1er script '+(sc.src||'?')+'@'+(sc.pos!=null?sc.pos:'?')+' '+(scD/1000).toFixed(2)+' s') : '')+')';
+    };
+    const blockers = cur.filter(isBlocker);
+    const worst = blockers.reduce(function(a,f){ return Math.max(a, f.dur); }, 0);
+    const lvl = worst >= 3000 ? 'warn' : (blockers.length ? 'info' : 'ok');
+    const bootTxt = (lastBoot && lastBoot.time) ? (' (boot '+lastBoot.time+')') : '';
+    const detail = (cur.length ? cur.slice(-5).reverse().map(line).join(' ; ') : ('Aucune frame longue depuis le boot courant'+bootTxt+'.'))
+      + (old.length ? (' · antérieures au boot courant ('+old.length+', hors verdict) : '+old.slice(-3).reverse().map(line).join(' ; ')) : '');
+    out.push(R(lvl,'Gel / Lag','Frames longues (LoAF ≥ 1 s) : '+cur.length+' depuis le boot courant · '+blockers.length+' avec bloqueur JS · '+old.length+' antérieures', detail,
+      blockers.length ? 'Seules les lignes « bloqueur » désignent un script à corriger (livrer la ligne à Claude : fichier, position, appelant). « Sans bloqueur JS » = frame étirée par le rendu, le GC ou le throttle Android, pas par le code.'
+                      : (cur.length ? 'Frames étirées sans JS dominant (rendu / GC / throttle Android) : rien à corriger dans le code.' : '')));
   }
   if(!gels.length){
     out.push(R('ok','Gel / Lag','Aucun gel récent','Ni mémoire durable ni trace 🐌 récente dans le journal.',''));
@@ -629,7 +653,7 @@ function probeGel(snap){
     const opTxt = named.length ? (' · opération nommée : ' + named.map(function(g){ return g.op; }).filter(function(v,i,a){ return a.indexOf(v)===i; }).join(', ')) : ' · aucune opération marquée (_perfOp) dans la fenêtre';
     const tops = {};
     jsGels.forEach(function(g){
-      const sc = g.loaf && Array.isArray(g.loaf.scripts) ? g.loaf.scripts[0] : null;
+      const sc = g.loaf ? _loafTop(g.loaf) : null;   // [20260912a] script le plus long de la frame
       if(!sc) return;
       const k = (sc.src||'?')+':'+(sc.fn||'anonyme')+'@'+(sc.pos!=null?sc.pos:'?')+' ← '+(sc.inv||sc.type||'?');
       tops[k] = Math.max(tops[k]||0, Number(sc.dur)||0);

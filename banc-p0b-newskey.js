@@ -4,7 +4,7 @@
 const fs = require('fs'), vm = require('vm'), assert = require('assert');
 let ok = 0, ko = 0;
 function T(name, fn) { try { fn(); ok++; console.log('  ok  ' + name); } catch (e) { ko++; console.log('  KO  ' + name + '\n      ' + e.message); } }
-const TOK = '20260911c';
+const TOK = (function(){ const m = require('fs').readFileSync(require('path').join(__dirname, 'AURA8_v118.html'), 'utf8').match(/DOC_V = '(\d{8}[a-z])'/); if (!m) { console.error('DOC_V introuvable dans AURA8_v118.html'); process.exit(2); } return m[1]; })();   // [12/09/2026] token lu dans le HTML (source unique) : plus jamais figé dans un banc
 const SRC = fs.readFileSync('js/10e7-news-nlp.js', 'utf8');
 function mkLS(init) { const m = Object.assign({}, init || {}); return { _m: m, getItem: k => (k in m ? m[k] : null), setItem: (k, v) => { m[k] = String(v); }, removeItem: k => { delete m[k]; } }; }
 function mkCtx(ls, withS) {

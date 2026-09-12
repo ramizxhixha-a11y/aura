@@ -24,8 +24,9 @@
 'use strict';
 const fs = require('fs'), vm = require('vm'), assert = require('assert'), path = require('path');
 const ROOT = __dirname;
-const TOK = '20260911c';
-const HEAD = '// [GEL BOOT · 11/09/2026] VERSION ' + TOK;
+const TOK = (function(){ const m = require('fs').readFileSync(require('path').join(__dirname, 'AURA8_v118.html'), 'utf8').match(/DOC_V = '(\d{8}[a-z])'/); if (!m) { console.error('DOC_V introuvable dans AURA8_v118.html'); process.exit(2); } return m[1]; })();   // [12/09/2026] token lu dans le HTML (source unique) : plus jamais figé dans un banc
+const VER03 = '20260911c';   // [12/09] version de la livraison qui a touché 03/04/09b3 en dernier — indépendante du token courant du HTML
+const HEAD = '// [GEL BOOT · 11/09/2026] VERSION ' + VER03;
 const F03 = 'js/03-per-pair-position-buttons-controls-buid.js', F04 = 'js/04-v8-0-livraison-35-mode-max-permissif-v.js', F9B3 = 'js/09b3-import-export.js';
 let pass = 0, fail = 0;
 async function T(name, fn){ try { await fn(); pass++; console.log('  ✅', name); } catch(e){ fail++; console.log('  ❌', name, '\n     ', (e && e.stack || e).toString().split('\n').slice(0,3).join('\n      ')); } }
@@ -172,7 +173,7 @@ const V1_NOMETA = (cycle) => ({ _type: 'aura_guardian_full', savedAt: '2026-08-0
   console.log('▶ banc-gel-backup · token', TOK);
 
   /* ───── statique ───── */
-  await T('syntaxe : 03, 04, 09b3 compilent + en-têtes VERSION ' + TOK, () => {
+  await T('syntaxe : 03, 04, 09b3 compilent + en-têtes VERSION ' + VER03, () => {
     for (const f of [F03, F04, F9B3]) { new vm.Script(src(f), { filename: f }); assert.ok(src(f).startsWith(HEAD), f + ' : en-tête'); }
   });
   await T('oracle : les deux lignes 🐌 réelles nomment 03 @261123 / @262456 ← IDBRequest.onsuccess (format LoAF de 08)', () => {
@@ -234,14 +235,14 @@ const V1_NOMETA = (cycle) => ({ _type: 'aura_guardian_full', savedAt: '2026-08-0
     const calls = files.filter(f => src(f).split('\n').some(l => !l.trim().startsWith('//') && /_checkAutoBackup\(\)/.test(l) && !/async function _checkAutoBackup/.test(l)));
     assert.deepStrictEqual(calls, [F04]);
   });
-  await T('HTML : DOC_V = ' + TOK + ', 78 ?v= au même token, aucun 20260911a / 20260911b · bancs p0b / gel-guardian / gel-boot au token ' + TOK, () => {
+  await T('HTML : DOC_V = ' + TOK + ', 78 ?v= au même token, aucun 20260911a / 20260911b · bancs p0b / gel-guardian / gel-boot lisent le token dans le HTML', () => {
     const h = src('AURA8_v118.html');
     assert.ok(h.includes("DOC_V = '" + TOK + "'"));
     const toks = h.match(/\?v=[0-9a-z]+/g) || [];
     assert.strictEqual(toks.length, 78);
     assert.deepStrictEqual(toks.filter(t => t !== '?v=' + TOK), []);
     assert.ok(!h.includes('20260911a') && !h.includes('20260911b'));
-    for (const b of ['banc-p0b-newskey.js', 'banc-gel-guardian.js', 'banc-gel-boot.js']) assert.ok(src(b).includes("const TOK = '" + TOK + "';"), b);
+    for (const b of ['banc-p0b-newskey.js', 'banc-gel-guardian.js', 'banc-gel-boot.js']) assert.ok(src(b).includes("match(/DOC_V = '(\\d{8}[a-z])'/)") && !/const TOK = '\d{8}[a-z]'/.test(src(b)), b + ' : token figé au lieu d\'être lu dans le HTML');   // [12/09] plus aucun banc ne fige le token
   });
 
   /* ───── dynamique : fausse IDB ───── */

@@ -1,4 +1,4 @@
-// banc-gel-guardian.js — [GEL BOOT · 11/09/2026] VERSION 20260911c (c : token seul, core/embed inchangés ; contrat mis à jour : code = ouverture / Relancer uniquement, jamais au boot ni en scan silencieux ; sonde réseau = groupe « Fichiers (réseau) »)
+// banc-gel-guardian.js — [GEL BOOT · 12/09/2026] VERSION 20260912a (token lu dans le HTML ; core 20260912a : affichage LoAF corrigé ; embed inchangé ; contrat mis à jour : code = ouverture / Relancer uniquement, jamais au boot ni en scan silencieux ; sonde réseau = groupe « Fichiers (réseau) »)
 // (édition 20260909a : oracle des sondes de code, un fetch par fichier, respiration, toasts)
 // Banc AUTONOME (node banc-gel-guardian.js depuis la racine du dépôt). Vérifie que les sondes de
 // code du Guardian (fichiers / fonctions / variables / doublons) donnent EXACTEMENT les mêmes
@@ -11,7 +11,7 @@
 'use strict';
 const fs = require('fs'), vm = require('vm'), assert = require('assert'), path = require('path');
 const ROOT = __dirname;
-const TOK = '20260911c';
+const TOK = (function(){ const m = require('fs').readFileSync(require('path').join(__dirname, 'AURA8_v118.html'), 'utf8').match(/DOC_V = '(\d{8}[a-z])'/); if (!m) { console.error('DOC_V introuvable dans AURA8_v118.html'); process.exit(2); } return m[1]; })();   // [12/09/2026] token lu dans le HTML (source unique) : plus jamais figé dans un banc
 let pass = 0, fail = 0;
 async function T(name, fn){ try { await fn(); pass++; console.log('  ✅', name); } catch(e){ fail++; console.log('  ❌', name, '\n     ', (e && e.stack || e).toString().split('\n').slice(0,3).join('\n      ')); } }
 process.on('unhandledRejection', e => { fail++; console.log('  ❌ rejet non géré :', e && e.message); });
@@ -118,7 +118,8 @@ function oracle(CFG, html, perFileDeclared, exists){
     for (const dead of ['probeFiles(','probeFunctions(','probeUndefinedVars(','probeDuplicates(','allCode']) assert.ok(!s.includes(dead), 'résidu '+dead);
     for (const live of ['async function probeCode(','async function analyseCode(','async function fetchDeclared(','function _breathe(','opts.refreshCode === true','let _codeReport = null']) assert.strictEqual(s.split(live).length, 2, live);
     assert.strictEqual(s.split("_guardianOp('guardianScan')").length, 4, 'guardianScan annoncé 3 fois (runAll, probeCode, par fichier)');
-    assert.ok(s.startsWith('// [GEL BOOT · 11/09/2026] VERSION 20260911b'));   // core inchangé depuis la livraison b
+    assert.ok(s.startsWith('// [GEL BOOT · 12/09/2026] VERSION 20260912a'));   // core : affichage LoAF (bloqueur = script le plus long, ≥ 50 % de la frame ; frames antérieures au boot séparées)
+    assert.strictEqual(s.split('function _loafTop(').length, 2); assert.strictEqual(s.split('_loafTop(').length, 5, '_loafTop : 1 déclaration + 3 usages'); assert.ok(!s.includes('scripts[0]'), 'scripts[0] résiduel');
   });
   await T('embed : plus aucune boîte modale alert, Relancer refait le code, ouverture = code demandé (cache ou 1er fetch), rien au boot', () => {
     const s = fs.readFileSync(path.join(ROOT,'guardian-embed.js'),'utf8');
