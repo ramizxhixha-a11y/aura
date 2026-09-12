@@ -1,3 +1,4 @@
+// [GEL BOOT · 12/09/2026] VERSION 20260912b · probeGel : un bloqueur dans 00-backup-state.js appelé par un timer / rAF / then / onmessage est l'ENVELOPPE chrono _wrapFn (@6882), pas le code → jointure avec S.perfLog.lent (ligne ⏱ LENT ≤ 5 s = fichier:ligne du vrai appelant) ; frames ≤ 60 s après un boot étiquetées « au boot (+N s) » (chargement de l'état, coût attendu) — capture Rams 12/09 18:37 : deux « bloqueurs » (enveloppe 18:12, loadState 17:34), aucun script applicatif nommé
 // [GEL BOOT · 12/09/2026] VERSION 20260912a · probeGel : frames LoAF séparées « depuis ce boot » / « antérieures » (S.perfLog.boots) ; bloqueur = script le PLUS LONG de la frame, nommé seulement s'il occupe ≥ 50 % de la frame, sinon « sans bloqueur JS » (rendu / GC / throttle Android) — corrige l'accusation à tort de 00-backup-state.js (11 ms de JS dans une frame de 1.3 s, 12/09) et l'affichage des frames d'avant le correctif c
 // [GEL BOOT · 11/09/2026] VERSION 20260911b · probeGel affiche l'anneau S.perfLog.loaf (frames ≥ 1 s nommées par le navigateur, indépendantes des gels)
 // [GEL BOOT · 11/09/2026] VERSION 20260911a · plus aucun travail de code au boot ni en scan silencieux (sonde Fichiers sans réseau via performance.getEntriesByType('resource')) · code = ouverture du bouclier / Relancer uniquement · probeGel lit S.perfLog.gels (durable, 30 gels, nom d'op complet, attribution LoAF) · sonde Mémoire (pente Mo/h)
@@ -532,6 +533,21 @@ function _loafTop(f){   // [20260912a] script le plus long de la frame — pas l
   for(let i = 0; i < sc.length; i++){ if(sc[i] && (!top || (Number(sc[i].dur)||0) > (Number(top.dur)||0))) top = sc[i]; }
   return top;
 }
+function _loafLent(S, f){   // [20260912b] ligne ⏱ LENT (S.perfLog.lent, écrite par l'enveloppe chrono de 00-backup-state.js à la fin du rappel > 1 s) la plus proche de la frame (≤ 5 s) : c'est ELLE qui nomme le vrai appelant (fichier:ligne d'inscription du timer / rAF / then) quand le navigateur ne voit que l'enveloppe _wrapFn
+  const lent = (S && S.perfLog && Array.isArray(S.perfLog.lent)) ? S.perfLog.lent : [];
+  const ft = Number(f && f.t) || 0;
+  if(!ft) return null;
+  let best = null, bestD = 5000;
+  for(let i = 0; i < lent.length; i++){ const e = lent[i]; if(!e || !e.name) continue; const d = Math.abs((Number(e.t)||0) - ft); if(d <= bestD){ best = e; bestD = d; } }
+  return best;
+}
+function _loafBootAge(boots, f){   // [20260912b] secondes écoulées depuis le boot qui précède la frame (null si inconnu ou > 60 s) : une frame « au boot » = en général le chargement de l'état (loadState : IDB + JSON.parse + applySnap), coût attendu une fois par boot
+  const ft = Number(f && f.t) || 0;
+  let bt = 0;
+  (Array.isArray(boots) ? boots : []).forEach(function(b){ const t = Number(b && b.t) || 0; if(t && t <= ft && t > bt) bt = t; });
+  if(!ft || !bt || ft - bt > 60000) return null;
+  return Math.round((ft - bt) / 1000);
+}
 function _gelFromRecord(r){
   return { gap:Number(r.gap)||0, tickMs:Number(r.tickMs)||0, visible:!r.hidden,
     heapU:(r.heapU!=null?Number(r.heapU):null), heapL:(r.heapL!=null?Number(r.heapL):null),
@@ -584,7 +600,15 @@ function probeGel(snap){
     const line = function(f){
       const sc = _loafTop(f), scD = sc ? (Number(sc.dur)||0) : 0;
       const head = (f.time||'?')+' · '+(f.dur/1000).toFixed(1)+' s';
-      if(isBlocker(f)) return head+' · bloqueur '+(sc.src||'?')+':'+(sc.fn||'anonyme')+'@'+(sc.pos!=null?sc.pos:'?')+' ← '+(sc.inv||sc.type||'?')+' '+(scD/1000).toFixed(1)+' s';
+      if(isBlocker(f)){
+        const inv = String(sc.inv||sc.type||'?');
+        const wrap = /00-backup-state\.js/.test(String(sc.src||'')) && /FrameRequestCallback|TimerHandler|\.then$|onmessage|MessageEvent/i.test(inv);   // [20260912b] 00 = instrumentation seule : appelé par timer/rAF/then/ws = enveloppe _wrapFn, pas le code
+        const le = wrap ? _loafLent(S, f) : null;
+        const age = _loafBootAge(boots, f);
+        return head+' · bloqueur '+(sc.src||'?')+':'+(sc.fn||'anonyme')+'@'+(sc.pos!=null?sc.pos:'?')+' ← '+inv+' '+(scD/1000).toFixed(1)+' s'
+          +(wrap ? (' = enveloppe chrono _wrapFn → vrai appelant : '+(le ? ('⏱ LENT '+String(le.name)+' '+((Number(le.dur)||0)/1000).toFixed(1)+' s') : 'aucune ligne ⏱ LENT jointe (rappel < 1 s ?)')) : '')
+          +(age != null ? (' · au boot (+'+age+' s)') : '');
+      }
       return head+' · sans bloqueur JS (JS '+((Number(f.script)||0)/1000).toFixed(2)+' s · rendu '+((Number(f.render)||0)/1000).toFixed(2)+' s · blocage '+((Number(f.block)||0)/1000).toFixed(2)+' s'
         +(sc ? (' · 1er script '+(sc.src||'?')+'@'+(sc.pos!=null?sc.pos:'?')+' '+(scD/1000).toFixed(2)+' s') : '')+')';
     };
@@ -595,7 +619,7 @@ function probeGel(snap){
     const detail = (cur.length ? cur.slice(-5).reverse().map(line).join(' ; ') : ('Aucune frame longue depuis le boot courant'+bootTxt+'.'))
       + (old.length ? (' · antérieures au boot courant ('+old.length+', hors verdict) : '+old.slice(-3).reverse().map(line).join(' ; ')) : '');
     out.push(R(lvl,'Gel / Lag','Frames longues (LoAF ≥ 1 s) : '+cur.length+' depuis le boot courant · '+blockers.length+' avec bloqueur JS · '+old.length+' antérieures', detail,
-      blockers.length ? 'Seules les lignes « bloqueur » désignent un script à corriger (livrer la ligne à Claude : fichier, position, appelant). « Sans bloqueur JS » = frame étirée par le rendu, le GC ou le throttle Android, pas par le code.'
+      blockers.length ? 'Seules les lignes « bloqueur » désignent un script à corriger (livrer la ligne à Claude telle quelle). Bloqueur dans 00-backup-state.js = enveloppe chrono : le vrai appelant est le « ⏱ LENT » joint (fichier:ligne d\'inscription du timer / rAF). « Au boot (+N s) » = chargement de l\'état, coût attendu une fois par boot. « Sans bloqueur JS » = frame étirée par le rendu, le GC ou le throttle Android, pas par le code.'
                       : (cur.length ? 'Frames étirées sans JS dominant (rendu / GC / throttle Android) : rien à corriger dans le code.' : '')));
   }
   if(!gels.length){

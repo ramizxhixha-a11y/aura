@@ -1,4 +1,4 @@
-// banc-gel-boot.js — [GEL BOOT · 12/09/2026] VERSION 20260912a (token lu dans le HTML ; affichage LoAF du core corrigé · a : livraison initiale ; b : rattachement tardif LoAF + anneau S.perfLog.loaf ; c : token seul — le correctif des gels est dans banc-gel-backup.js)
+// banc-gel-boot.js — [GEL BOOT · 12/09/2026] VERSION 20260912a (token lu dans le HTML ; affichage LoAF du core corrigé · a : livraison initiale ; b : rattachement tardif LoAF + anneau S.perfLog.loaf ; c : token seul — le correctif des gels est dans banc-gel-backup.js) · [20260912b] core attendu 20260912b (jointure ⏱ LENT + « au boot ») + test de la capture Rams 12/09 18:37
 // Banc AUTONOME (node banc-gel-boot.js depuis la racine du dépôt). Mission « gels de boot » :
 //  1) le Guardian ne fait PLUS RIEN au boot (aucun setTimeout à +4 s / +8 s : scans silencieux et
 //     tick backup uniquement par intervalle 2 min) et un scan silencieux ne touche JAMAIS au code
@@ -13,7 +13,7 @@ const fs = require('fs'), vm = require('vm'), assert = require('assert'), path =
 const ROOT = __dirname;
 const TOK = (function(){ const m = require('fs').readFileSync(require('path').join(__dirname, 'AURA8_v118.html'), 'utf8').match(/DOC_V = '(\d{8}[a-z])'/); if (!m) { console.error('DOC_V introuvable dans AURA8_v118.html'); process.exit(2); } return m[1]; })();   // [12/09/2026] token lu dans le HTML (source unique) : plus jamais figé dans un banc
 const HEAD = '// [GEL BOOT · 11/09/2026] VERSION ';
-const VER = { 'guardian-core.js':'// [GEL BOOT · 12/09/2026] VERSION 20260912a', 'guardian-embed.js':'20260911a', 'js/00-backup-state.js':'20260911a', 'js/08-learning-history-render.js':'20260911b', 'js/09b1-build-snapshot.js':'20260911b', 'js/09b2-save-load.js':'20260911b', 'js/09k-init.js':'20260911a' };
+const VER = { 'guardian-core.js':'// [GEL BOOT · 12/09/2026] VERSION 20260912b', 'guardian-embed.js':'20260911a', 'js/00-backup-state.js':'20260911a', 'js/08-learning-history-render.js':'20260911b', 'js/09b1-build-snapshot.js':'20260911b', 'js/09b2-save-load.js':'20260911b', 'js/09k-init.js':'20260911a' };
 let pass = 0, fail = 0;
 async function T(name, fn){ try { await fn(); pass++; console.log('  ✅', name); } catch(e){ fail++; console.log('  ❌', name, '\n     ', (e && e.stack || e).toString().split('\n').slice(0,3).join('\n      ')); } }
 process.on('unhandledRejection', e => { fail++; console.log('  ❌ rejet non géré :', e && e.message); });
@@ -84,7 +84,7 @@ const grp = (res, g) => J(res).filter(r => r.group === g);
   });
   await T('en-têtes : chaque fichier livré commence par « ' + HEAD + '<version> » (a ou b selon la livraison)', () => {
     for (const f of MODIFIED_JS) assert.ok(src(f).startsWith(VER[f].startsWith('//') ? VER[f] : HEAD + VER[f]), f + ' attendu ' + VER[f]);
-    assert.ok(src('banc-gel-guardian.js').startsWith('// banc-gel-guardian.js — [GEL BOOT · 12/09/2026] VERSION 20260912a'));
+    assert.ok(src('banc-gel-guardian.js').startsWith('// banc-gel-guardian.js — [GEL BOOT · 12/09/2026] VERSION 20260912b'));
   });
   await T('HTML : DOC_V = ' + TOK + ', 78 ?v= au même token, aucun 20260909a / 20260911a', () => {
     const h = src('AURA8_v118.html');
@@ -225,6 +225,20 @@ const grp = (res, g) => J(res).filter(r => r.group === g);
     assert.strictEqual(f.title, 'Frames longues (LoAF ≥ 1 s) : 0 depuis le boot courant · 0 avec bloqueur JS · 1 antérieures'); assert.strictEqual(f.level, 'ok');
     assert.ok(f.detail.startsWith('Aucune frame longue depuis le boot courant (boot 12/09/2026 13:07:13). · antérieures au boot courant (1, hors verdict) : '), f.detail);
     assert.strictEqual(f.fix, '');
+  });
+  await T('probeGel (12/09 18:37) : bloqueur 00-backup-state.js@6882 ← FrameRequestCallback = enveloppe chrono _wrapFn → jointure S.perfLog.lent (vrai appelant ⏱ LENT ≤ 5 s) ; frame 09b2 ≤ 60 s après le boot étiquetée « au boot (+N s) » ; src hors enveloppe jamais joint ; sans LENT → dit honnêtement', async () => {
+    const boots = [{ t: 100000, time: '12/09/2026 17:34:04' }];
+    const fBoot  = { t: 102000,  time: '12/09/2026 17:34:05', dur: 1500, block: 1450, script: 1200, render: 0, scripts: [{ dur: 1200, inv: 'IDBRequest.onsuccess', type: 'event-listener', fn: '', src: '09b2-save-load.js', pos: 16808 }] };
+    const fWrap  = { t: 2400000, time: '12/09/2026 18:12:18', dur: 1400, block: 1350, script: 1200, render: 0, scripts: [{ dur: 1200, inv: 'FrameRequestCallback', type: 'user-callback', fn: '', src: '00-backup-state.js', pos: 6882 }] };
+    const fOther = { t: 3000000, time: '12/09/2026 18:22:18', dur: 1400, block: 1350, script: 1200, render: 0, scripts: [{ dur: 1200, inv: 'Window.fetch.then', type: 'resolve-promise', fn: 'fetchUsdEurRate', src: '02-state-init.js', pos: 210001 }] };
+    const lent = [{ t: 2399200, time: '12/09/2026 18:12:17', name: 'timer rAF@03-per-pair-position-buttons-controls-buid.js:1234', dur: 1210 }, { t: 2999000, time: '12/09/2026 18:22:17', name: 'timer setTimeout@08-learning-history-render.js:99', dur: 1100 }, { t: 9, time: 'x', name: 'timer setInterval@loin', dur: 3000 }];
+    const run = async (loaf, lentArr) => { const S = { agents: [], pairStates: {}, chainLog: [], perfLog: { gels: [], lent: lentArr, heap: [], boots, loaf } }; return grp((await loadCore(mkFetch().fetch, { S }).GuardianCore.runAll()).results, 'Gel / Lag').find(x => x.title.startsWith('Frames longues (LoAF')); };
+    let f = await run([fBoot, fWrap, fOther], lent);
+    assert.strictEqual(f.title, 'Frames longues (LoAF ≥ 1 s) : 3 depuis le boot courant · 3 avec bloqueur JS · 0 antérieures'); assert.strictEqual(f.level, 'info');
+    assert.strictEqual(f.detail, '12/09/2026 18:22:18 · 1.4 s · bloqueur 02-state-init.js:fetchUsdEurRate@210001 ← Window.fetch.then 1.2 s ; 12/09/2026 18:12:18 · 1.4 s · bloqueur 00-backup-state.js:anonyme@6882 ← FrameRequestCallback 1.2 s = enveloppe chrono _wrapFn → vrai appelant : ⏱ LENT timer rAF@03-per-pair-position-buttons-controls-buid.js:1234 1.2 s ; 12/09/2026 17:34:05 · 1.5 s · bloqueur 09b2-save-load.js:anonyme@16808 ← IDBRequest.onsuccess 1.2 s · au boot (+2 s)');
+    assert.ok(f.fix.includes('enveloppe chrono') && f.fix.includes('Au boot'), f.fix);
+    f = await run([fWrap], []);   // aucune ligne LENT à ≤ 5 s → dit honnêtement, pas de jointure inventée
+    assert.ok(f.detail.endsWith('← FrameRequestCallback 1.2 s = enveloppe chrono _wrapFn → vrai appelant : aucune ligne ⏱ LENT jointe (rappel < 1 s ?)'), f.detail);
   });
   await T('probeGel : gels datés de plus de 24 h → relevé conservé, aucun verdict crit · LoAF non supporté → info', async () => {
     const S = { agents: [], pairStates: {}, chainLog: [], perfLog: { gels: [gelRec({ t: Date.now() - 2 * 86400000 })], lent: [], heap: [], boots: [] } };
