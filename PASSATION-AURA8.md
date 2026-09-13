@@ -46,7 +46,14 @@ Constat : témoin réseau rouge (01, ping Binance), chrono EV figé (mode en pau
 - Décision hors ligne : AUCUNE ouverture EV/RE possible (la porte exige une nouvelle kline close et fraîche) — le faux ne déclenche pas de trade tant que le réseau est coupé. Mais les bougies fabriquées restent dans la série et alimentent l'analyse au retour du réseau. En AA (école), la marche aléatoire est le principe même : hors ligne elle dérive, attendu.
 **Proposition (loi 1 : EV est LE juge → ses yeux doivent être vrais) — « go phase 1b » AVANT la phase 2** : en EV/RE, `ps.candles` = klines Binance (granularité d'analyse à choisir : 5 m via le WS/REST déjà collecté, ou la tf du mode), le générateur synthétique réservé à AA ; hors ligne → série figée + graphe marqué « hors ligne » (la porte refuse déjà). Fichiers : 08 (générateur + getTechSignals), 02 (upsert → ps.candles EV/RE), 09f3/04 (graphe), banc « hors ligne → 0 bougie EV ; en ligne → AT calculée sur klines réelles ». Touche la décision → 24 h. Le bus (phase 2) attribuerait sinon des sources EV calculées sur du faux.
 
-## Prochaine mission — « go phase 1b » puis « go phase 2 » (nouvelles conversations, après 24 h)
+## Demande Rams 13/09 21:54 (capture HOME, EV) — MICRO-MISSION AFFICHAGE « P&L cumulé · toutes paires » (07 `renderPairPnl`, l.3255-3320 ; CSS 06-page-dashboard)
+Affichage seul, aucune décision touchée → 12 h. À livrer dans SA conversation, après le backup et l'audit. Spécification exacte :
+1. **Police des noms de paires** (PEPE, DOT…) : 10px → **18px** (= `.stat-chip-val`, la tuile « ↓ SHORT »), `font-family:var(--font-display)`, et 1re colonne de la grille `70px` → ~`100px` pour que le nom tienne sur une ligne.
+2. **Dollars en temps réel quand la paire a une position ouverte** : à l'extrémité droite de la barre, `pb-usd` affiche **cumul réalisé + P&L latent de la position** (`ps.totalPnlUsd + pos.pnlUsdt`), avec un point « ● » qui bat (classe live), et `pb-meta` passe en 2 lignes : `Nt · WR%` puis `en cours ±$x.xx`. Sans position : inchangé. Cadence : `renderPairPnl()` tourne déjà tous les 2 ticks (08:3263) → « temps réel » à 2 s près sans nouveau timer. La barre garde le réalisé (sinon elle sauterait à chaque tick).
+3. Le badge sous le nom (`↑ $5.4274`) est la MISE/exposition de la position, pas un P&L — le libeller `mise $5.43` pour lever l'ambiguïté (2 décimales).
+Fichiers : 07 (+ CSS 06 si classe live), HTML token. Banc : scaffold 3 colonnes, tailles, valeur live = réalisé + latent, sans position = réalisé seul.
+
+## Prochaine mission — dans l'ordre : 1) backup + vérif phase 1 · 2) « go audit vérité » (lecture seule) · 3) micro-mission affichage (12 h) · 4) phase 1b bougies réelles (24 h) · 5) phase 2 bus/attribution
 Phase 2 = A2 bus `ps.intel` (`10i-intel-bus.js` : `_intelPublish`/`_intelRead`) + A5 attribution `S.attribution[src][mode]` alimentée à chaque clôture depuis `decisionCascade` — lecture seule, aucune décision changée (12 h). Fichiers : 10i (nouveau), 10f, 09c (`_openAgents` → votes de la paire), 02 clôture, 09b1/09b2 (+ manifest). Point de départ naturel : `ps.roster.votes` est déjà la première source du bus.
 
 ## Reports (non traités)
