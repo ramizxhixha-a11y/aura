@@ -8,7 +8,7 @@ const fs = require('fs'), vm = require('vm'), assert = require('assert');
 let ok = 0, ko = 0;
 function T(name, fn) { try { fn(); ok++; console.log('  ✅ ' + name); } catch (e) { ko++; console.log('  ❌ ' + name + '\n     ' + (e && e.message)); } }
 const TOK_10E6 = '20260906f';   // 10e6 NON relivré en P7
-const TOK_10F = '20260906g';   // 10f livré en P7, NON relivré en P7b
+const TOK_10F = '20260912c';   // [PHASE 1 · 12/09/2026] 10f relivré (vote par paire) ; avant : 20260906g (P7)
 const TOK = '20260906i';   // [SKILL BORNÉ 06/09/2026] token courant (HTML rebump, 10f NON relivré)
 const FC = { makerRate: 0.001, takerRate: 0.001, fundingRate: 0.00005, slippage: 0.0003 };
 const SRC = fs.readFileSync('js/10e6-frais-slippage.js', 'utf8');
@@ -88,9 +88,9 @@ T('50 clôtures par mode → seulement les 20 dernières de chaque mode comptent
 console.log('━━ C · texte LIVRÉ de 10f : 4 sites alignés, plus aucune lecture brute ━━');
 const F = fs.readFileSync('js/10f-resolveur-cycle.js', 'utf8');
 const codeLines = F.split('\n').filter(l => !/^\s*\/\//.test(l));
-T('10f : version ' + TOK_10F + ', ≤ 500 lignes de code hors commentaires ? non — 601 lignes totales (module hérité, non redécoupé ici ; [P7] +18 : 10 de code, 8 de commentaires), 0 lecture de totalPnlPct / totalPnlUsd / _recentNet / _learned hors commentaires', () => {
+T('10f : version ' + TOK_10F + ', ≤ 500 lignes de code hors commentaires ? non — 619 lignes totales (module hérité, non redécoupé ici ; [P7] +18 ; [PHASE 1] +18), 0 lecture de totalPnlPct / totalPnlUsd / _recentNet / _learned hors commentaires', () => {
   assert.ok(F.startsWith('// ▓▓▓ VERSION ' + TOK_10F + ' ▓▓▓'));
-  assert.strictEqual(F.split('\n').length, 601);
+  assert.strictEqual(F.split('\n').length, 619);   // [PHASE 1] 601 → 619 : +5 en-tête, +7 roster/votes, +3 dénominateur signal inversé, +2 commentaire sortie, +1 mémoire
   const code = codeLines.join('\n');
   ['totalPnlPct', 'totalPnlUsd', '_recentNet', '_recentCloses', '_learned ', '_learned +=', 'ps.totalTrades || 0) >= 20', '_pt >= 15'].forEach(k => assert.strictEqual(code.split(k).length - 1, 0, k));
 });

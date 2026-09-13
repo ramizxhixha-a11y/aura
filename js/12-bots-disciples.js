@@ -1,3 +1,4 @@
+// [PHASE 1 · 12/09/2026] VERSION 20260912c · angles direction/timing des disciples lus sur le vote de l'agent sur LA paire (_agentPairVote, 03), plus sur a.score
 // [SKILL BORNÉ · 06/09/2026] VERSION 20260906i — héritage agentPairSkill plafonné 500/cellule (halving) ; mérite par tâche plafonné 500/cellule
 // ▓▓▓ VERSION 20260815b ▓▓▓
 // 12-bots-disciples.js — Disciples des bots (architecture Rams, 15/08/2026)
@@ -47,12 +48,15 @@ var _ANGLES = ['direction', 'timing', 'conditions'];
 function _angleAnswer(a, angle, pair, side) {
   try {
     if (angle === 'direction') {
-      var dir = (a.score || 0) > 0.02 ? 1 : (a.score || 0) < -0.02 ? -1 : 0;
+      // [PHASE 1 · 12/09/2026] le SIGNE lu est le vote de l'agent sur LA paire (ps.roster, via 03), plus a.score (biais global)
+      var _vd = (typeof _agentPairVote === 'function') ? _agentPairVote(a, pair, a.score || 0) : (a.score || 0);
+      var dir = _vd > 0.02 ? 1 : _vd < -0.02 ? -1 : 0;
       if (!dir || (side !== 'long' && side !== 'short')) return 0;
       return dir * (side === 'long' ? 1 : -1);
     }
     if (angle === 'timing') {
-      var st = Math.abs(a.score || 0);
+      // [PHASE 1 · 12/09/2026] la FORCE lue est celle du vote sur LA paire
+      var st = Math.abs((typeof _agentPairVote === 'function') ? _agentPairVote(a, pair, a.score || 0) : (a.score || 0));
       return st >= 0.06 ? 1 : st < 0.02 ? -1 : 0;
     }
     if (angle === 'conditions') {

@@ -1,3 +1,4 @@
+// [PHASE 1 · 12/09/2026] VERSION 20260912c · VOTE PAR PAIRE : runRosterAnalysis publie ps.roster.votes de LA paire (muet = 0, RAM) et n'écrase plus a.score ; _agentPairVote(a, pair) ; learnFromOutcome / enrichMemory jugent l'agent sur son vote sur la paire ; liveTrainAgents retiré (archive/)
 // [GEL BOOT · 11/09/2026] VERSION 20260911c · double gel de boot (2 × 6 s) NOMMÉ par LoAF : `req.result` de store.getAll() sur aura_backups (rotation + liste) → index backups_meta (v2), lecture d'un seul enregistrement à la fois, enregistrements sans meta (collision 09b3) purgés
 // [SKILL BORNÉ · 06/09/2026] VERSION 20260906i — learnFromOutcome : agentPairSkill plafonné 500/cellule (halving)
 // [P7 · 06/09/2026] VERSION 20260906g — scoutAnalysis : nlp_v1 RAVIVÉ sur le signal news par paire (10e7), macro_v1/fundamental_v1 restent neutralisés (S3)
@@ -1204,7 +1205,7 @@ function learnFromOutcome(source, pnlPct, pair) {
     const _regime = detectMarketRegime();
     S.agents.forEach(a => {
       // Agent ayant un score actif dans ce trade
-      if(Math.abs(a.score||0) > 0.05) updateRegimeFitness(a, _regime, pnlPct * ((S.tradingMode === 'real') ? 5 : (S.tradingMode === 'paperReal') ? 3 : 1));
+      if(Math.abs(_agentPairVote(a, pair, a.score||0)) > 0.05) updateRegimeFitness(a, _regime, pnlPct * ((S.tradingMode === 'real') ? 5 : (S.tradingMode === 'paperReal') ? 3 : 1));   // [PHASE 1] vote sur LA paire
     });
     S._lastRegime = _regime;
   }
@@ -1255,8 +1256,12 @@ function learnFromOutcome(source, pnlPct, pair) {
       return;
     }
 
-    const aligned       = (won && a.score > 0) || (!won && a.score < 0);
-    const signalStrength= Math.abs(a.score);
+    // [PHASE 1 · 12/09/2026] l'agent est jugé sur SON VOTE SUR CETTE PAIRE (ps.roster : 10f vient
+    // de le calculer au cycle ; à la clôture d'une position, ≤ 1 cycle d'âge), plus sur a.score
+    // (biais appris global). Repli a.score tant que la paire n'a pas de roster.
+    const _vote         = _agentPairVote(a, pair, a.score || 0);
+    const aligned       = (won && _vote > 0) || (!won && _vote < 0);
+    const signalStrength= Math.abs(_vote);
     // [COMPÉTENCE PAR PAIRE · 13/08/2026] le journal identifiait déjà le meilleur/pire
     // agent PAR PAIRE à chaque cycle (Learn[cycle][SOL] → 🏆/⚠) puis jetait l'info.
     // Désormais elle s'accumule : S.agentPairSkill[agent][paire] = {w,l} — et le vote
@@ -1460,7 +1465,7 @@ function enrichMemory(agent, won, pnlPct, pair) {
   const metaphor = generateMetaphor(agent, won, pnlPct, pair);
   const context  = {
     lmsrProb:  lmsrP(S.pairStates[pair]),
-    agentScore: agent.score,
+    agentScore: _agentPairVote(agent, pair, agent.score || 0),   // [PHASE 1] vote sur LA paire (comparé par recallMemory au vote courant)
     agentConf:  agent.conf,
     fitness:    agent.fitness,
     pairTrend:  (() => {
@@ -2908,57 +2913,12 @@ if(typeof S !== 'undefined') {
 }
 
 // ════════════════════════════════════════════════════════════
-// LIVE TRAINING — every real price fetch nudges agents toward momentum
+// [PHASE 1 · 12/09/2026] liveTrainAgents RETIRÉ → archive/liveTrainAgents-03-retire-phase1.js
+// Il tirait TOUS les agents vers le momentum 5 bougies de chaque paire à chaque fetch CoinGecko
+// (la dernière paire gagnait) : doublon de l'AT (le momentum est déjà dans getTechSignals) qui
+// écrasait le score appris. Ses lignes 🧠 « Apprentissage · N agents entraînés » disparaissent
+// du journal (ce n'était pas un apprentissage). Son appelant _cgT (02) est retiré en même temps.
 // ════════════════════════════════════════════════════════════
-function liveTrainAgents() {
-  if(!S.agents || !Array.isArray(S.agents) || S.agents.length === 0) return;
-  // v6.0 — Memory-driven learning + archives context
-  const agentArchives = (S.archives?.snapshots || []).filter(s => s.domain === 'agents');
-  const learningBoost = agentArchives.length > 0 ? 1.15 : 1.0;
-  let nudged = 0;
-  const pairs = Object.keys(PAIRS || {});
-  pairs.forEach(pair => {
-    const ps = S.pairStates?.[pair];
-    if(!ps || !ps.candles || ps.candles.length < 3) return;
-    const recent = ps.candles.slice(-5);
-    if(recent.length < 2) return;
-    // Compute normalized momentum from last 5 candles
-    const first = recent[0].c, last = recent[recent.length-1].c;
-    if(first <= 0) return;
-    const momentum = (last - first) / first;      // raw pct change
-    const normMom  = Math.max(-0.05, Math.min(0.05, momentum)) / 0.05;  // clamp to [-1, +1]
-    // Only nudge agents whose style aligns; tiny amounts
-    S.agents.forEach(a => {
-      if(!a) return;
-      const w = (a.conf || 0.5) * 0.015 * learningBoost; // max nudge ~1.5%, boosted post-reset
-      a.score = (a.score || 0) * 0.985 + normMom * w;
-      a.learningEvents = (a.learningEvents || 0) + 1;
-      // Small fitness boost if agent was aligned with momentum direction
-      if((a.score > 0 && normMom > 0.3) || (a.score < 0 && normMom < -0.3)) {
-        a.fitness = Math.min(2000, Math.max(50, (a.fitness || 500) + 5));  // v8.0 LIVRAISON 30 · FIX #3 · échelle unifiée [50, 2000]
-      }
-    });
-    nudged++;
-  });
-  if(nudged > 0) {
-    // v6.5: write LEARN events to chainLog so Chain > Learn tab shows activity
-    if(!S.chainLog) S.chainLog = [];
-    const topAgents = [...S.agents]
-      .filter(a => Math.abs(a.score||0) > 0.05)
-      .sort((a,b) => Math.abs(b.score) - Math.abs(a.score))
-      .slice(0, 3);
-    if(topAgents.length && S.chainLog.filter(e => e.category==='learn').length < 200) {
-      S.chainLog.push({
-        icon: '🧠',
-        desc: `Apprentissage · ${nudged} agents entraînés · Top: ${topAgents.map(a => a.emoji + (a.score>=0?'+':'')+a.score.toFixed(2)).join(', ')}`,
-        hash: Math.random().toString(36).substr(2,8),
-        time: new Date().toTimeString().slice(0,8),
-        category: 'learn'
-      });
-      if(S.chainLog.length > 200) S.chainLog.splice(0, S.chainLog.length - 200);
-    }
-  }
-}
 
 // ════════════════════════════════════════════════════════════
 // 1. INNER DIALOGUE — 5 Personas Debate Panel
@@ -3934,44 +3894,49 @@ function runRosterAnalysis(pair) {
     guardianResults[gId] = guardianCheck(gId, verdict, pair, (S.tradingAccount || 100) * 0.1);
     if(guardianResults[gId].status === 'veto') anyVeto = true;
   });
-  // v6.3 · Sync computed scores back to S.agents so the UI shows live values
-  if(S.agents) {
-    // Scouts — direct score
-    Object.entries(scoutResults).forEach(([id, res]) => {
-      const agent = S.agents.find(a => a.id === id);
-      if(agent && res && typeof res.score === 'number') {
-        agent.score = res.score;
-        agent.conf  = res.conf || agent.conf;
-      }
-    });
-    // Council — vote → score
-    Object.entries(councilResults).forEach(([id, res]) => {
-      const agent = S.agents.find(a => a.id === id);
-      if(agent && res) {
-        const magnitude = Math.abs(res.score || 0.3);
-        agent.score = res.vote === 'long'  ?  magnitude
-                    : res.vote === 'short' ? -magnitude : 0;
-      }
-    });
-    // Fleet bots — score reflects their current status
-    if(S.botFleet) {
-      Object.entries(S.botFleet).forEach(([id, b]) => {
-        const agent = S.agents.find(a => a.id === id);
-        if(agent) {
-          // Active status → positive score, alert → negative, idle → ~0
-          agent.score = b.status === 'executing' ?  0.3
-                      : b.status === 'active'    ?  0.15
-                      : b.status === 'alert'     ? -0.4
-                      : b.status === 'scanning'  ?  0.05
-                      : 0.0;
-        }
+  // [PHASE 1 · 12/09/2026] VOTE PAR PAIRE — le roster n'écrit plus a.score des agents de signal.
+  // a.score est un scalaire GLOBAL : chaque appel (rotation 08, paire active, cascade 03, brain
+  // gate 09c) l'écrasait avec l'avis sur la DERNIÈRE paire analysée, et 10f le lisait comme le
+  // « consensus sur LA paire résolue » (50 % du signal final) → bruit corrélé, pas un vote.
+  // Le vote de chaque agent est publié dans ps.roster.votes de LA paire (RAM seulement : 09b1
+  // liste les champs de ps sauvegardés, roster n'en est pas), avec les MÊMES valeurs qu'avant :
+  // scout = score, conseil = ±magnitude (hold = 0), gardien = −0.5 veto / −0.2 warn / +0.05 ok ;
+  // agent muet (S.mutedAgents) = 0. Lecteurs : 10f (consensus, mémoire), learnFromOutcome
+  // (aligné/force), enrichMemory, 12 (angles disciples) — via _agentPairVote(a, pair).
+  // a.score / a.conf ne bougent plus que par learnFromOutcome, la redistribution (02) et le
+  // bunker (07) : c'est le biais appris, plus l'avis du moment.
+  try {
+    const _ps = S.pairStates && S.pairStates[pair];
+    if (_ps) {
+      const _muted = new Set(S.mutedAgents || []);
+      const _votes = {};
+      Object.entries(scoutResults).forEach(([id, res]) => {
+        if (res && typeof res.score === 'number') _votes[id] = _muted.has(id) ? 0 : res.score;
       });
+      Object.entries(councilResults).forEach(([id, res]) => {
+        if (!res) return;
+        const magnitude = Math.abs(res.score || 0.3);
+        _votes[id] = _muted.has(id) ? 0 : (res.vote === 'long' ? magnitude : res.vote === 'short' ? -magnitude : 0);
+      });
+      Object.entries(guardianResults).forEach(([id, res]) => {
+        if (!res) return;
+        _votes[id] = _muted.has(id) ? 0.05 : (res.status === 'veto' ? -0.5 : res.status === 'warn' ? -0.2 : 0.05);
+      });
+      _ps.roster = { ts: Date.now(), cycle: S.cycle || 0, votes: _votes };
     }
-    // Guardians — status → score
-    Object.entries(guardianResults).forEach(([id, res]) => {
+  } catch(e) {}
+  // Bots de flotte (isBot : jamais comptés dans le consensus 10f ni dans l'évolution) : leur
+  // « score » reste le reflet de leur statut pour les cartes — inchangé.
+  if(S.agents && S.botFleet) {
+    Object.entries(S.botFleet).forEach(([id, b]) => {
       const agent = S.agents.find(a => a.id === id);
       if(agent) {
-        agent.score = res.status === 'veto' ? -0.5 : res.status === 'warn' ? -0.2 : 0.05;
+        // Active status → positive score, alert → negative, idle → ~0
+        agent.score = b.status === 'executing' ?  0.3
+                    : b.status === 'active'    ?  0.15
+                    : b.status === 'alert'     ? -0.4
+                    : b.status === 'scanning'  ?  0.05
+                    : 0.0;
       }
     });
   }
@@ -3989,6 +3954,17 @@ function runRosterAnalysis(pair) {
     finalDecision: anyVeto ? 'VETO' : verdict,
     anyVeto
   };
+}
+
+// [PHASE 1 · 12/09/2026] Vote d'UN agent sur UNE paire — source unique ps.roster.votes (écrit par
+// runRosterAnalysis dans le mode courant : pairStates est multiplexé par mode). Rend `fallback`
+// (défaut 0) tant que la paire n'a pas de roster ou que l'agent n'y vote pas (bots, méta).
+function _agentPairVote(a, pair, fallback) {
+  try {
+    const r = a && pair && S.pairStates && S.pairStates[pair] && S.pairStates[pair].roster;
+    if (r && r.votes && typeof r.votes[a.id] === 'number') return r.votes[a.id];
+  } catch(e) {}
+  return (typeof fallback === 'number') ? fallback : 0;
 }
 
 // ════════════════════════════════════════════════════════════

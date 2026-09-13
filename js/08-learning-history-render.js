@@ -1,3 +1,4 @@
+// [PHASE 1 · 12/09/2026] VERSION 20260912c · simTick : rotation roster 1 paire/tick et rafraîchissement roster paire active RETIRÉS (ils n'existaient que pour écraser a.score ; le roster par paire vit dans 10f/09c/panneaux)
 // [GEL BOOT · 11/09/2026] VERSION 20260911b · correctif LoAF : la frame arrive APRÈS le tick qui écrit le gel (observé 20:24 : « LoAF aucun » sur 2 longtasks de 5,6/7,1 s) → rattachement tardif au dernier gel (S.perfLog.gels[].loaf + ligne 🐌 réécrite) + anneau durable S.perfLog.loaf (20 frames ≥ 1 s, scripts nommés) indépendant des gels
 // [GEL BOOT · 11/09/2026] VERSION 20260911a · sonde LoAF (long-animation-frame, Chrome ≥ 123) : le navigateur nomme le script bloquant (fichier:position, fonction, appelant) dans la ligne 🐌 · S.perfLog.gels = 30 derniers gels persistés (nom d'op complet, heap, dom, LoAF) · relevé heap/DOM toutes les 10 min dans S.perfLog.heap (144 pts = 24 h)
 // [CHRONO NOMINATIF · 02/08/2026] longtask a PROUVE un vrai blocage code (~9s, attribution unknown) -> chrono pose sur les fonctions synchrones suspectes pour la NOMMER au prochain gel (⏱ LENT: fn Xs). Temporaire.
@@ -3260,18 +3261,9 @@ function simTick() {
     renderHomePrices();                          // prices + cycle timers only (fast)
     updateMarketMood();                          // v5 · mood bar (light)
     if(tick % 2 === 0) { renderPositions(); renderActionsGrid(); renderPairPnl(); }
-    // v6.8: roster analysis chaque tick sur TOUTES les paires — consensus max
-    if(tick % 1 === 0) {
-      try {
-        if(typeof window.runRosterAnalysis === 'function') {
-          const _pairList = Object.keys(S.pairStates||{});
-          if(_pairList.length) {
-            const _idx = tick % _pairList.length;
-            window.runRosterAnalysis(_pairList[_idx]);  // rotation 1 paire/tick
-          }
-        }
-      } catch(e) {}
-    }
+    // [PHASE 1 · 12/09/2026] rotation roster « 1 paire/tick » RETIRÉE : elle n'existait que pour écraser a.score
+    // (« consensus max » = le bruit de la dernière paire). Le roster est calculé par 10f à chaque résolution de LA paire
+    // (ps.roster, dans le mode traité), par 09c à l'ouverture, et par les panneaux debate/swarm pour la paire active.
     if(tick % 3 === 0) { drawActionMiniCharts(); updatePairBtnStates(); updateAllPairCtrlLabels(); updateBotThoughts(); }
     if(tick % 4 === 0) { updatePairAnalysisPanels(); try{Object.keys(PAIRS).forEach(ac2UpdateXInd);}catch(e){} syncPairPresets(); updateIntelBanner(); updateStreakBadge(); try { renderHome(); updateFiscalMini(); renderAnalyticsPanel(); if(typeof renderPendingActions === 'function') renderPendingActions(); } catch(e) { console.warn('tick render:', e); }
 
@@ -3294,13 +3286,9 @@ function simTick() {
       } catch(_e) {}
     }
   _phEnd('evolution');
-  // v6.3 · Refresh roster scores every 4 ticks so agent panel shows live scores
-  try {
-    if(typeof runRosterAnalysis === 'function' && typeof window.runRosterAnalysis === 'function') {
-      const activePair = S.activePair || (Object.keys(S.pairStates||{})[0]) || 'BTC/USDT';
-      window.runRosterAnalysis(activePair);
-    }
-  } catch(e) {} }
+  // [PHASE 1 · 12/09/2026] rafraîchissement roster « pour l'UI » (paire active, 4 ticks) RETIRÉ : il écrasait a.score ;
+  // renderAnalyticsPanel ci-dessus calcule déjà le roster de la paire active quand l'onglet debate/swarm est affiché.
+  }
     if(tick % 5 === 0) drawSparkline();
   }
   else if(S.currentPage === 1) {

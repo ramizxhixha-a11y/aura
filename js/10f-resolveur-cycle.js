@@ -1,5 +1,10 @@
-// ▓▓▓ VERSION 20260906g ▓▓▓
+// ▓▓▓ VERSION 20260912c ▓▓▓
 // 10f-resolveur-cycle.js — Cœur : _resolvePairCycleCore + garde-fou perte max (_lossCapSweep)
+// [PHASE 1 · 12/09/2026] VOTE PAR PAIRE (PLAN-DIRECTEUR A1) : le consensus des agents (50 % du signal final) lisait a.score,
+// scalaire GLOBAL écrasé par le roster de la DERNIÈRE paire analysée (rotation 08, paire active, cascade, brain gate) et tiré
+// par liveTrainAgents vers le momentum d'une autre paire → 50 % du signal était du bruit corrélé (CARTO §2). Désormais :
+// roster FRAIS de LA paire résolue à chaque cycle (runRosterAnalysis, mode courant → ps.roster.votes), consensus et mémoire
+// (recallMemory) lus sur ces votes ; sans roster l'agent ne vote pas (0). a.score = biais appris, plus jamais l'avis du moment.
 // [P7 · 06/09/2026] BRIQUE 7 DU PONT : delta news NLP sur les portes de conviction (porte par régime ET
 // plancher 0.30), symétrique au sens du pari — contre le pari ≤ 35 → +0.05, ≤ 25 → +0.08 ; pour le pari
 // ≥ 70 → −0.02 (source unique 10e7, CoinStats 24 h, ≥ 5 articles scorés). Journalisé quand décisif (trace en 10e7).
@@ -57,13 +62,23 @@ function _resolvePairCycleCore(pair, ps) {
   const fundScore  = fund?.fundScore || 0;
   const composite  = Math.max(-1, Math.min(1, atScore*0.60 + fundScore*0.40));
 
-  const totalFitness   = S.agents.reduce((s,a) => s + (a.fitness||1), 0) || 1;
+  // [PHASE 1 · 12/09/2026] roster FRAIS de LA paire, dans le mode du cycle traité (pairStates/ps sont multiplexés par mode).
+  // getTechSignals/getFundamentalSignals sont déjà en cache pour cette paire (calculés ci-dessus). Marqué pour la sonde gel.
+  try { if (typeof window !== 'undefined' && window._perfOp) window._perfOp('roster:' + pair); } catch(e) {}
+  if (typeof runRosterAnalysis === 'function') { try { runRosterAnalysis(pair); } catch(e) {} }
+  const _votes  = (ps.roster && ps.roster.votes) || {};
+  const _voteOf = a => (typeof _votes[a.id] === 'number') ? _votes[a.id] : 0;
+
+  // [PHASE 1] totalFitness = dénominateur de la sortie « Signal inversé » (oppWeight, plus bas) : fitness des agents QUI
+  // VOTENT (signal, hors bots/méta). Les bots votent 0 désormais ; sur S.agents entier le seuil 0.75 devenait inatteignable
+  // (21 votants sur 31 agents ≈ 0.68 au maximum) — la sortie serait morte en silence.
+  const totalFitness   = S.agents.filter(a => !a.isBot && !a.isMeta).reduce((s,a) => s + (a.fitness||1), 0) || 1;
   const _currentRegime = typeof detectMarketRegime === 'function' ? detectMarketRegime() : 'calm';
   const _signalAgents = S.agents.filter(a => !a.isBot && !a.isMeta);
   const totalContextFit = _signalAgents.reduce((s,a) => s + (typeof getContextualWeight === 'function' ? getContextualWeight(a, _currentRegime) : (a.fitness||1)), 0) || 1;
   let _weightSum = 0;
   const _contribs = _signalAgents.map(a => {
-    const raw = (a.score||0);
+    const raw = _voteOf(a);   // [PHASE 1] vote de l'agent sur CETTE paire (ex : a.score global)
     if(Math.abs(raw) < 0.03) return { w:0, sig:0 };
     const cw = typeof getContextualWeight === 'function' ? getContextualWeight(a, _currentRegime) : (a.fitness||1);
     const convBoost = 1 + Math.pow(Math.abs(raw), 2) * 2;
@@ -90,11 +105,12 @@ function _resolvePairCycleCore(pair, ps) {
 
   let memBias = 0, memBiasCnt = 0;
   S.agents.filter(a => !a.isBot && !a.isMeta).forEach(a => {
-    const recall = typeof recallMemory === 'function' ? recallMemory(a, pair, a.score) : null;
+    const _v = _voteOf(a);   // [PHASE 1] la mémoire compare le vote courant sur CETTE paire (enrichMemory stocke le même vote)
+    const recall = typeof recallMemory === 'function' ? recallMemory(a, pair, _v) : null;
     if(recall) {
       const bias = recall.memory.won
-        ? recall.strength * a.score * 0.08
-        : -recall.strength * Math.abs(a.score) * 0.05;
+        ? recall.strength * _v * 0.08
+        : -recall.strength * Math.abs(_v) * 0.05;
       const fitWeight = (a.fitness || 1) / 1500;
       memBias += bias * fitWeight;
       memBiasCnt++;
@@ -257,7 +273,9 @@ function _resolvePairCycleCore(pair, ps) {
     const timeClose=botPos._holdCycles>=maxHold && pnlPct < tpPct*0.45;
     // garde-fou absolu : rien ne vit plus de 3x maxHold (marche vraiment figee)
     const hardTime=botPos._holdCycles>=maxHold*3;
-    const oppWeight=S.agents.filter(a=>{const ad=a.score>0.05?1:a.score<-0.05?-1:0;return ad!==0&&ad!==posDir;}).reduce((s,a)=>s+(a.fitness||1),0)/totalFitness;
+    // [PHASE 1] sortie « Signal inversé » : poids des agents qui votent CONTRE la position SUR CETTE paire (ex : a.score global,
+    // où les bots comptaient avec leur score de statut) ; bots/méta sans vote (0) ne pèsent plus au numérateur.
+    const oppWeight=S.agents.filter(a=>{const _va=_voteOf(a);const ad=_va>0.05?1:_va<-0.05?-1:0;return ad!==0&&ad!==posDir;}).reduce((s,a)=>s+(a.fitness||1),0)/totalFitness;
     const consRev=oppWeight>0.75&&effectiveConviction>0.55;
 
     const canBotClose = S.botAutoMode !== false;

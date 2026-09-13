@@ -1,62 +1,56 @@
-# PASSATION-AURA8 — 12/09/2026 — token `20260912b` (inchangé) — push direct ACTIF · passation versionnée dans le dépôt
+# PASSATION-AURA8 — 12/09/2026 — token `20260912c` — PHASE 1 LIVRÉE (vote par paire, PLAN-DIRECTEUR A1) · push direct ACTIF · passation versionnée
 
 ## Démarrage de session — Rams colle le PAT, rien d'autre (ce fichier est lu depuis le dépôt)
 1. Cloner : `git clone https://x-access-token:PAT@github.com/ramizxhixha-a11y/aura.git` puis aussitôt `git remote set-url origin https://github.com/ramizxhixha-a11y/aura.git` — le PAT ne reste ni dans `.git/config`, ni dans un fichier, ni en mémoire.
 2. Lire CE fichier, puis `node banc-all.js` sur l'état brut du dépôt → « VERDICT : LIVRABLE » attendu AVANT toute modification ; sinon la mission devient « comprendre pourquoi ».
 3. Une seule mission par session, nommée avant la première modification. Aucun fichier « en plus ». Pas d'hypothèse corrigée sans sonde qui la nomme.
-4. Fin : `node banc-all.js` LIVRABLE → **un seul commit** = fichiers modifiés + cette passation mise à jour (1re ligne au token courant ; banc-all BLOQUE si elle manque ou si le token diverge) → `git push https://x-access-token:PAT@github.com/ramizxhixha-a11y/aura.git main` → `curl` raw : `DOC_V = '<token>'` → Pages rebâtit (< 1 min) → Rams relance l'app. Plus aucun upload manuel, plus de fichier oublié, plus de gros bloc au chat.
+4. Fin : `node banc-all.js` LIVRABLE → **un seul commit** = fichiers modifiés + cette passation mise à jour (1re ligne au token courant ; banc-all BLOQUE si elle manque ou si le token diverge) → `git push https://x-access-token:PAT@github.com/ramizxhixha-a11y/aura.git main` → `curl` raw : `DOC_V = '<token>'` → Pages rebâtit (< 1 min) → Rams relance l'app.
 5. Auteur des commits : `Rams (via Claude) <226786946+ramizxhixha-a11y@users.noreply.github.com>`. Message : `<token> · <mission> · banc-all LIVRABLE`.
-6. PAT fine-grained, dépôt `aura` seul, Contents Read/Write, 30 j — celui du 12/09 expire le **12/10/2026** (Rams en régénère un à l'expiration). Ancien PAT classique : à révoquer (Rams).
-7. Au chat : court. Lectures, diffs, bancs → bac à sable.
+6. PAT fine-grained, dépôt `aura` seul, Contents Read/Write, 30 j — celui du 12/09 expire le **12/10/2026**. Ancien PAT classique : à révoquer (Rams).
+7. Au chat : court. **Lecture intégrale = dans le bac à sable** (grep de tous les appelants/lecteurs + bancs sur le texte livré), au chat seulement les fonctions touchées. C'est ce qui a saturé les sessions précédentes (20 000 lignes lues au chat par mission) — plus jamais. Le filet reste `banc-all` (collisions globales, syntaxe, HTML, passation), pas la lecture.
 
-## Ce commit (12/09 soir) — 3 fichiers racine, aucun `js/`, HTML NON touché, token inchangé
-- `PASSATION-AURA8.md` : ce fichier, désormais versionné et réécrit dans chaque commit de livraison.
-- `banc-all.js` : nouveau contrôle « ▶ Passation » (fichier présent + 1re ligne portant le token `DOC_V`) → oublier la passation = ⛔ VERDICT : BLOQUÉ. Vérifié : LIVRABLE avec, BLOQUÉ sans, BLOQUÉ avec un token divergent.
-- `.nojekyll` : GitHub Pages ne passe plus par Jekyll (qui transformait les `.md` et peut refuser un build sur `{{`/`{%`) ; html/js/css servis à l'identique, build plus court (avant : ~30–37 s).
+## Ce commit — PHASE 1 « VOTE PAR PAIRE » (A1) — token `20260912c` — 24 h d'observation avant la phase 2
+**Le problème (CARTO §2, prouvé au code)** : `a.score` est un scalaire GLOBAL par agent. `runRosterAnalysis(pair)` l'écrasait à chaque appel (rotation 1 paire/tick 08, paire active 08, cascade 03, brain gate 09c) avec l'avis sur la DERNIÈRE paire analysée ; `liveTrainAgents` (02 → 03, à chaque fetch CoinGecko) tirait en plus TOUS les agents vers le momentum 5 bougies de chaque paire (la dernière gagnait). 10f lisait ce scalaire comme « consensus des agents sur LA paire résolue » = 50 % du signal final, pour les 3 modes (`_resolvePairCycleCore` est le seul résolveur : sim direct, EV via `_resolvePaperRealCycle` 10g, RE via 08).
+**Découverte qui a élargi la mission** : `learnFromOutcome` (03) juge chaque agent sur `a.score` (aligné / force → fitness, `agentPairSkill`, conf, mémoire). Figer `a.score` sans rien d'autre tuait l'apprentissage (loi 4). Le juge lit donc lui aussi le vote sur la paire.
 
-## État vérifié le 12/09 ~21:00 (clone frais)
-- HEAD `62a6dfa` 19:06 = livraison 20260912b entière : guardian-core `VERSION 20260912b`, HTML 78 `?v=` + `DOC_V`, banc-gel-boot 26/26, banc-gel-guardian 16/16. Raw ET Pages servent `DOC_V = '20260912b'`.
-- `node banc-all.js` : LIVRABLE · 0 échec · 2 avertissements connus (`window.X` posé dans 2 fichiers ×6, heuristique sans acorn).
-- Rien reçu de Rams après relance (aucune ligne « bloqueur » applicative) → aucun code applicatif touché ce soir.
+### Fichiers livrés (js/ + racine ; HTML dans le lot)
+- `js/03-per-pair-position-buttons-controls-buid.js` : `runRosterAnalysis(pair)` publie `ps.roster = { ts, cycle, votes:{id:score} }` de LA paire (RAM seulement — 09b1 liste les champs de `ps` sauvegardés, `roster` n'en est pas ; 09b1/09b2 non touchés) avec les MÊMES valeurs qu'avant : scout = score, conseil = ±magnitude (hold = 0), gardien = −0.5 veto / −0.2 warn / +0.05 ok ; agent muet (`S.mutedAgents`) = 0. Il n'écrit plus `a.score` ni `a.conf` des agents de signal (le miroir « statut de flotte → score des bots » est conservé tel quel : bots jamais dans le consensus). Nouveau helper `_agentPairVote(a, pair, fallback)` (source unique, multiplexé par mode via `pairStates`). `learnFromOutcome` : aligné / force / porte régime sur `_agentPairVote(a, pair, a.score||0)` (repli `a.score` tant que la paire n'a pas de roster) ; `enrichMemory` stocke ce vote (`agentScore`), comparé par `recallMemory` au vote courant. `liveTrainAgents` retiré → `archive/liveTrainAgents-03-retire-phase1.js` (byte-identique, non chargé, raison + remplaçant en tête — loi 6).
+- `js/10f-resolveur-cycle.js` : roster FRAIS de la paire à chaque résolution (`runRosterAnalysis(pair)` dans le mode du cycle, marqué `_perfOp('roster:PAIRE')` pour la sonde gel — nom sans espace, la regex du Guardian tronque au 1er espace) ; consensus, mémoire (`recallMemory`/memBias) et sortie « Signal inversé » (`oppWeight`) lus sur `ps.roster.votes` (`_voteOf`) ; 0 lecture de `a.score`. Sans roster (erreur) : l'agent ne vote pas (0) → pas de décision sur du faux. `totalFitness` (dénominateur de `oppWeight`) = fitness des agents QUI VOTENT (signal, hors bots/méta) : les bots votant 0 désormais, sur `S.agents` entier le seuil 0.75 devenait inatteignable (21 votants / 31 agents ≈ 0.68) — la sortie serait morte en silence.
+- `js/08-learning-history-render.js` : dans `simTick`, rotation « 1 paire/tick » et rafraîchissement « pour l'UI » (paire active, 4 ticks) RETIRÉS — ils n'existaient que pour écraser `a.score`. Aucun appel `runRosterAnalysis` ne subsiste dans 08 ; les panneaux debate/swarm (03) et 09c calculent le roster quand ils en ont besoin. 9 `_phEnd` intacts.
+- `js/02-state-init.js` : `_cgT('liveTrainAgents', …)` retiré du bloc « traitement CoinGecko » (seul `_cgT('syncPairPresets')` reste).
+- `js/12-bots-disciples.js` : `_angleAnswer` — angles **direction** (signe) et **timing** (force) lus sur le vote de l'agent sur LA paire (repli `a.score`) ; angle **conditions** inchangé (régime).
+- `AURA8_v118.html` : `DOC_V` + 78 `?v=` → `20260912c` (79). Diff = token seul.
+- `banc-phase1-vote-paire.js` (NOUVEAU, 22/22) : statique (retraits, publication, snapshot, HTML, en-têtes) + dynamique avec le `runRosterAnalysis` RÉEL, la tranche consensus RÉELLE de 10f, `learnFromOutcome` RÉEL et `_angleAnswer` RÉEL en vm : consensus(ETH) < −0.3 et consensus(BTC) > +0.3 sur les MÊMES agents, `a.score`/`a.conf` byte-identiques après 12 rosters (stables sans clôture), muet = 0, sans roster = 0, multiplexage, veto gardien = −0.5, juge sur le vote (macro_v1 à `a.score` −0.9 votant +0.6 sur BTC est ALIGNÉ sur un gain), repli sans roster, `oppWeight` = 20/21 > 0.75.
+- Bancs adaptés (pins de version) : `banc-gel-backup.js` (en-tête 03 → PHASE 1), `banc-gel-boot.js` (en-tête 08 → PHASE 1), `banc-net-expectancy.js` (10f `20260912c`, 619 lignes ; reste 18/19 CONNU). `banc-all.js` : LIVRABLE, 0 échec nouveau, avertissements inchangés.
+- Non touchés (byte-identiques) : 09c, 09b1, 09b2, 04 (son enveloppe « muet » de `runRosterAnalysis` continue de post-traiter le résultat ; le vote muet est déjà 0 dans `ps.roster`), 10e*, 10g, 07, css.
 
-## Verdict capture 12/09 18:37 (Guardian 20260912a, boot ~17:33) — inchangé
-- **L'app va bien** : mode/positions/portfolio/valeurs cohérents, gels = écran masqué seuls (Android, pas le code), auto-backup à jour, fichier natif dispo.
-- 2 lignes « bloqueur », aucune n'accuse du code applicatif (vérifié à la position UTF-16 dans les sources) :
-  - 18:12:18 · 1.4 s · `00-backup-state.js:anonyme@6882 ← FrameRequestCallback 1.2 s` → @6882 = l'enveloppe chrono `_wrapFn` elle-même (l.146 de 00). Le navigateur nomme l'enveloppe, jamais le rappel enveloppé. Le vrai appelant est déjà journalisé par cette enveloppe (`d > 1000` → `_report`) : ligne `⏱ LENT: timer rAF@fichier:ligne 1.2s` dans le chainLog + `S.perfLog.lent`. Corrigé en 20260912b : le Guardian joint désormais cette ligne.
-  - 17:34:05 · 1.5 s · `09b2-save-load.js:anonyme@16808 ← IDBRequest.onsuccess 1.2 s` → `req.onsuccess = e => res(…)` de `loadState` (l.298) : `res()` enchaîne la continuation `await` (JSON.parse LS 1,4 Mo + `applySnap`) dans la même tâche. Chargement de l'état au boot (+1 s), coût attendu une fois par boot, pas un bug.
-- Leçon : une ligne « bloqueur » nomme un point d'entrée de tâche, pas forcément le code fautif. Fichier 00 (instrumentation seule) ou frame ≤ 60 s après le boot = la sonde ou le boot, pas l'app.
+### Ce que ça RETIRE / CHANGE (déclaré, rien de caché)
+- Lignes 🧠 « Apprentissage · N agents entraînés » du journal : disparaissent (elles venaient de `liveTrainAgents`, ce n'était pas un apprentissage). L'onglet Learn reste alimenté par les autres icônes 🧬/💭/🦋…
+- `a.score` / `a.conf` = **biais appris** (ne bougent plus que par `learnFromOutcome`, la redistribution 02, le bunker 07, la naissance d'un hybride 07). Ils ne sont plus « l'avis du moment ». Lecteurs qui restent sur `a.score` (globaux, sans paire) : cartes agents (07 `patchAgentCards`, 08 chips), vote DAO automatique (08:289), vote du rêve (07:2838), résonance/harmoniques (03, affichage), lettre agents (03:2313), stagnation évolution (08, |score| < 0.03 ET fitness < 400 → hybride : désormais un agent au biais plat ET perdant, pas un agent que le roster n'a pas encore écrit), `recordDecisionCascade` repli « legacy ». Sur la page Agents, les scores bougent LENTEMENT au lieu de sauter à chaque tick : attendu, pas un bug. Rebranchement de ces lecteurs sur le bus : A3/A10.
+- `09c` `_openAgents` (top 5 agents affichés sur la carte de la position) lit encore `a.score` → **phase 2 (A5 attribution, 09c dans le lot)** : le vote sur la paire au moment de l'ouverture y sera écrit.
+- Consensus 10f : les agents muets ne comptent plus (avant : l'enveloppe 04 ne touchait pas `a.score` déjà écrit → un agent muet votait quand même à 50 % du signal). `S.mutedAgents` respecté (garde-fou §5).
+- Coût : 13 scouts + 7 conseil + 3 gardiens par résolution de paire (10–300 s par paire et par mode, `getTechSignals`/`getFundamentalSignals` en cache), au lieu d'une rotation par tick à l'écran. Moins de travail par tick sur la tablette ; à confirmer au Guardian (`roster:PAIRE` dans une ligne 🐌 = à regarder).
 
-## Contenu de la livraison 20260912b (HEAD) — pour mémoire
-- `guardian-core.js` : `_loafLent(S,f)` = entrée `S.perfLog.lent` la plus proche de la frame (≤ 5 s) ; `_loafBootAge(boots,f)` = secondes depuis le boot précédent (null si > 60 s). Ligne bloqueur : si src = 00-backup-state.js ET invoker timer/rAF/then/onmessage → suffixe ` = enveloppe chrono _wrapFn → vrai appelant : ⏱ LENT <name> <dur> s` (ou `aucune ligne ⏱ LENT jointe (rappel < 1 s ?)`) ; si frame ≤ 60 s après un boot → ` · au boot (+N s)`. `_loafTop` : 1 déclaration + 3 usages, `scripts[0]` absent.
-- `AURA8_v118.html` : 78 `?v=` + `DOC_V` → `20260912b`.
-- `banc-gel-boot.js` : capture 18:37 reproduite → 26/26. `banc-gel-guardian.js` : `_loafLent`/`_loafBootAge` (1 déclaration + 1 usage chacun) → 16/16.
+### Observation attendue (24 h — porte/mise/sortie touchées, loi 5)
+1. Journal : `Document v20260912c chargé`. Pas de « bloqueur » applicatif ; si une ligne 🐌 nomme `op roster:PAIRE`, l'envoyer telle quelle.
+2. Onglet Analytics → Debate/Swarm : votes par paire cohérents avec la paire affichée (changer de paire change les votes).
+3. Page Agents : scores stables/lents (biais appris). Brain gate EVAL/VETO inchangés dans le journal.
+4. Trades : ouverture d'une paire sur SON consensus ; sorties « Signal inversé » possibles quand ≥ 75 % du poids de fitness des votants vote contre (avant : bruit global). Le KPI (espérance nette EV, `_pairNetExpectancy`) se lit après 7 j — une phase qui le baisse à 7 j est ANNULÉE (retour au token précédent, fichiers en dépôt), pas ajustée (plan §6).
+5. **Seule donnée à envoyer après 24 h** : le backup Guardian complet (Download/AURA) + toute ligne « bloqueur » applicative. Rien d'autre.
 
-## Protocole — à vie
-1. `node banc-all.js` → « VERDICT : LIVRABLE » avant tout commit. Un ❌ nouveau = on corrige ou on ne pousse pas.
-2. Aucune correction de code sans cause NOMMÉE par une sonde. Hypothèse = sonde, pas correctif. Retirer le suspect ET poser la sonde ; vérifier qu'un « bloqueur » n'est pas la sonde elle-même.
-3. Le moins de fichiers possible ; toujours dire quel dossier et si le HTML est dans le lot. Tout changement de `js/` ou `css/` = nouveau token (`DOC_V` + 78 `?v=`), même jour → lettre suivante.
-4. Un commit par session, passation comprise. Jamais de push sans banc-all vert, jamais de fichier livré au chat.
-5. Après push : vérifier raw + Pages (`DOC_V`), puis Rams relance l'app et lit le journal `Document v<token> chargé`.
+## Prochaine mission — « go phase 2 » (nouvelle conversation, après 24 h)
+Phase 2 = A2 bus `ps.intel` (`10i-intel-bus.js` : `_intelPublish`/`_intelRead`) + A5 attribution `S.attribution[src][mode]` alimentée à chaque clôture depuis `decisionCascade` — lecture seule, aucune décision changée (12 h). Fichiers : 10i (nouveau), 10f, 09c (`_openAgents` → votes de la paire), 02 clôture, 09b1/09b2 (+ manifest). Point de départ naturel : `ps.roster.votes` est déjà la première source du bus.
 
-## Observation attendue (après relance de l'app par Rams)
-1. Journal : `Document v20260912b chargé`.
-2. Bouclier → Gel / Lag : les lignes « bloqueur » de 00 portent « enveloppe chrono → vrai appelant : ⏱ LENT timer rAF@fichier:ligne » ; la frame de boot porte « au boot (+N s) ».
-3. **Seule donnée à envoyer** : une ligne « bloqueur » dont le vrai appelant est un fichier applicatif (`timer rAF@03-…:1234` etc.), telle quelle. Une ligne « au boot » ou « aucune ligne ⏱ LENT jointe » ne demande rien.
-
-## Prochaine mission (inchangée)
-- **Écran blanc / heap 468 Mo** : au prochain trou inexpliqué, backup ↓ puis l'envoyer : `perfLog.boots[].prevSavedAt` + `perfLog.heap`. Lire ce qui tourne à +20/+30 min après le boot (timers longs, backup FULL core +60 s, Dream cycle, `memRecordSession`) — regex multi-lignes dans `banc-gel-backup.js`.
-- Si le vrai appelant rAF des frames de 1.2 s est nommé (probable : rendu d'un panneau/graphique), on le regarde ; sinon rien.
-- Puis : churn non décisionnel (`probePersistence` → `buildSnapshot()` 1,5 Mo / 2 min ; `probeStorageSync` relit l'IDB / 2 min) → fenêtre de boot restante → Phase 1 du PLAN-DIRECTEUR (« go phase 1 »).
-
-## Reports (non traités, inchangés)
-- `window.X` posé dans 2 fichiers (banc-all ⚠️) : `stopSim` {09i, 01}, `applyTheme` {05, 07}, `_bgResolve` {02, 08}, `_auraLastOp` {00, 08}, `requestAnimationFrame` {00, 03} (00 = chrono, 03 = ? à relire : si 03 ré-enveloppe rAF après 00, l'enveloppe de 03 peut masquer celle de 00), `GUARDIAN_CONFIG` {guardian-config, guardian-core}.
+## Reports (non traités)
+- Écran blanc / heap 468 Mo : au prochain trou inexpliqué, backup → `perfLog.boots[].prevSavedAt` + `perfLog.heap` ; lire ce qui tourne à +20/+30 min (timers longs, backup FULL +60 s, Dream cycle, `memRecordSession`).
+- Churn non décisionnel : `probePersistence` → `buildSnapshot()` 1,5 Mo / 2 min ; `probeStorageSync` relit l'IDB / 2 min ; `09b2` l.144 JSON.parse complet du LS toutes les 25 s pour lire `.cycle`.
+- `window.X` posé dans 2 fichiers (banc-all ⚠️ inchangés) : `stopSim` {09i, 01}, `applyTheme` {05, 07}, `_bgResolve` {02, 08}, `_auraLastOp` {00, 08}, `requestAnimationFrame` {00, 03}, `GUARDIAN_CONFIG` {guardian-config, guardian-core}.
 - `banc-skill-borne.js` (token 20260906i en dur) et `banc-p7-news.js` (payload absent) figés → à réécrire « token lu dans le HTML » ; `net-expectancy` 18/19 et `p6` 28/29 tolérés par `CONNUS`.
-- `_APPLYSNAP_MANIFEST` liste `_errStats`, `_riskVetoes`, `_botSurplusCarry`, `_fpByBot` que 09b1 ne sauvegarde pas ; `sw.js` jamais enregistré ; `alert('⛔ Export REFUSÉ…')` → modal ; `probeFiles` réseau ne teste pas les CSS `?v=` ; `boots[].doc` toujours `null` (`DOC_V` = `var` dans l'IIFE inline l.1368, invisible de 09k → exposer `window.DOC_V`) ; `S.cycle` par paire ; Évolueur 3 générations en 3 min ; `09b2` l.144 JSON.parse complet du LS toutes les 25 s pour lire `.cycle`.
-- Hors code — Rams : vieux backups `Download/AURA` (28/06), DriveSync sans dépôt Drive depuis août, révoquer ancienne clé CoinStats + ancien PAT classique, GitHub 2FA, tablette branchée en permanence + Samsung : retirer AURA de la mise en veille des applis et de l'optimisation batterie (gels écran masqué).
+- `_APPLYSNAP_MANIFEST` liste `_errStats`, `_riskVetoes`, `_botSurplusCarry`, `_fpByBot` que 09b1 ne sauvegarde pas ; `sw.js` jamais enregistré ; `alert('⛔ Export REFUSÉ…')` → modal ; `probeFiles` réseau ne teste pas les CSS `?v=` ; `boots[].doc` toujours `null` (exposer `window.DOC_V`) ; `S.cycle` par paire ; Évolueur 3 générations en 3 min ; leçons ×0.008 (A8) ; `executePending` plancher 10 $ (A4) ; `10-fin-bloc` mort (A11).
+- Hors code — Rams : vieux backups `Download/AURA` (28/06), DriveSync sans dépôt Drive depuis août, révoquer ancienne clé CoinStats + ancien PAT classique, GitHub 2FA, tablette branchée en permanence + Samsung : retirer AURA de la mise en veille des applis et de l'optimisation batterie.
 
-## Rappels techniques (inchangés)
-- Position LoAF = unités UTF-16 (`src.encode('utf-16-le')[:pos*2]`), pas `src[:pos]`.
-- `grep` mono-ligne rate les timers multi-lignes → regex dans `banc-gel-backup.js`.
-- IDB : jamais `getAll()` / `openCursor()` sur un store de payloads.
-- `performance.memory` quantifié (paliers ~6 %, plancher 10 Mo, retard ≤ 20 s) : tendances, pas des Mo exacts.
-- `S` est un `const` de script (`02-state-init.js`) : pas de `window.S` ; modes `sim`/`paperReal`/`real` et clés de stockage (`nexus_state_v2`, `nexusSnap_A/B/C`, `NEXUS_DB`) jamais renommés.
+## Rappels techniques
+- Position LoAF = unités UTF-16 (`src.encode('utf-16-le')[:pos*2]`), pas `src[:pos]`. `grep` mono-ligne rate les timers multi-lignes.
+- IDB : jamais `getAll()` / `openCursor()` sur un store de payloads. `performance.memory` quantifié : tendances, pas des Mo exacts.
+- `S` est un `const` de script (`02-state-init.js`) : pas de `window.S` ; modes `sim`/`paperReal`/`real` et clés de stockage (`nexus_state_v2`, `nexusSnap_A/B/C`, `NEXUS_DB`) jamais renommés. `pairStates` est multiplexé par mode (`_WALLET_ACCESSOR_FIELDS`) : `ps.roster` est donc par paire ET par mode.
+- Remplacements par ancre UNIQUE assertée (`s.count(old)==1`), jamais `String.replace` ; en-têtes de fichier pinés par les bancs (03 : gel-backup, 08 : gel-boot, 09c : p4/p5/p6, 10e4/10e5 : p4/p5, 10f : net-expectancy + p7) → toucher un fichier = adapter son pin.
