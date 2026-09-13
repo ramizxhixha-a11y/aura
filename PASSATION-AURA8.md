@@ -48,7 +48,7 @@ Constat : témoin réseau rouge (01, ping Binance), chrono EV figé (mode en pau
 
 ## Demande Rams 13/09 21:54 (capture HOME, EV) — MICRO-MISSION AFFICHAGE « P&L cumulé · toutes paires » (07 `renderPairPnl`, l.3255-3320 ; CSS 06-page-dashboard)
 Affichage seul, aucune décision touchée → 12 h. À livrer dans SA conversation, après le backup et l'audit. Spécification exacte :
-1. **Police des noms de paires** (PEPE, DOT…) : 10px → **18px** (= `.stat-chip-val`, la tuile « ↓ SHORT »), `font-family:var(--font-display)`, et 1re colonne de la grille `70px` → ~`100px` pour que le nom tienne sur une ligne.
+1. **Police des noms de paires** (PEPE, DOT…) : 10px → **18px** (= `.stat-chip-val`, la tuile « ↓ SHORT »). **Règle Rams 13/09 : SEULE la taille change — même famille de police qu'aujourd'hui, mêmes couleurs (`cfg.color` par paire, thème sombre AURA), rien d'autre.** 1re colonne de la grille `70px` → ~`100px` pour que le nom tienne sur une ligne.
 2. **Dollars en temps réel quand la paire a une position ouverte** : à l'extrémité droite de la barre, `pb-usd` affiche **cumul réalisé + P&L latent de la position** (`ps.totalPnlUsd + pos.pnlUsdt`), avec un point « ● » qui bat (classe live), et `pb-meta` passe en 2 lignes : `Nt · WR%` puis `en cours ±$x.xx`. Sans position : inchangé. Cadence : `renderPairPnl()` tourne déjà tous les 2 ticks (08:3263) → « temps réel » à 2 s près sans nouveau timer. La barre garde le réalisé (sinon elle sauterait à chaque tick).
 3. Le badge sous le nom (`↑ $5.4274`) est la MISE/exposition de la position, pas un P&L — le libeller `mise $5.43` pour lever l'ambiguïté (2 décimales).
 Fichiers : 07 (+ CSS 06 si classe live), HTML token. Banc : scaffold 3 colonnes, tailles, valeur live = réalisé + latent, sans position = réalisé seul.
