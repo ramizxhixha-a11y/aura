@@ -1,3 +1,4 @@
+// [1b-a · 14/09/2026] VERSION 20260914a · porte RE : fraîcheur AVANT `closedTs <= lastSeenTs` ; battement : _lossCapSweep rebranché (1 tick/3, règle 06/07) et _botExitSweep (sorties bot sur ps.price) appelés pour chaque mode traité
 // [PHASE 1 · 12/09/2026] VERSION 20260912c · simTick : rotation roster 1 paire/tick et rafraîchissement roster paire active RETIRÉS (ils n'existaient que pour écraser a.score ; le roster par paire vit dans 10f/09c/panneaux)
 // [GEL BOOT · 11/09/2026] VERSION 20260911b · correctif LoAF : la frame arrive APRÈS le tick qui écrit le gel (observé 20:24 : « LoAF aucun » sur 2 longtasks de 5,6/7,1 s) → rattachement tardif au dernier gel (S.perfLog.gels[].loaf + ligne 🐌 réécrite) + anneau durable S.perfLog.loaf (20 frames ≥ 1 s, scripts nommés) indépendant des gels
 // [GEL BOOT · 11/09/2026] VERSION 20260911a · sonde LoAF (long-animation-frame, Chrome ≥ 123) : le navigateur nomme le script bloquant (fichier:position, fonction, appelant) dans la ligne 🐌 · S.perfLog.gels = 30 derniers gels persistés (nom d'op complet, heap, dom, LoAF) · relevé heap/DOM toutes les 10 min dans S.perfLog.heap (144 pts = 24 h)
@@ -2943,14 +2944,15 @@ function simTick() {
   } catch(e) {}
   _mRun.push(_mDisp);
   window._bgResolve = false;
-  // ★ 26/07 perf : le garde-fou perte max n'a plus sa propre minuterie —
-  // il s'execute ici, dans le battement existant, une fois sur trois.
-  // Le garde-fou perte max a ete SUPPRIME (regle Rams 27/07 : aucun plafond
-  // impose, le bot gere ses sorties). Seule subsiste la protection de
-  // solvabilite du levier, qui tourne a chaque changement de prix (02) ; ce
-  // passage periodique n en est que le filet si le flux venait a s interrompre.
+  // [1b-a · 14/09/2026] GARDE-FOU PERTE MAX REBRANCHÉ (1 tick sur 3) — règle Rams du 06/07 (« le bot surveille et
+  // stoppe si perte trop importante, même si je l'ai oublié ») : elle prime sur celle du 27/07 (« aucun plafond,
+  // le bot gère ses sorties »), parce que le bot ne PEUT pas gérer ses sorties quand la bougie ne se ferme pas
+  // (audit 14/09 : _lossCapSweep sans appelant depuis le 26/07, DOT/DOGE sous leur SL 2 jours). Plafond inchangé :
+  // 2 × SL prévu, borné 1,5-3 %, tous modes en play, positions manuelles comprises (10f).
+  // La protection de solvabilité du levier reste le filet si le flux venait à s'interrompre.
   if (tick % 3 === 0) {
     try { if (window._leverageMarginCheck) window._leverageMarginCheck(); } catch(e) {}
+    try { if (window._lossCapSweep) window._lossCapSweep(); } catch(e) {}
   }
   _mRun.forEach(function(_m){
     var _isBg = (_m !== _mDisp);
@@ -2969,6 +2971,9 @@ function simTick() {
       if (S.tradingMode === 'paperReal' || S.tradingMode === 'real') {
         try { _applyPaperRealProtection(); } catch(e) {}
       }
+      // [1b-a · 14/09/2026] sorties TP / SL / breakeven des positions BOT vérifiées ici, sur ps.price, à chaque
+      // passage du mode traité — plus seulement à la résolution du cycle (10f _botExitSweep).
+      try { if (window._botExitSweep) window._botExitSweep(); } catch(e) {}
       Object.entries(S.pairStates).forEach(([pair, ps]) => {
         ps.cycleTimer -= _step;
         if(ps.cycleTimer <= 0) {
@@ -3447,8 +3452,16 @@ function resolvePairCycle(pair, ps) {
   const tf = S.realTimeframe || '15m';
   const arr = (S.realCandles && S.realCandles[pair] && S.realCandles[pair][tf]) || [];
 
-  // Pas assez de données ? pause
-  if (arr.length < 30) return;
+  // [1b-a · 14/09/2026] FRAÎCHEUR AVANT « nouvelle bougie close » (même ordre que la porte EV, 10g) : une série
+  // figée ne produit jamais de nouvelle bougie, l'ancien test placé après `closedTs <= lastSeenTs` était donc
+  // inatteignable. Série courte ou périmée (> max(2,5 tf, 2 min)) → refetch REST (limité en 02) et on attend.
+  const tfMs = { '5m': 300000, '15m': 900000, '1h': 3600000, '4h': 14400000, '1j': 86400000 }[tf] || 900000;
+  const stalenessThreshold = Math.max(tfMs * 2.5, 120000);
+  const dataAge = arr.length ? (Date.now() - arr[arr.length - 1].ts) : Infinity;   // âge de la bougie EN COURS
+  if (arr.length < 30 || dataAge > stalenessThreshold) {
+    if (typeof _fetchAndBootstrapRealCandles === 'function') _fetchAndBootstrapRealCandles(pair, tf);
+    return;  // Attendre les données fraîches — pas de kill switch
+  }
 
   // Dernière bougie (live) — on déclenche le cycle quand une bougie se FERME
   // Une bougie se ferme quand sa ts change (la dernière bougie de arr est la nouvelle bougie en cours)
@@ -3459,22 +3472,6 @@ function resolvePairCycle(pair, ps) {
   if (closedTs <= lastSeenTs) return;        // pas de nouvelle bougie fermée
   if (!S.realPairCycle) S.realPairCycle = {};
   S.realPairCycle[pair] = closedTs;
-
-  // Vérifier la fraîcheur du WS / des bougies (sécurité 6 du plan)
-  // v7.12 LIVRAISON 9 · TOLÉRANCE 2 MIN MIN pour éviter les pauses sur micro-glitches
-  const tfMs = { '5m': 300000, '15m': 900000, '1h': 3600000, '4h': 14400000, '1j': 86400000 }[tf] || 900000;
-  const dataAge = Date.now() - arr[arr.length - 1].ts;  // âge de la bougie EN COURS
-  // On prend le MAX entre 2.5x tf et 2 min (pour 5m: 2.5x = 12.5min, donc 12.5min ; pour 1m hypothétique: 2min)
-  // L'idée : sur 5m/15m/1h, c'est déjà très tolérant ; on garantit au moins 2 min de tolérance
-  const stalenessThreshold = Math.max(tfMs * 2.5, 120000);
-  if (dataAge > stalenessThreshold) {
-    // v118 FIX · Données obsolètes → fetch REST au lieu de pauser définitivement
-    // Les bougies anciennes (session précédente) sont remplacées par des données fraîches Binance
-    if (typeof _fetchAndBootstrapRealCandles === 'function') {
-      _fetchAndBootstrapRealCandles(pair, tf);
-    }
-    return;  // Attendre les données fraîches — pas de kill switch
-  }
 
   // Tout va bien → exécuter le cycle bot sur ce signal de bougie fermée
   return _resolvePairCycleCore(pair, ps);

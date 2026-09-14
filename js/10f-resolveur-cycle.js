@@ -1,5 +1,6 @@
-// ▓▓▓ VERSION 20260912c ▓▓▓
-// 10f-resolveur-cycle.js — Cœur : _resolvePairCycleCore + garde-fou perte max (_lossCapSweep)
+// ▓▓▓ VERSION 20260914a ▓▓▓
+// 10f-resolveur-cycle.js — Cœur : _resolvePairCycleCore + sorties bot hors résolution (_botExitSweep) + garde-fou perte max (_lossCapSweep)
+// [1b-a · 14/09/2026] TP/SL/breakeven des positions bot sortis de la résolution → _botExitSweep (battement 08, sur ps.price) ; la résolution écrit _tpPct/_slPct et ne garde que Signal inversé / timeout / hardTime ; _lossCapSweep rebranché par 08 (règle 06/07)
 // [PHASE 1 · 12/09/2026] VOTE PAR PAIRE (PLAN-DIRECTEUR A1) : le consensus des agents (50 % du signal final) lisait a.score,
 // scalaire GLOBAL écrasé par le roster de la DERNIÈRE paire analysée (rotation 08, paire active, cascade, brain gate) et tiré
 // par liveTrainAgents vers le momentum d'une autre paire → 50 % du signal était du bruit corrélé (CARTO §2). Désormais :
@@ -251,15 +252,13 @@ function _resolvePairCycleCore(pair, ps) {
 
     const tpPct=Math.max(1.2,effectiveConviction*4.5*(1+volCV*8));
     const slPct=Math.max(0.6,tpPct*0.35);
+    // [1b-a · 14/09/2026] les cibles TP/SL (conviction + volatilité DU MOMENT) sont calculées ici et ÉCRITES sur la
+    // position ; la vérification prix (TP, SL, breakeven) tourne dans le battement, à chaque tick, dans
+    // _botExitSweep ci-dessous — plus seulement à la résolution (en EV/RE : seulement quand une bougie Binance se
+    // ferme → série figée = aucune sortie, jamais ; audit 14/09). Ici ne restent que les sorties qui ont besoin
+    // du roster ou du cycle : « Signal inversé », timeout, hardTime.
+    botPos._tpPct=tpPct; botPos._slPct=slPct;
 
-    if(pnlPct>tpPct*0.45){
-      const be=botPos.entryPrice*(1+(botPos.side==='long'?0.001:-0.001));
-      if(botPos.side==='long' &&(!botPos.sl||botPos.sl<be))botPos.sl=be;
-      if(botPos.side==='short'&&(!botPos.sl||botPos.sl>be))botPos.sl=be;
-    }
-
-    const tpHit=pnlPct>=tpPct;
-    const slHit=pnlPct<=-slPct;
     const sigRev=sigDir!==0&&sigDir!==posDir&&effectiveConviction>0.65;
     botPos._holdCycles=(botPos._holdCycles||0)+1;
     const minHoldMet = botPos._holdCycles >= 5;
@@ -279,8 +278,8 @@ function _resolvePairCycleCore(pair, ps) {
     const consRev=oppWeight>0.75&&effectiveConviction>0.55;
 
     const canBotClose = S.botAutoMode !== false;
-    if(canBotClose && (slHit || (minHoldMet && (tpHit||sigRev||timeClose||hardTime||consRev)))){
-      const why=tpHit?`TP +${tpPct.toFixed(1)}%`:slHit?`SL −${slPct.toFixed(1)}%`:(sigRev||consRev)?'Signal inversé':'Timeout';
+    if(canBotClose && minHoldMet && (sigRev||timeClose||hardTime||consRev)){
+      const why=(sigRev||consRev)?'Signal inversé':'Timeout';
       closePosition(botPos.id,true);
       learnFromOutcome('trade',pnlPct,pair);
       showToast(`${pnlPct>=0?'💰':'📉'} Bot ${pair} ${why} · ${pnlPct>=0?'+':''}${pnlPct.toFixed(2)}%`);
@@ -577,6 +576,47 @@ if(typeof _resolvePairCycleCore==='function') window._resolvePairCycleCore = _re
 // ★ 26/07 perf : plus de minuterie propre. Le garde-fou est expose et appele
 // par le battement principal (08), une fois toutes les 3 secondes : zero
 // reveil supplementaire, meme protection.
+// ═══ [1b-a · 14/09/2026] SORTIES DES POSITIONS BOT HORS RÉSOLUTION (_botExitSweep) ═══
+// Jusqu'ici TP / SL / breakeven des positions auto vivaient DANS _resolvePairCycleCore : vérifiés uniquement à la
+// résolution du cycle — en EV/RE, seulement quand une nouvelle bougie Binance se ferme (10g/08). Série figée =
+// aucune sortie, jamais (audit 14/09 : DOT et DOGE sous leur SL depuis 2 jours). Ce balayage tourne dans le
+// battement (08), pour le mode TRAITÉ (le même passage que _applyPaperRealProtection : mode affiché à chaque tick,
+// modes d'arrière-plan 1 tick sur 3), sur ps.price. Cibles : pos._tpPct / pos._slPct écrites par la résolution
+// (conviction + volatilité du moment) ; repli pour une position antérieure : conviction d'ouverture. Sémantique
+// INCHANGÉE : SL immédiat, TP après 5 cycles de détention, breakeven-stop au-delà de 45 % du TP, canBotClose.
+window._botExitSweep = function _botExitSweep() {
+  try {
+    if (!S || !S.openPositions || !S.pairStates) return;
+    if (S.botAutoMode === false) return;   // canBotClose, même règle qu'à la résolution
+    S.openPositions.slice().forEach(function(pos){
+      if (!pos || pos.auto !== true) return;
+      var ps = S.pairStates[pos.pair];
+      var px = ps ? Number(ps.price) : 0, entry = Number(pos.entryPrice);
+      if (!px || !entry) return;
+      var isLong = pos.side === 'long';
+      var pnlPct = isLong ? (px - entry) / entry * 100 : (entry - px) / entry * 100;
+      var pnlUsd = (Number(pos.stakeUsdt) || 0) * (pnlPct / 100);
+      pos.pnl = pnlPct; pos.pnlUsdt = pnlUsd; pos.currentVal = (Number(pos.stakeUsdt) || 0) + pnlUsd;
+      var tpPct = (isFinite(pos._tpPct) && pos._tpPct > 0) ? pos._tpPct : Math.max(1.2, (Number(pos.conviction) || 0.4) * 4.5);
+      var slPct = (isFinite(pos._slPct) && pos._slPct > 0) ? pos._slPct : Math.max(0.6, tpPct * 0.35);
+      if (pnlPct > tpPct * 0.45) {   // breakeven-stop : au-delà de 45 % du TP, la position ne peut plus repasser rouge
+        var be = entry * (1 + (isLong ? 0.001 : -0.001));
+        if (isLong  && (!pos.sl || pos.sl < be)) pos.sl = be;
+        if (!isLong && (!pos.sl || pos.sl > be)) pos.sl = be;
+      }
+      var tpHit = pnlPct >= tpPct;
+      var slHit = pnlPct <= -slPct;
+      var minHoldMet = (pos._holdCycles || 0) >= 5;
+      if (!(slHit || (minHoldMet && tpHit))) return;
+      var why = tpHit ? 'TP +' + tpPct.toFixed(1) + '%' : 'SL \u2212' + slPct.toFixed(1) + '%';
+      try { closePosition(pos.id, true); } catch(e){ try{window._decErr&&window._decErr(e)}catch(_e){} return; }
+      try { learnFromOutcome('trade', pnlPct, pos.pair); } catch(e){ try{window._decErr&&window._decErr(e)}catch(_e){} }
+      try { showToast((pnlPct >= 0 ? '\uD83D\uDCB0' : '\uD83D\uDCC9') + ' Bot ' + pos.pair + ' ' + why + ' \u00b7 ' + (pnlPct >= 0 ? '+' : '') + pnlPct.toFixed(2) + '%'); } catch(e) {}
+      if (ps) { ps.qYes = 100 + Math.floor(Math.random() * 20); ps.qNo = 100 + Math.floor(Math.random() * 20); }
+    });
+  } catch(e){ try{window._decErr&&window._decErr(e)}catch(_e){} }
+};
+
 window._lossCapSweep = function _lossCapSweep() {
   try {
     if (!S || !S.walletStore || !window._isModeRunning) return;

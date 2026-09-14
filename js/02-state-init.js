@@ -1,3 +1,4 @@
+// [1b-a · 14/09/2026] VERSION 20260914a · bougies réelles vivantes : filtre outlier non auto-bloquant (_rcOutlier, référence = dernier prix accepté < 5 min, plus jamais le close 5m), bootstrap REST au boot pour toute série périmée (_realCandlesStale, limiteur 90 s), référence rafraîchie après bootstrap
 // [PHASE 1 · 12/09/2026] VERSION 20260912c · appel _cgT('liveTrainAgents') retiré du traitement CoinGecko (fonction retirée de 03, archivée)
 // [P0 RÉGIME UNIFIÉ · 05/09/2026] detectMarketRegime() = SOURCE UNIQUE du régime, consommée partout (header, portes S2, risque, grâce, cockpit, exports). S._paperRealCurrentRegime (photo périmée des cycles EV) supprimé de tout le code chargé. Correctif interne : volatilité moyennée sur volCount (paires avec bougies) et non plus sur countValid (paires avec pnl24h). Mode Démo : force le régime via S._regimeOverride (posé/retiré par enterDemoMode/exitDemoMode dans 05).
 // [FRAIS REELS BINANCE · 28/07/2026] recordFees facture desormais l ALLER-RETOUR (entree taker + sortie maker/taker + slippage x2) au lieu d un seul cote ; taux feeConfig alignes sur Binance spot VIP 0 (0,10 % par cote, maker=taker) au lieu de 0,02/0,05 % — le cout reel d un aller-retour passe de 0,080 % a 0,260 %
@@ -3218,6 +3219,24 @@ async function _backfillRealCandles(pair, interval, limit) {
 }
 window._backfillRealCandles = _backfillRealCandles;
 
+// ═══ [1b-a · 14/09/2026] FILTRE OUTLIER NON AUTO-BLOQUANT ═══
+// Avant : chaque prix WS était comparé au dernier close 5m (jamais re-bootstrappé) — dès que cette série datait
+// (pause, veille, coupure, mouvement > 2 %), 100 % des prix étaient rejetés pour TOUTES les timeframes, à vie
+// (audit 14/09 : ETH 5m à 1 919 du 19/08 pour un prix à 2 501 ; 7 paires EV sans bougie 15m pendant 17 h).
+// Désormais : référence = dernier prix RÉEL accepté de la paire (WS, kline ou bootstrap REST) s'il a moins de
+// 5 min ; > 2 % d'écart → rejet (glitch). Sans référence fraîche, le prix est accepté et DEVIENT la référence :
+// le filtre se répare seul en 5 min au lieu de se verrouiller. Source unique pour @trade, @kline et le modal.
+var _rcLastPx = {};   // { 'BTC/USDT': { px, ts } }
+function _rcOutlier(pair, price, ts) {
+  if (!isFinite(price) || price <= 0) return true;
+  var now = ts || Date.now();
+  var ref = _rcLastPx[pair];
+  if (ref && (now - ref.ts) < 300000 && Math.abs(price - ref.px) / ref.px > 0.02) return true;
+  _rcLastPx[pair] = { px: price, ts: now };
+  return false;
+}
+window._rcOutlier = _rcOutlier;
+
 /**
  * Agrège un prix réel dans les bougies de toutes les granularités
  * Appelé à chaque arrivée d'un vrai prix CoinGecko/Binance
@@ -3237,16 +3256,9 @@ function _upsertKlineCandle(pair, interval, k) {
   if (!S.realCandles[pair] || !S.realCandles[pair][interval]) return;
   const arr = S.realCandles[pair][interval];
 
-  // v7.12 LIVRAISON 8 · Filtre outlier renforcé : vérifie close ET high/low
-  // (un high/low aberrant peut polluer le graphe même si close est correct)
-  const ref = (arr.length > 0 ? arr[arr.length - 1].c : null) ||
-              (S.pairStates && S.pairStates[pair] ? S.pairStates[pair].price : null);
-  if (ref && isFinite(ref) && ref > 0) {
-    // Reject si close, high OU low s'écarte de >2% de la référence
-    if (Math.abs(k.c - ref) / ref > 0.02) return;
-    if (Math.abs(k.h - ref) / ref > 0.02) return;
-    if (Math.abs(k.l - ref) / ref > 0.02) return;
-  }
+  // [1b-a · 14/09/2026] référence = dernier prix réel accepté de la paire (< 5 min), plus jamais le dernier close
+  // de la série (une série figée rejetait toute kline à vie). La cohérence h/l vs close reste vérifiée ci-dessous.
+  if (_rcOutlier(pair, k.c, Date.now())) return;
 
   // Sanity intra-bougie : rejeter aussi si h/l s'écartent de >2% du close
   // (cas où la bougie elle-même est cohérente avec ref mais a une mèche corrompue)
@@ -3297,13 +3309,14 @@ function _aggregateRealPriceOtherIntervals(pair, price, ts) {
 
   _ensureRealCandlesStruct();
   if (!S.realCandles[pair]) return;
+  // [1b-a · 14/09/2026] filtre unique en tête (référence = dernier prix accepté < 5 min), plus de comparaison au
+  // dernier close de chaque intervalle : un intervalle figé se verrouillait pour toujours.
+  if (_rcOutlier(pair, price, ts)) return;
   const skipInterval = (typeof _realCandlesState !== 'undefined') ? _realCandlesState.selectedInterval : null;
   Object.entries(REAL_CANDLE_INTERVALS).forEach(([interval, intervalMs]) => {
     if (interval === skipInterval) return;
     const arr = S.realCandles[pair][interval];
     if (!arr) return;
-    const ref = arr.length > 0 ? arr[arr.length - 1].c : null;
-    if (ref && Math.abs(price - ref) / ref > 0.02) return;
     const candleStart = _candleStartTs(ts, intervalMs);
     const lastCandle = arr[arr.length - 1];
     if (!lastCandle || lastCandle.ts < candleStart) {
@@ -3332,23 +3345,9 @@ function _aggregateRealPrice(pair, price, ts) {
   _ensureRealCandlesStruct();
   if (!S.realCandles[pair]) return;
 
-  // ═══ v7.12 LIVRAISON 5 · FILTRE OUTLIERS ═══
-  // Si la dernière bougie en cours existe et que le prix s'écarte de >2% de son close,
-  // c'est presque certainement un trade corrompu (mauvais feed, mauvais marché, parsing bug).
-  // BTC/ETH ne bougent jamais de >2% en quelques secondes en conditions normales.
-  // On vérifie sur la granularité 5m (la plus rapide) pour avoir une référence récente.
-  try {
-    const ref5m = S.realCandles[pair]['5m'];
-    if (ref5m && ref5m.length > 0) {
-      const refClose = ref5m[ref5m.length - 1].c;
-      if (isFinite(refClose) && refClose > 0) {
-        const deviation = Math.abs(price - refClose) / refClose;
-        if (deviation > 0.02) {  // > 2% d'écart vs close 5m récent → rejet
-          return;
-        }
-      }
-    }
-  } catch(e) {}
+  // [1b-a · 14/09/2026] filtre outlier : référence = dernier prix réel accepté de la paire (< 5 min), voir
+  // _rcOutlier. Le close 5m n'est plus jamais la référence (série jamais re-bootstrappée = verrou à vie).
+  if (_rcOutlier(pair, price, ts)) return;
 
   Object.entries(REAL_CANDLE_INTERVALS).forEach(([interval, intervalMs]) => {
     const arr = S.realCandles[pair][interval];
@@ -4692,8 +4691,11 @@ function _startBgCollector() {
       : (S.paperRealKillSwitch && S.paperRealKillSwitch[pair]);
     const _isStalePaused = _bgKs && _bgKs.paused && _bgKs.reason === 'Données obsolètes';
     if (!_bgCollectorWSMap[pair]) _openBgWs(pair);
-    // v118 · Bootstrap REST si nouvelle paire OU pausée pour données périmées
-    if (!_bgCollectorWSMap[pair] || _isStalePaused) {
+    // [1b-a · 14/09/2026] bootstrap REST pour TOUTE paire dont la série de la tf du mode est absente, courte ou
+    // périmée — plus seulement « nouvelle ou pausée » : EV ne pause plus (il attend), donc après une relance seules
+    // les paires au flux encore vivant recevaient des bougies (14/09 : BTC, ADA, EUR sur 12). Le limiteur vit dans
+    // _fetchAndBootstrapRealCandles (1 appel / 90 s / paire·tf, tous appelants confondus).
+    if (!_bgCollectorWSMap[pair] || _isStalePaused || _realCandlesStale(pair, _bgTf)) {
       try { _fetchAndBootstrapRealCandles(pair, _bgTf); } catch(e) {}
     }
   });
@@ -4710,7 +4712,22 @@ function _stopBgCollector() {
 // v118 FIX · Bootstrap bougies via REST Binance
 // Évite la détection "Données obsolètes" au démarrage quand les bougies sauvegardées sont anciennes.
 // Fetch les 60 dernières bougies et réveille la paire si elle était pausée pour données périmées.
+// [1b-a · 14/09/2026] série absente, courte (< 30) ou dont la bougie en cours a plus de max(2,5 tf, 2 min) —
+// le MÊME critère que les portes EV (10g) et RE (08) ; source unique pour le boot (02) et les portes.
+function _realCandlesStale(pair, tf) {
+  tf = tf || '15m';
+  const arr = (S.realCandles && S.realCandles[pair] && S.realCandles[pair][tf]) || [];
+  if (arr.length < 30) return true;
+  const tfMs = REAL_CANDLE_INTERVALS[tf] || 900000;
+  return (Date.now() - (arr[arr.length - 1].ts || 0)) > Math.max(tfMs * 2.5, 120000);
+}
+window._realCandlesStale = _realCandlesStale;
+var _rcBootstrapAt = {};   // { 'BTC/USDT_15m': ms } — [1b-a] 1 appel REST / 90 s / paire·tf, tous appelants confondus
 async function _fetchAndBootstrapRealCandles(pair, tf) {
+  const _bk = pair + '_' + (tf || '15m');
+  const _bn = Date.now();
+  if (_rcBootstrapAt[_bk] && (_bn - _rcBootstrapAt[_bk]) < 90000) return;
+  _rcBootstrapAt[_bk] = _bn;
   const ivMap = { '5m':'5m', '15m':'15m', '1h':'1h', '4h':'4h', '1j':'1d' };
   const binanceIv = ivMap[tf || '15m'] || '15m';
   const sym = pair.replace('/','');   // 'BTC/USDT' → 'BTCUSDT'
@@ -4724,7 +4741,7 @@ async function _fetchAndBootstrapRealCandles(pair, tf) {
     // (2,5-6,5 s APRÈS le boot, en deux vagues = deux lots de réponses) le désigne.
     // Marqué pour la ligne de gel (fenêtre 5 s) + chrono direct si > 1 s.
     const _kt0 = performance.now();
-    try { if (typeof window !== 'undefined' && window._perfOp) window._perfOp('bootstrap candles ' + pair); } catch(e) {}
+    try { if (typeof window !== 'undefined' && window._perfOp) window._perfOp('bootstrap:' + pair); } catch(e) {}   // [1b-a] nom sans espace (la sonde Guardian tronque au 1er espace)
     if (!Array.isArray(data) || data.length === 0) return;
     if (!S.realCandles) S.realCandles = {};
     if (!S.realCandles[pair]) S.realCandles[pair] = {};
@@ -4733,6 +4750,8 @@ async function _fetchAndBootstrapRealCandles(pair, tf) {
       l: parseFloat(k[3]), c: parseFloat(k[4]),
       v: parseFloat(k[5]), n: parseInt(k[8]) || 0
     }));
+    // [1b-a] le dernier close REST devient la référence fraîche du filtre outlier (le flux WS repart sur du vrai)
+    try { const _lc = S.realCandles[pair][tf || '15m']; const _lk = _lc[_lc.length - 1]; if (_lk && isFinite(_lk.c) && _lk.c > 0) _rcLastPx[pair] = { px: _lk.c, ts: Date.now() }; } catch(e) {}
     // Réveiller la paire si pausée uniquement pour "Données obsolètes"
     const ks = S.realKillSwitch && S.realKillSwitch[pair];
     if (ks && ks.paused && ks.reason === 'Données obsolètes') {

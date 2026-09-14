@@ -1,3 +1,4 @@
+// [1b-a · 14/09/2026] VERSION 20260914a · GBP/USDT (retirée de Binance le 29/12/2023) désactivée en EV/RE à chaque chargement (_evRetireDelisted)
 // [GEL BOOT · 11/09/2026] VERSION 20260911b · loadState relit perfLog.loaf
 // [GEL BOOT · 11/09/2026] VERSION 20260911a · applySnap relit perfLog (+ manifeste) · db.close() sur toute connexion openDB() de ce fichier (saveState toutes les 25 s ouvrait une connexion IDB neuve jamais fermée : ~144/h)
 // [FIX GEL · 06/09/2026] VERSION 20260906l — saveState : GuardianCore.autoBackup.run(false) au lieu de run(true) (backup complet IDB force toutes les 2 min -> intervalle Guardian)
@@ -888,6 +889,41 @@ console.log('[09b2 v125] ✅ hooks + autosave 10s installés · LS allégé · I
       }
     } catch(e) { _log('09b2·defEV2 charg\u00e9 \u2014 erreur d\'activation'); }
   }, 500);
+})();
+
+// ═══ [1b-a · 14/09/2026] PAIRES SUPPRIMÉES DE BINANCE — désactivées en EV et RE ═══
+// GBP/USDT : paire spot retirée par Binance le 29/12/2023 03:00 UTC (avis officiel « Notice of Removal of Spot
+// Trading Pairs - 2023-12-29 »). Le backup du 14/09 la montre avec 60 klines du 28-29/12/2023 : porte EV jamais
+// ouvrable, mais 1 WS + 1 cycle sur 12 consommés et une corrélation calculée contre 2023. Elle reste disponible
+// en AA (marche aléatoire, prix synthétique) ; en EV et RE son activation est retirée et son flux fermé. Tourne à
+// chaque chargement (idempotent) : une réactivation par l'onglet paires serait annulée à la relance suivante.
+var _EV_DELISTED_PAIRS = ['GBP/USDT'];
+function _evRetireDelisted() {
+  var n = 0;
+  _EV_DELISTED_PAIRS.forEach(function(p){
+    ['paperRealActivePairs', 'realActivePairs'].forEach(function(k){
+      if (S[k] && S[k][p]) { S[k][p] = false; n++; }
+    });
+    try {
+      if (typeof _bgCollectorWSMap !== 'undefined' && _bgCollectorWSMap && _bgCollectorWSMap[p]) {
+        _bgCollectorWSMap[p].onclose = null; _bgCollectorWSMap[p].close(); delete _bgCollectorWSMap[p];
+      }
+    } catch(e) {}
+  });
+  return n;
+}
+window._evRetireDelisted = _evRetireDelisted;
+(function(){
+  setTimeout(function(){
+    try {
+      if (typeof S === 'undefined' || !S) return;
+      var n = _evRetireDelisted();
+      if (n && S.chainLog) {   // même forme que _log de _evPairsDefault (portée locale à son IIFE)
+        S.chainLog.push({ icon:'\u2714', desc: '09b2\u00b7delisted \u2014 ' + n + ' activation(s) EV/RE retir\u00e9e(s) : ' + _EV_DELISTED_PAIRS.join(', ') + ' (paire supprim\u00e9e de Binance le 29/12/2023)', hash: Math.random().toString(36).slice(2,8), time: new Date().toLocaleTimeString() });
+        if (S.chainLog.length > 100) S.chainLog.splice(0, S.chainLog.length - 100);
+      }
+    } catch(e) {}
+  }, 600);
 })();
 
 // ═══ PURGE DE ROTATION (26/07/2026) ═══

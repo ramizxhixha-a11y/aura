@@ -1,3 +1,4 @@
+// [1b-a · 14/09/2026] VERSION 20260914a · porte EV : test de fraîcheur AVANT `closedTs <= lastSeenTs` (le refetch « données obsolètes » était inatteignable sur une série figée)
 // ▓▓▓ VERSION 20260905a ▓▓▓ · [P0 RÉGIME UNIFIÉ · 05/09/2026] écriture de S._paperRealCurrentRegime supprimée (photo périmée) — le régime se lit partout en direct via detectMarketRegime()
 // 10g-resolveur-ev-csv.js — Résolveur EV (_resolvePaperRealCycle), consignes MAN, force-close UI, indicateur réseau, profit split, exports CSV, modales, disable FP
 // [DÉCOUPE 10 · 09/08/2026] Tranche BYTE-IDENTIQUE de 10-fin-bloc-restauration-v93.js
@@ -31,7 +32,16 @@ function _resolvePaperRealCycle(pair, ps) {
 
   const tf = S.paperRealTimeframe || '15m';
   const arr = (S.realCandles && S.realCandles[pair] && S.realCandles[pair][tf]) || [];
-  if (arr.length < 30) return;
+  // [1b-a · 14/09/2026] FRAÎCHEUR AVANT « nouvelle bougie close » : une série figée ne produit jamais de nouvelle
+  // bougie, donc l'ancien test, placé après `closedTs <= lastSeenTs`, était inatteignable (7 paires EV figées 17 h
+  // le 14/09, DOT/DOGE sous SL 2 jours). Série courte ou périmée → refetch REST (limité en 02) et on attend le vrai.
+  const tfMs = { '5m':300000, '15m':900000, '1h':3600000, '4h':14400000, '1j':86400000 }[tf] || 900000;
+  const stalenessThreshold = Math.max(tfMs * 2.5, 120000);
+  const dataAge = arr.length ? (now - arr[arr.length - 1].ts) : Infinity;
+  if (arr.length < 30 || dataAge > stalenessThreshold) {
+    if (typeof _fetchAndBootstrapRealCandles === 'function') _fetchAndBootstrapRealCandles(pair, tf);
+    return;
+  }
 
   if (arr.length < 2) return;
   const closedTs = arr[arr.length - 2].ts;
@@ -39,16 +49,6 @@ function _resolvePaperRealCycle(pair, ps) {
   if (closedTs <= lastSeenTs) return;
   if (!S.realPairCycle) S.realPairCycle = {};
   S.realPairCycle[pair] = closedTs;
-
-  const tfMs = { '5m':300000, '15m':900000, '1h':3600000, '4h':14400000, '1j':86400000 }[tf] || 900000;
-  const dataAge = now - arr[arr.length - 1].ts;
-  const stalenessThreshold = Math.max(tfMs * 2.5, 120000);
-  if (dataAge > stalenessThreshold) {
-    if (typeof _fetchAndBootstrapRealCandles === 'function') {
-      _fetchAndBootstrapRealCandles(pair, tf);
-    }
-    return;
-  }
 
   const lastCandle = arr[arr.length - 1];
   if (lastCandle && isFinite(lastCandle.o) && lastCandle.o > 0) {
