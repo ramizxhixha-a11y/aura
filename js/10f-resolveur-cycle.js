@@ -1,4 +1,5 @@
-// ▓▓▓ VERSION 20260914a ▓▓▓
+// ▓▓▓ VERSION 20260914b ▓▓▓
+// [1b-a HOTFIX · 14/09/2026 soir] _closeCompleted : une fermeture qui n'aboutit pas n'est plus réessayée à chaque tick (1/60 s), rien n'est enseigné sans fermeture réelle, la raison est journalisée
 // 10f-resolveur-cycle.js — Cœur : _resolvePairCycleCore + sorties bot hors résolution (_botExitSweep) + garde-fou perte max (_lossCapSweep)
 // [1b-a · 14/09/2026] TP/SL/breakeven des positions bot sortis de la résolution → _botExitSweep (battement 08, sur ps.price) ; la résolution écrit _tpPct/_slPct et ne garde que Signal inversé / timeout / hardTime ; _lossCapSweep rebranché par 08 (règle 06/07)
 // [PHASE 1 · 12/09/2026] VOTE PAR PAIRE (PLAN-DIRECTEUR A1) : le consensus des agents (50 % du signal final) lisait a.score,
@@ -584,6 +585,32 @@ if(typeof _resolvePairCycleCore==='function') window._resolvePairCycleCore = _re
 // modes d'arrière-plan 1 tick sur 3), sur ps.price. Cibles : pos._tpPct / pos._slPct écrites par la résolution
 // (conviction + volatilité du moment) ; repli pour une position antérieure : conviction d'ouverture. Sémantique
 // INCHANGÉE : SL immédiat, TP après 5 cycles de détention, breakeven-stop au-delà de 45 % du TP, canBotClose.
+// [1b-a HOTFIX · 14/09/2026 soir] ferme la position et VÉRIFIE qu'elle a disparu de S.openPositions. Sinon : marque
+// pos._exitFailAt (prochain essai dans 60 s), journalise UNE fois (puis 1 fois sur 10) la raison — nom, message et
+// première ligne de pile de l'exception s'il y en a une, ou « sans erreur mais toujours ouverte » — et renvoie false.
+// Source unique pour _botExitSweep et _lossCapSweep. Le journal nomme la racine ; le balayage ne l'amplifie plus.
+function _closeCompleted(pos, label) {
+  if (pos._exitFailAt && (Date.now() - pos._exitFailAt) < 60000) return false;
+  var err = null;
+  try { closePosition(pos.id, pos.auto === true); } catch(e) { err = e; }
+  var gone = !(S.openPositions || []).some(function(p){ return p && p.id === pos.id; });
+  if (gone) return true;
+  pos._exitFailAt = Date.now();
+  pos._exitFails = (pos._exitFails || 0) + 1;
+  var why = err ? (String(err.name || 'Error') + ': ' + String(err.message || err) + ' @ ' + String((err.stack || '').split('\n')[1] || '').trim().slice(0, 90))
+                : 'closePosition sans erreur mais position toujours ouverte';
+  try {
+    if ((pos._exitFails === 1 || pos._exitFails % 10 === 0) && S.chainLog) {
+      S.chainLog.push({ icon: '\u26A0', desc: 'Fermeture non aboutie \u00b7 ' + pos.pair + ' \u00b7 ' + label + ' \u00b7 essai ' + pos._exitFails + ' \u00b7 ' + why,
+        hash: Math.random().toString(36).slice(2, 8), time: new Date().toLocaleTimeString() });
+      if (S.chainLog.length > 100) S.chainLog.splice(0, S.chainLog.length - 100);
+    }
+  } catch(e) {}
+  try { window._decErr && window._decErr(err || new Error('fermeture non aboutie ' + pos.pair)); } catch(e) {}
+  return false;
+}
+window._closeCompleted = _closeCompleted;
+
 window._botExitSweep = function _botExitSweep() {
   try {
     if (!S || !S.openPositions || !S.pairStates) return;
@@ -609,7 +636,13 @@ window._botExitSweep = function _botExitSweep() {
       var minHoldMet = (pos._holdCycles || 0) >= 5;
       if (!(slHit || (minHoldMet && tpHit))) return;
       var why = tpHit ? 'TP +' + tpPct.toFixed(1) + '%' : 'SL \u2212' + slPct.toFixed(1) + '%';
-      try { closePosition(pos.id, true); } catch(e){ try{window._decErr&&window._decErr(e)}catch(_e){} return; }
+      // [1b-a HOTFIX · 14/09/2026 soir] UNE FERMETURE QUI N'ABOUTIT PAS NE SE RÉESSAIE PAS À CHAQUE TICK.
+      // closePosition (02) sauvegarde l'état, incrémente les stats, juge les agents (learnFromOutcome 'position')
+      // PUIS retire la position en dernier : si quelque chose lève entre-temps, la position reste ouverte et ce
+      // balayage (à chaque seconde) recommençait — sauvegarde + stats + pénalité pour tous les agents, ~170 fois
+      // en 3 min : les 9 bots au plancher 50 (capture Rams 14/09 21:58). Désormais : 1 essai / 60 s par position,
+      // et rien n'est enseigné tant que la position n'est pas réellement fermée ; la cause est nommée au journal.
+      if (!_closeCompleted(pos, 'bot ' + why)) return;
       try { learnFromOutcome('trade', pnlPct, pos.pair); } catch(e){ try{window._decErr&&window._decErr(e)}catch(_e){} }
       try { showToast((pnlPct >= 0 ? '\uD83D\uDCB0' : '\uD83D\uDCC9') + ' Bot ' + pos.pair + ' ' + why + ' \u00b7 ' + (pnlPct >= 0 ? '+' : '') + pnlPct.toFixed(2) + '%'); } catch(e) {}
       if (ps) { ps.qYes = 100 + Math.floor(Math.random() * 20); ps.qNo = 100 + Math.floor(Math.random() * 20); }
@@ -648,7 +681,8 @@ window._lossCapSweep = function _lossCapSweep() {
                 if (S.chainLog.length > 100) S.chainLog.splice(0, S.chainLog.length - 100);
               }
             } catch(e){ try{window._decErr&&window._decErr(e)}catch(_e){} }
-            try { closePosition(pos.id, pos.auto === true); } catch(e){ try{window._decErr&&window._decErr(e)}catch(_e){} }
+            // [1b-a HOTFIX · 14/09/2026 soir] même garde que _botExitSweep : 1 essai / 60 s si la fermeture n'aboutit pas
+            if (!_closeCompleted(pos, 'perte max ' + cap.toFixed(1) + '%')) return;
             try { showToast('\u26D4 Perte max \u00b7 ' + pos.pair + ' ' + pnlPct.toFixed(1) + '%', 4000, 'loss'); } catch(e){ try{window._decErr&&window._decErr(e)}catch(_e){} }
           }
         });

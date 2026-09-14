@@ -29,7 +29,7 @@ const between = (s, a, b, what, incl) => {
   const j = s.indexOf(b, i + a.length); assert.ok(j > i, what + ' : ancre fin absente');
   return s.slice(i, incl ? j + b.length : j);
 };
-const HDR = '// [1b-a · 14/09/2026] VERSION ' + TOK;
+const HDR = '// [1b-a · 14/09/2026] VERSION 20260914a';   // 02/08/10g/09b2 livrés au token 20260914a ; 10f suit le token courant (hotfix b)
 console.log('▶ banc-verite-donnees · token ' + TOK);
 
 /* ═══════════════════════════ S · STATIQUE ════════════════════════════ */
@@ -89,7 +89,7 @@ T('S8 · 02 : _realCandlesStale (critère des portes) utilisé au boot, limiteur
   assert.ok(c.includes("window._perfOp('bootstrap:' + pair)"));
   assert.strictEqual(count(c, "'bootstrap candles '"), 0);
 });
-T('S9 · en-têtes 02/08/10g/09b2 « ' + HDR + ' », 10f « ▓▓▓ VERSION ' + TOK + ' ▓▓▓ », HTML : DOC_V + 78 ?v= (79), aucun autre token', () => {
+T('S9 · en-têtes 02/08/10g/09b2 « ' + HDR + ' », 10f « ▓▓▓ VERSION ' + TOK + ' ▓▓▓ » (hotfix), HTML : DOC_V + 78 ?v= (79), aucun autre token', () => {
   for (const [f, s] of [[F02, s02], [F08, s08], [F10G, s10g], [F9B2, s9b2]]) assert.ok(s.startsWith(HDR), f);
   assert.ok(s10f.startsWith('// ▓▓▓ VERSION ' + TOK + ' ▓▓▓'));
   assert.strictEqual(count(html, TOK), 79);
@@ -156,11 +156,12 @@ T('D2 · _resolvePaperRealCycle RÉEL (tête) : série 15m figée depuis 17 h et
 });
 function ctxSweep(S) {
   const closed = [], learned = [], toasts = [];
-  const ctx = { console, Math, Date, isFinite, Number, window: {}, S,
+  const ctx = { console, Math, Date, String, Error, isFinite, Number, window: {}, S,
     closePosition: (id, bot) => { closed.push([id, bot]); S.openPositions = S.openPositions.filter(p => p.id !== id); },
     learnFromOutcome: (src, pnl, pair) => learned.push([src, +pnl.toFixed(2), pair]),
     showToast: t => toasts.push(t) };
   vm.createContext(ctx);
+  vm.runInContext(between(s10f, 'function _closeCompleted(pos, label) {', 'window._closeCompleted = _closeCompleted;', 'closeCompleted', true), ctx);
   vm.runInContext(between(s10f, 'window._botExitSweep = function _botExitSweep() {', '\nwindow._lossCapSweep = function', 'sweep'), ctx);
   return { ctx, closed, learned, toasts, run: () => vm.runInContext('window._botExitSweep()', ctx) };
 }
@@ -197,6 +198,34 @@ T('D3 · _botExitSweep RÉEL : SL immédiat sans résolution, TP seulement aprè
   // (g) sans prix → rien
   s = ctxSweep({ botAutoMode: true, pairStates: { 'X/USDT': { price: 0 } }, openPositions: [pos('g', 'X/USDT', 'long', 100, { _slPct: 0.9 })] });
   s.run(); assert.strictEqual(s.closed.length, 0);
+});
+T('D11 · _closeCompleted / _botExitSweep RÉELS (hotfix) : closePosition qui lève ou ne retire pas → AUCUN learnFromOutcome, 1 essai / 60 s, journal UNE fois avec la raison ; fermeture réussie → learn', () => {
+  const mk = (closeImpl) => {
+    const S = { botAutoMode: true, chainLog: [], pairStates: { 'DOT/USDT': { price: 97.6 } }, openPositions: [{ id: 'z', pair: 'DOT/USDT', side: 'long', entryPrice: 100, stakeUsdt: 10, auto: true, sl: null, _slPct: 0.9, _tpPct: 2.7, _holdCycles: 0 }] };
+    const calls = { close: 0, learn: 0, dec: 0 };
+    const ctx = { console, Math, Date, String, Error, isFinite, Number, window: { _decErr: () => calls.dec++ }, S,
+      closePosition: (id, bot) => { calls.close++; return closeImpl(S, id); }, learnFromOutcome: () => calls.learn++, showToast: () => {} };
+    vm.createContext(ctx);
+    vm.runInContext(between(s10f, 'function _closeCompleted(pos, label) {', 'window._closeCompleted = _closeCompleted;', 'closeCompleted', true), ctx);
+    vm.runInContext(between(s10f, 'window._botExitSweep = function _botExitSweep() {', '\nwindow._lossCapSweep = function', 'sweep'), ctx);
+    return { ctx, calls, S, run: () => vm.runInContext('window._botExitSweep()', ctx) };
+  };
+  // (a) closePosition lève → position toujours là : 1 seul appel malgré 5 ticks, 0 learn, 1 ligne journal avec la raison
+  let t = mk(() => { throw new TypeError("Cannot read properties of undefined (reading 'closedAt')"); });
+  for (let i = 0; i < 5; i++) t.run();
+  assert.strictEqual(t.calls.close, 1); assert.strictEqual(t.calls.learn, 0); assert.strictEqual(t.calls.dec, 1);
+  assert.strictEqual(t.S.chainLog.length, 1); assert.ok(t.S.chainLog[0].desc.includes("TypeError: Cannot read properties of undefined (reading 'closedAt')"), t.S.chainLog[0].desc);
+  assert.ok(t.S.chainLog[0].desc.includes('essai 1'));
+  // 60 s plus tard : un nouvel essai, journal seulement au 10e
+  t.S.openPositions[0]._exitFailAt = Date.now() - 61000; t.run();
+  assert.strictEqual(t.calls.close, 2); assert.strictEqual(t.S.chainLog.length, 1);
+  // (b) closePosition sans erreur mais ne retire pas → même garde, raison explicite
+  t = mk(() => {}); t.run(); t.run();
+  assert.strictEqual(t.calls.close, 1); assert.strictEqual(t.calls.learn, 0);
+  assert.ok(t.S.chainLog[0].desc.includes('sans erreur mais position toujours ouverte'));
+  // (c) fermeture réussie → learn UNE fois, aucune ligne ⚠
+  t = mk((S, id) => { S.openPositions = S.openPositions.filter(p => p.id !== id); }); t.run(); t.run();
+  assert.strictEqual(t.calls.close, 1); assert.strictEqual(t.calls.learn, 1); assert.strictEqual(t.S.chainLog.length, 0);
 });
 P('1c', 'D4 · fusion → l\'héritier porte mémoire + skill du défunt, fitness = moyenne des parents');
 P('1c', 'D5 · 10 rêves → evoLog contient toujours ≥ 1 entrée « new »');

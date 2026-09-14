@@ -34,9 +34,9 @@ console.log('▶ banc-phase1-vote-paire · token ' + TOK + ' · ' + scripts.leng
 
 /* ═══════════════════════════ A · STATIQUE ═══════════════════════════ */
 console.log('\n── A · statique : ce qui est retiré, ce qui est publié ──');
-T('en-têtes : 03/12 « [PHASE 1 · 12/09/2026] VERSION 20260912c », 02/08 relivrés par 1b-a « [1b-a · 14/09/2026] VERSION ' + TOK + ' », 10f « ▓▓▓ VERSION ' + TOK + ' ▓▓▓ »', () => {
+T('en-têtes : 03/12 « [PHASE 1 · 12/09/2026] VERSION 20260912c », 02/08 relivrés par 1b-a « [1b-a · 14/09/2026] VERSION 20260914a », 10f « ▓▓▓ VERSION ' + TOK + ' ▓▓▓ »', () => {
   for (const [f, s] of [[F03, s03], [F12, s12]]) assert.ok(s.startsWith('// [PHASE 1 · 12/09/2026] VERSION 20260912c'), f);
-  for (const [f, s] of [[F02, s02], [F08, s08]]) assert.ok(s.startsWith('// [1b-a · 14/09/2026] VERSION ' + TOK), f);   // [1b-a] 02/08 relivrés, en-tête PHASE 1 conservé en 2e ligne
+  for (const [f, s] of [[F02, s02], [F08, s08]]) assert.ok(s.startsWith('// [1b-a · 14/09/2026] VERSION 20260914a'), f);   // [1b-a] 02/08 relivrés au token 20260914a, en-tête PHASE 1 conservé en 2e ligne
   assert.ok(s10f.startsWith('// ▓▓▓ VERSION ' + TOK + ' ▓▓▓'));
 });
 T('HTML : DOC_V + 78 ?v= au token ' + TOK + ' (79 occurrences), aucun autre token, archive/ non chargé', () => {
