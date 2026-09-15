@@ -1,3 +1,4 @@
+// [SONDE RÉSEAU · 15/09/2026] VERSION 20260915a · gardien des WS : rien hors ligne (window._auraNetOffline), remplacement d'un WS fermé seulement après le backoff partagé _bgNextTry (fin de la tempête ~130 connexions/min)
 // [1b-a · 14/09/2026] VERSION 20260914a · bougies réelles vivantes : filtre outlier non auto-bloquant (_rcOutlier, référence = dernier prix accepté < 5 min, plus jamais le close 5m), bootstrap REST au boot pour toute série périmée (_realCandlesStale, limiteur 90 s), référence rafraîchie après bootstrap
 // [PHASE 1 · 12/09/2026] VERSION 20260912c · appel _cgT('liveTrainAgents') retiré du traitement CoinGecko (fonction retirée de 03, archivée)
 // [P0 RÉGIME UNIFIÉ · 05/09/2026] detectMarketRegime() = SOURCE UNIQUE du régime, consommée partout (header, portes S2, risque, grâce, cockpit, exports). S._paperRealCurrentRegime (photo périmée des cycles EV) supprimé de tout le code chargé. Correctif interne : volatilité moyennée sur volCount (paires avec bougies) et non plus sur countValid (paires avec pnl24h). Mode Démo : force le régime via S._regimeOverride (posé/retiré par enterDemoMode/exitDemoMode dans 05).
@@ -4627,8 +4628,10 @@ function _openBgWs(pair) {
   };
 }
 
+var _bgNextTry = {};   // [SONDE RÉSEAU · 15/09/2026] prochain essai autorisé par paire — backoff PARTAGÉ entre le retry onclose et le gardien 5 s
 function _scheduleBgRetryFor(pair) {
   const delay = _bgCollectorRetryByPair[pair] || 1000;
+  _bgNextTry[pair] = Date.now() + delay;
   setTimeout(() => {
     let stillNeed = false;
     if (S.tradingMode === 'real') {
@@ -4786,22 +4789,35 @@ function _bgCollectorHealthCheck() {
     try { _startBgCollector(); } catch(e) {}
     return;  // _startBgCollector va faire le travail, on revérifiera au prochain tick
   }
+  // [SONDE RÉSEAU · 15/09/2026] TEMPÊTE DE RECONNEXIONS ÉTEINTE : ce gardien remplaçait chaque WS fermé toutes les
+  // 5 s, pour 11 paires, en plus du retry onclose (qui, lui, doublait jusqu'à 60 s) → ~130 connexions/min pendant
+  // une coupure, au-delà de la limite Binance (300 connexions / 5 min / IP). Désormais : rien tant que le garde
+  // réseau (01) dit hors ligne, et un remplacement seulement après le délai de backoff de la paire (_bgNextTry).
+  if (window._auraNetOffline) return;
+  const _nowHC = Date.now();
   let revived = 0;
   pairsToWatch.forEach(pair => {
     const ws = _bgCollectorWSMap[pair];
-    // Cas 1 : pas de WS du tout pour cette paire → en créer un
+    // Cas 1 : pas de WS du tout pour cette paire → en créer un (après le backoff)
     if (!ws) {
+      if (_nowHC < (_bgNextTry[pair] || 0)) return;
+      _bgNextTry[pair] = _nowHC + (_bgCollectorRetryByPair[pair] || 1000);
+      _bgCollectorRetryByPair[pair] = Math.min(60000, (_bgCollectorRetryByPair[pair] || 1000) * 2);
       _openBgWs(pair);
       revived++;
       return;
     }
+    if (ws.readyState === 1) { _bgCollectorRetryByPair[pair] = 1000; }
     // Cas 2 : WS existe mais pas OPEN (peut être CONNECTING, CLOSING, CLOSED)
     // readyState : 0=CONNECTING, 1=OPEN, 2=CLOSING, 3=CLOSED
     if (ws.readyState !== 1) {
       // Si en état CLOSED ou CLOSING, on le remplace
       if (ws.readyState === 2 || ws.readyState === 3) {
+        if (_nowHC < (_bgNextTry[pair] || 0)) return;   // [SONDE RÉSEAU] le retry onclose est déjà programmé, ou backoff en cours
         try { ws.onclose = null; ws.close(); } catch(e) {}
         delete _bgCollectorWSMap[pair];
+        _bgNextTry[pair] = _nowHC + (_bgCollectorRetryByPair[pair] || 1000);
+        _bgCollectorRetryByPair[pair] = Math.min(60000, (_bgCollectorRetryByPair[pair] || 1000) * 2);
         _openBgWs(pair);
         revived++;
       }
@@ -4810,8 +4826,11 @@ function _bgCollectorHealthCheck() {
       else if (ws.readyState === 0) {
         const createdAt = ws._createdAt || 0;
         if (createdAt > 0 && (Date.now() - createdAt) > 15000) {
+          if (_nowHC < (_bgNextTry[pair] || 0)) return;   // [SONDE RÉSEAU] backoff
           try { ws.onclose = null; ws.close(); } catch(e) {}
           delete _bgCollectorWSMap[pair];
+          _bgNextTry[pair] = _nowHC + (_bgCollectorRetryByPair[pair] || 1000);
+          _bgCollectorRetryByPair[pair] = Math.min(60000, (_bgCollectorRetryByPair[pair] || 1000) * 2);
           _openBgWs(pair);
           revived++;
         }

@@ -34,10 +34,11 @@ console.log('▶ banc-phase1-vote-paire · token ' + TOK + ' · ' + scripts.leng
 
 /* ═══════════════════════════ A · STATIQUE ═══════════════════════════ */
 console.log('\n── A · statique : ce qui est retiré, ce qui est publié ──');
-T('en-têtes : 03/12 « [PHASE 1 · 12/09/2026] VERSION 20260912c », 02/08 relivrés par 1b-a « [1b-a · 14/09/2026] VERSION 20260914a », 10f « ▓▓▓ VERSION ' + TOK + ' ▓▓▓ »', () => {
+T('en-têtes : 03/12 « [PHASE 1 · 12/09/2026] VERSION 20260912c », 02/08 relivrés par 1b-a « [1b-a · 14/09/2026] VERSION 20260914a », 10f « ▓▓▓ VERSION 20260914b ▓▓▓ »', () => {
   for (const [f, s] of [[F03, s03], [F12, s12]]) assert.ok(s.startsWith('// [PHASE 1 · 12/09/2026] VERSION 20260912c'), f);
-  for (const [f, s] of [[F02, s02], [F08, s08]]) assert.ok(s.startsWith('// [1b-a · 14/09/2026] VERSION 20260914a'), f);   // [1b-a] 02/08 relivrés au token 20260914a, en-tête PHASE 1 conservé en 2e ligne
-  assert.ok(s10f.startsWith('// ▓▓▓ VERSION ' + TOK + ' ▓▓▓'));
+  assert.ok(s08.startsWith('// [1b-a · 14/09/2026] VERSION 20260914a'), F08);   // [1b-a] 08 relivré au token 20260914a, en-tête PHASE 1 conservé en 2e ligne
+  assert.ok(s02.startsWith('// [SONDE RÉSEAU · 15/09/2026] VERSION 20260915a') && s02.split('\n')[1].startsWith('// [1b-a · 14/09/2026] VERSION 20260914a'), F02);   // [SONDE RÉSEAU] 02 relivré, en-tête 1b-a en 2e ligne
+  assert.ok(s10f.startsWith('// ▓▓▓ VERSION 20260914b ▓▓▓'));   // 10f livré au hotfix 1b-a (b), non retouché depuis
 });
 T('HTML : DOC_V + 78 ?v= au token ' + TOK + ' (79 occurrences), aucun autre token, archive/ non chargé', () => {
   assert.strictEqual(count(html, TOK), 79);

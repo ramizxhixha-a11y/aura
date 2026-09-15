@@ -16,7 +16,9 @@ const ROOT = __dirname;
 const rd = f => fs.readFileSync(path.join(ROOT, f), 'utf8');
 const TOK = (() => { const m = rd('AURA8_v118.html').match(/DOC_V = '(\d{8}[a-z])'/); if (!m) { console.error('DOC_V introuvable'); process.exit(2); } return m[1]; })();
 let pass = 0, fail = 0, pend = 0;
-function T(name, fn) { try { fn(); pass++; console.log('  ✅ ' + name); } catch (e) { fail++; console.log('  ❌ ' + name + '\n     ' + (e && e.stack || e).toString().split('\n').slice(0, 3).join('\n     ')); } }
+const _queue = [];
+function T(name, fn) { _queue.push([name, fn]); }
+async function _runQueue() { for (const [name, fn] of _queue) { try { await fn(); pass++; console.log('  ✅ ' + name); } catch (e) { fail++; console.log('  ❌ ' + name + '\n     ' + (e && e.stack || e).toString().split('\n').slice(0, 3).join('\n     ')); } } }
 function P(phase, name) { pend++; console.log('  ⏳ ' + name + '  ← en attente de ' + phase); }
 const F02 = 'js/02-state-init.js', F08 = 'js/08-learning-history-render.js', F10F = 'js/10f-resolveur-cycle.js',
       F10G = 'js/10g-resolveur-ev-csv.js', F9B2 = 'js/09b2-save-load.js';
@@ -89,9 +91,10 @@ T('S8 · 02 : _realCandlesStale (critère des portes) utilisé au boot, limiteur
   assert.ok(c.includes("window._perfOp('bootstrap:' + pair)"));
   assert.strictEqual(count(c, "'bootstrap candles '"), 0);
 });
-T('S9 · en-têtes 02/08/10g/09b2 « ' + HDR + ' », 10f « ▓▓▓ VERSION ' + TOK + ' ▓▓▓ » (hotfix), HTML : DOC_V + 78 ?v= (79), aucun autre token', () => {
-  for (const [f, s] of [[F02, s02], [F08, s08], [F10G, s10g], [F9B2, s9b2]]) assert.ok(s.startsWith(HDR), f);
-  assert.ok(s10f.startsWith('// ▓▓▓ VERSION ' + TOK + ' ▓▓▓'));
+T('S9 · en-têtes 02/08/10g/09b2 « ' + HDR + ' », 10f « ▓▓▓ VERSION 20260914b ▓▓▓ » (hotfix b), HTML : DOC_V + 78 ?v= (79), aucun autre token', () => {
+  for (const [f, s] of [[F08, s08], [F10G, s10g]]) assert.ok(s.startsWith(HDR), f);
+  for (const [f, s] of [[F02, s02], [F9B2, s9b2]]) assert.ok(s.startsWith('// [SONDE RÉSEAU · 15/09/2026] VERSION 20260915a') && s.split('\n')[1].startsWith(HDR), f);   // [SONDE RÉSEAU] relivrés, en-tête 1b-a en 2e ligne
+  assert.ok(s10f.startsWith('// ▓▓▓ VERSION 20260914b ▓▓▓'));   // 10f livré au hotfix b, non retouché depuis
   assert.strictEqual(count(html, TOK), 79);
   assert.strictEqual((html.match(/\?v=\d{8}[a-z]/g) || []).length, 78);
   assert.strictEqual((html.match(/\?v=\d{8}[a-z]/g) || []).filter(t => t !== '?v=' + TOK).length, 0);
@@ -227,6 +230,51 @@ T('D11 · _closeCompleted / _botExitSweep RÉELS (hotfix) : closePosition qui l�
   t = mk((S, id) => { S.openPositions = S.openPositions.filter(p => p.id !== id); }); t.run(); t.run();
   assert.strictEqual(t.calls.close, 1); assert.strictEqual(t.calls.learn, 1); assert.strictEqual(t.S.chainLog.length, 0);
 });
+T('S10 · sonde réseau : 01 classe chaque ping (perfLog.net, HTTP ≥ 400 = échec, témoin CoinGecko, journal 📵/📶, _auraNetOffline) ; 02 gardien WS sans tempête (_bgNextTry, rien hors ligne) ; 09b1/09b2 portent perfLog.net', () => {
+  const s01 = rd('js/01-chrono-network.js'), s9b1 = rd('js/09b1-build-snapshot.js');
+  const c01 = codeStrict(s01), c02 = codeStrict(s02);
+  assert.ok(s01.includes("_netProbe('https://api.binance.com/api/v3/ping', 5000)"));   // source brute : codeStrict tronque les URL (//)
+  assert.ok(s01.includes("_netProbe('https://api.coingecko.com/api/v3/ping', 5000)"));
+  assert.ok(c01.includes("kind: r.ok ? 'ok' : 'http'"), 'statut HTTP classé');
+  assert.ok(c01.includes("window._auraNetOffline = (sNew === 'offline')"));
+  assert.strictEqual(count(c01, "P.net.push(entry)"), 1);
+  assert.ok(c02.includes("if (window._auraNetOffline) return;"), '02 : rien hors ligne');
+  assert.strictEqual(count(c02, "_bgNextTry[pair] = _nowHC + (_bgCollectorRetryByPair[pair] || 1000);"), 3, '3 branches du gardien sous backoff');
+  assert.ok(c02.includes("_bgNextTry[pair] = Date.now() + delay;"), 'retry onclose partage le backoff');
+  assert.ok(codeStrict(s9b1).includes("net:   Array.isArray(p.net)   ? p.net.slice(-60)   : []"));
+  assert.ok(codeStrict(s9b2).includes("net:   Array.isArray(_pl.net)   ? _pl.net.slice(-60)   : []"));
+});
+T('D12 · _netPing RÉEL (fetch simulé) : 418 → échec classé http 418 ; 2 échecs → témoin CoinGecko + journal 📵 « Binance seul injoignable » + hors ligne ; retour ok → journal 📶 avec la durée', async () => {
+  const s01 = rd('js/01-chrono-network.js');
+  const block = between(s01, 'var _pingFails = 0, _netOffSince = 0;', 'window._netPing = _netPing;', 'ping', true);
+  const S = { perfLog: {}, chainLog: [] }, net = [];
+  const responses = {};   // url → fn() → Promise<Response>|throw
+  const ctx = { console, Math, Date, String, Promise, Array, setTimeout, clearTimeout, AbortController, navigator: { onLine: true },
+    window: { S }, _setNet: (st) => net.push(st),
+    fetch: (url) => responses[url]() };
+  vm.createContext(ctx); vm.runInContext(block, ctx);
+  const tick = () => new Promise(r => setTimeout(r, 15));
+  responses['https://api.binance.com/api/v3/ping'] = () => Promise.resolve({ ok: false, status: 418 });
+  responses['https://api.coingecko.com/api/v3/ping'] = () => Promise.resolve({ ok: true, status: 200 });
+  vm.runInContext('_netPing()', ctx); await tick();
+  assert.deepStrictEqual(net, [], '1er échec : pas encore hors ligne');
+  assert.strictEqual(S.perfLog.net.length, 1); assert.strictEqual(S.perfLog.net[0].kind, 'http'); assert.strictEqual(S.perfLog.net[0].status, 418);
+  vm.runInContext('_netPing()', ctx); await tick(); await tick();
+  assert.deepStrictEqual(net, ['offline'], '2e échec : hors ligne');
+  assert.strictEqual(S.perfLog.net[1].cg, 'ok 200');
+  assert.strictEqual(S.chainLog.length, 1); assert.ok(S.chainLog[0].desc.includes('Binance http 418') && S.chainLog[0].desc.includes('Binance seul injoignable'), S.chainLog[0].desc);
+  vm.runInContext('_netPing()', ctx); await tick(); await tick();
+  assert.strictEqual(S.chainLog.length, 1, 'pas de 2e ligne 📵 tant que la coupure dure');
+  responses['https://api.binance.com/api/v3/ping'] = () => Promise.resolve({ ok: true, status: 200 });
+  vm.runInContext('_netPing()', ctx); await tick();
+  assert.strictEqual(net[net.length - 1], 'online');
+  assert.strictEqual(S.chainLog.length, 2); assert.ok(S.chainLog[1].desc.includes('tabli apr'), S.chainLog[1].desc);
+  // réseau du tablet coupé : Binance error + CoinGecko error
+  responses['https://api.binance.com/api/v3/ping'] = () => Promise.reject(new TypeError('Failed to fetch'));
+  responses['https://api.coingecko.com/api/v3/ping'] = () => Promise.reject(new TypeError('Failed to fetch'));
+  vm.runInContext('_netPing()', ctx); await tick(); vm.runInContext('_netPing()', ctx); await tick(); await tick();
+  assert.ok(S.chainLog[2].desc.includes('seau du tablet coup') && S.chainLog[2].desc.includes('error (Failed to fetch)'), S.chainLog[2].desc);
+});
 P('1c', 'D4 · fusion → l\'héritier porte mémoire + skill du défunt, fitness = moyenne des parents');
 P('1c', 'D5 · 10 rêves → evoLog contient toujours ≥ 1 entrée « new »');
 P('1c', 'D6 · chargement d\'un snapshot avec 200 learningHistory → les 80 PLUS RÉCENTS survivent');
@@ -254,5 +302,7 @@ T('D10 · _realCandlesStale RÉEL = critère des portes : < 30 bougies → péri
   assert.strictEqual(vm.runInContext("_realCandlesStale('Z/USDT', '15m')", ctx), true, 'paire absente = périmée');
 });
 
-console.log('\n' + (fail ? '❌ ' : '✅ ') + pass + '/' + (pass + fail) + ' tests passés' + (fail ? ' — ' + fail + ' ÉCHEC(S)' : '') + ' · ' + pend + ' en attente (1c / 1b-b)');
-process.exit(fail ? 1 : 0);
+_runQueue().then(() => {
+  console.log('\n' + (fail ? '❌ ' : '✅ ') + pass + '/' + (pass + fail) + ' tests passés' + (fail ? ' — ' + fail + ' ÉCHEC(S)' : '') + ' · ' + pend + ' en attente (1c / 1b-b)');
+  process.exit(fail ? 1 : 0);
+});

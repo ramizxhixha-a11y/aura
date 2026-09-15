@@ -1,3 +1,4 @@
+// [SONDE RÉSEAU · 15/09/2026] VERSION 20260915a · chaque ping Binance classé (ok / http STATUT / abort / error) dans S.perfLog.net ; témoin CoinGecko au passage hors ligne ; HTTP ≥ 400 = échec ; journal 📵/📶 ; window._auraNetOffline
 // [CHRONOS PAR MODE · TERMINE 26/07/2026] chaque mode en play compte SA seconde (le temps des modes d arriere-plan n est plus perdu) + la marche du chrono ne se deduit plus du texte d un bouton (cause des chronos qui demarraient et s arretaient) + bouton play toujours synchronise apres bascule · [PERF BASCULE 26/07/2026] renderAll() differe au changement de mode : le bouton, le badge et le chrono repondent immediatement au lieu d attendre le repaint complet · [NETTOYAGE PERF 26/07/2026] verrou d ecran SUPPRIME (minuterie 15 s ajoutee sans besoin exprime) · [ex-VERROU ECRAN] Wake Lock : tant qu AURA est au premier plan avec un mode en play, l ecran ne s eteint plus (Android ne gele plus les horloges) — signature chainLog au verrouillage · [SIMULTANE · ETAPE 1 · 06/07/2026] le moteur bat tant qu AU MOINS UN mode est en play : pause de l ecran n arrete plus les modes d arriere-plan ; play rejoint le battement ; reprise au boot si un mode quelconque vivait
 // [FIX] detection reseau REELLE (ping Binance 20s + events) : coupure => temoin ROUGE clignotant + trading en PAUSE + play bloque ; retour => vert + reprise AUTO du mode pause (navigator.onLine seul etait non fiable sur Android) · 02/07/2026
 // [FIX] play/pause PAR MODE STRICT retabli : play dans un mode n affecte JAMAIS les deux autres (annule le play global du 01/07) + one-shot remise en pause des drapeaux pollues + purge cle legacy aura_sim_running · 02/07/2026
@@ -113,6 +114,7 @@ window._auraGetGlobalS = _auraGetGlobalS;
   // consecutifs => OFFLINE (temoin rouge + pause du trading) ; 1 succes =>
   // ONLINE (temoin vert + reprise auto du mode qui avait ete pause).
   function _setNet(sNew) {
+    try { window._auraNetOffline = (sNew === 'offline'); } catch(e) {}   // [SONDE RÉSEAU] lu par le gardien des WS (02) : pas de tempête de reconnexions hors ligne
     if (state.netStatus === sNew) return;
     var prev = state.netStatus;
     state.netStatus = sNew;
@@ -138,14 +140,71 @@ window._auraGetGlobalS = _auraGetGlobalS;
     }
   }
 
-  var _pingFails = 0;
-  function _netPing() {
-    var ctl = null, to = null;
-    try { ctl = new AbortController(); to = setTimeout(function(){ try { ctl.abort(); } catch(e) {} }, 5000); } catch(e) {}
-    fetch('https://api.binance.com/api/v3/ping', ctl ? { signal: ctl.signal, cache: 'no-store' } : { cache: 'no-store' })
-      .then(function(){ if (to) clearTimeout(to); _pingFails = 0; _setNet('online'); })
-      .catch(function(){ if (to) clearTimeout(to); _pingFails++; if (_pingFails >= 2 || navigator.onLine === false) _setNet('offline'); });
+  // ═══ [SONDE RÉSEAU · 15/09/2026] LE PING DIT POURQUOI IL ÉCHOUE ═══
+  // Backups des 14 et 15/09 : ~11 h sur 21 perdues en « pauses » du garde réseau (trous de 62, 104, 139 min), le
+  // JS vivant (heap toutes les 10 min), 0 message WS, plus une ligne CoinGecko non plus — sans qu'on puisse dire si
+  // c'est le réseau du tablet, un blocage Binance (418/429) ou la couche réseau du WebView : le ping ne journalisait
+  // rien. Désormais chaque ping est classé (ok / http STATUT / abort 5 s / error) et consigné dans S.perfLog.net
+  // (60 derniers, sauvegardés) ; au passage hors ligne, un SECOND témoin (CoinGecko) tranche « Binance seul » vs
+  // « réseau du tablet coupé », et le journal l'écrit ; au retour, la durée de la coupure. Changement de règle : un
+  // statut HTTP ≥ 400 (418/429 = IP bloquée par Binance) compte comme un échec — avant il comptait comme « en ligne »
+  // alors qu'aucune kline ni WS ne pouvait passer.
+  var _pingFails = 0, _netOffSince = 0;
+  function _netLog(entry) {
+    try {
+      var P = window.S && window.S.perfLog; if (!P) return;
+      if (!Array.isArray(P.net)) P.net = [];
+      P.net.push(entry); if (P.net.length > 60) P.net.splice(0, P.net.length - 60);
+    } catch(e) {}
   }
+  function _netJournal(icon, desc) {
+    try {
+      var S0 = window.S; if (!S0 || !Array.isArray(S0.chainLog)) return;
+      S0.chainLog.push({ icon: icon, desc: desc, hash: Math.random().toString(36).slice(2, 8), time: new Date().toLocaleTimeString() });
+      if (S0.chainLog.length > 100) S0.chainLog.splice(0, S0.chainLog.length - 100);
+    } catch(e) {}
+  }
+  function _netProbe(url, ms) {
+    return new Promise(function(res){
+      var t0 = Date.now(), ctl = null, to = null;
+      try { ctl = new AbortController(); to = setTimeout(function(){ try { ctl.abort(); } catch(e) {} }, ms); } catch(e) {}
+      var done = function(o){ if (to) clearTimeout(to); res(o); };
+      try {
+        fetch(url, ctl ? { signal: ctl.signal, cache: 'no-store' } : { cache: 'no-store' })
+          .then(function(r){ done({ ok: !!r.ok, kind: r.ok ? 'ok' : 'http', status: r.status || 0, ms: Date.now() - t0 }); })
+          .catch(function(e){ done({ ok: false, kind: (e && e.name === 'AbortError') ? 'abort' : 'error', status: 0, ms: Date.now() - t0, err: String(e && e.message || e).slice(0, 60) }); });
+      } catch(e) { done({ ok: false, kind: 'error', status: 0, ms: 0, err: String(e && e.message || e).slice(0, 60) }); }
+    });
+  }
+  function _netKind(b) { return b.kind + (b.status ? ' ' + b.status : '') + (b.err ? ' (' + b.err + ')' : ''); }
+  function _netPing() {
+    _netProbe('https://api.binance.com/api/v3/ping', 5000).then(function(b){
+      var entry = { t: Date.now(), ok: b.ok, kind: b.kind, status: b.status, ms: b.ms };
+      if (b.err) entry.err = b.err;
+      if (b.ok) {
+        if (_netOffSince) {
+          entry.back = Math.round((Date.now() - _netOffSince) / 60000);
+          _netJournal('\uD83D\uDCF6', 'R\u00e9seau r\u00e9tabli apr\u00e8s ' + entry.back + ' min \u00b7 Binance ok en ' + b.ms + ' ms');
+          _netOffSince = 0;
+        }
+        _pingFails = 0; _netLog(entry); _setNet('online'); return;
+      }
+      _pingFails++;
+      var browserOff = (typeof navigator !== 'undefined' && navigator.onLine === false);
+      if (_pingFails >= 2 || browserOff) {
+        _netProbe('https://api.coingecko.com/api/v3/ping', 5000).then(function(c){
+          entry.cg = _netKind(c);
+          _netLog(entry);
+          if (!_netOffSince) {
+            _netOffSince = Date.now();
+            _netJournal('\uD83D\uDCF5', 'R\u00e9seau \u00b7 Binance ' + _netKind(b) + ' \u00d7' + _pingFails + (browserOff ? ' \u00b7 navigateur hors ligne' : '') + ' \u00b7 CoinGecko ' + entry.cg + ' \u2192 ' + (c.ok ? 'Binance seul injoignable' : 'r\u00e9seau du tablet coup\u00e9') + ' \u00b7 trading en pause');
+          }
+          _setNet('offline');
+        });
+      } else { _netLog(entry); }
+    });
+  }
+  window._netPing = _netPing;
 
   function onNetworkChange() {
     // L'event 'offline' du navigateur est fiable DANS CE SENS ; 'online' ne

@@ -1,3 +1,4 @@
+// [SONDE RÉSEAU · 15/09/2026] VERSION 20260915a · applySnap relit perfLog.net
 // [1b-a · 14/09/2026] VERSION 20260914a · GBP/USDT (retirée de Binance le 29/12/2023) désactivée en EV/RE à chaque chargement (_evRetireDelisted)
 // [GEL BOOT · 11/09/2026] VERSION 20260911b · loadState relit perfLog.loaf
 // [GEL BOOT · 11/09/2026] VERSION 20260911a · applySnap relit perfLog (+ manifeste) · db.close() sur toute connexion openDB() de ce fichier (saveState toutes les 25 s ouvrait une connexion IDB neuve jamais fermée : ~144/h)
@@ -398,7 +399,8 @@ async function loadState() {
           lent:  Array.isArray(_pl.lent)  ? _pl.lent.slice(-30)  : [],
           heap:  Array.isArray(_pl.heap)  ? _pl.heap.slice(-144) : [],
           boots: Array.isArray(_pl.boots) ? _pl.boots.slice(-20) : [],
-          loaf:  Array.isArray(_pl.loaf)  ? _pl.loaf.slice(-20)  : []
+          loaf:  Array.isArray(_pl.loaf)  ? _pl.loaf.slice(-20)  : [],
+          net:   Array.isArray(_pl.net)   ? _pl.net.slice(-60)   : []    // [SONDE RÉSEAU · 15/09/2026]
         };
       }
     } catch(e) {}
