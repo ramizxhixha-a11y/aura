@@ -114,4 +114,6 @@ Une régression de vérité = `VERDICT : NON LIVRABLE`, jamais « CONNU, tolér�
 ## 7. Journal des vérifications
 - **15/09 18:04 — 1b-a vérifiée** (backup cycle 605 942) : 11/11 paires EV avec bougie 15m de 4 min (14/09 : 3/12) ; 5m vivantes ; 0 position zombie ; 17 trades EV/24 h sur 5 paires nouvelles ; equity plate. **Réfuté dans ce même backup** : la stabilité — ~11 h sur 21 sans trading (05:28→09:24, 10:48→18:03), CoinGecko et Binance muets ensemble, JS vivant → cause non nommable (le ping ne journalisait rien, un 418 comptait « en ligne »). Livré : sonde réseau `20260915a` (§2 sondes à ajouter : ping = fait ; bouton 15 s et `boots[].doc` restent).
 
+- **15/09 soir — 1c-lite + veille CSS livrées** (`20260915b`) : #19 partiellement (regimeFitness du siège, types restaurés ; héritage mémoire/skill = décision Rams, banc 06/09), #20 (1/h), #21 (1/jour), #22 (cutEnd), §2 veille écran. Restent : #4-#8 (1b-b), #19 héritage, #23-#24, bouton 15 s, `boots[].doc`.
+
 *Mis à jour à chaque mission. Le prochain audit complet : après 1b-b, sur un backup de 24 h propre.*

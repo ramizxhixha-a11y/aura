@@ -1,3 +1,29 @@
+// [1c-LITE · 15/09/2026] VERSION 20260915b · évolution 1/h (était 1/min), type/source du siège restaurés (_SEAT_DEF), regimeFitness du siège conservée (plus clonée des parents), rêve 1/jour (était 4 min)
+// [1c-LITE · 15/09/2026] type/source d'origine des 21 sièges signal (littéral initial de 02) — la logique de vote est par id (03)
+const _SEAT_DEF = {
+  'macro_v1': { type: 'Linear·FRED', source: 'Fed/BCE/FMI' },
+  'fundamental_v1': { type: 'Quant·Alpha', source: 'Bloomberg/AlphaV' },
+  'nlp_v1': { type: 'NLP·BERT-fin', source: 'News/Earnings' },
+  'sentiment_v2': { type: 'NLP·BERT', source: 'Twitter/Reddit' },
+  'volume_v1': { type: 'Stat·OBV', source: 'Binance/OB' },
+  'volatility_v1': { type: 'Stat·GARCH', source: 'Price/Options' },
+  'corr_v1': { type: 'Stat·PCA', source: 'Multi-Asset' },
+  'geopolitic_v1': { type: 'LLM·GPT-4', source: 'GDELT/News' },
+  'onchain_v1': { type: 'Graph·Anomaly', source: 'Etherscan/Glassn' },
+  'security_v1': { type: 'Anomaly·Forta', source: 'Forta/CertiK' },
+  'whale_v1': { type: 'On-Chain·L2', source: 'Mempool·DEX' },
+  'breakout_v1': { type: 'Range·ATR', source: 'Price·Structure' },
+  'harmonic_v1': { type: 'Multi·Align', source: 'Tech·Indicators' },
+  'flow_v1': { type: 'L2·Microstruct', source: 'OrderBook·Depth' },
+  'momentum_v1': { type: 'RSI·MACD·EMA', source: 'Price·Candles' },
+  'mean_rev_v1': { type: 'Z-Score·Bands', source: 'Price·Variance' },
+  'scalper_v2': { type: 'Momentum·5min', source: 'LMSR·Price' },
+  'swing_v2': { type: 'Cycles·1h-4h', source: 'MACD·ADX' },
+  'contrarian_v2': { type: 'Fade·Extremes', source: 'RSI·Sentiment' },
+  'trend_v2': { type: 'ADX·EMA·Cross', source: 'Price·Structure' },
+  'hedge_v2': { type: 'Risk·Off·Defender', source: 'Vol·Macro' }
+};
+window._SEAT_DEF = _SEAT_DEF;
 // [SKILL BORNÉ · 06/09/2026] VERSION 20260906i — triggerEvolution : reset agentPairSkill + discipleTaskSkill du siège recyclé après copie à l'héritier (fin de l'explosion exponentielle)
 // [P0 RÉGIME UNIFIÉ · 05/09/2026] lectures de régime en direct via detectMarketRegime() (source unique, 02) ; fantôme S.regime (jamais écrit) supprimé.
 // [PRIX HOLD FLUIDES · 02/08/2026] tous les prix affiches a 2 decimales (priceStr HOLD 3447, priceStr2, curStr badge, priceStr trades) au lieu de Math.floor -> SOL $73 devient $73.14 et les mouvements <$1 redeviennent visibles (avant "bloque a 73") · updater mort ac2_price_ (id inexistant) retire, le prix HOLD passe par ac2_px_
@@ -2640,7 +2666,10 @@ function triggerEvolution(weak) {
   // 2 fusions/seconde) : 1 fusion / 60 s MAX. Avant ~19/min → allocations ADN + agents +
   // journal en continu → churn → pauses GC de plusieurs secondes (diagnostic Guardian).
   // 60 fusions/h suffisent largement — intelligence par la PROFONDEUR, pas le volume.
-  const _EVO_COOLDOWN_MS = 60000;
+  // [1c-LITE · 15/09/2026] 60 s → 1 h. Audit 14/09 : 95 013 générations, ~60 fusions/h, chaque siège recyclé toutes
+  // les ~5 h → fitness 350, mémoire et compétence-paire perdues avant d'avoir servi (loi 4). Or la logique de vote
+  // est PAR SIÈGE (switch sur l'id, 03) : la « fusion » ne change que nom/score/conf. 1 fusion/h = 24/jour, assez.
+  const _EVO_COOLDOWN_MS = 3600000;
   if(S._lastEvolutionAt && (Date.now() - S._lastEvolutionAt) < _EVO_COOLDOWN_MS) return;
   const candidates = [...S.agents].filter(a=>!a.isBot&&!a.isMeta&&a.id!==weak.id)
                                    .sort((a,b)=>b.fitness-a.fitness);
@@ -2691,8 +2720,12 @@ function triggerEvolution(weak) {
   // Croisement génétique adaptatif
   weak.name    = `Hybrid Gen-${genNum}`;
   weak.emoji   = '🧬';
-  weak.type    = p1.type.split('·')[0].trim()+'·'+p2.type.split('·')[0].trim();
-  weak.source  = p1.source.split('/')[0]+'/'+p2.source.split('/')[0];
+  // [1c-LITE · 15/09/2026] type/source = ceux de la logique du siège (02, littéral initial), plus la concaténation
+  // des parents qui convergeait vers « Fade·Fade / RSI·Sentiment » pour les 21 sièges (la logique de vote n'a
+  // jamais changé : c'est l'id qui décide, 03). Siège inconnu de la carte : ancien comportement.
+  const _sd = (typeof _SEAT_DEF !== 'undefined') ? _SEAT_DEF[weak.id] : null;
+  weak.type    = _sd ? _sd.type   : (p1.type.split('·')[0].trim()+'·'+p2.type.split('·')[0].trim());
+  weak.source  = _sd ? _sd.source : (p1.source.split('/')[0]+'/'+p2.source.split('/')[0]);
   weak.role    = 'hybrid';
   // Fitness de départ 350 (au-dessus du seuil d'élimination de 300) + marqueur de
   // naissance : sans ça, l'hybride naissait à 120 (sous le seuil) et était retraité
@@ -2738,7 +2771,10 @@ function triggerEvolution(weak) {
     });
     return merged;
   };
-  weak.regimeFitness = mergeRegimeFit(p1.regimeFitness, p2.regimeFitness);
+  // [1c-LITE · 15/09/2026] la fitness par régime reste celle DU SIÈGE (son vécu, même logique de vote) — plus la
+  // copie pondérée des parents : les 21 sièges affichaient « calm 282/498 » identique, une mémoire clonée, pas vécue.
+  weak.regimeFitness = (weak.regimeFitness && typeof weak.regimeFitness === 'object') ? weak.regimeFitness : {};
+  void mergeRegimeFit;
 
   if(S.evoLog.length > 50) S.evoLog.splice(0, S.evoLog.length - 50);
   S.evoLog.push({ type:'new', title:'🧬 '+weak.name+' déployé', desc:`${_nbParents} parents (div ${_diversity.toFixed(2)}) : ${_parentNames} | Gen-${genNum}`, time:nowStr() });
@@ -2780,7 +2816,10 @@ function triggerDreamCycle() {
   // redéclenché dès 5 holds consécutifs ≈ toutes les ~40 s en régime CALM : 3 scénarios
   // simulés + allocations à chaque fois → churn → pauses GC). Le garde vit ICI pour couvrir
   // tous les chemins d'appel.
-  const _DREAM_COOLDOWN_MS = 240000;
+  // [1c-LITE · 15/09/2026] 4 min → 24 h. En EV « hold » est l'état normal entre deux bougies : le rêve repartait
+  // toutes les 4 min (15/h, id figé #11), inondait evoLog (50/50 = rêves, généalogie effacée en 1 h) et ratchetait
+  // ps.threshold à 0,82. Un rêve par jour suffit à ce qu'il fait (3 scénarios de stress).
+  const _DREAM_COOLDOWN_MS = 86400000;
   if(S._lastDreamAt && (Date.now() - S._lastDreamAt) < _DREAM_COOLDOWN_MS) return;
   S._lastDreamAt  = Date.now();
   S.dreamActive   = true;

@@ -75,8 +75,37 @@ T('S4 · 10f : aucune vérification TP/SL dans _resolvePairCycleCore (écrit _tp
   assert.strictEqual(count(s10f, 'window._lossCapSweep = function _lossCapSweep()'), 1);
   assert.strictEqual(count(html, '10-fin-bloc-restauration-v93.js'), 0, 'la copie morte de 10-fin-bloc n\'est pas chargée');
 });
-P('1c', 'S5 · 09b2 : historiques rotatifs avec cutEnd (le plus récent), plus de cut (le plus vieux)');
-P('1c', 'S6 · 07 : cooldown d\'évolution ≥ 3 600 000 ms, héritage fitness/mémoire/skill');
+T('S5 · 09b2 : les 6 historiques rotatifs de _auraRotatePurge gardent le plus RÉCENT (cutEnd), plus aucun cut( (tête)', () => {
+  const c = codeStrict(s9b2);
+  assert.strictEqual(count(c, ' cut('), 0, 'cut( = tête, interdit');
+  for (const k of ['S.learningHistory  = cutEnd(S.learningHistory, 80);', 'S.globalMemoryPool = cutEnd(S.globalMemoryPool, 30);', 'S.fiscalReserveLog = cutEnd(S.fiscalReserveLog, 50);', 'S.dreamJournal     = cutEnd(S.dreamJournal, 30);', 'w.dreamJournal      = cutEnd(w.dreamJournal, 40);', 'w.antiNegReserveLog = cutEnd(w.antiNegReserveLog, 50);']) assert.ok(c.includes(k), k);
+});
+T('S6 · 07 : évolution ≥ 1 h (_EVO_COOLDOWN_MS 3 600 000), rêve ≥ 24 h (86 400 000), type/source du siège via _SEAT_DEF (21 sièges), regimeFitness du siège conservée', () => {
+  const s07 = rd('js/07-v90-mode-bunker-sos.js'), c = codeStrict(s07);
+  assert.ok(c.includes('const _EVO_COOLDOWN_MS = 3600000;'));
+  assert.ok(c.includes('const _DREAM_COOLDOWN_MS = 86400000;'));
+  assert.ok(c.includes("weak.type    = _sd ? _sd.type   :"));
+  assert.ok(c.includes("weak.regimeFitness = (weak.regimeFitness && typeof weak.regimeFitness === 'object') ? weak.regimeFitness : {};"));
+  assert.strictEqual(count(c, 'weak.regimeFitness = mergeRegimeFit('), 0);
+  const m = s07.match(/const _SEAT_DEF = \{([\s\S]*?)\n\};/); assert.ok(m);
+  const ids = (m[1].match(/'([a-z_0-9]+)': \{ type:/g) || []).length; assert.strictEqual(ids, 21, 'sièges dans la carte : ' + ids);
+  assert.ok(m[1].includes("'macro_v1': { type: 'Linear·FRED', source: 'Fed/BCE/FMI' }"));
+});
+T('D6 · _auraRotatePurge RÉEL : 200 learningHistory → les 80 PLUS RÉCENTS survivent (cycles 121…200), idem dreamJournal (30) et globalMemoryPool (30)', () => {
+  const src = between(s9b2, 'function _auraRotatePurge() {', '\nsetInterval(_auraRotatePurge, 120000);', 'purge');
+  const S = { learningHistory: Array.from({ length: 200 }, (_, i) => ({ cycle: i + 1 })), dreamJournal: Array.from({ length: 50 }, (_, i) => ({ n: i + 1 })), globalMemoryPool: Array.from({ length: 40 }, (_, i) => ({ n: i + 1 })), fiscalReserveLog: [], realCandles: {}, walletStore: {} };
+  const ctx = { S, Array, Object, Math, console, window: {} }; vm.createContext(ctx);
+  vm.runInContext(src + '\n_auraRotatePurge();', ctx);
+  assert.strictEqual(S.learningHistory.length, 80); assert.strictEqual(S.learningHistory[0].cycle, 121); assert.strictEqual(S.learningHistory[79].cycle, 200);
+  assert.strictEqual(S.dreamJournal.length, 30); assert.strictEqual(S.dreamJournal[0].n, 21);
+  assert.strictEqual(S.globalMemoryPool.length, 30); assert.strictEqual(S.globalMemoryPool[29].n, 40);
+});
+T('S11 · 13-veille-ecran : plus de canvas, plus de requestAnimationFrame, plus d\'eval ; étoiles CSS (vTw), wake lock et appui long conservés', () => {
+  const s13 = rd('js/13-veille-ecran.js'), c = codeStrict(s13);
+  assert.strictEqual(count(c, 'requestAnimationFrame'), 0); assert.strictEqual(count(c, 'getContext('), 0); assert.strictEqual(count(c, 'shadowBlur'), 0); assert.strictEqual(count(c, 'eval'), 0);
+  assert.ok(c.includes('@keyframes vTw') && c.includes('wakeLock.request') && c.includes("getElementById('wakeLockBtn')") && c.includes('window._veilleNow=enter'));
+  assert.ok(s13.startsWith('// ▓▓▓ VERSION ' + TOK + ' ▓▓▓'));
+});
 T('S7 · 09b2 : GBP/USDT (retirée de Binance le 29/12/2023) désactivée en EV/RE à chaque chargement', () => {
   assert.ok(s9b2.includes("var _EV_DELISTED_PAIRS = ['GBP/USDT'];"));
   assert.strictEqual(count(codeStrict(s9b2), 'var n = _evRetireDelisted();'), 1);
@@ -93,7 +122,8 @@ T('S8 · 02 : _realCandlesStale (critère des portes) utilisé au boot, limiteur
 });
 T('S9 · en-têtes 02/08/10g/09b2 « ' + HDR + ' », 10f « ▓▓▓ VERSION 20260914b ▓▓▓ » (hotfix b), HTML : DOC_V + 78 ?v= (79), aucun autre token', () => {
   for (const [f, s] of [[F08, s08], [F10G, s10g]]) assert.ok(s.startsWith(HDR), f);
-  for (const [f, s] of [[F02, s02], [F9B2, s9b2]]) assert.ok(s.startsWith('// [SONDE RÉSEAU · 15/09/2026] VERSION 20260915a') && s.split('\n')[1].startsWith(HDR), f);   // [SONDE RÉSEAU] relivrés, en-tête 1b-a en 2e ligne
+  assert.ok(s02.startsWith('// [SONDE RÉSEAU · 15/09/2026] VERSION 20260915a') && s02.split('\n')[1].startsWith(HDR), F02);   // [SONDE RÉSEAU] 02 relivré, en-tête 1b-a en 2e ligne
+  assert.ok(s9b2.startsWith('// [1c-LITE · 15/09/2026] VERSION 20260915b') && s9b2.split('\n').slice(0, 4).some(l => l.startsWith(HDR)), F9B2);   // [1c-LITE] 09b2 relivré, en-tête 1b-a dans les 4 premières lignes
   assert.ok(s10f.startsWith('// ▓▓▓ VERSION 20260914b ▓▓▓'));   // 10f livré au hotfix b, non retouché depuis
   assert.strictEqual(count(html, TOK), 79);
   assert.strictEqual((html.match(/\?v=\d{8}[a-z]/g) || []).length, 78);
@@ -277,7 +307,6 @@ T('D12 · _netPing RÉEL (fetch simulé) : 418 → échec classé http 418 ; 2 �
 });
 P('1c', 'D4 · fusion → l\'héritier porte mémoire + skill du défunt, fitness = moyenne des parents');
 P('1c', 'D5 · 10 rêves → evoLog contient toujours ≥ 1 entrée « new »');
-P('1c', 'D6 · chargement d\'un snapshot avec 200 learningHistory → les 80 PLUS RÉCENTS survivent');
 P('1b-b', 'D7 · EV : getTechSignals(pair) lit des bougies avec ts Binance');
 P('1b-b', 'D8 · heatmap : une clôture AA n\'écrit pas dans la heatmap lue en EV');
 T('D9 · _evRetireDelisted RÉEL : GBP/USDT désactivée en EV et RE, les autres paires intactes, idempotent', () => {

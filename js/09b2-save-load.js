@@ -1,3 +1,4 @@
+// [1c-LITE · 15/09/2026] VERSION 20260915b · _auraRotatePurge : les 6 historiques rotatifs gardent le plus récent (cutEnd), plus le plus vieux (cut)
 // [SONDE RÉSEAU · 15/09/2026] VERSION 20260915a · applySnap relit perfLog.net
 // [1b-a · 14/09/2026] VERSION 20260914a · GBP/USDT (retirée de Binance le 29/12/2023) désactivée en EV/RE à chaque chargement (_evRetireDelisted)
 // [GEL BOOT · 11/09/2026] VERSION 20260911b · loadState relit perfLog.loaf
@@ -951,10 +952,10 @@ function _auraRotatePurge() {
     });
 
     // historiques rotatifs
-    S.learningHistory  = cut(S.learningHistory, 80);
-    S.globalMemoryPool = cut(S.globalMemoryPool, 30);
-    S.fiscalReserveLog = cut(S.fiscalReserveLog, 50);
-    S.dreamJournal     = cut(S.dreamJournal, 30);
+    S.learningHistory  = cutEnd(S.learningHistory, 80);   // [1c-LITE · 15/09/2026] cut = tête (le plus VIEUX) → cutEnd = queue (le plus récent) : learningHistory figé au cycle 130 980 (juin) depuis des mois
+    S.globalMemoryPool = cutEnd(S.globalMemoryPool, 30);   // [1c-LITE]
+    S.fiscalReserveLog = cutEnd(S.fiscalReserveLog, 50);   // [1c-LITE]
+    S.dreamJournal     = cutEnd(S.dreamJournal, 30);   // [1c-LITE]
 
     // trades memorises par paire, dans les trois modes (etaient 100/paire)
     var wsx = S.walletStore || {};
@@ -964,8 +965,8 @@ function _auraRotatePurge() {
       Object.keys(pst).forEach(function(pp){
         if (pst[pp] && Array.isArray(pst[pp].trades)) pst[pp].trades = cutEnd(pst[pp].trades, 40);
       });
-      w.dreamJournal      = cut(w.dreamJournal, 40);
-      w.antiNegReserveLog = cut(w.antiNegReserveLog, 50);
+      w.dreamJournal      = cutEnd(w.dreamJournal, 40);   // [1c-LITE]
+      w.antiNegReserveLog = cutEnd(w.antiNegReserveLog, 50);   // [1c-LITE]
       w.pnlHistory        = cutEnd(w.pnlHistory, 100);
     });
 
