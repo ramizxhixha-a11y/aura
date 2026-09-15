@@ -1,4 +1,4 @@
-// ▓▓▓ VERSION 20260906b ▓▓▓
+// ▓▓▓ VERSION 20260915c ▓▓▓
 // 10e3-heatmap-horaire.js — Heatmap horaire : porte de conviction par créneau (décision 10f)
 // [P3 · 06/09/2026] BRIQUE 3 DU PONT ANALYTICS→DÉCISION. Module dédié (10e = 464 l., 10f = 558 l.).
 // Ordre de chargement OBLIGATOIRE : juste après 10e2, avant 10f (dans le HTML).
@@ -11,8 +11,8 @@
 //   créneau D'OR  : WR ≥ 60 % sur ≥ 20 trades ET pnl > 0 → conviction requise −0.03
 //   sinon (échantillon insuffisant ou créneau moyen)   → neutre
 // Le seuil d'échantillon (20) rend le bruit inoffensif : un créneau se qualifie par l'expérience.
-// LIMITE DÉCLARÉE : S.heatmap n'est pas multiplexé par mode (absent de _WALLET_ACCESSOR_FIELDS, 02)
-// → un seul compteur AA+EV+RE confondus ; l'AA, plus nombreux, pèse le plus.
+// [1b-b · 15/09/2026] S.heatmap n'est toujours pas multiplexé par mode, mais recordTradeForHeatmap (03) n'y écrit
+// plus que les clôtures EV et RE (AA exclu) et l'a remis à zéro une fois : ce que lit cette porte est réel.
 // Cache RAM 60 s, invalidé au changement d'heure (10f appelle à chaque cycle de chaque paire).
 const HEAT_MIN_TRADES = 20;
 const HEAT_COLD_WR    = 0.40;

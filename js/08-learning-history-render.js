@@ -1,3 +1,4 @@
+// [1b-b · 15/09/2026] VERSION 20260915c · EV/RE : ps.candles = klines Binance de la tf du mode (_projectRealCandles, battement) ; générateur synthétique réservé à AA ; série périmée → figée + ps._candlesStale
 // [1b-a · 14/09/2026] VERSION 20260914a · porte RE : fraîcheur AVANT `closedTs <= lastSeenTs` ; battement : _lossCapSweep rebranché (1 tick/3, règle 06/07) et _botExitSweep (sorties bot sur ps.price) appelés pour chaque mode traité
 // [PHASE 1 · 12/09/2026] VERSION 20260912c · simTick : rotation roster 1 paire/tick et rafraîchissement roster paire active RETIRÉS (ils n'existaient que pour écraser a.score ; le roster par paire vit dans 10f/09c/panneaux)
 // [GEL BOOT · 11/09/2026] VERSION 20260911b · correctif LoAF : la frame arrive APRÈS le tick qui écrit le gel (observé 20:24 : « LoAF aucun » sur 2 longtasks de 5,6/7,1 s) → rattachement tardif au dernier gel (S.perfLog.gels[].loaf + ligne 🐌 réécrite) + anneau durable S.perfLog.loaf (20 frames ≥ 1 s, scripts nommés) indépendant des gels
@@ -2809,6 +2810,38 @@ if (typeof window !== 'undefined' && !window._perfOp) {
   } catch(e) {}
 })();
 
+// ═══ [1b-b · 15/09/2026] PROJECTION DES KLINES BINANCE DANS ps.candles (EV / RE) ═══
+// La tf du mode (_getActiveRealTimeframe, 15 m) = celle que la porte lit : une seule série, une seule vérité.
+// Série périmée (_realCandlesStale, critère des portes) → ps.candles inchangé, ps._candlesStale = true : on ne
+// fabrique rien, l'analyse reste sur la dernière vérité connue et la porte refuse d'ouvrir (10g/08).
+// Pas de réallocation si la dernière bougie n'a pas bougé (même ts, même close). Les bougies gardent o/h/l/c/v
+// (ce que lisent getTechSignals, scouts, patterns, régime) et portent leur ts Binance.
+function _projectRealCandles() {
+  if (!(S.tradingMode === 'paperReal' || S.tradingMode === 'real')) return 0;
+  const tf = (typeof _getActiveRealTimeframe === 'function') ? _getActiveRealTimeframe() : '15m';
+  let n = 0;
+  Object.entries(S.pairStates).forEach(([pair, ps]) => {
+    if (!ps) return;
+    const arr = (S.realCandles && S.realCandles[pair] && S.realCandles[pair][tf]) || [];
+    const stale = (typeof _realCandlesStale === 'function') ? _realCandlesStale(pair, tf) : (arr.length < 30);
+    if (stale) { ps._candlesStale = true; return; }
+    const src = arr.slice(-60);
+    const lastK = src[src.length - 1];
+    const cur = ps.candles;
+    if (cur && cur._real && cur._srcTs === lastK.ts && cur.length === src.length && cur[cur.length - 1].c === lastK.c) { ps._candlesStale = false; return; }
+    const out = src.map(k => ({ o: k.o, h: k.h, l: k.l, c: k.c, v: k.v, ts: k.ts }));
+    out._srcTs = lastK.ts; out._real = true;
+    ps.candles = out;
+    ps._candlesStale = false;
+    // variation sur la fenêtre (même sémantique que pour AA : régime, 02:656) — bornée ±40 %
+    const c0 = out[0].c;
+    if (c0 > 0) ps.pnl24h = Math.max(-40, Math.min(40, ((lastK.c - c0) / c0) * 100));
+    n++;
+  });
+  return n;
+}
+window._projectRealCandles = _projectRealCandles;
+
 function simTick() {
   // v7.2 Phase 18 · Perf monitoring (rolling window, sans impact perceptible)
   const _perfStart = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
@@ -2971,6 +3004,10 @@ function simTick() {
       if (S.tradingMode === 'paperReal' || S.tradingMode === 'real') {
         try { _applyPaperRealProtection(); } catch(e) {}
       }
+      // [1b-b · 15/09/2026] EV/RE : l'analyse (14 indicateurs, 13 scouts, régime, patterns) lit les klines Binance
+      // de la tf du mode — les MÊMES que la porte 10g/08 — projetées dans ps.candles à chaque passage du mode.
+      // AA garde son générateur (bloc « New candle » plus bas, désormais réservé au mode sim).
+      try { _projectRealCandles(); } catch(e) { try{window._decErr&&window._decErr(e)}catch(_e){} }
       // [1b-a · 14/09/2026] sorties TP / SL / breakeven des positions BOT vérifiées ici, sur ps.price, à chaque
       // passage du mode traité — plus seulement à la résolution du cycle (10f _botExitSweep).
       try { if (window._botExitSweep) window._botExitSweep(); } catch(e) {}
@@ -3177,7 +3214,10 @@ function simTick() {
   if(tick % 30 === 0 && typeof _evaluatePairPerformance === 'function') _evaluatePairPerformance();  // v7.12 P2: eval win rate
   if(_priceSource === 2 && tick % 2 === 0) _simulationTickAll();  // v7.12: keep SIM moving
 
-    Object.entries(S.pairStates).forEach(([pair, ps]) => {
+    // [1b-b · 15/09/2026] GÉNÉRATEUR RÉSERVÉ À AA : en EV/RE ps.candles vient des klines Binance (_projectRealCandles,
+    // battement ci-dessus). Avant, ce bloc fabriquait 60 bougies de marche aléatoire (mèches, volumes, corps inventés)
+    // pour le mode AFFICHÉ, EV compris, et écrasait ps.price avec le close synthétique toutes les 3 s.
+    if (S.tradingMode === 'sim') Object.entries(S.pairStates).forEach(([pair, ps]) => {
       const cfg  = PAIRS[pair];
       const last = ps.candles[ps.candles.length - 1] || { c: ps.price };
 

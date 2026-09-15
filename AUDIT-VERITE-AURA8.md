@@ -116,4 +116,6 @@ Une régression de vérité = `VERDICT : NON LIVRABLE`, jamais « CONNU, tolér�
 
 - **15/09 soir — 1c-lite + veille CSS livrées** (`20260915b`) : #19 partiellement (regimeFitness du siège, types restaurés ; héritage mémoire/skill = décision Rams, banc 06/09), #20 (1/h), #21 (1/jour), #22 (cutEnd), §2 veille écran. Restent : #4-#8 (1b-b), #19 héritage, #23-#24, bouton 15 s, `boots[].doc`.
 
+- **15/09 nuit — 1b-b livrée** (`20260915c`) : #4 (ps.candles EV/RE = klines Binance 15 m, générateur réservé à AA), #5/#6 (scouts et régime lisent du vrai), #12 (heatmap EV/RE seulement, remise à zéro). Restent : #7/#8 (corrélation/bêta : vivants depuis 1b-a), #13-#17 (paramètres, échantillons), #19 héritage (décision Rams), #23-#24, bouton 15 s, `boots[].doc`.
+
 *Mis à jour à chaque mission. Le prochain audit complet : après 1b-b, sur un backup de 24 h propre.*

@@ -1,3 +1,4 @@
+// [1b-b · 15/09/2026] VERSION 20260915c · recordTradeForHeatmap : clôtures EV/RE seulement (AA exclu), remise à zéro unique du compteur mélangé
 // [PHASE 1 · 12/09/2026] VERSION 20260912c · VOTE PAR PAIRE : runRosterAnalysis publie ps.roster.votes de LA paire (muet = 0, RAM) et n'écrase plus a.score ; _agentPairVote(a, pair) ; learnFromOutcome / enrichMemory jugent l'agent sur son vote sur la paire ; liveTrainAgents retiré (archive/)
 // [GEL BOOT · 11/09/2026] VERSION 20260911c · double gel de boot (2 × 6 s) NOMMÉ par LoAF : `req.result` de store.getAll() sur aura_backups (rotation + liste) → index backups_meta (v2), lecture d'un seul enregistrement à la fois, enregistrements sans meta (collision 09b3) purgés
 // [SKILL BORNÉ · 06/09/2026] VERSION 20260906i — learnFromOutcome : agentPairSkill plafonné 500/cellule (halving)
@@ -2597,7 +2598,12 @@ function renderHorizonPanel() {
 // 3. TEMPORAL HEATMAP (hour-of-day performance)
 // ════════════════════════════════════════════════════════════
 function recordTradeForHeatmap(pnlUsd, pair) {
+  // [1b-b · 15/09/2026] HEATMAP = VRAIS TRADES SEULEMENT. Elle comptait toutes les clôtures, tous modes : ~2 000
+  // trades de marche aléatoire (AA) pour 47 trades EV → la porte P3 (10e3) lisait du bruit. Désormais seules les
+  // clôtures EV et RE s'écrivent, et le compteur repart de zéro une fois (le mélange n'est pas séparable).
+  if (S.tradingMode === 'sim') return;
   if(!S.heatmap) S.heatmap = { byHour:{}, byWeekday:{} };
+  if (!S.heatmap._realOnlySince) { S.heatmap.byHour = {}; S.heatmap.byWeekday = {}; S.heatmap.byDayHour = {}; S.heatmap._realOnlySince = Date.now(); }
   const d = new Date();
   const h  = d.getHours();
   const wd = d.getDay();

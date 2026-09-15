@@ -104,7 +104,7 @@ T('S11 · 13-veille-ecran : plus de canvas, plus de requestAnimationFrame, plus 
   const s13 = rd('js/13-veille-ecran.js'), c = codeStrict(s13);
   assert.strictEqual(count(c, 'requestAnimationFrame'), 0); assert.strictEqual(count(c, 'getContext('), 0); assert.strictEqual(count(c, 'shadowBlur'), 0); assert.strictEqual(count(c, 'eval'), 0);
   assert.ok(c.includes('@keyframes vTw') && c.includes('wakeLock.request') && c.includes("getElementById('wakeLockBtn')") && c.includes('window._veilleNow=enter'));
-  assert.ok(s13.startsWith('// ▓▓▓ VERSION ' + TOK + ' ▓▓▓'));
+  assert.ok(s13.startsWith('// ▓▓▓ VERSION 20260915b ▓▓▓'));   // 13 livré en 1c-lite, non retouché depuis
 });
 T('S7 · 09b2 : GBP/USDT (retirée de Binance le 29/12/2023) désactivée en EV/RE à chaque chargement', () => {
   assert.ok(s9b2.includes("var _EV_DELISTED_PAIRS = ['GBP/USDT'];"));
@@ -121,7 +121,8 @@ T('S8 · 02 : _realCandlesStale (critère des portes) utilisé au boot, limiteur
   assert.strictEqual(count(c, "'bootstrap candles '"), 0);
 });
 T('S9 · en-têtes 02/08/10g/09b2 « ' + HDR + ' », 10f « ▓▓▓ VERSION 20260914b ▓▓▓ » (hotfix b), HTML : DOC_V + 78 ?v= (79), aucun autre token', () => {
-  for (const [f, s] of [[F08, s08], [F10G, s10g]]) assert.ok(s.startsWith(HDR), f);
+  assert.ok(s10g.startsWith(HDR), F10G);
+  assert.ok(s08.startsWith('// [1b-b · 15/09/2026] VERSION 20260915c') && s08.split('\n')[1].startsWith(HDR), F08);   // [1b-b] 08 relivré, en-tête 1b-a en 2e ligne
   assert.ok(s02.startsWith('// [SONDE RÉSEAU · 15/09/2026] VERSION 20260915a') && s02.split('\n')[1].startsWith(HDR), F02);   // [SONDE RÉSEAU] 02 relivré, en-tête 1b-a en 2e ligne
   assert.ok(s9b2.startsWith('// [1c-LITE · 15/09/2026] VERSION 20260915b') && s9b2.split('\n').slice(0, 4).some(l => l.startsWith(HDR)), F9B2);   // [1c-LITE] 09b2 relivré, en-tête 1b-a dans les 4 premières lignes
   assert.ok(s10f.startsWith('// ▓▓▓ VERSION 20260914b ▓▓▓'));   // 10f livré au hotfix b, non retouché depuis
@@ -307,8 +308,44 @@ T('D12 · _netPing RÉEL (fetch simulé) : 418 → échec classé http 418 ; 2 �
 });
 P('1c', 'D4 · fusion → l\'héritier porte mémoire + skill du défunt, fitness = moyenne des parents');
 P('1c', 'D5 · 10 rêves → evoLog contient toujours ≥ 1 entrée « new »');
-P('1b-b', 'D7 · EV : getTechSignals(pair) lit des bougies avec ts Binance');
-P('1b-b', 'D8 · heatmap : une clôture AA n\'écrit pas dans la heatmap lue en EV');
+T('D7 · _projectRealCandles RÉEL : en EV ps.candles = 60 klines Binance avec ts (ce que lit getTechSignals) ; série périmée → figée + _candlesStale ; AA intact ; pas de réallocation sans nouvelle bougie ; pnl24h = variation de la fenêtre', () => {
+  const src = between(s08, 'function _projectRealCandles() {', 'window._projectRealCandles = _projectRealCandles;', 'proj', true);
+  const now = Date.now(), last15 = Math.floor(now / 900000) * 900000;
+  const real = mkCandles(60, '15m', last15, 100); real[59].c = 101; real[0].c = 95;
+  const synth = Array.from({ length: 60 }, () => ({ o: 1, h: 1, l: 1, c: 1, v: 1 }));
+  const S = { tradingMode: 'paperReal', paperRealTimeframe: '15m', realCandles: { 'ETH/USDT': { '15m': real }, 'DOT/USDT': { '15m': mkCandles(60, '15m', now - 17 * 3600000, 1) } },
+    pairStates: { 'ETH/USDT': { candles: synth, price: 101 }, 'DOT/USDT': { candles: synth.slice(), price: 1 } } };
+  const ctx = { S, Object, Math, Array, Date, window: {}, REAL_CANDLE_INTERVALS: TF_MS,
+    _getActiveRealTimeframe: () => S.tradingMode === 'real' ? (S.realTimeframe || '15m') : (S.paperRealTimeframe || '15m') };
+  vm.createContext(ctx);
+  vm.runInContext(between(s02, 'function _realCandlesStale(pair, tf) {', 'window._realCandlesStale = _realCandlesStale;', 'stale', true) + '\n' + src, ctx);
+  assert.strictEqual(vm.runInContext('_projectRealCandles()', ctx), 1, 'ETH projetée, DOT (périmée) non');
+  const eth = S.pairStates['ETH/USDT'];
+  assert.strictEqual(eth.candles.length, 60); assert.strictEqual(eth.candles[59].c, 101); assert.strictEqual(eth.candles[59].ts, last15); assert.strictEqual(eth.candles[0].ts, last15 - 59 * 900000);
+  assert.strictEqual(eth._candlesStale, false); assert.ok(Math.abs(eth.pnl24h - (101 - 95) / 95 * 100) < 1e-9, 'pnl24h = variation de la fenêtre');
+  assert.strictEqual(S.pairStates['DOT/USDT'].candles[59].ts, undefined, 'DOT figée sur ses bougies existantes'); assert.strictEqual(S.pairStates['DOT/USDT']._candlesStale, true);
+  const ref = eth.candles; vm.runInContext('_projectRealCandles()', ctx);
+  assert.strictEqual(eth.candles, ref, 'même bougie → même tableau (pas de réallocation)');
+  real[59].c = 102; vm.runInContext('_projectRealCandles()', ctx);
+  assert.notStrictEqual(eth.candles, ref); assert.strictEqual(eth.candles[59].c, 102, 'nouveau close → projeté');
+  S.tradingMode = 'sim'; S.pairStates['ETH/USDT'].candles = synth;
+  assert.strictEqual(vm.runInContext('_projectRealCandles()', ctx), 0); assert.strictEqual(S.pairStates['ETH/USDT'].candles, synth, 'AA intact');
+});
+T('D8 · recordTradeForHeatmap RÉEL : une clôture AA n\'écrit rien ; la première clôture EV remet le compteur mélangé à zéro puis écrit ; 08 : générateur synthétique réservé à sim, projection appelée dans le battement', () => {
+  const s03 = rd('js/03-per-pair-position-buttons-controls-buid.js');
+  const src = between(s03, 'function recordTradeForHeatmap(pnlUsd, pair) {', "  if(pnlUsd>0) S.heatmap.byDayHour[dk].wins++;", 'heat', true) + '\n}';
+  const S = { tradingMode: 'sim', heatmap: { byHour: { 3: { count: 500, pnl: -9, wins: 200 } }, byWeekday: {}, byDayHour: {} } };
+  const ctx = { S, Date, Object, Math, window: {} }; vm.createContext(ctx); vm.runInContext(src, ctx);
+  vm.runInContext("recordTradeForHeatmap(1.5, 'X/USDT')", ctx);
+  assert.strictEqual(S.heatmap.byHour[3].count, 500, 'AA : rien écrit'); assert.strictEqual(S.heatmap._realOnlySince, undefined);
+  S.tradingMode = 'paperReal'; vm.runInContext("recordTradeForHeatmap(1.5, 'X/USDT')", ctx);
+  assert.ok(S.heatmap._realOnlySince > 0); assert.strictEqual(S.heatmap.byHour[3], undefined, 'compteur mélangé remis à zéro');
+  const h = new Date().getHours(); assert.deepStrictEqual(JSON.parse(JSON.stringify(S.heatmap.byHour[h])), { count: 1, pnl: 1.5, wins: 1 });   // objet né dans la vm : aller-retour JSON
+  const c08 = codeStrict(s08);
+  assert.ok(c08.includes("if (S.tradingMode === 'sim') Object.entries(S.pairStates).forEach(([pair, ps]) => {"), 'générateur réservé à sim');
+  assert.strictEqual(count(c08, 'ps.candles.push({ o, h, l, c, v });'), 1);
+  assert.ok(c08.indexOf('_projectRealCandles();') < c08.indexOf('window._botExitSweep()'), 'projection avant les sorties');
+});
 T('D9 · _evRetireDelisted RÉEL : GBP/USDT désactivée en EV et RE, les autres paires intactes, idempotent', () => {
   const ctx = { window: {}, S: { paperRealActivePairs: { 'GBP/USDT': true, 'BTC/USDT': true }, realActivePairs: { 'BTC/USDT': true } } };
   vm.createContext(ctx);
@@ -332,6 +369,6 @@ T('D10 · _realCandlesStale RÉEL = critère des portes : < 30 bougies → péri
 });
 
 _runQueue().then(() => {
-  console.log('\n' + (fail ? '❌ ' : '✅ ') + pass + '/' + (pass + fail) + ' tests passés' + (fail ? ' — ' + fail + ' ÉCHEC(S)' : '') + ' · ' + pend + ' en attente (1c / 1b-b)');
+  console.log('\n' + (fail ? '❌ ' : '✅ ') + pass + '/' + (pass + fail) + ' tests passés' + (fail ? ' — ' + fail + ' ÉCHEC(S)' : '') + ' · ' + pend + ' en attente (1c-full)');
   process.exit(fail ? 1 : 0);
 });
