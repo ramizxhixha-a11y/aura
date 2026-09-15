@@ -1,3 +1,4 @@
+// [BUNKER EQUITY · 15/09/2026] VERSION 20260915d · le bunker mesure compte trading + valeur des positions ouvertes (_bkCapital), plus le compte seul : fin des fausses alertes « −15 % » à chaque fois que 3 positions sont ouvertes
 // [1c-LITE · 15/09/2026] VERSION 20260915b · évolution 1/h (était 1/min), type/source du siège restaurés (_SEAT_DEF), regimeFitness du siège conservée (plus clonée des parents), rêve 1/jour (était 4 min)
 // [1c-LITE · 15/09/2026] type/source d'origine des 21 sièges signal (littéral initial de 02) — la logique de vote est par id (03)
 const _SEAT_DEF = {
@@ -98,8 +99,22 @@ function _bkGet() {
 }
 
 // Initialiser la référence de capital
+// ═══ [BUNKER EQUITY · 15/09/2026] LE BUNKER MESURE L'EQUITY, PAS LE COMPTE SEUL ═══
+// Jusqu'ici la « chute de capital » était (référence − S.tradingAccount) / référence. Or la mise d'une position
+// SORT du compte trading à l'ouverture et n'y revient qu'à la clôture : trois positions ouvertes = −27 $ « perdus »
+// → « BUNKER : capital −15,2 % » le 15/09 23:00 avec une equity intacte (117 $), et l'action reduceMises appliquée
+// sur une perte qui n'existait pas. Même défaut que le « portfolio » de l'accueil (AUDIT #23). Désormais le capital
+// surveillé = compte trading + valeur courante des positions ouvertes du mode (repli : la mise). La référence, le
+// seuil de déclenchement, la récupération et la bannière lisent tous cette même valeur.
+function _bkCapital() {
+  var acc = Number(S.tradingAccount) || 0, pos = 0;
+  try { (S.openPositions || []).forEach(function(p){ if (!p) return; var v = Number(p.currentVal); pos += isFinite(v) && v > 0 ? v : (Number(p.stakeUsdt) || 0); }); } catch(e) {}
+  return acc + pos;
+}
+window._bkCapital = _bkCapital;
+
 function _bkInitCapRef() {
-  const cap = S.tradingAccount||0;
+  const cap = _bkCapital();
   if(cap>0) {
     // v118 FIX · Toujours réinitialiser la référence au démarrage
     // Évite les déclenchements parasites basés sur des anciens highs de sessions précédentes
@@ -121,7 +136,7 @@ function checkBunker() {
   // faux -100% et declenche le bunker a tort (ex: juste apres un reset). On
   // leve un bunker eventuellement actif et on efface la reference perimee pour
   // qu'une future injection reparte proprement.
-  const cap = S.tradingAccount||0;
+  const cap = _bkCapital();
   if(cap <= 0) {
     if(_bkState().active) { try { exitBunker(); } catch(e){} }
     _bkState().capRef = 0;
@@ -156,7 +171,7 @@ function activateBunker(dropPct) {
   if(_bst.active) return;
   _bst.active      = true;
   _bst.triggerTs   = Date.now();
-  _bst.startCapital= S.tradingAccount||0;
+  _bst.startCapital= _bkCapital();
   const dropStr   = (dropPct||0).toFixed(1);
 
   // Actions immédiates — le bunker ne met JAMAIS le bot en pause (Option A) :
@@ -176,7 +191,7 @@ function activateBunker(dropPct) {
     try { _abExecute?.('bunker'); } catch(e) {}
   }
   if(cfg.actions.sendTelegram) {
-    try { tgOnUrgence?.(`🚨 BUNKER : capital chute de ${dropStr}% · $${(S.tradingAccount||0).toFixed(2)}`); } catch(e) {}
+    try { tgOnUrgence?.(`🚨 BUNKER : capital chute de ${dropStr}% · $${(_bkCapital()).toFixed(2)} (compte + positions)`); } catch(e) {}
   }
 
   // Bannière
@@ -191,7 +206,7 @@ function activateBunker(dropPct) {
   // Toast
   showToast(`🚨 BUNKER activé — Capital -${dropStr}% · Mises réduites`, 5000, 'warn');
   S.chainLog = S.chainLog||[];
-  S.chainLog.push({icon:'🚨',desc:`BUNKER: capital -${dropStr}% ($${(S.tradingAccount||0).toFixed(2)}) · actions ${Object.entries(cfg.actions).filter(([,v])=>v).map(([k])=>k).join(',')}`,hash:Math.random().toString(36).slice(2,8),time:new Date().toLocaleTimeString()});
+  S.chainLog.push({icon:'🚨',desc:`BUNKER: capital -${dropStr}% ($${(_bkCapital()).toFixed(2)} compte + positions) · actions ${Object.entries(cfg.actions).filter(([,v])=>v).map(([k])=>k).join(',')}`,hash:Math.random().toString(36).slice(2,8),time:new Date().toLocaleTimeString()});
 
   renderBunkerSection();
 }
@@ -203,7 +218,7 @@ function _bkAutoCheck() {
   const cfg    = _bkGet();
   if(!_bkState().active) return;
   _bkUpdateBanner();
-  const cap    = S.tradingAccount||0;
+  const cap    = _bkCapital();
   const start  = _bkState().startCapital||cap;
   if(start>0 && (cap-start)/start*100 >= cfg.recoveryPct) {
     showToast(`✅ Capital récupéré +${cfg.recoveryPct}% — Bunker levé automatiquement`, 3500, 'win');
@@ -214,7 +229,7 @@ function _bkAutoCheck() {
 function _bkUpdateBanner() {
   const cfg    = _bkGet();
   const capRef = _bkGetCapRef();
-  const cap    = S.tradingAccount||0;
+  const cap    = _bkCapital();
   const drop   = capRef>0?(capRef-cap)/capRef*100:0;
   const infoEl = document.getElementById('bunkerInfo');
   if(infoEl) infoEl.textContent = `Capital -${drop.toFixed(1)}% depuis la référence · $${cap.toFixed(0)}`;
@@ -230,7 +245,7 @@ function exitBunker() {
   });
 
   // Nouvelle référence = capital actuel (du mode actif)
-  const cap = S.tradingAccount||0;
+  const cap = _bkCapital();
   if(cap>0) _bkState().capRef = cap;
 
   var _bstx = _bkState();

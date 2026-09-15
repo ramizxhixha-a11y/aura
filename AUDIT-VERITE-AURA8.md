@@ -118,4 +118,6 @@ Une régression de vérité = `VERDICT : NON LIVRABLE`, jamais « CONNU, tolér�
 
 - **15/09 nuit — 1b-b livrée** (`20260915c`) : #4 (ps.candles EV/RE = klines Binance 15 m, générateur réservé à AA), #5/#6 (scouts et régime lisent du vrai), #12 (heatmap EV/RE seulement, remise à zéro). Restent : #7/#8 (corrélation/bêta : vivants depuis 1b-a), #13-#17 (paramètres, échantillons), #19 héritage (décision Rams), #23-#24, bouton 15 s, `boots[].doc`.
 
+- **15/09 23:10 — bunker sur l'equity** (`20260915d`) : #23 pour le bunker (compte + positions), fausses alertes « −15 % » à 3 positions ouvertes supprimées ; le « portfolio » de l'accueil reste à corriger (micro-mission P&L). Dernière retouche avant 7 jours sans intervention.
+
 *Mis à jour à chaque mission. Le prochain audit complet : après 1b-b, sur un backup de 24 h propre.*

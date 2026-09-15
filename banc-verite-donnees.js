@@ -306,6 +306,25 @@ T('D12 · _netPing RÉEL (fetch simulé) : 418 → échec classé http 418 ; 2 �
   vm.runInContext('_netPing()', ctx); await tick(); vm.runInContext('_netPing()', ctx); await tick(); await tick();
   assert.ok(S.chainLog[2].desc.includes('seau du tablet coup') && S.chainLog[2].desc.includes('error (Failed to fetch)'), S.chainLog[2].desc);
 });
+T('D13 · checkBunker RÉEL : 3 positions ouvertes (mises sorties du compte) → aucune alerte ; vraie perte de 16 % de l\'equity → bunker ; messages sur l\'equity (compte + positions)', () => {
+  const s07 = rd('js/07-v90-mode-bunker-sos.js');
+  const src = between(s07, 'function _bkCapital() {', 'window.checkBunker = checkBunker;', 'bunker', true);
+  const S = { tradingAccount: 106.42, openPositions: [], bunker: { active: false, capRef: 0, startCapital: 0, triggerTs: 0 } };
+  const calls = [];
+  const ctx = { S, Number, isFinite, Math, window: {}, _bkGet: () => ({ enabled: true, triggerDropPct: 15, actions: {} }), _bkState: () => S.bunker, exitBunker: () => {}, activateBunker: (d) => calls.push(+d.toFixed(1)) };
+  vm.createContext(ctx); vm.runInContext(src, ctx);
+  vm.runInContext('checkBunker()', ctx);
+  assert.strictEqual(S.bunker.capRef, 106.42, '1re référence = equity courante');
+  S.openPositions = [{ stakeUsdt: 9.1, currentVal: 9.05 }, { stakeUsdt: 9.1, currentVal: 9.2 }, { stakeUsdt: 9.1, currentVal: 9.1 }]; S.tradingAccount = 106.42 - 27.3;
+  vm.runInContext('checkBunker()', ctx);
+  assert.deepStrictEqual(calls, [], '3 positions ouvertes : pas de bunker (avant : −25,6 %)');
+  S.openPositions.forEach(p => { p.currentVal = 3.4; });   // vraie perte : 27,3 → 10,2 (equity 89,3 = −16,1 %)
+  vm.runInContext('checkBunker()', ctx);
+  assert.deepStrictEqual(calls, [16.1], 'vraie chute de 16,1 % → bunker');
+  const c07 = codeStrict(s07); const seg = c07.slice(c07.indexOf('function _bkInitCapRef()'), c07.indexOf('function _bkUpdateBanner()') + 500);
+  assert.strictEqual(count(seg, 'S.tradingAccount||0'), 0, 'plus aucune lecture du compte seul dans le bunker');
+  assert.strictEqual(count(s07, 'compte + positions)'), 2, 'messages sur l\'equity');
+});
 P('1c', 'D4 · fusion → l\'héritier porte mémoire + skill du défunt, fitness = moyenne des parents');
 P('1c', 'D5 · 10 rêves → evoLog contient toujours ≥ 1 entrée « new »');
 T('D7 · _projectRealCandles RÉEL : en EV ps.candles = 60 klines Binance avec ts (ce que lit getTechSignals) ; série périmée → figée + _candlesStale ; AA intact ; pas de réallocation sans nouvelle bougie ; pnl24h = variation de la fenêtre', () => {
