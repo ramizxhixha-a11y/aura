@@ -325,8 +325,21 @@ T('D13 · checkBunker RÉEL : 3 positions ouvertes (mises sorties du compte) →
   assert.strictEqual(count(seg, 'S.tradingAccount||0'), 0, 'plus aucune lecture du compte seul dans le bunker');
   assert.strictEqual(count(s07, 'compte + positions)'), 2, 'messages sur l\'equity');
 });
-P('1c', 'D4 · fusion → l\'héritier porte mémoire + skill du défunt, fitness = moyenne des parents');
-P('1c', 'D5 · 10 rêves → evoLog contient toujours ≥ 1 entrée « new »');
+T('D4 · 1c-FULL (banc-skill-borne.js rejoué ici) : à la fusion le siège garde mémoire, agentPairSkill, discipleTaskSkill, regimeFitness ; fitness = max(350, moyenne parents / 2) ; succession sans transfert ; 300 successions sans explosion', () => {
+  const r = require('child_process').spawnSync(process.execPath, [path.join(ROOT, 'banc-skill-borne.js')], { encoding: 'utf8' });
+  const out = (r.stdout || '') + (r.stderr || '');
+  const m = out.match(/banc-skill-borne : (\d+)\/(\d+) OK/);
+  assert.ok(r.status === 0 && m && m[1] === m[2] && +m[1] >= 30, 'banc-skill-borne doit passer entièrement (33/33) : ' + out.slice(-300));
+  const sb = rd('banc-skill-borne.js');
+  for (const k of ['agentPairSkill du siège CONSERVÉ', 'aucune copie envoyée', 'rien dupliqué', 'moyenne des parents 1300 / 2']) assert.ok(sb.includes(k), 'banc-skill-borne porte le test : ' + k);
+});
+T('D5 · 07 : plus aucun reset de mémoire/compétence dans triggerEvolution ; 12 : plus aucun transfert', () => {
+  const c07 = codeStrict(rd('js/07-v90-mode-bunker-sos.js')), c12 = codeStrict(rd('js/12-bots-disciples.js'));
+  assert.strictEqual(count(c07, 'weak.memory  = [];'), 0); assert.strictEqual(count(c07, 'delete S.agentPairSkill[weak.id]'), 0); assert.strictEqual(count(c07, 'delete S.discipleTaskSkill[weak.id]'), 0);
+  assert.ok(c07.includes('window._onAgentEvolved(weak.id, prevName);'));
+  assert.ok(c07.includes('weak.fitness = Math.max(350, Math.round(parents.reduce((t, p) => t + (Number(p.fitness) || 0), 0) / parents.length / 2));'));
+  assert.strictEqual(count(c12, 'S.agentPairSkill[heir.id][pair].w +='), 0); assert.strictEqual(count(c12, 'heir.memory = (heir.memory || []).concat(memory)'), 0);
+});
 T('D7 · _projectRealCandles RÉEL : en EV ps.candles = 60 klines Binance avec ts (ce que lit getTechSignals) ; série périmée → figée + _candlesStale ; AA intact ; pas de réallocation sans nouvelle bougie ; pnl24h = variation de la fenêtre', () => {
   const src = between(s08, 'function _projectRealCandles() {', 'window._projectRealCandles = _projectRealCandles;', 'proj', true);
   const now = Date.now(), last15 = Math.floor(now / 900000) * 900000;
@@ -388,6 +401,6 @@ T('D10 · _realCandlesStale RÉEL = critère des portes : < 30 bougies → péri
 });
 
 _runQueue().then(() => {
-  console.log('\n' + (fail ? '❌ ' : '✅ ') + pass + '/' + (pass + fail) + ' tests passés' + (fail ? ' — ' + fail + ' ÉCHEC(S)' : '') + ' · ' + pend + ' en attente (1c-full)');
+  console.log('\n' + (fail ? '❌ ' : '✅ ') + pass + '/' + (pass + fail) + ' tests passés' + (fail ? ' — ' + fail + ' ÉCHEC(S)' : '') + ' · ' + pend + ' en attente');
   process.exit(fail ? 1 : 0);
 });

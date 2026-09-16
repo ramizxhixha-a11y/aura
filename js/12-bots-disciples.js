@@ -1,3 +1,4 @@
+// [1c-FULL · 16/09/2026] VERSION 20260916a · succession sans transfert de savoir (affectation du siège seulement)
 // [PHASE 1 · 12/09/2026] VERSION 20260912c · angles direction/timing des disciples lus sur le vote de l'agent sur LA paire (_agentPairVote, 03), plus sur a.score
 // [SKILL BORNÉ · 06/09/2026] VERSION 20260906i — héritage agentPairSkill plafonné 500/cellule (halving) ; mérite par tâche plafonné 500/cellule
 // ▓▓▓ VERSION 20260815b ▓▓▓
@@ -242,6 +243,9 @@ window._payBotSurplus = function (bot, surplus) {
 };
 
 // ── Succession : un disciple recyclé → l'héritier de la pépinière prend le siège ──
+// [1c-FULL · 16/09/2026] la succession ne déplace plus que l'AFFECTATION du siège : l'héritier garde son propre
+// savoir, le nouveau-né (qui repart en pépinière) garde le sien. Plus aucune copie de compétence ni de mémoire
+// entre deux ids (deux logiques). Les paramètres memory/skillCopy ne sont plus envoyés par 07 et sont ignorés.
 window._onAgentEvolved = function (deadId, prevName, memory, skillCopy) {
   try {
     if (!S.botDisciples) return;
@@ -256,22 +260,7 @@ window._onAgentEvolved = function (deadId, prevName, memory, skillCopy) {
     if (!pep.length) return;   // pépinière vide : le nouveau-né garde le siège
     var heir = pep[0];
     S.botDisciples[seatBot][seatIdx] = heir.id;   // le nouveau-né (deadId) repart en pépinière
-    // Héritage du savoir : compétence×paire fusionnée + mémoire transmise
-    var cells = 0;
-    if (skillCopy) {
-      if (!S.agentPairSkill) S.agentPairSkill = {};
-      if (!S.agentPairSkill[heir.id]) S.agentPairSkill[heir.id] = {};
-      Object.keys(skillCopy).forEach(function (pair) {
-        if (!S.agentPairSkill[heir.id][pair]) S.agentPairSkill[heir.id][pair] = { w: 0, l: 0 };
-        S.agentPairSkill[heir.id][pair].w += skillCopy[pair].w || 0;
-        S.agentPairSkill[heir.id][pair].l += skillCopy[pair].l || 0;
-        // [SKILL BORNÉ · 06/09] plafond 500 échantillons par cellule (halving, ratio préservé)
-        var _hc = S.agentPairSkill[heir.id][pair];
-        while (_hc.w + _hc.l > 500) { _hc.w = Math.round(_hc.w / 2); _hc.l = Math.round(_hc.l / 2); }
-        cells++;
-      });
-    }
-    if (memory && memory.length) heir.memory = (heir.memory || []).concat(memory).slice(-20);
+    var cells = 0;                                // [1c-FULL] plus de transfert : chacun garde son savoir
     var botAgent = (S.agents || []).find(function (a) { return a.id === seatBot; });
     if (S.chainLog) {
       S.chainLog.push({ icon: '🎓', desc: 'Héritage : ' + heir.name + ' reprend le siège de feu ' + prevName + ' auprès de ' + (botAgent ? botAgent.name : seatBot) + ' · savoir transféré (' + cells + ' paires, ' + (memory ? memory.length : 0) + ' souvenirs)', hash: Math.random().toString(36).slice(2, 8), time: new Date().toLocaleTimeString() });

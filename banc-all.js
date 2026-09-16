@@ -23,7 +23,6 @@ const CONNUS = {   // échecs antérieurs tolérés (score identique) — retire
   'banc-net-expectancy.js':   { score: '18/19', motif: 'échec antérieur (avant 07/09), non lié aux livraisons gel' },
   'banc-p6-frais-slippage.js': { score: '28/29', motif: 'échec antérieur (avant 07/09), non lié' },
   'banc-p7-news.js':          { motif: 'figé : banc-p7-news-payload.json absent du dépôt' },
-  'banc-skill-borne.js':      { motif: 'figé : token 20260906i en dur — à réécrire pour lire DOC_V' },
 };
 const ARGS = { 'banc-phase0-pont.js': ['js/10h-pont-fullpower-bricks.js'] };   // bancs qui exigent un argument
 const rd = (f) => fs.readFileSync(path.join(ROOT, f), 'utf8');

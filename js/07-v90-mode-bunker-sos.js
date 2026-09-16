@@ -1,3 +1,4 @@
+// [1c-FULL · 16/09/2026] VERSION 20260916a · héritage complet : mémoire, agentPairSkill, discipleTaskSkill et regimeFitness restent avec le siège à la fusion ; fitness de naissance = max(350, moyenne des parents / 2) ; _onAgentEvolved(id, nom) sans copie
 // [BUNKER EQUITY · 15/09/2026] VERSION 20260915d · le bunker mesure compte trading + valeur des positions ouvertes (_bkCapital), plus le compte seul : fin des fausses alertes « −15 % » à chaque fois que 3 positions sont ouvertes
 // [1c-LITE · 15/09/2026] VERSION 20260915b · évolution 1/h (était 1/min), type/source du siège restaurés (_SEAT_DEF), regimeFitness du siège conservée (plus clonée des parents), rêve 1/jour (était 4 min)
 // [1c-LITE · 15/09/2026] type/source d'origine des 21 sièges signal (littéral initial de 02) — la logique de vote est par id (03)
@@ -2746,31 +2747,25 @@ function triggerEvolution(weak) {
   // naissance : sans ça, l'hybride naissait à 120 (sous le seuil) et était retraité
   // au tick suivant → boucle d'évolution infinie (40 000 générations en boucle).
   // _bornCycle donne une période de grâce pour qu'il fasse ses preuves avant jugement.
-  weak.fitness = 350;
+  // [1c-FULL · 16/09/2026] fitness de naissance = moitié de la moyenne des parents, plancher 350 (règle Rams 16/09 :
+  // « continuer l'évolution à l'infini et augmenter la performance en continu ») — le nouveau-né n'est plus
+  // automatiquement le plus faible, mais ne porte pas non plus la réputation entière de ses parents.
+  weak.fitness = Math.max(350, Math.round(parents.reduce((t, p) => t + (Number(p.fitness) || 0), 0) / parents.length / 2));   // moyenne des parents du tournoi / 2
   weak._bornCycle = (typeof S !== 'undefined' && S.cycle) ? S.cycle : 0;
   weak.score   = _scoreMix + (Math.random() - 0.5) * _mutation * 2;
   weak.conf    = Math.min(0.80, _confMix);
   weak.color   = p1.color;
-  // [DISCIPLES · 15/08/2026] avant le reset : si l'agent recyclé était le disciple d'un
-  // bot, son savoir (mémoire + compétence×paire) est capturé pour l'héritier de la
-  // pépinière — le module 12 traite la succession (vision Rams : l'héritier reprend le
-  // siège PARFAITEMENT formé, le nouveau-né repart en pépinière).
+  // ═══ [1c-FULL · 16/09/2026] LE SAVOIR RESTE AVEC LE SIÈGE — remplace la règle du 06/09 (décision Rams 16/09) ═══
+  // La logique de vote est PAR SIÈGE (switch sur l'id, 03) : la « fusion » ne change que nom, score et confiance.
+  // La compétence par paire, la mémoire, les notes par tâche et la fitness par régime décrivent donc CETTE logique
+  // sur CE marché : elles ne sont ni effacées ni copiées à un autre siège (une autre logique). La succession auprès
+  // des bots (12) ne déplace plus que l'affectation du siège. Fin de l'explosion de masse du 06/09 par construction :
+  // rien n'est jamais dupliqué ; le plafond 500 par cellule (03, 12) reste.
   try {
-    if (typeof window._onAgentEvolved === 'function') {
-      const _skillCopy = (S.agentPairSkill && S.agentPairSkill[weak.id]) ? JSON.parse(JSON.stringify(S.agentPairSkill[weak.id])) : null;
-      window._onAgentEvolved(weak.id, prevName, (weak.memory || []).slice(), _skillCopy);
-    }
+    if (typeof window._onAgentEvolved === 'function') window._onAgentEvolved(weak.id, prevName);
   } catch(e) { try{window._decErr&&window._decErr(e)}catch(_e){} }
-  weak.errors  = 0; weak.corrections = 0; weak.streak = 0;
-  weak.memory  = [];
-  // [SKILL BORNÉ · 06/09/2026] l'id du siège est réutilisé par le nouveau-né : sans ce reset,
-  // la compétence-paire du défunt restait sur le siège APRÈS avoir été copiée à l'héritier
-  // (12) → la masse doublait à chaque succession (420 cellules à 1e81…1e92, ratios
-  // identiques pour tous les agents = apprentissage par paire mort). Même règle pour le
-  // mérite par tâche (discipleTaskSkill) : le nouveau-né ne porte pas les notes du défunt.
-  if (S.agentPairSkill    && S.agentPairSkill[weak.id])    delete S.agentPairSkill[weak.id];
-  if (S.discipleTaskSkill && S.discipleTaskSkill[weak.id]) delete S.discipleTaskSkill[weak.id];
-  weak.fitnessHistory = [350];
+  weak.streak = 0;                                   // une série est une séquence : nouveau score, nouvelle séquence
+  weak.fitnessHistory = (Array.isArray(weak.fitnessHistory) ? weak.fitnessHistory : []).concat([weak.fitness]).slice(-50);
   // v7.3 OPT · Hériter le regimeFitness du meilleur parent (fusion pondérée 60/40)
   const mergeRegimeFit = (rf1, rf2) => {
     const merged = {};

@@ -30,7 +30,7 @@ const sane = saneCtx._saneSkill;
   ok(s09.includes('S.agentPairSkill    = _saneSkill(snap.agentPairSkill, 500)'), '09b2 agentPairSkill assaini');
 }
 
-// ---------- 2. triggerEvolution (07) + _onAgentEvolved (12) ----------
+// ---------- 2. triggerEvolution (07) + _onAgentEvolved (12) — [1c-FULL 16/09] le savoir reste avec le siège ----------
 const s07 = rd('js/07-v90-mode-bunker-sos.js'), s12 = rd('js/12-bots-disciples.js');
 const evoSrc = between(s07, 'function triggerEvolution(weak) {', 'buildAgentCards(); patchAgentCards();\n}') + 'buildAgentCards(); patchAgentCards();\n}';
 const heirSrc = between(s12, 'window._onAgentEvolved = function (deadId, prevName, memory, skillCopy) {', '\n(function _disciplesBoot');
@@ -46,46 +46,52 @@ function mkCtx(withHeir) {
   if (withHeir) vm.runInContext('function _pepiniere(){ return S.agents.filter(a => !Object.keys(S.botDisciples).some(b => S.botDisciples[b].indexOf(a.id) !== -1)); }\n' + heirSrc, ctx);
   return ctx;
 }
-{ // reset du siège recyclé, copie reçue intacte
-  const ctx = mkCtx(false); const S = ctx.S; let got = null;
-  ctx.window._onAgentEvolved = (id, name, mem, copy) => { got = copy; };
+// [1c-FULL · 16/09/2026] règle Rams 16/09 : le savoir reste avec le siège ; la succession ne déplace que l'affectation.
+{ // le siège recyclé GARDE tout ; _onAgentEvolved reçoit (id, nom) sans copie
+  const ctx = mkCtx(false); const S = ctx.S; let got = 'unset';
+  ctx.window._onAgentEvolved = (id, name, mem, copy) => { got = { id, name, mem, copy }; };
   S.agentPairSkill.s1 = { 'BTC/USDT': { w: 30, l: 10 } }; S.discipleTaskSkill.s1 = { direction: { w: 8, l: 2 } };
+  S.agents[0].memory = [{ pair: 'BTC/USDT', won: true }]; S.agents[0].regimeFitness = { calm: { wins: 3, total: 5, sumPnl: 1.2 } };
+  S.agents.forEach(a => { if (a.id !== 's1') a.fitness = 1300; });   // tout candidat du tournoi vaut 1300 → naissance 650
   ctx.triggerEvolution(S.agents[0]);
-  ok(got && got['BTC/USDT'].w === 30, 'copie transmise à _onAgentEvolved AVANT reset');
-  ok(S.agentPairSkill.s1 === undefined, '07 : agentPairSkill du siège recyclé supprimé');
-  ok(S.discipleTaskSkill.s1 === undefined, '07 : discipleTaskSkill du siège recyclé supprimé');
-  ok(S.agents[0].memory.length === 0 && S.agents[0].fitness === 350, 'reset existant préservé (memory, fitness 350)');
+  ok(got && got.id === 's1' && got.mem === undefined && got.copy === undefined, '_onAgentEvolved(id, nom) : aucune copie envoyée');
+  ok(S.agentPairSkill.s1['BTC/USDT'].w === 30 && S.agentPairSkill.s1['BTC/USDT'].l === 10, '07 : agentPairSkill du siège CONSERVÉ');
+  ok(S.discipleTaskSkill.s1.direction.w === 8, '07 : discipleTaskSkill du siège CONSERVÉ');
+  ok(S.agents[0].memory.length === 1 && S.agents[0].regimeFitness.calm.total === 5, '07 : mémoire et regimeFitness du siège CONSERVÉES');
+  ok(S.agents[0].fitness === 650, 'fitness de naissance = max(350, moyenne des parents 1300 / 2) = 650 (' + S.agents[0].fitness + ')');
+  ok(S.agents[0].streak === 0 && S.agents[0].fitnessHistory[S.agents[0].fitnessHistory.length - 1] === 650, 'série remise à zéro, historique de fitness continué');
 }
-{ // reset même sans module 12
+{ // plancher 350 quand les parents sont faibles
   const ctx = mkCtx(false); const S = ctx.S;
-  S.agentPairSkill.s2 = { P: { w: 1, l: 1 } };
   ctx.triggerEvolution(S.agents[1]);
-  ok(S.agentPairSkill.s2 === undefined, 'reset indépendant de _onAgentEvolved');
+  ok(S.agents[1].fitness === 350, 'parents ≤ 700 de moyenne → plancher 350 (' + S.agents[1].fitness + ')');
 }
-{ // héritage plafonné
+{ // succession : l'héritier prend le siège auprès du bot, chacun garde son savoir
   const ctx = mkCtx(true); const S = ctx.S;
-  S.agentPairSkill.p7 = { P: { w: 300, l: 300 } };
-  ctx.window._onAgentEvolved('s1', 'feu', [], { P: { w: 300, l: 300 } });
+  S.agentPairSkill.p7 = { P: { w: 300, l: 300 } }; S.agentPairSkill.s1 = { P: { w: 5, l: 5 } };
+  S.agents.find(a => a.id === 'p7').memory = [{ m: 1 }]; S.agents[0].memory = [{ m: 'seat' }];
+  ctx.window._onAgentEvolved('s1', 'feu');
   ok(S.botDisciples.bot1[0] === 'p7', 'héritier = meilleur de la pépinière (p7)');
-  ok(S.agentPairSkill.p7.P.w === 150 && S.agentPairSkill.p7.P.l === 150, '12 : 1200 → halving ×3 → 150/150, ratio préservé');
-  ctx.window._onAgentEvolved('s2', 'feu', [], { Q: { w: 4, l: 1 } });
-  const h2 = S.botDisciples.bot1[1]; ok(h2 === 's1' && S.agentPairSkill[h2].Q.w === 4 && S.agentPairSkill[h2].Q.l === 1, 'héritage sous plafond intact (héritier = s1 retourné en pépinière)');
+  ok(S.agentPairSkill.p7.P.w === 300 && S.agentPairSkill.p7.P.l === 300, '12 : compétence de l\'héritier intacte (aucune fusion)');
+  ok(S.agentPairSkill.s1.P.w === 5 && S.agents[0].memory[0].m === 'seat', '12 : le siège recyclé garde compétence et mémoire');
+  ok(S.agents.find(a => a.id === 'p7').memory.length === 1, '12 : mémoire de l\'héritier intacte');
 }
-{ // RÉGRESSION : 300 successions enchaînées, masse bornée
+{ // RÉGRESSION : 300 successions, la masse ne peut plus exploser (rien n'est dupliqué ; plafond 500 de 03 sur l'accumulation réelle)
   const ctx = mkCtx(true); const S = ctx.S;
+  const s03b = rd('js/03-per-pair-position-buttons-controls-buid.js');
+  vm.runInContext('this.acc = function(a, pair, signalStrength, aligned){' + between(s03b, '    if (pair && signalStrength > 0.05) {', '    const prevFitness   = a.fitness;') + '};', ctx);
   for (let i = 0; i < 300; i++) {
     S._lastEvolutionAt = 0;
     const seat = S.botDisciples.bot1[i % 3];
     const a = S.agents.find(x => x.id === seat);
-    if (!S.agentPairSkill[seat]) S.agentPairSkill[seat] = {};
-    S.agentPairSkill[seat]['BTC/USDT'] = S.agentPairSkill[seat]['BTC/USDT'] || { w: 0, l: 0 };
-    S.agentPairSkill[seat]['BTC/USDT'].w += 200; S.agentPairSkill[seat]['BTC/USDT'].l += 100;
+    for (let k = 0; k < 60; k++) ctx.acc(a, 'BTC/USDT', 0.5, k % 3 !== 0);
     ctx.triggerEvolution(a);
   }
-  let mx = 0, fin = true;
-  Object.keys(S.agentPairSkill).forEach(id => Object.keys(S.agentPairSkill[id]).forEach(k => { const c = S.agentPairSkill[id][k]; mx = Math.max(mx, c.w + c.l); fin = fin && isFinite(c.w) && isFinite(c.l); }));
+  let mx = 0, fin = true, cellsN = 0;
+  Object.keys(S.agentPairSkill).forEach(id => Object.keys(S.agentPairSkill[id]).forEach(k => { const c = S.agentPairSkill[id][k]; cellsN++; mx = Math.max(mx, c.w + c.l); fin = fin && isFinite(c.w) && isFinite(c.l); }));
   ok(fin, '300 successions : toutes les cellules finies');
-  ok(mx <= 500, '300 successions : masse max ' + mx + ' ≤ 500 (avant : ~2^300)');
+  ok(mx <= 500 && mx >= 250, '300 successions : masse max ' + mx + ' dans [250, 500] (plafond 03, rien dupliqué)');
+  ok(cellsN <= 10, '300 successions : ' + cellsN + ' cellules (une par siège, aucune copie)');
 }
 
 // ---------- 3. accumulation (03) ----------
@@ -114,6 +120,6 @@ const jurySrc = between(s12, '    pos._jury.forEach(function (j) {', '  } catch 
   ok(Math.abs(t.w / (t.w + t.l) - 0.75) < 0.02, '12 jury : ratio 3/4 préservé');
 }
 // ---------- 5. structure ----------
-ok(rd('AURA8_v118.html').split('v=20260906i').length - 1 === 78, 'HTML 78 ressources token 20260906i');
+{ const _h = rd('AURA8_v118.html'), _tk = (_h.match(/DOC_V = '(\d{8}[a-z])'/) || [])[1]; ok(_tk && _h.split('v=' + _tk).length - 1 === 78, 'HTML 78 ressources au token courant ' + _tk); }   // [1c-FULL 16/09] pin figé sur 20260906i depuis le 06/09 : le banc s'arrêtait ici, sections 2-4 jamais rejouées
 ok(s12.split('\n').length <= 501, '12 ≤ 500 lignes (' + (s12.split('\n').length - 1) + ')');
 console.log('banc-skill-borne : ' + n + '/' + n + ' OK');

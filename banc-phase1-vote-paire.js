@@ -35,7 +35,7 @@ console.log('▶ banc-phase1-vote-paire · token ' + TOK + ' · ' + scripts.leng
 /* ═══════════════════════════ A · STATIQUE ═══════════════════════════ */
 console.log('\n── A · statique : ce qui est retiré, ce qui est publié ──');
 T('en-têtes : 03/12 « [PHASE 1 · 12/09/2026] VERSION 20260912c », 02/08 relivrés par 1b-a « [1b-a · 14/09/2026] VERSION 20260914a », 10f « ▓▓▓ VERSION 20260914b ▓▓▓ »', () => {
-  assert.ok(s12.startsWith('// [PHASE 1 · 12/09/2026] VERSION 20260912c'), F12);
+  assert.ok(s12.startsWith('// [1c-FULL · 16/09/2026] VERSION 20260916a') && s12.split('\n')[1].startsWith('// [PHASE 1 · 12/09/2026] VERSION 20260912c'), F12);   // [1c-FULL] 12 relivré, en-tête PHASE 1 en 2e ligne
   assert.ok(s03.startsWith('// [1b-b · 15/09/2026] VERSION 20260915c') && s03.split('\n')[1].startsWith('// [PHASE 1 · 12/09/2026] VERSION 20260912c'), F03);   // [1b-b] 03 relivré, en-tête PHASE 1 en 2e ligne
   assert.ok(s08.startsWith('// [1b-b · 15/09/2026] VERSION 20260915c') && s08.split('\n')[1].startsWith('// [1b-a · 14/09/2026] VERSION 20260914a'), F08);   // [1b-b] 08 relivré, en-tête 1b-a en 2e ligne
   assert.ok(s02.startsWith('// [SONDE RÉSEAU · 15/09/2026] VERSION 20260915a') && s02.split('\n')[1].startsWith('// [1b-a · 14/09/2026] VERSION 20260914a'), F02);   // [SONDE RÉSEAU] 02 relivré, en-tête 1b-a en 2e ligne

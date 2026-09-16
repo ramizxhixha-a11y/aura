@@ -120,4 +120,6 @@ Une régression de vérité = `VERDICT : NON LIVRABLE`, jamais « CONNU, tolér�
 
 - **15/09 23:10 — bunker sur l'equity** (`20260915d`) : #23 pour le bunker (compte + positions), fausses alertes « −15 % » à 3 positions ouvertes supprimées ; le « portfolio » de l'accueil reste à corriger (micro-mission P&L). Dernière retouche avant 7 jours sans intervention.
 
+- **16/09 — 1c-full livrée** (`20260916a`) : #19 réglé (rien d'effacé ni copié à la fusion, fitness de naissance = moyenne des parents / 2). Découvert : `banc-skill-borne.js` s'arrêtait à sa 1re section depuis le 06/09 (pin HTML figé) — réparé, 33/33. Le 7 jours sans retouche est levé par Rams ; suite : génome réel, fitness glissante, poids par attribution.
+
 *Mis à jour à chaque mission. Le prochain audit complet : après 1b-b, sur un backup de 24 h propre.*
