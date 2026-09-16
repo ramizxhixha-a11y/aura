@@ -5479,6 +5479,7 @@ function _revigorBots() {
   let revigorated = 0;
   brokenBots.forEach(a => {
     a.fitness = 400;
+    a._judgments = [];   // [RETRAIT REDISTRIBUTION · 16/09/2026] idem (bots)
     a.streak = 0;
     a.errors = 0;
     a.lastPnl = 0;

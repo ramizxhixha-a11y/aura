@@ -61,9 +61,10 @@ T('S2 · redistributeFitness retirée (02), appel retiré (08), hook _payBotSurp
   assert.strictEqual(c02.includes('function redistributeFitness'), false); assert.strictEqual(c08.includes('redistributeFitness('), false); assert.strictEqual(c12.includes('window._payBotSurplus'), false);
   assert.strictEqual(c02.includes('_payBotSurplus'), false);
   const c03 = codeStrict(s03);
-  const direct = (c03.match(/\ba\.fitness\s*=\s*(?!Math\.max\(50, Math\.min\(2000, Math\.round\(350)/g) || []).length;
-  assert.strictEqual(direct, 3, 'écritures directes de fitness dans 03 hors _fitJudge = les 3 revigorations (' + direct + ')');
-  assert.strictEqual((c03.match(/a\.fitness = 400;\n\s*a\._judgments = \[\];/g) || []).length, 3, 'chaque revigoration vide la fenêtre');
+  const writes = (c03.match(/\ba\.fitness = /g) || []).length, judge = (c03.match(/a\.fitness = Math\.max\(50, Math\.min\(2000, Math\.round\(350 \+ 1000 \* E\)\)\);/g) || []).length, revig = (c03.match(/a\.fitness = 400;\n\s*a\._judgments = \[\];/g) || []).length;
+  assert.strictEqual(judge, 1, '_fitJudge écrit la fitness une fois');
+  assert.strictEqual(revig, 3, 'les 3 revigorations (auto agents, auto bots, manuelle) vident la fenêtre (' + revig + ')');
+  assert.strictEqual(writes, judge + revig, 'aucune autre écriture directe de fitness dans 03 (' + writes + ')');
 });
 console.log('\n' + (fail ? '❌ ' : '✅ ') + pass + '/' + (pass + fail) + ' tests passés' + (fail ? ' — ' + fail + ' ÉCHEC(S)' : ''));
 process.exit(fail ? 1 : 0);
