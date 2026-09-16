@@ -122,4 +122,6 @@ Une régression de vérité = `VERDICT : NON LIVRABLE`, jamais « CONNU, tolér�
 
 - **16/09 — 1c-full livrée** (`20260916a`) : #19 réglé (rien d'effacé ni copié à la fusion, fitness de naissance = moyenne des parents / 2). Découvert : `banc-skill-borne.js` s'arrêtait à sa 1re section depuis le 06/09 (pin HTML figé) — réparé, 33/33. Le 7 jours sans retouche est levé par Rams ; suite : génome réel, fitness glissante, poids par attribution.
 
+- **16/09 — génome réel par siège** (`20260916b`) : #20 va au-delà du plan — la « fusion » évolue désormais des nombres que la décision lit (72 gènes sur 17 sièges), byte-identique par défaut (oracle + 40 états). Restent : fitness glissante (3), poids par attribution (4).
+
 *Mis à jour à chaque mission. Le prochain audit complet : après 1b-b, sur un backup de 24 h propre.*

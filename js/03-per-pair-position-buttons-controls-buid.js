@@ -1,3 +1,4 @@
+// [GÉNOME · 16/09/2026] VERSION 20260916b · génome réel par siège (GENOME_DEFAULTS, _genomeOf, _genomeEvolve) lu par scoutAnalysis / councilVote / guardianCheck ; probation des nouveau-nés dans le poids du roster
 // [1b-b · 15/09/2026] VERSION 20260915c · recordTradeForHeatmap : clôtures EV/RE seulement (AA exclu), remise à zéro unique du compteur mélangé
 // [PHASE 1 · 12/09/2026] VERSION 20260912c · VOTE PAR PAIRE : runRosterAnalysis publie ps.roster.votes de LA paire (muet = 0, RAM) et n'écrase plus a.score ; _agentPairVote(a, pair) ; learnFromOutcome / enrichMemory jugent l'agent sur son vote sur la paire ; liveTrainAgents retiré (archive/)
 // [GEL BOOT · 11/09/2026] VERSION 20260911c · double gel de boot (2 × 6 s) NOMMÉ par LoAF : `req.result` de store.getAll() sur aura_backups (rotation + liste) → index backups_meta (v2), lecture d'un seul enregistrement à la fois, enregistrements sans meta (collision 09b3) purgés
@@ -3527,6 +3528,82 @@ const COUNCIL_ADVISORS = {
 };
 
 // ── SCOUT ANALYZERS (13) ──
+// ═══ [GÉNOME · 16/09/2026] GÉNOME RÉEL PAR SIÈGE — point 2 du conseil « évolution à l'infini » (Rams 16/09) ═══
+// Jusqu'ici l'Évolueur « fusionnait » des agents dont la logique de vote est fixe par siège : rien de ce qui décide
+// n'évoluait (95 013 générations pour rien — audit 14/09). Désormais chaque siège porte un GÉNOME : les nombres que
+// sa logique lit réellement dans scoutAnalysis / councilVote / guardianCheck (fenêtres, seuils, gains, poids).
+// GENOME_DEFAULTS = les constantes qui étaient en dur (comportement byte-identique par défaut, prouvé par
+// banc-genome.js contre l'oracle banc-fixtures/analyse-avant-genome-20260916a.js). S.genome[id] = la version vivante
+// du siège ; S.genomeHistory[id] = ses meilleures versions passées (≤ 10, avec la fitness de pointe atteinte).
+// À chaque fusion (07 triggerEvolution → _genomeEvolve) : la version courante est archivée avec sa fitness de
+// pointe, puis un nouveau génome naît par recombinaison gène à gène entre la version courante et la MEILLEURE
+// version passée DU MÊME SIÈGE, puis mutation ±mut (fraction de la valeur), bornée par gène. La sélection reste
+// la fitness (quel siège est recyclé). Rien n'est jamais copié d'un siège à un autre : deux logiques, deux génomes.
+const GENOME_DEFAULTS = {
+  sentiment_v2:  { win: 8,  rsiHigh: 65, rsiLow: 35, momGain: 10, rsiW: 0.5, atW: 0.3, conf: 0.72 },
+  volume_v1:     { recentN: 5, histN: 15, lookback: 5, spike: 1.5, spikeScore: 0.6, low: 0.6, maxScore: 0.4, slope: 0.5 },
+  volatility_v1: { adxStrong: 30, cvHigh: 0.03, cvLow: 0.008, wStrong: 0.8, wHigh: 0.5, wLow: 0.6, wNormal: 0.6 },
+  corr_v1:       { win: 5, gain: 0.15 },
+  geopolitic_v1: { cvHigh: 0.03, cvMid: 0.02, cvLow: 0.008, riskHigh: 0.6, riskMid: 0.3, riskLow: 0.2, riskBase: 0.05, afW: 0.35 },
+  onchain_v1:    { win: 12 },
+  whale_v1:      { avgN: 9, big: 2.5, mid: 1.5, bigScore: 0.7, midScore: 0.35 },
+  breakout_v1:   { win: 20, margin: 0.002, score: 0.7 },
+  flow_v1:       { win: 5, gain: 0.7 },
+  scalper_v2:    { gain: 2, ownW: 0.6, voteThr: 0.18 },
+  swing_v2:      { atMin: 0.1, score: 0.6, ownW: 0.6, voteThr: 0.18 },
+  contrarian_v2: { rsiHigh: 72, rsiLow: 28, score: 0.7, ownW: 0.6, voteThr: 0.18 },
+  trend_v2:      { adxMin: 25, atMin: 0.15, score: 0.8, ownW: 0.6, voteThr: 0.18 },
+  hedge_v2:      { cvMax: 0.025, adviceMin: 0.3, score: 0.5, ownW: 0.6, voteThr: 0.18 },
+  momentum_v1:   { gain: 0.9, ownW: 0.6, voteThr: 0.18 },
+  mean_rev_v1:   { bbHigh: 0.9, bbLow: 0.1, score: 0.6, ownW: 0.6, voteThr: 0.18 },
+  security_v1:   { cvVeto: 0.04, cvWarn: 0.03 }
+};
+const GENE_INT = { win: 1, recentN: 1, histN: 1, lookback: 1, avgN: 1 };          // fenêtres : entiers ≥ 2
+const GENE_BOUNDS = {                                                             // sinon [défaut/4, défaut×4]
+  rsiHigh: [50, 95], rsiLow: [5, 50], bbHigh: [0.5, 1], bbLow: [0, 0.5], ownW: [0.2, 0.9], voteThr: [0.05, 0.5],
+  conf: [0.2, 0.95], score: [0.1, 1], spikeScore: [0.1, 1], bigScore: [0.1, 1], midScore: [0.05, 1], maxScore: [0.1, 1],
+  wStrong: [0.1, 1], wHigh: [0.1, 1], wLow: [0.1, 1], wNormal: [0.1, 1], gain: [0.02, 4], momGain: [1, 40]
+};
+function _geneClamp(k, v, def) {
+  if (!isFinite(v)) return def;
+  var b = GENE_BOUNDS[k] || [def / 4, def * 4];
+  v = Math.max(b[0], Math.min(b[1], v));
+  if (GENE_INT[k]) v = Math.max(2, Math.min(60, Math.round(v)));
+  return v;
+}
+function _genomeOf(id) {
+  var def = GENOME_DEFAULTS[id];
+  if (!def) return {};
+  var live = (typeof S !== 'undefined' && S && S.genome) ? S.genome[id] : null;
+  if (!live) return def;
+  var out = {};
+  Object.keys(def).forEach(function(k){ var v = Number(live[k]); out[k] = isFinite(v) ? _geneClamp(k, v, def[k]) : def[k]; });
+  return out;
+}
+// Archive la version courante (fitness de pointe atteinte), puis nouveau génome = recombinaison avec la meilleure
+// version passée du siège + mutation ±mut. Retourne { changed, archived } ou null (siège sans génome).
+function _genomeEvolve(id, mut, fitnessPeak) {
+  var def = GENOME_DEFAULTS[id]; if (!def) return null;
+  if (!S.genome) S.genome = {}; if (!S.genomeHistory) S.genomeHistory = {};
+  var cur = _genomeOf(id);
+  var hist = Array.isArray(S.genomeHistory[id]) ? S.genomeHistory[id] : (S.genomeHistory[id] = []);
+  var sig = JSON.stringify(cur), archived = false;
+  if (!hist.some(function(h){ return JSON.stringify(h.g) === sig; })) { hist.push({ g: cur, f: Math.round(Number(fitnessPeak) || 0), t: Date.now() }); archived = true; }
+  hist.sort(function(a, b){ return (b.f || 0) - (a.f || 0); });
+  if (hist.length > 10) hist.splice(10);
+  var best = hist[0].g, next = {}, changed = 0;
+  mut = Math.max(0.02, Math.min(0.5, Number(mut) || 0.1));
+  Object.keys(def).forEach(function(k){
+    var base = (Math.random() < 0.5) ? cur[k] : (isFinite(best[k]) ? best[k] : cur[k]);
+    var v = _geneClamp(k, base * (1 + (Math.random() * 2 - 1) * mut), def[k]);
+    if (v !== cur[k]) changed++;
+    next[k] = v;
+  });
+  S.genome[id] = next;
+  return { changed: changed, archived: archived, genes: Object.keys(def).length };
+}
+window.GENOME_DEFAULTS = GENOME_DEFAULTS; window._genomeOf = _genomeOf; window._genomeEvolve = _genomeEvolve;
+
 function scoutAnalysis(agentId, pair) {
   const ps   = S.pairStates?.[pair];
   const tech = typeof getTechSignals === 'function' ? getTechSignals(pair) : null;
@@ -3535,6 +3612,7 @@ function scoutAnalysis(agentId, pair) {
 
   const candles = ps.candles || [];
   const price   = ps.price || 0;
+  const G = _genomeOf(agentId);   // [GÉNOME · 16/09/2026] les nombres de CETTE logique — mutables par siège (07)
 
   switch(agentId) {
     // [S3 · 03/09/2026] macro_v1 / fundamental_v1 NEUTRALISÉS : ils lisaient
@@ -3559,15 +3637,15 @@ function scoutAnalysis(agentId, pair) {
       // v6.7: Real sentiment — price momentum + RSI bias as social proxy
       const candles2 = ps?.candles || [];
       if(candles2.length < 5) return { score:0, conf:0.4, reasoning:'Données insuffisantes' };
-      const closes = candles2.slice(-8).map(x=>x.c);
+      const closes = candles2.slice(-G.win).map(x=>x.c);
       const momentum = closes.length > 1 ? (closes[closes.length-1] - closes[0]) / closes[0] : 0;
       const rsi = tech?.raw?.rsi?.rsi || 50;
       // RSI>65 = euphorie, RSI<35 = panique
-      const rsiSent = rsi > 65 ? (rsi-65)/35 : rsi < 35 ? -(35-rsi)/35 : 0;
-      const rawScore = Math.max(-1, Math.min(1, momentum*10 + rsiSent*0.5 + (tech?.atScore||0)*0.3));
+      const rsiSent = rsi > G.rsiHigh ? (rsi-G.rsiHigh)/35 : rsi < G.rsiLow ? -(G.rsiLow-rsi)/35 : 0;
+      const rawScore = Math.max(-1, Math.min(1, momentum*G.momGain + rsiSent*G.rsiW + (tech?.atScore||0)*G.atW));
       return {
         score: rawScore,
-        conf: 0.72,
+        conf: G.conf,
         reasoning: rawScore > 0.4 ? `Euphorie (RSI ${rsi.toFixed(0)}, mom+)` : rawScore < -0.4 ? `Panique (RSI ${rsi.toFixed(0)})` : `Sentiment neutre (RSI ${rsi.toFixed(0)})`
       };
     }
@@ -3575,19 +3653,19 @@ function scoutAnalysis(agentId, pair) {
       // v6.7: Use candle range as volume proxy (no real volume data available)
       if(candles.length < 10) return { score:0, conf:0.3, reasoning:'Données insuffisantes' };
       // Range spike = volume spike proxy
-      const recentRange = candles.slice(-5).map(cd => (cd.h - cd.l) / Math.max(0.0001, cd.c));
-      const avgRange    = candles.slice(-20,-5).map(cd => (cd.h - cd.l) / Math.max(0.0001, cd.c));
+      const recentRange = candles.slice(-G.recentN).map(cd => (cd.h - cd.l) / Math.max(0.0001, cd.c));
+      const avgRange    = candles.slice(-(G.recentN + G.histN), -G.recentN).map(cd => (cd.h - cd.l) / Math.max(0.0001, cd.c));
       const recentAvg   = recentRange.reduce((s,v)=>s+v,0) / recentRange.length;
       const historicAvg = avgRange.reduce((s,v)=>s+v,0) / Math.max(1, avgRange.length);
       const ratio = recentAvg / Math.max(0.0001, historicAvg);
-      const priceUp = candles[candles.length-1].c > candles[candles.length-5].c;
+      const priceUp = candles[candles.length-1].c > candles[Math.max(0, candles.length-G.lookback)].c;
       // High range with up price = bullish volume, high range with down = bearish
-      if(ratio > 1.5) {
-        return { score: priceUp ? +0.6 : -0.6, conf:0.75, reasoning:`Volume spike ×${ratio.toFixed(1)} ${priceUp?'(haussier)':'(baissier)'}` };
-      } else if(ratio < 0.6) {
+      if(ratio > G.spike) {
+        return { score: priceUp ? +G.spikeScore : -G.spikeScore, conf:0.75, reasoning:`Volume spike ×${ratio.toFixed(1)} ${priceUp?'(haussier)':'(baissier)'}` };
+      } else if(ratio < G.low) {
         return { score: 0, conf: 0.5, reasoning:`Volume faible (×${ratio.toFixed(1)}) · distribution` };
       }
-      const score = priceUp ? Math.min(0.4, (ratio-1)*0.5) : -Math.min(0.4, (ratio-1)*0.5);
+      const score = priceUp ? Math.min(G.maxScore, (ratio-1)*G.slope) : -Math.min(G.maxScore, (ratio-1)*G.slope);
       return { score, conf:0.6, reasoning:`Volume ×${ratio.toFixed(1)} ${priceUp?'haussier':'baissier'}` };
     }
         case 'volatility_v1': {
@@ -3596,21 +3674,21 @@ function scoutAnalysis(agentId, pair) {
       const adx = tech?.raw?.adx?.adx || 20;
       const at  = tech?.atScore || 0;
       // High ADX + trending = follow the trend
-      if(adx > 30) return { score: at * 0.8, conf:0.80, reasoning:`Tendance forte (ADX ${adx.toFixed(0)}) · ${at>0?'haussier':'baissier'}` };
-      if(cv > 0.03) return { score: at * 0.5, conf:0.70, reasoning:`Vol élevée (${(cv*100).toFixed(1)}%) — suivre AT` };
-      if(cv < 0.008) {
+      if(adx > G.adxStrong) return { score: at * G.wStrong, conf:0.80, reasoning:`Tendance forte (ADX ${adx.toFixed(0)}) · ${at>0?'haussier':'baissier'}` };
+      if(cv > G.cvHigh) return { score: at * G.wHigh, conf:0.70, reasoning:`Vol élevée (${(cv*100).toFixed(1)}%) — suivre AT` };
+      if(cv < G.cvLow) {
         // Compression = breakout imminent, bias toward last price action
-        return { score: at * 0.6, conf:0.60, reasoning:`Compression vol · breakout probable` };
+        return { score: at * G.wLow, conf:0.60, reasoning:`Compression vol · breakout probable` };
       }
       // Normal regime — moderate confidence in AT signal
-      return { score: at * 0.6, conf:0.65, reasoning:`Régime normal (cv${(cv*100).toFixed(1)}%, ADX${adx.toFixed(0)})` };
+      return { score: at * G.wNormal, conf:0.65, reasoning:`Régime normal (cv${(cv*100).toFixed(1)}%, ADX${adx.toFixed(0)})` };
     }
 
     case 'corr_v1': {
       // Detect divergence from market leaders
-      const leaderScore = (S.pairStates['BTC/USDT']?.candles?.slice(-5).reduce((s,c,i,a)=>i>0?s+Math.sign(c.c-a[i-1].c):s,0)) || 0;
+      const leaderScore = (S.pairStates['BTC/USDT']?.candles?.slice(-G.win).reduce((s,c,i,a)=>i>0?s+Math.sign(c.c-a[i-1].c):s,0)) || 0;
       return {
-        score: Math.max(-1, Math.min(1, leaderScore * 0.15)),
+        score: Math.max(-1, Math.min(1, leaderScore * G.gain)),
         conf: 0.6,
         reasoning: leaderScore > 2 ? 'BTC mène la hausse (corrélation +)' : leaderScore < -2 ? 'BTC mène la baisse' : 'Découplage en cours'
       };
@@ -3619,8 +3697,8 @@ function scoutAnalysis(agentId, pair) {
       // v6.7: Geopolitical risk proxy — volatility spike + macro
       const cv = tech?.raw?.stddev?.cv || 0.015;
       const af = fund?.fundScore || 0;
-      const riskScore = cv > 0.03 ? -0.6 : cv > 0.02 ? -0.3 : cv < 0.008 ? 0.2 : 0.05;
-      const rawScore  = Math.max(-1, Math.min(1, riskScore + af * 0.35));
+      const riskScore = cv > G.cvHigh ? -G.riskHigh : cv > G.cvMid ? -G.riskMid : cv < G.cvLow ? G.riskLow : G.riskBase;
+      const rawScore  = Math.max(-1, Math.min(1, riskScore + af * G.afW));
       return {
         score: rawScore,
         conf: 0.60,
@@ -3632,12 +3710,12 @@ function scoutAnalysis(agentId, pair) {
       const candles2 = ps?.candles || [];
       if(candles2.length < 10) return { score:0, conf:0.4, reasoning:'Données insuffisantes' };
       let accum = 0;
-      candles2.slice(-12).forEach(cd => {
+      candles2.slice(-G.win).forEach(cd => {
         const body  = Math.abs(cd.c - cd.o);
         const range = (cd.h - cd.l) || 0.0001;
         accum += (cd.c > cd.o ? 1 : -1) * (body / range);
       });
-      const rawScore = Math.max(-1, Math.min(1, accum / 12));
+      const rawScore = Math.max(-1, Math.min(1, accum / G.win));
       return {
         score: rawScore,
         conf: 0.70,
@@ -3646,28 +3724,28 @@ function scoutAnalysis(agentId, pair) {
     }
     case 'whale_v1': {
       // v6.7: Whale detection via large candle bodies (no volume data available)
-      if(candles.length < 10) return { score:0, conf:0.3, reasoning:'En observation' };
+      if(candles.length < Math.max(10, G.avgN + 1)) return { score:0, conf:0.3, reasoning:'En observation' };
       const last = candles[candles.length-1];
       // Body size relative to recent average body
       const lastBody = Math.abs(last.c - last.o);
-      const avgBody  = candles.slice(-10,-1).reduce((s,cd)=>s+Math.abs(cd.c-cd.o),0) / 9;
+      const avgBody  = candles.slice(-(G.avgN+1),-1).reduce((s,cd)=>s+Math.abs(cd.c-cd.o),0) / G.avgN;
       const ratio    = lastBody / Math.max(0.0001, avgBody);
       const bullish  = last.c > last.o;
-      if(ratio > 2.5) {
-        return { score: bullish ? +0.7 : -0.7, conf:0.80, reasoning:`Grosse bougie (×${ratio.toFixed(1)} moy.) · ${bullish?'achat massif':'vente massive'}` };
-      } else if(ratio > 1.5) {
-        return { score: bullish ? +0.35 : -0.35, conf:0.65, reasoning:`Bougie significative (×${ratio.toFixed(1)})` };
+      if(ratio > G.big) {
+        return { score: bullish ? +G.bigScore : -G.bigScore, conf:0.80, reasoning:`Grosse bougie (×${ratio.toFixed(1)} moy.) · ${bullish?'achat massif':'vente massive'}` };
+      } else if(ratio > G.mid) {
+        return { score: bullish ? +G.midScore : -G.midScore, conf:0.65, reasoning:`Bougie significative (×${ratio.toFixed(1)})` };
       }
       return { score:0, conf:0.45, reasoning:`Activité normale (×${ratio.toFixed(1)})` };
     }
 
     case 'breakout_v1': {
-      if(candles.length < 20) return { score:0, conf:0.3, reasoning:'Structure en construction' };
-      const recent20 = candles.slice(-20);
+      if(candles.length < G.win) return { score:0, conf:0.3, reasoning:'Structure en construction' };
+      const recent20 = candles.slice(-G.win);
       const high = Math.max(...recent20.slice(0,-2).map(c=>c.h||c.c));
       const low  = Math.min(...recent20.slice(0,-2).map(c=>c.l||c.c));
-      if(price > high * 1.002) return { score:+0.7, conf:0.78, reasoning:`Breakout haut cassé (${high.toFixed(2)})` };
-      if(price < low  * 0.998) return { score:-0.7, conf:0.78, reasoning:`Breakout bas cassé (${low.toFixed(2)})` };
+      if(price > high * (1 + G.margin)) return { score:+G.score, conf:0.78, reasoning:`Breakout haut cassé (${high.toFixed(2)})` };
+      if(price < low  * (1 - G.margin)) return { score:-G.score, conf:0.78, reasoning:`Breakout bas cassé (${low.toFixed(2)})` };
       const range = (price - low) / Math.max(0.001, high - low);
       return { score: 0, conf: 0.5, reasoning: `Dans la range (${(range*100).toFixed(0)}%)` };
     }
@@ -3683,15 +3761,15 @@ function scoutAnalysis(agentId, pair) {
     }
     case 'flow_v1': {
       // Approximate order flow from candle body direction
-      if(candles.length < 5) return { score:0, conf:0.3, reasoning:'Données insuffisantes' };
-      const last5 = candles.slice(-5);
+      if(candles.length < G.win) return { score:0, conf:0.3, reasoning:'Données insuffisantes' };
+      const last5 = candles.slice(-G.win);
       const bullBodies = last5.filter(c => c.c > c.o).length;
-      const bearBodies = 5 - bullBodies;
-      const netFlow = (bullBodies - bearBodies) / 5;
+      const bearBodies = last5.length - bullBodies;
+      const netFlow = (bullBodies - bearBodies) / Math.max(1, last5.length);
       return {
-        score: netFlow * 0.7,
+        score: netFlow * G.gain,
         conf: Math.abs(netFlow) * 0.7 + 0.3,
-        reasoning: netFlow > 0.3 ? `Flux acheteur dominant (${bullBodies}/5)` : netFlow < -0.3 ? `Flux vendeur dominant (${bearBodies}/5)` : 'Flux équilibré'
+        reasoning: netFlow > 0.3 ? `Flux acheteur dominant (${bullBodies}/${last5.length})` : netFlow < -0.3 ? `Flux vendeur dominant (${bearBodies}/${last5.length})` : 'Flux équilibré'
       };
     }
   }
@@ -3715,49 +3793,50 @@ function councilVote(councilId, pair, scoutResults) {
   const macd = tech?.raw?.macd?.hist || 0;
   const adx  = tech?.raw?.adx?.adx || 20;
 
+  const G = _genomeOf(councilId);   // [GÉNOME · 16/09/2026]
   let ownScore = 0, ownQuote = '';
 
   switch(councilId) {
     case 'scalper_v2':
-      ownScore = (lmsr - 0.5) * 2;
+      ownScore = (lmsr - 0.5) * G.gain;
       ownQuote = ownScore > 0.2 ? `Push court, LMSR ${(lmsr*100).toFixed(0)}%. Long scalp.` : ownScore < -0.2 ? `Pression vendeuse. Short rapide.` : `Pas de momentum net.`;
       break;
     case 'swing_v2':
-      ownScore = macd > 0 && at > 0.1 ? 0.6 : macd < 0 && at < -0.1 ? -0.6 : 0;
+      ownScore = macd > 0 && at > G.atMin ? G.score : macd < 0 && at < -G.atMin ? -G.score : 0;
       ownQuote = ownScore > 0 ? `MACD+${macd.toFixed(3)}, structure 1h-4h haussière.` : ownScore < 0 ? `MACD négatif, cycle baissier.` : `MACD neutre, j'attends.`;
       break;
     case 'contrarian_v2':
-      if(rsi > 72)      { ownScore = -0.7; ownQuote = `RSI ${rsi.toFixed(0)} surchauffe. Je fade.`; }
-      else if(rsi < 28) { ownScore = +0.7; ownQuote = `RSI ${rsi.toFixed(0)} capitulation. J'achète.`; }
+      if(rsi > G.rsiHigh)      { ownScore = -G.score; ownQuote = `RSI ${rsi.toFixed(0)} surchauffe. Je fade.`; }
+      else if(rsi < G.rsiLow) { ownScore = +G.score; ownQuote = `RSI ${rsi.toFixed(0)} capitulation. J'achète.`; }
       else              { ownScore = 0; ownQuote = `Pas d'extrême à fader.`; }
       break;
     case 'trend_v2':
-      if(adx > 25 && at > 0.15)       { ownScore = +0.8; ownQuote = `ADX ${adx.toFixed(0)}, tendance claire. Long.`; }
-      else if(adx > 25 && at < -0.15) { ownScore = -0.8; ownQuote = `Tendance baissière confirmée.`; }
+      if(adx > G.adxMin && at > G.atMin)       { ownScore = +G.score; ownQuote = `ADX ${adx.toFixed(0)}, tendance claire. Long.`; }
+      else if(adx > G.adxMin && at < -G.atMin) { ownScore = -G.score; ownQuote = `Tendance baissière confirmée.`; }
       else                             { ownScore = 0;   ownQuote = `Pas de tendance (ADX ${adx.toFixed(0)}).`; }
       break;
     case 'hedge_v2':
       const cv = tech?.raw?.stddev?.cv || 0.015;
-      if(cv > 0.025)               { ownScore = 0; ownQuote = `Volatilité élevée (${(cv*100).toFixed(1)}%). On attend.`; }
-      else if(adviceScore > 0.3)   { ownScore = 0.5; ownQuote = `Signaux alignés, vol contenue. Entrée raisonnable.`; }
-      else if(adviceScore < -0.3)  { ownScore = -0.5; ownQuote = `Signaux baissiers + macro. Short prudent.`; }
+      if(cv > G.cvMax)               { ownScore = 0; ownQuote = `Volatilité élevée (${(cv*100).toFixed(1)}%). On attend.`; }
+      else if(adviceScore > G.adviceMin)   { ownScore = G.score; ownQuote = `Signaux alignés, vol contenue. Entrée raisonnable.`; }
+      else if(adviceScore < -G.adviceMin)  { ownScore = -G.score; ownQuote = `Signaux baissiers + macro. Short prudent.`; }
       else                         { ownScore = 0; ownQuote = `Conviction insuffisante.`; }
       break;
     case 'momentum_v1':
-      ownScore = at * 0.9;
+      ownScore = at * G.gain;
       ownQuote = at > 0.2 ? `Momentum positif fort (AT ${at.toFixed(2)}).` : at < -0.2 ? `Momentum négatif (AT ${at.toFixed(2)}).` : `Momentum faible.`;
       break;
     case 'mean_rev_v1':
       const bb = tech?.raw?.boll?.position || 0.5;
-      if(bb > 0.9)      { ownScore = -0.6; ownQuote = `Sur la borne haute Boll, retour à la moyenne.`; }
-      else if(bb < 0.1) { ownScore = +0.6; ownQuote = `Sur la borne basse, rebond probable.`; }
+      if(bb > G.bbHigh)      { ownScore = -G.score; ownQuote = `Sur la borne haute Boll, retour à la moyenne.`; }
+      else if(bb < G.bbLow) { ownScore = +G.score; ownQuote = `Sur la borne basse, rebond probable.`; }
       else              { ownScore = 0;    ownQuote = `Proche de la moyenne, pas d'edge.`; }
       break;
   }
 
   // Blend own analysis (60%) with advisors (40%)
-  const finalScore = ownScore * 0.6 + adviceScore * 0.4;
-  const vote = finalScore > 0.18 ? 'long' : finalScore < -0.18 ? 'short' : 'hold';
+  const finalScore = ownScore * G.ownW + adviceScore * (1 - G.ownW);
+  const vote = finalScore > G.voteThr ? 'long' : finalScore < -G.voteThr ? 'short' : 'hold';
 
   return {
     vote,
@@ -3806,8 +3885,9 @@ function guardianCheck(guardianId, verdict, pair, stake) {
       const ps = S.pairStates?.[pair];
       const tech = typeof getTechSignals === 'function' ? getTechSignals(pair) : null;
       const cv = tech?.raw?.stddev?.cv || 0.015;
-      if(cv > 0.04) return { status:'veto', reasoning:`Volatilité anormale (${(cv*100).toFixed(1)}%). Pause.` };
-      if(cv > 0.03) return { status:'warn', reasoning:'Volatilité élevée.' };
+      const G = _genomeOf('security_v1');   // [GÉNOME · 16/09/2026]
+      if(cv > G.cvVeto) return { status:'veto', reasoning:`Volatilité anormale (${(cv*100).toFixed(1)}%). Pause.` };
+      if(cv > G.cvWarn) return { status:'warn', reasoning:'Volatilité élevée.' };
       return { status:'approve', reasoning:'Marché stable.' };
     }
     case 'evolver_v1': {
@@ -3853,6 +3933,7 @@ function runRosterAnalysis(pair) {
     const agent = (S.agents || []).find(a => a.id === cId);
     if (agent && typeof agent.fitness === 'number') {
       weight = 0.5 + (Math.max(50, Math.min(2000, agent.fitness)) / 1000);
+      if (agent._probationUntil && (S.cycle || 0) < agent._probationUntil) weight *= 0.5;   // [GÉNOME · 16/09/2026] probation : un nouveau-né pèse moitié pendant 30 résolutions
       // Penalize agents on a bad losing streak (3+ consecutive errors)
       if (agent.streak !== undefined && agent.streak <= -3) {
         weight *= 0.5;  // losing streak = half weight

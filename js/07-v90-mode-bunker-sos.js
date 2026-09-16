@@ -1,3 +1,4 @@
+// [GÉNOME · 16/09/2026] VERSION 20260916b · triggerEvolution fait évoluer le GÉNOME du siège (_genomeEvolve) et pose la probation (_probationUntil)
 // [1c-FULL · 16/09/2026] VERSION 20260916a · héritage complet : mémoire, agentPairSkill, discipleTaskSkill et regimeFitness restent avec le siège à la fusion ; fitness de naissance = max(350, moyenne des parents / 2) ; _onAgentEvolved(id, nom) sans copie
 // [BUNKER EQUITY · 15/09/2026] VERSION 20260915d · le bunker mesure compte trading + valeur des positions ouvertes (_bkCapital), plus le compte seul : fin des fausses alertes « −15 % » à chaque fois que 3 positions sont ouvertes
 // [1c-LITE · 15/09/2026] VERSION 20260915b · évolution 1/h (était 1/min), type/source du siège restaurés (_SEAT_DEF), regimeFitness du siège conservée (plus clonée des parents), rêve 1/jour (était 4 min)
@@ -2752,6 +2753,18 @@ function triggerEvolution(weak) {
   // automatiquement le plus faible, mais ne porte pas non plus la réputation entière de ses parents.
   weak.fitness = Math.max(350, Math.round(parents.reduce((t, p) => t + (Number(p.fitness) || 0), 0) / parents.length / 2));   // moyenne des parents du tournoi / 2
   weak._bornCycle = (typeof S !== 'undefined' && S.cycle) ? S.cycle : 0;
+  // [GÉNOME · 16/09/2026] la version courante du siège est archivée avec sa fitness de pointe, puis un nouveau
+  // génome naît (recombinaison avec la meilleure version passée DU MÊME SIÈGE + mutation ±_mutation, 03 _genomeEvolve).
+  // Probation : le nouveau-né pèse moitié dans le roster pendant 30 résolutions (03).
+  weak._probationUntil = weak._bornCycle + 30;
+  try {
+    const _peakPrev = Math.max.apply(null, (Array.isArray(weak.fitnessHistory) && weak.fitnessHistory.length ? weak.fitnessHistory : [0]).map(Number).filter(isFinite).concat([0]));
+    const _ge = (typeof _genomeEvolve === 'function') ? _genomeEvolve(weak.id, _mutation, _peakPrev) : null;
+    if (_ge && S.chainLog) {
+      S.chainLog.push({ icon: '\uD83E\uDDEC', desc: 'G\u00e9nome ' + weak.id + ' : ' + _ge.changed + '/' + _ge.genes + ' g\u00e8nes mut\u00e9s (\u00b1' + Math.round(_mutation * 100) + ' %)' + (_ge.archived ? ' \u00b7 version pr\u00e9c\u00e9dente archiv\u00e9e (pointe ' + Math.round(_peakPrev) + ' T$)' : ''), hash: Math.random().toString(36).slice(2, 8), time: new Date().toLocaleTimeString() });
+      if (S.chainLog.length > 100) S.chainLog.splice(0, S.chainLog.length - 100);
+    }
+  } catch(e) { try{window._decErr&&window._decErr(e)}catch(_e){} }
   weak.score   = _scoreMix + (Math.random() - 0.5) * _mutation * 2;
   weak.conf    = Math.min(0.80, _confMix);
   weak.color   = p1.color;

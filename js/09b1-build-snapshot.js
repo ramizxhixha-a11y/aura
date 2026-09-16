@@ -1,3 +1,4 @@
+// [GÉNOME · 16/09/2026] VERSION 20260916b · genome + genomeHistory dans le snapshot
 // [SONDE RÉSEAU · 15/09/2026] VERSION 20260915a · perfLog.net (60 derniers pings classés) dans le snapshot
 // [GEL BOOT · 11/09/2026] VERSION 20260911b · perfLog : + loaf (20 frames ≥ 1 s nommées par le navigateur)
 // [GEL BOOT · 11/09/2026] VERSION 20260911a · snapshot : + perfLog (gels 30 / lent 30 / heap 144 / boots 20), bornée, relue par applySnap (09b2) et listée dans _APPLYSNAP_MANIFEST
@@ -73,6 +74,8 @@ function buildSnapshot() {
       removedPairs: S.removedPairs || [],
       // [13/08/2026] compétence agent×paire — pondère le vote du conseil par paire
       agentPairSkill: S.agentPairSkill || {},
+      genome: S.genome || {},                 // [GÉNOME · 16/09/2026]
+      genomeHistory: S.genomeHistory || {},   // [GÉNOME · 16/09/2026]
       botDisciples:   S.botDisciples   || {},   // [15/08] sièges des disciples par bot
       discipleTasks:  S.discipleTasks  || {},   // [15/08] tâche élue de chaque disciple
       discipleAngles: S.discipleAngles || {},   // [15/08] angle mesurable de chaque disciple
