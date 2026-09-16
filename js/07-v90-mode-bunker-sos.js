@@ -1,3 +1,4 @@
+// [FITNESS GLISSANTE · 16/09/2026] VERSION 20260916c · fenêtre de jugements remise à zéro à la fusion
 // [GÉNOME · 16/09/2026] VERSION 20260916b · triggerEvolution fait évoluer le GÉNOME du siège (_genomeEvolve) et pose la probation (_probationUntil)
 // [1c-FULL · 16/09/2026] VERSION 20260916a · héritage complet : mémoire, agentPairSkill, discipleTaskSkill et regimeFitness restent avec le siège à la fusion ; fitness de naissance = max(350, moyenne des parents / 2) ; _onAgentEvolved(id, nom) sans copie
 // [BUNKER EQUITY · 15/09/2026] VERSION 20260915d · le bunker mesure compte trading + valeur des positions ouvertes (_bkCapital), plus le compte seul : fin des fausses alertes « −15 % » à chaque fois que 3 positions sont ouvertes
@@ -2757,6 +2758,7 @@ function triggerEvolution(weak) {
   // génome naît (recombinaison avec la meilleure version passée DU MÊME SIÈGE + mutation ±_mutation, 03 _genomeEvolve).
   // Probation : le nouveau-né pèse moitié dans le roster pendant 30 résolutions (03).
   weak._probationUntil = weak._bornCycle + 30;
+  weak._judgments = [];   // [FITNESS GLISSANTE · 16/09/2026] la fenêtre repart de zéro : elle mesure le génome courant
   try {
     const _peakPrev = Math.max.apply(null, (Array.isArray(weak.fitnessHistory) && weak.fitnessHistory.length ? weak.fitnessHistory : [0]).map(Number).filter(isFinite).concat([0]));
     const _ge = (typeof _genomeEvolve === 'function') ? _genomeEvolve(weak.id, _mutation, _peakPrev) : null;

@@ -1,3 +1,4 @@
+// [FITNESS GLISSANTE · 16/09/2026] VERSION 20260916c · fitness = 350 + 1 000 × espérance nette des 60 derniers jugements (_fitJudge), poids symétriques, plus de saturation ; bonus de série retiré
 // [GÉNOME · 16/09/2026] VERSION 20260916b · génome réel par siège (GENOME_DEFAULTS, _genomeOf, _genomeEvolve) lu par scoutAnalysis / councilVote / guardianCheck ; probation des nouveau-nés dans le poids du roster
 // [1b-b · 15/09/2026] VERSION 20260915c · recordTradeForHeatmap : clôtures EV/RE seulement (AA exclu), remise à zéro unique du compteur mélangé
 // [PHASE 1 · 12/09/2026] VERSION 20260912c · VOTE PAR PAIRE : runRosterAnalysis publie ps.roster.votes de LA paire (muet = 0, RAM) et n'écrase plus a.score ; _agentPairVote(a, pair) ; learnFromOutcome / enrichMemory jugent l'agent sur son vote sur la paire ; liveTrainAgents retiré (archive/)
@@ -1186,6 +1187,29 @@ function _drawActionMiniChartsInner() {
 // ============================================================
 // MOTEUR D'APPRENTISSAGE ADAPTATIF — Correction d'erreurs permanente
 // ============================================================
+// ═══ [FITNESS GLISSANTE · 16/09/2026] point 3 du conseil « évolution à l'infini » (Rams 16/09) ═══
+// Jusqu'ici la fitness s'ADDITIONNAIT (+42 × force × amplitude par bonne réponse, −18 par erreur, bots +5/−1,2 × amplitude)
+// jusqu'au plafond : tout le monde finissait à 1 600 et la sélection s'éteignait (audit 14/09, capture 15/09 : 4 sièges à
+// 1 600-1 652). Désormais la fitness d'un siège = 350 + 1 000 × E, où E ∈ [−1, +1] est l'espérance nette de ses
+// FIT_WINDOW derniers jugements (±1 pondéré par force du signal × amplitude × décroissance — poids SYMÉTRIQUES : un
+// pile-ou-face vaut E = 0 → 350). Toujours-juste → 1 350, jamais le plafond ; un siège qui se met à perdre redescend
+// en moins de 30 jugements ; les vieux régimes sortent de la fenêtre. Moins de FIT_MIN_N jugements → fitness de
+// naissance conservée. À la fusion (07) la fenêtre repart de zéro : elle mesure le génome courant.
+const FIT_WINDOW = 60, FIT_MIN_N = 5;
+function _fitJudge(a, sign, w) {
+  if (!a) return 0;
+  if (!Array.isArray(a._judgments)) a._judgments = [];
+  a._judgments.push({ s: sign >= 0 ? 1 : -1, w: Math.max(0.01, Number(w) || 0) });
+  if (a._judgments.length > FIT_WINDOW) a._judgments.splice(0, a._judgments.length - FIT_WINDOW);
+  if (a._judgments.length < FIT_MIN_N) return a.fitness;
+  let sw = 0, se = 0;
+  a._judgments.forEach(j => { sw += j.w; se += j.s * j.w; });
+  const E = sw > 0 ? se / sw : 0;
+  a.fitness = Math.max(50, Math.min(2000, Math.round(350 + 1000 * E)));
+  return a.fitness;
+}
+window._fitJudge = _fitJudge;
+
 function learnFromOutcome(source, pnlPct, pair) {
 
   // ── UN NON-EVENEMENT N ENSEIGNE RIEN (30/07/2026) ───────────────────
@@ -1245,14 +1269,14 @@ function learnFromOutcome(source, pnlPct, pair) {
           a._lastPnlContrib = cur;
         }
       } catch(e) { try{window._decErr&&window._decErr(e)}catch(_e){} }
-      a.fitness = Math.max(50, Math.min(2000, a.fitness + botReward));
+      _fitJudge(a, botReward >= 0 ? 1 : -1, mag);   // [FITNESS GLISSANTE] poids symétrique = amplitude du trade
       a.totalReward = (a.totalReward || 0) + botReward;
       a.learningEvents = (a.learningEvents || 0) + 1;
       return;
     }
     if(a.isMeta) {
       const metaReward = won ? mag * 2 : -mag * 0.5;  // v7.3 OPT · calcul extrait
-      a.fitness = Math.max(50, a.fitness + metaReward);  // v8.0 LIVRAISON 30 · FIX #2 · borne min unifiée à 50
+      _fitJudge(a, won ? 1 : -1, mag);   // [FITNESS GLISSANTE] poids symétrique
       a.totalReward = (a.totalReward || 0) + metaReward;  // v7.3 OPT · affichage réel
       a.learningEvents = (a.learningEvents || 0) + 1;  // v7.3 OPT · compteur visible
       return;
@@ -1293,7 +1317,7 @@ function learnFromOutcome(source, pnlPct, pair) {
     if(aligned) {
       // ── Agent correct : récompense + renforcement ──────────────
       const reward = signalStrength * mag * decay * 42;  // v7.2 TURBO · ×3 (ex: 14)
-      a.fitness    = Math.min(2000, a.fitness + reward);  // v8.0 LIVRAISON 27 FIX · borne max unifiée à 2000
+      _fitJudge(a, 1, signalStrength * mag * decay);   // [FITNESS GLISSANTE] reward reste le montant affiché (totalReward)
       a.learningEvents = (a.learningEvents||0) + 1;
       a.totalReward    = (a.totalReward||0) + reward;
       a.streak         = (a.streak||0) + 1;
@@ -1309,7 +1333,7 @@ function learnFromOutcome(source, pnlPct, pair) {
     } else {
       // ── Agent incorrect : pénalité + correction automatique ────
       const penalty = signalStrength * mag * decay * 18;  // v7.2 TURBO · ×3 (ex: 6)
-      a.fitness = Math.max(50, a.fitness - penalty);  // v8.0 LIVRAISON 27 FIX · borne min unifiée à 50
+      _fitJudge(a, -1, signalStrength * mag * decay);   // [FITNESS GLISSANTE] même poids qu'une bonne réponse (symétrie)
       a.learningEvents = (a.learningEvents||0) + 1;
       a.totalReward    = (a.totalReward||0) - penalty;
       a.errors         = (a.errors||0) + 1;
@@ -1354,9 +1378,8 @@ function learnFromOutcome(source, pnlPct, pair) {
     }
 
     // ── Streak bonus ──
-    if(a.streak >= 5) {
-      a.fitness = Math.min(2000, a.fitness + 5);  // v8.0 LIVRAISON 27 FIX · borne max unifiée à 2000
-    }
+    // [FITNESS GLISSANTE · 16/09/2026] plus de bonus de série sur la fitness (il était écrasé au jugement suivant) : la
+    // série reste visible (a.streak) et pèse dans le roster (03 : série perdante = poids ÷ 2).
 
     // ── Fitness history for sparkline ──
     if(!a.fitnessHistory) a.fitnessHistory = [a.fitness];

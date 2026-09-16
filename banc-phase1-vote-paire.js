@@ -36,7 +36,7 @@ console.log('▶ banc-phase1-vote-paire · token ' + TOK + ' · ' + scripts.leng
 console.log('\n── A · statique : ce qui est retiré, ce qui est publié ──');
 T('en-têtes : 03/12 « [PHASE 1 · 12/09/2026] VERSION 20260912c », 02/08 relivrés par 1b-a « [1b-a · 14/09/2026] VERSION 20260914a », 10f « ▓▓▓ VERSION 20260914b ▓▓▓ »', () => {
   assert.ok(s12.startsWith('// [1c-FULL · 16/09/2026] VERSION 20260916a') && s12.split('\n')[1].startsWith('// [PHASE 1 · 12/09/2026] VERSION 20260912c'), F12);   // [1c-FULL] 12 relivré, en-tête PHASE 1 en 2e ligne
-  assert.ok(s03.startsWith('// [GÉNOME · 16/09/2026] VERSION 20260916b') && s03.split('\n').slice(0, 4).some(l => l.startsWith('// [PHASE 1 · 12/09/2026] VERSION 20260912c')), F03);   // [GÉNOME] 03 relivré, en-tête PHASE 1 conservé dans les 4 premières lignes
+  assert.ok(s03.startsWith('// [FITNESS GLISSANTE · 16/09/2026] VERSION 20260916c') && s03.split('\n').slice(0, 5).some(l => l.startsWith('// [PHASE 1 · 12/09/2026] VERSION 20260912c')), F03);   // [FITNESS GLISSANTE] 03 relivré, en-tête PHASE 1 conservé dans les 5 premières lignes
   assert.ok(s08.startsWith('// [1b-b · 15/09/2026] VERSION 20260915c') && s08.split('\n')[1].startsWith('// [1b-a · 14/09/2026] VERSION 20260914a'), F08);   // [1b-b] 08 relivré, en-tête 1b-a en 2e ligne
   assert.ok(s02.startsWith('// [SONDE RÉSEAU · 15/09/2026] VERSION 20260915a') && s02.split('\n')[1].startsWith('// [1b-a · 14/09/2026] VERSION 20260914a'), F02);   // [SONDE RÉSEAU] 02 relivré, en-tête 1b-a en 2e ligne
   assert.ok(s10f.startsWith('// ▓▓▓ VERSION 20260914b ▓▓▓'));   // 10f livré au hotfix 1b-a (b), non retouché depuis
@@ -242,22 +242,23 @@ function mkLearnCtx() {
   c.enrichMemory = (a, won, pnl, pair) => c.calls.memory.push([a.id, won, pair]);
   c.triggerEvolution = a => c.calls.evo.push(a.id);
   c.nowStr = () => '00:00:00'; c.rndHash = () => 'h';
+  vm.runInContext(between(s03, 'const FIT_WINDOW = 60, FIT_MIN_N = 5;', 'window._fitJudge = _fitJudge;', 'fitJudge') + 'window._fitJudge = _fitJudge;', c);   // [FITNESS GLISSANTE 16/09]
   vm.runInContext(LEARN_TXT, c);
   return c;
 }
-T('learnFromOutcome(\'trade\', +1.5, BTC) : macro_v1 (a.score = −0.9, vote BTC = +0.6) est ALIGNÉ (avant : jugé sur a.score → faux) → streak 1, fitness ↑, agentPairSkill[macro_v1][BTC].w = 1, mémoire won', () => {
+T('learnFromOutcome(\'trade\', +1.5, BTC) : macro_v1 (a.score = −0.9, vote BTC = +0.6) est ALIGNÉ (avant : jugé sur a.score → faux) → streak 1, jugement +1 (fitness glissante : inchangée avant 5), agentPairSkill[macro_v1][BTC].w = 1, mémoire won', () => {
   const c = mkLearnCtx(); const macro = c.S.agents.find(a => a.id === 'macro_v1'); macro.score = -0.9;
   vm.runInContext("runRosterAnalysis('BTC/USDT'); learnFromOutcome('trade', 1.5, 'BTC/USDT')", c);
-  assert.strictEqual(macro.streak, 1); assert.ok(macro.fitness > 800);
+  assert.strictEqual(macro.streak, 1); assert.strictEqual(macro._judgments.length, 1); assert.strictEqual(macro._judgments[0].s, 1); assert.strictEqual(macro.fitness, 800, '[FITNESS GLISSANTE] < 5 jugements : fitness de naissance conservée');
   assert.deepStrictEqual(J(c.S.agentPairSkill.macro_v1['BTC/USDT']), { w: 1, l: 0 });
   assert.ok(c.calls.memory.some(m => m[0] === 'macro_v1' && m[1] === true && m[2] === 'BTC/USDT'));
   assert.deepStrictEqual(J(c.S.agentPairSkill.scalper_v2['BTC/USDT']), { w: 1, l: 0 });   // conseil long sur BTC, gagné
 });
-T('learnFromOutcome(\'trade\', +1.5, ETH) : votes ETH négatifs, trade gagné → tous les votants INCORRECTS (errors 1, l = 1, fitness ↓) ; porte régime appelée pour les 20 votants |vote| > 0.05 seulement (gardien +0.05 exclu, bots score 0 exclus)', () => {
+T('learnFromOutcome(\'trade\', +1.5, ETH) : votes ETH négatifs, trade gagné → tous les votants INCORRECTS (errors 1, l = 1, jugement −1) ; porte régime appelée pour les 20 votants |vote| > 0.05 seulement (gardien +0.05 exclu, bots score 0 exclus)', () => {
   const c = mkLearnCtx();
   vm.runInContext("runRosterAnalysis('ETH/USDT'); learnFromOutcome('trade', 1.5, 'ETH/USDT')", c);
   const macro = c.S.agents.find(a => a.id === 'macro_v1'), swing = c.S.agents.find(a => a.id === 'swing_v2');
-  assert.strictEqual(macro.errors, 1); assert.ok(macro.fitness < 800); assert.deepStrictEqual(J(c.S.agentPairSkill.macro_v1['ETH/USDT']), { w: 0, l: 1 });
+  assert.strictEqual(macro.errors, 1); assert.strictEqual(macro._judgments[0].s, -1); assert.strictEqual(macro.fitness, 800, '[FITNESS GLISSANTE] < 5 jugements : inchangée'); assert.deepStrictEqual(J(c.S.agentPairSkill.macro_v1['ETH/USDT']), { w: 0, l: 1 });
   assert.strictEqual(swing.errors, 1); assert.deepStrictEqual(J(c.S.agentPairSkill.swing_v2['ETH/USDT']), { w: 0, l: 1 });
   assert.deepStrictEqual([...new Set(c.calls.regime)].sort(), [...TIERS.scouts, ...TIERS.council].sort());
 });

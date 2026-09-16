@@ -124,4 +124,6 @@ Une régression de vérité = `VERDICT : NON LIVRABLE`, jamais « CONNU, tolér�
 
 - **16/09 — génome réel par siège** (`20260916b`) : #20 va au-delà du plan — la « fusion » évolue désormais des nombres que la décision lit (72 gènes sur 17 sièges), byte-identique par défaut (oracle + 40 états). Restent : fitness glissante (3), poids par attribution (4).
 
+- **16/09 — fitness glissante** (`20260916c`) : la saturation à 1 600 (audit #20, captures 14-15/09) n'est plus possible ; sélection sur les 60 derniers jugements réels, poids symétriques. `redistributeFitness` (économie bots 15/08) devient sans effet → décision Rams.
+
 *Mis à jour à chaque mission. Le prochain audit complet : après 1b-b, sur un backup de 24 h propre.*

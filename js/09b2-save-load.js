@@ -1,3 +1,4 @@
+// [FITNESS GLISSANTE · 16/09/2026] VERSION 20260916c · applySnap relit _judgments / _probationUntil / _bornCycle des agents
 // [GÉNOME · 16/09/2026] VERSION 20260916b · applySnap relit genome + genomeHistory (manifest)
 // [1c-LITE · 15/09/2026] VERSION 20260915b · _auraRotatePurge : les 6 historiques rotatifs gardent le plus récent (cutEnd), plus le plus vieux (cut)
 // [SONDE RÉSEAU · 15/09/2026] VERSION 20260915a · applySnap relit perfLog.net
@@ -527,6 +528,9 @@ async function loadState() {
           a.streak         = sa.streak         || 0;
           a.lastPnl        = sa.lastPnl        || 0;
           a.memory         = sa.memory         || [];
+          a._judgments     = Array.isArray(sa._judgments) ? sa._judgments.slice(-60) : [];   // [FITNESS GLISSANTE · 16/09/2026]
+          a._probationUntil = sa._probationUntil || 0;                                        // [GÉNOME · 16/09/2026]
+          a._bornCycle     = sa._bornCycle      || 0;
         }
       });
     }

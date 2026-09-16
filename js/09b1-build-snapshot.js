@@ -1,3 +1,4 @@
+// [FITNESS GLISSANTE · 16/09/2026] VERSION 20260916c · agents : _judgments (60), _probationUntil, _bornCycle dans le snapshot
 // [GÉNOME · 16/09/2026] VERSION 20260916b · genome + genomeHistory dans le snapshot
 // [SONDE RÉSEAU · 15/09/2026] VERSION 20260915a · perfLog.net (60 derniers pings classés) dans le snapshot
 // [GEL BOOT · 11/09/2026] VERSION 20260911b · perfLog : + loaf (20 frames ≥ 1 s nommées par le navigateur)
@@ -65,7 +66,10 @@ function buildSnapshot() {
         streak:         a.streak          || 0,
         lastPnl:        a.lastPnl         || 0,
         memory:         (a.memory         || []).slice(-20),
-        regimeFitness:  a.regimeFitness   || {}
+        regimeFitness:  a.regimeFitness   || {},
+        _judgments:     (a._judgments     || []).slice(-60),   // [FITNESS GLISSANTE · 16/09/2026]
+        _probationUntil: a._probationUntil || 0,               // [GÉNOME · 16/09/2026]
+        _bornCycle:     a._bornCycle      || 0
       })),
 
       // [GESTION PAIRES · 11/08/2026] paires ajoutées/retirées par Rams — rejouées au
