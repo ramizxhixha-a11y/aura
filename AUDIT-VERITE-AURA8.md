@@ -126,4 +126,6 @@ Une régression de vérité = `VERDICT : NON LIVRABLE`, jamais « CONNU, tolér�
 
 - **16/09 — fitness glissante** (`20260916c`) : la saturation à 1 600 (audit #20, captures 14-15/09) n'est plus possible ; sélection sur les 60 derniers jugements réels, poids symétriques. `redistributeFitness` (économie bots 15/08) devient sans effet → décision Rams.
 
+- **16/09 — poids par attribution** (`20260916d`) : consensus pondéré par compétence par paire × régime ; `regimeFitness` = votes alignés du siège (fin du « calm 282/498 » identique, #19). Conseil 1→4 livré en entier.
+
 *Mis à jour à chaque mission. Le prochain audit complet : après 1b-b, sur un backup de 24 h propre.*

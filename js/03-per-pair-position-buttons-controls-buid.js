@@ -1,3 +1,4 @@
+// [POIDS PAR ATTRIBUTION · 16/09/2026] VERSION 20260916d · poids du roster = fitness glissante × compétence par paire × compétence par régime (continu, _attributionFactor) ; regimeFitness = votes alignés du siège ; ps.roster.weights
 // [FITNESS GLISSANTE · 16/09/2026] VERSION 20260916c · fitness = 350 + 1 000 × espérance nette des 60 derniers jugements (_fitJudge), poids symétriques, plus de saturation ; bonus de série retiré
 // [GÉNOME · 16/09/2026] VERSION 20260916b · génome réel par siège (GENOME_DEFAULTS, _genomeOf, _genomeEvolve) lu par scoutAnalysis / councilVote / guardianCheck ; probation des nouveau-nés dans le poids du roster
 // [1b-b · 15/09/2026] VERSION 20260915c · recordTradeForHeatmap : clôtures EV/RE seulement (AA exclu), remise à zéro unique du compteur mélangé
@@ -1231,7 +1232,11 @@ function learnFromOutcome(source, pnlPct, pair) {
     const _regime = detectMarketRegime();
     S.agents.forEach(a => {
       // Agent ayant un score actif dans ce trade
-      if(Math.abs(_agentPairVote(a, pair, a.score||0)) > 0.05) updateRegimeFitness(a, _regime, pnlPct * ((S.tradingMode === 'real') ? 5 : (S.tradingMode === 'paperReal') ? 3 : 1));   // [PHASE 1] vote sur LA paire
+      // [POIDS PAR ATTRIBUTION · 16/09/2026] regimeFitness compte les votes ALIGNÉS de CET agent (signe du vote × P&L),
+      // plus le résultat du trade copié à tous les votants (c'est pour ça que les 21 sièges affichaient « calm 282/498 »
+      // identique) : wins/total devient la compétence propre du siège dans ce régime, sumPnl ce que SES votes auraient rapporté.
+      const _va = _agentPairVote(a, pair, a.score||0);
+      if(Math.abs(_va) > 0.05) updateRegimeFitness(a, _regime, (_va > 0 ? 1 : -1) * pnlPct * ((S.tradingMode === 'real') ? 5 : (S.tradingMode === 'paperReal') ? 3 : 1));   // [PHASE 1] vote sur LA paire
     });
     S._lastRegime = _regime;
   }
@@ -3930,6 +3935,24 @@ function guardianCheck(guardianId, verdict, pair, stake) {
 }
 
 // ── ORCHESTRATOR ──
+// ═══ [POIDS PAR ATTRIBUTION · 16/09/2026] point 4 du conseil « évolution à l'infini » (Rams 16/09) ═══
+// Le poids d'un siège dans le consensus d'une paire = fitness glissante globale (base) × compétence sur CETTE paire
+// (agentPairSkill w/l) × compétence dans le RÉGIME courant (regimeFitness wins/total, votes alignés). Continu et
+// bayésien léger : f = 0,5 + (succès + 5) / (total + 10) → 1,0 sans historique, 1,2 à 30/10, 0,8 à 10/30, 1,25 à
+// 40/50 ; un petit échantillon tire vers le neutre. Les paliers ×1,3 / ×0,6 (corrections/errors) et ×1,25 / ×0,75
+// (paire) sont remplacés. ps.roster.weights garde la décomposition par siège (RAM) : l'attribution est lisible.
+function _attributionFactor(id, pair, regime) {
+  const sk = S.agentPairSkill && S.agentPairSkill[id] && S.agentPairSkill[id][pair];
+  const w = sk ? (Number(sk.w) || 0) : 0, l = sk ? (Number(sk.l) || 0) : 0;
+  const pairF = 0.5 + (w + 5) / (w + l + 10);
+  let regF = 1;
+  const a = (S.agents || []).find(x => x.id === id);
+  const rf = (a && a.regimeFitness && regime) ? a.regimeFitness[regime] : null;
+  if (rf) { const rw = Number(rf.wins) || 0, rt = Number(rf.total) || 0; regF = 0.5 + (rw + 5) / (rt + 10); }
+  return { pairF, regF, regime: regime || null };
+}
+window._attributionFactor = _attributionFactor;
+
 function runRosterAnalysis(pair) {
   pair = pair || S.activePair || (Object.keys(S.pairStates || {})[0]) || 'BTC/USDT';
   // Run all scouts
@@ -3949,6 +3972,8 @@ function runRosterAnalysis(pair) {
   let longWeighted = 0, shortWeighted = 0, holdWeighted = 0;  // MOD 7
   let totalWeight = 0;
   let _skillWeighted = 0;   // [13/08] nb d'agents dont le vote a été modulé par leur compétence sur la paire
+  const _weights = {};      // [POIDS PAR ATTRIBUTION · 16/09/2026] décomposition du poids par siège → ps.roster.weights
+  let _regimeNow = null; try { _regimeNow = (typeof detectMarketRegime === 'function') ? detectMarketRegime() : null; } catch(e) {}
   
   Object.entries(councilResults).forEach(([cId, v]) => {
     // Compute weight from fitness: fitness 500 = weight 1.0, 1000 = 1.5, 1500 = 2.0, 1900+ = 2.5
@@ -3961,24 +3986,13 @@ function runRosterAnalysis(pair) {
       if (agent.streak !== undefined && agent.streak <= -3) {
         weight *= 0.5;  // losing streak = half weight
       }
-      // Bonus for agents with high correction count (proven right often)
-      const hits = agent.corrections || 0;
-      const misses = agent.errors || 0;
-      if (hits + misses >= 10) {
-        const hitRate = hits / (hits + misses);
-        if (hitRate > 0.60) weight *= 1.3;
-        else if (hitRate < 0.40) weight *= 0.6;
-      }
-      // [COMPÉTENCE PAR PAIRE · 13/08/2026] la fitness est GLOBALE ; ici la compétence
-      // de CET agent sur CETTE paire module son vote : ≥10 échantillons sur la paire,
-      // taux d'alignement >60% → ×1.25, <40% → ×0.75. Borné, neutre sans historique.
+      // [POIDS PAR ATTRIBUTION · 16/09/2026] compétence sur CETTE paire × compétence dans CE régime, en continu
+      // (remplace les paliers corrections/errors ×1,3/×0,6 — redondants avec la fitness glissante — et paire ×1,25/×0,75).
       try {
-        const _ps = S.agentPairSkill && S.agentPairSkill[cId] && S.agentPairSkill[cId][pair];
-        if (_ps && (_ps.w + _ps.l) >= 10) {
-          const _pr = _ps.w / (_ps.w + _ps.l);
-          if (_pr > 0.60) { weight *= 1.25; _skillWeighted++; }
-          else if (_pr < 0.40) { weight *= 0.75; _skillWeighted++; }
-        }
+        const _pf = _attributionFactor(cId, pair, _regimeNow);
+        weight *= _pf.pairF * _pf.regF;
+        if (_pf.pairF !== 1 || _pf.regF !== 1) _skillWeighted++;
+        _weights[cId] = { w: +weight.toFixed(3), base: +(0.5 + (Math.max(50, Math.min(2000, agent.fitness)) / 1000)).toFixed(3), pairF: +_pf.pairF.toFixed(3), regF: +_pf.regF.toFixed(3) };
       } catch(e) {}
     }
     totalWeight += weight;
@@ -4032,7 +4046,7 @@ function runRosterAnalysis(pair) {
         if (!res) return;
         _votes[id] = _muted.has(id) ? 0.05 : (res.status === 'veto' ? -0.5 : res.status === 'warn' ? -0.2 : 0.05);
       });
-      _ps.roster = { ts: Date.now(), cycle: S.cycle || 0, votes: _votes };
+      _ps.roster = { ts: Date.now(), cycle: S.cycle || 0, votes: _votes, weights: _weights, regime: _regimeNow };   // [POIDS PAR ATTRIBUTION] décomposition lisible
     }
   } catch(e) {}
   // Bots de flotte (isBot : jamais comptés dans le consensus 10f ni dans l'évolution) : leur

@@ -36,7 +36,7 @@ console.log('▶ banc-phase1-vote-paire · token ' + TOK + ' · ' + scripts.leng
 console.log('\n── A · statique : ce qui est retiré, ce qui est publié ──');
 T('en-têtes : 03/12 « [PHASE 1 · 12/09/2026] VERSION 20260912c », 02/08 relivrés par 1b-a « [1b-a · 14/09/2026] VERSION 20260914a », 10f « ▓▓▓ VERSION 20260914b ▓▓▓ »', () => {
   assert.ok(s12.startsWith('// [1c-FULL · 16/09/2026] VERSION 20260916a') && s12.split('\n')[1].startsWith('// [PHASE 1 · 12/09/2026] VERSION 20260912c'), F12);   // [1c-FULL] 12 relivré, en-tête PHASE 1 en 2e ligne
-  assert.ok(s03.startsWith('// [FITNESS GLISSANTE · 16/09/2026] VERSION 20260916c') && s03.split('\n').slice(0, 5).some(l => l.startsWith('// [PHASE 1 · 12/09/2026] VERSION 20260912c')), F03);   // [FITNESS GLISSANTE] 03 relivré, en-tête PHASE 1 conservé dans les 5 premières lignes
+  assert.ok(s03.startsWith('// [POIDS PAR ATTRIBUTION · 16/09/2026] VERSION 20260916d') && s03.split('\n').slice(0, 6).some(l => l.startsWith('// [PHASE 1 · 12/09/2026] VERSION 20260912c')), F03);   // [FITNESS GLISSANTE] 03 relivré, en-tête PHASE 1 conservé dans les 5 premières lignes
   assert.ok(s08.startsWith('// [1b-b · 15/09/2026] VERSION 20260915c') && s08.split('\n')[1].startsWith('// [1b-a · 14/09/2026] VERSION 20260914a'), F08);   // [1b-b] 08 relivré, en-tête 1b-a en 2e ligne
   assert.ok(s02.startsWith('// [SONDE RÉSEAU · 15/09/2026] VERSION 20260915a') && s02.split('\n')[1].startsWith('// [1b-a · 14/09/2026] VERSION 20260914a'), F02);   // [SONDE RÉSEAU] 02 relivré, en-tête 1b-a en 2e ligne
   assert.ok(s10f.startsWith('// ▓▓▓ VERSION 20260914b ▓▓▓'));   // 10f livré au hotfix 1b-a (b), non retouché depuis
@@ -74,7 +74,7 @@ T('03 runRosterAnalysis : plus d\'écriture a.score / a.conf des scouts-conseil-
   const c = code(body);
   assert.strictEqual(count(c, 'agent.conf'), 0);
   assert.strictEqual(count(c, 'agent.score ='), 1);
-  const iScore = c.indexOf('agent.score ='), iRoster = c.indexOf('_ps.roster = { ts: Date.now(), cycle: S.cycle || 0, votes: _votes };');
+  const iScore = c.indexOf('agent.score ='), iRoster = c.indexOf('_ps.roster = { ts: Date.now(), cycle: S.cycle || 0, votes: _votes, weights: _weights, regime: _regimeNow };')   // [POIDS PAR ATTRIBUTION 16/09] + weights/regime;
   assert.ok(iRoster >= 0 && iRoster < iScore, 'ps.roster publié avant le miroir bots');
   assert.ok(c.lastIndexOf('S.botFleet', iScore) > iRoster, 'l\'unique agent.score = est dans le bloc botFleet');
   assert.strictEqual(count(c, '_ps.roster = {'), 1);
@@ -97,7 +97,7 @@ T('03 learnFromOutcome / enrichMemory : jugent sur _agentPairVote(a, pair, a.sco
   assert.ok(lf.includes('const _vote         = _agentPairVote(a, pair, a.score || 0);'));
   assert.ok(lf.includes('const aligned       = (won && _vote > 0) || (!won && _vote < 0);'));
   assert.ok(lf.includes('const signalStrength= Math.abs(_vote);'));
-  assert.ok(lf.includes('if(Math.abs(_agentPairVote(a, pair, a.score||0)) > 0.05) updateRegimeFitness('));
+  assert.ok(lf.includes("const _va = _agentPairVote(a, pair, a.score||0);") && lf.includes('if(Math.abs(_va) > 0.05) updateRegimeFitness(a, _regime, (_va > 0 ? 1 : -1) * pnlPct'))   // [POIDS PAR ATTRIBUTION 16/09] porte régime sur le vote aligné;
   const c = code(lf);
   assert.strictEqual(count(c, 'a.score > 0') + count(c, 'a.score < 0') + count(c, 'Math.abs(a.score)'), 0);
   assert.ok(s03.includes('agentScore: _agentPairVote(agent, pair, agent.score || 0),'));
