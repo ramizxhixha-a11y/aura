@@ -1,3 +1,4 @@
+// [RETRAIT REDISTRIBUTION · 16/09/2026] VERSION 20260916e · redistributeFitness retirée (sans effet depuis la fitness glissante)
 // [SONDE RÉSEAU · 15/09/2026] VERSION 20260915a · gardien des WS : rien hors ligne (window._auraNetOffline), remplacement d'un WS fermé seulement après le backoff partagé _bgNextTry (fin de la tempête ~130 connexions/min)
 // [1b-a · 14/09/2026] VERSION 20260914a · bougies réelles vivantes : filtre outlier non auto-bloquant (_rcOutlier, référence = dernier prix accepté < 5 min, plus jamais le close 5m), bootstrap REST au boot pour toute série périmée (_realCandlesStale, limiteur 90 s), référence rafraîchie après bootstrap
 // [PHASE 1 · 12/09/2026] VERSION 20260912c · appel _cgT('liveTrainAgents') retiré du traitement CoinGecko (fonction retirée de 03, archivée)
@@ -707,76 +708,11 @@ function updateRegimeFitness(agent, regime, pnlPct) {
 //  3. Apprentissage DOUX : le faible glisse de ~10% vers le comportement moyen
 //     des forts (score), sans se cloner — la diversité de l'essaim est préservée
 //     (pas d'ADN unique). Les bots et le méta sont exclus.
-function redistributeFitness() {
-  try {
-    // [ÉCONOMIE BOTS · 15/08/2026, architecture Rams] Le surplus d'un bot au-dessus de
-    // 1600 n'est plus DISSIPÉ (l'ancien code le brûlait : les bots étaient ponctionnés
-    // dans le vide pendant que les hybrides gardaient leur richesse en circuit fermé —
-    // biais structurel du classement DAO). Il est VERSÉ : (B) à ses 3 hybrides dédiés
-    // selon leur mérite sur leur tâche, sinon (A, ce jour) au pot des hybrides libres
-    // (la pépinière), qui se nourrit du surplus de TOUS les maîtres. Le bot revient à
-    // 1600 : plafond, pas plafond de verre — il reste classé par son apport réel.
-    let botSurplusPot = 0;
-    (S.agents || []).filter(a => a.isBot && (a.fitness || 0) > 1600).forEach(a => {
-      const surplus = a.fitness - 1600;
-      a.fitness = 1600;
-      botSurplusPot += surplus;
-      if (typeof window._payBotSurplus === 'function') {
-        try { botSurplusPot -= (window._payBotSurplus(a, surplus) || 0); } catch(e) {}
-      }
-    });
-
-    const pool = (S.agents || []).filter(a => !a.isBot && !a.isMeta);
-    if (pool.length < 4) return;
-
-    // [03/09/2026, règle Rams] UN SEUL PLAFOND POUR TOUS : les hybrides plafonnaient à
-    // 2000 avec une érosion douce de 2 % pendant que les maîtres étaient scalpés net à
-    // 1600 → élèves structurellement plus riches que les maîtres, « Meilleur agent »
-    // toujours un Hybrid, classement DAO biaisé. Désormais le surplus des hybrides est
-    // VERSÉ au pot exactement comme celui des bots. L'érosion douce (obsolète) est retirée.
-    pool.filter(a => (a.fitness || 0) > 1600).forEach(a => {
-      botSurplusPot += a.fitness - 1600;
-      a.fitness = 1600;
-    });
-    const strong = pool.filter(a => (a.fitness || 0) >= 1600);
-    const weak   = pool.filter(a => (a.fitness || 0) <= 300);
-    if (strong.length === 0 && botSurplusPot <= 0) return;
-
-    // [FIX 05/08/2026] Sans destinataire, on ne prélève RIEN : l'ancienne « dissipation »
-    // brûlait 130-230 T$ par passage en boucle (log « X forts → 0 faibles » toutes les ~45 s)
-    // dès que tous les agents étaient forts — cas massif après l'incident Plein Régime qui
-    // avait égalisé toutes les fitness à 2000.
-    if (weak.length === 0) {
-      // [15/08] pas de faible à nourrir : le surplus bot est mis en réserve pour le
-      // prochain passage (jamais brûlé)
-      S._botSurplusCarry = (S._botSurplusCarry || 0) + botSurplusPot;
-      return;
-    }
-    if (S._botSurplusCarry) { botSurplusPot += S._botSurplusCarry; S._botSurplusCarry = 0; }
-    let pot = botSurplusPot;   // surplus des maîtres ET des hybrides, versé aux faibles
-
-    // Comportement moyen des forts (pour l'apprentissage doux)
-    const strongMeanScore = strong.reduce((s,a)=>s+(a.score||0),0) / strong.length;
-
-    // 3. Redistribution équitable aux faibles + apprentissage doux (10%).
-    //    S'il n'y a aucun faible, le pot se dissipe : les forts ont quand même
-    //    redescendu, c'est l'effet anti-saturation voulu.
-    if (weak.length > 0) {
-      const share = pot / weak.length;
-      weak.forEach(a => {
-        a.fitness = Math.min(1600, (a.fitness || 50) + share);   // [03/09] même plafond que les maîtres
-        // glisse doucement vers le comportement des forts SANS se cloner (diversité préservée)
-        a.score = (a.score || 0) * 0.90 + strongMeanScore * 0.10;
-      });
-    }
-
-    if (S.chainLog) {
-      S.chainLog.push({ icon:'⚖️', desc:`Redistribution : ${strong.length} forts → ${weak.length} faibles (${Math.round(pot)} T$ · apprentissage doux${botSurplusPot>0?' · dont '+Math.round(botSurplusPot)+' T$ de surplus bots':''})`, hash:rndHash(), time:nowStr() });
-      if (S.chainLog.length > 100) S.chainLog.splice(0, S.chainLog.length - 100);
-    }
-  } catch(e) { console.warn('redistributeFitness:', e && e.message); }
-}
-window.redistributeFitness = redistributeFitness;
+// [RETRAIT REDISTRIBUTION · 16/09/2026] redistributeFitness retirée (décision Rams 16/09 : « retire si tu juges inutile »).
+// Elle érodait les agents saturés, redistribuait aux faibles (toutes les 40 s) et versait le surplus des bots > 1 600 à
+// leurs disciples (économie bots 15/08). Depuis la fitness glissante (20260916c) aucun siège ne dépasse 1 350 et toute
+// écriture directe de fitness est écrasée au jugement suivant : la fonction n'avait plus d'effet. Retirée avec son
+// appel (08) et le hook _payBotSurplus (12). Le plafond unique 1 600 (règle 03/09) reste vrai par construction.
 
 // v7.0: CONTEXT-AWARE WEIGHT — booster les agents spécialistes du régime actuel
 function getContextualWeight(agent, currentRegime) {

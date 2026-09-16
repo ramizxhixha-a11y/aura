@@ -122,8 +122,8 @@ T('S8 · 02 : _realCandlesStale (critère des portes) utilisé au boot, limiteur
 });
 T('S9 · en-têtes 02/08/10g/09b2 « ' + HDR + ' », 10f « ▓▓▓ VERSION 20260914b ▓▓▓ » (hotfix b), HTML : DOC_V + 78 ?v= (79), aucun autre token', () => {
   assert.ok(s10g.startsWith(HDR), F10G);
-  assert.ok(s08.startsWith('// [1b-b · 15/09/2026] VERSION 20260915c') && s08.split('\n')[1].startsWith(HDR), F08);   // [1b-b] 08 relivré, en-tête 1b-a en 2e ligne
-  assert.ok(s02.startsWith('// [SONDE RÉSEAU · 15/09/2026] VERSION 20260915a') && s02.split('\n')[1].startsWith(HDR), F02);   // [SONDE RÉSEAU] 02 relivré, en-tête 1b-a en 2e ligne
+  assert.ok(s08.startsWith('// [RETRAIT REDISTRIBUTION · 16/09/2026] VERSION 20260916e') && s08.split('\n').slice(0, 4).some(l => l.startsWith(HDR)), F08);   // [1b-b] 08 relivré, en-tête 1b-a en 2e ligne
+  assert.ok(s02.startsWith('// [RETRAIT REDISTRIBUTION · 16/09/2026] VERSION 20260916e') && s02.split('\n').slice(0, 4).some(l => l.startsWith(HDR)), F02);   // [SONDE RÉSEAU] 02 relivré, en-tête 1b-a en 2e ligne
   assert.ok(s9b2.startsWith('// [FITNESS GLISSANTE · 16/09/2026] VERSION 20260916c') && s9b2.split('\n').slice(0, 6).some(l => l.startsWith(HDR)), F9B2);   // [FITNESS GLISSANTE] 09b2 relivré, en-tête 1b-a dans les 6 premières lignes
   assert.ok(s10f.startsWith('// ▓▓▓ VERSION 20260914b ▓▓▓'));   // 10f livré au hotfix b, non retouché depuis
   assert.strictEqual(count(html, TOK), 79);

@@ -56,5 +56,14 @@ T('S1 · learnFromOutcome : plus aucune écriture additive de fitness (bots, mé
   assert.ok(codeStrict(rd('js/09b1-build-snapshot.js')).includes('_judgments:     (a._judgments     || []).slice(-60),'));
   assert.ok(codeStrict(rd('js/09b2-save-load.js')).includes('a._judgments     = Array.isArray(sa._judgments) ? sa._judgments.slice(-60) : [];'));
 });
+T('S2 · redistributeFitness retirée (02), appel retiré (08), hook _payBotSurplus retiré (12) — aucune écriture directe de fitness hors _fitJudge et la naissance (07)', () => {
+  const c02 = codeStrict(rd('js/02-state-init.js')), c08 = codeStrict(rd('js/08-learning-history-render.js')), c12 = codeStrict(rd('js/12-bots-disciples.js'));
+  assert.strictEqual(c02.includes('function redistributeFitness'), false); assert.strictEqual(c08.includes('redistributeFitness('), false); assert.strictEqual(c12.includes('window._payBotSurplus'), false);
+  assert.strictEqual(c02.includes('_payBotSurplus'), false);
+  const c03 = codeStrict(s03);
+  const direct = (c03.match(/\ba\.fitness\s*=\s*(?!Math\.max\(50, Math\.min\(2000, Math\.round\(350)/g) || []).length;
+  assert.strictEqual(direct, 3, 'écritures directes de fitness dans 03 hors _fitJudge = les 3 revigorations (' + direct + ')');
+  assert.strictEqual((c03.match(/a\.fitness = 400;\n\s*a\._judgments = \[\];/g) || []).length, 3, 'chaque revigoration vide la fenêtre');
+});
 console.log('\n' + (fail ? '❌ ' : '✅ ') + pass + '/' + (pass + fail) + ' tests passés' + (fail ? ' — ' + fail + ' ÉCHEC(S)' : ''));
 process.exit(fail ? 1 : 0);

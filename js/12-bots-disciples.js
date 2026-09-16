@@ -1,3 +1,4 @@
+// [RETRAIT REDISTRIBUTION · 16/09/2026] VERSION 20260916e · hook _payBotSurplus retiré
 // [1c-FULL · 16/09/2026] VERSION 20260916a · succession sans transfert de savoir (affectation du siège seulement)
 // [PHASE 1 · 12/09/2026] VERSION 20260912c · angles direction/timing des disciples lus sur le vote de l'agent sur LA paire (_agentPairVote, 03), plus sur a.score
 // [SKILL BORNÉ · 06/09/2026] VERSION 20260906i — héritage agentPairSkill plafonné 500/cellule (halving) ; mérite par tâche plafonné 500/cellule
@@ -7,7 +8,7 @@
 // VISION (édictée par Rams, 15/08) :
 //  · Chaque bot a 3 SIÈGES de disciples — des hybrides dédiés qui l'aident à décider
 //    (consultation : étape C). Le surplus de T$ du bot au-dessus de 1600 est VERSÉ à
-//    ses disciples SELON LEUR MÉRITE (hook _payBotSurplus, appelé par 02).
+//    ses disciples SELON LEUR MÉRITE (hook _payBotSurplus — RETIRÉ le 16/09/2026 avec redistributeFitness).
 //  · Les hybrides SANS maître forment la PÉPINIÈRE (≥7) : ils se nourrissent du
 //    surplus de tous (redistribution de 02) et sont la relève.
 //  · SUCCESSION : quand l'Évolueur recycle un disciple, le MEILLEUR de la pépinière
@@ -215,32 +216,8 @@ function _logAssign(n) {
   } catch (e) {}
 }
 
-// ── Versement du surplus d'un bot à SES disciples, au mérite ────────────
-// Appelé par redistributeFitness (02). Retourne le montant réellement versé ;
-// le reste (bot sans disciples) reste dans le pot pépinière de 02.
-window._payBotSurplus = function (bot, surplus) {
-  try {
-    if (!S.botDisciples || !bot || !(surplus > 0)) return 0;
-    var ids = (S.botDisciples[bot.id] || []).filter(Boolean);
-    if (!ids.length) return 0;
-    var ds = ids.map(function (id) { return (S.agents || []).find(function (a) { return a.id === id; }); }).filter(Boolean);
-    if (!ds.length) return 0;
-    // mérite = taux d'alignement global (corrections vs erreurs), plancher 0.5
-    var weights = ds.map(function (a) {
-      var h = a.corrections || 0, m = a.errors || 0;
-      return 0.5 + ((h + m) >= 5 ? h / (h + m) : 0.5);
-    });
-    var wSum = weights.reduce(function (x, y) { return x + y; }, 0);
-    var paid = 0;
-    ds.forEach(function (a, i) {
-      var part = surplus * weights[i] / wSum;
-      var before = a.fitness || 0;
-      a.fitness = Math.min(2000, before + part);
-      paid += (a.fitness - before);
-    });
-    return paid;
-  } catch (e) { try{window._decErr&&window._decErr(e)}catch(_e){} return 0; }
-};
+// [RETRAIT REDISTRIBUTION · 16/09/2026] hook _payBotSurplus retiré : son seul appelant (redistributeFitness, 02) n'existe plus.
+// Le versement du surplus des bots > 1 600 à leurs disciples n'a plus d'objet : la fitness glissante ne dépasse pas 1 350.
 
 // ── Succession : un disciple recyclé → l'héritier de la pépinière prend le siège ──
 // [1c-FULL · 16/09/2026] la succession ne déplace plus que l'AFFECTATION du siège : l'héritier garde son propre

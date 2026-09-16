@@ -1,3 +1,4 @@
+// [RETRAIT REDISTRIBUTION · 16/09/2026] VERSION 20260916e · revigoration : vide aussi la fenêtre de jugements
 // [POIDS PAR ATTRIBUTION · 16/09/2026] VERSION 20260916d · poids du roster = fitness glissante × compétence par paire × compétence par régime (continu, _attributionFactor) ; regimeFitness = votes alignés du siège ; ps.roster.weights
 // [FITNESS GLISSANTE · 16/09/2026] VERSION 20260916c · fitness = 350 + 1 000 × espérance nette des 60 derniers jugements (_fitJudge), poids symétriques, plus de saturation ; bonus de série retiré
 // [GÉNOME · 16/09/2026] VERSION 20260916b · génome réel par siège (GENOME_DEFAULTS, _genomeOf, _genomeEvolve) lu par scoutAnalysis / councilVote / guardianCheck ; probation des nouveau-nés dans le poids du roster
@@ -5437,6 +5438,7 @@ function _autoRevigorCheck() {
   const count = brokenLearners.length;
   brokenLearners.forEach(a => {
     a.fitness = 400;
+    a._judgments = [];   // [RETRAIT REDISTRIBUTION · 16/09/2026] la revigoration vide aussi la fenêtre de jugements, sinon la fitness retombe au jugement suivant
     a.errors = 0;
     a.streak = 0;
   });
@@ -5509,6 +5511,7 @@ function _revigorBrokenAgents(silent) {
   S.agents.forEach(a => {
     if ((a.fitness || 0) <= 80 && !a.isBot) {
       a.fitness = 400;
+      a._judgments = [];   // [RETRAIT REDISTRIBUTION · 16/09/2026] idem
       a.errors = 0;
       a.streak = 0;
       count++;

@@ -1,3 +1,4 @@
+// [RETRAIT REDISTRIBUTION · 16/09/2026] VERSION 20260916e · appel redistributeFitness retiré du battement
 // [1b-b · 15/09/2026] VERSION 20260915c · EV/RE : ps.candles = klines Binance de la tf du mode (_projectRealCandles, battement) ; générateur synthétique réservé à AA ; série périmée → figée + ps._candlesStale
 // [1b-a · 14/09/2026] VERSION 20260914a · porte RE : fraîcheur AVANT `closedTs <= lastSeenTs` ; battement : _lossCapSweep rebranché (1 tick/3, règle 06/07) et _botExitSweep (sorties bot sur ps.price) appelés pour chaque mode traité
 // [PHASE 1 · 12/09/2026] VERSION 20260912c · simTick : rotation roster 1 paire/tick et rafraîchissement roster paire active RETIRÉS (ils n'existaient que pour écraser a.score ; le roster par paire vit dans 10f/09c/panneaux)
@@ -3035,9 +3036,8 @@ function simTick() {
   // ── Funding fees: once every 30 ticks (≈ 30s) per open position ──
   if(tick % 30 === 0) { applyFundingFees(); applyLeverageBorrowFees(); }
 
-  // ── Redistribution de fitness (anti-saturation) : toutes les 40 ticks (≈ 40s)
-  //    érode les agents saturés et redistribue aux faibles avec apprentissage doux.
-  if(tick % 40 === 0 && typeof redistributeFitness === 'function') { redistributeFitness(); }
+  // [RETRAIT REDISTRIBUTION · 16/09/2026] l'appel redistributeFitness (toutes les 40 s) est retiré : sans effet depuis la
+  // fitness glissante (20260916c), la fonction n'existe plus (02).
 
   // ── v7.1 PHASE 1 · Fetch USD/EUR rate (tick 1 puis toutes les 60 ticks ≈ 60s) ──
   if(tick === 1 || tick % 60 === 0) { try { fetchUsdEurRate(); } catch(e) {} }
