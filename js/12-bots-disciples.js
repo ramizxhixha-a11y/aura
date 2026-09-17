@@ -1,3 +1,4 @@
+// [ÉCOLE · 17/09/2026] VERSION 20260917a · jury des disciples : pas de notation en AA
 // [RETRAIT REDISTRIBUTION · 16/09/2026] VERSION 20260916e · hook _payBotSurplus retiré
 // [1c-FULL · 16/09/2026] VERSION 20260916a · succession sans transfert de savoir (affectation du siège seulement)
 // [PHASE 1 · 12/09/2026] VERSION 20260912c · angles direction/timing des disciples lus sur le vote de l'agent sur LA paire (_agentPairVote, 03), plus sur a.score
@@ -368,6 +369,7 @@ window._discipleJurySnapshot = function (pair, side, cvOpen) {
 };
 
 window._judgeDisciples = function (pos, pnlUsd) {
+  if (typeof S !== 'undefined' && S && S.tradingMode === 'sim') return;   // [ÉCOLE · 17/09/2026] l'AA ne note pas le jury des disciples (positions sur bougies fabriquées)
   try {
     if (!pos || !pos._jury || !pos._jury.length) return;
     var verdicts = {};

@@ -66,5 +66,23 @@ T('S2 · redistributeFitness retirée (02), appel retiré (08), hook _payBotSurp
   assert.strictEqual(revig, 3, 'les 3 revigorations (auto agents, auto bots, manuelle) vident la fenêtre (' + revig + ')');
   assert.strictEqual(writes, judge + revig, 'aucune autre écriture directe de fitness dans 03 (' + writes + ')');
 });
+T('S3 · ÉCOLE : learnFromOutcome sort AVANT toute écriture quand S.tradingMode === "sim" (1re instruction du corps) ; le jury des disciples (12) ne note pas en AA', () => {
+  const start = s03.indexOf('function learnFromOutcome(source, pnlPct, pair) {'); const body = codeStrict(s03.slice(start, start + 4000));
+  const firstStmt = body.split('\n').map(l => l.trim()).filter(l => l && !l.startsWith('function learnFromOutcome'))[0];
+  assert.ok(firstStmt.startsWith("if (S.tradingMode === 'sim') {") && firstStmt.includes('return;'), 'garde en tête : ' + firstStmt);
+  const s12 = codeStrict(rd('js/12-bots-disciples.js'));
+  const k = s12.indexOf('pos._jury.forEach(function (j) {'); const before = s12.slice(Math.max(0, k - 2500), k);
+  assert.ok(before.includes("if (typeof S !== 'undefined' && S && S.tradingMode === 'sim') return;"), 'garde jury 12');
+});
+T('D6 · ÉCOLE dynamique : en sim, learnFromOutcome ne touche ni agents, ni skill, ni journal (compteur S._simLearnSkipped) ; en paperReal, il juge', () => {
+  const start = s03.indexOf('function learnFromOutcome(source, pnlPct, pair) {'); const guardEnd = s03.indexOf('\n', s03.indexOf("if (S.tradingMode === 'sim') {", start));
+  const head = s03.slice(start, guardEnd) + '\n  S._reached = (S._reached || 0) + 1; }';
+  const S = { tradingMode: 'sim', agents: [{ id: 'a', fitness: 800 }], agentPairSkill: {}, chainLog: [] };
+  const c = { S }; vm.createContext(c); vm.runInContext(head, c);
+  vm.runInContext("learnFromOutcome('cycle', 1.2, 'BTC/USDT')", c);
+  assert.strictEqual(S._simLearnSkipped, 1); assert.strictEqual(S._reached, undefined); assert.strictEqual(S.agents[0].fitness, 800);
+  S.tradingMode = 'paperReal'; vm.runInContext("learnFromOutcome('cycle', 1.2, 'BTC/USDT')", c);
+  assert.strictEqual(S._reached, 1); assert.strictEqual(S._simLearnSkipped, 1);
+});
 console.log('\n' + (fail ? '❌ ' : '✅ ') + pass + '/' + (pass + fail) + ' tests passés' + (fail ? ' — ' + fail + ' ÉCHEC(S)' : ''));
 process.exit(fail ? 1 : 0);

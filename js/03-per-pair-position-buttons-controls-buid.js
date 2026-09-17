@@ -1,3 +1,4 @@
+// [ÉCOLE · 17/09/2026] VERSION 20260917a · learnFromOutcome : l'AA (bougies fabriquées) ne juge plus les agents — seuls EV et RE notent
 // [RETRAIT REDISTRIBUTION · 16/09/2026] VERSION 20260916e · revigoration : vide aussi la fenêtre de jugements
 // [POIDS PAR ATTRIBUTION · 16/09/2026] VERSION 20260916d · poids du roster = fitness glissante × compétence par paire × compétence par régime (continu, _attributionFactor) ; regimeFitness = votes alignés du siège ; ps.roster.weights
 // [FITNESS GLISSANTE · 16/09/2026] VERSION 20260916c · fitness = 350 + 1 000 × espérance nette des 60 derniers jugements (_fitJudge), poids symétriques, plus de saturation ; bonus de série retiré
@@ -1213,6 +1214,13 @@ function _fitJudge(a, sign, w) {
 window._fitJudge = _fitJudge;
 
 function learnFromOutcome(source, pnlPct, pair) {
+  // ═══ [ÉCOLE · 17/09/2026] L'ÉCOLE NE NOTE PLUS (décision Rams 17/09) ═══
+  // AA tourne sur des bougies fabriquées (générateur 08, réservé à AA depuis 1b-b) : ses cycles jugeaient les 31 agents
+  // — les mêmes qu'en EV — dix paires toutes les deux minutes, réseau coupé compris (capture Rams 17/09 01:57 : le DAO
+  // bouge pendant « Connexion perdue »). 90 % des 60 jugements de la fenêtre venaient d'une marche aléatoire, et le
+  // poids des voix en EV avec. Désormais seuls les résultats RÉELS (EV, RE) jugent : fitness, score, confiance, mémoire,
+  // compétence par paire, régime, leçons, évolution. AA reste un bac à sable et une vitrine : rien n'est écrit.
+  if (S.tradingMode === 'sim') { try { S._simLearnSkipped = (S._simLearnSkipped || 0) + 1; } catch(e) {} return; }
 
   // ── UN NON-EVENEMENT N ENSEIGNE RIEN (30/07/2026) ───────────────────
   // `const won = pnlPct > 0` classait pnlPct === 0 comme une PERTE.

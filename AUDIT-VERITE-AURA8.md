@@ -128,4 +128,6 @@ Une régression de vérité = `VERDICT : NON LIVRABLE`, jamais « CONNU, tolér�
 
 - **16/09 — poids par attribution** (`20260916d`) : consensus pondéré par compétence par paire × régime ; `regimeFitness` = votes alignés du siège (fin du « calm 282/498 » identique, #19). Conseil 1→4 livré en entier.
 
+- **17/09 — l'école ne note plus** (`20260917a`) : les jugements AA (marche aléatoire) n'alimentent plus fitness/skill/régime/génome — seuls EV/RE jugent (#5/#12 fermés côté apprentissage). Backup 17/09 : 11/11 paires, equity plate, 1 fusion/h, sonde réseau 60/60 ok dans sa fenêtre, Guardian : gels = suspension OS.
+
 *Mis à jour à chaque mission. Le prochain audit complet : après 1b-b, sur un backup de 24 h propre.*
