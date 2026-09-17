@@ -1,3 +1,4 @@
+// [P&L AFFICHAGE · 17/09/2026] VERSION 20260917c · recalage du portfolio au boot = cash + trading + mises engagées (_computePortfolio), plus de P&L de session fantôme
 // [FITNESS GLISSANTE · 16/09/2026] VERSION 20260916c · applySnap relit _judgments / _probationUntil / _bornCycle des agents
 // [GÉNOME · 16/09/2026] VERSION 20260916b · applySnap relit genome + genomeHistory (manifest)
 // [1c-LITE · 15/09/2026] VERSION 20260915b · _auraRotatePurge : les 6 historiques rotatifs gardent le plus récent (cutEnd), plus le plus vieux (cut)
@@ -648,7 +649,10 @@ async function loadState() {
       try { _pfFirst = !localStorage.getItem('aura_startpf_recal_v3'); } catch(e) {}
       ['sim','paperReal','real'].forEach(function(_mk){
         var _w = S.walletStore[_mk]; if (!_w || typeof _w !== 'object') return;
-        var _wpf = (_w.cashAccount||0) + (_w.tradingAccount||0);   // definition de portfolio (02)
+        // [P&L AFFICHAGE · 17/09/2026] même définition que 02 (_computePortfolio, « engagé inclus » 23/08) : avant, le recalage
+        // au boot excluait les mises des positions ouvertes → portfolio faux au boot (88,39 pour 118,6 le 14/09) et, au 1er
+        // trade, un « P&L de session » égal aux mises (+30,20 $ fantômes, audit #23). Le P&L de session repart bien de 0.
+        var _wpf = (typeof _computePortfolio === 'function') ? _computePortfolio(_w) : ((_w.cashAccount||0) + (_w.tradingAccount||0) + (_w.openPositions||[]).reduce(function(a,p){ return a + (Number(p.stakeUsdt)||0); }, 0));
         if (_pfFirst) {
           _w._totalCompounded = 0;
         } else if (typeof _w._startPortfolio === 'number' && _w._startPortfolio > 0) {

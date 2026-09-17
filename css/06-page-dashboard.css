@@ -255,3 +255,6 @@
 .lmsr-labels span:last-child  { color: var(--up);   }
 .lmsr-labels .lmsr-pct { color: var(--t2); }
 
+/* [P&L AFFICHAGE · 17/09/2026] point qui bat sous le cumul (latent live) — spec Rams 13/09 */
+.pb-dot{display:inline-block;animation:pbPulse 1s ease-in-out infinite}
+@keyframes pbPulse{0%,100%{opacity:.25}50%{opacity:1}}

@@ -1,3 +1,4 @@
+// [P&L AFFICHAGE · 17/09/2026] VERSION 20260917c · renderPairPnl : noms 18px (même police/couleurs), colonne 100px, mise 2 décimales + 🤖/👤, latent live coloré sous le cumul (spec Rams 13/09)
 // [FITNESS GLISSANTE · 16/09/2026] VERSION 20260916c · fenêtre de jugements remise à zéro à la fusion
 // [GÉNOME · 16/09/2026] VERSION 20260916b · triggerEvolution fait évoluer le GÉNOME du siège (_genomeEvolve) et pose la probation (_probationUntil)
 // [1c-FULL · 16/09/2026] VERSION 20260916a · héritage complet : mémoire, agentPairSkill, discipleTaskSkill et regimeFitness restent avec le siège à la fusion ; fitness de naissance = max(350, moyenne des parents / 2) ; _onAgentEvolved(id, nom) sans copie
@@ -3343,10 +3344,10 @@ function renderPairPnl() {
   if(existBars.length !== pairs.length) {
     // Build scaffold
     barsEl.innerHTML = pairs.map(({ pair, cfg }) => `
-    <div data-pairbar="${pair}" style="display:grid;grid-template-columns:70px 1fr 60px;gap:8px;align-items:center;cursor:pointer;" onclick="goPage(2);">
+    <div data-pairbar="${pair}" style="display:grid;grid-template-columns:100px 1fr 60px;gap:8px;align-items:center;cursor:pointer;" onclick="goPage(2);">
       <div style="display:flex;align-items:center;gap:5px;flex-wrap:wrap;">
         <div style="width:6px;height:6px;border-radius:50%;background:${cfg.color};flex-shrink:0;"></div>
-        <span style="font-size:10px;font-weight:700;color:${cfg.color};">${pair.replace('/USDT','')}</span>
+        <span class="pb-name" style="font-size:18px;font-weight:700;color:${cfg.color};">${pair.replace('/USDT','')}</span>
         <span class="pb-open-badge" id="pb_badge_${pair.replace('/','_')}" style="display:none;font-size:8px;color:var(--ice);background:rgba(56,212,245,.1);padding:1px 5px;border-radius:4px;"></span>
       </div>
       <div style="position:relative;height:8px;background:var(--s3);border-radius:100px;overflow:hidden;">
@@ -3354,12 +3355,13 @@ function renderPairPnl() {
       </div>
       <div style="text-align:right;">
         <div class="pb-usd" id="pb_usd_${pair.replace('/','_')}" style="font-size:11px;font-weight:700;color:var(--up);">$0</div>
+        <div class="pb-live" id="pb_live_${pair.replace('/','_')}" style="display:none;font-size:11px;font-weight:700;"><span class="pb-dot">●</span> $0.00</div>
         <div class="pb-meta" id="pb_meta_${pair.replace('/','_')}" style="font-size:8px;color:var(--t3);">0t</div>
       </div>
     </div>`).join('');
   }
   // Patch values
-  pairs.forEach(({ pair, cfg, usd, trades, wr }) => {
+  pairs.forEach(({ pair, ps, cfg, usd, trades, wr }) => {
     const k    = pair.replace('/','_');
     const up   = usd >= 0;
     const bcol = up ? '#00e87a' : '#ff3d6b';
@@ -3368,16 +3370,31 @@ function renderPairPnl() {
     const usdEl   = document.getElementById('pb_usd_'+k);
     const metaEl  = document.getElementById('pb_meta_'+k);
     const badgeEl = document.getElementById('pb_badge_'+k);
+    const liveEl  = document.getElementById('pb_live_'+k);
     const pos     = S.openPositions.find(p => p.pair === pair);
     if(fillEl)  { fillEl.style.width = barPct+'%'; fillEl.style.background = bcol; fillEl.style.left = up?'0':'auto'; fillEl.style.right = up?'auto':'0'; }
     if(usdEl)   { usdEl.textContent = (up?'+':'-')+'$'+Math.abs(usd).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}); usdEl.style.color = up?'var(--up)':'var(--down)'; }
     if(metaEl)  metaEl.textContent = trades+'t · '+wr+'%';
+    // [P&L AFFICHAGE · 17/09/2026 — spec Rams 13/09] sous le nom : la MISE (2 décimales) avec qui a ouvert (🤖 bot / 👤 man) ;
+    // sous le cumul réalisé (qui ne bouge pas) : le latent LIVE de la position, sans signe, la couleur dit le sens, point qui bat.
     if(badgeEl) {
       if(pos) {
         const exp = pos.totalExposure || pos.stakeUsdt;
-        badgeEl.textContent = (pos.side==='long'?'↑':'↓')+' $'+Number(exp).toFixed(4);
+        badgeEl.textContent = (pos.auto === true ? '\uD83E\uDD16' : '\uD83D\uDC64') + ' ' + (pos.side==='long'?'\u2191':'\u2193') + ' mise $' + Number(exp).toFixed(2);
         badgeEl.style.display = '';
       } else { badgeEl.style.display = 'none'; }
+    }
+    if(liveEl) {
+      if(pos) {
+        let lat = Number(pos.pnlUsdt);
+        if (!isFinite(lat)) {
+          const px = Number(ps && ps.price), en = Number(pos.entryPrice), st = Number(pos.stakeUsdt) || 0;
+          lat = (px > 0 && en > 0) ? ((pos.side === 'long' ? (px - en) / en : (en - px) / en) * st) : 0;
+        }
+        liveEl.innerHTML = '<span class="pb-dot">\u25CF</span> $' + Math.abs(lat).toFixed(2);
+        liveEl.style.color = lat >= 0 ? 'var(--up)' : 'var(--down)';
+        liveEl.style.display = '';
+      } else { liveEl.style.display = 'none'; }
     }
   });
 

@@ -132,4 +132,6 @@ Une régression de vérité = `VERDICT : NON LIVRABLE`, jamais « CONNU, tolér�
 
 - **17/09 — A13 moteur de sortie unique** (`20260917b`) : #9/#10 fermés — les niveaux ATR (A/B) sont exécutés, breakeven réel ; le % de conviction n'est plus qu'un repli. L'A/B compare enfin deux règles réelles.
 
+- **17/09 — affichage P&L + portfolio au boot** (`20260917c`) : #23 fermé côté accueil (recalage avec mises engagées, plus de +30 $ fantômes) ; latent live par paire, mise 🤖/👤. Restent : `_totalCompounded` fossile (affichage), `cashLog` EV mort depuis le 07/07, #24 journal.
+
 *Mis à jour à chaque mission. Le prochain audit complet : après 1b-b, sur un backup de 24 h propre.*
