@@ -136,4 +136,6 @@ Une régression de vérité = `VERDICT : NON LIVRABLE`, jamais « CONNU, tolér�
 
 - **17/09 — flux Binance (A14)** (`20260917d`) : #5 fermé pour whale/flow/volume — flux d'ordres réel (quantité + côté preneur) et carnet 20 niveaux ; les autres scouts lisent déjà les klines réelles (1b-b).
 
+- **17/09 — génome de paire** (`20260917e`) : les périodes et poids de `getTechSignals` (60 % du composite, #4/#5) ne sont plus des constantes partagées BTC/PEPE — 12 gènes par paire, mutés 1/jour sur le P&L réel de la paire, défauts identiques à hier.
+
 *Mis à jour à chaque mission. Le prochain audit complet : après 1b-b, sur un backup de 24 h propre.*

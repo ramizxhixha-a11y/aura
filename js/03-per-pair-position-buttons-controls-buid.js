@@ -1,3 +1,4 @@
+// [GÉNOME DE PAIRE · 17/09/2026] VERSION 20260917e · génome de paire (périodes TA + poids du mélange) : PAIR_GENOME_DEFAULTS, _pairGenomeOf, _pairGenomeEvolve
 // [FLUX BINANCE · 17/09/2026] VERSION 20260917d · whale_v1 / flow_v1 lisent le flux d'ordres réel et le carnet Binance (02), volume_v1 le volume réel des klines — fin des proxys de bougies
 // [ÉCOLE · 17/09/2026] VERSION 20260917a · learnFromOutcome : l'AA (bougies fabriquées) ne juge plus les agents — seuls EV et RE notent
 // [RETRAIT REDISTRIBUTION · 16/09/2026] VERSION 20260916e · revigoration : vide aussi la fenêtre de jugements
@@ -3640,6 +3641,52 @@ function _genomeEvolve(id, mut, fitnessPeak) {
   S.genome[id] = next;
   return { changed: changed, archived: archived, genes: Object.keys(def).length };
 }
+// ═══ [GÉNOME DE PAIRE · 17/09/2026] LES PÉRIODES DES INDICATEURS ÉVOLUENT PAR PAIRE ═══
+// getTechSignals (08) = 14 indicateurs, 60 % du composite, PARTAGÉS par tous les sièges d'une paire : ses périodes
+// (RSI 14, EMA 9/21/50, SMA 10/20/50, stochastique 14, ADX 14) et les poids du mélange étaient en dur, identiques pour
+// BTC et PEPE. Elles deviennent le génome DE LA PAIRE : S.pairGenome[pair], muté au rollover (1/jour/paire, 08), même
+// mécanique que le génome de siège (archive de la meilleure version + recombinaison + mutation bornée).
+const PAIR_GENOME_DEFAULTS = { rsi: 14, stoch: 14, adx: 14, emaFast: 9, emaSlow: 21, emaLong: 50, smaFast: 10, smaSlow: 20, smaLong: 50, wTrend: 1.2, wMomentum: 1.3, wVolatility: 1 };
+const PAIR_GENE_INT = { rsi: 1, stoch: 1, adx: 1, emaFast: 1, emaSlow: 1, emaLong: 1, smaFast: 1, smaSlow: 1, smaLong: 1 };
+function _pairGeneClamp(k, v, def) {
+  if (!isFinite(v)) return def;
+  var v2 = Math.max(def / 3, Math.min(def * 3, v));
+  if (PAIR_GENE_INT[k]) v2 = Math.max(3, Math.min(60, Math.round(v2)));
+  else v2 = Math.max(0.2, Math.min(3, v2));
+  return v2;
+}
+function _pairGenomeOf(pair) {
+  var live = (typeof S !== 'undefined' && S && S.pairGenome) ? S.pairGenome[pair] : null;
+  if (!live) return PAIR_GENOME_DEFAULTS;
+  var out = {};
+  Object.keys(PAIR_GENOME_DEFAULTS).forEach(function(k){ var v = Number(live[k]); out[k] = isFinite(v) ? _pairGeneClamp(k, v, PAIR_GENOME_DEFAULTS[k]) : PAIR_GENOME_DEFAULTS[k]; });
+  if (out.emaSlow <= out.emaFast) out.emaSlow = out.emaFast + 1;      // un croisement a besoin de deux périodes distinctes
+  if (out.smaSlow <= out.smaFast) out.smaSlow = out.smaFast + 1;
+  return out;
+}
+// Archive la version courante avec le P&L net réalisé de la paire au moment de l'archivage (sa « fitness »), puis
+// recombine avec la meilleure version passée de CETTE paire + mutation ±mut. Retourne { changed, genes } ou null.
+function _pairGenomeEvolve(pair, mut, score) {
+  if (!S.pairGenome) S.pairGenome = {}; if (!S.pairGenomeHistory) S.pairGenomeHistory = {};
+  var cur = _pairGenomeOf(pair);
+  var hist = Array.isArray(S.pairGenomeHistory[pair]) ? S.pairGenomeHistory[pair] : (S.pairGenomeHistory[pair] = []);
+  var sig = JSON.stringify(cur);
+  if (!hist.some(function(h){ return JSON.stringify(h.g) === sig; })) hist.push({ g: cur, f: Number(score) || 0, t: Date.now() });
+  hist.sort(function(a, b){ return (b.f || 0) - (a.f || 0); });
+  if (hist.length > 8) hist.splice(8);
+  var best = hist[0].g, next = {}, changed = 0;
+  mut = Math.max(0.05, Math.min(0.4, Number(mut) || 0.15));
+  Object.keys(PAIR_GENOME_DEFAULTS).forEach(function(k){
+    var base = (Math.random() < 0.5) ? cur[k] : (isFinite(best[k]) ? best[k] : cur[k]);
+    var v = _pairGeneClamp(k, base * (1 + (Math.random() * 2 - 1) * mut), PAIR_GENOME_DEFAULTS[k]);
+    if (v !== cur[k]) changed++;
+    next[k] = v;
+  });
+  S.pairGenome[pair] = next;
+  return { changed: changed, genes: Object.keys(PAIR_GENOME_DEFAULTS).length };
+}
+window.PAIR_GENOME_DEFAULTS = PAIR_GENOME_DEFAULTS; window._pairGenomeOf = _pairGenomeOf; window._pairGenomeEvolve = _pairGenomeEvolve;
+
 window.GENOME_DEFAULTS = GENOME_DEFAULTS; window._genomeOf = _genomeOf; window._genomeEvolve = _genomeEvolve;
 
 function scoutAnalysis(agentId, pair) {

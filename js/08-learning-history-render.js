@@ -1,3 +1,4 @@
+// [GÉNOME DE PAIRE · 17/09/2026] VERSION 20260917e · getTechSignals : périodes et poids du mélange = génome de la paire (03) ; rollover quotidien par paire
 // [RETRAIT REDISTRIBUTION · 16/09/2026] VERSION 20260916e · appel redistributeFitness retiré du battement
 // [1b-b · 15/09/2026] VERSION 20260915c · EV/RE : ps.candles = klines Binance de la tf du mode (_projectRealCandles, battement) ; générateur synthétique réservé à AA ; série périmée → figée + ps._candlesStale
 // [1b-a · 14/09/2026] VERSION 20260914a · porte RE : fraîcheur AVANT `closedTs <= lastSeenTs` ; battement : _lossCapSweep rebranché (1 tick/3, règle 06/07) et _botExitSweep (sorties bot sur ps.price) appelés pour chaque mode traité
@@ -1958,7 +1959,10 @@ const _techCache = {};
 function getTechSignals(pair) {
   const ps = S.pairStates[pair];
   if(!ps || !ps.candles || ps.candles.length < 5) return null;
-  const ckey = pair + '_' + ps.candles.length + '_' + ps.price.toFixed(2);
+  // [GÉNOME DE PAIRE · 17/09/2026] les périodes et les poids viennent du génome DE LA PAIRE (03) — plus des constantes
+  // identiques pour BTC et PEPE. Le cache est invalidé quand le génome change (son empreinte entre dans la clé).
+  const GP = (typeof _pairGenomeOf === 'function') ? _pairGenomeOf(pair) : { rsi:14, stoch:14, adx:14, emaFast:9, emaSlow:21, emaLong:50, smaFast:10, smaSlow:20, smaLong:50, wTrend:1.2, wMomentum:1.3, wVolatility:1 };
+  const ckey = pair + '_' + ps.candles.length + '_' + ps.price.toFixed(2) + '_' + GP.rsi + '.' + GP.emaFast + '.' + GP.emaSlow + '.' + GP.smaFast + '.' + GP.smaSlow + '.' + GP.adx + '.' + GP.stoch + '.' + GP.wTrend + '.' + GP.wMomentum + '.' + GP.wVolatility;
   if(_techCache[pair] && _techCache[pair].key === ckey) return _techCache[pair].val;
   const candles = ps.candles;
   const closes  = _closes(candles);
@@ -1966,20 +1970,20 @@ function getTechSignals(pair) {
   const lows    = _lows(candles);
 
   // Compute all 10 indicators
-  const sma10   = calcSMA(closes, Math.min(10, closes.length));
-  const sma20   = calcSMA(closes, Math.min(20, closes.length));
-  const sma50   = calcSMA(closes, Math.min(50, closes.length));
-  const ema9    = calcEMA(closes, Math.min(9,  closes.length));
-  const ema21   = calcEMA(closes, Math.min(21, closes.length));
-  const ema50   = calcEMA(closes, Math.min(50, closes.length));
-  const stoch   = calcStochastic(candles, Math.min(14, candles.length-1));
+  const sma10   = calcSMA(closes, Math.min(GP.smaFast, closes.length));
+  const sma20   = calcSMA(closes, Math.min(GP.smaSlow, closes.length));
+  const sma50   = calcSMA(closes, Math.min(GP.smaLong, closes.length));
+  const ema9    = calcEMA(closes, Math.min(GP.emaFast, closes.length));
+  const ema21   = calcEMA(closes, Math.min(GP.emaSlow, closes.length));
+  const ema50   = calcEMA(closes, Math.min(GP.emaLong, closes.length));
+  const stoch   = calcStochastic(candles, Math.min(GP.stoch, candles.length-1));
   const macd    = calcMACD(candles);
   const boll    = calcBollinger(candles);
-  const rsiData = calcRSI(candles, Math.min(14, candles.length-2));
+  const rsiData = calcRSI(candles, Math.min(GP.rsi, candles.length-2));
   const fib     = calcFibonacci(candles);
   const ichi    = candles.length >= 52 ? calcIchimoku(candles) : null;
   const stddev  = calcStdDev(candles);
-  const adx     = calcADX(candles, Math.min(14, candles.length-2));
+  const adx     = calcADX(candles, Math.min(GP.adx, candles.length-2));
 
   const cur = ps.price;
 
@@ -1990,9 +1994,9 @@ function getTechSignals(pair) {
   if(sma10 && sma20) {
     signals.mm = {
       signal: sma10>sma20 ? 'bull' : 'bear',
-      label:  sma10>sma20 ? 'SMA10>SMA20 ↑' : 'SMA10<SMA20 ↓',
-      detail: `SMA10:${sma10.toFixed(2)} SMA20:${sma20.toFixed(2)}${sma50?` SMA50:${sma50.toFixed(2)}`:''}`,
-      weight: 1
+      label:  (sma10>sma20 ? `SMA${GP.smaFast}>SMA${GP.smaSlow} ↑` : `SMA${GP.smaFast}<SMA${GP.smaSlow} ↓`),
+      detail: `SMA${GP.smaFast}:${sma10.toFixed(2)} SMA${GP.smaSlow}:${sma20.toFixed(2)}${sma50?` SMA${GP.smaLong}:${sma50.toFixed(2)}`:''}`,
+      weight: GP.wTrend * 0.83   // [GÉNOME DE PAIRE] tendance (défaut 1)
     };
   }
 
@@ -2000,9 +2004,9 @@ function getTechSignals(pair) {
   if(ema9 && ema21) {
     signals.mme = {
       signal: ema9>ema21 ? 'bull' : 'bear',
-      label:  ema9>ema21 ? 'EMA9>EMA21 ↑' : 'EMA9<EMA21 ↓',
-      detail: `EMA9:${ema9.toFixed(2)} EMA21:${ema21.toFixed(2)}${ema50?` EMA50:${ema50.toFixed(2)}`:''}`,
-      weight: 1.2
+      label:  (ema9>ema21 ? `EMA${GP.emaFast}>EMA${GP.emaSlow} ↑` : `EMA${GP.emaFast}<EMA${GP.emaSlow} ↓`),
+      detail: `EMA${GP.emaFast}:${ema9.toFixed(2)} EMA${GP.emaSlow}:${ema21.toFixed(2)}${ema50?` EMA${GP.emaLong}:${ema50.toFixed(2)}`:''}`,
+      weight: GP.wTrend   // [GÉNOME DE PAIRE] tendance (défaut 1,2)
     };
   }
 
@@ -2014,7 +2018,7 @@ function getTechSignals(pair) {
       signal: oversold?'bull':overbought?'bear': stoch.cross==='bull'?'bull':stoch.cross==='bear'?'bear':'neut',
       label:  oversold?`Survendu %K:${stoch.k.toFixed(0)}`:overbought?`Suracheté %K:${stoch.k.toFixed(0)}`:stoch.cross?`Croisement ${stoch.cross==='bull'?'↑':'↓'}`:`%K:${stoch.k.toFixed(0)} %D:${stoch.d.toFixed(0)}`,
       detail: `%K:${stoch.k.toFixed(1)} %D:${stoch.d.toFixed(1)}${stoch.cross?' '+stoch.cross:''}`,
-      weight: 1.2
+      weight: GP.wMomentum * 0.92   // [GÉNOME DE PAIRE] momentum (défaut 1,2)
     };
   }
 
@@ -2024,7 +2028,7 @@ function getTechSignals(pair) {
       signal: macd.hist>0?'bull':'bear',
       label:  macd.cross?`Croix MACD ${macd.cross==='bull'?'↑':'↓'}`:macd.hist>0?'MACD ↑':'MACD ↓',
       detail: `MACD:${macd.macd.toFixed(3)} Sig:${macd.signal.toFixed(3)} Hist:${macd.hist.toFixed(3)}`,
-      weight: 1.3
+      weight: GP.wMomentum   // [GÉNOME DE PAIRE] momentum (défaut 1,3)
     };
   }
 
@@ -2034,7 +2038,7 @@ function getTechSignals(pair) {
       signal: boll.pct>0.85?'bear':boll.pct<0.15?'bull':'neut',
       label:  boll.squeeze?'⚡ Squeeze':boll.pct>0.85?'Bande sup. ↓':boll.pct<0.15?'Bande inf. ↑':'Milieu',
       detail: `%B:${(boll.pct*100).toFixed(0)}% σ:${boll.std.toFixed(2)} BW:${(boll.bw*100).toFixed(1)}%`,
-      weight: 1
+      weight: GP.wVolatility   // [GÉNOME DE PAIRE] volatilité (défaut 1)
     };
   }
 
@@ -2045,7 +2049,7 @@ function getTechSignals(pair) {
       signal: rsi<30?'bull':rsi>70?'bear': rsiData.divergence==='bull'?'bull':rsiData.divergence==='bear'?'bear':'neut',
       label:  rsi<30?`Survendu ${rsi.toFixed(0)}`:rsi>70?`Suracheté ${rsi.toFixed(0)}`:rsiData.divergence?`Div. ${rsiData.divergence==='bull'?'haussière':'baissière'}`:`RSI:${rsi.toFixed(0)}`,
       detail: `RSI:${rsi.toFixed(1)}${rsiData.divergence?' div:'+rsiData.divergence:''}`,
-      weight: 1.3
+      weight: GP.wMomentum   // [GÉNOME DE PAIRE] momentum (défaut 1,3)
     };
   }
 
@@ -2066,7 +2070,7 @@ function getTechSignals(pair) {
       signal: ichi.aboveCloud?'bull':ichi.belowCloud?'bear':'neut',
       label:  ichi.aboveCloud?'Au-dessus nuage ↑':ichi.belowCloud?'Sous nuage ↓':'Dans le nuage',
       detail: `T:${ichi.tenkan.toFixed(2)} K:${ichi.kijun.toFixed(2)} Cross:${ichi.tkCross||'none'}`,
-      weight: 1.2
+      weight: GP.wTrend   // [GÉNOME DE PAIRE] tendance (défaut 1,2)
     };
   }
 
@@ -2817,6 +2821,30 @@ if (typeof window !== 'undefined' && !window._perfOp) {
 // fabrique rien, l'analyse reste sur la dernière vérité connue et la porte refuse d'ouvrir (10g/08).
 // Pas de réallocation si la dernière bougie n'a pas bougé (même ts, même close). Les bougies gardent o/h/l/c/v
 // (ce que lisent getTechSignals, scouts, patterns, régime) et portent leur ts Binance.
+// [GÉNOME DE PAIRE · 17/09/2026] une paire par jour (clé jour locale), seulement en EV/RE, seulement si la paire a
+// assez d'histoire réelle (≥ 5 trades du mode) : sans résultats, muter serait du bruit.
+function _pairGenomeRollover() {
+  if (!(S.tradingMode === 'paperReal' || S.tradingMode === 'real')) return 0;
+  if (typeof _pairGenomeEvolve !== 'function') return 0;
+  const d = new Date(), day = d.getFullYear() + '-' + (d.getMonth() + 1) + '-' + d.getDate();
+  if (!S._pairGenomeDay) S._pairGenomeDay = {};
+  let n = 0;
+  Object.keys(S.pairStates || {}).some(pair => {
+    const ps = S.pairStates[pair];
+    if (!ps || (ps.totalTrades || 0) < 5) return false;
+    if (S._pairGenomeDay[pair] === day) return false;
+    S._pairGenomeDay[pair] = day;
+    const r = _pairGenomeEvolve(pair, 0.15, Number(ps.totalPnlUsd) || 0);
+    if (r && S.chainLog) {
+      S.chainLog.push({ icon: '\uD83E\uDDEC', desc: 'G\u00e9nome de paire ' + pair + ' : ' + r.changed + '/' + r.genes + ' g\u00e8nes mut\u00e9s (P&L de r\u00e9f\u00e9rence ' + (Number(ps.totalPnlUsd) || 0).toFixed(2) + ' $)', hash: Math.random().toString(36).slice(2, 8), time: new Date().toLocaleTimeString() });
+      if (S.chainLog.length > 100) S.chainLog.splice(0, S.chainLog.length - 100);
+    }
+    n++; return true;   // une seule paire par passage
+  });
+  return n;
+}
+window._pairGenomeRollover = _pairGenomeRollover;
+
 function _projectRealCandles() {
   if (!(S.tradingMode === 'paperReal' || S.tradingMode === 'real')) return 0;
   const tf = (typeof _getActiveRealTimeframe === 'function') ? _getActiveRealTimeframe() : '15m';
@@ -3005,6 +3033,10 @@ function simTick() {
       if (S.tradingMode === 'paperReal' || S.tradingMode === 'real') {
         try { _applyPaperRealProtection(); } catch(e) {}
       }
+      // [GÉNOME DE PAIRE · 17/09/2026] rollover quotidien : une paire EV/RE par jour fait évoluer son génome TA
+      // (périodes + poids), avec pour « fitness » le P&L net réalisé de la paire dans ce mode. Une seule mutation par
+      // paire et par jour : les périodes sont le socle de 60 % du composite, elles ne doivent pas bouger sans arrêt.
+      try { _pairGenomeRollover(); } catch(e) { try{window._decErr&&window._decErr(e)}catch(_e){} }
       // [1b-b · 15/09/2026] EV/RE : l'analyse (14 indicateurs, 13 scouts, régime, patterns) lit les klines Binance
       // de la tf du mode — les MÊMES que la porte 10g/08 — projetées dans ps.candles à chaque passage du mode.
       // AA garde son générateur (bloc « New candle » plus bas, désormais réservé au mode sim).

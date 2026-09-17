@@ -1,3 +1,4 @@
+// [GÉNOME DE PAIRE · 17/09/2026] VERSION 20260917e · pairGenome + pairGenomeHistory + _pairGenomeDay dans le snapshot
 // [FITNESS GLISSANTE · 16/09/2026] VERSION 20260916c · agents : _judgments (60), _probationUntil, _bornCycle dans le snapshot
 // [GÉNOME · 16/09/2026] VERSION 20260916b · genome + genomeHistory dans le snapshot
 // [SONDE RÉSEAU · 15/09/2026] VERSION 20260915a · perfLog.net (60 derniers pings classés) dans le snapshot
@@ -80,6 +81,9 @@ function buildSnapshot() {
       agentPairSkill: S.agentPairSkill || {},
       genome: S.genome || {},                 // [GÉNOME · 16/09/2026]
       genomeHistory: S.genomeHistory || {},   // [GÉNOME · 16/09/2026]
+      pairGenome: S.pairGenome || {},                 // [GÉNOME DE PAIRE · 17/09/2026]
+      pairGenomeHistory: S.pairGenomeHistory || {},   // [GÉNOME DE PAIRE · 17/09/2026]
+      _pairGenomeDay: S._pairGenomeDay || {},
       botDisciples:   S.botDisciples   || {},   // [15/08] sièges des disciples par bot
       discipleTasks:  S.discipleTasks  || {},   // [15/08] tâche élue de chaque disciple
       discipleAngles: S.discipleAngles || {},   // [15/08] angle mesurable de chaque disciple
