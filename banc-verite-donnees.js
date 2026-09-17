@@ -120,12 +120,12 @@ T('S8 · 02 : _realCandlesStale (critère des portes) utilisé au boot, limiteur
   assert.ok(c.includes("window._perfOp('bootstrap:' + pair)"));
   assert.strictEqual(count(c, "'bootstrap candles '"), 0);
 });
-T('S9 · en-têtes 02/08/10g/09b2 « ' + HDR + ' », 10f « ▓▓▓ VERSION 20260914b ▓▓▓ » (hotfix b), HTML : DOC_V + 78 ?v= (79), aucun autre token', () => {
+T('S9 · en-têtes 02/08/10g/09b2 « ' + HDR + ' », 10f « ▓▓▓ VERSION 20260917b ▓▓▓ » (hotfix b), HTML : DOC_V + 78 ?v= (79), aucun autre token', () => {
   assert.ok(s10g.startsWith(HDR), F10G);
   assert.ok(s08.startsWith('// [RETRAIT REDISTRIBUTION · 16/09/2026] VERSION 20260916e') && s08.split('\n').slice(0, 4).some(l => l.startsWith(HDR)), F08);   // [1b-b] 08 relivré, en-tête 1b-a en 2e ligne
   assert.ok(s02.startsWith('// [RETRAIT REDISTRIBUTION · 16/09/2026] VERSION 20260916e') && s02.split('\n').slice(0, 4).some(l => l.startsWith(HDR)), F02);   // [SONDE RÉSEAU] 02 relivré, en-tête 1b-a en 2e ligne
   assert.ok(s9b2.startsWith('// [FITNESS GLISSANTE · 16/09/2026] VERSION 20260916c') && s9b2.split('\n').slice(0, 6).some(l => l.startsWith(HDR)), F9B2);   // [FITNESS GLISSANTE] 09b2 relivré, en-tête 1b-a dans les 6 premières lignes
-  assert.ok(s10f.startsWith('// ▓▓▓ VERSION 20260914b ▓▓▓'));   // 10f livré au hotfix b, non retouché depuis
+  assert.ok(s10f.startsWith('// ▓▓▓ VERSION 20260917b ▓▓▓'));   // 10f livré au hotfix b, non retouché depuis
   assert.strictEqual(count(html, TOK), 79);
   assert.strictEqual((html.match(/\?v=\d{8}[a-z]/g) || []).length, 78);
   assert.strictEqual((html.match(/\?v=\d{8}[a-z]/g) || []).filter(t => t !== '?v=' + TOK).length, 0);
@@ -377,6 +377,25 @@ T('D8 · recordTradeForHeatmap RÉEL : une clôture AA n\'écrit rien ; la premi
   assert.ok(c08.includes("if (S.tradingMode === 'sim') Object.entries(S.pairStates).forEach(([pair, ps]) => {"), 'générateur réservé à sim');
   assert.strictEqual(count(c08, 'ps.candles.push({ o, h, l, c, v });'), 1);
   assert.ok(c08.indexOf('_projectRealCandles();') < c08.indexOf('window._botExitSweep()'), 'projection avant les sorties');
+});
+T('D14 · A13 _botExitSweep RÉEL, niveaux ATR : SL exécuté au niveau, TP exécuté au niveau (sans attente de 5 cycles), breakeven à 45 % du chemin puis SL breakeven exécuté ; short symétrique ; le repli % reste pour une position sans niveaux', () => {
+  const pos = (id, side, entry, sl, tp) => ({ id, pair: 'X/USDT', side, entryPrice: entry, stakeUsdt: 10, auto: true, sl, tp, _holdCycles: 0, _tpPct: 2.7, _slPct: 0.9 });
+  let s = ctxSweep({ botAutoMode: true, pairStates: { 'X/USDT': { price: 97.9 } }, openPositions: [pos('a', 'long', 100, 98, 103)] });
+  s.run(); assert.deepStrictEqual(s.closed, [['a', true]]); assert.ok(s.toasts[0].includes('SL 98.0000'), s.toasts[0]);
+  s = ctxSweep({ botAutoMode: true, pairStates: { 'X/USDT': { price: 103.1 } }, openPositions: [pos('b', 'long', 100, 98, 103)] });
+  s.run(); assert.deepStrictEqual(s.closed, [['b', true]]); assert.ok(s.toasts[0].includes('TP 103.0000'), 'TP immédiat malgré _holdCycles 0');
+  s = ctxSweep({ botAutoMode: true, pairStates: { 'X/USDT': { price: 101.4 } }, openPositions: [pos('c', 'long', 100, 98, 103)] });
+  s.run(); assert.strictEqual(s.closed.length, 0); assert.strictEqual(+s.ctx.S.openPositions[0].sl.toFixed(3), 100.1); assert.ok(s.ctx.S.openPositions[0]._beAt > 0);
+  s.ctx.S.pairStates['X/USDT'].price = 100.05; s.run();
+  assert.deepStrictEqual(s.closed, [['c', true]]); assert.ok(s.toasts[0].includes('(breakeven)') && s.learned[0][1] > 0, s.toasts[0] + ' ' + JSON.stringify(s.learned));
+  s = ctxSweep({ botAutoMode: true, pairStates: { 'X/USDT': { price: 101.0 } }, openPositions: [pos('d', 'long', 100, 98, 103)] });
+  s.run(); assert.strictEqual(s.closed.length, 0); assert.strictEqual(s.ctx.S.openPositions[0].sl, 98, '< 45 % : SL inchangé');
+  s = ctxSweep({ botAutoMode: true, pairStates: { 'X/USDT': { price: 98.6 } }, openPositions: [pos('e', 'short', 100, 102, 97)] });
+  s.run(); assert.strictEqual(s.closed.length, 0); assert.strictEqual(+s.ctx.S.openPositions[0].sl.toFixed(3), 99.9, 'short : breakeven sous l\'entrée');
+  s = ctxSweep({ botAutoMode: true, pairStates: { 'X/USDT': { price: 102.1 } }, openPositions: [pos('e2', 'short', 100, 102, 97)] }); s.run(); assert.deepStrictEqual(s.closed, [['e2', true]]);
+  s = ctxSweep({ botAutoMode: true, pairStates: { 'X/USDT': { price: 96.9 } }, openPositions: [pos('e3', 'short', 100, 102, 97)] }); s.run(); assert.deepStrictEqual(s.closed, [['e3', true]]);
+  s = ctxSweep({ botAutoMode: true, pairStates: { 'X/USDT': { price: 103 } }, openPositions: [pos('f', 'long', 100, null, null)] }); s.run(); assert.strictEqual(s.closed.length, 0, 'repli % : TP attend 5 cycles');
+  s = ctxSweep({ botAutoMode: true, pairStates: { 'X/USDT': { price: 98.5 } }, openPositions: [pos('f2', 'long', 100, null, null)] }); s.run(); assert.deepStrictEqual(s.closed, [['f2', true]], 'repli % : SL −1,5 %');
 });
 T('D9 · _evRetireDelisted RÉEL : GBP/USDT désactivée en EV et RE, les autres paires intactes, idempotent', () => {
   const ctx = { window: {}, S: { paperRealActivePairs: { 'GBP/USDT': true, 'BTC/USDT': true }, realActivePairs: { 'BTC/USDT': true } } };

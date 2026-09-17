@@ -1,4 +1,5 @@
-// ▓▓▓ VERSION 20260914b ▓▓▓
+// ▓▓▓ VERSION 20260917b ▓▓▓
+// [A13 · 17/09/2026] _botExitSweep : règle unique de sortie = niveaux pos.sl / pos.tp (ATR × bras A/B, 09d1) exécutés sur ps.price, breakeven réel ; le % de conviction ne reste qu'en repli (AA, tick d'ouverture)
 // [1b-a HOTFIX · 14/09/2026 soir] _closeCompleted : une fermeture qui n'aboutit pas n'est plus réessayée à chaque tick (1/60 s), rien n'est enseigné sans fermeture réelle, la raison est journalisée
 // 10f-resolveur-cycle.js — Cœur : _resolvePairCycleCore + sorties bot hors résolution (_botExitSweep) + garde-fou perte max (_lossCapSweep)
 // [1b-a · 14/09/2026] TP/SL/breakeven des positions bot sortis de la résolution → _botExitSweep (battement 08, sur ps.price) ; la résolution écrit _tpPct/_slPct et ne garde que Signal inversé / timeout / hardTime ; _lossCapSweep rebranché par 08 (règle 06/07)
@@ -624,18 +625,39 @@ window._botExitSweep = function _botExitSweep() {
       var pnlPct = isLong ? (px - entry) / entry * 100 : (entry - px) / entry * 100;
       var pnlUsd = (Number(pos.stakeUsdt) || 0) * (pnlPct / 100);
       pos.pnl = pnlPct; pos.pnlUsdt = pnlUsd; pos.currentVal = (Number(pos.stakeUsdt) || 0) + pnlUsd;
-      var tpPct = (isFinite(pos._tpPct) && pos._tpPct > 0) ? pos._tpPct : Math.max(1.2, (Number(pos.conviction) || 0.4) * 4.5);
-      var slPct = (isFinite(pos._slPct) && pos._slPct > 0) ? pos._slPct : Math.max(0.6, tpPct * 0.35);
-      if (pnlPct > tpPct * 0.45) {   // breakeven-stop : au-delà de 45 % du TP, la position ne peut plus repasser rouge
-        var be = entry * (1 + (isLong ? 0.001 : -0.001));
-        if (isLong  && (!pos.sl || pos.sl < be)) pos.sl = be;
-        if (!isLong && (!pos.sl || pos.sl > be)) pos.sl = be;
+      var tpHit, slHit, why;
+      var hasLv = isFinite(pos.sl) && pos.sl > 0 && isFinite(pos.tp) && pos.tp > 0;
+      if (hasLv) {
+        // ═══ [A13 · 17/09/2026] RÈGLE UNIQUE DE SORTIE : les niveaux pos.sl / pos.tp (ATR × multiplicateurs des bras A/B, 09d1),
+        // exécutés sur ps.price à chaque tick. Avant : ces niveaux — ceux que l'A/B fait varier depuis des semaines — n'étaient
+        // jamais comparés au prix pour une position auto (seul le % de conviction fermait), et le breakeven déplaçait un pos.sl
+        // que personne ne lisait. Breakeven : à 45 % du chemin entrée → TP, le SL passe à l'entrée ± 0,1 % (et il est exécuté).
+        slHit = isLong ? (px <= pos.sl) : (px >= pos.sl);
+        tpHit = isLong ? (px >= pos.tp) : (px <= pos.tp);
+        var dist = Math.abs(pos.tp - entry), prog = isLong ? (px - entry) : (entry - px);
+        if (!slHit && !tpHit && dist > 0 && prog >= 0.45 * dist) {
+          var beL = entry * (1 + (isLong ? 0.001 : -0.001));
+          if (isLong ? (pos.sl < beL) : (pos.sl > beL)) { pos.sl = beL; pos._beAt = Date.now(); }
+        }
+        if (!(slHit || tpHit)) return;
+        var fmtPx = function(v){ return v >= 1 ? v.toFixed(4) : v.toPrecision(4); };
+        why = tpHit ? 'TP ' + fmtPx(pos.tp) : 'SL ' + fmtPx(pos.sl) + (pos._beAt ? ' (breakeven)' : '');
+      } else {
+        // Repli (AA, ou position EV avant que 09d1 n'ait posé ses niveaux — le tick suivant l'ouverture) : le % de conviction
+        // écrit par la résolution (_tpPct/_slPct) — sémantique 1b-a inchangée : SL immédiat, TP après 5 cycles, breakeven 45 %.
+        var tpPct = (isFinite(pos._tpPct) && pos._tpPct > 0) ? pos._tpPct : Math.max(1.2, (Number(pos.conviction) || 0.4) * 4.5);
+        var slPct = (isFinite(pos._slPct) && pos._slPct > 0) ? pos._slPct : Math.max(0.6, tpPct * 0.35);
+        if (pnlPct > tpPct * 0.45) {
+          var be = entry * (1 + (isLong ? 0.001 : -0.001));
+          if (isLong  && (!pos.sl || pos.sl < be)) pos.sl = be;
+          if (!isLong && (!pos.sl || pos.sl > be)) pos.sl = be;
+        }
+        tpHit = pnlPct >= tpPct;
+        slHit = pnlPct <= -slPct;
+        var minHoldMet = (pos._holdCycles || 0) >= 5;
+        if (!(slHit || (minHoldMet && tpHit))) return;
+        why = tpHit ? 'TP +' + tpPct.toFixed(1) + '%' : 'SL \u2212' + slPct.toFixed(1) + '%';
       }
-      var tpHit = pnlPct >= tpPct;
-      var slHit = pnlPct <= -slPct;
-      var minHoldMet = (pos._holdCycles || 0) >= 5;
-      if (!(slHit || (minHoldMet && tpHit))) return;
-      var why = tpHit ? 'TP +' + tpPct.toFixed(1) + '%' : 'SL \u2212' + slPct.toFixed(1) + '%';
       // [1b-a HOTFIX · 14/09/2026 soir] UNE FERMETURE QUI N'ABOUTIT PAS NE SE RÉESSAIE PAS À CHAQUE TICK.
       // closePosition (02) sauvegarde l'état, incrémente les stats, juge les agents (learnFromOutcome 'position')
       // PUIS retire la position en dernier : si quelque chose lève entre-temps, la position reste ouverte et ce

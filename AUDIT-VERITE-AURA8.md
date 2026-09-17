@@ -130,4 +130,6 @@ Une régression de vérité = `VERDICT : NON LIVRABLE`, jamais « CONNU, tolér�
 
 - **17/09 — l'école ne note plus** (`20260917a`) : les jugements AA (marche aléatoire) n'alimentent plus fitness/skill/régime/génome — seuls EV/RE jugent (#5/#12 fermés côté apprentissage). Backup 17/09 : 11/11 paires, equity plate, 1 fusion/h, sonde réseau 60/60 ok dans sa fenêtre, Guardian : gels = suspension OS.
 
+- **17/09 — A13 moteur de sortie unique** (`20260917b`) : #9/#10 fermés — les niveaux ATR (A/B) sont exécutés, breakeven réel ; le % de conviction n'est plus qu'un repli. L'A/B compare enfin deux règles réelles.
+
 *Mis à jour à chaque mission. Le prochain audit complet : après 1b-b, sur un backup de 24 h propre.*
