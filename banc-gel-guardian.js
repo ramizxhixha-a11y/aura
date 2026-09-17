@@ -133,10 +133,10 @@ function oracle(CFG, html, perFileDeclared, exists){
     assert.ok(!s.includes('setTimeout(_gdnSilentScan') && !s.includes('setTimeout(tick'), 'travail Guardian au boot');
     assert.ok(s.startsWith('// [GEL BOOT · 11/09/2026] VERSION 20260911a'));   // embed inchangé depuis la livraison a
   });
-  await T('HTML : DOC_V = ' + TOK + ' et tous les ?v= au même token (79)', () => {
+  await T('HTML : DOC_V = ' + TOK + ' et tous les ?v= au même token (80)', () => {
     const h = fs.readFileSync(path.join(ROOT,'AURA8_v118.html'),'utf8');
     assert.ok(h.includes("DOC_V = '" + TOK + "'"));
-    assert.strictEqual((h.match(/\?v=[0-9a-z]+/g)||[]).length, 78);
+    assert.strictEqual((h.match(/\?v=[0-9a-z]+/g)||[]).length, 79);   // [ATTRIBUTION PAR SOURCE 17/09] +1 : js/10i-intel-bus.js
     assert.deepStrictEqual((h.match(/\?v=[0-9a-z]+/g)||[]).filter(t => t !== '?v=' + TOK), []);
     assert.ok(!h.includes('20260908b') && !h.includes('20260909a') && !h.includes('20260911a') && !h.includes('?v=20260911b') && !h.includes("DOC_V = '20260911b'"));
   });

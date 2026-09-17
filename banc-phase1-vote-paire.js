@@ -36,15 +36,15 @@ console.log('▶ banc-phase1-vote-paire · token ' + TOK + ' · ' + scripts.leng
 console.log('\n── A · statique : ce qui est retiré, ce qui est publié ──');
 T('en-têtes : 03/12 « [PHASE 1 · 12/09/2026] VERSION 20260912c », 02/08 relivrés par 1b-a « [1b-a · 14/09/2026] VERSION 20260914a », 10f « ▓▓▓ VERSION 20260917b ▓▓▓ »', () => {
   assert.ok(s12.startsWith('// [ÉCOLE · 17/09/2026] VERSION 20260917a') && s12.split('\n').slice(0, 5).some(l => l.startsWith('// [PHASE 1 · 12/09/2026] VERSION 20260912c')), F12);   // [1c-FULL] 12 relivré, en-tête PHASE 1 en 2e ligne
-  assert.ok(s03.startsWith('// [GÉNOME DE PAIRE · 17/09/2026] VERSION 20260917e') && s03.split('\n').slice(0, 10).some(l => l.startsWith('// [PHASE 1 · 12/09/2026] VERSION 20260912c')), F03);   // [FITNESS GLISSANTE] 03 relivré, en-tête PHASE 1 conservé dans les 5 premières lignes
+  assert.ok(s03.startsWith('// [ATTRIBUTION PAR SOURCE · 17/09/2026] VERSION 20260917f') && s03.split('\n').slice(0, 11).some(l => l.startsWith('// [PHASE 1 · 12/09/2026] VERSION 20260912c')), F03);   // [FITNESS GLISSANTE] 03 relivré, en-tête PHASE 1 conservé dans les 5 premières lignes
   assert.ok(s08.startsWith('// [GÉNOME DE PAIRE · 17/09/2026] VERSION 20260917e') && s08.split('\n').slice(0, 5).some(l => l.startsWith('// [1b-a · 14/09/2026] VERSION 20260914a')), F08);   // [1b-b] 08 relivré, en-tête 1b-a en 2e ligne
-  assert.ok(s02.startsWith('// [FLUX BINANCE · 17/09/2026] VERSION 20260917d') && s02.split('\n').slice(0, 5).some(l => l.startsWith('// [1b-a · 14/09/2026] VERSION 20260914a')), F02);   // [SONDE RÉSEAU] 02 relivré, en-tête 1b-a en 2e ligne
+  assert.ok(s02.startsWith('// [ATTRIBUTION PAR SOURCE · 17/09/2026] VERSION 20260917f') && s02.split('\n').slice(0, 6).some(l => l.startsWith('// [1b-a · 14/09/2026] VERSION 20260914a')), F02);   // [SONDE RÉSEAU] 02 relivré, en-tête 1b-a en 2e ligne
   assert.ok(s10f.startsWith('// ▓▓▓ VERSION 20260917b ▓▓▓'));   // 10f livré au hotfix 1b-a (b), non retouché depuis
 });
-T('HTML : DOC_V + 78 ?v= au token ' + TOK + ' (79 occurrences), aucun autre token, archive/ non chargé', () => {
-  assert.strictEqual(count(html, TOK), 79);
-  assert.strictEqual(count(html, '?v=' + TOK), 78);
-  assert.strictEqual((html.match(/\?v=\d{8}[a-z]/g) || []).length, 78);
+T('HTML : DOC_V + 79 ?v= au token ' + TOK + ' (80 occurrences, 10i-intel-bus ajouté le 17/09), aucun autre token, archive/ non chargé', () => {
+  assert.strictEqual(count(html, TOK), 80);
+  assert.strictEqual(count(html, '?v=' + TOK), 79);
+  assert.strictEqual((html.match(/\?v=\d{8}[a-z]/g) || []).length, 79);
   assert.strictEqual(html.indexOf('archive/'), -1);
 });
 T('syntaxe : 02, 03, 08, 10f, 12 et l\'archive compilent (vm.Script)', () => {

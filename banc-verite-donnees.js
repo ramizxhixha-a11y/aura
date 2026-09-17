@@ -123,11 +123,11 @@ T('S8 · 02 : _realCandlesStale (critère des portes) utilisé au boot, limiteur
 T('S9 · en-têtes 02/08/10g/09b2 « ' + HDR + ' », 10f « ▓▓▓ VERSION 20260917b ▓▓▓ » (hotfix b), HTML : DOC_V + 78 ?v= (79), aucun autre token', () => {
   assert.ok(s10g.startsWith(HDR), F10G);
   assert.ok(s08.startsWith('// [GÉNOME DE PAIRE · 17/09/2026] VERSION 20260917e') && s08.split('\n').slice(0, 5).some(l => l.startsWith(HDR)), F08);   // [1b-b] 08 relivré, en-tête 1b-a en 2e ligne
-  assert.ok(s02.startsWith('// [FLUX BINANCE · 17/09/2026] VERSION 20260917d') && s02.split('\n').slice(0, 5).some(l => l.startsWith(HDR)), F02);   // [SONDE RÉSEAU] 02 relivré, en-tête 1b-a en 2e ligne
-  assert.ok(s9b2.startsWith('// [GÉNOME DE PAIRE · 17/09/2026] VERSION 20260917e') && s9b2.split('\n').slice(0, 8).some(l => l.startsWith(HDR)), F9B2);   // [FITNESS GLISSANTE] 09b2 relivré, en-tête 1b-a dans les 6 premières lignes
+  assert.ok(s02.startsWith('// [ATTRIBUTION PAR SOURCE · 17/09/2026] VERSION 20260917f') && s02.split('\n').slice(0, 6).some(l => l.startsWith(HDR)), F02);   // [SONDE RÉSEAU] 02 relivré, en-tête 1b-a en 2e ligne
+  assert.ok(s9b2.startsWith('// [ATTRIBUTION PAR SOURCE · 17/09/2026] VERSION 20260917f') && s9b2.split('\n').slice(0, 9).some(l => l.startsWith(HDR)), F9B2);   // [FITNESS GLISSANTE] 09b2 relivré, en-tête 1b-a dans les 6 premières lignes
   assert.ok(s10f.startsWith('// ▓▓▓ VERSION 20260917b ▓▓▓'));   // 10f livré au hotfix b, non retouché depuis
-  assert.strictEqual(count(html, TOK), 79);
-  assert.strictEqual((html.match(/\?v=\d{8}[a-z]/g) || []).length, 78);
+  assert.strictEqual(count(html, TOK), 80);   // [ATTRIBUTION PAR SOURCE 17/09] 10i-intel-bus ajouté
+  assert.strictEqual((html.match(/\?v=\d{8}[a-z]/g) || []).length, 79);
   assert.strictEqual((html.match(/\?v=\d{8}[a-z]/g) || []).filter(t => t !== '?v=' + TOK).length, 0);
 });
 

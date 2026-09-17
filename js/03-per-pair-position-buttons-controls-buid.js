@@ -1,3 +1,4 @@
+// [ATTRIBUTION PAR SOURCE · 17/09/2026] VERSION 20260917f · runRosterAnalysis publie l'état des sources dans le bus (10i _intelPublish)
 // [GÉNOME DE PAIRE · 17/09/2026] VERSION 20260917e · génome de paire (périodes TA + poids du mélange) : PAIR_GENOME_DEFAULTS, _pairGenomeOf, _pairGenomeEvolve
 // [FLUX BINANCE · 17/09/2026] VERSION 20260917d · whale_v1 / flow_v1 lisent le flux d'ordres réel et le carnet Binance (02), volume_v1 le volume réel des klines — fin des proxys de bougies
 // [ÉCOLE · 17/09/2026] VERSION 20260917a · learnFromOutcome : l'AA (bougies fabriquées) ne juge plus les agents — seuls EV et RE notent
@@ -4109,6 +4110,9 @@ function runRosterAnalysis(pair) {
         _votes[id] = _muted.has(id) ? 0.05 : (res.status === 'veto' ? -0.5 : res.status === 'warn' ? -0.2 : 0.05);
       });
       _ps.roster = { ts: Date.now(), cycle: S.cycle || 0, votes: _votes, weights: _weights, regime: _regimeNow };   // [POIDS PAR ATTRIBUTION] décomposition lisible
+      // [ATTRIBUTION PAR SOURCE · 17/09/2026] A2 : range ce que chaque SOURCE DE DONNÉES disait à cet instant (10i, RAM,
+      // lecture seule) — aucune décision ne le lit. Sert à l'attribution à la clôture (02 → _attributionRecord).
+      try { if (typeof _intelPublish === 'function') _intelPublish(pair, _votes, _weights, (getTechSignals(pair) || {}).atScore); } catch(e) {}
     }
   } catch(e) {}
   // Bots de flotte (isBot : jamais comptés dans le consensus 10f ni dans l'évolution) : leur

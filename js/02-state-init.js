@@ -1,3 +1,4 @@
+// [ATTRIBUTION PAR SOURCE · 17/09/2026] VERSION 20260917f · closePosition enregistre l'attribution par source (10i _attributionRecord)
 // [FLUX BINANCE · 17/09/2026] VERSION 20260917d · flux réel : _recordTrade (quantité + côté preneur du @trade), _flowSummary, carnet REST depth 20 niveaux en tournante (_pollOrderBook, _parseDepth)
 // [RETRAIT REDISTRIBUTION · 16/09/2026] VERSION 20260916e · redistributeFitness retirée (sans effet depuis la fitness glissante)
 // [SONDE RÉSEAU · 15/09/2026] VERSION 20260915a · gardien des WS : rien hors ligne (window._auraNetOffline), remplacement d'un WS fermé seulement après le backoff partagé _bgNextTry (fin de la tempête ~130 connexions/min)
@@ -6105,6 +6106,9 @@ function closePosition(id, botClose = false) {
   }
 
   learnFromOutcome('position', realisedPct, pos.pair);
+  // [ATTRIBUTION PAR SOURCE · 17/09/2026] A5 : crédite chaque source de données selon ce qu'elle disait à l'OUVERTURE
+  // de cette position (10i, lecture seule — aucune décision n'utilise S.attribution).
+  try { if (typeof _attributionRecord === 'function') _attributionRecord(pos, realisedPct); } catch(e) {}
 
   S.openPositions = S.openPositions.filter(p=>p.id!==id);
   if (typeof _updateCloseAllBadge === 'function') _updateCloseAllBadge();

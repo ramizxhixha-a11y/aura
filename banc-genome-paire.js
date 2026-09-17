@@ -25,19 +25,35 @@ T('D1 · _pairGenomeOf : défauts = les constantes d\'hier (RSI 14, EMA 9/21/50,
   const g2 = J(vm.runInContext("_pairGenomeOf('X/USDT')", c));
   assert.ok(g2.emaSlow > g2.emaFast && g2.smaSlow > g2.smaFast, 'croisements distincts : ' + JSON.stringify(g2));
 });
-T('D2 · _pairGenomeEvolve : archive avec le P&L de référence, trie, cap 8, recombine avec la meilleure version, mutation bornée, entiers', () => {
+T('D2 · _pairGenomeEvolve : archive la version courante avec sa fitness, jamais deux fois la même, trie, cap 8, recombine et mute dans les bornes (entiers)', () => {
   const c = ctx({});
+  let k = 0; const seq = [0.9, 0.1, 0.8, 0.2, 0.7, 0.3, 0.6, 0.4, 0.95, 0.05, 0.55, 0.45];   // Math.random maîtrisé
+  const M = Object.create(Math); M.random = () => seq[(k++) % seq.length]; c.Math = M; vm.runInContext('Math = this.Math;', c);
   const r = J(vm.runInContext("_pairGenomeEvolve('BTC/USDT', 0.15, 4.2)", c));
-  assert.strictEqual(r.genes, 12); assert.ok(r.changed >= 1);
-  const h = c.S.pairGenomeHistory['BTC/USDT']; assert.strictEqual(h.length, 1); assert.strictEqual(h[0].f, 4.2);
-  assert.deepStrictEqual(J(h[0].g).rsi, 14);
-  for (let i = 1; i <= 12; i++) vm.runInContext("_pairGenomeEvolve('BTC/USDT', 0.3, " + (i <= 5 ? i * 2 : -i) + ")", c);
-  const hh = c.S.pairGenomeHistory['BTC/USDT']; assert.ok(hh.length <= 8, 'cap 8 : ' + hh.length);
-  assert.strictEqual(hh[0].f, 10, 'meilleure version en tête');
-  for (let i = 1; i < hh.length; i++) assert.ok(hh[i - 1].f >= hh[i].f);
-  const g = J(c.S.pairGenome['BTC/USDT']);
-  Object.keys(g).forEach(k => { const d = { rsi: 14, stoch: 14, adx: 14, emaFast: 9, emaSlow: 21, emaLong: 50, smaFast: 10, smaSlow: 20, smaLong: 50, wTrend: 1.2, wMomentum: 1.3, wVolatility: 1 }[k]; assert.ok(g[k] >= Math.max(k.startsWith('w') ? 0.2 : 3, d / 3 - 1e-9) && g[k] <= Math.min(k.startsWith('w') ? 3 : 60, d * 3 + 1e-9), k + ' hors bornes : ' + g[k]); });
-  ['rsi', 'stoch', 'adx', 'emaFast', 'emaSlow', 'emaLong', 'smaFast', 'smaSlow', 'smaLong'].forEach(k => assert.strictEqual(g[k], Math.round(g[k]), k + ' non entier'));
+  assert.strictEqual(r.genes, 12); assert.ok(r.changed >= 1, 'au moins un gène muté');
+  const h = c.S.pairGenomeHistory['BTC/USDT'];
+  assert.strictEqual(h.length, 1); assert.strictEqual(h[0].f, 4.2); assert.strictEqual(J(h[0].g).rsi, 14, 'la version archivée est celle d\'avant mutation');
+  // le génome courant est muté, entier, dans les bornes
+  const g = J(c.S.pairGenome['BTC/USDT']), D = { rsi: 14, stoch: 14, adx: 14, emaFast: 9, emaSlow: 21, emaLong: 50, smaFast: 10, smaSlow: 20, smaLong: 50, wTrend: 1.2, wMomentum: 1.3, wVolatility: 1 };
+  Object.keys(D).forEach(key => {
+    const isW = key.startsWith('w');
+    assert.ok(g[key] >= Math.max(isW ? 0.2 : 3, D[key] / 3 - 1e-9) && g[key] <= Math.min(isW ? 3 : 60, D[key] * 3 + 1e-9), key + ' hors bornes : ' + g[key]);
+    if (!isW) assert.strictEqual(g[key], Math.round(g[key]), key + ' non entier');
+  });
+  // même génome courant → pas de doublon archivé
+  const before = c.S.pairGenomeHistory['BTC/USDT'].length;
+  c.S.pairGenome['BTC/USDT'] = J(c.S.pairGenomeHistory['BTC/USDT'][0].g);
+  vm.runInContext("_pairGenomeEvolve('BTC/USDT', 0.15, 99)", c);
+  assert.strictEqual(c.S.pairGenomeHistory['BTC/USDT'].length, before, 'version déjà archivée : pas de doublon');
+  // 12 versions distinctes (imposées) : triées par fitness décroissante, cap 8, la meilleure en tête
+  for (let i = 1; i <= 12; i++) {
+    c.S.pairGenome['BTC/USDT'] = Object.assign(J(D), { rsi: 5 + i });
+    vm.runInContext("_pairGenomeEvolve('BTC/USDT', 0.15, " + (i <= 6 ? i * 2 : -i) + ")", c);
+  }
+  const hh = c.S.pairGenomeHistory['BTC/USDT'];
+  assert.strictEqual(hh.length, 8, 'cap 8');
+  assert.strictEqual(hh[0].f, 12, 'meilleure version (fitness 12) en tête');
+  for (let i = 1; i < hh.length; i++) assert.ok(hh[i - 1].f >= hh[i].f, 'triée');
 });
 T('D3 · _pairGenomeRollover RÉEL : rien en AA ; en EV une seule paire par passage, seulement ≥ 5 trades, une fois par jour, journal 🧬', () => {
   const S = { tradingMode: 'sim', pairStates: { 'A/USDT': { totalTrades: 9, totalPnlUsd: 1.5 }, 'B/USDT': { totalTrades: 3, totalPnlUsd: 0 }, 'C/USDT': { totalTrades: 40, totalPnlUsd: -2 } }, chainLog: [] };
