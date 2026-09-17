@@ -1,3 +1,4 @@
+// [FLUX BINANCE · 17/09/2026] VERSION 20260917d · whale_v1 / flow_v1 lisent le flux d'ordres réel et le carnet Binance (02), volume_v1 le volume réel des klines — fin des proxys de bougies
 // [ÉCOLE · 17/09/2026] VERSION 20260917a · learnFromOutcome : l'AA (bougies fabriquées) ne juge plus les agents — seuls EV et RE notent
 // [RETRAIT REDISTRIBUTION · 16/09/2026] VERSION 20260916e · revigoration : vide aussi la fenêtre de jugements
 // [POIDS PAR ATTRIBUTION · 16/09/2026] VERSION 20260916d · poids du roster = fitness glissante × compétence par paire × compétence par régime (continu, _attributionFactor) ; regimeFitness = votes alignés du siège ; ps.roster.weights
@@ -3687,23 +3688,24 @@ function scoutAnalysis(agentId, pair) {
       };
     }
     case 'volume_v1': {
-      // v6.7: Use candle range as volume proxy (no real volume data available)
-      if(candles.length < 10) return { score:0, conf:0.3, reasoning:'Données insuffisantes' };
-      // Range spike = volume spike proxy
-      const recentRange = candles.slice(-G.recentN).map(cd => (cd.h - cd.l) / Math.max(0.0001, cd.c));
-      const avgRange    = candles.slice(-(G.recentN + G.histN), -G.recentN).map(cd => (cd.h - cd.l) / Math.max(0.0001, cd.c));
-      const recentAvg   = recentRange.reduce((s,v)=>s+v,0) / recentRange.length;
-      const historicAvg = avgRange.reduce((s,v)=>s+v,0) / Math.max(1, avgRange.length);
-      const ratio = recentAvg / Math.max(0.0001, historicAvg);
+      // [FLUX BINANCE · 17/09/2026] VOLUME RÉEL des klines (v, depuis 1b-b) : G.recentN dernières bougies vs les G.histN
+      // précédentes — plus les amplitudes h−l comme proxy. Direction : le prix sur G.lookback bougies.
+      if(candles.length < Math.max(10, G.recentN + G.histN)) return { score:0, conf:0.3, reasoning:'En observation' };
+      const vol = candles.map(cd => Number(cd.v) || 0);
+      if (!vol.some(v => v > 0)) return { score:0, conf:0.3, reasoning:'En attente du volume Binance' };
+      const recentVol = vol.slice(-G.recentN).reduce((a,b)=>a+b,0) / G.recentN;
+      const histVol   = vol.slice(-(G.recentN + G.histN), -G.recentN).reduce((a,b)=>a+b,0) / G.histN;
+      const ratio = histVol > 0 ? recentVol / histVol : 1;
       const priceUp = candles[candles.length-1].c > candles[Math.max(0, candles.length-G.lookback)].c;
-      // High range with up price = bullish volume, high range with down = bearish
       if(ratio > G.spike) {
-        return { score: priceUp ? +G.spikeScore : -G.spikeScore, conf:0.75, reasoning:`Volume spike ×${ratio.toFixed(1)} ${priceUp?'(haussier)':'(baissier)'}` };
+        return { score: priceUp ? +G.spikeScore : -G.spikeScore, conf:0.75,
+                 reasoning:`Pic de volume ×${ratio.toFixed(1)} sur ${G.recentN} bougies — ${priceUp?'accumulation':'distribution'}` };
       } else if(ratio < G.low) {
-        return { score: 0, conf: 0.5, reasoning:`Volume faible (×${ratio.toFixed(1)}) · distribution` };
+        return { score:0, conf:0.5, reasoning:`Volume faible (×${ratio.toFixed(2)}) — marché indécis` };
+      } else {
+        const score = priceUp ? Math.min(G.maxScore, (ratio-1)*G.slope) : -Math.min(G.maxScore, (ratio-1)*G.slope);
+        return { score, conf:0.62, reasoning:`Volume normal (×${ratio.toFixed(2)}), tendance ${priceUp?'haussière':'baissière'}` };
       }
-      const score = priceUp ? Math.min(G.maxScore, (ratio-1)*G.slope) : -Math.min(G.maxScore, (ratio-1)*G.slope);
-      return { score, conf:0.6, reasoning:`Volume ×${ratio.toFixed(1)} ${priceUp?'haussier':'baissier'}` };
     }
         case 'volatility_v1': {
       // v6.7: Volatility regime → directional bias
@@ -3760,22 +3762,25 @@ function scoutAnalysis(agentId, pair) {
       };
     }
     case 'whale_v1': {
-      // v6.7: Whale detection via large candle bodies (no volume data available)
-      if(candles.length < Math.max(10, G.avgN + 1)) return { score:0, conf:0.3, reasoning:'En observation' };
-      const last = candles[candles.length-1];
-      // Body size relative to recent average body
-      const lastBody = Math.abs(last.c - last.o);
-      const avgBody  = candles.slice(-(G.avgN+1),-1).reduce((s,cd)=>s+Math.abs(cd.c-cd.o),0) / G.avgN;
-      const ratio    = lastBody / Math.max(0.0001, avgBody);
-      const bullish  = last.c > last.o;
-      if(ratio > G.big) {
-        return { score: bullish ? +G.bigScore : -G.bigScore, conf:0.80, reasoning:`Grosse bougie (×${ratio.toFixed(1)} moy.) · ${bullish?'achat massif':'vente massive'}` };
-      } else if(ratio > G.mid) {
-        return { score: bullish ? +G.midScore : -G.midScore, conf:0.65, reasoning:`Bougie significative (×${ratio.toFixed(1)})` };
+      // [FLUX BINANCE · 17/09/2026] GROS TRADES RÉELS (flux @trade, 02 _recordTrade) + MURS DU CARNET — plus les « gros
+      // corps de bougie ». Fenêtre G.avgN minutes ; un gros trade = notionnel > 8 × le notionnel moyen de la paire.
+      const fw = (typeof _flowSummary === 'function') ? _flowSummary(pair, G.avgN) : null;
+      if (!fw || fw.minutes < 2) return { score:0, conf:0.3, reasoning:'En attente du flux Binance' };
+      const ob = (S.orderBook && S.orderBook[pair] && (Date.now() - S.orderBook[pair].t) < 180000) ? S.orderBook[pair] : null;
+      const bigN = fw.bigBuy + fw.bigSell;
+      let sc = 0, why = 'Aucun gros ordre (' + fw.n + ' trades/' + fw.minutes + ' min)';
+      if (bigN > 0) {
+        const ratio = Math.max(fw.bigBuyUsd, fw.bigSellUsd) / Math.max(1, Math.min(fw.bigBuyUsd, fw.bigSellUsd));
+        const mag = ratio > G.big ? G.bigScore : ratio > G.mid ? G.midScore : Math.abs(fw.bigNet) * G.midScore;
+        sc = fw.bigNet >= 0 ? mag : -mag;
+        why = (fw.bigNet >= 0 ? 'Gros acheteurs' : 'Gros vendeurs') + ' : ' + fw.bigBuy + ' achats / ' + fw.bigSell + ' ventes > 8× moyenne';
       }
-      return { score:0, conf:0.45, reasoning:`Activité normale (×${ratio.toFixed(1)})` };
+      if (ob) {
+        if (ob.bidWall && !ob.askWall) { sc += 0.15; why += ' · mur d\'achat à ' + ob.bidWall.p; }
+        else if (ob.askWall && !ob.bidWall) { sc -= 0.15; why += ' · mur de vente à ' + ob.askWall.p; }
+      }
+      return { score: Math.max(-1, Math.min(1, sc)), conf: bigN > 0 ? 0.80 : 0.5, reasoning: why };
     }
-
     case 'breakout_v1': {
       if(candles.length < G.win) return { score:0, conf:0.3, reasoning:'Structure en construction' };
       const recent20 = candles.slice(-G.win);
@@ -3797,16 +3802,17 @@ function scoutAnalysis(agentId, pair) {
       };
     }
     case 'flow_v1': {
-      // Approximate order flow from candle body direction
-      if(candles.length < G.win) return { score:0, conf:0.3, reasoning:'Données insuffisantes' };
-      const last5 = candles.slice(-G.win);
-      const bullBodies = last5.filter(c => c.c > c.o).length;
-      const bearBodies = last5.length - bullBodies;
-      const netFlow = (bullBodies - bearBodies) / Math.max(1, last5.length);
+      // [FLUX BINANCE · 17/09/2026] FLUX D'ORDRES RÉEL : quantité prise par les acheteurs vs les vendeurs (côté preneur du
+      // @trade) sur G.win minutes, + déséquilibre du carnet (20 niveaux) — plus le comptage des bougies vertes.
+      const fw = (typeof _flowSummary === 'function') ? _flowSummary(pair, G.win) : null;
+      if (!fw || fw.minutes < 2 || fw.n < 10) return { score:0, conf:0.3, reasoning:'En attente du flux Binance' };
+      const ob = (S.orderBook && S.orderBook[pair] && (Date.now() - S.orderBook[pair].t) < 180000) ? S.orderBook[pair] : null;
+      const netFlow = ob ? (fw.imb * 0.7 + ob.imb * 0.3) : fw.imb;
+      const pct = Math.round((fw.buyQ / Math.max(1e-12, fw.buyQ + fw.sellQ)) * 100);
       return {
-        score: netFlow * G.gain,
-        conf: Math.abs(netFlow) * 0.7 + 0.3,
-        reasoning: netFlow > 0.3 ? `Flux acheteur dominant (${bullBodies}/${last5.length})` : netFlow < -0.3 ? `Flux vendeur dominant (${bearBodies}/${last5.length})` : 'Flux équilibré'
+        score: Math.max(-1, Math.min(1, netFlow * G.gain)),
+        conf: 0.72,
+        reasoning: netFlow > 0.3 ? `Flux acheteur dominant (${pct} % pris à l'achat, ${fw.n} trades/${fw.minutes} min)` : netFlow < -0.3 ? `Flux vendeur dominant (${100 - pct} % pris à la vente, ${fw.n} trades/${fw.minutes} min)` : `Flux équilibré (${pct} % achat` + (ob ? `, carnet ${ob.imb >= 0 ? '+' : ''}${(ob.imb * 100).toFixed(0)} %` : '') + ')'
       };
     }
   }

@@ -134,4 +134,6 @@ Une régression de vérité = `VERDICT : NON LIVRABLE`, jamais « CONNU, tolér�
 
 - **17/09 — affichage P&L + portfolio au boot** (`20260917c`) : #23 fermé côté accueil (recalage avec mises engagées, plus de +30 $ fantômes) ; latent live par paire, mise 🤖/👤. Restent : `_totalCompounded` fossile (affichage), `cashLog` EV mort depuis le 07/07, #24 journal.
 
+- **17/09 — flux Binance (A14)** (`20260917d`) : #5 fermé pour whale/flow/volume — flux d'ordres réel (quantité + côté preneur) et carnet 20 niveaux ; les autres scouts lisent déjà les klines réelles (1b-b).
+
 *Mis à jour à chaque mission. Le prochain audit complet : après 1b-b, sur un backup de 24 h propre.*

@@ -1,3 +1,4 @@
+// [FLUX BINANCE · 17/09/2026] VERSION 20260917d · flux réel : _recordTrade (quantité + côté preneur du @trade), _flowSummary, carnet REST depth 20 niveaux en tournante (_pollOrderBook, _parseDepth)
 // [RETRAIT REDISTRIBUTION · 16/09/2026] VERSION 20260916e · redistributeFitness retirée (sans effet depuis la fitness glissante)
 // [SONDE RÉSEAU · 15/09/2026] VERSION 20260915a · gardien des WS : rien hors ligne (window._auraNetOffline), remplacement d'un WS fermé seulement après le backoff partagé _bgNextTry (fin de la tempête ~130 connexions/min)
 // [1b-a · 14/09/2026] VERSION 20260914a · bougies réelles vivantes : filtre outlier non auto-bloquant (_rcOutlier, référence = dernier prix accepté < 5 min, plus jamais le close 5m), bootstrap REST au boot pour toute série périmée (_realCandlesStale, limiteur 90 s), référence rafraîchie après bootstrap
@@ -3156,6 +3157,80 @@ async function _backfillRealCandles(pair, interval, limit) {
 }
 window._backfillRealCandles = _backfillRealCandles;
 
+// ═══ [FLUX BINANCE · 17/09/2026] DONNÉES RÉELLES POUR WHALE / FLOW / VOLUME (A14, « go whale et binance » Rams) ═══
+// Jusqu'ici les scouts whale_v1 et flow_v1 lisaient des « gros corps » et des « bougies vertes » — des proxys de prix,
+// jamais un ordre ni un volume réel (audit #5). Le flux @trade que le collecteur reçoit déjà porte pour chaque trade
+// la quantité (q) et le côté preneur (m = true → le preneur VEND) : c'est le vrai flux d'ordres, sans connexion en plus.
+// S.flowStats[pair] = seaux d'une minute (30 derniers, RAM) : quantité achetée/vendue par les preneurs, nombre de
+// trades, notionnel, et les GROS trades (notionnel > 8 × la moyenne mobile du notionnel de la paire, plancher 500 $).
+// S.orderBook[pair] (RAM) = carnet REST /api/v3/depth?limit=20, une paire toutes les 5 s en tournante (≈ 1 tour/min),
+// seulement en ligne : déséquilibre bid/ask des 20 niveaux, murs (niveau > 5 × la moyenne des niveaux), spread.
+var _flowEmaNotional = {};   // { pair: notionnel moyen (EMA) }
+const FLOW_BUCKET_MS = 60000, FLOW_KEEP = 30, FLOW_WHALE_MULT = 8, FLOW_WHALE_FLOOR_USD = 500;
+function _recordTrade(pair, price, qty, buyerIsMaker, ts) {
+  if (!isFinite(price) || !isFinite(qty) || price <= 0 || qty <= 0) return;
+  if (!S.flowStats) S.flowStats = {};
+  const arr = S.flowStats[pair] || (S.flowStats[pair] = []);
+  const t0 = Math.floor((ts || Date.now()) / FLOW_BUCKET_MS) * FLOW_BUCKET_MS;
+  let b = arr[arr.length - 1];
+  if (!b || b.t !== t0) {
+    if (b && t0 < b.t) return;                      // trade en retard : ignoré
+    b = { t: t0, buyQ: 0, sellQ: 0, buyN: 0, sellN: 0, notional: 0, n: 0, bigBuy: 0, bigSell: 0, bigBuyUsd: 0, bigSellUsd: 0 };
+    arr.push(b); if (arr.length > FLOW_KEEP) arr.splice(0, arr.length - FLOW_KEEP);
+  }
+  const usd = price * qty, sell = buyerIsMaker === true;
+  if (sell) { b.sellQ += qty; b.sellN++; } else { b.buyQ += qty; b.buyN++; }
+  b.notional += usd; b.n++;
+  const ema = _flowEmaNotional[pair];
+  if (ema && usd > FLOW_WHALE_MULT * ema && usd >= FLOW_WHALE_FLOOR_USD) { if (sell) { b.bigSell++; b.bigSellUsd += usd; } else { b.bigBuy++; b.bigBuyUsd += usd; } }
+  _flowEmaNotional[pair] = ema ? ema + (usd - ema) * 0.02 : usd;
+}
+window._recordTrade = _recordTrade;
+// Résumé des N dernières minutes : { n, buyQ, sellQ, imb (−1..+1, flux preneur), bigBuy, bigSell, bigNet (−1..+1), minutes }
+function _flowSummary(pair, minutes) {
+  const arr = (S.flowStats && S.flowStats[pair]) || [];
+  const since = Math.floor(Date.now() / FLOW_BUCKET_MS) * FLOW_BUCKET_MS - (Math.max(1, minutes | 0) - 1) * FLOW_BUCKET_MS;
+  const o = { n: 0, buyQ: 0, sellQ: 0, imb: 0, bigBuy: 0, bigSell: 0, bigBuyUsd: 0, bigSellUsd: 0, bigNet: 0, minutes: 0 };
+  arr.forEach(b => { if (b.t < since) return; o.minutes++; o.n += b.n; o.buyQ += b.buyQ; o.sellQ += b.sellQ; o.bigBuy += b.bigBuy; o.bigSell += b.bigSell; o.bigBuyUsd += b.bigBuyUsd; o.bigSellUsd += b.bigSellUsd; });
+  const tot = o.buyQ + o.sellQ; o.imb = tot > 0 ? (o.buyQ - o.sellQ) / tot : 0;
+  const bt = o.bigBuyUsd + o.bigSellUsd; o.bigNet = bt > 0 ? (o.bigBuyUsd - o.bigSellUsd) / bt : 0;
+  return o;
+}
+window._flowSummary = _flowSummary;
+// Carnet : déséquilibre et murs sur 20 niveaux
+function _parseDepth(pair, bids, asks) {
+  const lv = a => (Array.isArray(a) ? a : []).map(x => [Number(x[0]), Number(x[1])]).filter(x => x[0] > 0 && x[1] > 0);
+  const B = lv(bids), A = lv(asks);
+  const bq = B.reduce((t, x) => t + x[1], 0), aq = A.reduce((t, x) => t + x[1], 0);
+  const all = B.concat(A); const avg = all.length ? all.reduce((t, x) => t + x[1], 0) / all.length : 0;
+  const wall = a => a.find(x => avg > 0 && x[1] > 5 * avg) || null;
+  const bw = wall(B), aw = wall(A);
+  const best = (B[0] && A[0]) ? { bid: B[0][0], ask: A[0][0] } : null;
+  const ob = { t: Date.now(), imb: (bq + aq) > 0 ? (bq - aq) / (bq + aq) : 0, bidQ: bq, askQ: aq, bidWall: bw ? { p: bw[0], q: bw[1] } : null, askWall: aw ? { p: aw[0], q: aw[1] } : null, spreadPct: best ? (best.ask - best.bid) / best.bid * 100 : null };
+  if (!S.orderBook) S.orderBook = {};
+  S.orderBook[pair] = ob;
+  return ob;
+}
+window._parseDepth = _parseDepth;
+var _obCursor = 0;
+function _pollOrderBook() {
+  try {
+    if (window._auraNetOffline) return;
+    const pairs = (typeof _bgPairsToWatch === 'function') ? _bgPairsToWatch() : [];
+    if (!pairs.length) return;
+    const pair = pairs[_obCursor % pairs.length]; _obCursor++;
+    const sym = String(pair).replace('/', '').toUpperCase();
+    const ctl = (typeof AbortController === 'function') ? new AbortController() : null;
+    const to = ctl ? setTimeout(function(){ try { ctl.abort(); } catch(e) {} }, 5000) : null;
+    fetch('https://api.binance.com/api/v3/depth?symbol=' + sym + '&limit=20', ctl ? { signal: ctl.signal, cache: 'no-store' } : { cache: 'no-store' })
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { if (to) clearTimeout(to); if (d && d.bids && d.asks) _parseDepth(pair, d.bids, d.asks); })
+      .catch(() => { if (to) clearTimeout(to); });
+  } catch(e) {}
+}
+window._pollOrderBook = _pollOrderBook;
+setInterval(_pollOrderBook, 5000);   // une paire toutes les 5 s → 11 paires en ≈ 1 min, poids Binance négligeable
+
 // ═══ [1b-a · 14/09/2026] FILTRE OUTLIER NON AUTO-BLOQUANT ═══
 // Avant : chaque prix WS était comparé au dernier close 5m (jamais re-bootstrappé) — dès que cette série datait
 // (pause, veille, coupure, mouvement > 2 %), 100 % des prix étaient rejetés pour TOUTES les timeframes, à vie
@@ -4551,6 +4626,7 @@ function _openBgWs(pair) {
       if (!isFinite(price) || price <= 0) return;
       if (_realCandlesState && _realCandlesState.wsConnected && _realCandlesState.wsPair === pair) return;
       try { if (_wsAggGate(pair)) _aggregateRealPrice(pair, price, msg.T); } catch(e) {}
+      try { _recordTrade(pair, price, parseFloat(msg.q), msg.m === true, msg.T); } catch(e) {}   // [FLUX BINANCE · 17/09/2026] flux réel : quantité + côté preneur
       try {
         const ps = (S && S.pairStates) ? S.pairStates[pair] : null;
         if (ps) ps.price = price;
