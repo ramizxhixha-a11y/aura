@@ -1,4 +1,4 @@
-# PASSATION-AURA8 — 19/09/2026 — token `20260919a` — CORRECTIF ATTRIBUTION (forme des votes) + banc du flux déterministe · lecture du backup 19/09 · push direct ACTIF · passation versionnée
+# PASSATION-AURA8 — 19/09/2026 — token `20260919b` — TRAILING STOP PROPORTIONNEL (le gagnant respire jusqu'à son objectif) · correctif attribution `20260919a` · push direct ACTIF · passation versionnée
 
 ## Démarrage de session — Rams colle le PAT, rien d'autre (ce fichier est lu depuis le dépôt)
 1. Cloner : `git clone https://x-access-token:PAT@github.com/ramizxhixha-a11y/aura.git` puis aussitôt `git remote set-url origin https://github.com/ramizxhixha-a11y/aura.git` — le PAT ne reste ni dans `.git/config`, ni dans un fichier, ni en mémoire.
@@ -9,7 +9,18 @@
 6. PAT fine-grained, dépôt `aura` seul, Contents Read/Write, 30 j — celui du 12/09 expire le **12/10/2026**. Ancien PAT classique : à révoquer (Rams).
 7. Au chat : court. **Lecture intégrale = dans le bac à sable** (grep de tous les appelants/lecteurs + bancs sur le texte livré), au chat seulement les fonctions touchées. C'est ce qui a saturé les sessions précédentes (20 000 lignes lues au chat par mission) — plus jamais. Le filet reste `banc-all` (collisions globales, syntaxe, HTML, passation), pas la lecture.
 
-## Ce commit — CORRECTIF ATTRIBUTION + BANC DÉTERMINISTE — token `20260919a` — défaut de MA livraison du 17/09, trouvé par le backup
+## Ce commit — TRAILING STOP PROPORTIONNEL — token `20260919b` — Rams « OK go » (19/09) — touche l'argent
+**Le problème, mesuré** : backup 19/09 — 106 trades, **59 gagnants (56 %)**, P&L réalisé **−8,37 $**. Les pertes sont plus grosses que les gains. Le trailing v7.12 (07, `PACK RÉSILIENCE`) fermait **toute** position retombée de **0,5 point** sous un pic ≥ **+1 %**, quel que soit son objectif : AVAX pic +1,25 % → sortie +0,58 %. Les gagnants étaient plafonnés vers +0,5 à +1 % pendant que les perdants allaient jusqu'au SL ATR (≈ 2 ATR), et **les bras A/B ne pouvaient pas mesurer leur TP** puisqu'il n'était jamais atteint.
+**La règle livrée** (`_trailStopHit`, fonction pure et testable, 07) : proportionnelle à l'objectif de **la** position (TP ATR posé par 09d1, exécuté par A13) —
+1. tant que la position n'a pas fait **60 % du chemin** entrée → TP : **aucun trailing**, elle va au TP ou au SL ;
+2. au-delà, le stop suit le pic et déclenche au **plus serré des deux** : 40 % du gain acquis rendu, ou **un quart de la distance** à l'objectif rendu (jamais plus) ;
+3. **sans niveau TP** (manuelle sans objectif) : règle v7.12 **inchangée** (pic ≥ +1 %, 0,5 point rendu) — rien ne régresse.
+Exemple sur un objectif +2 % : pic à +1,6 % (80 % du chemin) → sortie à +1,10 % (contre +1,10 % avant, identique ici) ; pic à +1,25 % (62 %) → **on tient** (avant : sortie à +0,75 %) ; pic à +1,0 % (50 %) → **aucun trailing**, la position va chercher son TP (avant : sortie à +0,50 %).
+**Non touché** : anti-zombie 30 min flat, consensus switch, TP/SL manuel, liquidation −90 %, `_lossCapSweep`, A13. La fermeture reste `closePosition(pos.id, pos.auto === true)`.
+**Fichiers** : 07, HTML → `20260919b` (80 occurrences). `banc-trailing-proportionnel.js` (NOUVEAU, 6/6 sur la fonction RÉELLE : non-armement sous 60 %, seuil au plus serré, short symétrique, repli v7.12 exact, entrées douteuses, épingle statique sur 07).
+**À surveiller au prochain backup** : le ratio gain moyen / perte moyenne (aujourd'hui < 1 avec 56 % de réussite) et le nombre de sorties « TP » vs « Trailing stop » dans le journal — si le TP ATR ne se déclenche toujours jamais, c'est que l'objectif est trop loin et c'est le multiplicateur ATR des bras qu'il faudra regarder, pas le trailing.
+
+## CORRECTIF ATTRIBUTION + BANC DÉTERMINISTE — token `20260919a` — défaut de MA livraison du 17/09, trouvé par le backup
 **Le défaut** : `ps.roster.votes[id]` est un **NOMBRE** (03 : scouts → `res.score`, conseil → ±|score| selon le vote, gardiens → −0,5 / −0,2 / +0,05). `_intelPublish` (10i, livré le 17/09) lisait `v.score` / `v.vote` sur ce nombre → `undefined` → **toutes les sources sauf le composite technique étaient ignorées**. Preuve dans le backup 19/09 12:22 : `S.attribution` ne contient que `technique` (n = 8), rien pour flux, prix, volume, news, harmonique. Le banc du 17/09 passait parce que je l'avais écrit avec une forme d'objet **inventée** au lieu de lire 03 — faute de méthode, dite ici.
 **Correctif** : `_intelPublish` lit le nombre (forme objet tolérée par sécurité). **Nouveau test S2** : la forme écrite par 03 est épinglée ligne par ligne — si elle change, le banc bloque au lieu de laisser l'attribution se vider en silence. `banc-attribution-source.js` 6/6, avec la forme RÉELLE.
 **Banc déterministe** : `banc-flux-binance.js` D1 clignotait (1 échec sur 6) — les seaux du flux sont découpés à la minute et le test lisait l'horloge réelle. Horloge gelée dans la vm, `now` au milieu d'une minute : 8/8 stables.

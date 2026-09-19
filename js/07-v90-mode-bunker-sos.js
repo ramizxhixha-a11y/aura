@@ -1,3 +1,4 @@
+// [TRAILING PROPORTIONNEL · 19/09/2026] VERSION 20260919b · trailing stop proportionnel au TP ATR (_trailStopHit) : armé à 60 % du chemin, rend au plus 40 % du gain ou un quart de la distance
 // [P&L AFFICHAGE · 17/09/2026] VERSION 20260917c · renderPairPnl : noms 18px (même police/couleurs), colonne 100px, mise 2 décimales + 🤖/👤, latent live coloré sous le cumul (spec Rams 13/09)
 // [FITNESS GLISSANTE · 16/09/2026] VERSION 20260916c · fenêtre de jugements remise à zéro à la fusion
 // [GÉNOME · 16/09/2026] VERSION 20260916b · triggerEvolution fait évoluer le GÉNOME du siège (_genomeEvolve) et pose la probation (_probationUntil)
@@ -3112,6 +3113,42 @@ function checkPairProposalAutoPass() {
 }
 
 // Called every tick to apply unrealised position PnL as a soft signal to agents
+// ═══ [TRAILING PROPORTIONNEL · 19/09/2026] LE GAGNANT RESPIRE JUSQU'À SON OBJECTIF (décision Rams 19/09) ═══
+// Constat du backup 19/09 : 106 trades, 59 gagnants (56 %), P&L −8,37 $ — les pertes sont plus grosses que les gains.
+// Cause : le trailing v7.12 fermait TOUTE position retombée de 0,5 point sous un pic ≥ +1 %, quel que soit l'objectif
+// (AVAX : pic +1,25 % → sortie +0,58 %). Les gagnants étaient donc plafonnés vers +0,5 à +1 % pendant que les perdants
+// allaient jusqu'au SL ATR (≈ 2 ATR), et les bras A/B ne pouvaient pas mesurer leur TP puisqu'il n'était jamais atteint.
+// Nouvelle règle, proportionnelle à l'objectif de LA position (TP ATR posé par 09d1, exécuté par A13) :
+//   · tant que la position n'a pas fait 60 % du chemin entrée → TP, AUCUN trailing : elle va au TP ou au SL ;
+//   · au-delà, le stop suit le pic et déclenche au plus serré des deux : 40 % du gain acquis rendu, ou un quart de la
+//     distance à l'objectif rendu (jamais plus) ;
+//   · sans niveau TP (position manuelle sans objectif), la règle v7.12 s'applique telle quelle — rien ne régresse.
+// Fonction pure et testable : elle ne ferme rien, elle dit s'il faut fermer (banc-trailing-proportionnel.js).
+function _trailStopHit(pos, cur) {
+  if (!pos) return null;
+  var entry = Number(pos.entryPrice), px = Number(cur);
+  if (!isFinite(entry) || entry <= 0 || !isFinite(px) || px <= 0) return null;
+  var isLong = pos.side === 'long';
+  var pct = (isLong ? (px - entry) / entry : (entry - px) / entry) * 100;
+  if (!isFinite(pos._peakPct)) pos._peakPct = 0;
+  if (pct > pos._peakPct) pos._peakPct = pct;
+  var tp = Number(pos.tp), dist = isFinite(tp) && tp > 0 ? Math.abs(tp - entry) : 0;
+  if (dist > 0) {
+    var prog = (isLong ? (px - entry) : (entry - px)) / dist;
+    if (!isFinite(pos._peakProg)) pos._peakProg = 0;
+    if (prog > pos._peakProg) pos._peakProg = prog;
+    if (pos._peakProg < 0.6) return null;                                  // pas armé : le gagnant respire
+    var thr = Math.max(0.6 * pos._peakProg, pos._peakProg - 0.25);         // le plus serré des deux
+    if (prog > thr) return null;
+    return { pct: pct, why: 'pic ' + Math.round(pos._peakProg * 100) + ' % du chemin \u2192 sortie @' + (pct >= 0 ? '+' : '') + pct.toFixed(2) + ' %' };
+  }
+  if (pos._peakPct >= 1.0 && (pos._peakPct - pct) >= 0.5) {                // repli : règle v7.12 inchangée
+    return { pct: pct, why: 'pic +' + pos._peakPct.toFixed(2) + ' % \u2192 sortie @' + (pct >= 0 ? '+' : '') + pct.toFixed(2) + ' %' };
+  }
+  return null;
+}
+window._trailStopHit = _trailStopHit;
+
 function learnFromOpenPositions() {
   if(S.openPositions.length === 0) return;
   S.openPositions.forEach(pos => {
@@ -3149,23 +3186,19 @@ function learnFromOpenPositions() {
     if (!pos._peakPct) pos._peakPct = 0;
     if (_cExitPct > pos._peakPct) pos._peakPct = _cExitPct;
 
-    // ── A. TRAILING STOP ──
-    // Si on a atteint un pic de +1% min et qu'on retombe de 0.5 points par rapport au pic,
-    // on ferme pour verrouiller le gain.
-    // Ex: pic +1.5% → seuil trailing = +1.0% → si prix repasse sous +1.0%, fermeture
-    if (pos._peakPct >= 1.0) {
-      const trailingDrop = pos._peakPct - _cExitPct;
-      if (trailingDrop >= 0.5) {
-        closePosition(pos.id, pos.auto === true);
-        S.chainLog.push({
-          icon: '🎯',
-          desc: `Trailing stop · ${pos.pair} ${pos.side.toUpperCase()} · pic +${pos._peakPct.toFixed(2)}% → sortie @+${_cExitPct.toFixed(2)}%`,
-          hash: rndHash(), time: nowStr()
-        });
-        if (S.chainLog.length > 100) S.chainLog.splice(0, S.chainLog.length - 100);
-        if (typeof showToast === 'function') showToast('🎯 Trailing stop · ' + pos.pair + ' +' + _cExitPct.toFixed(2) + '% verrouillé', 3000, 'user');
-        return;
-      }
+    // ── A. TRAILING STOP PROPORTIONNEL ── [19/09/2026] voir _trailStopHit ci-dessus (armé à 60 % du chemin vers le
+    // TP ATR, rend au plus 40 % du gain acquis ou un quart de la distance ; règle v7.12 conservée sans niveau TP).
+    const _trail = (typeof _trailStopHit === 'function') ? _trailStopHit(pos, cur) : null;
+    if (_trail) {
+      closePosition(pos.id, pos.auto === true);
+      S.chainLog.push({
+        icon: '🎯',
+        desc: `Trailing stop · ${pos.pair} ${pos.side.toUpperCase()} · ${_trail.why}`,
+        hash: rndHash(), time: nowStr()
+      });
+      if (S.chainLog.length > 100) S.chainLog.splice(0, S.chainLog.length - 100);
+      if (typeof showToast === 'function') showToast('🎯 Trailing stop · ' + pos.pair + ' ' + (_trail.pct >= 0 ? '+' : '') + _trail.pct.toFixed(2) + '% verrouillé', 3000, 'user');
+      return;
     }
 
     // ── C. TIMER ANTI-ZOMBIE ──
