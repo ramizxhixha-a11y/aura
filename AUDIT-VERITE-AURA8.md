@@ -140,4 +140,7 @@ Une régression de vérité = `VERDICT : NON LIVRABLE`, jamais « CONNU, tolér�
 
 - **17/09 — attribution par source** (`20260917f`) : phase 2 A2/A5 livrée en lecture seule — on mesure enfin quelle DONNÉE rapporte (flux, technique, prix, news…), pas seulement quel siège. Rien ne s'en sert encore : décision Rams quand le volume sera là.
 
+- **19/09 — correctif attribution** (`20260919a`) : ma livraison du 17/09 lisait une forme de votes inventée (objet) au lieu de la vraie (nombre) — seule la source « technique » était mesurée. Corrigé, forme épinglée par le banc. Banc du flux rendu déterministe (il clignotait).
+- **19/09 — lecture backup** : stabilité réglée (12 h continues depuis la relance). Argent : −13,46 $ sur 1 150,34 $ injectés, 56 % de trades gagnants mais pertes > gains ; cause nommée : le trailing stop de 07 (0,5 point sous un pic ≥ +1 %) ferme avant le TP ATR et rend l'A/B non mesurable. Décision Rams en attente.
+
 *Mis à jour à chaque mission. Le prochain audit complet : après 1b-b, sur un backup de 24 h propre.*

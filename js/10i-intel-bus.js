@@ -1,3 +1,4 @@
+// [CORRECTIF ATTRIBUTION · 19/09/2026] VERSION 20260919a · _intelPublish lit les votes au format réel (nombres) — sans quoi seule la source « technique » était mesurée
 // [ATTRIBUTION PAR SOURCE · 17/09/2026] VERSION 20260917f
 // ═══ PHASE 2 · A2 BUS D'INTELLIGENCE + A5 ATTRIBUTION PAR SOURCE DE DONNÉES ═══
 // Question à laquelle ce module répond, et à laquelle rien ne répondait : QUELLE DONNÉE rapporte de l'argent ?
@@ -41,8 +42,14 @@ function _intelPublish(pair, votes, weights, atScore) {
       var ids = INTEL_SOURCES[src], sum = 0, wsum = 0;
       ids.forEach(function (id) {
         if (id === '__tech') { if (isFinite(atScore)) { sum += Number(atScore); wsum += 1; } return; }
-        var v = votes ? votes[id] : null; if (!v) return;
-        var sc = Number(v.score); if (!isFinite(sc)) sc = Number(v.vote);
+        // [CORRECTIF · 19/09/2026] ps.roster.votes[id] est un NOMBRE (03 : scouts → res.score, conseil → ±|score|
+        // selon le vote, gardiens → −0,5 / −0,2 / +0,05), pas un objet. La version du 17/09 lisait v.score sur un
+        // nombre : undefined → toutes les sources sauf le composite technique étaient ignorées (backup 19/09 : seule
+        // « technique » avait des enregistrements, n = 8). L'objet reste accepté par sécurité si la forme change.
+        var v = votes ? votes[id] : null;
+        if (v === null || v === undefined) return;
+        var sc = (typeof v === 'number') ? v : Number(v.score);
+        if (!isFinite(sc) && v && typeof v === 'object') sc = Number(v.vote);
         if (!isFinite(sc)) return;
         var w = (weights && weights[id] && isFinite(weights[id].w)) ? Number(weights[id].w) : 1;
         sum += sc * w; wsum += Math.abs(w);

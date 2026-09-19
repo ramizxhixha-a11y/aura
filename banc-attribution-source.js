@@ -14,7 +14,9 @@ const mkS = (mode) => ({ tradingMode: mode || 'paperReal', pairStates: { 'BTC/US
 console.log('▶ banc-attribution-source');
 T('D1 · _intelPublish RÉEL : agrège par source, pondère par le poids du siège, borne à ±1, anneau de 40, ps.intel = dernier état ; source sans siège absente', () => {
   const S = mkS(); const c = ctx(S);
-  c.votes = { flow_v1: { score: 0.8 }, whale_v1: { score: 0.4 }, nlp_v1: { score: -1 }, sentiment_v2: { score: 0.2 }, scalper_v2: { vote: 'long', score: 1 } };
+  // FORME RÉELLE de ps.roster.votes (03) : des NOMBRES. Le test du 17/09 utilisait des objets inventés — il passait
+  // alors que la production ne mesurait que « technique » (backup 19/09). Épinglé par S2 ci-dessous.
+  c.votes = { flow_v1: 0.8, whale_v1: 0.4, nlp_v1: -1, sentiment_v2: 0.2, scalper_v2: 1 };
   c.weights = { flow_v1: { w: 3 }, whale_v1: { w: 1 } };
   const r = J(vm.runInContext("_intelPublish('BTC/USDT', votes, weights, 0.5)", c));
   assert.ok(Math.abs(r.flux - (0.8 * 3 + 0.4 * 1) / 4) < 1e-9, 'flux pondéré : ' + r.flux);
@@ -26,8 +28,10 @@ T('D1 · _intelPublish RÉEL : agrège par source, pondère par le poids du siè
   assert.deepStrictEqual(J(S.pairStates['BTC/USDT'].intel.s), r);
   for (let i = 0; i < 60; i++) vm.runInContext("_intelPublish('BTC/USDT', votes, weights, 0.5)", c);
   assert.strictEqual(S.pairStates['BTC/USDT'].intelLog.length, 40, 'anneau 40');
-  c.votes2 = { flow_v1: { score: 5 } };
+  c.votes2 = { flow_v1: 5 };
   assert.strictEqual(J(vm.runInContext("_intelPublish('BTC/USDT', votes2, null, NaN)", c)).flux, 1, 'borné à +1');
+  c.votesObj = { flow_v1: { score: 0.8 }, whale_v1: { score: 0.4 } };   // forme objet tolérée par sécurité si 03 change un jour
+  assert.ok(Math.abs(J(vm.runInContext("_intelPublish('BTC/USDT', votesObj, weights, NaN)", c)).flux - (0.8 * 3 + 0.4) / 4) < 1e-9, 'forme objet acceptée');
 });
 T('D2 · _intelRead : l\'état le plus proche de l\'horodatage demandé, rien au-delà de 15 min, dernier état sans horodatage', () => {
   const S = mkS(); const c = ctx(S); const now = Date.now();
@@ -72,6 +76,13 @@ T('D4 · _attributionSummary : trié par P&L moyen, taux de réussite, par mode 
   assert.deepStrictEqual(sum, [ { src: 'flux', n: 1, winRate: 100, avgPnl: 4, sumPnl: 4 }, { src: 'news', n: 1, winRate: 0, avgPnl: -4, sumPnl: -4 } ]);
   assert.deepStrictEqual(J(vm.runInContext("_attributionSummary('real')", c)), [], 'autre mode : vide');
 });
+T('S2 · FORME DES VOTES épinglée sur 03 : ps.roster.votes[id] est un nombre (scouts res.score, conseil ±|score|, gardiens −0,5/−0,2/+0,05) — le correctif du 19/09 tient tant que cette forme tient', () => {
+  const c = codeStrict(s03);
+  assert.ok(c.includes("if (res && typeof res.score === 'number') _votes[id] = _muted.has(id) ? 0 : res.score;"), 'scouts : nombre');
+  assert.ok(c.includes("_votes[id] = _muted.has(id) ? 0 : (res.vote === 'long' ? magnitude : res.vote === 'short' ? -magnitude : 0);"), 'conseil : nombre');
+  assert.ok(c.includes("_votes[id] = _muted.has(id) ? 0.05 : (res.status === 'veto' ? -0.5 : res.status === 'warn' ? -0.2 : 0.05);"), 'gardiens : nombre');
+  assert.ok(codeStrict(s10i).includes("var sc = (typeof v === 'number') ? v : Number(v.score);"), '10i lit le nombre en premier');
+});
 T('S1 · LECTURE SEULE et branchements : 03 publie après le roster, 02 enregistre à la clôture (entonnoir unique), aucune décision ne lit S.attribution / ps.intel, persistance + manifest, script chargé', () => {
   const c03 = codeStrict(s03), c02 = codeStrict(s02);
   assert.ok(c03.includes("if (typeof _intelPublish === 'function') _intelPublish(pair, _votes, _weights, (getTechSignals(pair) || {}).atScore);"));
@@ -86,7 +97,8 @@ T('S1 · LECTURE SEULE et branchements : 03 publie après le roster, 02 enregist
   });
   const c1 = codeStrict(rd('js/09b1-build-snapshot.js')), c2 = codeStrict(rd('js/09b2-save-load.js'));
   assert.ok(c1.includes('attribution: S.attribution || {},') && c2.includes('S.attribution       = snap.attribution;') && c2.includes("'attribution','feeConfig'"));
-  assert.ok(rd('AURA8_v118.html').includes('<script src="js/10i-intel-bus.js?v=20260917f"></script>'));
+  const html = rd('AURA8_v118.html'), tok = (html.match(/DOC_V = '(\d{8}[a-z])'/) || [])[1];
+  assert.ok(tok && html.includes('<script src="js/10i-intel-bus.js?v=' + tok + '"></script>'), '10i chargé au token courant');
   assert.strictEqual(codeStrict(s10i).includes('S.openPositions'), false, '10i n\'ouvre ni ne ferme rien');
 });
 console.log('\n' + (fail ? '❌ ' : '✅ ') + pass + '/' + (pass + fail) + ' tests passés' + (fail ? ' — ' + fail + ' ÉCHEC(S)' : ''));

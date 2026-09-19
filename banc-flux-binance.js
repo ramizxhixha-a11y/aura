@@ -12,11 +12,13 @@ const s02 = rd('js/02-state-init.js'), s03 = rd('js/03-per-pair-position-buttons
 const FLUX = between(s02, 'var _flowEmaNotional = {};', 'window._parseDepth = _parseDepth;', true);
 const ENGINE = between(s03, 'const GENOME_DEFAULTS = {', 'window.GENOME_DEFAULTS = GENOME_DEFAULTS;', false);
 const SCOUT = between(s03, 'function scoutAnalysis(agentId, pair) {', '\n// ── COUNCIL ANALYZERS', false);
+// [19/09/2026] HORLOGE GELÉE : les seaux du flux sont découpés à la minute ; avec l'horloge réelle, un test lancé
+// près d'une frontière de minute comptait un seau de plus ou de moins (le banc a clignoté une fois sur six le 19/09).
 function ctx(S) {
-  const c = { S, Math, Number, Array, Object, Date, isFinite, String, window: {}, getTechSignals: () => ({ atScore: 0, raw: {} }), getFundamentalSignals: () => ({ fundScore: 0 }), detectHarmonicResonance: () => null, lmsrP: () => 0.5 };
+  const c = { S, Math, Number, Array, Object, Date: { now: () => now }, isFinite, String, window: {}, getTechSignals: () => ({ atScore: 0, raw: {} }), getFundamentalSignals: () => ({ fundScore: 0 }), detectHarmonicResonance: () => null, lmsrP: () => 0.5 };
   vm.createContext(c); vm.runInContext(FLUX + '\n' + ENGINE + '\n' + SCOUT, c); return c;
 }
-const now = Date.now(), M = 60000;
+const M = 60000, now = Math.floor(Date.now() / M) * M + 30000;   // milieu de minute, horloge gelée dans la vm
 console.log('▶ banc-flux-binance');
 T('D1 · _recordTrade / _flowSummary RÉELS : seaux d\'une minute, quantités par côté preneur (m=true → vente), gros trades > 8 × notionnel moyen (plancher 500 $), fenêtre, trade en retard ignoré, ≤ 30 seaux', () => {
   const c = ctx({}); const rec = (p, px, q, m, t) => vm.runInContext(`_recordTrade('${p}', ${px}, ${q}, ${m}, ${t})`, c);
