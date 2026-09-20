@@ -1,3 +1,4 @@
+// [JOURNAL DES ÉVÉNEMENTS · 20/09/2026] VERSION 20260920b · journal des événements : relais sur le push de chainLog (_installChainTap), S.eventLog (400) + S.eventStats (7 jours)
 // [ATTRIBUTION PAR SOURCE · 17/09/2026] VERSION 20260917f · closePosition enregistre l'attribution par source (10i _attributionRecord)
 // [FLUX BINANCE · 17/09/2026] VERSION 20260917d · flux réel : _recordTrade (quantité + côté preneur du @trade), _flowSummary, carnet REST depth 20 niveaux en tournante (_pollOrderBook, _parseDepth)
 // [RETRAIT REDISTRIBUTION · 16/09/2026] VERSION 20260916e · redistributeFitness retirée (sans effet depuis la fitness glissante)
@@ -283,7 +284,8 @@ const S = {
   toastVerbose: false,  // v7.0: silent mode ON par défaut
   // 🤖 true = bot gère tout (AUTO) / false = manuel (MAN)
   pnlHistory:[], b:100,
-  chainLog:[], evoLog:[], alerts:[],
+  chainLog:[], eventLog:[], eventStats:{},   // [JOURNAL DES ÉVÉNEMENTS · 20/09/2026] journal filtré + compteurs par jour
+  evoLog:[], alerts:[],
   learningHistory: [],
   agentLessons: [],       // v7.3 OPT · mémoire inter-agents — leçons collectives des trades significatifs
   // v7.12 LIVRAISON 4 · MODE TRADING (sim/real)
@@ -3157,6 +3159,76 @@ async function _backfillRealCandles(pair, interval, limit) {
   }
 }
 window._backfillRealCandles = _backfillRealCandles;
+
+// ═══ [JOURNAL DES ÉVÉNEMENTS · 20/09/2026] CE QUI COMPTE SURVIT AU BRUIT (« go journal », Rams 20/09) ═══
+// Le journal S.chainLog est plafonné à 100 lignes en RAM et 50 dans la sauvegarde, et 105 endroits y écrivent, dont
+// des lignes à haute fréquence (prix CoinGecko, cadence des bots, Learn[cycle], recalibrages). Backup du 20/09 :
+// les 50 lignes gardées couvraient TROIS MINUTES — impossible de compter les sorties d'une nuit, de savoir combien
+// de trailing, d'anti-zombie ou de bascules de consensus ont eu lieu, ni de relire une coupure réseau.
+// Ici : un second journal, filtré et durable. Aucun des 105 appelants n'est touché — on pose un relais sur le push
+// de S.chainLog (_installChainTap), qui classe chaque ligne et garde les événements qui comptent dans S.eventLog
+// (anneau de 400, 250 sauvegardés) + des compteurs par jour et par nature dans S.eventStats (7 jours).
+// Le comportement de chainLog est inchangé : même contenu, même plafond, même affichage.
+const EVENT_KINDS = [
+  ['sortie_trailing',  /Trailing stop/i],
+  ['sortie_zombie',    /anti-zombie/i],
+  ['sortie_consensus', /Consensus switch/i],
+  ['sortie_tp',        /\bTP [0-9]|TP atteint|TP \+/i],
+  ['sortie_sl',        /\bSL [0-9]|SL \u2212|SL -/i],
+  ['fermeture',        /Ferm\u00e9|Liquidation|Plafond de perte|Signal invers\u00e9|Timeout/i],
+  ['ouverture',        /Ouvert(ure)? |Position ouverte|Pari plac\u00e9|Entr\u00e9e /i],
+  ['argent',           /B\u00e9n\u00e9fice|Perte nette|Caisse|D\u00e9p\u00f4t|Retrait|Injection|R\u00e9serve fiscale/i],
+  ['evolution',        /G\u00e9nome|\u00c9volueur|Evolueur|H\u00e9ritage|revigoration|R\u00eave|recalibr\u00e9/i],
+  ['reseau',           /Connexion|R\u00e9seau|hors ligne|reconnect|\uD83D\uDCF5|\uD83D\uDCF6/i],
+  ['bunker',           /Bunker|SOS|Mode d\u00e9mo|sauvegarde suspendue/i],
+  ['veto',             /Veto|BLACKLIST|bloqu\u00e9/i]
+];
+const EVENT_KEEP = 400, EVENT_SAVE = 250, EVENT_DAYS = 7;
+function _eventKind(entry) {
+  const d = String((entry && entry.desc) || '');
+  for (let i = 0; i < EVENT_KINDS.length; i++) if (EVENT_KINDS[i][1].test(d)) return EVENT_KINDS[i][0];
+  return null;   // bruit : compté nulle part, gardé nulle part
+}
+function _eventNote(entry) {
+  const kind = _eventKind(entry);
+  if (!kind) return null;
+  const now = new Date();
+  const day = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0') + '-' + String(now.getDate()).padStart(2, '0');
+  if (!S.eventStats) S.eventStats = {};
+  const st = S.eventStats[day] || (S.eventStats[day] = {});
+  st[kind] = (st[kind] || 0) + 1;
+  const days = Object.keys(S.eventStats).sort();
+  while (days.length > EVENT_DAYS) delete S.eventStats[days.shift()];
+  if (!Array.isArray(S.eventLog)) S.eventLog = [];
+  S.eventLog.push({ t: Date.now(), k: kind, i: (entry && entry.icon) || '', d: String((entry && entry.desc) || '').slice(0, 160) });
+  if (S.eventLog.length > EVENT_KEEP) S.eventLog.splice(0, S.eventLog.length - EVENT_KEEP);
+  return kind;
+}
+// Relais sur le push : le tableau garde son comportement, on observe au passage. Réinstallé après chaque
+// remplacement de S.chainLog (chargement d'une sauvegarde) — 08 le vérifie à chaque battement.
+function _installChainTap() {
+  try {
+    const arr = S && S.chainLog;
+    if (!Array.isArray(arr) || arr._tapped) return false;
+    Object.defineProperty(arr, '_tapped', { value: true, enumerable: false, writable: true, configurable: true });
+    Object.defineProperty(arr, 'push', {
+      value: function () {
+        const n = Array.prototype.push.apply(this, arguments);
+        for (let i = 0; i < arguments.length; i++) { try { _eventNote(arguments[i]); } catch (e) {} }
+        return n;
+      }, enumerable: false, writable: true, configurable: true
+    });
+    return true;
+  } catch (e) { return false; }
+}
+// Lecture : { jours: {…}, total: {…}, dernier: [n dernières lignes gardées] }
+function _eventSummary(n) {
+  const out = { jours: (S && S.eventStats) || {}, total: {}, dernier: [] };
+  Object.keys(out.jours).forEach(d => Object.keys(out.jours[d]).forEach(k => { out.total[k] = (out.total[k] || 0) + out.jours[d][k]; }));
+  out.dernier = ((S && S.eventLog) || []).slice(-(n || 20));
+  return out;
+}
+window._eventKind = _eventKind; window._eventNote = _eventNote; window._installChainTap = _installChainTap; window._eventSummary = _eventSummary;
 
 // ═══ [FLUX BINANCE · 17/09/2026] DONNÉES RÉELLES POUR WHALE / FLOW / VOLUME (A14, « go whale et binance » Rams) ═══
 // Jusqu'ici les scouts whale_v1 et flow_v1 lisaient des « gros corps » et des « bougies vertes » — des proxys de prix,

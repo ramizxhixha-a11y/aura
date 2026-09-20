@@ -96,7 +96,9 @@ T('S1 · LECTURE SEULE et branchements : 03 publie après le roster, 02 enregist
     assert.strictEqual(/ps\.intel\b|\.intelLog/.test(c), false, f + ' lit le bus');
   });
   const c1 = codeStrict(rd('js/09b1-build-snapshot.js')), c2 = codeStrict(rd('js/09b2-save-load.js'));
-  assert.ok(c1.includes('attribution: S.attribution || {},') && c2.includes('S.attribution       = snap.attribution;') && c2.includes("'attribution','feeConfig'"));
+  assert.ok(c1.includes('attribution: S.attribution || {},') && c2.includes('S.attribution       = snap.attribution;'));
+  const man = (c2.match(/window\._APPLYSNAP_MANIFEST = \[([^\]]*)\]/) || [])[1] || '';
+  assert.ok(man.includes("'attribution'"), 'attribution dans le manifest : ' + man.slice(0, 120));
   const html = rd('AURA8_v118.html'), tok = (html.match(/DOC_V = '(\d{8}[a-z])'/) || [])[1];
   assert.ok(tok && html.includes('<script src="js/10i-intel-bus.js?v=' + tok + '"></script>'), '10i chargé au token courant');
   assert.strictEqual(codeStrict(s10i).includes('S.openPositions'), false, '10i n\'ouvre ni ne ferme rien');

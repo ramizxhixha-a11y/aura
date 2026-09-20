@@ -147,4 +147,6 @@ Une régression de vérité = `VERDICT : NON LIVRABLE`, jamais « CONNU, tolér�
 
 - **20/09 — porte de sortie + plancher** (`20260920a`) : l'escalier de sortie était derrière `|P&L| < 0,5 % → return` — le timer anti-zombie de v7.12 n'a jamais pu se déclencher (preuve : EUR tenu 43 h à −0,27 %, 3 emplacements EV bloqués). Porte ouverte ; trailing planchéisé à la moitié du chemin. Attribution par source validée (5 sources, volume et flux positifs, harmonique et prix négatifs).
 
+- **20/09 — journal des événements** (`20260920b`) : #24 fermé — le journal ne couvrait que 3 minutes (100 lignes RAM / 50 sauvegardées, 105 écrivains, bruit à haute fréquence). Relais sur le push : ce qui compte est gardé (400 événements, 250 sauvegardés) et compté par jour sur 7 jours, sans toucher un seul appelant ni changer chainLog.
+
 *Mis à jour à chaque mission. Le prochain audit complet : après 1b-b, sur un backup de 24 h propre.*

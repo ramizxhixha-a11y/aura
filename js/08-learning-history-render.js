@@ -1,3 +1,4 @@
+// [JOURNAL DES ÉVÉNEMENTS · 20/09/2026] VERSION 20260920b · le battement repose le relais du journal si besoin
 // [GÉNOME DE PAIRE · 17/09/2026] VERSION 20260917e · getTechSignals : périodes et poids du mélange = génome de la paire (03) ; rollover quotidien par paire
 // [RETRAIT REDISTRIBUTION · 16/09/2026] VERSION 20260916e · appel redistributeFitness retiré du battement
 // [1b-b · 15/09/2026] VERSION 20260915c · EV/RE : ps.candles = klines Binance de la tf du mode (_projectRealCandles, battement) ; générateur synthétique réservé à AA ; série périmée → figée + ps._candlesStale
@@ -3037,6 +3038,8 @@ function simTick() {
       // (périodes + poids), avec pour « fitness » le P&L net réalisé de la paire dans ce mode. Une seule mutation par
       // paire et par jour : les périodes sont le socle de 60 % du composite, elles ne doivent pas bouger sans arrêt.
       try { _pairGenomeRollover(); } catch(e) { try{window._decErr&&window._decErr(e)}catch(_e){} }
+      // [JOURNAL DES ÉVÉNEMENTS · 20/09/2026] le relais se perd si S.chainLog est remplacé : on le repose (no-op sinon).
+      try { if (typeof _installChainTap === 'function') _installChainTap(); } catch(e) {}
       // [1b-b · 15/09/2026] EV/RE : l'analyse (14 indicateurs, 13 scouts, régime, patterns) lit les klines Binance
       // de la tf du mode — les MÊMES que la porte 10g/08 — projetées dans ps.candles à chaque passage du mode.
       // AA garde son générateur (bloc « New candle » plus bas, désormais réservé au mode sim).

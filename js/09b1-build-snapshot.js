@@ -1,3 +1,4 @@
+// [JOURNAL DES ÉVÉNEMENTS · 20/09/2026] VERSION 20260920b · eventLog (250) + eventStats dans le snapshot
 // [ATTRIBUTION PAR SOURCE · 17/09/2026] VERSION 20260917f · attribution (par source) dans le snapshot
 // [GÉNOME DE PAIRE · 17/09/2026] VERSION 20260917e · pairGenome + pairGenomeHistory + _pairGenomeDay dans le snapshot
 // [FITNESS GLISSANTE · 16/09/2026] VERSION 20260916c · agents : _judgments (60), _probationUntil, _bornCycle dans le snapshot
@@ -134,6 +135,8 @@ function buildSnapshot() {
 
       // Chain log
       chainLog: (S.chainLog || []).slice(-50),
+      eventLog: (S.eventLog || []).slice(-250),      // [JOURNAL DES ÉVÉNEMENTS · 20/09/2026] ce qui compte, durable
+      eventStats: S.eventStats || {},
 
       // Stats globales
       totalTrades:     S.totalTrades,
