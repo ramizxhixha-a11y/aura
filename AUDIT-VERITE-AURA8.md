@@ -145,4 +145,6 @@ Une régression de vérité = `VERDICT : NON LIVRABLE`, jamais « CONNU, tolér�
 
 - **19/09 — trailing proportionnel** (`20260919b`) : la sortie qui plafonnait les gagnants (0,5 point sous un pic ≥ +1 %) devient proportionnelle au TP ATR de la position — armée à 60 % du chemin, rend au plus 40 % du gain ou un quart de la distance. L'A/B peut enfin atteindre son objectif.
 
+- **20/09 — porte de sortie + plancher** (`20260920a`) : l'escalier de sortie était derrière `|P&L| < 0,5 % → return` — le timer anti-zombie de v7.12 n'a jamais pu se déclencher (preuve : EUR tenu 43 h à −0,27 %, 3 emplacements EV bloqués). Porte ouverte ; trailing planchéisé à la moitié du chemin. Attribution par source validée (5 sources, volume et flux positifs, harmonique et prix négatifs).
+
 *Mis à jour à chaque mission. Le prochain audit complet : après 1b-b, sur un backup de 24 h propre.*

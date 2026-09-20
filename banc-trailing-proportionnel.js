@@ -27,15 +27,22 @@ T('D2 · armé à 60 % du chemin : ferme au plus serré des deux (40 % du gain r
   const p = L();
   assert.strictEqual(hit(p, 101.6), null);                         // pic 80 % du chemin, pas de repli
   assert.ok(Math.abs(p._peakProg - 0.8) < 1e-9, 'pic 80 % : ' + p._peakProg);
-  // seuil = max(0,6 × 0,8 ; 0,8 − 0,25) = 0,55 → 101,10
+  // seuil = max(0,6 × 0,8 ; 0,8 − 0,25 ; 0,5) = 0,55 → 101,10
   assert.strictEqual(hit(p, 101.2), null, 'au-dessus du seuil : on tient');
   const r = hit(p, 101.10);
   assert.ok(r && Math.abs(r.pct - 1.1) < 1e-9, JSON.stringify(r));
   assert.ok(r.why.includes('pic 80 % du chemin') && r.why.includes('+1.10 %'), r.why);
-  // pic juste au-dessus de l'armement : seuil = max(0,36 ; 0,35) = 0,36 → 100,72
-  const q = L(); assert.strictEqual(hit(q, 101.2), null);
-  assert.strictEqual(hit(q, 100.8), null, 'au-dessus de 0,36 du chemin');
-  assert.ok(hit(q, 100.7), 'sous le seuil : fermeture');
+});
+
+T('D2b · PLANCHER (20/09) : un pic a peine arme ne rend plus 40 % du gain — le stop ne descend jamais sous la MOITIE du chemin vers objectif', () => {
+  const q = L();                                     // objectif +2 % : armement a 101,20 ; plancher a 101,00
+  assert.strictEqual(hit(q, 101.25), null, 'pic 62,5 % : arme, pas de repli');
+  assert.strictEqual(hit(q, 101.05), null, 'au-dessus du plancher');
+  const r = hit(q, 101.00);
+  assert.ok(r && Math.abs(r.pct - 1.0) < 1e-9, 'sortie AU plancher (50 % du chemin), pas a 37 % : ' + JSON.stringify(r));
+  const q2 = L(); hit(q2, 101.25); assert.ok(hit(q2, 100.75), 'bien sous le plancher : ferme');
+  const q3 = L(); hit(q3, 101.6);                    // pic 80 % : 0,8 - 0,25 = 0,55 est plus serre que le plancher
+  assert.strictEqual(hit(q3, 101.15), null); assert.ok(hit(q3, 101.05));
 });
 T('D3 · short symétrique : entrée 100, TP 98 — armé à 98,8, seuil identique en miroir', () => {
   const p = { pair: 'X/USDT', side: 'short', entryPrice: 100, tp: 98, auto: true };
@@ -65,6 +72,17 @@ T('D5 · entrées douteuses : rien ne casse, rien ne ferme (prix nul, entrée nu
   const p = { side: 'long', entryPrice: 100, tp: 100 };   // distance nulle → repli v7.12
   assert.strictEqual(hit(p, 101.5), null); assert.ok(hit(p, 101.0));
 });
+T('S2 · PORTE DE SORTIE (20/09) : la porte des 0,5 % ne couvre plus que apprentissage doux — escalier de sortie atteignable a tout P&L', () => {
+  const c07 = codeStrict(s07);
+  assert.strictEqual(c07.includes('if(Math.abs(unrealisedPct) < 0.5) return;'), false, 'sortie anticipee supprimee');
+  assert.ok(c07.includes('if(Math.abs(unrealisedPct) >= 0.5) {'), 'apprentissage doux encore borne');
+  const fn = c07.slice(c07.indexOf('function learnFromOpenPositions()'));
+  const iGate = fn.indexOf('if(Math.abs(unrealisedPct) >= 0.5) {'), iTrail = fn.indexOf('_trailStopHit(pos, cur)'), iZomb = fn.indexOf('Timer anti-zombie');
+  assert.ok(iGate > 0 && iTrail > iGate && iZomb > iTrail, 'ordre : porte (apprentissage) puis trailing puis anti-zombie');
+  assert.strictEqual(/\n\s*return;/.test(fn.slice(iGate, iTrail)), false, 'aucun return entre la porte et le trailing');
+  assert.ok(fn.indexOf('posAgeMs > 30 * 60 * 1000 && Math.abs(_cExitPct) < 0.3') > 0, 'anti-zombie inchange (30 min, 0,3 %)');
+});
+
 T('S1 · 07 : l\'ancienne règle en dur a disparu du bloc de sortie, le trailing passe par _trailStopHit, les autres stratégies (anti-zombie, consensus, TP manuel) sont intactes', () => {
   const c07 = codeStrict(s07);
   assert.strictEqual(c07.includes('const trailingDrop = pos._peakPct - _cExitPct;'), false, 'règle fixe retirée');

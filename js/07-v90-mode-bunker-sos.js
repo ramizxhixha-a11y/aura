@@ -1,3 +1,4 @@
+// [PORTE DE SORTIE + PLANCHER TRAILING · 20/09/2026] VERSION 20260920a · l'escalier de sortie n'est plus derrière la porte des 0,5 % (le timer anti-zombie ne pouvait jamais se déclencher) ; plancher du trailing à la moitié du chemin
 // [TRAILING PROPORTIONNEL · 19/09/2026] VERSION 20260919b · trailing stop proportionnel au TP ATR (_trailStopHit) : armé à 60 % du chemin, rend au plus 40 % du gain ou un quart de la distance
 // [P&L AFFICHAGE · 17/09/2026] VERSION 20260917c · renderPairPnl : noms 18px (même police/couleurs), colonne 100px, mise 2 décimales + 🤖/👤, latent live coloré sous le cumul (spec Rams 13/09)
 // [FITNESS GLISSANTE · 16/09/2026] VERSION 20260916c · fenêtre de jugements remise à zéro à la fusion
@@ -3138,7 +3139,11 @@ function _trailStopHit(pos, cur) {
     if (!isFinite(pos._peakProg)) pos._peakProg = 0;
     if (prog > pos._peakProg) pos._peakProg = prog;
     if (pos._peakProg < 0.6) return null;                                  // pas armé : le gagnant respire
-    var thr = Math.max(0.6 * pos._peakProg, pos._peakProg - 0.25);         // le plus serré des deux
+    // [20/09/2026] PLANCHER : une fois armé (60 % du chemin fait), le stop ne redescend JAMAIS sous la MOITIÉ du
+    // chemin vers l'objectif. Sans lui, un pic à peine armé rendait 40 % aussitôt : seuil 0,6 × 0,62 = 0,37 du chemin,
+    // soit ≈ +0,47 % pour un objectif à +1,3 %. Backup 20/09 : les gains se groupaient à +0,52 / +0,53 / +0,60 / +0,63 /
+    // +0,70 / +0,75 / +0,76 — exactement cette signature, pour une perte moyenne de −0,86 %.
+    var thr = Math.max(0.6 * pos._peakProg, pos._peakProg - 0.25, 0.5);    // le plus serré des trois
     if (prog > thr) return null;
     return { pct: pct, why: 'pic ' + Math.round(pos._peakProg * 100) + ' % du chemin \u2192 sortie @' + (pct >= 0 ? '+' : '') + pct.toFixed(2) + ' %' };
   }
@@ -3159,20 +3164,26 @@ function learnFromOpenPositions() {
       ? ((cur - pos.entryPrice) / pos.entryPrice) * 100
       : ((pos.entryPrice - cur) / pos.entryPrice) * 100;
 
-    // Only apply if the position has been open for at least a bit (avoid noise on open)
-    if(Math.abs(unrealisedPct) < 0.5) return;
-
-    // Soft learning — half weight of a realised trade
-    S.agents.forEach(a => {
-      const winning  = unrealisedPct > 0;
-      const aligned  = (winning && a.score > 0) || (!winning && a.score < 0);
-      const nudge    = Math.abs(a.score) * Math.abs(unrealisedPct) * 0.5;  // v6.9: nudge x1.67
-      if(aligned) {
-        a.fitness = Math.min(a.fitness + nudge, a.fitness * 1.01);
-      } else {
-        a.fitness = Math.max(50, a.fitness - nudge * 0.5);  // v8.0 LIVRAISON 27 FIX · borne min unifiée à 50
-      }
-    });
+    // [PORTE DE SORTIE · 20/09/2026] La porte « |P&L| < 0,5 % → on sort » ne couvre plus que l'apprentissage doux.
+    // Elle était placée AVANT tout l'escalier de sortie : le timer anti-zombie (30 min à plat, |P&L| < 0,3 %) ne
+    // pouvait donc JAMAIS se déclencher — il exige moins de 0,3 % et n'était atteint qu'à partir de 0,5 %. Preuve
+    // (backup 20/09) : EUR/USDT tenu 43 h à −0,27 %, une autre 28 h, une troisième 15 h, pendant que l'EV n'a que
+    // 3 emplacements. Le trailing, la bascule du consensus et le TP/SL manuel étaient bornés de la même façon.
+    // Conséquence assumée : la bascule du consensus et le TP/SL manuel deviennent atteignables sous ±0,5 % — à
+    // surveiller au prochain backup (nombre de sorties « Consensus switch » et frais).
+    if(Math.abs(unrealisedPct) >= 0.5) {
+      // Soft learning — half weight of a realised trade
+      S.agents.forEach(a => {
+        const winning  = unrealisedPct > 0;
+        const aligned  = (winning && a.score > 0) || (!winning && a.score < 0);
+        const nudge    = Math.abs(a.score) * Math.abs(unrealisedPct) * 0.5;  // v6.9: nudge x1.67
+        if(aligned) {
+          a.fitness = Math.min(a.fitness + nudge, a.fitness * 1.01);
+        } else {
+          a.fitness = Math.max(50, a.fitness - nudge * 0.5);  // v8.0 LIVRAISON 27 FIX · borne min unifiée à 50
+        }
+      });
+    }
 
     // ═══ v7.12 · PACK RÉSILIENCE · 3 nouvelles stratégies de sortie ═══
     // Applicables à TOUTES les positions (auto et manuelles)
