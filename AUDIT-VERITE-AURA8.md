@@ -153,4 +153,6 @@ Une régression de vérité = `VERDICT : NON LIVRABLE`, jamais « CONNU, tolér�
 
 - **22/09 — mémoire des chemins + horizon auto-armé** (`20260922a`) : rejeu en marchant sur 162 trades — un organe « paires » aurait perdu plus (retiré) ; le temps est le seul signal robuste mais biaisé par la clôture → le système mémorise le chemin de chaque position et n'arme un horizon par paire que quand ses propres chemins prouvent que fermer à H aurait rapporté. Règle de méthode : rejeu sur la mémoire avant tout organe décisionnel.
 
+- **22/09 — plafonds appris + BNB** (`20260922b`) : le « 3 » de la config et le « 2 » du 21/09 remplacés par des niveaux appris par paliers sur les propres trades du système (plafond = paires actives) ; GBP/USDT (inexistante sur Binance) remplacée par BNB/USDT via l'organe de gestion des paires. Écriture tronquée de 11 détectée et corrigée avant tout push.
+
 *Mis à jour à chaque mission. Le prochain audit complet : après 1b-b, sur un backup de 24 h propre.*

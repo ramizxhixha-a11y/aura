@@ -1,3 +1,4 @@
+// [PLAFONDS APPRIS · 22/09/2026] VERSION 20260922b · migration GBP/USDT → BNB/USDT par removePair/addPair (une fois, drapeau _gbpToBnbDone)
 // ▓▓▓ VERSION 20260809r ▓▓▓
 // 11-gestion-paires.js — Ajout / retrait de paires par Rams (demande du 11/08/2026)
 // ════════════════════════════════════════════════════════════════════════
@@ -144,6 +145,31 @@ function removePair(pair) {
   }
 }
 window.removePair = removePair;
+
+// [PLAFONDS APPRIS · 22/09/2026] REMPLACEMENT GBP/USDT → BNB/USDT (décision Rams 22/09 : « 12 paires réelles »).
+// GBP/USDT n'existe plus sur Binance depuis le 29/12/2023 (audit 14/09, retirée d'EV/RE en 1b-a) ; elle tournait encore
+// en AA sur des bougies fabriquées. BNB/USDT : l'un des carnets les plus profonds de Binance — les sources qui
+// rapportent (volume, flux) s'en nourrissent ; l'attribution jugera la paire comme les autres. On passe par l'organe
+// existant (removePair / addPair : vérification Binance, mémoire, WS, bougies réelles, EV activée), une seule fois ;
+// si le réseau manque, l'ajout est réessayé au boot suivant (le drapeau n'est posé qu'après succès).
+function _migrateGbpToBnb() {
+  try {
+    if (typeof S === 'undefined' || !S) return;
+    if (S._gbpToBnbDone) return;
+    if (PAIRS['GBP/USDT']) {
+      var r = removePair('GBP/USDT');
+      if (!r || !r.ok) { _pairLog('\u26A0\uFE0F', 'Remplacement GBP\u2192BNB report\u00e9 : ' + ((r && r.reason) || 'retrait impossible')); return; }
+    }
+    if (PAIRS['BNB/USDT']) { S._gbpToBnbDone = true; return; }
+    if (window._auraNetOffline) return;   // sans réseau, on réessaie plus tard
+    addPair('BNB').then(function (a) {
+      if (a && a.ok) { S._gbpToBnbDone = true; _pairLog('\uD83D\uDD01', 'GBP/USDT (retir\u00e9e de Binance) remplac\u00e9e par BNB/USDT \u00b7 12 paires r\u00e9elles'); try { if (typeof saveState === 'function') saveState(true); } catch (e) {} }
+      else _pairLog('\u26A0\uFE0F', 'Ajout BNB/USDT \u00e9chou\u00e9 : ' + ((a && a.reason) || '?') + ' \u00b7 r\u00e9essai au prochain boot');
+    }).catch(function () {});
+  } catch (e) { try{window._decErr&&window._decErr(e)}catch(_e){} }
+}
+window._migrateGbpToBnb = _migrateGbpToBnb;
+setTimeout(_migrateGbpToBnb, 15000);    // après le boot et la reprise des WS ; une fois par session, drapeau persisté
 
 function _pairLog(icon, desc) {
   try {

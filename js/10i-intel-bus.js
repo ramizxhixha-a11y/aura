@@ -1,3 +1,4 @@
+// [PLAFONDS APPRIS · 22/09/2026] VERSION 20260922b · plafonds appris (emplacements en tout / par sens) : _capEval, _capRefresh, _capFor
 // [MÉMOIRE DES CHEMINS · 22/09/2026] VERSION 20260922a · mémoire des chemins (_pathRecord) + horizon auto-armé par paire (_horizonEvalPair/_horizonRefresh/_horizonExit)
 // [CORRECTIF ATTRIBUTION · 19/09/2026] VERSION 20260919a · _intelPublish lit les votes au format réel (nombres) — sans quoi seule la source « technique » était mesurée
 // [ATTRIBUTION PAR SOURCE · 17/09/2026] VERSION 20260917f
@@ -217,6 +218,80 @@ function _horizonExit(pos, pnlPct, now) {
     return { H: r.H, why: 'Horizon appris ' + r.H + ' min (' + r.n + ' chemins, ' + r.worse + ' % finissent pire)' };
   } catch (e) { return null; }
 }
+
+// ═══ [PLAFONDS APPRIS · 22/09/2026] COMBIEN DE POSITIONS EN MÊME TEMPS — LE SYSTÈME DÉCIDE (« go apprenant », Rams 22/09) ═══
+// Deux chiffres étaient posés à la main : maxConcurrentPos = 3 (config EV, époque du compte à 100 $) et le plafond de
+// sens = 2 (ma barrière du 21/09). Rams : « pourquoi 3 et pas le nombre de paires que le système possède ? » Réponse :
+// aucune raison. Ici les deux plafonds — en tout, et par sens (long / short séparément) — sont APPRIS par paliers :
+//   · chaque trade garde combien de positions étaient déjà ouvertes à son ouverture (10c openTotal / openSameDir) ;
+//   · le niveau k est « nuisible » si ≥ CAP_MIN_N trades ouverts en tant que k-ième position PERDENT en moyenne, font
+//     pire que les trades ouverts avec moins de compagnie (référence, même fenêtre), et ce pour ≥ CAP_MIN_WORSE d'entre
+//     eux ; il est « prouvé » si ≥ CAP_MIN_N et pas nuisible — un k-ième qui gagne encore, même un peu moins que les
+//     autres, ajoute du résultat au livre : il n'est pas nuisible ;
+//   · le plafond part de la config (là où le système est), monte d'un niveau à chaque niveau prouvé, redescend sous le
+//     premier niveau nuisible ; plancher 1, plafond = nombre de paires actives du mode. Revérifié à chaque clôture.
+// Pas onze d'un coup : sans preuve, onze positions de 50 $ font 550 $ exposés au même creux. Le palier n'est pas une
+// barrière, c'est la vitesse à laquelle le système se fait confiance avec ses propres chiffres.
+var CAP_MIN_N = 8, CAP_MIN_WORSE = 0.6, CAP_WINDOW = 30;
+function _capEval(kind, trades, start, ceiling) {
+  var field = (kind === 'total') ? 'openTotal' : 'openSameDir';
+  var closed = (trades || []).filter(function (t) {
+    if (!t || !t.closedAt || !isFinite(t.pnlPct) || !isFinite(t[field])) return false;
+    if (kind === 'total') return true;
+    var isLong = String(t.side).toLowerCase().indexOf('long') === 0 || t.side === 'buy';
+    return (kind === 'long') === isLong;
+  });
+  var out = { level: Math.max(1, start | 0), start: start | 0, ceiling: ceiling | 0, harmful: null, proven: [], n: {} };
+  var mean = function (a) { return a.reduce(function (x, y) { return x + y; }, 0) / a.length; };
+  var status = {};
+  for (var k = 2; k <= Math.max(2, ceiling); k++) {
+    var sample = closed.filter(function (t) { return t[field] === k - 1; }).slice(-CAP_WINDOW).map(function (t) { return Number(t.pnlPct); });
+    var base = closed.filter(function (t) { return t[field] < k - 1; }).slice(-CAP_WINDOW).map(function (t) { return Number(t.pnlPct); });
+    out.n[k] = sample.length;
+    if (sample.length < CAP_MIN_N || base.length < CAP_MIN_N) { status[k] = 'unknown'; continue; }
+    var mb = mean(base), ms = mean(sample), worse = sample.filter(function (v) { return v < mb; }).length / sample.length;
+    status[k] = (ms < 0 && ms < mb && worse >= CAP_MIN_WORSE) ? 'harmful' : 'proven';
+    if (status[k] === 'proven') out.proven.push(k);
+  }
+  var firstHarm = null;
+  for (var k2 = 2; k2 <= Math.max(2, ceiling); k2++) if (status[k2] === 'harmful') { firstHarm = k2; break; }
+  if (firstHarm !== null) { out.harmful = firstHarm; out.level = Math.max(1, firstHarm - 1); }
+  else { var lv = Math.max(1, start | 0); while (lv < ceiling && status[lv] === 'proven') lv++; out.level = Math.min(Math.max(1, lv), Math.max(1, ceiling)); }
+  return out;
+}
+function _capCeiling() {
+  try {
+    var mode = S.tradingMode;
+    if (mode === 'paperReal' || mode === 'real') { var n = Object.keys(S.paperRealActivePairs || {}).filter(function (p) { return S.paperRealActivePairs[p]; }).length; return Math.max(1, n); }
+    return Math.max(1, Object.keys((typeof PAIRS !== 'undefined' && PAIRS) || {}).length);
+  } catch (e) { return 3; }
+}
+function _capStart() { try { return Math.max(1, (S.paperRealConfig && S.paperRealConfig.maxConcurrentPos) || 3); } catch (e) { return 3; } }
+function _capRefresh() {
+  try {
+    var mem = (S && S.tradeContextMemory) || [], start = _capStart(), ceiling = _capCeiling();
+    if (!S.capRules) S.capRules = {};
+    ['total', 'long', 'short'].forEach(function (kind) {
+      var r = _capEval(kind, mem, start, ceiling), old = S.capRules[kind];
+      r.t = Date.now();
+      if (old && old.level !== r.level && S.chainLog) {
+        try {
+          var lab = kind === 'total' ? 'en tout' : ('m\u00eame sens ' + kind.toUpperCase());
+          var why = r.harmful ? ('le ' + r.harmful + 'e a nui sur ' + r.n[r.harmful] + ' cas') : ('le ' + old.level + 'e n\u2019a pas nui sur ' + (r.n[old.level] || 0) + ' cas');
+          S.chainLog.push({ icon: '\uD83E\uDE9C', desc: 'Emplacements appris \u00b7 ' + lab + ' \u00b7 ' + old.level + ' \u2192 ' + r.level + ' (' + why + ')', hash: Math.random().toString(36).slice(2, 8), time: (typeof nowStr === 'function') ? nowStr() : new Date().toLocaleTimeString() });
+          if (S.chainLog.length > 100) S.chainLog.splice(0, S.chainLog.length - 100);
+        } catch (e) {}
+      }
+      S.capRules[kind] = r;
+    });
+    return S.capRules;
+  } catch (e) { return null; }
+}
+// Lecture (09c / 10e) : le plafond courant pour 'total', 'long' ou 'short' ; sans règle calculée → le départ (config).
+function _capFor(kind) {
+  try { var r = S && S.capRules && S.capRules[kind]; return (r && isFinite(r.level)) ? r.level : _capStart(); } catch (e) { return 3; }
+}
+window._capEval = _capEval; window._capRefresh = _capRefresh; window._capFor = _capFor; window._capCeiling = _capCeiling;
 window._pathRecord = _pathRecord; window._horizonEvalPair = _horizonEvalPair; window._horizonRefresh = _horizonRefresh; window._horizonExit = _horizonExit;
 
 window._intelPublish = _intelPublish;

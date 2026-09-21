@@ -1,3 +1,4 @@
+// [PLAFONDS APPRIS · 22/09/2026] VERSION 20260922b · capRules dans le snapshot
 // [MÉMOIRE DES CHEMINS · 22/09/2026] VERSION 20260922a · horizonRules dans le snapshot
 // [JOURNAL DES ÉVÉNEMENTS · 20/09/2026] VERSION 20260920b · eventLog (250) + eventStats dans le snapshot
 // [ATTRIBUTION PAR SOURCE · 17/09/2026] VERSION 20260917f · attribution (par source) dans le snapshot
@@ -89,6 +90,8 @@ function buildSnapshot() {
       _pairGenomeDay: S._pairGenomeDay || {},
       attribution: S.attribution || {},               // [ATTRIBUTION PAR SOURCE · 17/09/2026]
       horizonRules: S.horizonRules || {},             // [MÉMOIRE DES CHEMINS · 22/09/2026]
+      capRules: S.capRules || {},                     // [PLAFONDS APPRIS · 22/09/2026]
+      _gbpToBnbDone: !!S._gbpToBnbDone,
       botDisciples:   S.botDisciples   || {},   // [15/08] sièges des disciples par bot
       discipleTasks:  S.discipleTasks  || {},   // [15/08] tâche élue de chaque disciple
       discipleAngles: S.discipleAngles || {},   // [15/08] angle mesurable de chaque disciple

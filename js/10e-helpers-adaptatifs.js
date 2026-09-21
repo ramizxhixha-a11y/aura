@@ -1,4 +1,5 @@
-// ▓▓▓ VERSION 20260921a ▓▓▓
+// ▓▓▓ VERSION 20260922b ▓▓▓
+// [PLAFONDS APPRIS · 22/09/2026] _dirCapForOpen lit le niveau appris par sens (10i _capFor)
 // [PLAFOND DE SENS · 21/09/2026] _dirCapForOpen : au plus 2 positions ouvertes dans le même sens — 10e inchangé depuis 20260905b jusqu'ici
 // 10e-helpers-adaptatifs.js — Seuils adaptatifs, multiplicateurs de vote, WR effectif, clés temporelles, corrélations, netwatch, trade MAN, watchdogs P4/P5
 // [P1 · 05/09/2026] BRIQUE 1 DU PONT ANALYTICS→DÉCISION : _getPairCorrelation réparée
@@ -193,15 +194,18 @@ window._corrGateForOpen = _corrGateForOpen;
 // 0,60 à 0,73 (1 seul couple sur 21 grandes cryptos dépasse 0,80 ; en pleine baisse elles bougent pourtant ensemble).
 // Règle simple, qui ne dépend d'aucune estimation : au plus DIR_CAP_MAX positions ouvertes dans le même sens (bot ou
 // manuelles — le livre est le livre), hors la paire candidate. Appliquée par l'entonnoir unique 09c, en EV et RE.
-const DIR_CAP_MAX = 2;
+const DIR_CAP_MAX = 2;   // repli si 10i n'est pas chargé — le niveau vivant est APPRIS (10i _capFor), voir ci-dessous
 function _dirCapForOpen(pair, side) {
-  const out = { veto: false, count: 0, max: DIR_CAP_MAX, pairs: [] };
   const wantLong = _isLongSide(side);
+  // [PLAFONDS APPRIS · 22/09/2026] le « 2 » du 21/09 était une barrière (Rams) : le plafond par sens est désormais le
+  // niveau appris pour ce sens — départ = config, monte quand le k-ième pari du même sens n'a pas nui, redescend quand il a nui.
+  const max = (typeof _capFor === 'function') ? _capFor(wantLong ? 'long' : 'short') : DIR_CAP_MAX;
+  const out = { veto: false, count: 0, max: max, pairs: [] };
   (S.openPositions || []).forEach(op => {
     if (!op || !op.pair || op.pair === pair) return;
     if (_isLongSide(op.side) === wantLong) { out.count++; out.pairs.push(op.pair); }
   });
-  out.veto = out.count >= DIR_CAP_MAX;
+  out.veto = out.count >= max;
   return out;
 }
 window._dirCapForOpen = _dirCapForOpen;

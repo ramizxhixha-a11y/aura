@@ -1,3 +1,4 @@
+// [PLAFONDS APPRIS · 22/09/2026] VERSION 20260922b · recalcul des plafonds appris à chaque clôture
 // [MÉMOIRE DES CHEMINS · 22/09/2026] VERSION 20260922a · _enrichTradeContextOnClose garde le chemin de la position et recalcule l'horizon de la paire
 // ════════════════════════════════════════════════════════════════════════
 // ▓▓▓ AURA8 — 09d1-paper-real-core.js ▓▓▓
@@ -297,6 +298,7 @@ function _enrichTradeContextOnClose(contextId, pnlPct, pnlUsd, holdMs, path) {  
       // d'horizon de la paire est recalculée sur ses propres chemins (10i) — elle s'arme ou se désarme seule.
       if (path && typeof path === 'object') S.tradeContextMemory[i].path = { mfe: path.mfe, mae: path.mae, at: Object.assign({}, path.at || {}) };
       try { if (typeof _horizonRefresh === 'function') _horizonRefresh(S.tradeContextMemory[i].pair); } catch (e) {}
+      try { if (typeof _capRefresh === 'function') _capRefresh(); } catch (e) {}   // [PLAFONDS APPRIS · 22/09/2026]
       return;
     }
   }

@@ -1,3 +1,4 @@
+// [PLAFONDS APPRIS · 22/09/2026] VERSION 20260922b · _captureTradeContext note openTotal / openSameDir à l'ouverture
 // ▓▓▓ VERSION 20260809k ▓▓▓
 // 10c-profil-ab-contexte.js — Profil adaptatif par paire, A/B testing, contexte de trade, rotation des périodes
 // [DÉCOUPE 10 · 09/08/2026] Tranche BYTE-IDENTIQUE de 10-fin-bloc-restauration-v93.js
@@ -191,7 +192,11 @@ function _captureTradeContext(pair, side, stakeUsdt) {
     pairPerfMult: 1.0,
     pairBonusMult: 1.0,
     indicators: _computeIndicatorsForContext(pair),
-    topAgents: []
+    topAgents: [],
+    // [PLAFONDS APPRIS · 22/09/2026] combien de positions étaient DÉJÀ ouvertes quand celle-ci a été prise (en tout,
+    // et dans le même sens) : la donnée qui nourrit les plafonds appris (10i _capEval). Ce trade est le (openTotal+1)-ième.
+    openTotal: (S.openPositions || []).filter(function (p) { return p && p.pair && p.pair !== pair; }).length,
+    openSameDir: (S.openPositions || []).filter(function (p) { return p && p.pair && p.pair !== pair && (String(p.side).toLowerCase().indexOf('long') === 0 || p.side === 'buy') === (String(side).toLowerCase().indexOf('long') === 0 || side === 'buy'); }).length
   };
   
   if (typeof _getPairAdaptiveProfile === 'function') {

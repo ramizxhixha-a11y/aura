@@ -1,4 +1,5 @@
-// ▓▓▓ VERSION 20260921a ▓▓▓
+// ▓▓▓ VERSION 20260922b ▓▓▓
+// [PLAFONDS APPRIS · 22/09/2026] emplacements EV et plafond de sens lus depuis les niveaux appris (10i _capFor)
 // [PLAFOND DE SENS · 21/09/2026] entonnoir : plafond de sens (au plus 2 positions dans le même sens, EV/RE) après l'anti-doublon — 09c inchangé depuis 20260906e jusqu'ici
 // [P6 · 06/09/2026] BRIQUE 6 DU PONT : FRAIS + SLIPPAGE dans l'entonnoir unique (après le veto BETA) — source 10e6 (S.feeConfig = barème facturé par recordFees, ps.trades par mode) : gain attendu − coût aller-retour < 0,15 % net = veto ; en Réel, expectancy nette ≤ −2× le coût sur ≥ 10 clôtures = veto ; expectancy nette < 0 (≥ 10 clôtures) = mise ×0.5 avant l'anti-négatif. brainLog COST, journal 💸 1×/5 min/paire.
 // [P5 · 06/09/2026] BRIQUE 5 DU PONT : BÊTA BTC dans l'entonnoir unique (après le veto BEHAV) — source 10e5 (bougies réelles Binance, timeframe active) : BTC ≤ −1 % sur 5 bougies + β > 0.5 = veto LONG journalisé dans EVAL (brainLog BETA) + journal (₿, 1 fois/5 min/paire) + toast ; |β| > 3 = mise ×0.5, appliquée après le plafond comportemental et avant l'anti-négatif (journal ₿ à chaque application).
@@ -171,7 +172,8 @@ function autoOpenPosition(pair, side, stakeOverride) {
   // par le badge « 4 » en mode EV le 16/08. La garde vit désormais ICI, l'entonnoir
   // unique par lequel passe TOUTE ouverture, quel que soit le chemin.
   if (S.tradingMode !== 'sim') {
-    const _capMax = (S.tradingMode === 'real') ? 1 : ((S.paperRealConfig && S.paperRealConfig.maxConcurrentPos) || 3);
+    // [PLAFONDS APPRIS · 22/09/2026] EV : le nombre d'emplacements est appris (10i _capFor, départ = config, plafond = paires actives) ; RE reste 1 (argent réel).
+    const _capMax = (S.tradingMode === 'real') ? 1 : ((typeof _capFor === 'function') ? _capFor('total') : ((S.paperRealConfig && S.paperRealConfig.maxConcurrentPos) || 3));
     if ((S.openPositions || []).length >= _capMax) {
       if (Math.random() < 0.15 && S.chainLog) {
         S.chainLog.push({ icon:'🛡️', desc:`Ouverture ${pair} refusée · plafond ${_capMax} position(s) atteint (${S.tradingMode === 'real' ? 'RE' : 'EV'})`, hash:Math.random().toString(36).slice(2,8), time:new Date().toLocaleTimeString() });
@@ -492,9 +494,9 @@ function autoOpenPosition(pair, side, stakeOverride) {
   } catch(e){ try{window._decErr&&window._decErr(e)}catch(_e){} }
 
   // ───────────────────────────────────────────────────────
-  // [PLAFOND DE SENS · 21/09/2026] au plus 2 positions dans le même sens (10e _dirCapForOpen), EV et RE.
-  // Le troisième emplacement ne peut plus être qu'un pari de l'autre sens, ou rester libre : un creux ne
-  // prend plus tout le livre d'un coup. Positions manuelles de Rams : jamais bloquées (elles ne passent pas ici).
+  // [PLAFONDS APPRIS · 22/09/2026] le plafond de sens n'est plus un « 2 » choisi par moi : 10e _dirCapForOpen lit le niveau
+  // APPRIS pour ce sens (10i _capFor('long'|'short'), départ = config, monte et descend sur preuve). Positions manuelles :
+  // comptées dans le livre, jamais bloquées (elles ne passent pas ici).
   // ───────────────────────────────────────────────────────
   try {
     if ((S.tradingMode === 'paperReal' || S.tradingMode === 'real') && typeof _dirCapForOpen === 'function') {
