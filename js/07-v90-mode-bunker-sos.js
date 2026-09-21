@@ -1,3 +1,4 @@
+// [MÉMOIRE DE LA BLACKLIST · 22/09/2026] VERSION 20260922c · retrait de l'apprentissage doux (écriture directe de fitness, écrasée par la fitness glissante)
 // [PORTE DE SORTIE + PLANCHER TRAILING · 20/09/2026] VERSION 20260920a · l'escalier de sortie n'est plus derrière la porte des 0,5 % (le timer anti-zombie ne pouvait jamais se déclencher) ; plancher du trailing à la moitié du chemin
 // [TRAILING PROPORTIONNEL · 19/09/2026] VERSION 20260919b · trailing stop proportionnel au TP ATR (_trailStopHit) : armé à 60 % du chemin, rend au plus 40 % du gain ou un quart de la distance
 // [P&L AFFICHAGE · 17/09/2026] VERSION 20260917c · renderPairPnl : noms 18px (même police/couleurs), colonne 100px, mise 2 décimales + 🤖/👤, latent live coloré sous le cumul (spec Rams 13/09)
@@ -3171,19 +3172,10 @@ function learnFromOpenPositions() {
     // 3 emplacements. Le trailing, la bascule du consensus et le TP/SL manuel étaient bornés de la même façon.
     // Conséquence assumée : la bascule du consensus et le TP/SL manuel deviennent atteignables sous ±0,5 % — à
     // surveiller au prochain backup (nombre de sorties « Consensus switch » et frais).
-    if(Math.abs(unrealisedPct) >= 0.5) {
-      // Soft learning — half weight of a realised trade
-      S.agents.forEach(a => {
-        const winning  = unrealisedPct > 0;
-        const aligned  = (winning && a.score > 0) || (!winning && a.score < 0);
-        const nudge    = Math.abs(a.score) * Math.abs(unrealisedPct) * 0.5;  // v6.9: nudge x1.67
-        if(aligned) {
-          a.fitness = Math.min(a.fitness + nudge, a.fitness * 1.01);
-        } else {
-          a.fitness = Math.max(50, a.fitness - nudge * 0.5);  // v8.0 LIVRAISON 27 FIX · borne min unifiée à 50
-        }
-      });
-    }
+    // [MÉMOIRE DE LA BLACKLIST · 22/09/2026] L'« apprentissage doux » (v6.9) qui vivait ici écrivait a.fitness EN DIRECT à
+    // chaque tick pour toute position au-delà de ±0,5 % — dans tous les modes, AA compris. Depuis la fitness glissante
+    // (20260916c) cette écriture était écrasée au jugement suivant : du bruit d'affichage qui contredisait la vraie fitness
+    // entre deux jugements. Retiré (règle 4 : pas de code sans effet). La porte des 0,5 % n'a plus rien à garder.
 
     // ═══ v7.12 · PACK RÉSILIENCE · 3 nouvelles stratégies de sortie ═══
     // Applicables à TOUTES les positions (auto et manuelles)

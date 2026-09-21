@@ -72,15 +72,15 @@ T('D5 · entrées douteuses : rien ne casse, rien ne ferme (prix nul, entrée nu
   const p = { side: 'long', entryPrice: 100, tp: 100 };   // distance nulle → repli v7.12
   assert.strictEqual(hit(p, 101.5), null); assert.ok(hit(p, 101.0));
 });
-T('S2 · PORTE DE SORTIE (20/09) : la porte des 0,5 % ne couvre plus que apprentissage doux — escalier de sortie atteignable a tout P&L', () => {
+T('S2 · PORTE DE SORTIE (20/09, puis 22/09) : plus aucune porte « |P&L| < 0,5 % » — l\'apprentissage doux qui en dépendait a été retiré (fossile) ; l\'escalier de sortie s\'exécute à tout P&L, dans l\'ordre trailing → anti-zombie', () => {
   const c07 = codeStrict(s07);
-  assert.strictEqual(c07.includes('if(Math.abs(unrealisedPct) < 0.5) return;'), false, 'sortie anticipee supprimee');
-  assert.ok(c07.includes('if(Math.abs(unrealisedPct) >= 0.5) {'), 'apprentissage doux encore borne');
+  assert.strictEqual(c07.includes('if(Math.abs(unrealisedPct) < 0.5) return;'), false, 'la sortie anticipée a disparu');
+  assert.strictEqual(c07.includes('if(Math.abs(unrealisedPct) >= 0.5) {'), false, '[22/09] apprentissage doux retiré : plus de porte du tout');
   const fn = c07.slice(c07.indexOf('function learnFromOpenPositions()'));
-  const iGate = fn.indexOf('if(Math.abs(unrealisedPct) >= 0.5) {'), iTrail = fn.indexOf('_trailStopHit(pos, cur)'), iZomb = fn.indexOf('Timer anti-zombie');
-  assert.ok(iGate > 0 && iTrail > iGate && iZomb > iTrail, 'ordre : porte (apprentissage) puis trailing puis anti-zombie');
-  assert.strictEqual(/\n\s*return;/.test(fn.slice(iGate, iTrail)), false, 'aucun return entre la porte et le trailing');
-  assert.ok(fn.indexOf('posAgeMs > 30 * 60 * 1000 && Math.abs(_cExitPct) < 0.3') > 0, 'anti-zombie inchange (30 min, 0,3 %)');
+  const iCur = fn.indexOf('const cur = ps.price;'), iTrail = fn.indexOf('_trailStopHit(pos, cur)'), iZomb = fn.indexOf('Timer anti-zombie');
+  assert.ok(iCur > 0 && iTrail > iCur && iZomb > iTrail, 'ordre : prix → trailing → anti-zombie');
+  assert.strictEqual(/\n\s*return;/.test(fn.slice(iCur, iTrail)), false, 'aucun return entre le prix et le trailing');
+  assert.ok(fn.indexOf('posAgeMs > 30 * 60 * 1000 && Math.abs(_cExitPct) < 0.3') > 0, 'anti-zombie inchangé (30 min, 0,3 %)');
 });
 
 T('S1 · 07 : l\'ancienne règle en dur a disparu du bloc de sortie, le trailing passe par _trailStopHit, les autres stratégies (anti-zombie, consensus, TP manuel) sont intactes', () => {

@@ -155,4 +155,6 @@ Une régression de vérité = `VERDICT : NON LIVRABLE`, jamais « CONNU, tolér�
 
 - **22/09 — plafonds appris + BNB** (`20260922b`) : le « 3 » de la config et le « 2 » du 21/09 remplacés par des niveaux appris par paliers sur les propres trades du système (plafond = paires actives) ; GBP/USDT (inexistante sur Binance) remplacée par BNB/USDT via l'organe de gestion des paires. Écriture tronquée de 11 détectée et corrigée avant tout push.
 
+- **22/09 — mémoire de la blacklist** (`20260922c`) : l'organe v7.12 dormait — fenêtre non sauvegardée (effacée par mes relances) et nourrie par l'AA. Réveillé sans changer sa règle : EV/RE seulement, persisté. Fossile v6.9 (écriture directe de fitness dans 07) retiré.
+
 *Mis à jour à chaque mission. Le prochain audit complet : après 1b-b, sur un backup de 24 h propre.*

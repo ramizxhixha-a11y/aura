@@ -1,4 +1,5 @@
-// ▓▓▓ VERSION 20260922b ▓▓▓
+// ▓▓▓ VERSION 20260922c ▓▓▓
+// [MÉMOIRE DE LA BLACKLIST · 22/09/2026] blacklist / pause série lues en EV/RE seulement
 // [PLAFONDS APPRIS · 22/09/2026] emplacements EV et plafond de sens lus depuis les niveaux appris (10i _capFor)
 // [PLAFOND DE SENS · 21/09/2026] entonnoir : plafond de sens (au plus 2 positions dans le même sens, EV/RE) après l'anti-doublon — 09c inchangé depuis 20260906e jusqu'ici
 // [P6 · 06/09/2026] BRIQUE 6 DU PONT : FRAIS + SLIPPAGE dans l'entonnoir unique (après le veto BETA) — source 10e6 (S.feeConfig = barème facturé par recordFees, ps.trades par mode) : gain attendu − coût aller-retour < 0,15 % net = veto ; en Réel, expectancy nette ≤ −2× le coût sur ≥ 10 clôtures = veto ; expectancy nette < 0 (≥ 10 clôtures) = mise ×0.5 avant l'anti-négatif. brainLog COST, journal 💸 1×/5 min/paire.
@@ -184,8 +185,9 @@ function autoOpenPosition(pair, side, stakeOverride) {
   }
 
   // Filtre série de pertes : 3 pertes consécutives → pause 30 min
+  // [MÉMOIRE DE LA BLACKLIST · 22/09/2026] la fenêtre n'est nourrie que par EV/RE (02) : elle ne s'applique donc qu'en EV/RE.
   if (!S._lossStreaks) S._lossStreaks = {};
-  const streak = S._lossStreaks[pair];
+  const streak = (S.tradingMode !== 'sim') ? S._lossStreaks[pair] : null;
 
   // Blacklist dynamique : WR insuffisant
   if (streak && streak.blacklistedUntil && streak.blacklistedUntil > Date.now()) {

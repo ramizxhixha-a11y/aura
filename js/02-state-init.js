@@ -1,3 +1,4 @@
+// [MÉMOIRE DE LA BLACKLIST · 22/09/2026] VERSION 20260922c · fenêtre de la blacklist nourrie par EV/RE seulement, et sauvegardée
 // [MÉMOIRE DES CHEMINS · 22/09/2026] VERSION 20260922a · closePosition transmet le chemin de la position à la mémoire des trades
 // [PLAFOND DE SENS · 21/09/2026] VERSION 20260921a · journal : refus = vetos (comptés, pas gardés), vraies ouvertures reconnues
 // [JOURNAL DES ÉVÉNEMENTS · 20/09/2026] VERSION 20260920b · journal des événements : relais sur le push de chainLog (_installChainTap), S.eventLog (400) + S.eventStats (7 jours)
@@ -5967,7 +5968,11 @@ function closePosition(id, botClose = false) {
     if(realisedPct > 0) ps.winTrades++;
 
     // v7.12 MOD 5+ · Track loss streak + fenêtre glissante pour blacklist
-    if (pos.auto === true) {
+    // [MÉMOIRE DE LA BLACKLIST · 22/09/2026] (1) seuls les résultats RÉELS (EV/RE) nourrissent la fenêtre : l'AA (bougies
+    // fabriquées, 12 paires en continu) la remplissait de bruit — même règle que « l'école ne note plus » (17/09) ;
+    // (2) S._lossStreaks est désormais sauvegardé (09b1/09b2) : chaque relance l'effaçait, et il fallait 10 nouveaux
+    // trades avant que la blacklist puisse agir — BTC (27 % de réussite) n'a jamais été mis en pause (backup 21/09).
+    if (pos.auto === true && S.tradingMode !== 'sim') {
       if (!S._lossStreaks) S._lossStreaks = {};
       const streak = S._lossStreaks[pos.pair] || {
         count: 0, pausedAt: 0,
