@@ -1,3 +1,4 @@
+// [MÉMOIRE DES CHEMINS · 22/09/2026] VERSION 20260922a · horizonRules dans le snapshot
 // [JOURNAL DES ÉVÉNEMENTS · 20/09/2026] VERSION 20260920b · eventLog (250) + eventStats dans le snapshot
 // [ATTRIBUTION PAR SOURCE · 17/09/2026] VERSION 20260917f · attribution (par source) dans le snapshot
 // [GÉNOME DE PAIRE · 17/09/2026] VERSION 20260917e · pairGenome + pairGenomeHistory + _pairGenomeDay dans le snapshot
@@ -87,6 +88,7 @@ function buildSnapshot() {
       pairGenomeHistory: S.pairGenomeHistory || {},   // [GÉNOME DE PAIRE · 17/09/2026]
       _pairGenomeDay: S._pairGenomeDay || {},
       attribution: S.attribution || {},               // [ATTRIBUTION PAR SOURCE · 17/09/2026]
+      horizonRules: S.horizonRules || {},             // [MÉMOIRE DES CHEMINS · 22/09/2026]
       botDisciples:   S.botDisciples   || {},   // [15/08] sièges des disciples par bot
       discipleTasks:  S.discipleTasks  || {},   // [15/08] tâche élue de chaque disciple
       discipleAngles: S.discipleAngles || {},   // [15/08] angle mesurable de chaque disciple

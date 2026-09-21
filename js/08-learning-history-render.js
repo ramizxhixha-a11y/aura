@@ -1,3 +1,4 @@
+// [MÉMOIRE DES CHEMINS · 22/09/2026] VERSION 20260922a · le battement enregistre le chemin de chaque position ouverte (_pathRecord) avant le balayage des sorties
 // [JOURNAL DES ÉVÉNEMENTS · 20/09/2026] VERSION 20260920b · le battement repose le relais du journal si besoin
 // [GÉNOME DE PAIRE · 17/09/2026] VERSION 20260917e · getTechSignals : périodes et poids du mélange = génome de la paire (03) ; rollover quotidien par paire
 // [RETRAIT REDISTRIBUTION · 16/09/2026] VERSION 20260916e · appel redistributeFitness retiré du battement
@@ -3046,6 +3047,7 @@ function simTick() {
       try { _projectRealCandles(); } catch(e) { try{window._decErr&&window._decErr(e)}catch(_e){} }
       // [1b-a · 14/09/2026] sorties TP / SL / breakeven des positions BOT vérifiées ici, sur ps.price, à chaque
       // passage du mode traité — plus seulement à la résolution du cycle (10f _botExitSweep).
+      try { if (window._pathRecord) window._pathRecord(); } catch(e) {}   // [MÉMOIRE DES CHEMINS · 22/09/2026] avant les sorties : le chemin d'abord
       try { if (window._botExitSweep) window._botExitSweep(); } catch(e) {}
       Object.entries(S.pairStates).forEach(([pair, ps]) => {
         ps.cycleTimer -= _step;

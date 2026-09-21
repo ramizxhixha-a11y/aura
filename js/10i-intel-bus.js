@@ -1,3 +1,4 @@
+// [MÉMOIRE DES CHEMINS · 22/09/2026] VERSION 20260922a · mémoire des chemins (_pathRecord) + horizon auto-armé par paire (_horizonEvalPair/_horizonRefresh/_horizonExit)
 // [CORRECTIF ATTRIBUTION · 19/09/2026] VERSION 20260919a · _intelPublish lit les votes au format réel (nombres) — sans quoi seule la source « technique » était mesurée
 // [ATTRIBUTION PAR SOURCE · 17/09/2026] VERSION 20260917f
 // ═══ PHASE 2 · A2 BUS D'INTELLIGENCE + A5 ATTRIBUTION PAR SOURCE DE DONNÉES ═══
@@ -127,6 +128,97 @@ function _attributionSummary(mode) {
 }
 
 window.INTEL_SOURCES = INTEL_SOURCES;
+// ═══ [MÉMOIRE DES CHEMINS · 22/09/2026] APPRENDRE DU CHEMIN, PAS DE LA CLÔTURE (« go », Rams 22/09) ═══
+// Backup 21/09 : les positions tenues plus de 2 h perdent sur 6 paires sur 7 (≈ −2 % chacune), mais c'est en partie
+// mécanique — les gagnantes sortent vite (TP, trailing), les perdantes traînent jusqu'à un stop lointain. Une clôture
+// ne dit pas ce que valait la position à 2 h. Le chemin, si. Rejoué en marchant sur les 162 trades, un organe « mise
+// selon l'espérance passée de la paire » aurait PERDU PLUS (−12,84 → −16,89 $) : l'espérance passée d'une paire est
+// du bruit à cette taille. Le temps est le seul signal qui tient sur toutes les paires — on le mesure donc au chemin.
+//
+// 1 · _pathRecord (battement, toute position ouverte, tous modes) : pos._path = { mfe, mae, at: { 15, 30, 60, 120,
+//     240 } } — P&L (% de la mise) au pic, au creux, et à chaque jalon d'âge (posé une seule fois, au premier tick
+//     qui le dépasse). À la clôture (02 → _enrichTradeContextOnClose 09d1), le chemin est copié dans la mémoire des
+//     trades (`path`). Coût : une lecture de ps.price par position et par seconde. Rien n'est décidé ici.
+// 2 · _horizonRules (recalculé à chaque clôture EV/RE de la paire, et au boot) : pour chaque paire et chaque jalon
+//     H ∈ {60, 120, 240}, sur ses HZ_WINDOW derniers trades EV/RE dont le chemin porte at[H] < 0 (encore négative
+//     à H) : combien ont fini PIRE qu'à H, et de combien. La règle s'arme seulement si n ≥ HZ_MIN_N, si au moins
+//     HZ_MIN_WORSE d'entre elles ont fini pire, et si fermer à H aurait rapporté en moyenne (final − at[H] < 0).
+//     Le plus petit H qui prouve est retenu. La règle se désarme d'elle-même dès que ses chemins ne le prouvent plus.
+//     C'est le rejeu « et si j'avais fermé à H » sur les chemins RÉELS — la preuve est une précondition de la règle.
+// 3 · _horizonExit (10f _botExitSweep, positions bot) : une position de la paire encore négative à H est fermée.
+//     Sans chemins, aucune règle : rien ne change tant que le système n'a pas ses propres preuves.
+var PATH_MARKS = [15, 30, 60, 120, 240];
+var HZ_MARKS = [60, 120, 240], HZ_WINDOW = 30, HZ_MIN_N = 8, HZ_MIN_WORSE = 0.6;
+function _pathRecord() {
+  try {
+    if (!S || !S.openPositions || !S.pairStates) return 0;
+    var now = Date.now(), n = 0;
+    S.openPositions.forEach(function (pos) {
+      if (!pos || !pos.pair) return;
+      var ps = S.pairStates[pos.pair], px = ps ? Number(ps.price) : 0, entry = Number(pos.entryPrice), t0 = Number(pos.openedAt);
+      if (!(px > 0) || !(entry > 0) || !(t0 > 0)) return;
+      var pct = (pos.side === 'long' ? (px - entry) / entry : (entry - px) / entry) * 100;
+      if (!isFinite(pct)) return;
+      var P = pos._path || (pos._path = { mfe: 0, mae: 0, at: {} });
+      if (pct > P.mfe) P.mfe = Math.round(pct * 1000) / 1000;
+      if (pct < P.mae) P.mae = Math.round(pct * 1000) / 1000;
+      var ageMin = (now - t0) / 60000;
+      for (var i = 0; i < PATH_MARKS.length; i++) {
+        var m = PATH_MARKS[i];
+        if (ageMin >= m && P.at[m] === undefined) P.at[m] = Math.round(pct * 1000) / 1000;
+      }
+      n++;
+    });
+    return n;
+  } catch (e) { return 0; }
+}
+// Évalue la règle d'horizon d'UNE paire sur sa mémoire ; retourne { H, n, worse, gain } ou null.
+function _horizonEvalPair(pair, trades) {
+  var closed = (trades || []).filter(function (t) { return t && t.pair === pair && t.closedAt && isFinite(t.pnlPct) && t.path && t.path.at; });
+  closed = closed.slice(-HZ_WINDOW);
+  for (var i = 0; i < HZ_MARKS.length; i++) {
+    var H = HZ_MARKS[i], neg = [];
+    closed.forEach(function (t) { var a = t.path.at[H]; if (isFinite(a) && a < 0) neg.push({ atH: a, fin: Number(t.pnlPct) }); });
+    if (neg.length < HZ_MIN_N) continue;
+    var worse = 0, delta = 0;
+    neg.forEach(function (x) { if (x.fin < x.atH) worse++; delta += x.fin - x.atH; });
+    var fracWorse = worse / neg.length, meanDelta = delta / neg.length;
+    if (fracWorse >= HZ_MIN_WORSE && meanDelta < 0) return { H: H, n: neg.length, worse: Math.round(fracWorse * 100), gain: Math.round(-meanDelta * 100) / 100 };
+  }
+  return null;
+}
+// Recalcule toutes les règles depuis la mémoire des trades ; journalise armements et désarmements.
+function _horizonRefresh(pair) {
+  try {
+    var mem = (S && S.tradeContextMemory) || [];
+    if (!S.horizonRules) S.horizonRules = {};
+    var pairs = pair ? [pair] : Object.keys(S.pairStates || {});
+    pairs.forEach(function (p) {
+      var r = _horizonEvalPair(p, mem), old = S.horizonRules[p] || null;
+      if (r) { r.t = Date.now(); S.horizonRules[p] = r; } else delete S.horizonRules[p];
+      var changed = (!!r !== !!old) || (r && old && r.H !== old.H);
+      if (changed && S.chainLog) {
+        try {   // le journal ne doit jamais faire tomber les règles
+          S.chainLog.push({ icon: '\u23F3', desc: r ? ('Horizon appris \u00b7 ' + p + ' \u00b7 fermer si encore n\u00e9gative \u00e0 ' + r.H + ' min (' + r.n + ' chemins, ' + r.worse + ' % finissent pire, +' + r.gain + ' % en moyenne)') : ('Horizon d\u00e9sarm\u00e9 \u00b7 ' + p + ' \u00b7 ses chemins ne le prouvent plus'), hash: Math.random().toString(36).slice(2, 8), time: (typeof nowStr === 'function') ? nowStr() : new Date().toLocaleTimeString() });
+          if (S.chainLog.length > 100) S.chainLog.splice(0, S.chainLog.length - 100);
+        } catch (e) {}
+      }
+    });
+    return Object.keys(S.horizonRules).length;
+  } catch (e) { return 0; }
+}
+// Décision pour une position (lue par 10f) : { H, why } si la règle armée de sa paire dit de fermer, sinon null.
+function _horizonExit(pos, pnlPct, now) {
+  try {
+    var r = S && S.horizonRules && pos && S.horizonRules[pos.pair];
+    if (!r || !(pnlPct < 0)) return null;
+    var ageMin = ((now || Date.now()) - Number(pos.openedAt || 0)) / 60000;
+    if (!(ageMin >= r.H)) return null;
+    return { H: r.H, why: 'Horizon appris ' + r.H + ' min (' + r.n + ' chemins, ' + r.worse + ' % finissent pire)' };
+  } catch (e) { return null; }
+}
+window._pathRecord = _pathRecord; window._horizonEvalPair = _horizonEvalPair; window._horizonRefresh = _horizonRefresh; window._horizonExit = _horizonExit;
+
 window._intelPublish = _intelPublish;
 window._intelRead = _intelRead;
 window._attributionRecord = _attributionRecord;

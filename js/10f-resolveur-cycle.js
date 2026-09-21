@@ -1,4 +1,5 @@
-// ▓▓▓ VERSION 20260917b ▓▓▓
+// ▓▓▓ VERSION 20260922a ▓▓▓
+// [MÉMOIRE DES CHEMINS · 22/09/2026] _botExitSweep : sortie par horizon appris (10i _horizonExit) avant les niveaux — armée seulement par les chemins de la paire
 // [A13 · 17/09/2026] _botExitSweep : règle unique de sortie = niveaux pos.sl / pos.tp (ATR × bras A/B, 09d1) exécutés sur ps.price, breakeven réel ; le % de conviction ne reste qu'en repli (AA, tick d'ouverture)
 // [1b-a HOTFIX · 14/09/2026 soir] _closeCompleted : une fermeture qui n'aboutit pas n'est plus réessayée à chaque tick (1/60 s), rien n'est enseigné sans fermeture réelle, la raison est journalisée
 // 10f-resolveur-cycle.js — Cœur : _resolvePairCycleCore + sorties bot hors résolution (_botExitSweep) + garde-fou perte max (_lossCapSweep)
@@ -626,6 +627,15 @@ window._botExitSweep = function _botExitSweep() {
       var pnlUsd = (Number(pos.stakeUsdt) || 0) * (pnlPct / 100);
       pos.pnl = pnlPct; pos.pnlUsdt = pnlUsd; pos.currentVal = (Number(pos.stakeUsdt) || 0) + pnlUsd;
       var tpHit, slHit, why;
+      // [MÉMOIRE DES CHEMINS · 22/09/2026] HORIZON APPRIS : si la règle de la paire est armée par ses propres chemins
+      // (10i _horizonRefresh) et que la position est encore négative passé H minutes, elle est fermée ici — avant les
+      // niveaux. Sans règle armée (pas de chemins, ou chemins qui ne prouvent rien) : rien ne change.
+      var _hz = (typeof _horizonExit === 'function') ? _horizonExit(pos, pnlPct, Date.now()) : null;
+      if (_hz) {
+        if (!_closeCompleted(pos, 'bot ' + _hz.why)) return;
+        try { S.chainLog.push({ icon: '\u23F3', desc: 'Sortie horizon \u00b7 ' + pos.pair + ' ' + String(pos.side).toUpperCase() + ' \u00b7 ' + _hz.why + ' \u00b7 @' + pnlPct.toFixed(2) + ' %', hash: Math.random().toString(36).slice(2, 8), time: new Date().toLocaleTimeString() }); if (S.chainLog.length > 100) S.chainLog.splice(0, S.chainLog.length - 100); } catch(e) {}
+        return;
+      }
       var hasLv = isFinite(pos.sl) && pos.sl > 0 && isFinite(pos.tp) && pos.tp > 0;
       if (hasLv) {
         // ═══ [A13 · 17/09/2026] RÈGLE UNIQUE DE SORTIE : les niveaux pos.sl / pos.tp (ATR × multiplicateurs des bras A/B, 09d1),

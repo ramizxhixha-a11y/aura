@@ -151,4 +151,6 @@ Une régression de vérité = `VERDICT : NON LIVRABLE`, jamais « CONNU, tolér�
 
 - **21/09 — plafond de sens** (`20260921a`) : toute la perte du 21/09 = 5 trades, dont 4 LONG simultanés sur cryptos corrélées stoppés par le même creux en 6 min ; l'anti-doublon (> 0,80) ne se déclenchait quasiment jamais (1 couple sur 21 au-dessus). Au plus 2 positions dans le même sens. Journal : vetos comptés hors anneau, refus ≠ ouvertures, vraies ouvertures reconnues (défauts de `20260920b`).
 
+- **22/09 — mémoire des chemins + horizon auto-armé** (`20260922a`) : rejeu en marchant sur 162 trades — un organe « paires » aurait perdu plus (retiré) ; le temps est le seul signal robuste mais biaisé par la clôture → le système mémorise le chemin de chaque position et n'arme un horizon par paire que quand ses propres chemins prouvent que fermer à H aurait rapporté. Règle de méthode : rejeu sur la mémoire avant tout organe décisionnel.
+
 *Mis à jour à chaque mission. Le prochain audit complet : après 1b-b, sur un backup de 24 h propre.*

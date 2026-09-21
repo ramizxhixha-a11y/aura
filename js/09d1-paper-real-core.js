@@ -1,3 +1,4 @@
+// [MÉMOIRE DES CHEMINS · 22/09/2026] VERSION 20260922a · _enrichTradeContextOnClose garde le chemin de la position et recalcule l'horizon de la paire
 // ════════════════════════════════════════════════════════════════════════
 // ▓▓▓ AURA8 — 09d1-paper-real-core.js ▓▓▓
 // [P0 RÉGIME UNIFIÉ · 05/09/2026] stress bear systémique lu en direct via detectMarketRegime() (source unique, 02).
@@ -281,7 +282,7 @@ window._detectSystemicBearStress = _detectSystemicBearStress;
 // ──────────────────────────────────────────────────────────────────────
 // Enrichissement d'un contexte de trade au moment du close (pour mémoire)
 // ──────────────────────────────────────────────────────────────────────
-function _enrichTradeContextOnClose(contextId, pnlPct, pnlUsd, holdMs) {
+function _enrichTradeContextOnClose(contextId, pnlPct, pnlUsd, holdMs, path) {   // [MÉMOIRE DES CHEMINS · 22/09/2026] + path
   if (!contextId || !S.tradeContextMemory) return;
 
   // Parcours arrière car le plus récent est en fin
@@ -292,6 +293,10 @@ function _enrichTradeContextOnClose(contextId, pnlPct, pnlUsd, holdMs) {
       S.tradeContextMemory[i].pnlUsd       = +pnlUsd.toFixed(3);
       S.tradeContextMemory[i].holdMinutes  = Math.round(holdMs / 60000);
       S.tradeContextMemory[i].won          = pnlPct >= 0;
+      // [MÉMOIRE DES CHEMINS · 22/09/2026] le chemin (pic, creux, P&L aux jalons) reste avec le trade ; la règle
+      // d'horizon de la paire est recalculée sur ses propres chemins (10i) — elle s'arme ou se désarme seule.
+      if (path && typeof path === 'object') S.tradeContextMemory[i].path = { mfe: path.mfe, mae: path.mae, at: Object.assign({}, path.at || {}) };
+      try { if (typeof _horizonRefresh === 'function') _horizonRefresh(S.tradeContextMemory[i].pair); } catch (e) {}
       return;
     }
   }

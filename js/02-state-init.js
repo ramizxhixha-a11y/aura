@@ -1,3 +1,4 @@
+// [MÉMOIRE DES CHEMINS · 22/09/2026] VERSION 20260922a · closePosition transmet le chemin de la position à la mémoire des trades
 // [PLAFOND DE SENS · 21/09/2026] VERSION 20260921a · journal : refus = vetos (comptés, pas gardés), vraies ouvertures reconnues
 // [JOURNAL DES ÉVÉNEMENTS · 20/09/2026] VERSION 20260920b · journal des événements : relais sur le push de chainLog (_installChainTap), S.eventLog (400) + S.eventStats (7 jours)
 // [ATTRIBUTION PAR SOURCE · 17/09/2026] VERSION 20260917f · closePosition enregistre l'attribution par source (10i _attributionRecord)
@@ -5877,7 +5878,7 @@ function closePosition(id, botClose = false) {
     if (pos._contextId && typeof _enrichTradeContextOnClose === 'function') {
       try {
         const holdMs = (pos.openedAt) ? (Date.now() - pos.openedAt) : 0;
-        _enrichTradeContextOnClose(pos._contextId, realisedPct, realisedUsd, holdMs);
+        _enrichTradeContextOnClose(pos._contextId, realisedPct, realisedUsd, holdMs, pos._path);   // [MÉMOIRE DES CHEMINS · 22/09/2026]
       } catch(e) {}
     }
 

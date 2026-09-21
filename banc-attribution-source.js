@@ -101,7 +101,8 @@ T('S1 · LECTURE SEULE et branchements : 03 publie après le roster, 02 enregist
   assert.ok(man.includes("'attribution'"), 'attribution dans le manifest : ' + man.slice(0, 120));
   const html = rd('AURA8_v118.html'), tok = (html.match(/DOC_V = '(\d{8}[a-z])'/) || [])[1];
   assert.ok(tok && html.includes('<script src="js/10i-intel-bus.js?v=' + tok + '"></script>'), '10i chargé au token courant');
-  assert.strictEqual(codeStrict(s10i).includes('S.openPositions'), false, '10i n\'ouvre ni ne ferme rien');
+  // [22/09] 10i LIT les positions (mémoire des chemins) mais n'en ouvre, n'en ferme ni n'en retire aucune : la décision d'horizon est exécutée par 10f
+  assert.strictEqual(/closePosition\(|openPositions\.(push|splice|shift|pop|unshift)|openPositions\.length\s*=|openPositions\s*=[^=]/.test(codeStrict(s10i)), false, '10i n\'ouvre ni ne ferme rien');
 });
 console.log('\n' + (fail ? '❌ ' : '✅ ') + pass + '/' + (pass + fail) + ' tests passés' + (fail ? ' — ' + fail + ' ÉCHEC(S)' : ''));
 process.exit(fail ? 1 : 0);
