@@ -36,7 +36,13 @@ T('D1 · classement des lignes RÉELLES du backup : le bruit à haute fréquence
     'Hybrid Gen-95119 auto-recalibré · fitness critique': 'evolution',
     'Réseau · Binance injoignable (2 échecs)': 'reseau',
     'Veto RSI · SOL/USDT LONG bloqué · RSI 99 (suracheté)': 'veto',
-    'BLACKLIST · GBP/USDT LONG bloqué · WR insuffisant': 'veto'
+    'BLACKLIST · GBP/USDT LONG bloqué · WR insuffisant': 'veto',
+    // [21/09] lignes réelles mal classées la veille : un refus n'est pas une ouverture, une vraie ouverture est reconnue
+    'Ouverture SOL/USDT refusée · plafond 3 position(s) atteint (EV)': 'veto',
+    'Anti-doublon · BTC/USDT LONG refusé · Doublon refusé · corr +0.86 avec ETH/USDT LONG': 'veto',
+    'Plafond de sens · BTC/USDT LONG refusé · déjà 2 positions LONG (LINK/USDT, ADA/USDT)': 'veto',
+    'Position 2/3 · SOL/USDT · corr max 0.61 avec l\u2019existant': 'ouverture',
+    'Position 1/∞ · DOGE/USDT': 'ouverture'
   };
   Object.keys(cas).forEach(d => assert.strictEqual(kind(c, d), cas[d], d.slice(0, 40) + ' → ' + kind(c, d)));
   assert.strictEqual(kind(c, ''), null); assert.strictEqual(vm.runInContext('_eventKind(null)', c), null);
@@ -52,6 +58,10 @@ T('D2 · _eventNote : compteurs par jour et par nature, anneau de 400, 7 jours g
   assert.deepStrictEqual(J(c.S.eventStats[day]), { sortie_trailing: 2, sortie_zombie: 1 });
   assert.strictEqual(c.S.eventLog.length, 3);
   assert.strictEqual(c.S.eventLog[0].k, 'sortie_trailing'); assert.ok(c.S.eventLog[0].t > 0 && c.S.eventLog[0].d.startsWith('Trailing stop'));
+  // [21/09] un veto est COMPTÉ mais PAS gardé dans l'anneau (226 des 250 lignes étaient le même veto)
+  const before = c.S.eventLog.length;
+  assert.strictEqual(vm.runInContext("_eventNote(mk('Veto RSI · SOL/USDT LONG bloqué · RSI 99'))", c), 'veto');
+  assert.strictEqual(c.S.eventLog.length, before, 'veto hors de l\'anneau'); assert.strictEqual(c.S.eventStats[day].veto, 1, 'veto compté');
   for (let i = 0; i < 500; i++) vm.runInContext("_eventNote(mk('Fermé X/USDT LONG | +0.1%'))", c);
   assert.strictEqual(c.S.eventLog.length, 400, 'anneau 400');
   assert.strictEqual(c.S.eventStats[day].fermeture, 500, 'les compteurs, eux, ne perdent rien');

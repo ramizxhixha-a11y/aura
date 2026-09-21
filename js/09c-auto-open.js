@@ -1,4 +1,5 @@
-// ▓▓▓ VERSION 20260906e ▓▓▓
+// ▓▓▓ VERSION 20260921a ▓▓▓
+// [PLAFOND DE SENS · 21/09/2026] entonnoir : plafond de sens (au plus 2 positions dans le même sens, EV/RE) après l'anti-doublon — 09c inchangé depuis 20260906e jusqu'ici
 // [P6 · 06/09/2026] BRIQUE 6 DU PONT : FRAIS + SLIPPAGE dans l'entonnoir unique (après le veto BETA) — source 10e6 (S.feeConfig = barème facturé par recordFees, ps.trades par mode) : gain attendu − coût aller-retour < 0,15 % net = veto ; en Réel, expectancy nette ≤ −2× le coût sur ≥ 10 clôtures = veto ; expectancy nette < 0 (≥ 10 clôtures) = mise ×0.5 avant l'anti-négatif. brainLog COST, journal 💸 1×/5 min/paire.
 // [P5 · 06/09/2026] BRIQUE 5 DU PONT : BÊTA BTC dans l'entonnoir unique (après le veto BEHAV) — source 10e5 (bougies réelles Binance, timeframe active) : BTC ≤ −1 % sur 5 bougies + β > 0.5 = veto LONG journalisé dans EVAL (brainLog BETA) + journal (₿, 1 fois/5 min/paire) + toast ; |β| > 3 = mise ×0.5, appliquée après le plafond comportemental et avant l'anti-négatif (journal ₿ à chaque application).
 // [P4 · 06/09/2026] BRIQUE 4 DU PONT : GARDES COMPORTEMENTALES dans l'entonnoir unique (après le veto ECO) — source 10e4 (ps.trades par mode) : cooldown 15 min sur la paire après une perte + plafond d'ouvertures/jour par régime (CALM 40, bull/bear 80, volatil libre) = veto journalisé dans EVAL (brainLog BEHAV) + journal (🧊, 1 fois/5 min/paire) + toast ; mise ≤ mise précédente après une perte, appliquée avant l'anti-négatif (journal 🧊 à chaque application).
@@ -22,6 +23,7 @@ function _stakeRound(x) { return Math.round((Number(x) || 0) * 10) / 10; }
 // [P1 · 05/09/2026] horodatage du dernier journal 🔗 par paire (RAM seule : anti-flood du
 // journal 100 lignes pendant qu'une position corrélée reste ouverte — EVAL reçoit tout).
 const _corrVetoLogTs = {};
+const _dirCapLogTs = {};   // [PLAFOND DE SENS · 21/09/2026] une ligne de journal par paire toutes les 5 min, pas à chaque cycle
 // [P2 · 06/09/2026] même anti-flood pour le veto calendrier éco (📅).
 const _ecoVetoLogTs = {};
 // [P4 · 06/09/2026] même anti-flood pour les gardes comportementales (🧊).
@@ -486,6 +488,30 @@ function autoOpenPosition(pair, side, stakeOverride) {
         if (typeof showToast === 'function') showToast('🔗 Anti-doublon · ' + pair + ' ' + side.toUpperCase() + ' · corr ' + _cg.corr.toFixed(2) + ' avec ' + _cg.withPair);
       }
       return;
+    }
+  } catch(e){ try{window._decErr&&window._decErr(e)}catch(_e){} }
+
+  // ───────────────────────────────────────────────────────
+  // [PLAFOND DE SENS · 21/09/2026] au plus 2 positions dans le même sens (10e _dirCapForOpen), EV et RE.
+  // Le troisième emplacement ne peut plus être qu'un pari de l'autre sens, ou rester libre : un creux ne
+  // prend plus tout le livre d'un coup. Positions manuelles de Rams : jamais bloquées (elles ne passent pas ici).
+  // ───────────────────────────────────────────────────────
+  try {
+    if ((S.tradingMode === 'paperReal' || S.tradingMode === 'real') && typeof _dirCapForOpen === 'function') {
+      const _dc = _dirCapForOpen(pair, side);
+      if (_dc.veto) {
+        const _sd = String(side).toUpperCase().indexOf('SHORT') === 0 ? 'SHORT' : 'LONG';
+        const _why = 'déjà ' + _dc.count + ' positions ' + _sd + ' (' + _dc.pairs.join(', ') + ')';
+        if (!S.brainLog) S.brainLog = [];
+        S.brainLog.unshift({ ts: Date.now(), pair, event: 'DIRCAP', side, reason: _why });
+        if (S.brainLog.length > 30) S.brainLog.length = 30;
+        if ((Date.now() - (_dirCapLogTs[pair] || 0)) > 5 * 60 * 1000) {
+          _dirCapLogTs[pair] = Date.now();
+          S.chainLog.push({ icon: '🧭', desc: `Plafond de sens · ${pair} ${_sd} refusé · ${_why}`, hash: rndHash(), time: nowStr() });
+          if (S.chainLog.length > 100) S.chainLog.splice(0, S.chainLog.length - 100);
+        }
+        return;
+      }
     }
   } catch(e){ try{window._decErr&&window._decErr(e)}catch(_e){} }
 

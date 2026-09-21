@@ -149,4 +149,6 @@ Une régression de vérité = `VERDICT : NON LIVRABLE`, jamais « CONNU, tolér�
 
 - **20/09 — journal des événements** (`20260920b`) : #24 fermé — le journal ne couvrait que 3 minutes (100 lignes RAM / 50 sauvegardées, 105 écrivains, bruit à haute fréquence). Relais sur le push : ce qui compte est gardé (400 événements, 250 sauvegardés) et compté par jour sur 7 jours, sans toucher un seul appelant ni changer chainLog.
 
+- **21/09 — plafond de sens** (`20260921a`) : toute la perte du 21/09 = 5 trades, dont 4 LONG simultanés sur cryptos corrélées stoppés par le même creux en 6 min ; l'anti-doublon (> 0,80) ne se déclenchait quasiment jamais (1 couple sur 21 au-dessus). Au plus 2 positions dans le même sens. Journal : vetos comptés hors anneau, refus ≠ ouvertures, vraies ouvertures reconnues (défauts de `20260920b`).
+
 *Mis à jour à chaque mission. Le prochain audit complet : après 1b-b, sur un backup de 24 h propre.*

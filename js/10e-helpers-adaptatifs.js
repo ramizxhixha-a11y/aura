@@ -1,4 +1,5 @@
-// ▓▓▓ VERSION 20260905b ▓▓▓
+// ▓▓▓ VERSION 20260921a ▓▓▓
+// [PLAFOND DE SENS · 21/09/2026] _dirCapForOpen : au plus 2 positions ouvertes dans le même sens — 10e inchangé depuis 20260905b jusqu'ici
 // 10e-helpers-adaptatifs.js — Seuils adaptatifs, multiplicateurs de vote, WR effectif, clés temporelles, corrélations, netwatch, trade MAN, watchdogs P4/P5
 // [P1 · 05/09/2026] BRIQUE 1 DU PONT ANALYTICS→DÉCISION : _getPairCorrelation réparée
 // (source unique = Pearson des log-retours, cache 5 min au format prévu par 02 et lu par 04)
@@ -184,6 +185,26 @@ function _corrGateForOpen(pair, side) {
   return out;
 }
 window._corrGateForOpen = _corrGateForOpen;
+
+// ═══ [PLAFOND DE SENS · 21/09/2026] PAS PLUS DE DEUX POSITIONS DANS LE MÊME SENS (décision Rams 21/09) ═══
+// Backup 21/09 : à 03:45, les 3 emplacements EV étaient tous LONG (LINK, ADA, BTC) ; le même creux les a stoppés en
+// 6 minutes (−1,35 / −1,17 / −0,57 %, DOT −0,95 % juste avant) — 4 des 5 pertes qui font TOUTE la perte du jour.
+// L'anti-doublon ci-dessus n'a rien bloqué : il exige une corrélation > 0,80 et les corrélations mesurées étaient
+// 0,60 à 0,73 (1 seul couple sur 21 grandes cryptos dépasse 0,80 ; en pleine baisse elles bougent pourtant ensemble).
+// Règle simple, qui ne dépend d'aucune estimation : au plus DIR_CAP_MAX positions ouvertes dans le même sens (bot ou
+// manuelles — le livre est le livre), hors la paire candidate. Appliquée par l'entonnoir unique 09c, en EV et RE.
+const DIR_CAP_MAX = 2;
+function _dirCapForOpen(pair, side) {
+  const out = { veto: false, count: 0, max: DIR_CAP_MAX, pairs: [] };
+  const wantLong = _isLongSide(side);
+  (S.openPositions || []).forEach(op => {
+    if (!op || !op.pair || op.pair === pair) return;
+    if (_isLongSide(op.side) === wantLong) { out.count++; out.pairs.push(op.pair); }
+  });
+  out.veto = out.count >= DIR_CAP_MAX;
+  return out;
+}
+window._dirCapForOpen = _dirCapForOpen;
 
 function _getPairReturns(pair) {
   const ps = (S.pairStates && S.pairStates[pair]) || null;

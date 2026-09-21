@@ -110,7 +110,7 @@ T('backup : feeConfig persisté à taker 0,05 % (antérieur au plancher 09b2) �
 });
 console.log('━━ F · texte LIVRÉ de 09c ━━');
 const c9 = fs.readFileSync('js/09c-auto-open.js', 'utf8');
-T('09c : version 20260906e, anti-flood _costVetoLogTs déclaré une fois', () => { assert.ok(c9.startsWith('// ▓▓▓ VERSION 20260906e ▓▓▓')); assert.strictEqual(c9.split('const _costVetoLogTs = {};').length - 1, 1); });
+T('09c : version 20260906e, anti-flood _costVetoLogTs déclaré une fois', () => { assert.ok(c9.startsWith('// ▓▓▓ VERSION 20260921a ▓▓▓')); assert.strictEqual(c9.split('const _costVetoLogTs = {};').length - 1, 1); });
 T('09c : veto COST après le veto BETA et avant runBotFleet (Smart Sizer), appel unique _costGateForOpen(pair, baseStake, ps._leverageBonus || 0)', () => {
   const iBeta = c9.indexOf("event: 'BETA'"), iCost = c9.indexOf("event: 'COST'"), iFleet = c9.indexOf("runBotFleet('pre_trade'");
   assert.ok(iBeta > 0 && iCost > iBeta && iFleet > iCost);
@@ -124,7 +124,7 @@ T('09c : mise ×0.5 après le bloc bêta, avant VALIDATION ANTI-NÉGATIF, planch
   assert.ok(iB > 0 && iC > iB && iAN > iC); assert.strictEqual(c9.split('const _redC = Math.max(_stakeFloor(), _stakeRound(baseStake * _ct.stakeFactor));').length - 1, 1); assert.ok(c9.includes('baseStake = _redC;'));
 });
 T('09c : node --check (syntaxe)', () => { new vm.Script(c9, { filename: '09c' }); });
-T('09c : diff limité au bloc P6 (aucune autre fonction touchée : 1017 lignes, 984 identiques à la version 20260906d)', () => { assert.strictEqual(c9.split('\n').length, 1018); assert.strictEqual(c9.split('_betaGateForOpen(pair, side)').length - 1, 1); });
+T('09c : diff limité au bloc P6 (aucune autre fonction touchée : 1017 lignes, 984 identiques à la version 20260906d)', () => { assert.strictEqual(c9.split('\n').length, 1044); /* [PLAFOND DE SENS 21/09] +bloc plafond de sens, +1 ligne d'en-tête, +1 déclaration */ assert.strictEqual(c9.split('_betaGateForOpen(pair, side)').length - 1, 1); });
 console.log('━━ G · HTML et intégrité ━━');
 const html = fs.readFileSync('AURA8_v118.html', 'utf8');
 T('HTML : 78 ressources au token 20260906i ([SKILL BORNÉ]), aucune au token précédent, DOC_V = 20260906i', () => { assert.strictEqual((html.match(/\?v=20260906i/g) || []).length, 78); assert.ok(!html.includes('20260906h')); assert.ok(html.includes("var DOC_V = '20260906i';")); });

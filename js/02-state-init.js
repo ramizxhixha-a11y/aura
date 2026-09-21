@@ -1,3 +1,4 @@
+// [PLAFOND DE SENS · 21/09/2026] VERSION 20260921a · journal : refus = vetos (comptés, pas gardés), vraies ouvertures reconnues
 // [JOURNAL DES ÉVÉNEMENTS · 20/09/2026] VERSION 20260920b · journal des événements : relais sur le push de chainLog (_installChainTap), S.eventLog (400) + S.eventStats (7 jours)
 // [ATTRIBUTION PAR SOURCE · 17/09/2026] VERSION 20260917f · closePosition enregistre l'attribution par source (10i _attributionRecord)
 // [FLUX BINANCE · 17/09/2026] VERSION 20260917d · flux réel : _recordTrade (quantité + côté preneur du @trade), _flowSummary, carnet REST depth 20 niveaux en tournante (_pollOrderBook, _parseDepth)
@@ -3176,12 +3177,14 @@ const EVENT_KINDS = [
   ['sortie_tp',        /\bTP [0-9]|TP atteint|TP \+/i],
   ['sortie_sl',        /\bSL [0-9]|SL \u2212|SL -/i],
   ['fermeture',        /Ferm\u00e9|Liquidation|Plafond de perte|Signal invers\u00e9|Timeout/i],
-  ['ouverture',        /Ouvert(ure)? |Position ouverte|Pari plac\u00e9|Entr\u00e9e /i],
+  // [21/09/2026] les refus AVANT les ouvertures : « Ouverture X refusée · plafond » était compté comme une ouverture
+  ['veto',             /Veto|BLACKLIST|bloqu\u00e9|refus\u00e9|Anti-doublon|Plafond de sens/i],
+  // [21/09/2026] une vraie ouverture bot écrit « Position 2/3 · SOL/USDT · … » (09c) — l'ancien motif ne la voyait pas
+  ['ouverture',        /^Position \d+\/(\d+|\u221e) \u00b7 |Position ouverte|Pari plac\u00e9/i],
   ['argent',           /B\u00e9n\u00e9fice|Perte nette|Caisse|D\u00e9p\u00f4t|Retrait|Injection|R\u00e9serve fiscale/i],
   ['evolution',        /G\u00e9nome|\u00c9volueur|Evolueur|H\u00e9ritage|revigoration|R\u00eave|recalibr\u00e9/i],
   ['reseau',           /Connexion|R\u00e9seau|hors ligne|reconnect|\uD83D\uDCF5|\uD83D\uDCF6/i],
-  ['bunker',           /Bunker|SOS|Mode d\u00e9mo|sauvegarde suspendue/i],
-  ['veto',             /Veto|BLACKLIST|bloqu\u00e9/i]
+  ['bunker',           /Bunker|SOS|Mode d\u00e9mo|sauvegarde suspendue/i]
 ];
 const EVENT_KEEP = 400, EVENT_SAVE = 250, EVENT_DAYS = 7;
 function _eventKind(entry) {
@@ -3199,6 +3202,9 @@ function _eventNote(entry) {
   st[kind] = (st[kind] || 0) + 1;
   const days = Object.keys(S.eventStats).sort();
   while (days.length > EVENT_DAYS) delete S.eventStats[days.shift()];
+  // [21/09/2026] les vetos sont COMPTÉS mais pas gardés dans l'anneau : backup 21/09, 226 des 250 lignes gardées
+  // étaient le même veto (SOL long à RSI 99, répété à chaque cycle) — ils chassaient les vrais événements.
+  if (kind === 'veto') return kind;
   if (!Array.isArray(S.eventLog)) S.eventLog = [];
   S.eventLog.push({ t: Date.now(), k: kind, i: (entry && entry.icon) || '', d: String((entry && entry.desc) || '').slice(0, 160) });
   if (S.eventLog.length > EVENT_KEEP) S.eventLog.splice(0, S.eventLog.length - EVENT_KEEP);
