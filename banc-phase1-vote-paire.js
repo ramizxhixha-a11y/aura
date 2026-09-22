@@ -41,10 +41,10 @@ T('en-têtes : 03/12 « [PHASE 1 · 12/09/2026] VERSION 20260912c », 02/08 reli
   assert.ok(s02.startsWith('// [MÉMOIRE DE LA BLACKLIST · 22/09/2026] VERSION 20260922c') && s02.split('\n').slice(0, 10).some(l => l.startsWith('// [1b-a · 14/09/2026] VERSION 20260914a')), F02);   // [SONDE RÉSEAU] 02 relivré, en-tête 1b-a en 2e ligne
   assert.ok(s10f.startsWith('// ▓▓▓ VERSION 20260923b ▓▓▓'));   // 10f livré au hotfix 1b-a (b), non retouché depuis
 });
-T('HTML : DOC_V + 79 ?v= au token ' + TOK + ' (80 occurrences, 10i-intel-bus ajouté le 17/09), aucun autre token, archive/ non chargé', () => {
-  assert.strictEqual(count(html, TOK), 80);
-  assert.strictEqual(count(html, '?v=' + TOK), 79);
-  assert.strictEqual((html.match(/\?v=\d{8}[a-z]/g) || []).length, 79);
+T('HTML : DOC_V + 80 ?v= au token ' + TOK + ' (81 occurrences, 10i le 17/09, 11b le 23/09), aucun autre token, archive/ non chargé', () => {
+  assert.strictEqual(count(html, TOK), 81);
+  assert.strictEqual(count(html, '?v=' + TOK), 80);
+  assert.strictEqual((html.match(/\?v=\d{8}[a-z]/g) || []).length, 80);
   assert.strictEqual(html.indexOf('archive/'), -1);
 });
 T('syntaxe : 02, 03, 08, 10f, 12 et l\'archive compilent (vm.Script)', () => {

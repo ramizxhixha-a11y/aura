@@ -4,7 +4,7 @@
 //   node banc-all.js --statique   statique seul (≈ 1 s)
 //
 // STATIQUE (tout est lu dans le dépôt, rien n'est figé ici) :
-//   1. HTML : DOC_V présent, les 79 ?v= identiques à DOC_V, chaque script/css déclaré existe sur le disque.
+//   1. HTML : DOC_V présent, les 80 ?v= identiques à DOC_V, chaque script/css déclaré existe sur le disque.
 //   1b. PASSATION : PASSATION-AURA8.md présente à la racine et 1re ligne portant `DOC_V` — la passation est versionnée et
 //       réécrite dans CHAQUE commit de livraison (push direct depuis le 12/09) ; l'oublier ou la laisser à l'ancien token BLOQUE.
 //   2. Syntaxe : chaque .js du dépôt (js/, racine, bancs) compile (vm.Script).
@@ -39,8 +39,8 @@ const TOK = mDoc ? mDoc[1] : null;
 if (!TOK) ko('DOC_V introuvable dans ' + HTML); else ok('DOC_V = ' + TOK);
 const toks = html.match(/\?v=[0-9a-z]+/g) || [];
 const bad = toks.filter(t => t !== '?v=' + TOK);
-if (toks.length === 79 && !bad.length) ok('79 ?v= tous à ' + TOK);   // [ATTRIBUTION PAR SOURCE 17/09] +1 : js/10i-intel-bus.js
-else ko(toks.length + ' ?v= (attendu 79) · divergents : ' + (bad.slice(0, 5).join(' ') || 'aucun'));
+if (toks.length === 80 && !bad.length) ok('80 ?v= tous à ' + TOK);   // [ÉCRAN APPRIS 23/09] +1 : js/11b-ecran-appris.js (10i le 17/09)
+else ko(toks.length + ' ?v= (attendu 80) · divergents : ' + (bad.slice(0, 5).join(' ') || 'aucun'));
 const scripts = [...html.matchAll(/<script[^>]*\bsrc="([^"?]+)(?:\?[^"]*)?"/g)].map(m => m[1]);
 const csss = [...html.matchAll(/<link[^>]*\bhref="([^"?]+\.css)(?:\?[^"]*)?"/g)].map(m => m[1]);
 const missing = scripts.concat(csss).filter(f => !fs.existsSync(path.join(ROOT, f)));

@@ -126,8 +126,8 @@ T('S9 · en-têtes 02/08/10g/09b2 « ' + HDR + ' », 10f « ▓▓▓ VERSION 20
   assert.ok(s02.startsWith('// [MÉMOIRE DE LA BLACKLIST · 22/09/2026] VERSION 20260922c') && s02.split('\n').slice(0, 10).some(l => l.startsWith(HDR)), F02);   // [SONDE RÉSEAU] 02 relivré, en-tête 1b-a en 2e ligne
   assert.ok(s9b2.startsWith('// [STOP APPRIS · 23/09/2026] VERSION 20260923b') && s9b2.split('\n').slice(0, 15).some(l => l.startsWith(HDR)), F9B2);   // [FITNESS GLISSANTE] 09b2 relivré, en-tête 1b-a dans les 6 premières lignes
   assert.ok(s10f.startsWith('// ▓▓▓ VERSION 20260923b ▓▓▓'));   // 10f livré au hotfix b, non retouché depuis
-  assert.strictEqual(count(html, TOK), 80);   // [ATTRIBUTION PAR SOURCE 17/09] 10i-intel-bus ajouté
-  assert.strictEqual((html.match(/\?v=\d{8}[a-z]/g) || []).length, 79);
+  assert.strictEqual(count(html, TOK), 81);   // [ÉCRAN APPRIS 23/09] 11b ajouté (10i le 17/09)
+  assert.strictEqual((html.match(/\?v=\d{8}[a-z]/g) || []).length, 80);
   assert.strictEqual((html.match(/\?v=\d{8}[a-z]/g) || []).filter(t => t !== '?v=' + TOK).length, 0);
 });
 

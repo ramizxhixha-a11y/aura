@@ -86,11 +86,11 @@ const grp = (res, g) => J(res).filter(r => r.group === g);
     for (const f of MODIFIED_JS) assert.ok(src(f).startsWith(VER[f].startsWith('//') ? VER[f] : HEAD + VER[f]), f + ' attendu ' + VER[f]);
     assert.ok(src('banc-gel-guardian.js').startsWith('// banc-gel-guardian.js — [GEL BOOT · 12/09/2026] VERSION 20260912b'));
   });
-  await T('HTML : DOC_V = ' + TOK + ', 79 ?v= au même token, aucun 20260909a / 20260911a', () => {
+  await T('HTML : DOC_V = ' + TOK + ', 80 ?v= au même token, aucun 20260909a / 20260911a', () => {
     const h = src('AURA8_v118.html');
     assert.ok(h.includes("DOC_V = '" + TOK + "'"));
     const toks = h.match(/\?v=[0-9a-z]+/g) || [];
-    assert.strictEqual(toks.length, 79);   // [ATTRIBUTION PAR SOURCE 17/09] +1 : js/10i-intel-bus.js
+    assert.strictEqual(toks.length, 80);   // [ÉCRAN APPRIS 23/09] +1 : js/11b-ecran-appris.js
     assert.deepStrictEqual(toks.filter(t => t !== '?v=' + TOK), []);
     assert.ok(!h.includes('20260909a') && !h.includes('20260911a'));
   });

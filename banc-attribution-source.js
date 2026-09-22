@@ -92,7 +92,7 @@ T('S1 · LECTURE SEULE et branchements : 03 publie après le roster, 02 enregist
   fs.readdirSync(path.join(ROOT, 'js')).filter(f => f.endsWith('.js') && f !== '10i-intel-bus.js').forEach(f => {
     const c = codeStrict(rd('js/' + f));
     assert.strictEqual(/S\.attribution\s*\[/.test(c) && f !== '09b1-build-snapshot.js' && f !== '09b2-save-load.js', false, f + ' lit S.attribution');
-    assert.strictEqual(/_attributionSummary\(/.test(c), false, f + ' lit le résumé');
+    if (f !== '11b-ecran-appris.js') assert.strictEqual(/_attributionSummary\(/.test(c), false, f + ' lit le résumé');   // [23/09] l'écran « appris » (11b) l'AFFICHE — lecture seule, prouvée par banc-ecran-appris
     assert.strictEqual(/ps\.intel\b|\.intelLog/.test(c), false, f + ' lit le bus');
   });
   const c1 = codeStrict(rd('js/09b1-build-snapshot.js')), c2 = codeStrict(rd('js/09b2-save-load.js'));

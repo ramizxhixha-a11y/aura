@@ -120,6 +120,6 @@ const jurySrc = between(s12, '    pos._jury.forEach(function (j) {', '  } catch 
   ok(Math.abs(t.w / (t.w + t.l) - 0.75) < 0.02, '12 jury : ratio 3/4 préservé');
 }
 // ---------- 5. structure ----------
-{ const _h = rd('AURA8_v118.html'), _tk = (_h.match(/DOC_V = '(\d{8}[a-z])'/) || [])[1]; ok(_tk && _h.split('v=' + _tk).length - 1 === 79, 'HTML 79 ressources au token courant ' + _tk); }   // [1c-FULL 16/09] pin figé sur 20260906i depuis le 06/09 : le banc s'arrêtait ici, sections 2-4 jamais rejouées
+{ const _h = rd('AURA8_v118.html'), _tk = (_h.match(/DOC_V = '(\d{8}[a-z])'/) || [])[1]; ok(_tk && _h.split('v=' + _tk).length - 1 === 80, 'HTML 80 ressources au token courant ' + _tk); }   // [1c-FULL 16/09] pin figé sur 20260906i depuis le 06/09 : le banc s'arrêtait ici, sections 2-4 jamais rejouées
 ok(s12.split('\n').length <= 501, '12 ≤ 500 lignes (' + (s12.split('\n').length - 1) + ')');
 console.log('banc-skill-borne : ' + n + '/' + n + ' OK');
