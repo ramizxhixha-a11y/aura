@@ -159,4 +159,6 @@ Une régression de vérité = `VERDICT : NON LIVRABLE`, jamais « CONNU, tolér�
 
 - **23/09 — gain appris** (`20260923a`) : 13 premiers chemins — le système gardait 13 % de ses meilleurs moments. Repères de rendu dans le chemin (grille m|f) + règle par paire rejouée exactement sur ses chemins, armée sur preuve (n ≥ 8, gain > 0, mieux ≥ 60 %), désarmée sinon. Backup 22/09 : tout le 22 tourne (BNB, blacklist EV, paliers, chemins) ; 13 trades, +0,38 $.
 
+- **23/09 — stop appris** (`20260923b`) : le stop de la paire décidé par ses creux, rejeu exact (jamais plus tard que la réalité), preuve stable sur deux moitiés pour gain et stop ; l'état des sources est gardé à l'ouverture de chaque trade pour le rejeu futur des voix.
+
 *Mis à jour à chaque mission. Le prochain audit complet : après 1b-b, sur un backup de 24 h propre.*

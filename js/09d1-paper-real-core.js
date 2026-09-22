@@ -1,3 +1,4 @@
+// [STOP APPRIS · 23/09/2026] VERSION 20260923b · recalcul du stop appris de la paire à chaque clôture
 // [GAIN APPRIS · 23/09/2026] VERSION 20260923a · recalcul de la règle de gain de la paire à chaque clôture
 // [PLAFONDS APPRIS · 22/09/2026] VERSION 20260922b · recalcul des plafonds appris à chaque clôture
 // [MÉMOIRE DES CHEMINS · 22/09/2026] VERSION 20260922a · _enrichTradeContextOnClose garde le chemin de la position et recalcule l'horizon de la paire
@@ -301,6 +302,7 @@ function _enrichTradeContextOnClose(contextId, pnlPct, pnlUsd, holdMs, path) {  
       try { if (typeof _horizonRefresh === 'function') _horizonRefresh(S.tradeContextMemory[i].pair); } catch (e) {}
       try { if (typeof _capRefresh === 'function') _capRefresh(); } catch (e) {}   // [PLAFONDS APPRIS · 22/09/2026]
       try { if (typeof _gainRefresh === 'function') _gainRefresh(S.tradeContextMemory[i].pair); } catch (e) {}   // [GAIN APPRIS · 23/09/2026]
+      try { if (typeof _stopRefresh === 'function') _stopRefresh(S.tradeContextMemory[i].pair); } catch (e) {}   // [STOP APPRIS · 23/09/2026]
       return;
     }
   }

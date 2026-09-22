@@ -1,3 +1,4 @@
+// [STOP APPRIS · 23/09/2026] VERSION 20260923b · stop appris par paire (_stopEvalPair/_stopRefresh/_stopExit) + preuve stable sur les deux moitiés (_halfStable) pour gain et stop
 // [GAIN APPRIS · 23/09/2026] VERSION 20260923a · repères de rendu dans le chemin (grille m|f) + règle de gain apprise par paire (_gainEvalPair/_gainRefresh/_gainExit)
 // [PLAFONDS APPRIS · 22/09/2026] VERSION 20260922b · plafonds appris (emplacements en tout / par sens) : _capEval, _capRefresh, _capFor
 // [MÉMOIRE DES CHEMINS · 22/09/2026] VERSION 20260922a · mémoire des chemins (_pathRecord) + horizon auto-armé par paire (_horizonEvalPair/_horizonRefresh/_horizonExit)
@@ -318,21 +319,31 @@ window._capEval = _capEval; window._capRefresh = _capRefresh; window._capFor = _
 // meilleur gain moyen ; elle ne s'arme que si n ≥ GAIN_MIN_N, gain moyen > 0, et amélioration sur ≥ GAIN_MIN_BETTER des
 // trades où elle aurait agi. Elle se désarme dès que ses chemins ne le prouvent plus. Exécution : 10f, avant les niveaux.
 var GAIN_WINDOW = 30, GAIN_MIN_N = 8, GAIN_MIN_BETTER = 0.6;
+// [STOP APPRIS · 23/09/2026] preuve STABLE DANS LE TEMPS : quand la fenêtre a ≥ 16 chemins, la règle doit avoir rapporté
+// sur CHACUNE des deux moitiés (l'ancienne et la récente) — une case qui n'a gagné que sur un épisode n'est pas une règle.
+function _halfStable(deltas) {
+  if (deltas.length < 16) return true;
+  var h = Math.floor(deltas.length / 2), a = 0, b = 0;
+  for (var i = 0; i < deltas.length; i++) { if (i < h) a += deltas[i]; else b += deltas[i]; }
+  return a > 0 && b > 0;
+}
 function _gainEvalPair(pair, trades) {
   var closed = (trades || []).filter(function (t) { return t && t.pair === pair && t.closedAt && isFinite(t.pnlPct) && t.path && isFinite(t.path.mfe); }).slice(-GAIN_WINDOW);
   if (closed.length < GAIN_MIN_N) return null;
   var best = null;
   GAIN_M.forEach(function (m) { GAIN_F.forEach(function (f) {
-    var key = m + '|' + f, sum = 0, acted = 0, better = 0;
+    var key = m + '|' + f, sum = 0, acted = 0, better = 0, deltas = [];
     closed.forEach(function (t) {
-      var gb = t.path.gb || {}, fin = Number(t.pnlPct);
-      if (gb[key] !== undefined) { var out = Number(gb[key]); sum += out - fin; acted++; if (out > fin) better++; }
+      var gb = t.path.gb || {}, fin = Number(t.pnlPct), d = 0;
+      if (gb[key] !== undefined) { var out = Number(gb[key]); d = out - fin; acted++; if (out > fin) better++; }
+      sum += d; deltas.push(d);
     });
     var gain = sum / closed.length;
-    if (best === null || gain > best.gain) best = { m: m, f: f, gain: gain, acted: acted, better: better };
+    if (best === null || gain > best.gain) best = { m: m, f: f, gain: gain, acted: acted, better: better, deltas: deltas };
   }); });
   if (!best || !(best.gain > 0) || best.acted < 1) return null;
   if (best.better / best.acted < GAIN_MIN_BETTER) return null;
+  if (!_halfStable(best.deltas)) return null;
   return { m: best.m, f: best.f, n: closed.length, acted: best.acted, better: Math.round(100 * best.better / best.acted), gain: Math.round(best.gain * 1000) / 1000 };
 }
 function _gainRefresh(pair) {
@@ -363,6 +374,62 @@ function _gainExit(pos, pnlPct) {
     return { why: 'Gain appris \u00b7 pic +' + mfe.toFixed(2) + ' % \u2192 sortie \u00e0 ' + Math.round(r.f * 100) + ' % du pic (' + r.n + ' chemins)' };
   } catch (e) { return null; }
 }
+
+// ═══ [STOP APPRIS · 23/09/2026] LE STOP DE LA PAIRE, DÉCIDÉ PAR SES CREUX (« go », Rams 23/09) ═══
+// Le stop est à 2 ATR pour toutes les paires (bras A/B) — de −0,5 % (BTC, EUR) à −2 % (PEPE, AVAX) : les pertes vont au
+// bout pendant que les gains font +0,3. Chaque chemin garde son creux (mae) : une paire peut rejouer EXACTEMENT « et si
+// mon stop avait été à −d » — si le creux a atteint −d, le trade aurait fermé là (premier passage) ; sinon il a fini
+// comme il a fini. Une règle apprise ne ferme jamais plus tard que la réalité, donc le rejeu est exact. Même mécanique
+// que le gain appris : grille, meilleure case, armée sur preuve (n ≥ 8, gain > 0, mieux ≥ 60 % des fois où elle agit,
+// stable sur les deux moitiés), désarmée sinon. Elle S'AJOUTE au stop ATR (qui reste la borne extérieure).
+var STOP_D = [0.4, 0.6, 0.8, 1.2];
+function _stopEvalPair(pair, trades) {
+  var closed = (trades || []).filter(function (t) { return t && t.pair === pair && t.closedAt && isFinite(t.pnlPct) && t.path && isFinite(t.path.mae); }).slice(-GAIN_WINDOW);
+  if (closed.length < GAIN_MIN_N) return null;
+  var best = null;
+  STOP_D.forEach(function (d) {
+    var sum = 0, acted = 0, better = 0, deltas = [];
+    closed.forEach(function (t) {
+      var fin = Number(t.pnlPct), mae = Number(t.path.mae), dl = 0;
+      if (mae <= -d && fin < -d + 1e-9) { dl = (-d) - fin; acted++; if (dl > 0) better++; }       // aurait fermé à −d
+      else if (mae <= -d && fin >= -d) { dl = (-d) - fin; acted++; }                             // aurait coupé un trade qui a remonté : perte de la règle
+      sum += dl; deltas.push(dl);
+    });
+    var gain = sum / closed.length;
+    if (best === null || gain > best.gain) best = { d: d, gain: gain, acted: acted, better: better, deltas: deltas };
+  });
+  if (!best || !(best.gain > 0) || best.acted < 1) return null;
+  if (best.better / best.acted < GAIN_MIN_BETTER) return null;
+  if (!_halfStable(best.deltas)) return null;
+  return { d: best.d, n: closed.length, acted: best.acted, better: Math.round(100 * best.better / best.acted), gain: Math.round(best.gain * 1000) / 1000 };
+}
+function _stopRefresh(pair) {
+  try {
+    var mem = (S && S.tradeContextMemory) || [];
+    if (!S.stopRules) S.stopRules = {};
+    var pairs = pair ? [pair] : Object.keys(S.pairStates || {});
+    pairs.forEach(function (p) {
+      var r = _stopEvalPair(p, mem), old = S.stopRules[p] || null;
+      if (r) { r.t = Date.now(); S.stopRules[p] = r; } else delete S.stopRules[p];
+      var changed = (!!r !== !!old) || (r && old && r.d !== old.d);
+      if (changed && S.chainLog) {
+        try {
+          S.chainLog.push({ icon: '\uD83D\uDED1', desc: r ? ('Stop appris \u00b7 ' + p + ' \u00b7 fermer \u00e0 \u2212' + r.d + ' % (' + r.n + ' chemins, +' + r.gain + ' %/trade, mieux ' + r.better + ' % des fois)') : ('Stop d\u00e9sarm\u00e9 \u00b7 ' + p + ' \u00b7 ses chemins ne le prouvent plus'), hash: Math.random().toString(36).slice(2, 8), time: (typeof nowStr === 'function') ? nowStr() : new Date().toLocaleTimeString() });
+          if (S.chainLog.length > 100) S.chainLog.splice(0, S.chainLog.length - 100);
+        } catch (e) {}
+      }
+    });
+    return Object.keys(S.stopRules).length;
+  } catch (e) { return 0; }
+}
+function _stopExit(pos, pnlPct) {
+  try {
+    var r = S && S.stopRules && pos && S.stopRules[pos.pair]; if (!r) return null;
+    if (!(pnlPct <= -r.d)) return null;
+    return { d: r.d, why: 'Stop appris \u2212' + r.d + ' % (' + r.n + ' chemins)' };
+  } catch (e) { return null; }
+}
+window._stopEvalPair = _stopEvalPair; window._stopRefresh = _stopRefresh; window._stopExit = _stopExit; window._halfStable = _halfStable;
 window._gainEvalPair = _gainEvalPair; window._gainRefresh = _gainRefresh; window._gainExit = _gainExit;
 window._pathRecord = _pathRecord; window._horizonEvalPair = _horizonEvalPair; window._horizonRefresh = _horizonRefresh; window._horizonExit = _horizonExit;
 

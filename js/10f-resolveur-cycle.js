@@ -1,4 +1,5 @@
-// ▓▓▓ VERSION 20260923a ▓▓▓
+// ▓▓▓ VERSION 20260923b ▓▓▓
+// [STOP APPRIS · 23/09/2026] _botExitSweep : sortie par stop appris (10i _stopExit) après le gain appris, avant les niveaux
 // [GAIN APPRIS · 23/09/2026] _botExitSweep : sortie par règle de gain apprise (10i _gainExit) après l'horizon, avant les niveaux
 // [MÉMOIRE DES CHEMINS · 22/09/2026] _botExitSweep : sortie par horizon appris (10i _horizonExit) avant les niveaux — armée seulement par les chemins de la paire
 // [A13 · 17/09/2026] _botExitSweep : règle unique de sortie = niveaux pos.sl / pos.tp (ATR × bras A/B, 09d1) exécutés sur ps.price, breakeven réel ; le % de conviction ne reste qu'en repli (AA, tick d'ouverture)
@@ -643,6 +644,14 @@ window._botExitSweep = function _botExitSweep() {
       if (_ga) {
         if (!_closeCompleted(pos, 'bot ' + _ga.why)) return;
         try { S.chainLog.push({ icon: '\uD83D\uDD12', desc: 'Sortie gain \u00b7 ' + pos.pair + ' ' + String(pos.side).toUpperCase() + ' \u00b7 ' + _ga.why + ' \u00b7 @' + pnlPct.toFixed(2) + ' %', hash: Math.random().toString(36).slice(2, 8), time: new Date().toLocaleTimeString() }); if (S.chainLog.length > 100) S.chainLog.splice(0, S.chainLog.length - 100); } catch(e) {}
+        return;
+      }
+      // [STOP APPRIS · 23/09/2026] stop de la paire décidé par ses creux (10i _stopRefresh) : P&L ≤ −d → fermée ici,
+      // avant le stop ATR (qui reste la borne extérieure). Sans règle armée : rien ne change.
+      var _st = (typeof _stopExit === 'function') ? _stopExit(pos, pnlPct) : null;
+      if (_st) {
+        if (!_closeCompleted(pos, 'bot ' + _st.why)) return;
+        try { S.chainLog.push({ icon: '\uD83D\uDED1', desc: 'Sortie stop appris \u00b7 ' + pos.pair + ' ' + String(pos.side).toUpperCase() + ' \u00b7 ' + _st.why + ' \u00b7 @' + pnlPct.toFixed(2) + ' %', hash: Math.random().toString(36).slice(2, 8), time: new Date().toLocaleTimeString() }); if (S.chainLog.length > 100) S.chainLog.splice(0, S.chainLog.length - 100); } catch(e) {}
         return;
       }
       var hasLv = isFinite(pos.sl) && pos.sl > 0 && isFinite(pos.tp) && pos.tp > 0;

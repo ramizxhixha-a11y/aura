@@ -1,3 +1,4 @@
+// [STOP APPRIS · 23/09/2026] VERSION 20260923b · stopRules dans le snapshot
 // [GAIN APPRIS · 23/09/2026] VERSION 20260923a · gainRules dans le snapshot
 // [MÉMOIRE DE LA BLACKLIST · 22/09/2026] VERSION 20260922c · _lossStreaks (fenêtre blacklist / pause série) dans le snapshot
 // [PLAFONDS APPRIS · 22/09/2026] VERSION 20260922b · capRules dans le snapshot
@@ -95,6 +96,7 @@ function buildSnapshot() {
       capRules: S.capRules || {},                     // [PLAFONDS APPRIS · 22/09/2026]
       _lossStreaks: S._lossStreaks || {},             // [MÉMOIRE DE LA BLACKLIST · 22/09/2026]
       gainRules: S.gainRules || {},                   // [GAIN APPRIS · 23/09/2026]
+      stopRules: S.stopRules || {},                   // [STOP APPRIS · 23/09/2026]
       _gbpToBnbDone: !!S._gbpToBnbDone,
       botDisciples:   S.botDisciples   || {},   // [15/08] sièges des disciples par bot
       discipleTasks:  S.discipleTasks  || {},   // [15/08] tâche élue de chaque disciple

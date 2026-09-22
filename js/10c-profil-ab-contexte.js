@@ -1,3 +1,4 @@
+// [STOP APPRIS · 23/09/2026] VERSION 20260923b · le contexte garde l'état des sources à l'ouverture (sources)
 // [PLAFONDS APPRIS · 22/09/2026] VERSION 20260922b · _captureTradeContext note openTotal / openSameDir à l'ouverture
 // ▓▓▓ VERSION 20260809k ▓▓▓
 // 10c-profil-ab-contexte.js — Profil adaptatif par paire, A/B testing, contexte de trade, rotation des périodes
@@ -196,7 +197,10 @@ function _captureTradeContext(pair, side, stakeUsdt) {
     // [PLAFONDS APPRIS · 22/09/2026] combien de positions étaient DÉJÀ ouvertes quand celle-ci a été prise (en tout,
     // et dans le même sens) : la donnée qui nourrit les plafonds appris (10i _capEval). Ce trade est le (openTotal+1)-ième.
     openTotal: (S.openPositions || []).filter(function (p) { return p && p.pair && p.pair !== pair; }).length,
-    openSameDir: (S.openPositions || []).filter(function (p) { return p && p.pair && p.pair !== pair && (String(p.side).toLowerCase().indexOf('long') === 0 || p.side === 'buy') === (String(side).toLowerCase().indexOf('long') === 0 || side === 'buy'); }).length
+    openSameDir: (S.openPositions || []).filter(function (p) { return p && p.pair && p.pair !== pair && (String(p.side).toLowerCase().indexOf('long') === 0 || p.side === 'buy') === (String(side).toLowerCase().indexOf('long') === 0 || side === 'buy'); }).length,
+    // [STOP APPRIS · 23/09/2026] ce que chaque SOURCE de données disait à l'ouverture (dernier état du bus 10i) : rend
+    // rejouable, plus tard, « et si les voix avaient été pesées par ce que leur source rapporte ». Lecture seule.
+    sources: (typeof _intelRead === 'function') ? (_intelRead(pair) || null) : null
   };
   
   if (typeof _getPairAdaptiveProfile === 'function') {
