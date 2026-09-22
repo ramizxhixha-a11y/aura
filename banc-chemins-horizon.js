@@ -22,10 +22,11 @@ T('D1 · _pathRecord : pic, creux, jalons posés UNE fois au premier tick qui le
   assert.strictEqual(vm.runInContext('_pathRecord()', c), 2, 'C sans prix et null ignorés');
   S.pairStates['A/USDT'].price = 101.2; S.pairStates['B/USDT'].price = 50.5;   // A +1,2 %, B −1 %
   c.Date.now = () => t0 + 16 * M; vm.runInContext('_pathRecord()', c);
-  const A = J(S.openPositions[0]._path), B = J(S.openPositions[1]._path);
+  const strip = p => { const q = J(p); delete q.gb; return q; };   // [23/09] les repères de rendu (gb) sont testés dans banc-gain-appris
+  const A = strip(S.openPositions[0]._path), B = strip(S.openPositions[1]._path);
   assert.deepStrictEqual(A, { mfe: 1.2, mae: 0, at: { 15: 1.2 } }); assert.deepStrictEqual(B, { mfe: 0, mae: -1, at: { 15: -1 } });
   S.pairStates['A/USDT'].price = 99; c.Date.now = () => t0 + 31 * M; vm.runInContext('_pathRecord()', c);
-  const A2 = J(S.openPositions[0]._path); assert.deepStrictEqual(A2, { mfe: 1.2, mae: -1, at: { 15: 1.2, 30: -1 } }, 'le jalon 15 ne bouge plus, le creux descend');
+  const A2 = strip(S.openPositions[0]._path); assert.deepStrictEqual(A2, { mfe: 1.2, mae: -1, at: { 15: 1.2, 30: -1 } }, 'le jalon 15 ne bouge plus, le creux descend');
   c.Date.now = () => t0 + 300 * M; S.pairStates['A/USDT'].price = 100.3; vm.runInContext('_pathRecord()', c);
   assert.deepStrictEqual(Object.keys(J(S.openPositions[0]._path).at).sort((a, b) => a - b).map(Number), [15, 30, 60, 120, 240]);
   assert.strictEqual(J(S.openPositions[0]._path).at[60], 0.3, 'jalons manqués posés au tick courant');

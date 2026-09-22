@@ -1,4 +1,5 @@
-// ▓▓▓ VERSION 20260922a ▓▓▓
+// ▓▓▓ VERSION 20260923a ▓▓▓
+// [GAIN APPRIS · 23/09/2026] _botExitSweep : sortie par règle de gain apprise (10i _gainExit) après l'horizon, avant les niveaux
 // [MÉMOIRE DES CHEMINS · 22/09/2026] _botExitSweep : sortie par horizon appris (10i _horizonExit) avant les niveaux — armée seulement par les chemins de la paire
 // [A13 · 17/09/2026] _botExitSweep : règle unique de sortie = niveaux pos.sl / pos.tp (ATR × bras A/B, 09d1) exécutés sur ps.price, breakeven réel ; le % de conviction ne reste qu'en repli (AA, tick d'ouverture)
 // [1b-a HOTFIX · 14/09/2026 soir] _closeCompleted : une fermeture qui n'aboutit pas n'est plus réessayée à chaque tick (1/60 s), rien n'est enseigné sans fermeture réelle, la raison est journalisée
@@ -634,6 +635,14 @@ window._botExitSweep = function _botExitSweep() {
       if (_hz) {
         if (!_closeCompleted(pos, 'bot ' + _hz.why)) return;
         try { S.chainLog.push({ icon: '\u23F3', desc: 'Sortie horizon \u00b7 ' + pos.pair + ' ' + String(pos.side).toUpperCase() + ' \u00b7 ' + _hz.why + ' \u00b7 @' + pnlPct.toFixed(2) + ' %', hash: Math.random().toString(36).slice(2, 8), time: new Date().toLocaleTimeString() }); if (S.chainLog.length > 100) S.chainLog.splice(0, S.chainLog.length - 100); } catch(e) {}
+        return;
+      }
+      // [GAIN APPRIS · 23/09/2026] si la règle de gain de la paire est armée par ses propres chemins (10i _gainRefresh) :
+      // pic atteint ≥ m et P&L retombé à f × pic → fermée ici, avant les niveaux. Sans règle armée : rien ne change.
+      var _ga = (typeof _gainExit === 'function') ? _gainExit(pos, pnlPct) : null;
+      if (_ga) {
+        if (!_closeCompleted(pos, 'bot ' + _ga.why)) return;
+        try { S.chainLog.push({ icon: '\uD83D\uDD12', desc: 'Sortie gain \u00b7 ' + pos.pair + ' ' + String(pos.side).toUpperCase() + ' \u00b7 ' + _ga.why + ' \u00b7 @' + pnlPct.toFixed(2) + ' %', hash: Math.random().toString(36).slice(2, 8), time: new Date().toLocaleTimeString() }); if (S.chainLog.length > 100) S.chainLog.splice(0, S.chainLog.length - 100); } catch(e) {}
         return;
       }
       var hasLv = isFinite(pos.sl) && pos.sl > 0 && isFinite(pos.tp) && pos.tp > 0;

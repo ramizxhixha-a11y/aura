@@ -1,3 +1,4 @@
+// [GAIN APPRIS · 23/09/2026] VERSION 20260923a · repères de rendu dans le chemin (grille m|f) + règle de gain apprise par paire (_gainEvalPair/_gainRefresh/_gainExit)
 // [PLAFONDS APPRIS · 22/09/2026] VERSION 20260922b · plafonds appris (emplacements en tout / par sens) : _capEval, _capRefresh, _capFor
 // [MÉMOIRE DES CHEMINS · 22/09/2026] VERSION 20260922a · mémoire des chemins (_pathRecord) + horizon auto-armé par paire (_horizonEvalPair/_horizonRefresh/_horizonExit)
 // [CORRECTIF ATTRIBUTION · 19/09/2026] VERSION 20260919a · _intelPublish lit les votes au format réel (nombres) — sans quoi seule la source « technique » était mesurée
@@ -149,6 +150,11 @@ window.INTEL_SOURCES = INTEL_SOURCES;
 // 3 · _horizonExit (10f _botExitSweep, positions bot) : une position de la paire encore négative à H est fermée.
 //     Sans chemins, aucune règle : rien ne change tant que le système n'a pas ses propres preuves.
 var PATH_MARKS = [15, 30, 60, 120, 240];
+// [GAIN APPRIS · 23/09/2026] repères de « rendu » : pour chaque case de la grille (m = pic atteint en %, f = fraction du
+// pic gardée), le P&L au PREMIER instant où le pic a atteint m ET le P&L est retombé à f × pic. Ces repères rendent la
+// règle « une fois m atteint, sortir à f × pic » REJOUABLE EXACTEMENT sur la mémoire (elle aurait fermé là, pas ailleurs).
+// La grille est un menu ; la paire choisit la case sur preuve, ou aucune.
+var GAIN_M = [0.2, 0.3, 0.5, 0.8], GAIN_F = [0.3, 0.5, 0.7];
 var HZ_MARKS = [60, 120, 240], HZ_WINDOW = 30, HZ_MIN_N = 8, HZ_MIN_WORSE = 0.6;
 function _pathRecord() {
   try {
@@ -163,6 +169,16 @@ function _pathRecord() {
       var P = pos._path || (pos._path = { mfe: 0, mae: 0, at: {} });
       if (pct > P.mfe) P.mfe = Math.round(pct * 1000) / 1000;
       if (pct < P.mae) P.mae = Math.round(pct * 1000) / 1000;
+      if (P.mfe > 0) {                                   // repères de rendu (posés une seule fois, au premier déclenchement)
+        var gb = P.gb || (P.gb = {});
+        for (var gi = 0; gi < GAIN_M.length; gi++) {
+          if (P.mfe < GAIN_M[gi]) continue;
+          for (var gj = 0; gj < GAIN_F.length; gj++) {
+            var key = GAIN_M[gi] + '|' + GAIN_F[gj];
+            if (gb[key] === undefined && pct <= GAIN_F[gj] * P.mfe) gb[key] = Math.round(pct * 1000) / 1000;
+          }
+        }
+      }
       var ageMin = (now - t0) / 60000;
       for (var i = 0; i < PATH_MARKS.length; i++) {
         var m = PATH_MARKS[i];
@@ -292,6 +308,62 @@ function _capFor(kind) {
   try { var r = S && S.capRules && S.capRules[kind]; return (r && isFinite(r.level)) ? r.level : _capStart(); } catch (e) { return 3; }
 }
 window._capEval = _capEval; window._capRefresh = _capRefresh; window._capFor = _capFor; window._capCeiling = _capCeiling;
+
+// ═══ [GAIN APPRIS · 23/09/2026] GARDER CE QUE LA POSITION A TOUCHÉ (« go », Rams 23/09) ═══
+// Backup 22/09, 13 premiers chemins : somme des pics +5,16 %, somme des résultats +0,66 % — le système gardait 13 % de
+// ses meilleurs moments (6 trades sur 9 ayant atteint +0,30 % ont fini sous +0,10). Le breakeven (45 % du chemin vers un
+// objectif ATR ≈ 1,3 %) et le trailing (60 %) s'arment vers +0,6 / +0,8 % : au-dessus de ce que le système capture.
+// Règle apprise PAR PAIRE, sur ses GAIN_WINDOW derniers chemins : pour chaque case (m, f) de la grille, rejeu exact —
+// si le repère gb[m|f] existe, la règle aurait fermé là ; sinon le trade a fini comme il a fini. On retient la case au
+// meilleur gain moyen ; elle ne s'arme que si n ≥ GAIN_MIN_N, gain moyen > 0, et amélioration sur ≥ GAIN_MIN_BETTER des
+// trades où elle aurait agi. Elle se désarme dès que ses chemins ne le prouvent plus. Exécution : 10f, avant les niveaux.
+var GAIN_WINDOW = 30, GAIN_MIN_N = 8, GAIN_MIN_BETTER = 0.6;
+function _gainEvalPair(pair, trades) {
+  var closed = (trades || []).filter(function (t) { return t && t.pair === pair && t.closedAt && isFinite(t.pnlPct) && t.path && isFinite(t.path.mfe); }).slice(-GAIN_WINDOW);
+  if (closed.length < GAIN_MIN_N) return null;
+  var best = null;
+  GAIN_M.forEach(function (m) { GAIN_F.forEach(function (f) {
+    var key = m + '|' + f, sum = 0, acted = 0, better = 0;
+    closed.forEach(function (t) {
+      var gb = t.path.gb || {}, fin = Number(t.pnlPct);
+      if (gb[key] !== undefined) { var out = Number(gb[key]); sum += out - fin; acted++; if (out > fin) better++; }
+    });
+    var gain = sum / closed.length;
+    if (best === null || gain > best.gain) best = { m: m, f: f, gain: gain, acted: acted, better: better };
+  }); });
+  if (!best || !(best.gain > 0) || best.acted < 1) return null;
+  if (best.better / best.acted < GAIN_MIN_BETTER) return null;
+  return { m: best.m, f: best.f, n: closed.length, acted: best.acted, better: Math.round(100 * best.better / best.acted), gain: Math.round(best.gain * 1000) / 1000 };
+}
+function _gainRefresh(pair) {
+  try {
+    var mem = (S && S.tradeContextMemory) || [];
+    if (!S.gainRules) S.gainRules = {};
+    var pairs = pair ? [pair] : Object.keys(S.pairStates || {});
+    pairs.forEach(function (p) {
+      var r = _gainEvalPair(p, mem), old = S.gainRules[p] || null;
+      if (r) { r.t = Date.now(); S.gainRules[p] = r; } else delete S.gainRules[p];
+      var changed = (!!r !== !!old) || (r && old && (r.m !== old.m || r.f !== old.f));
+      if (changed && S.chainLog) {
+        try {
+          S.chainLog.push({ icon: '\uD83D\uDD12', desc: r ? ('Gain appris \u00b7 ' + p + ' \u00b7 pic \u2265 +' + r.m + ' % \u2192 garder ' + Math.round(r.f * 100) + ' % du pic (' + r.n + ' chemins, +' + r.gain + ' %/trade, mieux ' + r.better + ' % des fois)') : ('Gain d\u00e9sarm\u00e9 \u00b7 ' + p + ' \u00b7 ses chemins ne le prouvent plus'), hash: Math.random().toString(36).slice(2, 8), time: (typeof nowStr === 'function') ? nowStr() : new Date().toLocaleTimeString() });
+          if (S.chainLog.length > 100) S.chainLog.splice(0, S.chainLog.length - 100);
+        } catch (e) {}
+      }
+    });
+    return Object.keys(S.gainRules).length;
+  } catch (e) { return 0; }
+}
+// Décision (10f) : { why } si la règle armée de la paire dit de fermer — pic ≥ m et P&L retombé à f × pic — sinon null.
+function _gainExit(pos, pnlPct) {
+  try {
+    var r = S && S.gainRules && pos && S.gainRules[pos.pair]; if (!r) return null;
+    var mfe = pos._path && Number(pos._path.mfe);
+    if (!(mfe >= r.m) || !(pnlPct <= r.f * mfe)) return null;
+    return { why: 'Gain appris \u00b7 pic +' + mfe.toFixed(2) + ' % \u2192 sortie \u00e0 ' + Math.round(r.f * 100) + ' % du pic (' + r.n + ' chemins)' };
+  } catch (e) { return null; }
+}
+window._gainEvalPair = _gainEvalPair; window._gainRefresh = _gainRefresh; window._gainExit = _gainExit;
 window._pathRecord = _pathRecord; window._horizonEvalPair = _horizonEvalPair; window._horizonRefresh = _horizonRefresh; window._horizonExit = _horizonExit;
 
 window._intelPublish = _intelPublish;

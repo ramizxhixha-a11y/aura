@@ -157,4 +157,6 @@ Une régression de vérité = `VERDICT : NON LIVRABLE`, jamais « CONNU, tolér�
 
 - **22/09 — mémoire de la blacklist** (`20260922c`) : l'organe v7.12 dormait — fenêtre non sauvegardée (effacée par mes relances) et nourrie par l'AA. Réveillé sans changer sa règle : EV/RE seulement, persisté. Fossile v6.9 (écriture directe de fitness dans 07) retiré.
 
+- **23/09 — gain appris** (`20260923a`) : 13 premiers chemins — le système gardait 13 % de ses meilleurs moments. Repères de rendu dans le chemin (grille m|f) + règle par paire rejouée exactement sur ses chemins, armée sur preuve (n ≥ 8, gain > 0, mieux ≥ 60 %), désarmée sinon. Backup 22/09 : tout le 22 tourne (BNB, blacklist EV, paliers, chemins) ; 13 trades, +0,38 $.
+
 *Mis à jour à chaque mission. Le prochain audit complet : après 1b-b, sur un backup de 24 h propre.*
