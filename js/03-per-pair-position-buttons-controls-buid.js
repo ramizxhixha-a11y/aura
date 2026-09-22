@@ -1,3 +1,4 @@
+// [HARMONIQUE GÉNOMÉE · 23/09/2026] VERSION 20260923d · les 9 seuils de detectHarmonicResonance sont le génome du siège harmonic_v1 (byte-identique par défaut)
 // [ATTRIBUTION PAR SOURCE · 17/09/2026] VERSION 20260917f · runRosterAnalysis publie l'état des sources dans le bus (10i _intelPublish)
 // [GÉNOME DE PAIRE · 17/09/2026] VERSION 20260917e · génome de paire (périodes TA + poids du mélange) : PAIR_GENOME_DEFAULTS, _pairGenomeOf, _pairGenomeEvolve
 // [FLUX BINANCE · 17/09/2026] VERSION 20260917d · whale_v1 / flow_v1 lisent le flux d'ordres réel et le carnet Binance (02), volume_v1 le volume réel des klines — fin des proxys de bougies
@@ -3136,6 +3137,11 @@ function renderMirrorPanel() {
 function detectHarmonicResonance(pair) {
   const ps = S.pairStates?.[pair];
   if(!ps) return null;
+  // [HARMONIQUE GÉNOMÉE · 23/09/2026] la pire source de l'attribution (−0,22 %/trade, 43 % de réussite) était la seule dont les
+  // seuils étaient encore en dur : elle ne pouvait ni s'améliorer ni s'éteindre proprement. Ses 9 seuils sont désormais le
+  // génome du siège harmonic_v1 (GENOME_DEFAULTS = ces valeurs → byte-identique par défaut, oracle banc-fixtures/harmonic-avant-genome-20260923c.js).
+  const G = (typeof _genomeOf === 'function') ? _genomeOf('harmonic_v1') : null;
+  const g = (k, d) => (G && isFinite(G[k])) ? G[k] : d;
   const tech = typeof getTechSignals === 'function' ? getTechSignals(pair) : null;
   if(!tech) return null;
 
@@ -3147,11 +3153,11 @@ function detectHarmonicResonance(pair) {
 
   // Direction: +1 bullish, -1 bearish, 0 neutral
   const notes = [
-    { name:'RSI',   val: rsi > 65 ? +1 : rsi < 35 ? -1 : 0, display: `RSI ${rsi.toFixed(0)}` },
-    { name:'MACD',  val: macd > 0.002 ? +1 : macd < -0.002 ? -1 : 0, display: `MACD ${macd>=0?'+':''}${macd.toFixed(3)}` },
-    { name:'STOCH', val: stoch > 75 ? +1 : stoch < 25 ? -1 : 0, display: `STO ${stoch.toFixed(0)}` },
-    { name:'ADX',   val: adx > 30 ? (macd > 0 ? +1 : -1) : 0, display: `ADX ${adx.toFixed(0)}` },
-    { name:'BOLL',  val: bb > 0.85 ? +1 : bb < 0.15 ? -1 : 0, display: `BB ${(bb*100).toFixed(0)}%` }
+    { name:'RSI',   val: rsi > g('rsiHigh', 65) ? +1 : rsi < g('rsiLow', 35) ? -1 : 0, display: `RSI ${rsi.toFixed(0)}` },
+    { name:'MACD',  val: macd > g('macdThr', 0.002) ? +1 : macd < -g('macdThr', 0.002) ? -1 : 0, display: `MACD ${macd>=0?'+':''}${macd.toFixed(3)}` },
+    { name:'STOCH', val: stoch > g('stochHigh', 75) ? +1 : stoch < g('stochLow', 25) ? -1 : 0, display: `STO ${stoch.toFixed(0)}` },
+    { name:'ADX',   val: adx > g('adxMin', 30) ? (macd > 0 ? +1 : -1) : 0, display: `ADX ${adx.toFixed(0)}` },
+    { name:'BOLL',  val: bb > g('bbHigh', 0.85) ? +1 : bb < g('bbLow', 0.15) ? -1 : 0, display: `BB ${(bb*100).toFixed(0)}%` }
   ];
 
   const bullCount = notes.filter(n => n.val === +1).length;
@@ -3159,7 +3165,7 @@ function detectHarmonicResonance(pair) {
   const maxAligned = Math.max(bullCount, bearCount);
   const direction = bullCount > bearCount ? 'bullish' : bearCount > bullCount ? 'bearish' : 'neutral';
   const strength  = maxAligned / notes.length;
-  const isResonance = maxAligned >= 4;
+  const isResonance = maxAligned >= g('resonanceMin', 4);
 
   if(isResonance && S.resonanceHistory) {
     const lastEvent = S.resonanceHistory[S.resonanceHistory.length - 1];
@@ -3596,13 +3602,15 @@ const GENOME_DEFAULTS = {
   hedge_v2:      { cvMax: 0.025, adviceMin: 0.3, score: 0.5, ownW: 0.6, voteThr: 0.18 },
   momentum_v1:   { gain: 0.9, ownW: 0.6, voteThr: 0.18 },
   mean_rev_v1:   { bbHigh: 0.9, bbLow: 0.1, score: 0.6, ownW: 0.6, voteThr: 0.18 },
-  security_v1:   { cvVeto: 0.04, cvWarn: 0.03 }
+  security_v1:   { cvVeto: 0.04, cvWarn: 0.03 },
+  harmonic_v1:   { rsiHigh: 65, rsiLow: 35, macdThr: 0.002, stochHigh: 75, stochLow: 25, adxMin: 30, bbHigh: 0.85, bbLow: 0.15, resonanceMin: 4 }   // [HARMONIQUE GÉNOMÉE · 23/09/2026]
 };
-const GENE_INT = { win: 1, recentN: 1, histN: 1, lookback: 1, avgN: 1 };          // fenêtres : entiers ≥ 2
+const GENE_INT = { win: 1, recentN: 1, histN: 1, lookback: 1, avgN: 1, resonanceMin: 1 };          // fenêtres : entiers ≥ 2
 const GENE_BOUNDS = {                                                             // sinon [défaut/4, défaut×4]
   rsiHigh: [50, 95], rsiLow: [5, 50], bbHigh: [0.5, 1], bbLow: [0, 0.5], ownW: [0.2, 0.9], voteThr: [0.05, 0.5],
   conf: [0.2, 0.95], score: [0.1, 1], spikeScore: [0.1, 1], bigScore: [0.1, 1], midScore: [0.05, 1], maxScore: [0.1, 1],
-  wStrong: [0.1, 1], wHigh: [0.1, 1], wLow: [0.1, 1], wNormal: [0.1, 1], gain: [0.02, 4], momGain: [1, 40]
+  wStrong: [0.1, 1], wHigh: [0.1, 1], wLow: [0.1, 1], wNormal: [0.1, 1], gain: [0.02, 4], momGain: [1, 40],
+  stochHigh: [50, 95], stochLow: [5, 50], adxMin: [10, 60], resonanceMin: [2, 5]   // [HARMONIQUE GÉNOMÉE · 23/09/2026]
 };
 function _geneClamp(k, v, def) {
   if (!isFinite(v)) return def;

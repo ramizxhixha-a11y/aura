@@ -163,4 +163,6 @@ Une régression de vérité = `VERDICT : NON LIVRABLE`, jamais « CONNU, tolér�
 
 - **23/09 — écran appris** (`20260923c`) : ce que le système apprend est visible dans l'app (page Journal), lecture seule — Rams ne dépend plus de mes lectures de backup pour le voir.
 
+- **23/09 — harmonique génomée** (`20260923d`) : les 9 seuils du détecteur harmonique (pire source, −0,22 %/trade) deviennent le génome du siège harmonic_v1, byte-identique par défaut (oracle 200 états). Plus aucun siège aux constantes en dur.
+
 *Mis à jour à chaque mission. Le prochain audit complet : après 1b-b, sur un backup de 24 h propre.*

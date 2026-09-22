@@ -124,7 +124,7 @@ T('5 · persistance : 09b1 écrit genome + genomeHistory, 09b2 les relit, manife
   assert.ok(c7.includes("_genomeEvolve(weak.id, _mutation, _peakPrev)") && c7.includes("weak._probationUntil = weak._bornCycle + 30;"));
   assert.ok(c3.includes("if (agent._probationUntil && (S.cycle || 0) < agent._probationUntil) weight *= 0.5;"));
   assert.strictEqual((c3.match(/const G = _genomeOf\(/g) || []).length, 3, 'scoutAnalysis, councilVote, guardianCheck lisent le génome');
-  const defs = Object.keys(JSON.parse(JSON.stringify(vm.runInContext('GENOME_DEFAULTS', mkCtx(NEW, mkState(1)))))); assert.strictEqual(defs.length, 17, 'sièges génomés : ' + defs.length);
+  const defs = Object.keys(JSON.parse(JSON.stringify(vm.runInContext('GENOME_DEFAULTS', mkCtx(NEW, mkState(1)))))); assert.strictEqual(defs.length, 18, 'sièges génomés : ' + defs.length);   // [23/09] + harmonic_v1
 });
 console.log('\n' + (fail ? '❌ ' : '✅ ') + pass + '/' + (pass + fail) + ' tests passés' + (fail ? ' — ' + fail + ' ÉCHEC(S)' : ''));
 process.exit(fail ? 1 : 0);
