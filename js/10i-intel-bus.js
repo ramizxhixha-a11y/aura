@@ -1,3 +1,4 @@
+// [VÉRITÉ DES RÈGLES · 23/09/2026] VERSION 20260923f · armedAt/baseMean conservés à l'armement, _ruleTruth : trades de la paire depuis l'armement vs avant, sorties dues à la règle
 // [CORRECTIFS CHEMINS · 23/09/2026] VERSION 20260923e · plafonds appris : un verdict « nuisible » expire après 20 trades sans échantillon (re-test)
 // [STOP APPRIS · 23/09/2026] VERSION 20260923b · stop appris par paire (_stopEvalPair/_stopRefresh/_stopExit) + preuve stable sur les deux moitiés (_halfStable) pour gain et stop
 // [GAIN APPRIS · 23/09/2026] VERSION 20260923a · repères de rendu dans le chemin (grille m|f) + règle de gain apprise par paire (_gainEvalPair/_gainRefresh/_gainExit)
@@ -214,8 +215,8 @@ function _horizonRefresh(pair) {
     var pairs = pair ? [pair] : Object.keys(S.pairStates || {});
     pairs.forEach(function (p) {
       var r = _horizonEvalPair(p, mem), old = S.horizonRules[p] || null;
-      if (r) { r.t = Date.now(); S.horizonRules[p] = r; } else delete S.horizonRules[p];
       var changed = (!!r !== !!old) || (r && old && r.H !== old.H);
+      if (r) { r.t = Date.now(); _ruleArmStamp(r, old, changed, p, mem); S.horizonRules[p] = r; } else delete S.horizonRules[p];
       if (changed && S.chainLog) {
         try {   // le journal ne doit jamais faire tomber les règles
           S.chainLog.push({ icon: '\u23F3', desc: r ? ('Horizon appris \u00b7 ' + p + ' \u00b7 fermer si encore n\u00e9gative \u00e0 ' + r.H + ' min (' + r.n + ' chemins, ' + r.worse + ' % finissent pire, +' + r.gain + ' % en moyenne)') : ('Horizon d\u00e9sarm\u00e9 \u00b7 ' + p + ' \u00b7 ses chemins ne le prouvent plus'), hash: Math.random().toString(36).slice(2, 8), time: (typeof nowStr === 'function') ? nowStr() : new Date().toLocaleTimeString() });
@@ -361,8 +362,8 @@ function _gainRefresh(pair) {
     var pairs = pair ? [pair] : Object.keys(S.pairStates || {});
     pairs.forEach(function (p) {
       var r = _gainEvalPair(p, mem), old = S.gainRules[p] || null;
-      if (r) { r.t = Date.now(); S.gainRules[p] = r; } else delete S.gainRules[p];
       var changed = (!!r !== !!old) || (r && old && (r.m !== old.m || r.f !== old.f));
+      if (r) { r.t = Date.now(); _ruleArmStamp(r, old, changed, p, mem); S.gainRules[p] = r; } else delete S.gainRules[p];
       if (changed && S.chainLog) {
         try {
           S.chainLog.push({ icon: '\uD83D\uDD12', desc: r ? ('Gain appris \u00b7 ' + p + ' \u00b7 pic \u2265 +' + r.m + ' % \u2192 garder ' + Math.round(r.f * 100) + ' % du pic (' + r.n + ' chemins, +' + r.gain + ' %/trade, mieux ' + r.better + ' % des fois)') : ('Gain d\u00e9sarm\u00e9 \u00b7 ' + p + ' \u00b7 ses chemins ne le prouvent plus'), hash: Math.random().toString(36).slice(2, 8), time: (typeof nowStr === 'function') ? nowStr() : new Date().toLocaleTimeString() });
@@ -418,8 +419,8 @@ function _stopRefresh(pair) {
     var pairs = pair ? [pair] : Object.keys(S.pairStates || {});
     pairs.forEach(function (p) {
       var r = _stopEvalPair(p, mem), old = S.stopRules[p] || null;
-      if (r) { r.t = Date.now(); S.stopRules[p] = r; } else delete S.stopRules[p];
       var changed = (!!r !== !!old) || (r && old && r.d !== old.d);
+      if (r) { r.t = Date.now(); _ruleArmStamp(r, old, changed, p, mem); S.stopRules[p] = r; } else delete S.stopRules[p];
       if (changed && S.chainLog) {
         try {
           S.chainLog.push({ icon: '\uD83D\uDED1', desc: r ? ('Stop appris \u00b7 ' + p + ' \u00b7 fermer \u00e0 \u2212' + r.d + ' % (' + r.n + ' chemins, +' + r.gain + ' %/trade, mieux ' + r.better + ' % des fois)') : ('Stop d\u00e9sarm\u00e9 \u00b7 ' + p + ' \u00b7 ses chemins ne le prouvent plus'), hash: Math.random().toString(36).slice(2, 8), time: (typeof nowStr === 'function') ? nowStr() : new Date().toLocaleTimeString() });
@@ -437,6 +438,33 @@ function _stopExit(pos, pnlPct) {
     return { d: r.d, why: 'Stop appris \u2212' + r.d + ' % (' + r.n + ' chemins)' };
   } catch (e) { return null; }
 }
+
+// ═══ [VÉRITÉ DES RÈGLES · 23/09/2026] UNE RÈGLE ARMÉE TIENT-ELLE SA PROMESSE ? (« go », Rams 23/09) ═══
+// Chaque règle s'arme sur une promesse de rejeu (« +0,21 %/trade »). Personne ne vérifiait ce qui se passe APRÈS.
+// Ici : à l'armement, la règle garde armedAt et baseMean (moyenne du P&L des trades de la paire dans la fenêtre qui
+// l'a armée) ; tant que la règle reste la même, ces deux valeurs sont conservées d'un recalcul à l'autre. _ruleTruth
+// compare ensuite les trades de la paire clos DEPUIS l'armement (tous, pas seulement ceux où la règle a agi) à baseMean,
+// et compte les sorties dues à la règle (10f pose pos._ruleExit, 09d1 le copie dans la mémoire). Lecture seule.
+function _ruleArmStamp(r, old, changed, pair, mem) {
+  try {
+    if (old && !changed && isFinite(old.armedAt)) { r.armedAt = old.armedAt; r.baseMean = old.baseMean; return r; }
+    var win = (mem || []).filter(function (t) { return t && t.pair === pair && t.closedAt && isFinite(t.pnlPct); }).slice(-30);
+    r.armedAt = Date.now();
+    r.baseMean = win.length ? Math.round(win.reduce(function (a, t) { return a + Number(t.pnlPct); }, 0) / win.length * 1000) / 1000 : 0;
+    return r;
+  } catch (e) { return r; }
+}
+function _ruleTruth(pair, kind) {
+  try {
+    var rules = kind === 'gain' ? S.gainRules : kind === 'stop' ? S.stopRules : S.horizonRules;
+    var r = rules && rules[pair]; if (!r || !isFinite(r.armedAt)) return null;
+    var since = (S.tradeContextMemory || []).filter(function (t) { return t && t.pair === pair && t.closedAt && t.closedAt >= r.armedAt && isFinite(t.pnlPct); });
+    var acted = since.filter(function (t) { return t.ruleExit && t.ruleExit.kind === kind; }).length;
+    var mean = since.length ? Math.round(since.reduce(function (a, t) { return a + Number(t.pnlPct); }, 0) / since.length * 1000) / 1000 : null;
+    return { n: since.length, acted: acted, mean: mean, before: r.baseMean, delta: (mean === null || !isFinite(r.baseMean)) ? null : Math.round((mean - r.baseMean) * 1000) / 1000, promise: r.gain };
+  } catch (e) { return null; }
+}
+window._ruleArmStamp = _ruleArmStamp; window._ruleTruth = _ruleTruth;
 window._stopEvalPair = _stopEvalPair; window._stopRefresh = _stopRefresh; window._stopExit = _stopExit; window._halfStable = _halfStable;
 window._gainEvalPair = _gainEvalPair; window._gainRefresh = _gainRefresh; window._gainExit = _gainExit;
 window._pathRecord = _pathRecord; window._horizonEvalPair = _horizonEvalPair; window._horizonRefresh = _horizonRefresh; window._horizonExit = _horizonExit;

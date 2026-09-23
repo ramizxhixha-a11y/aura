@@ -1,3 +1,4 @@
+// [VÉRITÉ DES RÈGLES · 23/09/2026] VERSION 20260923f · closePosition transmet la sortie par règle apprise à la mémoire des trades
 // [MÉMOIRE DE LA BLACKLIST · 22/09/2026] VERSION 20260922c · fenêtre de la blacklist nourrie par EV/RE seulement, et sauvegardée
 // [MÉMOIRE DES CHEMINS · 22/09/2026] VERSION 20260922a · closePosition transmet le chemin de la position à la mémoire des trades
 // [PLAFOND DE SENS · 21/09/2026] VERSION 20260921a · journal : refus = vetos (comptés, pas gardés), vraies ouvertures reconnues
@@ -5879,7 +5880,7 @@ function closePosition(id, botClose = false) {
     if (pos._contextId && typeof _enrichTradeContextOnClose === 'function') {
       try {
         const holdMs = (pos.openedAt) ? (Date.now() - pos.openedAt) : 0;
-        _enrichTradeContextOnClose(pos._contextId, realisedPct, realisedUsd, holdMs, pos._path);   // [MÉMOIRE DES CHEMINS · 22/09/2026]
+        _enrichTradeContextOnClose(pos._contextId, realisedPct, realisedUsd, holdMs, pos._path, pos._ruleExit);   // [MÉMOIRE DES CHEMINS · 22/09/2026] · [VÉRITÉ DES RÈGLES · 23/09/2026]
       } catch(e) {}
     }
 

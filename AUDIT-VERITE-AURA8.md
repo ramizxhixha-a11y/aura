@@ -167,4 +167,6 @@ Une régression de vérité = `VERDICT : NON LIVRABLE`, jamais « CONNU, tolér�
 
 - **23/09 — correctifs chemins** (`20260923e`) : mes repères de rendu n'étaient pas copiés à la clôture (règle de gain inarmable) ; un palier nuisible était définitif (le système s'était limité à 1 position sans pouvoir se rejuger). Les deux corrigés ; le second reste la décision du système, désormais rejugée tous les 20 trades.
 
+- **23/09 — vérité des règles** (`20260923f`) : chaque règle armée garde sa promesse et son avant ; le système mesure lui-même l'après (tous les trades de la paire depuis l'armement, sorties dues à la règle) et l'affiche. L'apprentissage n'est plus une affirmation, c'est une ligne à l'écran.
+
 *Mis à jour à chaque mission. Le prochain audit complet : après 1b-b, sur un backup de 24 h propre.*

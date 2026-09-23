@@ -84,8 +84,8 @@ T('D4 · _horizonExit : ferme seulement si règle armée ET position négative E
 T('S1 · branchements : 08 enregistre le chemin AVANT le balayage, 02 → 09d1 gardent le chemin et recalculent la paire, 10f ferme par _horizonExit avant les niveaux (bot seulement), persistance + manifest + recalcul au boot', () => {
   const c08 = codeStrict(rd('js/08-learning-history-render.js')), c02 = codeStrict(rd('js/02-state-init.js')), c9 = codeStrict(rd('js/09d1-paper-real-core.js')), cf = codeStrict(rd('js/10f-resolveur-cycle.js')), c1 = codeStrict(rd('js/09b1-build-snapshot.js')), c2 = codeStrict(rd('js/09b2-save-load.js'));
   const iP = c08.indexOf('window._pathRecord()'), iS = c08.indexOf('window._botExitSweep()'); assert.ok(iP > 0 && iS > iP, 'chemin avant sorties');
-  assert.ok(c02.includes('_enrichTradeContextOnClose(pos._contextId, realisedPct, realisedUsd, holdMs, pos._path);'));
-  assert.ok(c9.includes('function _enrichTradeContextOnClose(contextId, pnlPct, pnlUsd, holdMs, path) {') && c9.includes('S.tradeContextMemory[i].path = { mfe: path.mfe, mae: path.mae, at: Object.assign({}, path.at || {}), gb: Object.assign({}, path.gb || {}) };') && c9.includes('_horizonRefresh(S.tradeContextMemory[i].pair);'), '[23/09] le chemin copié garde ses repères gb');
+  assert.ok(c02.includes('_enrichTradeContextOnClose(pos._contextId, realisedPct, realisedUsd, holdMs, pos._path, pos._ruleExit);'));
+  assert.ok(c9.includes('function _enrichTradeContextOnClose(contextId, pnlPct, pnlUsd, holdMs, path, ruleExit) {') && c9.includes('S.tradeContextMemory[i].path = { mfe: path.mfe, mae: path.mae, at: Object.assign({}, path.at || {}), gb: Object.assign({}, path.gb || {}) };') && c9.includes('_horizonRefresh(S.tradeContextMemory[i].pair);'), '[23/09] le chemin copié garde ses repères gb');
   const sweep = cf.slice(cf.indexOf('window._botExitSweep = function _botExitSweep() {'));
   const iAuto = sweep.indexOf("if (!pos || pos.auto !== true) return;"), iHz = sweep.indexOf('_horizonExit(pos, pnlPct, Date.now())'), iLv = sweep.indexOf('var hasLv = isFinite(pos.sl)');
   assert.ok(iAuto > 0 && iHz > iAuto && iLv > iHz, 'bot seulement, horizon avant les niveaux');

@@ -1,4 +1,5 @@
-// ▓▓▓ VERSION 20260923b ▓▓▓
+// ▓▓▓ VERSION 20260923f ▓▓▓
+// [VÉRITÉ DES RÈGLES · 23/09/2026] une sortie par règle apprise marque la position (pos._ruleExit)
 // [STOP APPRIS · 23/09/2026] _botExitSweep : sortie par stop appris (10i _stopExit) après le gain appris, avant les niveaux
 // [GAIN APPRIS · 23/09/2026] _botExitSweep : sortie par règle de gain apprise (10i _gainExit) après l'horizon, avant les niveaux
 // [MÉMOIRE DES CHEMINS · 22/09/2026] _botExitSweep : sortie par horizon appris (10i _horizonExit) avant les niveaux — armée seulement par les chemins de la paire
@@ -634,6 +635,7 @@ window._botExitSweep = function _botExitSweep() {
       // niveaux. Sans règle armée (pas de chemins, ou chemins qui ne prouvent rien) : rien ne change.
       var _hz = (typeof _horizonExit === 'function') ? _horizonExit(pos, pnlPct, Date.now()) : null;
       if (_hz) {
+        pos._ruleExit = { kind: 'horizon', at: Math.round(pnlPct * 1000) / 1000, t: Date.now() };   // [VÉRITÉ DES RÈGLES · 23/09/2026]
         if (!_closeCompleted(pos, 'bot ' + _hz.why)) return;
         try { S.chainLog.push({ icon: '\u23F3', desc: 'Sortie horizon \u00b7 ' + pos.pair + ' ' + String(pos.side).toUpperCase() + ' \u00b7 ' + _hz.why + ' \u00b7 @' + pnlPct.toFixed(2) + ' %', hash: Math.random().toString(36).slice(2, 8), time: new Date().toLocaleTimeString() }); if (S.chainLog.length > 100) S.chainLog.splice(0, S.chainLog.length - 100); } catch(e) {}
         return;
@@ -642,6 +644,7 @@ window._botExitSweep = function _botExitSweep() {
       // pic atteint ≥ m et P&L retombé à f × pic → fermée ici, avant les niveaux. Sans règle armée : rien ne change.
       var _ga = (typeof _gainExit === 'function') ? _gainExit(pos, pnlPct) : null;
       if (_ga) {
+        pos._ruleExit = { kind: 'gain', at: Math.round(pnlPct * 1000) / 1000, t: Date.now() };   // [VÉRITÉ DES RÈGLES · 23/09/2026]
         if (!_closeCompleted(pos, 'bot ' + _ga.why)) return;
         try { S.chainLog.push({ icon: '\uD83D\uDD12', desc: 'Sortie gain \u00b7 ' + pos.pair + ' ' + String(pos.side).toUpperCase() + ' \u00b7 ' + _ga.why + ' \u00b7 @' + pnlPct.toFixed(2) + ' %', hash: Math.random().toString(36).slice(2, 8), time: new Date().toLocaleTimeString() }); if (S.chainLog.length > 100) S.chainLog.splice(0, S.chainLog.length - 100); } catch(e) {}
         return;
@@ -650,6 +653,7 @@ window._botExitSweep = function _botExitSweep() {
       // avant le stop ATR (qui reste la borne extérieure). Sans règle armée : rien ne change.
       var _st = (typeof _stopExit === 'function') ? _stopExit(pos, pnlPct) : null;
       if (_st) {
+        pos._ruleExit = { kind: 'stop', at: Math.round(pnlPct * 1000) / 1000, t: Date.now() };   // [VÉRITÉ DES RÈGLES · 23/09/2026]
         if (!_closeCompleted(pos, 'bot ' + _st.why)) return;
         try { S.chainLog.push({ icon: '\uD83D\uDED1', desc: 'Sortie stop appris \u00b7 ' + pos.pair + ' ' + String(pos.side).toUpperCase() + ' \u00b7 ' + _st.why + ' \u00b7 @' + pnlPct.toFixed(2) + ' %', hash: Math.random().toString(36).slice(2, 8), time: new Date().toLocaleTimeString() }); if (S.chainLog.length > 100) S.chainLog.splice(0, S.chainLog.length - 100); } catch(e) {}
         return;

@@ -1,3 +1,4 @@
+// [VÉRITÉ DES RÈGLES · 23/09/2026] VERSION 20260923f · sous chaque règle armée : promesse vs réalité depuis l'armement
 // [ÉCRAN APPRIS · 23/09/2026] VERSION 20260923c
 // ═══ CE QUE LE SYSTÈME A APPRIS — ÉCRAN, LECTURE SEULE (« go », Rams 23/09) ═══
 // Jusqu'ici tout ce que le système apprend (attribution par source, règles de gain / stop / horizon par paire, paliers
@@ -44,6 +45,13 @@ function _learnedPanelHtml() {
       { t: st ? ('−' + st.d + ' % (' + _lrnPct(st.gain, 2) + ')') : '—', w: '.9fr', s: st ? 'color:#ff8fb1;' : 'color:#556;' },
       { t: hz ? (hz.H + ' min (' + hz.worse + ' % pire)') : '—', w: '.9fr', s: hz ? 'color:#ffd166;' : 'color:#556;' }
     ]);
+    // [VÉRITÉ DES RÈGLES · 23/09/2026] promesse vs réalité : depuis l'armement, tous les trades de la paire, contre avant
+    [['gain', g], ['stop', st], ['horizon', hz]].forEach(function (kv) {
+      var tr = kv[1] && (typeof _ruleTruth === 'function') ? _ruleTruth(p, kv[0]) : null;
+      if (!tr) return;
+      var txt = tr.n ? ('depuis armée : ' + tr.n + ' trade' + (tr.n > 1 ? 's' : '') + ', ' + _lrnPct(tr.mean, 2) + '/trade (avant ' + _lrnPct(tr.before, 2) + ', promesse ' + _lrnPct(tr.promise, 2) + '), ' + tr.acted + ' sortie' + (tr.acted > 1 ? 's' : '') + ' par la règle') : 'depuis armée : aucun trade encore';
+      h += row([{ t: '', w: '1fr' }, { t: '↳ ' + kv[0], w: '.7fr', s: 'color:#889;' }, { t: txt, w: '2.9fr', s: 'color:' + (tr.delta === null ? '#889' : tr.delta >= 0 ? '#00e87a' : '#ff4d6d') + ';' }]);
+    });
   });
   // 3 · emplacements
   var cr = S.capRules || {}, ceil = (typeof _capCeiling === 'function') ? _capCeiling() : pairs.length;

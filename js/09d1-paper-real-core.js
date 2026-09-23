@@ -1,3 +1,4 @@
+// [VÉRITÉ DES RÈGLES · 23/09/2026] VERSION 20260923f · la sortie par règle apprise (ruleExit) reste avec le trade
 // [CORRECTIFS CHEMINS · 23/09/2026] VERSION 20260923e · le chemin copié à la clôture garde ses repères de rendu (gb)
 // [STOP APPRIS · 23/09/2026] VERSION 20260923b · recalcul du stop appris de la paire à chaque clôture
 // [GAIN APPRIS · 23/09/2026] VERSION 20260923a · recalcul de la règle de gain de la paire à chaque clôture
@@ -286,7 +287,7 @@ window._detectSystemicBearStress = _detectSystemicBearStress;
 // ──────────────────────────────────────────────────────────────────────
 // Enrichissement d'un contexte de trade au moment du close (pour mémoire)
 // ──────────────────────────────────────────────────────────────────────
-function _enrichTradeContextOnClose(contextId, pnlPct, pnlUsd, holdMs, path) {   // [MÉMOIRE DES CHEMINS · 22/09/2026] + path
+function _enrichTradeContextOnClose(contextId, pnlPct, pnlUsd, holdMs, path, ruleExit) {   // [MÉMOIRE DES CHEMINS · 22/09/2026] + path · [VÉRITÉ DES RÈGLES · 23/09/2026] + ruleExit
   if (!contextId || !S.tradeContextMemory) return;
 
   // Parcours arrière car le plus récent est en fin
@@ -302,6 +303,7 @@ function _enrichTradeContextOnClose(contextId, pnlPct, pnlUsd, holdMs, path) {  
       // [CORRECTIFS CHEMINS · 23/09/2026] les repères de rendu (gb) n'étaient pas copiés — la règle de gain apprise ne pouvait
       // jamais s'armer (backup 23/09 12:35 : 26 chemins, 0 repère). Mon oubli du 23a.
       if (path && typeof path === 'object') S.tradeContextMemory[i].path = { mfe: path.mfe, mae: path.mae, at: Object.assign({}, path.at || {}), gb: Object.assign({}, path.gb || {}) };
+      if (ruleExit && typeof ruleExit === 'object' && ruleExit.kind) S.tradeContextMemory[i].ruleExit = { kind: ruleExit.kind, at: ruleExit.at };   // [VÉRITÉ DES RÈGLES · 23/09/2026]
       try { if (typeof _horizonRefresh === 'function') _horizonRefresh(S.tradeContextMemory[i].pair); } catch (e) {}
       try { if (typeof _capRefresh === 'function') _capRefresh(); } catch (e) {}   // [PLAFONDS APPRIS · 22/09/2026]
       try { if (typeof _gainRefresh === 'function') _gainRefresh(S.tradeContextMemory[i].pair); } catch (e) {}   // [GAIN APPRIS · 23/09/2026]
