@@ -1,3 +1,4 @@
+// [MÉNAGE · 23/09/2026] VERSION 20260923g · panneau Miroir : P&L de session sans _totalCompounded
 // [HARMONIQUE GÉNOMÉE · 23/09/2026] VERSION 20260923d · les 9 seuils de detectHarmonicResonance sont le génome du siège harmonic_v1 (byte-identique par défaut)
 // [ATTRIBUTION PAR SOURCE · 17/09/2026] VERSION 20260917f · runRosterAnalysis publie l'état des sources dans le bus (10i _intelPublish)
 // [GÉNOME DE PAIRE · 17/09/2026] VERSION 20260917e · génome de paire (périodes TA + poids du mélange) : PAIR_GENOME_DEFAULTS, _pairGenomeOf, _pairGenomeEvolve
@@ -3088,7 +3089,7 @@ function recordShadowFromClose(realPnlUsd, realPnlPct, pair, side) {
 function renderMirrorPanel() {
   const el = document.getElementById('apanel-mirror');
   if(!el) return;
-  const mainPnl = (S._totalCompounded || 0) + (S.portfolio && S._startPortfolio ? (S.portfolio - S._startPortfolio) : 0);
+  const mainPnl = (S.portfolio && S._startPortfolio ? (S.portfolio - S._startPortfolio) : 0);   // [MÉNAGE · 23/09/2026] le P&L de session, le même qu'à l'accueil — _totalCompounded (−112 $ fossile) retiré
   const shadow = S.shadow || { virtualPnl: 0, virtualTrades: [], wins: 0, losses: 0 };
   const recentN = Math.min(20, shadow.virtualTrades.length);
   const recent = shadow.virtualTrades.slice(-recentN);

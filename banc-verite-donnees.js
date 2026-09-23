@@ -123,7 +123,7 @@ T('S8 · 02 : _realCandlesStale (critère des portes) utilisé au boot, limiteur
 T('S9 · en-têtes 02/08/10g/09b2 « ' + HDR + ' », 10f « ▓▓▓ VERSION 20260917b ▓▓▓ » (hotfix b), HTML : DOC_V + 78 ?v= (79), aucun autre token', () => {
   assert.ok(s10g.startsWith(HDR), F10G);
   assert.ok(s08.startsWith('// [MÉMOIRE DES CHEMINS · 22/09/2026] VERSION 20260922a') && s08.split('\n').slice(0, 7).some(l => l.startsWith(HDR)), F08);   // [1b-b] 08 relivré, en-tête 1b-a en 2e ligne
-  assert.ok(s02.startsWith('// [VÉRITÉ DES RÈGLES · 23/09/2026] VERSION 20260923f') && s02.split('\n').slice(0, 11).some(l => l.startsWith(HDR)), F02);   // [SONDE RÉSEAU] 02 relivré, en-tête 1b-a en 2e ligne
+  assert.ok(s02.startsWith('// [MÉNAGE · 23/09/2026] VERSION 20260923g') && s02.split('\n').slice(0, 12).some(l => l.startsWith(HDR)), F02);   // [SONDE RÉSEAU] 02 relivré, en-tête 1b-a en 2e ligne
   assert.ok(s9b2.startsWith('// [STOP APPRIS · 23/09/2026] VERSION 20260923b') && s9b2.split('\n').slice(0, 15).some(l => l.startsWith(HDR)), F9B2);   // [FITNESS GLISSANTE] 09b2 relivré, en-tête 1b-a dans les 6 premières lignes
   assert.ok(s10f.startsWith('// ▓▓▓ VERSION 20260923f ▓▓▓'));   // 10f livré au hotfix b, non retouché depuis
   assert.strictEqual(count(html, TOK), 81);   // [ÉCRAN APPRIS 23/09] 11b ajouté (10i le 17/09)

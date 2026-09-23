@@ -169,4 +169,6 @@ Une régression de vérité = `VERDICT : NON LIVRABLE`, jamais « CONNU, tolér�
 
 - **23/09 — vérité des règles** (`20260923f`) : chaque règle armée garde sa promesse et son avant ; le système mesure lui-même l'après (tous les trades de la paire depuis l'armement, sorties dues à la règle) et l'affiche. L'apprentissage n'est plus une affirmation, c'est une ligne à l'écran.
 
+- **23/09 — ménage** (`20260923g`) : `_totalCompounded` (−112 $ ajoutés au P&L des panneaux Miroir/Jumeau) retiré ; reset EV/RE vide la blacklist ; `cashLog` EV vérifié VIVANT (l'entrée #… du 14/09 ne tient plus, corrigée ici).
+
 *Mis à jour à chaque mission. Le prochain audit complet : après 1b-b, sur un backup de 24 h propre.*

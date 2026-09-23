@@ -1,3 +1,4 @@
+// [MÉNAGE · 23/09/2026] VERSION 20260923g · panneau Jumeau sans _totalCompounded ; reset EV/RE vide aussi la mémoire de la blacklist
 // [MÉMOIRE DE LA BLACKLIST · 22/09/2026] VERSION 20260922c · retrait de l'apprentissage doux (écriture directe de fitness, écrasée par la fitness glissante)
 // [PORTE DE SORTIE + PLANCHER TRAILING · 20/09/2026] VERSION 20260920a · l'escalier de sortie n'est plus derrière la porte des 0,5 % (le timer anti-zombie ne pouvait jamais se déclencher) ; plancher du trailing à la moitié du chemin
 // [TRAILING PROPORTIONNEL · 19/09/2026] VERSION 20260919b · trailing stop proportionnel au TP ATR (_trailStopHit) : armé à 60 % du chemin, rend au plus 40 % du gain ou un quart de la distance
@@ -2090,7 +2091,7 @@ function renderTwinLive() {
   if(toggleBtn) toggleBtn.textContent = twin.active ? 'Désactiver' : 'Activer';
 
   // P&L bot principal
-  const mainPnl = (S._totalCompounded || 0) + (S.portfolio && S._startPortfolio ? (S.portfolio - S._startPortfolio) : 0);
+  const mainPnl = (S.portfolio && S._startPortfolio ? (S.portfolio - S._startPortfolio) : 0);   // [MÉNAGE · 23/09/2026] idem Miroir : sans _totalCompounded
   const mainWr  = S.totalTrades > 0 ? Math.round(S.winTrades / S.totalTrades * 100) : 0;
   const twinWr  = (twin.wins + twin.losses) > 0 ? Math.round(twin.wins / (twin.wins + twin.losses) * 100) : 0;
 
@@ -3485,6 +3486,9 @@ function _confirmFullCoherentReset() {
       w.realStatsByPair = {};
       w.heatmap = { byHour: {}, byWeekday: {} };
       w._lossStreaks = {};
+      // [MÉNAGE · 23/09/2026] la fenêtre de la blacklist vit sur S (EV/RE, sauvegardée depuis 20260922c) : un reset du
+      // portefeuille EV ou RE doit aussi la vider, sinon la paire repart avec ses pertes d'avant le reset.
+      try { if (S.walletStore && (w === S.walletStore.paperReal || w === S.walletStore.real)) S._lossStreaks = {}; } catch (e) {}
       w.paperRealKillSwitch = {};
       w.tradeContextMemory = [];
       w.totalTrades = 0; w.winTrades = 0; w.paperRealConsecLosses = 0;

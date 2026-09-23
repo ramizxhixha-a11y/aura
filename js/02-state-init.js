@@ -1,3 +1,4 @@
+// [MÉNAGE · 23/09/2026] VERSION 20260923g · l'« auto-compound » (_totalCompounded) n'est plus écrit : il faussait le P&L des panneaux Miroir et Jumeau
 // [VÉRITÉ DES RÈGLES · 23/09/2026] VERSION 20260923f · closePosition transmet la sortie par règle apprise à la mémoire des trades
 // [MÉMOIRE DE LA BLACKLIST · 22/09/2026] VERSION 20260922c · fenêtre de la blacklist nourrie par EV/RE seulement, et sauvegardée
 // [MÉMOIRE DES CHEMINS · 22/09/2026] VERSION 20260922a · closePosition transmet le chemin de la position à la mémoire des trades
@@ -6120,10 +6121,10 @@ function closePosition(id, botClose = false) {
     }
 
     syncLeverageReserve();  // recalculer la réserve disponible
-    // Auto-compound: reinvest profits back into trading capital
-    if(realisedUsd > 0 && pos.auto === true) {
-      S._totalCompounded = (S._totalCompounded||0) + realisedUsd * 0.7;
-    }
+    // [MÉNAGE · 23/09/2026] « auto-compound » retiré : il ajoutait 70 % de chaque gain brut à _totalCompounded, que les panneaux
+    // Miroir (03) et Jumeau (07) AJOUTAIENT au P&L de session alors que les gains sont déjà dans le portefeuille — double comptage,
+    // et le compteur valait −112,37 $ dans le backup 23/09 (aucune écriture ne le rendait négatif : fossile de plusieurs époques).
+    // Le champ reste dans les sauvegardes (manifest) mais n'est plus ni écrit ni lu.
     // Track best/worst trade
     const tradeRecord = { pnl: realisedPct, pnlUsd: realisedUsd, price: cur, side: pos.side, time: nowStr() };
     if(!ps.bestTrade  || realisedPct > ps.bestTrade.pnl)   ps.bestTrade  = tradeRecord;
