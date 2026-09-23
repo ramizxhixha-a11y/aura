@@ -1,3 +1,4 @@
+// [CORRECTIFS CHEMINS · 23/09/2026] VERSION 20260923e · le chemin copié à la clôture garde ses repères de rendu (gb)
 // [STOP APPRIS · 23/09/2026] VERSION 20260923b · recalcul du stop appris de la paire à chaque clôture
 // [GAIN APPRIS · 23/09/2026] VERSION 20260923a · recalcul de la règle de gain de la paire à chaque clôture
 // [PLAFONDS APPRIS · 22/09/2026] VERSION 20260922b · recalcul des plafonds appris à chaque clôture
@@ -298,7 +299,9 @@ function _enrichTradeContextOnClose(contextId, pnlPct, pnlUsd, holdMs, path) {  
       S.tradeContextMemory[i].won          = pnlPct >= 0;
       // [MÉMOIRE DES CHEMINS · 22/09/2026] le chemin (pic, creux, P&L aux jalons) reste avec le trade ; la règle
       // d'horizon de la paire est recalculée sur ses propres chemins (10i) — elle s'arme ou se désarme seule.
-      if (path && typeof path === 'object') S.tradeContextMemory[i].path = { mfe: path.mfe, mae: path.mae, at: Object.assign({}, path.at || {}) };
+      // [CORRECTIFS CHEMINS · 23/09/2026] les repères de rendu (gb) n'étaient pas copiés — la règle de gain apprise ne pouvait
+      // jamais s'armer (backup 23/09 12:35 : 26 chemins, 0 repère). Mon oubli du 23a.
+      if (path && typeof path === 'object') S.tradeContextMemory[i].path = { mfe: path.mfe, mae: path.mae, at: Object.assign({}, path.at || {}), gb: Object.assign({}, path.gb || {}) };
       try { if (typeof _horizonRefresh === 'function') _horizonRefresh(S.tradeContextMemory[i].pair); } catch (e) {}
       try { if (typeof _capRefresh === 'function') _capRefresh(); } catch (e) {}   // [PLAFONDS APPRIS · 22/09/2026]
       try { if (typeof _gainRefresh === 'function') _gainRefresh(S.tradeContextMemory[i].pair); } catch (e) {}   // [GAIN APPRIS · 23/09/2026]

@@ -55,6 +55,19 @@ T('D3 · redescend sous le premier palier nuisible (PERD en moyenne, pire que la
   for (let i = 0; i < 10; i++) m3.push(mk(0, 0, 0.5)); for (let i = 0; i < 10; i++) m3.push(mk(1, 0, -1)); c3.mem = m3;
   assert.strictEqual(J(vm.runInContext("_capEval('total', mem, 3, 11)", c3)).level, 1);
 });
+T('D4b · RE-TEST (23/09) : un niveau jugé nuisible n\'est plus définitif — après 20 trades sans nouvel échantillon à ce niveau, le verdict expire, le plafond remonte et le niveau est rejugé', () => {
+  const c = ctx({}); const mem = [];
+  for (let i = 0; i < 12; i++) mem.push(mk(0, 0, 0.2));
+  for (let i = 0; i < 9; i++) mem.push(mk(1, 0, -0.5));     // le 2e a nui → plafond 1
+  c.mem = mem;
+  let r = J(vm.runInContext("_capEval('total', mem, 3, 11)", c)); assert.strictEqual(r.level, 1); assert.strictEqual(r.harmful, 2);
+  for (let i = 0; i < 19; i++) mem.push(mk(0, 0, 0.1)); c.mem = mem;      // 19 trades seuls depuis : pas encore
+  r = J(vm.runInContext("_capEval('total', mem, 3, 11)", c)); assert.strictEqual(r.level, 1, '19 < 20 : verdict maintenu');
+  mem.push(mk(0, 0, 0.1)); c.mem = mem;                                     // 20e : le verdict expire
+  r = J(vm.runInContext("_capEval('total', mem, 3, 11)", c)); assert.strictEqual(r.harmful, null); assert.strictEqual(r.retest, 2); assert.strictEqual(r.level, 3, 'retour au départ (config) : ' + JSON.stringify(r));
+  for (let i = 0; i < 8; i++) mem.push(mk(1, 0, -0.6)); c.mem = mem;       // rejugé sur 8 cas frais : encore nuisible → 1
+  r = J(vm.runInContext("_capEval('total', mem, 3, 11)", c)); assert.strictEqual(r.level, 1); assert.strictEqual(r.harmful, 2);
+});
 T('D4 · fenêtre 30 : de vieux résultats nuisibles n\'empêchent pas la remontée quand les 30 derniers sont sains', () => {
   const c = ctx({}); const mem = [];
   for (let i = 0; i < 15; i++) mem.push(mk(0, 0, 0.2));

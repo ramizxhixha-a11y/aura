@@ -1,3 +1,4 @@
+// [CORRECTIFS CHEMINS · 23/09/2026] VERSION 20260923e · plafonds appris : un verdict « nuisible » expire après 20 trades sans échantillon (re-test)
 // [STOP APPRIS · 23/09/2026] VERSION 20260923b · stop appris par paire (_stopEvalPair/_stopRefresh/_stopExit) + preuve stable sur les deux moitiés (_halfStable) pour gain et stop
 // [GAIN APPRIS · 23/09/2026] VERSION 20260923a · repères de rendu dans le chemin (grille m|f) + règle de gain apprise par paire (_gainEvalPair/_gainRefresh/_gainExit)
 // [PLAFONDS APPRIS · 22/09/2026] VERSION 20260922b · plafonds appris (emplacements en tout / par sens) : _capEval, _capRefresh, _capFor
@@ -250,6 +251,11 @@ function _horizonExit(pos, pnlPct, now) {
 // Pas onze d'un coup : sans preuve, onze positions de 50 $ font 550 $ exposés au même creux. Le palier n'est pas une
 // barrière, c'est la vitesse à laquelle le système se fait confiance avec ses propres chiffres.
 var CAP_MIN_N = 8, CAP_MIN_WORSE = 0.6, CAP_WINDOW = 30;
+// [CORRECTIFS CHEMINS · 23/09/2026] RE-TEST : un niveau jugé nuisible abaisse le plafond, donc plus aucun trade ne s'ouvre à
+// ce niveau, donc son échantillon ne se renouvelle jamais — le verdict était définitif (backup 23/09 : total = 1 sur 9
+// cas, sans issue). Désormais un verdict dont le dernier échantillon date de plus de CAP_RETEST trades clos expire :
+// le niveau redevient « inconnu », le plafond peut remonter d'un cran, et le niveau est rejugé sur des cas frais.
+var CAP_RETEST = 20;
 function _capEval(kind, trades, start, ceiling) {
   var field = (kind === 'total') ? 'openTotal' : 'openSameDir';
   var closed = (trades || []).filter(function (t) {
@@ -266,6 +272,8 @@ function _capEval(kind, trades, start, ceiling) {
     var base = closed.filter(function (t) { return t[field] < k - 1; }).slice(-CAP_WINDOW).map(function (t) { return Number(t.pnlPct); });
     out.n[k] = sample.length;
     if (sample.length < CAP_MIN_N || base.length < CAP_MIN_N) { status[k] = 'unknown'; continue; }
+    var lastIdx = -1; for (var q = closed.length - 1; q >= 0; q--) { if (closed[q][field] === k - 1) { lastIdx = q; break; } }
+    if (lastIdx >= 0 && (closed.length - 1 - lastIdx) >= CAP_RETEST) { status[k] = 'unknown'; out.retest = k; continue; }   // verdict expiré : à rejuger
     var mb = mean(base), ms = mean(sample), worse = sample.filter(function (v) { return v < mb; }).length / sample.length;
     status[k] = (ms < 0 && ms < mb && worse >= CAP_MIN_WORSE) ? 'harmful' : 'proven';
     if (status[k] === 'proven') out.proven.push(k);
