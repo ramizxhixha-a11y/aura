@@ -1,3 +1,4 @@
+// [COMPTEURS RÉGLAGES · 24/09/2026] VERSION 20260924a · _realJudgments dans le snapshot
 // [STOP APPRIS · 23/09/2026] VERSION 20260923b · stopRules dans le snapshot
 // [GAIN APPRIS · 23/09/2026] VERSION 20260923a · gainRules dans le snapshot
 // [MÉMOIRE DE LA BLACKLIST · 22/09/2026] VERSION 20260922c · _lossStreaks (fenêtre blacklist / pause série) dans le snapshot
@@ -98,6 +99,7 @@ function buildSnapshot() {
       gainRules: S.gainRules || {},                   // [GAIN APPRIS · 23/09/2026]
       stopRules: S.stopRules || {},                   // [STOP APPRIS · 23/09/2026]
       _gbpToBnbDone: !!S._gbpToBnbDone,
+      _realJudgments: S._realJudgments || 0,          // [COMPTEURS RÉGLAGES · 24/09/2026]
       botDisciples:   S.botDisciples   || {},   // [15/08] sièges des disciples par bot
       discipleTasks:  S.discipleTasks  || {},   // [15/08] tâche élue de chaque disciple
       discipleAngles: S.discipleAngles || {},   // [15/08] angle mesurable de chaque disciple

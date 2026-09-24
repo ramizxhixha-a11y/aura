@@ -1,3 +1,4 @@
+// [COMPTEURS RÉGLAGES · 24/09/2026] VERSION 20260924a · Réglages : jugements réels (_realJudgments) au lieu des 41 M cycles, frais réels, « P&L attribué », Shadow = miroir
 // [MÉNAGE · 23/09/2026] VERSION 20260923g · panneau Miroir : P&L de session sans _totalCompounded
 // [HARMONIQUE GÉNOMÉE · 23/09/2026] VERSION 20260923d · les 9 seuils de detectHarmonicResonance sont le génome du siège harmonic_v1 (byte-identique par défaut)
 // [ATTRIBUTION PAR SOURCE · 17/09/2026] VERSION 20260917f · runRosterAnalysis publie l'état des sources dans le bus (10i _intelPublish)
@@ -1226,6 +1227,8 @@ function learnFromOutcome(source, pnlPct, pair) {
   // poids des voix en EV avec. Désormais seuls les résultats RÉELS (EV, RE) jugent : fitness, score, confiance, mémoire,
   // compétence par paire, régime, leçons, évolution. AA reste un bac à sable et une vitrine : rien n'est écrit.
   if (S.tradingMode === 'sim') { try { S._simLearnSkipped = (S._simLearnSkipped || 0) + 1; } catch(e) {} return; }
+  // [COMPTEURS RÉGLAGES · 24/09/2026] jugements RÉELS (EV/RE) depuis « l'école ne note plus » — le compteur honnête des Réglages
+  try { S._realJudgments = (S._realJudgments || 0) + 1; } catch(e) {}
 
   // ── UN NON-EVENEMENT N ENSEIGNE RIEN (30/07/2026) ───────────────────
   // `const won = pnlPct > 0` classait pnlPct === 0 comme une PERTE.
@@ -5023,9 +5026,11 @@ const RESET_DOMAINS = [
     icon: '🧠',
     name: 'Agents',
     metric: () => {
+      // [COMPTEURS RÉGLAGES · 24/09/2026] avant : somme de learningEvents (41 M, 99 % de l'ère AA sur bougies fabriquées).
+      // Désormais : les jugements RÉELS (EV/RE) reçus depuis « l'école ne note plus » (17/09), comptés à la source.
       const count = (S.agents || []).length;
-      const totalLearning = (S.agents || []).reduce((s,a) => s + (a.learningEvents || 0), 0);
-      return `${count} agents · ${totalLearning} cycles d'apprentissage`;
+      const real = S._realJudgments || 0;
+      return `${count} agents · ${real} jugements réels depuis le 17/09`;
     },
     snapshot: () => ({
       agents: (S.agents || []).map(a => ({
@@ -5055,7 +5060,7 @@ const RESET_DOMAINS = [
       if(!S.botFleet) return '8 bots · en attente';
       const tot = Object.values(S.botFleet).reduce((s,b) => s + (b.contributions || 0), 0);
       const pnl = Object.values(S.botFleet).reduce((s,b) => s + (b.pnlContrib || 0), 0);
-      return `${tot} contribs · ${pnl>=0?'+':''}$${pnl.toFixed(2)} économisés`;
+      return `${tot} contribs · ${pnl>=0?'+':''}$${pnl.toFixed(2)} de P&L attribué`;   // [COMPTEURS RÉGLAGES · 24/09/2026] « économisés » ne voulait rien dire (−87 $ « économisés »)
     },
     snapshot: () => ({ fleet: { ...(S.botFleet || {}) } }),
     reset: () => {
@@ -5104,9 +5109,10 @@ const RESET_DOMAINS = [
     icon: '💰',
     name: 'Compteurs fiscaux',
     metric: () => {
+      // [COMPTEURS RÉGLAGES · 24/09/2026] lisait S.fees.totalFees, clé inexistante → « frais $0 » depuis longtemps.
       const pnl = S.fees?.totalPnlGross || 0;
-      const fees = S.fees?.totalFees || 0;
-      return `P&L brut $${pnl.toFixed(0)} · frais $${fees.toFixed(0)}`;
+      const fees = (S.fees?.totalTradingFees || 0) + (S.fees?.totalSlippage || 0);
+      return `P&L brut $${pnl.toFixed(2)} · frais + slippage $${fees.toFixed(2)}`;
     },
     snapshot: () => ({ fees: { ...(S.fees || {}) } }),
     reset: () => {
@@ -5121,10 +5127,10 @@ const RESET_DOMAINS = [
   {
     id: 'shadow',
     icon: '🪞',
-    name: 'Shadow Bot',
+    name: 'Miroir',   // [COMPTEURS RÉGLAGES · 24/09/2026] décision Rams : « miroir » — ce n'est pas un bot, c'est l'inverse de chaque trade réel (×0,92)
     metric: () => {
       const s = S.shadow || {};
-      return `${(s.virtualTrades || []).length} trades virtuels · ${s.virtualPnl>=0?'+':''}$${(s.virtualPnl || 0).toFixed(2)}`;
+      return `l'inverse de chaque trade : ${(s.virtualTrades || []).length} trades · ${s.virtualPnl>=0?'+':''}$${(s.virtualPnl || 0).toFixed(2)} si tu avais fait le contraire`;
     },
     snapshot: () => ({ shadow: { ...(S.shadow || {}) } }),
     reset: () => {

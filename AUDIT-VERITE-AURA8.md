@@ -171,4 +171,6 @@ Une régression de vérité = `VERDICT : NON LIVRABLE`, jamais « CONNU, tolér�
 
 - **23/09 — ménage** (`20260923g`) : `_totalCompounded` (−112 $ ajoutés au P&L des panneaux Miroir/Jumeau) retiré ; reset EV/RE vide la blacklist ; `cashLog` EV vérifié VIVANT (l'entrée #… du 14/09 ne tient plus, corrigée ici).
 
+- **24/09 — compteurs Réglages** (`20260924a`) : audit des 9 domaines — frais affichés à 0 (clé morte) réparés, « 41 M cycles » remplacé par les jugements réels depuis le 17/09, Shadow nommé Miroir (l'inverse de chaque trade), « économisés » → « P&L attribué ». Resets partiels signalés, non touchés.
+
 *Mis à jour à chaque mission. Le prochain audit complet : après 1b-b, sur un backup de 24 h propre.*
