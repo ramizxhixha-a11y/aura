@@ -1,3 +1,4 @@
+// [STOP CÔTÉ EXCHANGE SIMULÉ · 26/09/2026] VERSION 20260926a · closePosition : prix de sortie imposé (_forcedExitPx) pour le stop côté exchange simulé
 // [PRIX FIGÉ + PREUVE D'ACTION · 25/09/2026] VERSION 20260925a · _rcPriceAge : âge du dernier prix réel accepté par paire
 // [MÉNAGE · 23/09/2026] VERSION 20260923g · l'« auto-compound » (_totalCompounded) n'est plus écrit : il faussait le P&L des panneaux Miroir et Jumeau
 // [VÉRITÉ DES RÈGLES · 23/09/2026] VERSION 20260923f · closePosition transmet la sortie par règle apprise à la mémoire des trades
@@ -5812,7 +5813,11 @@ function closePosition(id, botClose = false) {
 
   const ps  = S.pairStates[pos.pair];
   const cfg = PAIRS[pos.pair];
-  const cur = ps ? ps.price : pos.entryPrice;
+  // [STOP CÔTÉ EXCHANGE SIMULÉ · 26/09/2026] prix de sortie IMPOSÉ, posé par 10f uniquement quand une coupure a fait traverser
+  // le stop : l'exchange aurait exécuté AU stop, pas au prix de retour (décision Rams 26/09 : « oui aux deux »). Consommé une fois.
+  const _forced = (isFinite(pos._forcedExitPx) && pos._forcedExitPx > 0) ? pos._forcedExitPx : null;
+  if (_forced !== null) delete pos._forcedExitPx;
+  const cur = _forced !== null ? _forced : (ps ? ps.price : pos.entryPrice);
 
   // ═══ v7.12 · QUANTFURY B · Règle "liquidation nette" ═══
   // - Clamp : une perte ne peut JAMAIS dépasser -100% (impossible de devoir plus que la marge)

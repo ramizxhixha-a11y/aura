@@ -38,8 +38,8 @@ T('en-têtes : 03/12 « [PHASE 1 · 12/09/2026] VERSION 20260912c », 02/08 reli
   assert.ok(s12.startsWith('// [ÉCOLE · 17/09/2026] VERSION 20260917a') && s12.split('\n').slice(0, 5).some(l => l.startsWith('// [PHASE 1 · 12/09/2026] VERSION 20260912c')), F12);   // [1c-FULL] 12 relivré, en-tête PHASE 1 en 2e ligne
   assert.ok(s03.startsWith('// [COMPTEURS RÉGLAGES · 24/09/2026] VERSION 20260924a') && s03.split('\n').slice(0, 14).some(l => l.startsWith('// [PHASE 1 · 12/09/2026] VERSION 20260912c')), F03);   // [FITNESS GLISSANTE] 03 relivré, en-tête PHASE 1 conservé dans les 5 premières lignes
   assert.ok(s08.startsWith('// [MÉMOIRE DES CHEMINS · 22/09/2026] VERSION 20260922a') && s08.split('\n').slice(0, 7).some(l => l.startsWith('// [1b-a · 14/09/2026] VERSION 20260914a')), F08);   // [1b-b] 08 relivré, en-tête 1b-a en 2e ligne
-  assert.ok(s02.startsWith('// [PRIX FIGÉ + PREUVE D\'ACTION · 25/09/2026] VERSION 20260925a') && s02.split('\n').slice(0, 13).some(l => l.startsWith('// [1b-a · 14/09/2026] VERSION 20260914a')), F02);   // [SONDE RÉSEAU] 02 relivré, en-tête 1b-a en 2e ligne
-  assert.ok(s10f.startsWith('// ▓▓▓ VERSION 20260923f ▓▓▓'));   // 10f livré au hotfix 1b-a (b), non retouché depuis
+  assert.ok(s02.startsWith('// [STOP CÔTÉ EXCHANGE SIMULÉ · 26/09/2026] VERSION 20260926a') && s02.split('\n').slice(0, 14).some(l => l.startsWith('// [1b-a · 14/09/2026] VERSION 20260914a')), F02);   // [SONDE RÉSEAU] 02 relivré, en-tête 1b-a en 2e ligne
+  assert.ok(s10f.startsWith('// ▓▓▓ VERSION 20260926a ▓▓▓'));   // 10f livré au hotfix 1b-a (b), non retouché depuis
 });
 T('HTML : DOC_V + 80 ?v= au token ' + TOK + ' (81 occurrences, 10i le 17/09, 11b le 23/09), aucun autre token, archive/ non chargé', () => {
   assert.strictEqual(count(html, TOK), 81);

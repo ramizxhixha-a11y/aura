@@ -175,4 +175,6 @@ Une régression de vérité = `VERDICT : NON LIVRABLE`, jamais « CONNU, tolér�
 
 - **25/09 — prix figé, preuve d'action, anti-zombie** (`20260925a`) : PEPE −5,13 % = prix figé 1 h par une coupure réseau (243 min le 24/09) — en papier, les stops n'existent pas sans réseau : décision Rams (stops côté exchange en RE + simulation en EV). Chemins jamais écrits sur un prix figé ; règles armées seulement avec ≥ 4 cas d'action (BNB armait sur 2) ; l'anti-zombie s'efface devant une règle de gain armée.
 
+- **26/09 — stop côté exchange simulé** (`20260926a`) : décision Rams « oui aux deux » — en EV, un stop traversé pendant une coupure est exécuté AU stop à la reconnexion (l'EV imite un réel protégé) ; les stops Binance en RE sont acceptés et à livrer à l'activation du RE, avec clés et petits montants.
+
 *Mis à jour à chaque mission. Le prochain audit complet : après 1b-b, sur un backup de 24 h propre.*

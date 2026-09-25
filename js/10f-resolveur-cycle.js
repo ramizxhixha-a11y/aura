@@ -1,4 +1,5 @@
-// ▓▓▓ VERSION 20260923f ▓▓▓
+// ▓▓▓ VERSION 20260926a ▓▓▓
+// [STOP CÔTÉ EXCHANGE SIMULÉ · 26/09/2026] _botExitSweep : à la reconnexion, un stop traversé pendant la coupure est exécuté AU stop (EV)
 // [VÉRITÉ DES RÈGLES · 23/09/2026] une sortie par règle apprise marque la position (pos._ruleExit)
 // [STOP APPRIS · 23/09/2026] _botExitSweep : sortie par stop appris (10i _stopExit) après le gain appris, avant les niveaux
 // [GAIN APPRIS · 23/09/2026] _botExitSweep : sortie par règle de gain apprise (10i _gainExit) après l'horizon, avant les niveaux
@@ -630,6 +631,23 @@ window._botExitSweep = function _botExitSweep() {
       var pnlUsd = (Number(pos.stakeUsdt) || 0) * (pnlPct / 100);
       pos.pnl = pnlPct; pos.pnlUsdt = pnlUsd; pos.currentVal = (Number(pos.stakeUsdt) || 0) + pnlUsd;
       var tpHit, slHit, why;
+      // ═══ [STOP CÔTÉ EXCHANGE SIMULÉ · 26/09/2026] décision Rams (« oui aux deux ») ═══
+      // En papier, le stop vit dans l'app : sans réseau, aucune protection (PEPE 24/09 : prix figé 1 h, −5,13 % au retour au lieu de −2).
+      // En réel, le stop sera posé chez Binance (à livrer avec le mode RE) et exécuté AU stop pendant la coupure. L'EV imite ce réel
+      // protégé : au premier prix frais après une coupure (pos._pathStale > 0, posé par 10i quand le prix réel a plus de 2 min),
+      // si le prix a traversé le stop, la position est comptée fermée AU stop — pas au prix de retour. Si le prix n'a pas traversé,
+      // rien : on ne sait pas ce que la mèche a fait, on suppose que non.
+      if (S.tradingMode === 'paperReal' && pos._pathStale > 0 && typeof _rcPriceAge === 'function' && _rcPriceAge(pos.pair) <= 120000) {
+        var _staleTicks = pos._pathStale; pos._pathStale = 0;
+        if (isFinite(pos.sl) && pos.sl > 0 && (isLong ? px <= pos.sl : px >= pos.sl)) {
+          pos._forcedExitPx = pos.sl;
+          var _slPnl = (isLong ? (pos.sl - entry) / entry : (entry - pos.sl) / entry) * 100;
+          pos._ruleExit = { kind: 'stop_exchange', at: Math.round(_slPnl * 1000) / 1000, t: Date.now() };
+          if (!_closeCompleted(pos, 'bot stop exchange simul\u00e9 (coupure)')) { delete pos._forcedExitPx; return; }
+          try { S.chainLog.push({ icon: '\uD83D\uDD0C', desc: 'Stop c\u00f4t\u00e9 exchange (simul\u00e9) \u00b7 ' + pos.pair + ' ' + String(pos.side).toUpperCase() + ' \u00b7 coupure ' + Math.round(_staleTicks / 60) + ' min, prix revenu \u00e0 ' + pnlPct.toFixed(2) + ' % \u2192 compt\u00e9 au stop ' + _slPnl.toFixed(2) + ' %', hash: Math.random().toString(36).slice(2, 8), time: new Date().toLocaleTimeString() }); if (S.chainLog.length > 100) S.chainLog.splice(0, S.chainLog.length - 100); } catch(e) {}
+          return;
+        }
+      }
       // [MÉMOIRE DES CHEMINS · 22/09/2026] HORIZON APPRIS : si la règle de la paire est armée par ses propres chemins
       // (10i _horizonRefresh) et que la position est encore négative passé H minutes, elle est fermée ici — avant les
       // niveaux. Sans règle armée (pas de chemins, ou chemins qui ne prouvent rien) : rien ne change.
