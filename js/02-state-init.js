@@ -1,3 +1,4 @@
+// [PRIX FIGÉ + PREUVE D'ACTION · 25/09/2026] VERSION 20260925a · _rcPriceAge : âge du dernier prix réel accepté par paire
 // [MÉNAGE · 23/09/2026] VERSION 20260923g · l'« auto-compound » (_totalCompounded) n'est plus écrit : il faussait le P&L des panneaux Miroir et Jumeau
 // [VÉRITÉ DES RÈGLES · 23/09/2026] VERSION 20260923f · closePosition transmet la sortie par règle apprise à la mémoire des trades
 // [MÉMOIRE DE LA BLACKLIST · 22/09/2026] VERSION 20260922c · fenêtre de la blacklist nourrie par EV/RE seulement, et sauvegardée
@@ -3331,6 +3332,11 @@ function _rcOutlier(pair, price, ts) {
   return false;
 }
 window._rcOutlier = _rcOutlier;
+// [PRIX FIGÉ · 25/09/2026] âge (ms) du dernier prix RÉEL accepté pour la paire — Infinity si aucun. Lu par la mémoire des chemins :
+// pendant une coupure, ps.price ne bouge plus et un chemin enregistré sur ce prix figé est faux (PEPE 24/09 : P&L figé à −0,699 %
+// à 15, 30 et 60 min pendant que le marché filait vers −5 %).
+function _rcPriceAge(pair) { var ref = _rcLastPx[pair]; return ref ? (Date.now() - ref.ts) : Infinity; }
+window._rcPriceAge = _rcPriceAge;
 
 /**
  * Agrège un prix réel dans les bougies de toutes les granularités

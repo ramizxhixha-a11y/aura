@@ -1,3 +1,4 @@
+// [PRIX FIGÉ + PREUVE D'ACTION · 25/09/2026] VERSION 20260925a · _pathRecord n'écrit rien sur un prix figé ; gain/stop exigent ≥ 4 cas d'action pour s'armer
 // [VÉRITÉ DES RÈGLES · 23/09/2026] VERSION 20260923f · armedAt/baseMean conservés à l'armement, _ruleTruth : trades de la paire depuis l'armement vs avant, sorties dues à la règle
 // [CORRECTIFS CHEMINS · 23/09/2026] VERSION 20260923e · plafonds appris : un verdict « nuisible » expire après 20 trades sans échantillon (re-test)
 // [STOP APPRIS · 23/09/2026] VERSION 20260923b · stop appris par paire (_stopEvalPair/_stopRefresh/_stopExit) + preuve stable sur les deux moitiés (_halfStable) pour gain et stop
@@ -167,6 +168,8 @@ function _pathRecord() {
       if (!pos || !pos.pair) return;
       var ps = S.pairStates[pos.pair], px = ps ? Number(ps.price) : 0, entry = Number(pos.entryPrice), t0 = Number(pos.openedAt);
       if (!(px > 0) || !(entry > 0) || !(t0 > 0)) return;
+      // [PRIX FIGÉ · 25/09/2026] prix réel plus vieux que 2 min (coupure) : on n'écrit rien — un chemin sur un prix figé est faux.
+      if (typeof _rcPriceAge === 'function' && (S.tradingMode === 'paperReal' || S.tradingMode === 'real') && _rcPriceAge(pos.pair) > 120000) { pos._pathStale = (pos._pathStale || 0) + 1; return; }
       var pct = (pos.side === 'long' ? (px - entry) / entry : (entry - px) / entry) * 100;
       if (!isFinite(pct)) return;
       var P = pos._path || (pos._path = { mfe: 0, mae: 0, at: {} });
@@ -328,6 +331,9 @@ window._capEval = _capEval; window._capRefresh = _capRefresh; window._capFor = _
 // meilleur gain moyen ; elle ne s'arme que si n ≥ GAIN_MIN_N, gain moyen > 0, et amélioration sur ≥ GAIN_MIN_BETTER des
 // trades où elle aurait agi. Elle se désarme dès que ses chemins ne le prouvent plus. Exécution : 10f, avant les niveaux.
 var GAIN_WINDOW = 30, GAIN_MIN_N = 8, GAIN_MIN_BETTER = 0.6;
+// [PREUVE D'ACTION · 25/09/2026] une règle ne peut s'armer que si elle aurait AGI sur ≥ GAIN_MIN_ACTED chemins : backup 25/09,
+// BNB avait armé un gain (+0,011 %/trade) et un stop (+0,003 %/trade) sur 2 cas d'action pour 16 chemins — du bruit qui ferme.
+var GAIN_MIN_ACTED = 4;
 // [STOP APPRIS · 23/09/2026] preuve STABLE DANS LE TEMPS : quand la fenêtre a ≥ 16 chemins, la règle doit avoir rapporté
 // sur CHACUNE des deux moitiés (l'ancienne et la récente) — une case qui n'a gagné que sur un épisode n'est pas une règle.
 function _halfStable(deltas) {
@@ -350,7 +356,7 @@ function _gainEvalPair(pair, trades) {
     var gain = sum / closed.length;
     if (best === null || gain > best.gain) best = { m: m, f: f, gain: gain, acted: acted, better: better, deltas: deltas };
   }); });
-  if (!best || !(best.gain > 0) || best.acted < 1) return null;
+  if (!best || !(best.gain > 0) || best.acted < GAIN_MIN_ACTED) return null;
   if (best.better / best.acted < GAIN_MIN_BETTER) return null;
   if (!_halfStable(best.deltas)) return null;
   return { m: best.m, f: best.f, n: closed.length, acted: best.acted, better: Math.round(100 * best.better / best.acted), gain: Math.round(best.gain * 1000) / 1000 };
@@ -407,7 +413,7 @@ function _stopEvalPair(pair, trades) {
     var gain = sum / closed.length;
     if (best === null || gain > best.gain) best = { d: d, gain: gain, acted: acted, better: better, deltas: deltas };
   });
-  if (!best || !(best.gain > 0) || best.acted < 1) return null;
+  if (!best || !(best.gain > 0) || best.acted < GAIN_MIN_ACTED) return null;
   if (best.better / best.acted < GAIN_MIN_BETTER) return null;
   if (!_halfStable(best.deltas)) return null;
   return { d: best.d, n: closed.length, acted: best.acted, better: Math.round(100 * best.better / best.acted), gain: Math.round(best.gain * 1000) / 1000 };

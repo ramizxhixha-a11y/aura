@@ -173,4 +173,6 @@ Une régression de vérité = `VERDICT : NON LIVRABLE`, jamais « CONNU, tolér�
 
 - **24/09 — compteurs Réglages** (`20260924a`) : audit des 9 domaines — frais affichés à 0 (clé morte) réparés, « 41 M cycles » remplacé par les jugements réels depuis le 17/09, Shadow nommé Miroir (l'inverse de chaque trade), « économisés » → « P&L attribué ». Resets partiels signalés, non touchés.
 
+- **25/09 — prix figé, preuve d'action, anti-zombie** (`20260925a`) : PEPE −5,13 % = prix figé 1 h par une coupure réseau (243 min le 24/09) — en papier, les stops n'existent pas sans réseau : décision Rams (stops côté exchange en RE + simulation en EV). Chemins jamais écrits sur un prix figé ; règles armées seulement avec ≥ 4 cas d'action (BNB armait sur 2) ; l'anti-zombie s'efface devant une règle de gain armée.
+
 *Mis à jour à chaque mission. Le prochain audit complet : après 1b-b, sur un backup de 24 h propre.*

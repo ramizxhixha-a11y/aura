@@ -1,3 +1,4 @@
+// [PRIX FIGÉ + PREUVE D'ACTION · 25/09/2026] VERSION 20260925a · l'anti-zombie s'efface devant une règle de gain armée ; sa sortie est marquée (zombie)
 // [MÉNAGE · 23/09/2026] VERSION 20260923g · panneau Jumeau sans _totalCompounded ; reset EV/RE vide aussi la mémoire de la blacklist
 // [MÉMOIRE DE LA BLACKLIST · 22/09/2026] VERSION 20260922c · retrait de l'apprentissage doux (écriture directe de fitness, écrasée par la fitness glissante)
 // [PORTE DE SORTIE + PLANCHER TRAILING · 20/09/2026] VERSION 20260920a · l'escalier de sortie n'est plus derrière la porte des 0,5 % (le timer anti-zombie ne pouvait jamais se déclencher) ; plancher du trailing à la moitié du chemin
@@ -3208,7 +3209,12 @@ function learnFromOpenPositions() {
     // ── C. TIMER ANTI-ZOMBIE ──
     // Si position ouverte > 30 min ET P&L entre -0.3% et +0.3% (flat) → fermer
     const posAgeMs = Date.now() - (pos.openedAt || Date.now());
-    if (posAgeMs > 30 * 60 * 1000 && Math.abs(_cExitPct) < 0.3) {
+    // [PREUVE D'ACTION · 25/09/2026] backup 25/09 : DOT pic +0,89 → +0,01 à 30 min, ETH +0,40 → −0,18, SOL +0,32 → −0,08 — l'anti-zombie
+    // fermait à plat des positions qui avaient respiré. Quand la paire a une règle de gain ARMÉE (prouvée sur ses chemins), c'est
+    // elle qui décide de la sortie : l'anti-zombie s'efface. Sans règle armée, il garde son rôle.
+    const _gainArmed = !!(S.gainRules && S.gainRules[pos.pair]);
+    if (!_gainArmed && posAgeMs > 30 * 60 * 1000 && Math.abs(_cExitPct) < 0.3) {
+      pos._ruleExit = { kind: 'zombie', at: Math.round(_cExitPct * 1000) / 1000, t: Date.now() };   // [VÉRITÉ DES RÈGLES] la sortie reste avec le trade
       closePosition(pos.id, pos.auto === true);
       S.chainLog.push({
         icon: '⏱',
