@@ -71,7 +71,7 @@ T('1 · NON-RÉGRESSION : génome par défaut = sorties byte-identiques à l\'or
     const oldOut = runAll(mkCtx(oracle, a), a), newOut = runAll(mkCtx(NEW, b), b);
     // [FLUX BINANCE 17/09] whale_v1 / flow_v1 / volume_v1 lisent désormais le flux et le carnet Binance (comportement
     // volontairement différent de l'oracle) ; les conseils qu'ils conseillent (scalper, contrarian, momentum, mean_rev) suivent.
-    const CHANGED_SCOUTS = ['whale_v1', 'flow_v1', 'volume_v1'], CHANGED_COUNCIL = ['scalper_v2', 'contrarian_v2', 'momentum_v1', 'mean_rev_v1'];
+    const CHANGED_SCOUTS = ['whale_v1', 'flow_v1', 'volume_v1', 'macro_v1', 'fundamental_v1' /* [26/09] macro lit le flux réel ; fundamental : seul le motif textuel a changé */], CHANGED_COUNCIL = ['scalper_v2', 'contrarian_v2', 'momentum_v1', 'mean_rev_v1'];
     [oldOut, newOut].forEach(o => Object.values(o).forEach(p => { CHANGED_SCOUTS.forEach(id => delete p.scouts[id]); CHANGED_COUNCIL.forEach(id => delete p.council[id]); }));
     assert.deepStrictEqual(newOut, oldOut, 'état ' + seed); n++;
   }
@@ -124,7 +124,7 @@ T('5 · persistance : 09b1 écrit genome + genomeHistory, 09b2 les relit, manife
   assert.ok(c7.includes("_genomeEvolve(weak.id, _mutation, _peakPrev)") && c7.includes("weak._probationUntil = weak._bornCycle + 30;"));
   assert.ok(c3.includes("if (agent._probationUntil && (S.cycle || 0) < agent._probationUntil) weight *= 0.5;"));
   assert.strictEqual((c3.match(/const G = _genomeOf\(/g) || []).length, 3, 'scoutAnalysis, councilVote, guardianCheck lisent le génome');
-  const defs = Object.keys(JSON.parse(JSON.stringify(vm.runInContext('GENOME_DEFAULTS', mkCtx(NEW, mkState(1)))))); assert.strictEqual(defs.length, 18, 'sièges génomés : ' + defs.length);   // [23/09] + harmonic_v1
+  const defs = Object.keys(JSON.parse(JSON.stringify(vm.runInContext('GENOME_DEFAULTS', mkCtx(NEW, mkState(1)))))); assert.strictEqual(defs.length, 19, 'sièges génomés : ' + defs.length);   // [23/09] + harmonic_v1 · [26/09] + macro_v1
 });
 console.log('\n' + (fail ? '❌ ' : '✅ ') + pass + '/' + (pass + fail) + ' tests passés' + (fail ? ' — ' + fail + ' ÉCHEC(S)' : ''));
 process.exit(fail ? 1 : 0);

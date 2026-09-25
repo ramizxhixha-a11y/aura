@@ -177,4 +177,6 @@ Une régression de vérité = `VERDICT : NON LIVRABLE`, jamais « CONNU, tolér�
 
 - **26/09 — stop côté exchange simulé** (`20260926a`) : décision Rams « oui aux deux » — en EV, un stop traversé pendant une coupure est exécuté AU stop à la reconnexion (l'EV imite un réel protégé) ; les stops Binance en RE sont acceptés et à livrer à l'activation du RE, avec clés et petits montants.
 
+- **26/09 — macro réel + tuiles vraies** (`20260926b`) : audit des 11 tuiles « fondamentales » — 3 vraies, 1 vide, 7 prix déguisé. Macro lit enfin Fear & Greed + dominance + cap 24 h (génomé) ; la tuile News lit l'agent news ; chaque tuile dit ce qu'elle lit. Lots suivants : financement/OI, liquidations, multi-horizon.
+
 *Mis à jour à chaque mission. Le prochain audit complet : après 1b-b, sur un backup de 24 h propre.*

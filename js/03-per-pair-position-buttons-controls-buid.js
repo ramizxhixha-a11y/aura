@@ -1,3 +1,4 @@
+// [MACRO RÉEL · 26/09/2026] VERSION 20260926b · macro_v1 lit S.macroFeed (Fear & Greed, dominance, cap 24 h), génomé ; fundamental_v1 reste neutralisé
 // [COMPTEURS RÉGLAGES · 24/09/2026] VERSION 20260924a · Réglages : jugements réels (_realJudgments) au lieu des 41 M cycles, frais réels, « P&L attribué », Shadow = miroir
 // [MÉNAGE · 23/09/2026] VERSION 20260923g · panneau Miroir : P&L de session sans _totalCompounded
 // [HARMONIQUE GÉNOMÉE · 23/09/2026] VERSION 20260923d · les 9 seuils de detectHarmonicResonance sont le génome du siège harmonic_v1 (byte-identique par défaut)
@@ -3607,14 +3608,16 @@ const GENOME_DEFAULTS = {
   momentum_v1:   { gain: 0.9, ownW: 0.6, voteThr: 0.18 },
   mean_rev_v1:   { bbHigh: 0.9, bbLow: 0.1, score: 0.6, ownW: 0.6, voteThr: 0.18 },
   security_v1:   { cvVeto: 0.04, cvWarn: 0.03 },
-  harmonic_v1:   { rsiHigh: 65, rsiLow: 35, macdThr: 0.002, stochHigh: 75, stochLow: 25, adxMin: 30, bbHigh: 0.85, bbLow: 0.15, resonanceMin: 4 }   // [HARMONIQUE GÉNOMÉE · 23/09/2026]
+  harmonic_v1:   { rsiHigh: 65, rsiLow: 35, macdThr: 0.002, stochHigh: 75, stochLow: 25, adxMin: 30, bbHigh: 0.85, bbLow: 0.15, resonanceMin: 4 },   // [HARMONIQUE GÉNOMÉE · 23/09/2026]
+  macro_v1:      { fngLow: 25, fngHigh: 75, capScale: 5, wFng: 0.6, wCap: 0.4 }   // [MACRO RÉEL · 26/09/2026]
 };
 const GENE_INT = { win: 1, recentN: 1, histN: 1, lookback: 1, avgN: 1, resonanceMin: 1 };          // fenêtres : entiers ≥ 2
 const GENE_BOUNDS = {                                                             // sinon [défaut/4, défaut×4]
   rsiHigh: [50, 95], rsiLow: [5, 50], bbHigh: [0.5, 1], bbLow: [0, 0.5], ownW: [0.2, 0.9], voteThr: [0.05, 0.5],
   conf: [0.2, 0.95], score: [0.1, 1], spikeScore: [0.1, 1], bigScore: [0.1, 1], midScore: [0.05, 1], maxScore: [0.1, 1],
   wStrong: [0.1, 1], wHigh: [0.1, 1], wLow: [0.1, 1], wNormal: [0.1, 1], gain: [0.02, 4], momGain: [1, 40],
-  stochHigh: [50, 95], stochLow: [5, 50], adxMin: [10, 60], resonanceMin: [2, 5]   // [HARMONIQUE GÉNOMÉE · 23/09/2026]
+  stochHigh: [50, 95], stochLow: [5, 50], adxMin: [10, 60], resonanceMin: [2, 5],   // [HARMONIQUE GÉNOMÉE · 23/09/2026]
+  fngLow: [5, 45], fngHigh: [55, 95], capScale: [1, 20], wFng: [0.1, 1], wCap: [0, 1]   // [MACRO RÉEL · 26/09/2026]
 };
 function _geneClamp(k, v, def) {
   if (!isFinite(v)) return def;
@@ -3717,9 +3720,19 @@ function scoutAnalysis(agentId, pair) {
     // fundScore (le score qu'ils alimentent) → circularité pure, aucune source externe.
     // Score 0 / conf 0 = ils ne pèsent plus rien et le disent. Ils reprendront vie le
     // jour où Nyx (worker Cloudflare) leur servira un vrai flux macro.
-    case 'macro_v1':
+    // [MACRO RÉEL · 26/09/2026] macro_v1 lit ENFIN une donnée réelle : S.macroFeed (07) — Fear & Greed, dominance BTC, cap 24 h.
+    // Lecture classique, génomée : peur extrême (< fngLow) → biais acheteur, avidité extrême (> fngHigh) → biais vendeur
+    // (contrarien), pondéré par la variation de la capitalisation globale sur 24 h (élan). Plus vieux que 30 min → 0.
+    case 'macro_v1': {
+      const mf = S.macroFeed;
+      if (!mf || !isFinite(mf.fng) || !isFinite(mf.t) || (Date.now() - mf.t) > 1800000) return { score: 0, conf: 0.3, reasoning: 'En attente du flux macro (Fear & Greed, dominance)' };
+      const fngS = mf.fng < G.fngLow ? (G.fngLow - mf.fng) / G.fngLow : mf.fng > G.fngHigh ? -(mf.fng - G.fngHigh) / (100 - G.fngHigh) : 0;
+      const capS = isFinite(mf.cap24h) ? Math.max(-1, Math.min(1, mf.cap24h / G.capScale)) : 0;
+      const sc = Math.max(-1, Math.min(1, fngS * G.wFng + capS * G.wCap));
+      return { score: sc, conf: 0.6, reasoning: `Fear & Greed ${Math.round(mf.fng)} (${mf.fngLabel || ''})` + (isFinite(mf.cap24h) ? ` · cap globale ${mf.cap24h >= 0 ? '+' : ''}${mf.cap24h.toFixed(1)} % 24 h` : '') + (isFinite(mf.btcDominance) ? ` · dominance BTC ${mf.btcDominance.toFixed(1)} %` : '') };
+    }
     case 'fundamental_v1':
-      return { score: 0, conf: 0, reasoning: 'Pas de source externe — neutralisé (S3). En attente d\'un flux réel via Nyx.' };
+      return { score: 0, conf: 0, reasoning: 'Pas de source externe — neutralisé (S3). Prochaine source : financement + open interest.' };
     // [P7 · 06/09/2026] nlp_v1 RAVIVÉ sur une source RÉELLE : signal news par paire (10e7, CoinStats,
     // 24 h glissantes, ≥ 5 articles scorés). Sans clé / sans volume → 0 / 0 avec le vrai motif.
     case 'nlp_v1': {

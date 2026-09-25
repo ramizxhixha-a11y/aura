@@ -1,3 +1,4 @@
+// [MACRO RÉEL · 26/09/2026] VERSION 20260926b · tuiles fondamentales : étiquettes vraies ; la tuile News lit nlp_v1 ; la tuile Macro lit le flux réel
 // [MÉMOIRE DES CHEMINS · 22/09/2026] VERSION 20260922a · le battement enregistre le chemin de chaque position ouverte (_pathRecord) avant le balayage des sorties
 // [JOURNAL DES ÉVÉNEMENTS · 20/09/2026] VERSION 20260920b · le battement repose le relais du journal si besoin
 // [GÉNOME DE PAIRE · 17/09/2026] VERSION 20260917e · getTechSignals : périodes et poids du mélange = génome de la paire (03) ; rollover quotidien par paire
@@ -2167,7 +2168,7 @@ function getFundamentalSignals(pair) {
   // croissance) sont SUPPRIMÉS : c'étaient la variation 24h, le volume et macro.score
   // recomptés sous d'autres noms (audit S2). Restent les sources réellement distinctes.
   const debtScore = sec.score * 0.7;      // Debt/Equity (security agent)
-  const nlpScore  = sent.score;           // Sentiment NLP
+  const nlpScore  = nlp.score;            // [MACRO RÉEL · 26/09/2026] la tuile NLP lisait sentiment_v2 (RSI) : elle lit nlp_v1 (news CoinStats)
 
   // ── LMSR + corrélation BTC ─────────────────────────────────────────────
   // v6.5: LMSR score enriched with live agent consensus (not just qYes/qNo ratio)
@@ -2208,17 +2209,18 @@ function getFundamentalSignals(pair) {
   const result = {
     // 10 indicateurs fondamentaux officiels
     // [S2 · 26/08] Les 8 tuiles « fondamentales » proxys sont remplacées par la vérité :
-    momentum:{ score:(ch24 > 1 ? 0.5 : ch24 < -1 ? -0.5 : ch24 * 0.4), conf:0.70, label:'Momentum 24h', detail:'Variation prix 24h (ex-proxys EPS/PE/EV/marge, assumé)' },
-    macroAgg:{ score:macro.score*0.7, conf:macro.conf,  label:'Macro (agrégé)',  detail:'Taux/CPI/NFP · agent macro, compté UNE fois' },
-    debt:    { score:debtScore,      conf:sec.conf,     label:'Debt/Equity',     detail:'Ratio endettement · '+sec.name },
-    nlp:     { score:nlpScore,       conf:nlp.conf,     label:'Sentiment NLP',   detail:'Analyse NLP news & earnings · '+nlp.name },
+    // [MACRO RÉEL · 26/09/2026] les étiquettes disent ce que chaque tuile LIT (audit 26/09 : 7 tuiles sur 11 étaient du prix déguisé)
+    momentum:{ score:(ch24 > 1 ? 0.5 : ch24 < -1 ? -0.5 : ch24 * 0.4), conf:0.70, label:'Momentum 24h', detail:'Variation du prix sur 24 h' },
+    macroAgg:{ score:macro.score*0.7, conf:macro.conf,  label:'Macro',           detail:'Fear & Greed · dominance BTC · cap 24 h · '+macro.name },
+    debt:    { score:debtScore,      conf:sec.conf,     label:'Volatilité (sécurité)', detail:'Écart-type du prix, agent sécurité · '+sec.name },
+    nlp:     { score:nlpScore,       conf:nlp.conf,     label:'News',            detail:'Titres 24 h scorés (CoinStats) · '+nlp.name },
     // Facteurs contextuels agents
     lmsr:    { score:lmsrScore,      conf:1.0,          label:'LMSR marché',     detail:'Consensus agents interne ×'+S.agents.length },
-    sentiment:{ score:sent.score,   conf:sent.conf,    label:'Sentiment Social', detail:'Twitter/Reddit · '+sent.name },
-    geo:     { score:geo.score,      conf:geo.conf,     label:'Géopolitique',    detail:'Risques macros globaux · '+geo.name },
-    onchain: { score:onchain.score,  conf:onchain.conf, label:'On-Chain',        detail:'Analytics blockchain · '+onchain.name },
-    security:{ score:sec.score,      conf:sec.conf,     label:'Sécurité',        detail:'Risques protocoles · '+sec.name },
-    volume:  { score:vol.score,      conf:vol.conf,     label:'Volume·Flux',     detail:'OBV/OrderBook · '+vol.name },
+    sentiment:{ score:sent.score,   conf:sent.conf,    label:'Élan (RSI)',      detail:'RSI et momentum des bougies · '+sent.name },
+    geo:     { score:geo.score,      conf:geo.conf,     label:'Régime de volatilité', detail:'Volatilité + score fondamental · '+geo.name },
+    onchain: { score:onchain.score,  conf:onchain.conf, label:'Corps de bougies', detail:'Pression acheteuse/vendeuse des bougies · '+onchain.name },
+    security:{ score:sec.score,      conf:sec.conf,     label:'Sécurité (volatilité)', detail:'Veto sur volatilité anormale · '+sec.name },
+    volume:  { score:vol.score,      conf:vol.conf,     label:'Volume réel',     detail:'Volume des bougies Binance · '+vol.name },
     corr:    { score:btcTrend,       conf:0.70,         label:'Correl. BTC',     detail:pair==='BTC/USDT'?'Référence':'+60% suivi BTC' },
     // Score global
     fundScore

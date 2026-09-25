@@ -1,3 +1,4 @@
+// [MACRO RÉEL · 26/09/2026] VERSION 20260926b · flux macro permanent (_macroFeedRefresh → S.macroFeed) : Fear & Greed, dominance BTC, cap 24 h
 // [PRIX FIGÉ + PREUVE D'ACTION · 25/09/2026] VERSION 20260925a · l'anti-zombie s'efface devant une règle de gain armée ; sa sortie est marquée (zombie)
 // [MÉNAGE · 23/09/2026] VERSION 20260923g · panneau Jumeau sans _totalCompounded ; reset EV/RE vide aussi la mémoire de la blacklist
 // [MÉMOIRE DE LA BLACKLIST · 22/09/2026] VERSION 20260922c · retrait de l'apprentissage doux (écriture directe de fitness, écrasée par la fitness glissante)
@@ -1373,6 +1374,33 @@ async function _fetchTrending() {
 }
 
 // ── Rafraîchir toutes les sources ──
+// ═══ [MACRO RÉEL · 26/09/2026] FLUX MACRO PERMANENT (« je les veux toutes », Rams 26/09) ═══
+// Fear & Greed (alternative.me) et le marché global CoinGecko (dominance BTC, capitalisation 24 h) étaient interrogés toutes
+// les 5 min… pour l'écran de veille seulement. Ils nourrissent désormais S.macroFeed (RAM), lu par le scout macro_v1 (03)
+// — la tuile « Macro » vide depuis le 12/09 (S3) a enfin une donnée réelle. Rafraîchi toutes les 10 min, jamais hors ligne.
+async function _macroFeedRefresh() {
+  try {
+    if (window._auraNetOffline) return null;
+    if (S._macroFeedFetching) return null;
+    S._macroFeedFetching = true;
+    const [fg, global] = await Promise.all([_fetchFearGreed(), _fetchGlobal()]);
+    S._macroFeedFetching = false;
+    const feed = Object.assign({}, S.macroFeed || {});
+    if (fg && fg[0] && isFinite(Number(fg[0].value))) { feed.fng = Number(fg[0].value); feed.fngPrev = (fg[1] && isFinite(Number(fg[1].value))) ? Number(fg[1].value) : feed.fngPrev; feed.fngLabel = fg[0].value_classification || ''; }
+    if (global) {
+      const dom = global.market_cap_percentage && Number(global.market_cap_percentage.btc);
+      const cap24 = Number(global.market_cap_change_percentage_24h_usd);
+      if (isFinite(dom)) feed.btcDominance = dom;
+      if (isFinite(cap24)) feed.cap24h = cap24;
+    }
+    if (fg || global) { feed.t = Date.now(); S.macroFeed = feed; }
+    return feed;
+  } catch (e) { S._macroFeedFetching = false; return null; }
+}
+window._macroFeedRefresh = _macroFeedRefresh;
+setTimeout(_macroFeedRefresh, 20000);
+setInterval(_macroFeedRefresh, 10 * 60 * 1000);
+
 async function refreshVeilleMarche(force) {
   const now = Date.now();
   if(!force && _VEILLE_CACHE.lastFetch > 0 && (now - _VEILLE_CACHE.lastFetch) < _VEILLE_TTL) {
