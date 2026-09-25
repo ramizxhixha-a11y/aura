@@ -1,3 +1,4 @@
+// [POSITIONNEMENT · 26/09/2026] VERSION 20260926c · flux positionnement (financement, open interest, ratio long/short) des futures Binance → S.positioning ; siège fundamental_v1 renommé Positionnement
 // [STOP CÔTÉ EXCHANGE SIMULÉ · 26/09/2026] VERSION 20260926a · closePosition : prix de sortie imposé (_forcedExitPx) pour le stop côté exchange simulé
 // [PRIX FIGÉ + PREUVE D'ACTION · 25/09/2026] VERSION 20260925a · _rcPriceAge : âge du dernier prix réel accepté par paire
 // [MÉNAGE · 23/09/2026] VERSION 20260923g · l'« auto-compound » (_totalCompounded) n'est plus écrit : il faussait le P&L des panneaux Miroir et Jumeau
@@ -554,8 +555,8 @@ const S = {
     // ── Agents d'Analyse Fondamentale ──────────────────────────────────────
     { id:'macro_v1',     name:'Macro-Économie',     emoji:'📊', type:'Linear·FRED',    source:'Fed/BCE/FMI',      score:-0.30, conf:0.70, fitness:878,  color:'var(--ice)',
       role:'fundamental', domain:'macro',      errors:0, corrections:0, streak:0, lastPnl:0, memory:[] },
-    { id:'fundamental_v1',name:'EPS·P/E·EV',        emoji:'💹', type:'Quant·Alpha',    source:'Bloomberg/AlphaV', score:0.25,  conf:0.65, fitness:620,  color:'var(--up)',
-      role:'fundamental', domain:'corporate',  errors:0, corrections:0, streak:0, lastPnl:0, memory:[] },
+    { id:'fundamental_v1',name:'Positionnement',    emoji:'💹', type:'Futures·Levier', source:'Binance Futures',  score:0.25,  conf:0.65, fitness:620,  color:'var(--up)',   // [POSITIONNEMENT · 26/09/2026] ex « EPS·P/E·EV » (finance d'entreprise, jamais alimenté)
+      role:'fundamental', domain:'positioning',  errors:0, corrections:0, streak:0, lastPnl:0, memory:[] },
     { id:'nlp_v1',       name:'Sentiment NLP',      emoji:'🧠', type:'NLP·BERT-fin',   source:'News/Earnings',    score:0.40,  conf:0.72, fitness:730,  color:'var(--pur)',
       role:'fundamental', domain:'nlp',        errors:0, corrections:0, streak:0, lastPnl:0, memory:[] },
     // ── Agents d'Analyse de Marché ──────────────────────────────────────────
@@ -3315,6 +3316,52 @@ function _pollOrderBook() {
 }
 window._pollOrderBook = _pollOrderBook;
 setInterval(_pollOrderBook, 5000);   // une paire toutes les 5 s → 11 paires en ≈ 1 min, poids Binance négligeable
+
+// ═══ [POSITIONNEMENT · 26/09/2026] FINANCEMENT + OPEN INTEREST + RATIO LONG/SHORT (lot 2 des sources, Rams « je les veux toutes ») ═══
+// Les futures USDT-M de Binance exposent, sans clé, le positionnement des traders à levier : le taux de financement
+// (positif = les longs paient les shorts = longs surpeuplés), l'open interest et son évolution (des positions s'ouvrent ou
+// se ferment), et le ratio de comptes long/short. Une paire toutes les 20 s en tournante (≈ 4 min pour les 11 paires
+// négociées en futures ; EUR/USDT n'a pas de contrat), jamais hors ligne, en RAM : S.positioning[pair].
+var _posCursor = 0;
+function _futSymbol(pair) {
+  var base = String(pair || '').split('/')[0];
+  if (!base || base === 'EUR' || base === 'GBP') return null;          // pas de contrat perpétuel
+  if (base === 'PEPE' || base === 'SHIB' || base === 'FLOKI' || base === 'BONK') return '1000' + base + 'USDT';
+  return base + 'USDT';
+}
+// Interprète les trois réponses (pure, testée) : { funding (%/8 h), oiNow, oiChg2h (%), lsRatio, t } ou null
+function _positioningParse(premium, oiHist, ls) {
+  var out = { funding: null, oiNow: null, oiChg2h: null, lsRatio: null, t: Date.now() }, any = false;
+  if (premium && isFinite(Number(premium.lastFundingRate))) { out.funding = Math.round(Number(premium.lastFundingRate) * 100 * 1e5) / 1e5; any = true; }
+  if (Array.isArray(oiHist) && oiHist.length >= 2) {
+    var first = Number(oiHist[0].sumOpenInterest), last = Number(oiHist[oiHist.length - 1].sumOpenInterest);
+    if (isFinite(first) && first > 0 && isFinite(last)) { out.oiNow = last; out.oiChg2h = Math.round((last - first) / first * 100 * 100) / 100; any = true; }
+  }
+  if (Array.isArray(ls) && ls.length && isFinite(Number(ls[ls.length - 1].longShortRatio))) { out.lsRatio = Math.round(Number(ls[ls.length - 1].longShortRatio) * 1000) / 1000; any = true; }
+  return any ? out : null;
+}
+async function _positioningRefresh() {
+  try {
+    if (window._auraNetOffline) return null;
+    var pairs = (typeof _bgPairsToWatch === 'function') ? _bgPairsToWatch().filter(_futSymbol) : [];
+    if (!pairs.length) return null;
+    var pair = pairs[_posCursor % pairs.length]; _posCursor++;
+    var sym = _futSymbol(pair);
+    var opt = { cache: 'no-store', signal: (typeof AbortSignal !== 'undefined' && AbortSignal.timeout) ? AbortSignal.timeout(6000) : undefined };
+    var get = function (url) { return fetch(url, opt).then(function (r) { return r.ok ? r.json() : null; }).catch(function () { return null; }); };
+    var res = await Promise.all([
+      get('https://fapi.binance.com/fapi/v1/premiumIndex?symbol=' + sym),
+      get('https://fapi.binance.com/futures/data/openInterestHist?symbol=' + sym + '&period=15m&limit=9'),
+      get('https://fapi.binance.com/futures/data/globalLongShortAccountRatio?symbol=' + sym + '&period=15m&limit=1')
+    ]);
+    var parsed = _positioningParse(res[0], res[1], res[2]);
+    if (parsed) { if (!S.positioning) S.positioning = {}; S.positioning[pair] = parsed; }
+    return parsed;
+  } catch (e) { return null; }
+}
+window._futSymbol = _futSymbol; window._positioningParse = _positioningParse; window._positioningRefresh = _positioningRefresh;
+setTimeout(_positioningRefresh, 25000);
+setInterval(_positioningRefresh, 20000);
 
 // ═══ [1b-a · 14/09/2026] FILTRE OUTLIER NON AUTO-BLOQUANT ═══
 // Avant : chaque prix WS était comparé au dernier close 5m (jamais re-bootstrappé) — dès que cette série datait

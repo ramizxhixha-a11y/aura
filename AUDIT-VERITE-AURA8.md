@@ -179,4 +179,6 @@ Une régression de vérité = `VERDICT : NON LIVRABLE`, jamais « CONNU, tolér�
 
 - **26/09 — macro réel + tuiles vraies** (`20260926b`) : audit des 11 tuiles « fondamentales » — 3 vraies, 1 vide, 7 prix déguisé. Macro lit enfin Fear & Greed + dominance + cap 24 h (génomé) ; la tuile News lit l'agent news ; chaque tuile dit ce qu'elle lit. Lots suivants : financement/OI, liquidations, multi-horizon.
 
+- **26/09 — positionnement** (`20260926c`) : lot 2 des sources — financement, open interest, ratio long/short des futures Binance ; fundamental_v1 (ex « EPS·P/E·EV », jamais alimenté) devient Positionnement, génomé. Piège `isFinite(null)` attrapé par le banc, règle notée.
+
 *Mis à jour à chaque mission. Le prochain audit complet : après 1b-b, sur un backup de 24 h propre.*

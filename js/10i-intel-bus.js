@@ -1,3 +1,4 @@
+// [POSITIONNEMENT · 26/09/2026] VERSION 20260926c · sources d'attribution : macro et positionnement séparées (ex « fondamental »)
 // [PRIX FIGÉ + PREUVE D'ACTION · 25/09/2026] VERSION 20260925a · _pathRecord n'écrit rien sur un prix figé ; gain/stop exigent ≥ 4 cas d'action pour s'armer
 // [VÉRITÉ DES RÈGLES · 23/09/2026] VERSION 20260923f · armedAt/baseMean conservés à l'armement, _ruleTruth : trades de la paire depuis l'armement vs avant, sorties dues à la règle
 // [CORRECTIFS CHEMINS · 23/09/2026] VERSION 20260923e · plafonds appris : un verdict « nuisible » expire après 20 trades sans échantillon (re-test)
@@ -34,7 +35,8 @@ var INTEL_SOURCES = {
   flux:        ['flow_v1', 'whale_v1'],                                      // @trade (quantité + côté preneur) + carnet depth
   volume:      ['volume_v1'],                                                // volume réel des klines
   news:        ['nlp_v1'],                                                   // 10e7-news-nlp
-  fondamental: ['macro_v1', 'fundamental_v1'],                               // neutralisés S3 — mesurés quand même
+  macro:       ['macro_v1'],                                                 // [26/09] Fear & Greed · dominance · cap 24 h (07)
+  positionnement: ['fundamental_v1'],                                        // [26/09] financement · open interest · long/short (02)
   harmonique:  ['harmonic_v1']                                               // figures (06)
 };
 var INTEL_KEEP = 40;   // ~40 analyses par paire : couvre largement la vie d'une position

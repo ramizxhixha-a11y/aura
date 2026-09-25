@@ -1,3 +1,4 @@
+// [POSITIONNEMENT · 26/09/2026] VERSION 20260926c · fundamental_v1 = Positionnement : lit S.positioning (financement, OI, long/short), génomé
 // [MACRO RÉEL · 26/09/2026] VERSION 20260926b · macro_v1 lit S.macroFeed (Fear & Greed, dominance, cap 24 h), génomé ; fundamental_v1 reste neutralisé
 // [COMPTEURS RÉGLAGES · 24/09/2026] VERSION 20260924a · Réglages : jugements réels (_realJudgments) au lieu des 41 M cycles, frais réels, « P&L attribué », Shadow = miroir
 // [MÉNAGE · 23/09/2026] VERSION 20260923g · panneau Miroir : P&L de session sans _totalCompounded
@@ -3609,7 +3610,8 @@ const GENOME_DEFAULTS = {
   mean_rev_v1:   { bbHigh: 0.9, bbLow: 0.1, score: 0.6, ownW: 0.6, voteThr: 0.18 },
   security_v1:   { cvVeto: 0.04, cvWarn: 0.03 },
   harmonic_v1:   { rsiHigh: 65, rsiLow: 35, macdThr: 0.002, stochHigh: 75, stochLow: 25, adxMin: 30, bbHigh: 0.85, bbLow: 0.15, resonanceMin: 4 },   // [HARMONIQUE GÉNOMÉE · 23/09/2026]
-  macro_v1:      { fngLow: 25, fngHigh: 75, capScale: 5, wFng: 0.6, wCap: 0.4 }   // [MACRO RÉEL · 26/09/2026]
+  macro_v1:      { fngLow: 25, fngHigh: 75, capScale: 5, wFng: 0.6, wCap: 0.4 },   // [MACRO RÉEL · 26/09/2026]
+  fundamental_v1:{ fundScale: 0.05, oiScale: 5, lsHigh: 1.5, lsLow: 0.67, wF: 0.4, wOi: 0.35, wLs: 0.25 }   // [POSITIONNEMENT · 26/09/2026]
 };
 const GENE_INT = { win: 1, recentN: 1, histN: 1, lookback: 1, avgN: 1, resonanceMin: 1 };          // fenêtres : entiers ≥ 2
 const GENE_BOUNDS = {                                                             // sinon [défaut/4, défaut×4]
@@ -3617,7 +3619,8 @@ const GENE_BOUNDS = {                                                           
   conf: [0.2, 0.95], score: [0.1, 1], spikeScore: [0.1, 1], bigScore: [0.1, 1], midScore: [0.05, 1], maxScore: [0.1, 1],
   wStrong: [0.1, 1], wHigh: [0.1, 1], wLow: [0.1, 1], wNormal: [0.1, 1], gain: [0.02, 4], momGain: [1, 40],
   stochHigh: [50, 95], stochLow: [5, 50], adxMin: [10, 60], resonanceMin: [2, 5],   // [HARMONIQUE GÉNOMÉE · 23/09/2026]
-  fngLow: [5, 45], fngHigh: [55, 95], capScale: [1, 20], wFng: [0.1, 1], wCap: [0, 1]   // [MACRO RÉEL · 26/09/2026]
+  fngLow: [5, 45], fngHigh: [55, 95], capScale: [1, 20], wFng: [0.1, 1], wCap: [0, 1],   // [MACRO RÉEL · 26/09/2026]
+  fundScale: [0.01, 0.3], oiScale: [1, 25], lsHigh: [1.05, 4], lsLow: [0.25, 0.95], wF: [0, 1], wOi: [0, 1], wLs: [0, 1]   // [POSITIONNEMENT · 26/09/2026]
 };
 function _geneClamp(k, v, def) {
   if (!isFinite(v)) return def;
@@ -3731,8 +3734,22 @@ function scoutAnalysis(agentId, pair) {
       const sc = Math.max(-1, Math.min(1, fngS * G.wFng + capS * G.wCap));
       return { score: sc, conf: 0.6, reasoning: `Fear & Greed ${Math.round(mf.fng)} (${mf.fngLabel || ''})` + (isFinite(mf.cap24h) ? ` · cap globale ${mf.cap24h >= 0 ? '+' : ''}${mf.cap24h.toFixed(1)} % 24 h` : '') + (isFinite(mf.btcDominance) ? ` · dominance BTC ${mf.btcDominance.toFixed(1)} %` : '') };
     }
-    case 'fundamental_v1':
-      return { score: 0, conf: 0, reasoning: 'Pas de source externe — neutralisé (S3). Prochaine source : financement + open interest.' };
+    // [POSITIONNEMENT · 26/09/2026] fundamental_v1 lit S.positioning (02) : financement (longs surpeuplés → biais vendeur, contrarien),
+    // open interest sur 2 h dans le sens du prix (des positions s'ouvrent avec le mouvement → confirmation), ratio long/short des
+    // comptes (foule longue → contrarien). Génomé. Sans flux ou flux de plus de 30 min → 0.
+    case 'fundamental_v1': {
+      const pf = S.positioning && S.positioning[pair];
+      if (!pf || !isFinite(pf.t) || (Date.now() - pf.t) > 1800000) return { score: 0, conf: 0.3, reasoning: 'En attente du flux positionnement (financement, open interest)' };
+      let sc = 0, parts = [];
+      const num = v => typeof v === 'number' && isFinite(v);   // isFinite(null) vaut TRUE en JS : le flux met null quand une réponse manque
+      if (num(pf.funding)) { const f = Math.max(-1, Math.min(1, -pf.funding / G.fundScale)); sc += f * G.wF; parts.push(`financement ${pf.funding >= 0 ? '+' : ''}${pf.funding.toFixed(3)} %`); }
+      if (num(pf.oiChg2h)) {
+        const c2 = candles.length >= 9 ? Math.sign(candles[candles.length - 1].c - candles[candles.length - 9].c) : 0;
+        const o = Math.max(-1, Math.min(1, pf.oiChg2h / G.oiScale)) * c2; sc += o * G.wOi; parts.push(`OI ${pf.oiChg2h >= 0 ? '+' : ''}${pf.oiChg2h.toFixed(1)} % 2 h`);
+      }
+      if (num(pf.lsRatio)) { const l = pf.lsRatio > G.lsHigh ? -Math.min(1, (pf.lsRatio - G.lsHigh) / G.lsHigh) : pf.lsRatio < G.lsLow ? Math.min(1, (G.lsLow - pf.lsRatio) / G.lsLow) : 0; sc += l * G.wLs; parts.push(`long/short ${pf.lsRatio.toFixed(2)}`); }
+      return { score: Math.max(-1, Math.min(1, sc)), conf: 0.6, reasoning: parts.join(' · ') || 'Positionnement sans lecture' };
+    }
     // [P7 · 06/09/2026] nlp_v1 RAVIVÉ sur une source RÉELLE : signal news par paire (10e7, CoinStats,
     // 24 h glissantes, ≥ 5 articles scorés). Sans clé / sans volume → 0 / 0 avec le vrai motif.
     case 'nlp_v1': {

@@ -36,7 +36,7 @@ T('S1 · 07 : flux macro permanent (20 s après le boot, puis toutes les 10 min,
   assert.ok(c8.includes('const nlpScore  = nlp.score;'), 'la tuile News lit nlp_v1');
   ["label:'Macro'", "label:'Volatilité (sécurité)'", "label:'News'", "label:'Élan (RSI)'", "label:'Régime de volatilité'", "label:'Corps de bougies'", "label:'Sécurité (volatilité)'", "label:'Volume réel'"].forEach(l => assert.ok(c8.includes(l), l));
   ['Twitter/Reddit', 'Analytics blockchain', 'Ratio endettement', 'news & earnings', 'Taux/CPI/NFP'].forEach(l => assert.strictEqual(c8.includes(l), false, 'étiquette mensongère restante : ' + l));
-  assert.ok(c3.includes("case 'fundamental_v1':") && c3.includes('Prochaine source : financement + open interest'));
+  assert.ok(c3.includes("case 'fundamental_v1': {") && c3.includes('En attente du flux positionnement'), '[26/09 lot 2] fundamental_v1 lit le positionnement');
 });
 console.log('\n' + (fail ? '❌ ' : '✅ ') + pass + '/' + (pass + fail) + ' tests passés' + (fail ? ' — ' + fail + ' ÉCHEC(S)' : ''));
 process.exit(fail ? 1 : 0);
