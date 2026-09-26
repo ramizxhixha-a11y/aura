@@ -69,7 +69,7 @@ T('S2 · redistributeFitness retirée (02), appel retiré (08), hook _payBotSurp
   assert.strictEqual((c03.match(/\bbot\.fitness = /g) || []).length, 0, 'plus d\'écriture additive du Risk Bot');
   assert.strictEqual((c03.match(/return Math\.max\(50, Math\.min\(2000, Math\.round\(350 \+ 1000 \* E\)\)\);/g) || []).length, 1, 'la formule vit une fois, dans _fitOf');
   assert.strictEqual(judge, 2, '_fitJudge et _fitRecomputeAll écrivent la fitness calculée par _fitOf ([FENÊTRE APPRENANTE 26/09])');
-  assert.strictEqual(revig, 3, 'les 3 revigorations (auto agents, auto bots, manuelle) vident la fenêtre (' + revig + ')');
+  assert.strictEqual(revig, 2, 'les 2 revigorations MANUELLES (agents, bots) vident la fenêtre — [ÉVOLUTION SEULE 26/09] l\'automatique est retirée (' + revig + ')');
   assert.strictEqual(writes, judge + revig + migr + resync + abst * 2, 'aucune autre écriture directe de fitness dans 03 (' + writes + ')');
 });
 T('S3 · ÉCOLE : learnFromOutcome sort AVANT toute écriture quand S.tradingMode === "sim" (1re instruction du corps) ; le jury des disciples (12) ne note pas en AA', () => {

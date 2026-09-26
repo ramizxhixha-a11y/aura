@@ -4,7 +4,7 @@
 //     plancher 0,01) : 5 abstentions suffisaient à mettre un siège à 50 T$ (« cassé ») et comptaient autant d'« erreurs » ;
 //  2. les délais de l'évolution (1 h), de la revigoration (30 min) et du rêve (24 h) n'étaient pas sauvegardés : chaque
 //     rechargement (donc chaque livraison) déclenchait les trois.
-// Fonctions RÉELLES (03 runRosterAnalysis, learnFromOutcome, _fitJudge, moteur d'essai, migration, _autoRevigorCheck ;
+// Fonctions RÉELLES (03 runRosterAnalysis, learnFromOutcome, _fitJudge, moteur d'essai, migration ;
 // 07 triggerEvolution, triggerDreamCycle ; 09b2 restauration des délais) en vm ; rejeu sur les backups réels s'ils sont là.
 'use strict';
 const fs = require('fs'), vm = require('vm'), assert = require('assert'), path = require('path');
@@ -21,8 +21,7 @@ const ROSTER_TXT = between(s03, 'function runRosterAnalysis(pair) {', '\n// ═�
 const LEARN_TXT = between(s03, 'function learnFromOutcome(source, pnlPct, pair) {', '\nconst METAPHOR_TEMPLATES', false);
 const EVO = between(s03, 'var EVO_TRIAL_N = 30', 'window._evoTrialStart = _evoTrialStart;', false);
 const MIGR = between(s03, '(function _botMeritMigrate() {', '\n})();', true);
-const REVIG = between(s03, 'function _autoRevigorCheck() {', '\nwindow._autoRevigorCheck = _autoRevigorCheck;', false);
-const RESTORE = between(s9b2, "    ['_lastEvolutionAt', '_lastAutoRevigorTs', '_lastDreamAt'].forEach(function (k) {", '\n    });\n', true);
+const RESTORE = between(s9b2, "    ['_lastEvolutionAt', '_lastDreamAt'].forEach(function (k) {", '\n    });\n', true);   // [ÉVOLUTION SEULE 26/09] la revigoration automatique est retirée
 const EVOLVE = between(s07, 'function triggerEvolution(weak) {', 'buildAgentCards(); patchAgentCards();\n}', true);
 const DREAM_HEAD = between(s07, 'function triggerDreamCycle() {', '\n  S.dreamActive   = true;', false) + '\n}';
 const TIERS = new Function(TIERS_TXT + '\nreturn ROSTER_TIERS;')();
@@ -136,22 +135,20 @@ T('D6 · rejeu sur la mémoire réelle (backups 23/09 et 25/09, migration RÉELL
 });
 T('D7 · 09b2 RÉEL : délais relus au redémarrage — heure passée gardée ; absente (snapshot d\'avant) ou du futur → le délai part du chargement ; zéro (jamais arrivé) → rien de retenu', () => {
   const now = Date.now(), run = snap => { const c = { S: {}, snap, Date, Number }; vm.createContext(c); vm.runInContext(RESTORE, c); return c.S; };
-  const a = run({ _lastEvolutionAt: now - 600000, _lastAutoRevigorTs: now - 300000, _lastDreamAt: now - 3600000 });
-  assert.deepStrictEqual([a._lastEvolutionAt, a._lastAutoRevigorTs, a._lastDreamAt], [now - 600000, now - 300000, now - 3600000]);
-  const b = run({}); ['_lastEvolutionAt', '_lastAutoRevigorTs', '_lastDreamAt'].forEach(k => assert.ok(Math.abs(b[k] - now) < 5000, 'absent → maintenant : ' + k));
-  const f = run({ _lastEvolutionAt: now + 86400000, _lastAutoRevigorTs: 0, _lastDreamAt: 0 });
-  assert.ok(Math.abs(f._lastEvolutionAt - now) < 5000, 'futur → maintenant'); assert.strictEqual(f._lastAutoRevigorTs, undefined); assert.strictEqual(f._lastDreamAt, undefined);
+  const a = run({ _lastEvolutionAt: now - 600000, _lastDreamAt: now - 3600000 });
+  assert.deepStrictEqual([a._lastEvolutionAt, a._lastDreamAt], [now - 600000, now - 3600000]);
+  const b = run({}); ['_lastEvolutionAt', '_lastDreamAt'].forEach(k => assert.ok(Math.abs(b[k] - now) < 5000, 'absent → maintenant : ' + k));
+  const f = run({ _lastEvolutionAt: now + 86400000, _lastDreamAt: 0 });
+  assert.ok(Math.abs(f._lastEvolutionAt - now) < 5000, 'futur → maintenant'); assert.strictEqual(f._lastDreamAt, undefined);
 });
-T('D8 · après un rechargement, les délais RÉELS tiennent : revigoration (30 min), évolution (1 h), rêve (24 h) ne repartent pas ; une fois le délai écoulé, la revigoration repart (6 apprenants cassés)', () => {
+T('D8 · après un rechargement, les délais RÉELS tiennent : évolution (1 h) et rêve (24 h) ne repartent pas ; le rêve repart une fois son délai écoulé ([ÉVOLUTION SEULE 26/09] la revigoration automatique n\'existe plus)', () => {
   const now = Date.now();
-  const mk = last => { const c = { S: { _lastAutoRevigorTs: last, chainLog: [], agents: Array.from({ length: 6 }, (_, i) => ({ id: 's' + i, fitness: 50, _judgments: jj(6, -1, 0.3), errors: 2, streak: 0 })) }, Date, Math, window: {}, rndHash: () => 'h', nowStr: () => '' }; vm.createContext(c); vm.runInContext(REVIG, c); vm.runInContext('_autoRevigorCheck()', c); return c.S; };
-  const held = mk(now - 10 * 60000); assert.ok(held.agents.every(a => a.fitness === 50) && held.chainLog.length === 0, 'dans le délai : rien');
-  const fired = mk(now - 31 * 60000); assert.ok(fired.agents.every(a => a.fitness === 400) && /Auto-revigoration · 6/.test(fired.chainLog[0].desc), 'délai écoulé : revigoration');
   const ce = { S: { _lastEvolutionAt: now - 10 * 60000, agents: [{ id: 'a' }, { id: 'b' }, { id: 'c' }], evoLog: [] }, Date, Math, window: {} }; vm.createContext(ce); vm.runInContext(EVOLVE, ce);
   vm.runInContext('triggerEvolution(S.agents[0])', ce); assert.strictEqual(ce.S._lastEvolutionAt, now - 10 * 60000); assert.strictEqual(ce.S.evoLog.length, 0, 'évolution : délai tenu');
   const cd = { S: { _lastDreamAt: now - 3600000, dreamActive: false }, Date, Math }; vm.createContext(cd); vm.runInContext(DREAM_HEAD, cd);
   vm.runInContext('triggerDreamCycle()', cd); assert.strictEqual(cd.S._lastDreamAt, now - 3600000, 'rêve : délai tenu');
   cd.S._lastDreamAt = now - 25 * 3600000; vm.runInContext('triggerDreamCycle()', cd); assert.ok(Math.abs(cd.S._lastDreamAt - Date.now()) < 5000, 'rêve : délai écoulé → repart');
+  assert.ok(!codeStrict(s03).includes('_autoRevigorCheck'), 'revigoration automatique retirée');
 });
 T('S1 · textes : le saut d\'abstention suit l\'essai de l\'Évolueur et précède compétence, fitness, erreurs, souvenir ; 09b1 écrit et 09b2 relit les délais et le drapeau de migration (manifeste)', () => {
   const lfo = codeStrict(LEARN_TXT);
@@ -159,8 +156,8 @@ T('S1 · textes : le saut d\'abstention suit l\'essai de l\'Évolueur et précè
   assert.ok(iEvo > 0 && iSkip > iEvo && iSkill > iSkip && iAl > iSkill, 'ordre : essai → saut → compétence → jugement');
   assert.ok(lfo.includes('try { const _fw = _fitOf(a._judgments || [], _fitWindow()); if (_fw !== null) a.fitness = _fw; } catch(e) {}\n      return;\n    }'));
   assert.ok(codeStrict(EVO).includes('if (Math.abs(v) <= 0.05) return null;'));
-  const b1 = codeStrict(s9b1); ['_lastEvolutionAt: S._lastEvolutionAt || 0,', '_lastAutoRevigorTs: S._lastAutoRevigorTs || 0,', '_lastDreamAt: S._lastDreamAt || 0,', '_abstMigrated: !!S._abstMigrated,'].forEach(t => assert.ok(b1.includes(t), t));
-  const b2 = codeStrict(s9b2); assert.ok(b2.includes("'_lastEvolutionAt','_lastAutoRevigorTs','_lastDreamAt','_abstMigrated',") && b2.includes('if (snap._abstMigrated)'));
+  const b1 = codeStrict(s9b1); ['_lastEvolutionAt: S._lastEvolutionAt || 0,', '_lastDreamAt: S._lastDreamAt || 0,', '_abstMigrated: !!S._abstMigrated,'].forEach(t => assert.ok(b1.includes(t), t));
+  const b2 = codeStrict(s9b2); assert.ok(b2.includes("'_lastEvolutionAt','_lastDreamAt','_abstMigrated',") && b2.includes('if (snap._abstMigrated)'));
 });
 console.log('\n' + (fail ? '❌ ' : '✅ ') + pass + '/' + (pass + fail) + ' tests passés' + (fail ? ' — ' + fail + ' ÉCHEC(S)' : ''));
 process.exit(fail ? 1 : 0);

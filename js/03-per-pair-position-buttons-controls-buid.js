@@ -1,3 +1,4 @@
+// [ÉVOLUTION SEULE · 26/09/2026] VERSION 20260926o · revigoration AUTOMATIQUE des apprenants retirée (elle remettait à 400 T$, fenêtre vidée, les sièges mesurés faux : leur poids de vote ×5 à ×8 et l'évolution détournée vers un siège sain) ; un siège faible garde sa vraie fitness et l'évolution le remplace ; revigorations manuelles gardées
 // [ABSTENTION · 26/09/2026] VERSION 20260926n · une abstention (|vote| ≤ 0,05 : conseil « hold », scout sans donnée, gardien qui approuve, siège muet) n'est plus jugée comme une erreur — ni fitness, ni erreurs, ni souvenir ; même règle dans l'essai de l'Évolueur ; migration unique : les jugements au poids plancher (0,01, signature d'une abstention) quittent les fenêtres des apprenants, fitness recalculée
 // [MÉRITE DE L'ÉVOLUEUR · 26/09/2026] VERSION 20260926k · l'Évolueur n'est plus jugé sur le résultat du système : chaque évolution ouvre un essai (ancien génome en ombre, voté sur les mêmes événements) ; au bout de 30 jugements, nouveau contre ancien → l'Évolueur est jugé
 // [MÉRITE DES BOTS · 26/09/2026] VERSION 20260926j · un bot n'est plus jugé sur le résultat du système (les 9 bots avaient la MÊME fenêtre et tombaient ensemble à 50) : il est jugé sur SES actes vérifiés (_botPredict / _botMeritAudit / _botJudgeMeasured) ; relevé des vetos réparé (`side` inexistant depuis le 15/08)
@@ -5599,52 +5600,15 @@ window._showBrokenAgentsDetail = _showBrokenAgentsDetail;
 // v7.12 LIVRAISON 13 · Revigoration FORCÉE des bots stratégiques cassés
 // Action manuelle uniquement, à utiliser quand les bots restent bloqués à fitness 1
 // après un rollback ou un état très ancien.
-// v7.12 LIVRAISON 14 · AUTO-REVIGORATION des agents apprenants
-// Règle : si plus de 3 agents apprenants sont cassés (fitness <=80),
-// les revigorer automatiquement. Cooldown 30min entre 2 déclenchements.
-// Les BOTS STRATÉGIQUES restent manuels (bouton "Revigoration forcée").
-function _autoRevigorCheck() {
-  if (!S.agents) return;
-  const now = Date.now();
-  const cooldownMs = 30 * 60 * 1000; // 30 minutes
-  const lastAuto = S._lastAutoRevigorTs || 0;
-  // Skip si cooldown actif
-  if (lastAuto > 0 && (now - lastAuto) < cooldownMs) return;
-  // Compter les agents apprenants cassés (pas les bots)
-  const brokenLearners = S.agents.filter(a => !a.isBot && (a.fitness || 0) <= 80);
-  // Seuil : plus de 3 (donc 4 ou plus)
-  if (brokenLearners.length <= 3) return;
-  // Déclencher la revigoration
-  const count = brokenLearners.length;
-  brokenLearners.forEach(a => {
-    a.fitness = 400;
-    a._judgments = [];   // [RETRAIT REDISTRIBUTION · 16/09/2026] la revigoration vide aussi la fenêtre de jugements, sinon la fitness retombe au jugement suivant
-    a.errors = 0;
-    a.streak = 0;
-  });
-  // Marquer le moment pour le cooldown
-  S._lastAutoRevigorTs = now;
-  // Logger dans la blockchain
-  try {
-    if (!S.chainLog) S.chainLog = [];
-    S.chainLog.push({
-      icon: '🔄',
-      desc: 'Auto-revigoration · ' + count + ' agent(s) apprenant(s) restaurés (seuil >3)',
-      hash: typeof rndHash==='function' ? rndHash() : '',
-      time: typeof nowStr==='function' ? nowStr() : ''
-    });
-    if (S.chainLog.length > 100) S.chainLog.splice(0, S.chainLog.length - 100);
-  } catch(e) {}
-  // Toast notification
-  try {
-    if (typeof showToast === 'function') {
-      showToast('🔄 Auto-revigoration · ' + count + ' agent(s) restaurés', 4000, 'win');
-    }
-  } catch(e) {}
-}
-window._autoRevigorCheck = _autoRevigorCheck;
-// Vérifier toutes les 60 secondes (suffisant : c'est rare et pas urgent)
-setInterval(_autoRevigorCheck, 60000);
+// [ÉVOLUTION SEULE · 26/09/2026] REVIGORATION AUTOMATIQUE RETIRÉE (go Rams 26/09 22:43, après rejeu sur la mémoire).
+// Elle remettait à 400 T$, fenêtre vidée, tout apprenant ≤ 80 T$ dès qu'il y en avait 4 (toutes les 30 min au plus) : son vrai
+// niveau disparaissait, il revotait avec le poids d'un agent moyen, et l'évolution (qui remplace le plus faible, 1 / h) ne le
+// voyait plus. Rejeu backups 23 et 25/09, après la correction des abstentions (20260926n) : 7 et 6 vrais cassés, précision
+// pondérée 8 à 36 % sur 7 à 49 vrais jugements ; revigorés, leur poids dans le vote passait de 5,6 % à 31,3 % (23/09) et de
+// 4,2 % à 25,9 % (25/09) ; l'évolution visait trend_v2 (112 T$) au lieu de sentiment_v2 (50), onchain_v1 (286) au lieu de
+// nlp_v1 (50). Désormais un siège faible garde sa vraie fitness (poids réduit d'autant dans le vote) et l'évolution le
+// remplace : fin de learnFromOutcome (plus faible sous 150 T$ → remplacement immédiat, délai 1 h) et évolution continue (08).
+// Les revigorations MANUELLES (_revigorBrokenAgents, _revigorBots : boutons DAO / Déblocages) restent — c'est Rams qui décide.
 
 function _revigorBots() {
   if (!S.agents) return;

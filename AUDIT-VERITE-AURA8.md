@@ -203,4 +203,6 @@ Une régression de vérité = `VERDICT : NON LIVRABLE`, jamais « CONNU, tolér�
 
 - **26/09 — abstention + redémarrage** (`20260926n`) : une abstention (|vote| ≤ 0,05 : « hold », scout sans donnée, gardien qui approuve) était jugée fausse (−1) → sièges « cassés » à tort (rejeu 23 et 25/09 : 14 et 13 → 7 et 6) et « erreurs » fantômes ; les délais de l'évolution, de la revigoration et du rêve n'étaient pas sauvegardés → les trois repartaient à chaque rechargement. Corrigé ; migration unique des fenêtres (poids plancher retirés).
 
+- **26/09 — évolution seule** (`20260926o`) : revigoration automatique des apprenants retirée (go Rams). Rejeu 23 et 25/09 : les 7 et 6 vrais cassés (précision pondérée 8 à 36 %) revigorés à 400 prenaient 26 à 31 % du vote au lieu de 4 à 6 %, et l'évolution visait un siège sain. Désormais un siège faible garde sa vraie fitness et l'évolution le remplace ; revigorations manuelles gardées.
+
 *Mis à jour à chaque mission. Le prochain audit complet : après 1b-b, sur un backup de 24 h propre.*
