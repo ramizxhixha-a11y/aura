@@ -1,3 +1,4 @@
+// [SURVEILLANCE PERMANENTE · 27/09/2026] VERSION 20260927a · bandeau d'un bot sans acte jugé : affirmations en cours et trades ouverts (plus de « 30 min après »)
 // [MASQUE CORRIGÉ · 26/09/2026] VERSION 20260926p · triggerEvolution(weak, opts) : opts.manual (« Faire évoluer maintenant », décision de Rams) passe outre le délai d'1 h, qui repart de là ; opts.quiet : pas de toast par évolution
 // [MÉRITE DE L'ÉVOLUEUR · 26/09/2026] VERSION 20260926k · triggerEvolution ouvre un essai (ancien génome capturé AVANT la mutation) ; bandeau de l'Évolueur sans évolution jugée
 // [MÉRITE DES BOTS · 26/09/2026] VERSION 20260926j · bandeau d'un bot sans acte vérifié : « aucun acte vérifié encore » + bilan des actes (S.botMerit)
@@ -5592,8 +5593,9 @@ function patchAgentCards() {
         const lab = elMstrip.querySelector('.memory-strip-label span');
         if(lab) lab.textContent = '🧮 MÉMOIRE RÉELLE';
         if(elMemCnt)  elMemCnt.textContent  = '0 jug.';
-        if(elMemText) elMemText.textContent = 'aucun acte vérifié encore — jugé sur ses propres actes (propositions, vetos, flatten, TWAP, taille), 30 min après';
-        if(elMemPnl)  { elMemPnl.textContent = _mr && _mr.inconclusive ? (_mr.inconclusive + ' non concluant' + (_mr.inconclusive > 1 ? 's' : '')) : 'en attente'; elMemPnl.style.color = 'var(--t3)'; }
+        if(elMemText) elMemText.textContent = 'aucun acte jugé encore — jugé sur ses propres actes : résultat réel de ses trades, affirmations dès que le marché tranche (±1 ATR), TWAP, taille';
+        const _oc = (S._botPredictions || []).filter(q => q && q.bot === a.id).length, _ot = (S.openPositions || []).filter(p => p && p._bot === a.id).length;   // [SURVEILLANCE PERMANENTE · 27/09/2026]
+        if(elMemPnl)  { elMemPnl.textContent = (_oc || _ot) ? ((_oc ? _oc + ' affirmation' + (_oc > 1 ? 's' : '') + ' en cours' : '') + (_oc && _ot ? ' · ' : '') + (_ot ? _ot + ' trade' + (_ot > 1 ? 's' : '') + ' ouvert' + (_ot > 1 ? 's' : '') : '')) : (_mr && _mr.inconclusive ? (_mr.inconclusive + ' non concluant' + (_mr.inconclusive > 1 ? 's' : '')) : 'en attente'); elMemPnl.style.color = 'var(--t3)'; }
         if(elMemPair) elMemPair.textContent = 'fitness neutre';
         if(elMemLegacy) { elMemLegacy.textContent = '🧮 0 jug.'; elMemLegacy.style.color = 'var(--t3)'; }
       }

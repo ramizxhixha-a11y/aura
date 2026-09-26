@@ -1,3 +1,4 @@
+// [SURVEILLANCE PERMANENTE · 27/09/2026] VERSION 20260927a · executePending(id, { auto }) : trade d'un bot marqué pos._bot (jugé à son résultat réel), refusé → affirmation ; Réel : un bot n'ouvre qu'avec des bases solides (paire à espérance nette apprise > 0, bot au mérite prouvé) ; mode de la proposition respecté ; Rééquilibrage auto sans position manuelle
 // [MASQUE CORRIGÉ · 26/09/2026] VERSION 20260926p · « Apprentissage accéléré » (modes ×3 / ×8, session rejouée, boost +50 / +200 : fitness écrite sans jugement) remplacé par « Apprentissage réel » ; Déblocages : « Faire évoluer agents cassés »
 // [GEL BOOT · 11/09/2026] VERSION 20260911c · le timer +3 s (_checkAutoBackup + _refreshBackupsCache) était la fenêtre des deux gels de boot : liste/index à +3 s (léger), backup auto du jour à +90 s ; restoreBackup lit UN enregistrement (_getBackup)
 // [P7 · 06/09/2026] VERSION 20260906g — Sentiment News : fetch CryptoCompare mort + NLP local SUPPRIMÉS, champ clé CoinStats, rendu sur la source unique 10e7
@@ -1752,6 +1753,7 @@ function _autoValidatePendingActions() {
   for (let i = S.pendingActions.length - 1; i >= 0; i--) {
     const action = S.pendingActions[i];
     if (!action || !action.action) continue;
+    if (action.mode && action.mode !== S.tradingMode) continue;   // [SURVEILLANCE PERMANENTE · 27/09/2026] une proposition s'exécute dans SON mode (le battement s'en charge)
     // Skip si action de fermeture (manuelle)
     if (NON_AUTO_ACTIONS.includes(action.action)) continue;
     // Skip si trop récente
@@ -1779,7 +1781,7 @@ function _autoValidatePendingActions() {
     } catch(e) {}
     // Exécuter via la fonction standard
     try {
-      executePending(action.id);
+      executePending(action.id, { auto: true });
     } catch(e) {}
   }
 }
@@ -1787,47 +1789,90 @@ window._autoValidatePendingActions = _autoValidatePendingActions;
 // Appel régulier (toutes les 3s suffit, car les actions arrivent rarement)
 setInterval(_autoValidatePendingActions, 3000);
 
-function executePending(actionId) {
+function executePending(actionId, opts) {
   const idx = (S.pendingActions || []).findIndex(a => a.id === actionId);
   if(idx === -1) return;
   const action = S.pendingActions[idx];
+  const _auto = !!(opts && opts.auto);
+  // [SURVEILLANCE PERMANENTE · 27/09/2026] une proposition s'exécute dans le mode où le bot l'a faite (positions, portefeuille de CE mode)
+  const _m0 = S.tradingMode, _sw = !!(action.mode && action.mode !== _m0);
+  if (_sw) { S.tradingMode = action.mode; window._bgResolve = true; }
+  let _changed = false;
   try {
     switch(action.action) {
       case 'open_trade': {
-        // Open trade on a pair/side with default stake
-        const ps = S.pairStates[action.payload.pair];
+        const _pr = action.payload.pair, _sd = action.payload.side, _bot = action.source || null;
+        const _ba = _bot ? (S.agents || []).find(x => x && x.id === _bot) : null, _bn = (_ba && _ba.name) || _bot || 'bot';
+        // [SURVEILLANCE PERMANENTE · 27/09/2026] Réel : un bot n'ouvre qu'avec des bases solides, comme le cerveau (Règles Réel v2 de Rams, 05/07) —
+        // paire à espérance apprise NETTE positive (10e6 _learnedNetUsd) ET bot au mérite prouvé (fitness > 350 sur ≥ 5 actes
+        // jugés). Sinon son occasion reste une affirmation, jugée par le marché. Évaluation : aucune condition de plus.
+        let _reBlock = false;
+        if (S.tradingMode === 'real' && _bot) {
+          let _ln = null; try { _ln = (typeof _learnedNetUsd === 'function') ? _learnedNetUsd(_pr) : null; } catch(e) {}
+          const _proven = !!(_ba && Array.isArray(_ba._judgments) && _ba._judgments.length >= 5 && (_ba.fitness || 0) > 350);
+          _reBlock = !(_ln && _ln.netUsd > 0 && _proven);
+        }
+        const ps = S.pairStates[_pr];
         const stake = Math.max(10, Math.min(S.tradingAccount * 0.15, ps?.stake || 20));
-        if(typeof autoOpenPosition === 'function') {
-          autoOpenPosition(action.payload.pair, action.payload.side, stake);
-          if(typeof showToast === 'function') showToast(`✓ Trade ${action.payload.pair} ${action.payload.side.toUpperCase()} exécuté`);
+        if(!_reBlock && typeof autoOpenPosition === 'function') {
+          const _t0 = Date.now(), _cl = S.chainLog || [], _last0 = _cl[_cl.length - 1];
+          autoOpenPosition(_pr, _sd, stake);
+          const np = (S.openPositions || []).find(p => p && p.pair === _pr && (p.openedAt || 0) >= _t0);
+          if (np) {
+            _changed = true;
+            if (_bot) { np._bot = _bot; np._botKind = action.type || ''; }   // jugé à SON résultat réel à la clôture (02)
+            try { if (_bot && typeof _setBot === 'function') _setBot(_bot, 'active', `Trade ${_pr} ${String(_sd).toUpperCase()} ouvert (${action.type || 'occasion'}) · jugé à son résultat réel`); } catch(e) {}
+            try { if (S.chainLog && _bot) { S.chainLog.push({ icon: '🤖', desc: _bn + ' · trade ' + _pr + ' ' + String(_sd).toUpperCase() + ' ouvert (' + (action.type || 'occasion') + ')', hash: typeof rndHash === 'function' ? rndHash() : '', time: typeof nowStr === 'function' ? nowStr() : '' }); if (S.chainLog.length > 100) S.chainLog.splice(0, S.chainLog.length - 100); } } catch(e) {}
+            if(typeof showToast === 'function') showToast(_bot ? `🤖 ${_bn} · ${_pr} ${String(_sd).toUpperCase()} ouvert` : `✓ Trade ${_pr} ${String(_sd).toUpperCase()} exécuté`);
+          } else if (_bot) {
+            // refusée par l'entonnoir : l'occasion reste une affirmation, jugée par le marché ; la raison est affichée
+            try { if (typeof _botPredict === 'function') _botPredict(_bot, _pr, _sd, action.type || ''); } catch(e) {}
+            // raison : la trace que l'entonnoir vient de laisser (journal EVAL du cerveau, sinon la dernière ligne du journal sur la paire)
+            const _ev = (S.brainLog || [])[0];
+            let _why = (_ev && (_ev.ts || 0) >= _t0 && _ev.pair === _pr && _ev.reason) ? String(_ev.reason) : '';
+            if (!_why) { const _cl2 = S.chainLog || []; for (let _k = _cl2.length - 1; _k >= 0 && _cl2[_k] !== _last0; _k--) { if (String((_cl2[_k] && _cl2[_k].desc) || '').indexOf(_pr) !== -1) { _why = String(_cl2[_k].desc); break; } } }
+            _why = _why.slice(0, 90);
+            try { if (typeof _setBot === 'function') _setBot(_bot, 'scanning', `Occasion ${_pr} ${String(_sd).toUpperCase()} refusée par l'entonnoir${_why ? ' (' + _why + ')' : ''} · affirmation suivie`); } catch(e) {}
+            if (!_auto && typeof showToast === 'function') showToast(`⛔ ${_pr} ${String(_sd).toUpperCase()} refusé par l'entonnoir${_why ? ' · ' + _why : ''}`);
+          } else if (typeof showToast === 'function') showToast(`⛔ ${_pr} ${String(_sd).toUpperCase()} refusé par l'entonnoir`);
+        } else if (_reBlock && _bot) {
+          try { if (typeof _botPredict === 'function') _botPredict(_bot, _pr, _sd, action.type || ''); } catch(e) {}
+          try { if (typeof _setBot === 'function') _setBot(_bot, 'scanning', `Réel : ${_pr} ${String(_sd).toUpperCase()} non ouvert — bases pas encore prouvées (paire ou bot) · affirmation suivie`); } catch(e) {}
         }
         break;
       }
       case 'close_position': {
         if(typeof closePosition === 'function') {
+          const _n0 = (S.openPositions || []).length;
           closePosition(action.payload.posId, false);
-          if(typeof showToast === 'function') showToast(`✓ Position fermée`);
+          _changed = (S.openPositions || []).length !== _n0;
+          if(typeof showToast === 'function') showToast(_changed ? `✓ Position fermée` : `Position introuvable (déjà fermée ?)`);
         }
         break;
       }
       case 'close_skewed': {
         // Close the largest position of the skewed pair
+        // [SURVEILLANCE PERMANENTE · 27/09/2026] validé automatiquement → fermeture « bot » : une position manuelle n'est jamais fermée (règle absolue)
         const positions = (S.openPositions || []).filter(p => p.pair === action.payload.pair);
         if(positions.length > 0) {
           const largest = positions.sort((a,b) => (b.stakeUsdt||0) - (a.stakeUsdt||0))[0];
           if(typeof closePosition === 'function') {
-            closePosition(largest.id, false);
-            if(typeof showToast === 'function') showToast(`✓ Position ${action.payload.pair} fermée (rééquilibrage)`);
+            const _n0 = (S.openPositions || []).length;
+            closePosition(largest.id, _auto);
+            _changed = (S.openPositions || []).length !== _n0;
+            if(_changed && typeof showToast === 'function') showToast(`✓ Position ${action.payload.pair} fermée (rééquilibrage)`);
           }
         }
         break;
       }
     }
   } catch(e) { console.warn('executePending:', e); }
+  finally { if (_sw) { S.tradingMode = _m0; window._bgResolve = false; } }
   // Remove from queue
-  S.pendingActions.splice(idx, 1);
-  renderPendingActions();
-  try { if(typeof saveState === 'function') saveState(true); } catch(e) {}
+  const _i2 = (S.pendingActions || []).findIndex(a => a.id === actionId);
+  if (_i2 !== -1) S.pendingActions.splice(_i2, 1);
+  if (!_auto) { try { if (typeof renderPendingActions === 'function') renderPendingActions(); } catch(e) {} }   // exécution par le battement : la liste affichée est rafraîchie par le rendu normal
+  if (_changed) { try { if(typeof saveState === 'function') saveState(true); } catch(e) {} }   // [SURVEILLANCE PERMANENTE · 27/09/2026] sauvegarde seulement si le livre a changé
 }
 
 function dismissPending(actionId) {

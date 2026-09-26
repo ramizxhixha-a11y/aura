@@ -1,3 +1,4 @@
+// [SURVEILLANCE PERMANENTE · 27/09/2026] VERSION 20260927a · goPage(0) ne fait plus tourner la flotte (le battement s'en charge) ; closePosition juge le bot qui a ouvert la position (pos._bot) sur son résultat réel
 // [MASQUE CORRIGÉ · 26/09/2026] VERSION 20260926p · juge caché « v6.0 » de la clôture retiré : il retrouvait l'agent par le préfixe « Hybrid » et créditait toujours le premier hybride (macro_v1) pour les avis des autres — fitness, erreurs, série, souvenirs
 // [TOUTE PAIRE AUTOMATIQUE · 26/09/2026] VERSION 20260926m · symbole futures découvert pour toute paire (sans préfixe → avec « 1000 » → aucun contrat), mis en cache 24 h — la liste des pièces à préfixe 1000 était figée
 // [PRIX 12 PAIRES · 26/09/2026] VERSION 20260926l · CoinGecko et le secours Binance couvrent les paires ACTIVES (listes figées de 10 avec MATIC : BNB, PEPE, EUR jamais mis à jour) ; EUR/GBP par l'USDT ; symbole inconnu résolu par la recherche CoinGecko ; CoinGecko ne touche plus prix ni bougies d'une paire dont Binance est vivant (< 60 s)
@@ -4945,7 +4946,7 @@ function goPage(idx, tabEl, navEl) {
       if (typeof _restoreAutoBarState === 'function') _restoreAutoBarState();
       if (typeof _updateAutoBarCounters === 'function') _updateAutoBarCounters();
       if (typeof _attachLongPressToBricks === 'function') setTimeout(_attachLongPressToBricks, 50); updatePairAnalysisPanels(); updateIntelBanner(); updateStreakBadge(); startBrainAnim(); updateMarketMood(); updateBotThoughts(); updateFiscalMini(); renderAnalyticsPanel(); if(typeof renderPendingActions === 'function') renderPendingActions(); } catch(e) { console.warn('page 0 render:', e); }
-    if(typeof runBotFleet === 'function') { try { runBotFleet('tick'); } catch(e) { console.warn('fleet tick:', e); } }
+    // [SURVEILLANCE PERMANENTE · 27/09/2026] plus de runBotFleet('tick') à l'ouverture de l'accueil : la flotte tourne au battement (03 _fleetHeartbeat)
     // v18 · Twin Live tick
     try { if(typeof tickTwinLive === 'function') tickTwinLive(); } catch(e) {}
   // v6.2 · Expire stale pending actions (older than 10 minutes)
@@ -6480,6 +6481,8 @@ function closePosition(id, botClose = false) {
   }
 
   learnFromOutcome('position', realisedPct, pos.pair);
+  // [SURVEILLANCE PERMANENTE · 27/09/2026] la position a été ouverte par un bot : il est jugé sur SON résultat réel (en $), comme l'économie du TWAP
+  try { if (pos._bot && typeof _botJudgeMeasured === 'function') { _botJudgeMeasured(pos._bot, realisedUsd, 'trade'); if (S.botFleet && S.botFleet[pos._bot]) S.botFleet[pos._bot].pnlContrib = (S.botFleet[pos._bot].pnlContrib || 0) + (Number(realisedUsd) || 0); } } catch(e) {}
   // [ATTRIBUTION PAR SOURCE · 17/09/2026] A5 : crédite chaque source de données selon ce qu'elle disait à l'OUVERTURE
   // de cette position (10i, lecture seule — aucune décision n'utilise S.attribution).
   try { if (typeof _attributionRecord === 'function') _attributionRecord(pos, realisedPct); } catch(e) {}

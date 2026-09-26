@@ -1,3 +1,4 @@
+// [SURVEILLANCE PERMANENTE · 27/09/2026] VERSION 20260927a · le battement fait tourner la flotte de chaque mode en play (_fleetHeartbeat, dans le contexte du mode) et juge les affirmations des bots à chaque tick (_botMeritAudit)
 // [CONTEXTE 1 H / 4 H · 26/09/2026] VERSION 20260926e · tuile « Contexte 1 h / 4 h » (ex « Régime de volatilité ») : elle lit le siège converti
 // [MACRO RÉEL · 26/09/2026] VERSION 20260926b · tuiles fondamentales : étiquettes vraies ; la tuile News lit nlp_v1 ; la tuile Macro lit le flux réel
 // [MÉMOIRE DES CHEMINS · 22/09/2026] VERSION 20260922a · le battement enregistre le chemin de chaque position ouverte (_pathRecord) avant le balayage des sorties
@@ -3052,6 +3053,7 @@ function simTick() {
       // passage du mode traité — plus seulement à la résolution du cycle (10f _botExitSweep).
       try { if (window._pathRecord) window._pathRecord(); } catch(e) {}   // [MÉMOIRE DES CHEMINS · 22/09/2026] avant les sorties : le chemin d'abord
       try { if (window._botExitSweep) window._botExitSweep(); } catch(e) {}
+      try { if (window._fleetHeartbeat) window._fleetHeartbeat(); } catch(e) { try{window._decErr&&window._decErr(e)}catch(_e){} }   // [SURVEILLANCE PERMANENTE · 27/09/2026] les bots, au rythme du mode
       Object.entries(S.pairStates).forEach(([pair, ps]) => {
         ps.cycleTimer -= _step;
         if(ps.cycleTimer <= 0) {
@@ -3064,6 +3066,7 @@ function simTick() {
     if (_isBg) { S.tradingMode = _mDisp; window._bgResolve = false; }
   });
 
+  try { if (window._botMeritAudit) window._botMeritAudit(); } catch(e) {}   // [SURVEILLANCE PERMANENTE · 27/09/2026] affirmations jugées dès que le marché tranche
   _phEnd('cycles paires + protection');
   //  Global ring timer (display only — BTC/USDT reference) ──
   // S.cycleMax is the user-chosen global display reference — DO NOT overwrite it from per-pair

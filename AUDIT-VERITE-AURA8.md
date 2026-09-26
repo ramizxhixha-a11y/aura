@@ -207,4 +207,6 @@ Une régression de vérité = `VERDICT : NON LIVRABLE`, jamais « CONNU, tolér�
 
 - **26/09 — masque corrigé** (`20260926p`) : plus aucune fitness écrite sans jugement — revigorations manuelles (apprenants, bots) remplacées par « Faire évoluer maintenant » (évolution réelle), « Apprentissage accéléré » (modes, session, boost) remplacé par « Apprentissage réel », juge caché de la clôture retiré (il créditait toujours macro_v1 pour les avis des autres, backups 14 → 21/09). Reste connu : le drain LMSR (08), dormant.
 
+- **27/09 — surveillance permanente** (`20260927a`) : la flotte ne tournait que quand l'écran l'appelait (accueil, onglet flotte) ; propositions retardées de 5 s ; affirmations jugées 30 min après sous 0,3 % (sinon jamais). Désormais : battement par mode en play, exécution immédiate par l'entonnoir, trade d'un bot jugé à son résultat réel, affirmations jugées au premier franchissement de ±1 ATR sans limite de temps. Rejeu 90 h réelles : occasions justes 44-45 % (aucun avantage démontré) — dit à Rams.
+
 *Mis à jour à chaque mission. Le prochain audit complet : après 1b-b, sur un backup de 24 h propre.*

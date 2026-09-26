@@ -1,3 +1,4 @@
+// [SURVEILLANCE PERMANENTE · 27/09/2026] VERSION 20260927a · flotte au rythme du système (_fleetHeartbeat, par mode en play) ; affirmations jugées dès que le marché tranche (±1 ATR, plus de 30 min ni de 0,3 %) ; une affirmation ouverte par bot / paire / sens ; Scalper sans pause globale ; Sauvetage qui repart après un flatten ; Rééquilibrage jamais sur une position manuelle
 // [MASQUE CORRIGÉ · 26/09/2026] VERSION 20260926p · « Revigorer » (400 T$, même génome, fenêtre vidée) remplacé par « Faire évoluer maintenant » (_evolveBrokenNow : évolution réelle) ; revigoration forcée des bots retirée (bots et Évolueur jugés sur leurs actes)
 // [ÉVOLUTION SEULE · 26/09/2026] VERSION 20260926o · revigoration AUTOMATIQUE des apprenants retirée (elle remettait à 400 T$, fenêtre vidée, les sièges mesurés faux : leur poids de vote ×5 à ×8 et l'évolution détournée vers un siège sain) ; un siège faible garde sa vraie fitness et l'évolution le remplace ; revigorations manuelles gardées
 // [ABSTENTION · 26/09/2026] VERSION 20260926n · une abstention (|vote| ≤ 0,05 : conseil « hold », scout sans donnée, gardien qui approuve, siège muet) n'est plus jugée comme une erreur — ni fitness, ni erreurs, ni souvenir ; même règle dans l'essai de l'Évolueur ; migration unique : les jugements au poids plancher (0,01, signature d'une abstention) quittent les fenêtres des apprenants, fitness recalculée
@@ -1320,7 +1321,8 @@ function learnFromOutcome(source, pnlPct, pair) {
       // bots avaient donc la MÊME fenêtre de 60 jugements (backups 21, 23, 25/09 : identiques au jugement près) et la même
       // fitness — celle du système, pas la leur. Le système perdait → les 9 tombaient ensemble au plancher 50 (« cassés »), et
       // aucune revigoration automatique ne les relevait. Un bot n'est plus jugé ici : il l'est sur SES actes vérifiés
-      // (_botPredict → _botMeritAudit 30 min plus tard ; TWAP et Smart Sizer à leur résultat : _botJudgeMeasured).
+      // (_botPredict → _botMeritAudit ; TWAP et Smart Sizer à leur résultat : _botJudgeMeasured). [SURVEILLANCE PERMANENTE · 27/09/2026] affirmations jugées
+      // dès que le marché tranche (±1 ATR, plus de 30 min) ; trades des bots jugés à leur résultat réel (02 closePosition, pos._bot).
       return;
     }
     if(a.isMeta) {
@@ -4068,7 +4070,7 @@ function guardianCheck(guardianId, verdict, pair, stake) {
         // _riskVetoAudit juge 30 min plus tard si le trade refusé aurait perdu → crédit.
         // [MÉRITE DES BOTS · 26/09/2026] ce relevé n'a JAMAIS fonctionné : `side` n'existe pas ici (ReferenceError avalée par le try) — aucun
         // veto n'a été audité depuis le 15/08. Le côté refusé est celui du verdict du conseil ; le veto prédit que ce trade aurait
-        // perdu, donc que le prix ira CONTRE ce côté — vérifié 30 min plus tard par _botMeritAudit.
+        // perdu, donc que le prix ira CONTRE ce côté — jugé par _botMeritAudit dès que le marché tranche ([SURVEILLANCE PERMANENTE · 27/09/2026] ±1 ATR).
         try {
           const _vs = verdict === 'LONG' ? 'long' : verdict === 'SHORT' ? 'short' : null;
           if (_vs && typeof _botPredict === 'function') _botPredict('risk_bot_v1', pair, _vs === 'long' ? 'short' : 'long', 'veto');
@@ -4597,6 +4599,7 @@ function botArb() {
         if (Math.abs(div) > 0.025) {
           const lag = div > 0 ? pairs[j] : pairs[i];   // le retardataire
           const lead = div > 0 ? pairs[i] : pairs[j];
+          if (typeof _botAlreadyActing === 'function' && _botAlreadyActing('arb_bot_v1', lag, 'long')) continue;   // [SURVEILLANCE PERMANENTE · 27/09/2026]
           if (!best || Math.abs(div) > Math.abs(best.div)) best = { lag, lead, corr, div };
         }
       }
@@ -4629,7 +4632,7 @@ function botArb() {
       });
       if(S.pendingActions.length > 10) S.pendingActions.length = 10;
       S.botFleet.arb_bot_v1.contributions++;   // proposition publiée = intervention réelle
-      try { _botPredict('arb_bot_v1', best.lag, 'long', 'convergence'); } catch(e) {}   // [MÉRITE DES BOTS · 26/09/2026]
+      // [SURVEILLANCE PERMANENTE · 27/09/2026] jugée au résultat RÉEL du trade (exécution immédiate, _fleetHeartbeat) ou, refusée par l'entonnoir, comme affirmation (04 executePending)
     }
     _setBot('arb_bot_v1', 'active', `Convergence ${best.lag}/${best.lead} · corr ${best.corr.toFixed(2)} · div ${(Math.abs(best.div)*100).toFixed(1)}%`);
     return best;
@@ -4650,11 +4653,8 @@ function botArb() {
 // scalp réel (LMSR décollé + volatilité présente) et PROPOSER le trade
 // (pendingActions), comme le Bot Arbitrage. Aucun dollar fabriqué.
 function botScalper() {
-  const hasPositions = (S.openPositions || []).length > 0;
-  if(hasPositions) {
-    _setBot('scalper_bot_v1', 'idle', `${(S.openPositions || []).length} position(s) ouverte(s), scalper en pause`);
-    return;
-  }
+  // [SURVEILLANCE PERMANENTE · 27/09/2026] plus de pause dès qu'UNE position est ouverte, n'importe où (le Scalper dormait pendant tout trade du
+  // système) : il saute seulement les paires déjà engagées (une position par paire : l'entonnoir la refuserait) ou déjà affirmées.
   const pairs = Object.keys(PAIRS || {});
   let best = null;
   pairs.forEach(pair => {
@@ -4665,7 +4665,9 @@ function botScalper() {
     const lmsr = typeof lmsrP === 'function' ? lmsrP(ps) : 0.5;
     const edge = Math.abs(lmsr - 0.5);
     if(edge > 0.12 && cv > 0.0008) {   // [audit CV 16/08] 0.8% était inatteignable sur les majors (cv réel BTC ~0.01%)
-      if(!best || edge > best.edge) best = { pair, edge, side: lmsr > 0.5 ? 'long' : 'short', cv };
+      const _sd = lmsr > 0.5 ? 'long' : 'short';
+      if (typeof _botAlreadyActing === 'function' && _botAlreadyActing('scalper_bot_v1', pair, _sd)) return;   // [SURVEILLANCE PERMANENTE · 27/09/2026]
+      if(!best || edge > best.edge) best = { pair, edge, side: _sd, cv };
     }
   });
   if(best) {
@@ -4696,7 +4698,7 @@ function botScalper() {
       });
       if(S.pendingActions.length > 10) S.pendingActions.length = 10;
       S.botFleet.scalper_bot_v1.contributions++;
-      try { _botPredict('scalper_bot_v1', best.pair, best.side, 'scalp'); } catch(e) {}   // [MÉRITE DES BOTS · 26/09/2026]
+      // [SURVEILLANCE PERMANENTE · 27/09/2026] jugée au résultat RÉEL du trade (exécution immédiate, _fleetHeartbeat) ou, refusée par l'entonnoir, comme affirmation (04 executePending)
     }
     _setBot('scalper_bot_v1', 'active', `Signal scalp ${best.pair} ${best.side.toUpperCase()} · proposition créée`);
   } else {
@@ -4786,6 +4788,7 @@ function botDCA() {
     if(!(range > 0)) return;
     const posInRange = (ps.price - lo) / range;   // 0 = plancher, 1 = plafond
     if(posInRange <= 0.15) {
+      if (typeof _botAlreadyActing === 'function' && _botAlreadyActing('dca_bot_v1', p, 'long')) return;   // [SURVEILLANCE PERMANENTE · 27/09/2026]
       if(!best || posInRange < best.posInRange) best = { pair: p, posInRange, lo, hi, cv };
     }
   });
@@ -4816,7 +4819,7 @@ function botDCA() {
       });
       if(S.pendingActions.length > 10) S.pendingActions.length = 10;
       S.botFleet.dca_bot_v1.contributions++;   // proposition publiée = intervention réelle
-      try { _botPredict('dca_bot_v1', best.pair, 'long', 'dca'); } catch(e) {}   // [MÉRITE DES BOTS · 26/09/2026]
+      // [SURVEILLANCE PERMANENTE · 27/09/2026] jugée au résultat RÉEL du trade (exécution immédiate, _fleetHeartbeat) ou, refusée par l'entonnoir, comme affirmation (04 executePending)
     }
     _setBot('dca_bot_v1', 'active', `Achat bas de range proposé · ${best.pair} à ${(best.posInRange*100).toFixed(0)}% du range plat`);
     return best;
@@ -4828,7 +4831,12 @@ function botDCA() {
 
 // ── 6. RESCUE BOT · Emergency drawdown (v6.0 · vraie action) ──
 function botRescue() {
-  const startP = S._startPortfolio || S.portfolio || 1;
+  // [SURVEILLANCE PERMANENTE · 27/09/2026] surveillé en permanence, le flatten doit REPARTIR du portefeuille restant : sinon, tant que la perte de
+  // session dépasse 12 %, chaque nouvelle position serait refermée au passage suivant (trading gelé jusqu'au rechargement).
+  // Référence : début de session (_startPortfolio), ou le portefeuille juste après le dernier flatten de CETTE session.
+  if (!S._rescueRef) S._rescueRef = {};
+  const _rk = S.tradingMode || 'sim', _rr = S._rescueRef[_rk];
+  const startP = (_rr && _rr.base === S._startPortfolio && _rr.ref > 0) ? _rr.ref : (S._startPortfolio || S.portfolio || 1);
   const curP = S.portfolio || 1;
   const ddPct = startP > 0 ? (startP - curP) / startP * 100 : 0;
   const hasPositions = (S.openPositions || []).length > 0;
@@ -4843,6 +4851,7 @@ function botRescue() {
       } catch(e) { console.warn('rescue flatten:', e); }
     });
     S.botFleet.rescue_bot_v1.contributions++;
+    S._rescueRef[_rk] = { ref: S.portfolio || startP, base: S._startPortfolio };   // [SURVEILLANCE PERMANENTE · 27/09/2026] la référence repart d'ici
     try { snapshot.forEach(p => _botPredict('rescue_bot_v1', p.pair, p.side === 'long' ? 'short' : 'long', 'flatten')); } catch(e) {}   // [MÉRITE DES BOTS · 26/09/2026] le flatten est juste si les prix continuent contre les positions fermées
     _setBot('rescue_bot_v1', 'alert', `🚨 FLATTEN EXÉCUTÉ · ${countBefore} position(s) fermée(s) · DD ${ddPct.toFixed(1)}%`);
     if(typeof showToast === 'function') showToast(`🛟 Rescue · ${countBefore} position(s) fermée(s) (DD ${ddPct.toFixed(1)}%)`);
@@ -4885,6 +4894,12 @@ function botRebalance() {
     if(share > 0.60) skewed = { pair: p, share, value: v };
   });
   if(skewed) {
+    const _rbTop = positions.filter(p => p.pair === skewed.pair).sort((a,b) => (b.stakeUsdt||0) - (a.stakeUsdt||0))[0];
+    if (_rbTop && _rbTop.auto !== true) {   // [SURVEILLANCE PERMANENTE · 27/09/2026] règle absolue : un bot ne ferme jamais une position manuelle
+      _setBot('rebalance_bot_v1', 'idle', `Skew ${skewed.pair} ${(skewed.share*100).toFixed(0)}% · position manuelle : pas de rééquilibrage (règle absolue)`);
+      if(S.pendingActions) S.pendingActions = S.pendingActions.filter(a => a.type !== 'rebalance');
+      return null;
+    }
     // v6.0 · Publie une proposition actionnable
     if(!S.pendingActions) S.pendingActions = [];
     const already = S.pendingActions.find(a => a.type === 'rebalance' && a.pair === skewed.pair);
@@ -5018,13 +5033,46 @@ function runBotFleet(event, context) {
   }
 }
 
+// ═══ [SURVEILLANCE PERMANENTE · 27/09/2026] LA FLOTTE AU RYTHME DU SYSTÈME ═══
+// Rams : « les bots doivent mener la danse… surveillance en permanence, et dès que l'occasion se présente, ils doivent trader ».
+// Avant : runBotFleet('tick') n'était appelé QUE par l'écran — goPage(0) (ouvrir l'accueil) et renderFleetPanel (onglet flotte
+// affiché) : dès que tu regardais ailleurs, les bots dormaient (backups 14 → 25/09 : Arbitrage et Scalper ~3 propositions par
+// jour, DCA 2 depuis le 17/09, Fiscal et Rééquilibrage jamais, Sauvetage rien depuis le 14/09). Désormais le battement (08
+// simTick) appelle _fleetHeartbeat pour CHAQUE mode en play, dans son propre contexte (positions, portefeuille, réglages) :
+//  · les propositions d'ouverture (Arbitrage, Scalper, DCA) et le Rééquilibrage sont exécutés TOUT DE SUITE (plus de délai de
+//    5 s), par l'entonnoir unique 09c — mêmes portes que le cerveau ; ouvert, le trade porte le bot (pos._bot) et le bot est
+//    jugé sur SON résultat réel à la clôture ; refusé, l'occasion devient une affirmation jugée par le marché (04 executePending) ;
+//  · le « Harvest » du Fiscal (fermer une position précise à perte, pour l'impôt) reste à valider par toi (règle v7.12 « la fermeture d'une position précise reste manuelle »).
+// Les propositions portent leur mode (a.mode) : un mode n'exécute jamais celles d'un autre.
+function _fleetHeartbeat() {
+  if (typeof S === 'undefined' || !S) return 0;
+  const mode = S.tradingMode || 'sim';
+  try { if (typeof window._isModeRunning === 'function' && !window._isModeRunning(mode)) return 0; } catch (e) {}   // mode en pause : les bots aussi
+  const all = Array.isArray(S.pendingActions) ? S.pendingActions : [];
+  const others = all.filter(a => a && a.mode && a.mode !== mode);
+  S.pendingActions = all.filter(a => a && (!a.mode || a.mode === mode));
+  let n = 0;
+  try {
+    runBotFleet('tick');
+    (S.pendingActions || []).forEach(a => { if (a && !a.mode) a.mode = mode; });
+    const auto = (S.pendingActions || []).filter(a => a && a.action && a.action !== 'close_position' && !a._autoValidated);
+    auto.forEach(a => {
+      a._autoValidated = true;
+      try { if (typeof executePending === 'function') { executePending(a.id, { auto: true }); n++; } } catch (e) { try{window._decErr&&window._decErr(e)}catch(_e){} }
+    });
+  } catch (e) { try{window._decErr&&window._decErr(e)}catch(_e){} }
+  S.pendingActions = others.concat(S.pendingActions || []);
+  return n;
+}
+window._fleetHeartbeat = _fleetHeartbeat;
+
 // ── RENDER FLEET PANEL ──
 function renderFleetPanel() {
   const el = document.getElementById('apanel-fleet');
   if(!el) return;
   initBotFleet();
-  // Refresh fleet states
-  try { runBotFleet('tick'); } catch(e) {}
+  // [SURVEILLANCE PERMANENTE · 27/09/2026] plus de runBotFleet('tick') ici : les états viennent du battement (_fleetHeartbeat) — l'écran ne fait plus
+  // tourner la flotte (avant : les bots ne travaillaient que quand tu ouvrais l'accueil ou cet onglet).
 
   const stats = {
     active:    0,
@@ -5554,7 +5602,7 @@ function _showBrokenAgentsDetail() {
          <span style="font-size:9px;opacity:.7;font-weight:600;letter-spacing:0;text-transform:none;">jugés sur leurs actes</span>
        </div>
        <div style="font-size:9px;color:var(--t3);line-height:1.4;margin-bottom:6px;">
-         Jugés sur leurs actes vérifiés (prédiction contrôlée 30 min après, résultat mesuré du TWAP et du Smart Sizer ; l'Évolueur sur ses évolutions) : leur fitness est leur bilan réel — aucun bouton ne la réécrit.
+         Jugés sur leurs actes : résultat réel de leurs trades, affirmations jugées dès que le marché tranche (±1 ATR), TWAP et Smart Sizer mesurés ; l'Évolueur sur ses évolutions. Leur fitness est leur bilan réel — aucun bouton ne la réécrit.
        </div>
        ${bots.map(fmtAgent).join('')}`
     : '';
@@ -6086,12 +6134,16 @@ window.exportBackup = exportBackup;
 // additive de fitness était effacée au jugement suivant). Un bot est jugé sur SES actes, jamais sur le résultat du système :
 //  · prédictions vérifiables (_botPredict) : propositions Arbitrage / Scalper / DCA (le prix ira dans ce sens), Fiscal et
 //    Rééquilibrage (fermer / réduire est juste si le prix continue contre la position), veto du Risk Bot (le trade refusé
-//    aurait perdu), flatten du Sauvetage (les prix continuent contre les positions fermées) — vérifiées 30 min plus tard sur
-//    le dernier prix réel accepté ; mouvement < 0,3 % : non concluant, rien n'est jugé (zéro n'est pas une perte) ;
+//    aurait perdu), flatten du Sauvetage (les prix continuent contre les positions fermées) ;
+//    [SURVEILLANCE PERMANENTE · 27/09/2026] Rams : « je ne veux pas de limite de 30 min en dur ». Une affirmation est jugée DÈS QUE LE MARCHÉ
+//    TRANCHE : premier franchissement de ±1 ATR (14 bougies de la timeframe, mesuré à sa création) sur le dernier prix réel
+//    accepté — plus d'horizon de 30 min, plus de seuil fixe de 0,3 % (rejeu backups 14 → 25/09 : sous l'ancienne règle, 60 %
+//    des affirmations du Scalper, 54 % de l'Arbitrage et 95 % du DCA n'étaient JAMAIS jugées — l'autre raison des 350 figés).
+//    Une seule affirmation ouverte par bot / paire / sens (plus de fenêtre de 30 min) ; elle reste ouverte jusqu'à ce que le
+//    marché tranche. Les trades ouverts par un bot sont jugés à leur résultat réel (02 closePosition, pos._bot) ;
 //  · résultats mesurés (_botJudgeMeasured) : économie TWAP de l'Exécution (09c), effet de la taille du Smart Sizer.
 // Seulement en EV / RE (un bot qui a regardé les bougies fabriquées de l'école n'est pas jugé). S.botMerit : bilan par bot.
 // ════════════════════════════════════════════════════════════════════════
-var BOT_AUDIT_MS = 30 * 60 * 1000, BOT_AUDIT_MIN_MOVE = 0.003, BOT_AUDIT_MAX_AGE = 2 * 60 * 60 * 1000;
 function _botMeritRow(botId) {
   if (!S.botMerit) S.botMerit = {};
   return S.botMerit[botId] || (S.botMerit[botId] = { good: 0, bad: 0, inconclusive: 0, last: null });
@@ -6114,7 +6166,37 @@ function _botJudgeMeasured(botId, value, kind) {
   if (!(typeof v === 'number' && isFinite(v)) || Math.abs(v) < 0.001) return null;
   return _botJudge(botId, v > 0, Math.abs(v), kind);
 }
-// Prédiction vérifiable : « le prix de `pair` ira dans le sens `dir` » (long = hausse). Une par bot, paire et sens par fenêtre d'audit.
+// [SURVEILLANCE PERMANENTE · 27/09/2026] ATR relatif (14 bougies de la timeframe du mode, bougies réelles sinon celles de la paire) : la borne d'une
+// affirmation — ce que le marché de CETTE paire appelle un vrai mouvement (plus un 0,3 % identique pour BTC et PEPE).
+function _botAtrPct(pair) {
+  try {
+    const tf = (typeof _getActiveRealTimeframe === 'function') ? _getActiveRealTimeframe() : '15m';
+    let c = (S.realCandles && S.realCandles[pair] && S.realCandles[pair][tf]) || null;
+    if (!Array.isArray(c) || c.length < 15) { const ps = S.pairStates && S.pairStates[pair]; c = ps && ps.candles; }
+    if (!Array.isArray(c) || c.length < 15) return null;
+    let sum = 0, m = 0;
+    for (let i = c.length - 14; i < c.length; i++) {
+      const x = c[i], y = c[i - 1];
+      if (!x || !y || !(x.c > 0) || !(y.c > 0)) continue;
+      sum += Math.max(x.h - x.l, Math.abs(x.h - y.c), Math.abs(x.l - y.c)); m++;
+    }
+    const last = c[c.length - 1] && c[c.length - 1].c;
+    const v = (m >= 10 && last > 0) ? (sum / m) / last : null;
+    return (v > 0 && isFinite(v)) ? v : null;
+  } catch (e) { return null; }
+}
+function _botHasOpenClaim(botId, pair, dir) {
+  return Array.isArray(S._botPredictions) && S._botPredictions.some(q => q && q.bot === botId && q.pair === pair && (!dir || q.dir === dir));
+}
+// Le bot est-il déjà engagé sur cette paire ? Position ouverte sur la paire (une par paire : l'entonnoir refuserait) ou
+// affirmation encore ouverte du même bot, même sens (il l'a déjà dit : le répéter n'apporte rien).
+function _botAlreadyActing(botId, pair, dir) {
+  try {
+    if ((S.openPositions || []).some(p => p && p.pair === pair)) return true;
+    return _botHasOpenClaim(botId, pair, dir);
+  } catch (e) { return false; }
+}
+// Affirmation : « le prix de `pair` ira dans le sens `dir` » (long = hausse). Bornes ±1 ATR fixées à la création.
 function _botPredict(botId, pair, dir, kind) {
   try {
     if (!S || (S.tradingMode !== 'paperReal' && S.tradingMode !== 'real')) return false;
@@ -6122,34 +6204,38 @@ function _botPredict(botId, pair, dir, kind) {
     const px = (typeof _rcLastPrice === 'function') ? _rcLastPrice(pair) : 0;
     if (!(px > 0) || (typeof _rcPriceAge === 'function' && _rcPriceAge(pair) > 120000)) return false;
     if (!Array.isArray(S._botPredictions)) S._botPredictions = [];
-    const now = Date.now();
-    if (S._botPredictions.some(q => q.bot === botId && q.pair === pair && q.dir === dir && (now - q.ts) < BOT_AUDIT_MS)) return false;
-    S._botPredictions.push({ bot: botId, pair: pair, dir: dir, px: px, ts: now, kind: kind || '' });
-    if (S._botPredictions.length > 200) S._botPredictions.splice(0, S._botPredictions.length - 200);
+    if (_botHasOpenClaim(botId, pair, dir)) return false;
+    const atr = _botAtrPct(pair);
+    if (!(atr > 0)) return false;
+    S._botPredictions.push({ bot: botId, pair: pair, dir: dir, px: px, ts: Date.now(), kind: kind || '', atr: atr, up: px * (1 + atr), dn: px * (1 - atr) });
+    if (S._botPredictions.length > 300) S._botPredictions.splice(0, S._botPredictions.length - 300);
     return true;
   } catch (e) { return false; }
 }
+// Jugement des affirmations, à chaque battement (08) : borne haute atteinte → le long avait raison ; borne basse → le short.
 function _botMeritAudit() {
   try {
     if (typeof S === 'undefined' || !S || !Array.isArray(S._botPredictions) || !S._botPredictions.length) return 0;
-    const now = Date.now(), keep = [];
+    const keep = [];
     let n = 0;
     S._botPredictions.forEach(q => {
-      const age = now - q.ts;
-      if (age < BOT_AUDIT_MS) { keep.push(q); return; }
-      if (age > BOT_AUDIT_MAX_AGE) return;   // jamais vérifiable (réseau coupé) : abandonnée sans jugement
+      if (!q || !(q.px > 0)) return;
+      if (!(q.up > 0 && q.dn > 0)) {   // affirmation de l'ancienne règle (30 min) : bornes posées maintenant sur son prix d'origine
+        const a0 = _botAtrPct(q.pair);
+        if (!(a0 > 0)) { keep.push(q); return; }
+        q.atr = a0; q.up = q.px * (1 + a0); q.dn = q.px * (1 - a0);
+      }
       const px = (typeof _rcLastPrice === 'function') ? _rcLastPrice(q.pair) : 0;
       if (!(px > 0) || (typeof _rcPriceAge === 'function' && _rcPriceAge(q.pair) > 120000)) { keep.push(q); return; }   // prix figé : on attend
-      const move = (px - q.px) / q.px * (q.dir === 'long' ? 1 : -1);
-      if (Math.abs(move) < BOT_AUDIT_MIN_MOVE) { _botMeritRow(q.bot).inconclusive++; return; }
-      _botJudge(q.bot, move > 0, Math.abs(move) * 100, q.kind);
+      const up = px >= q.up, dn = px <= q.dn;
+      if (!up && !dn) { keep.push(q); return; }   // le marché n'a pas encore tranché
+      _botJudge(q.bot, (up && q.dir === 'long') || (dn && q.dir === 'short'), Math.abs(px - q.px) / q.px * 100, q.kind);
       n++;
     });
     S._botPredictions = keep;
     return n;
   } catch (e) { try{window._decErr&&window._decErr(e)}catch(_e){} return 0; }
 }
-setInterval(_botMeritAudit, 60000);
 // Migration unique : les fenêtres des bots copiaient le résultat du système (identiques pour les 9) — rien du bot n'y est
 // perdu. Effacées une fois, fitness neutre 350 (« pas encore de preuve »), après la restauration de l'état.
 (function _botMeritMigrate() {
@@ -6209,6 +6295,7 @@ setInterval(_botMeritAudit, 60000);
   }, 500);
 })();
 window._botPredict = _botPredict; window._botMeritAudit = _botMeritAudit; window._botJudgeMeasured = _botJudgeMeasured; window._botJudge = _botJudge;
+window._botAtrPct = _botAtrPct; window._botHasOpenClaim = _botHasOpenClaim; window._botAlreadyActing = _botAlreadyActing;
 
 // ═══ [MÉRITE DE L'ÉVOLUEUR · 26/09/2026] L'ÉVOLUTION A-T-ELLE AMÉLIORÉ LE SIÈGE ? (Rams : « oui je veux ») ═══
 // Une évolution (07 triggerEvolution) change UNE chose dans les décisions d'un siège : son génome (la logique de vote est par
