@@ -1,4 +1,4 @@
-// ▓▓▓ VERSION 20260926a ▓▓▓
+// ▓▓▓ VERSION 20260926g ▓▓▓ · [DOUBLE JUGEMENT · 26/09/2026] une fermeture bot ne juge plus les agents deux fois (closePosition juge déjà, source 'position')
 // [STOP CÔTÉ EXCHANGE SIMULÉ · 26/09/2026] _botExitSweep : à la reconnexion, un stop traversé pendant la coupure est exécuté AU stop (EV)
 // [VÉRITÉ DES RÈGLES · 23/09/2026] une sortie par règle apprise marque la position (pos._ruleExit)
 // [STOP APPRIS · 23/09/2026] _botExitSweep : sortie par stop appris (10i _stopExit) après le gain appris, avant les niveaux
@@ -288,7 +288,7 @@ function _resolvePairCycleCore(pair, ps) {
     if(canBotClose && minHoldMet && (sigRev||timeClose||hardTime||consRev)){
       const why=(sigRev||consRev)?'Signal inversé':'Timeout';
       closePosition(botPos.id,true);
-      learnFromOutcome('trade',pnlPct,pair);
+      // [DOUBLE JUGEMENT · 26/09/2026] plus de second jugement ici : closePosition (02) vient de juger les agents (source 'position', décroissance 1,3) — l'appel 'trade' qui suivait comptait le même trade DEUX fois (fitness, compétence par paire, souvenirs, régime)
       showToast(`${pnlPct>=0?'💰':'📉'} Bot ${pair} ${why} · ${pnlPct>=0?'+':''}${pnlPct.toFixed(2)}%`);
       ps.qYes=100+Math.floor(Math.random()*20); ps.qNo=100+Math.floor(Math.random()*20);
     } else {
@@ -715,7 +715,7 @@ window._botExitSweep = function _botExitSweep() {
       // en 3 min : les 9 bots au plancher 50 (capture Rams 14/09 21:58). Désormais : 1 essai / 60 s par position,
       // et rien n'est enseigné tant que la position n'est pas réellement fermée ; la cause est nommée au journal.
       if (!_closeCompleted(pos, 'bot ' + why)) return;
-      try { learnFromOutcome('trade', pnlPct, pos.pair); } catch(e){ try{window._decErr&&window._decErr(e)}catch(_e){} }
+      // [DOUBLE JUGEMENT · 26/09/2026] idem : _closeCompleted → closePosition a jugé (source 'position') ; le second jugement 'trade' est retiré
       try { showToast((pnlPct >= 0 ? '\uD83D\uDCB0' : '\uD83D\uDCC9') + ' Bot ' + pos.pair + ' ' + why + ' \u00b7 ' + (pnlPct >= 0 ? '+' : '') + pnlPct.toFixed(2) + '%'); } catch(e) {}
       if (ps) { ps.qYes = 100 + Math.floor(Math.random() * 20); ps.qNo = 100 + Math.floor(Math.random() * 20); }
     });

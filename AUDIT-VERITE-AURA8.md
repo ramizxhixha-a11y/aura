@@ -187,4 +187,6 @@ Une régression de vérité = `VERDICT : NON LIVRABLE`, jamais « CONNU, tolér�
 
 - **26/09 — fenêtre apprenante** (`20260926f`) : la fenêtre de 60 jugements de la fitness (ma constante du 16/09) devient apprise par rejeu exact des jugements (240 gardés, alignés par n° d'événement) : 6 fenêtres candidates, armée seulement sur preuve (≥ 40 événements, ≥ 5 points de mieux que 60, stable sur les deux moitiés). Trouvé : une clôture bot (10f) juge les agents deux fois pour le même trade (02 'position' + 10f 'trade') — signalé, non corrigé sans go.
 
+- **26/09 — double jugement** (`20260926g`) : corrigé sur go — 10f ne rejuge plus après closePosition ; la compétence par régime suit désormais chaque fermeture ('position'), elle ne suivait que les fermetures bot ('trade').
+
 *Mis à jour à chaque mission. Le prochain audit complet : après 1b-b, sur un backup de 24 h propre.*

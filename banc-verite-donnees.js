@@ -125,7 +125,7 @@ T('S9 · en-têtes 02/08/10g/09b2 « ' + HDR + ' », 10f « ▓▓▓ VERSION 20
   assert.ok(s08.startsWith('// [CONTEXTE 1 H / 4 H · 26/09/2026] VERSION 20260926e') && s08.split('\n').slice(0, 9).some(l => l.startsWith(HDR)), F08);   // [1b-b] 08 relivré, en-tête 1b-a en 2e ligne
   assert.ok(s02.startsWith('// [CONTEXTE 1 H / 4 H · 26/09/2026] VERSION 20260926e') && s02.split('\n').slice(0, 17).some(l => l.startsWith(HDR)), F02);   // [SONDE RÉSEAU] 02 relivré, en-tête 1b-a en 2e ligne
   assert.ok(s9b2.startsWith('// [FENÊTRE APPRENANTE · 26/09/2026] VERSION 20260926f') && s9b2.split('\n').slice(0, 18).some(l => l.startsWith(HDR)), F9B2);   // [FITNESS GLISSANTE] 09b2 relivré, en-tête 1b-a dans les 6 premières lignes
-  assert.ok(s10f.startsWith('// ▓▓▓ VERSION 20260926a ▓▓▓'));   // 10f livré au hotfix b, non retouché depuis
+  assert.ok(s10f.startsWith('// ▓▓▓ VERSION 20260926g ▓▓▓'));   // [DOUBLE JUGEMENT 26/09] 10f relivré
   assert.strictEqual(count(html, TOK), 81);   // [ÉCRAN APPRIS 23/09] 11b ajouté (10i le 17/09)
   assert.strictEqual((html.match(/\?v=\d{8}[a-z]/g) || []).length, 80);
   assert.strictEqual((html.match(/\?v=\d{8}[a-z]/g) || []).filter(t => t !== '?v=' + TOK).length, 0);
@@ -201,10 +201,10 @@ function ctxSweep(S) {
 }
 T('D3 · _botExitSweep RÉEL : SL immédiat sans résolution, TP seulement après 5 cycles, breakeven à 45 % du TP, repli conviction, positions manuelles et MANU intouchées, P&L de la position rafraîchi', () => {
   const pos = (id, pair, side, entry, extra) => Object.assign({ id, pair, side, entryPrice: entry, stakeUsdt: 10, auto: true, sl: null, tp: null, _holdCycles: 0 }, extra || {});
-  // (a) SL : long à −1,5 % avec _slPct 0,9 → fermé en botClose, learnFromOutcome('trade')
+  // (a) SL : long à −1,5 % avec _slPct 0,9 → fermé en botClose ; [DOUBLE JUGEMENT 26/09] le balayage ne juge plus lui-même (closePosition le fait)
   let s = ctxSweep({ botAutoMode: true, pairStates: { 'DOT/USDT': { price: 98.5, qYes: 500, qNo: 700 } }, openPositions: [pos('a', 'DOT/USDT', 'long', 100, { _tpPct: 2.7, _slPct: 0.9 })] });
   s.run();
-  assert.deepStrictEqual(s.closed, [['a', true]]); assert.deepStrictEqual(s.learned, [['trade', -1.5, 'DOT/USDT']]);
+  assert.deepStrictEqual(s.closed, [['a', true]]); assert.deepStrictEqual(s.learned, [], 'plus de second jugement dans le balayage');
   assert.ok(s.toasts[0].includes('SL') && s.toasts[0].includes('-1.50%'));
   assert.ok(s.ctx.S.pairStates['DOT/USDT'].qYes < 200, 'LMSR réinitialisé');
   // (b) TP à +3 % : _holdCycles 0 → rien ; _holdCycles 5 → fermé
@@ -233,7 +233,7 @@ T('D3 · _botExitSweep RÉEL : SL immédiat sans résolution, TP seulement aprè
   s = ctxSweep({ botAutoMode: true, pairStates: { 'X/USDT': { price: 0 } }, openPositions: [pos('g', 'X/USDT', 'long', 100, { _slPct: 0.9 })] });
   s.run(); assert.strictEqual(s.closed.length, 0);
 });
-T('D11 · _closeCompleted / _botExitSweep RÉELS (hotfix) : closePosition qui lève ou ne retire pas → AUCUN learnFromOutcome, 1 essai / 60 s, journal UNE fois avec la raison ; fermeture réussie → learn', () => {
+T('D11 · _closeCompleted / _botExitSweep RÉELS (hotfix) : closePosition qui lève ou ne retire pas → AUCUN learnFromOutcome, 1 essai / 60 s, journal UNE fois avec la raison ; fermeture réussie → un seul closePosition, plus de second jugement (26/09)', () => {
   const mk = (closeImpl) => {
     const S = { botAutoMode: true, chainLog: [], pairStates: { 'DOT/USDT': { price: 97.6 } }, openPositions: [{ id: 'z', pair: 'DOT/USDT', side: 'long', entryPrice: 100, stakeUsdt: 10, auto: true, sl: null, _slPct: 0.9, _tpPct: 2.7, _holdCycles: 0 }] };
     const calls = { close: 0, learn: 0, dec: 0 };
@@ -257,9 +257,9 @@ T('D11 · _closeCompleted / _botExitSweep RÉELS (hotfix) : closePosition qui l�
   t = mk(() => {}); t.run(); t.run();
   assert.strictEqual(t.calls.close, 1); assert.strictEqual(t.calls.learn, 0);
   assert.ok(t.S.chainLog[0].desc.includes('sans erreur mais position toujours ouverte'));
-  // (c) fermeture réussie → learn UNE fois, aucune ligne ⚠
+  // (c) fermeture réussie → closePosition appelé UNE fois, aucune ligne ⚠ ; [DOUBLE JUGEMENT 26/09] le balayage ne juge plus lui-même (closePosition, mocké ici, porte le seul jugement)
   t = mk((S, id) => { S.openPositions = S.openPositions.filter(p => p.id !== id); }); t.run(); t.run();
-  assert.strictEqual(t.calls.close, 1); assert.strictEqual(t.calls.learn, 1); assert.strictEqual(t.S.chainLog.length, 0);
+  assert.strictEqual(t.calls.close, 1); assert.strictEqual(t.calls.learn, 0); assert.strictEqual(t.S.chainLog.length, 0);
 });
 T('S10 · sonde réseau : 01 classe chaque ping (perfLog.net, HTTP ≥ 400 = échec, témoin CoinGecko, journal 📵/📶, _auraNetOffline) ; 02 gardien WS sans tempête (_bgNextTry, rien hors ligne) ; 09b1/09b2 portent perfLog.net', () => {
   const s01 = rd('js/01-chrono-network.js'), s9b1 = rd('js/09b1-build-snapshot.js');
@@ -387,7 +387,7 @@ T('D14 · A13 _botExitSweep RÉEL, niveaux ATR : SL exécuté au niveau, TP exé
   s = ctxSweep({ botAutoMode: true, pairStates: { 'X/USDT': { price: 101.4 } }, openPositions: [pos('c', 'long', 100, 98, 103)] });
   s.run(); assert.strictEqual(s.closed.length, 0); assert.strictEqual(+s.ctx.S.openPositions[0].sl.toFixed(3), 100.1); assert.ok(s.ctx.S.openPositions[0]._beAt > 0);
   s.ctx.S.pairStates['X/USDT'].price = 100.05; s.run();
-  assert.deepStrictEqual(s.closed, [['c', true]]); assert.ok(s.toasts[0].includes('(breakeven)') && s.learned[0][1] > 0, s.toasts[0] + ' ' + JSON.stringify(s.learned));
+  assert.deepStrictEqual(s.closed, [['c', true]]); assert.ok(s.toasts[0].includes('(breakeven)') && s.learned.length === 0, s.toasts[0] + ' ' + JSON.stringify(s.learned));
   s = ctxSweep({ botAutoMode: true, pairStates: { 'X/USDT': { price: 101.0 } }, openPositions: [pos('d', 'long', 100, 98, 103)] });
   s.run(); assert.strictEqual(s.closed.length, 0); assert.strictEqual(s.ctx.S.openPositions[0].sl, 98, '< 45 % : SL inchangé');
   s = ctxSweep({ botAutoMode: true, pairStates: { 'X/USDT': { price: 98.6 } }, openPositions: [pos('e', 'short', 100, 102, 97)] });

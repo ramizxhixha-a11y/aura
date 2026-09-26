@@ -1,3 +1,4 @@
+// [DOUBLE JUGEMENT · 26/09/2026] VERSION 20260926g · la compétence par régime (regimeFitness) est mise à jour sur les jugements 'position' (chaque fermeture) et plus seulement 'trade' (10f ne rejuge plus)
 // [FENÊTRE APPRENANTE · 26/09/2026] VERSION 20260926f · la fenêtre de jugement (60) devient apprise : _fitWindow lit S.fitWindowRule (10i), jugements gardés 240 avec n° d'événement k, _fitOf / _fitRecomputeAll, rejeu après chaque jugement
 // [CONTEXTE 1 H / 4 H · 26/09/2026] VERSION 20260926e · geopolitic_v1 = Contexte 1h·4h : tendance des horizons 1 h et 4 h (02 _ctxHorizonRead), horizons alignés renforcés / en conflit amortis, 11 gènes bornés
 // [LIQUIDATIONS · 26/09/2026] VERSION 20260926d · whale_v1 lit les liquidations (S.liqStats) : shorts liquidés = achats forcés (+), longs liquidés = ventes forcées (−), génomé (wLiq, liqMinUsd)
@@ -1279,7 +1280,8 @@ function learnFromOutcome(source, pnlPct, pair) {
   if (!(Math.abs(Number(pnlPct)) > 0)) return;
 
   // v7.0: Update per-regime fitness
-  if(source === 'trade' && typeof detectMarketRegime === 'function' && pnlPct != null) {
+  // [DOUBLE JUGEMENT · 26/09/2026] 'position' = la fermeture elle-même (02 closePosition, seule voie désormais) ; 'trade' gardé pour les bancs et d'éventuels appelants externes
+  if((source === 'trade' || source === 'position') && typeof detectMarketRegime === 'function' && pnlPct != null) {
     const _regime = detectMarketRegime();
     S.agents.forEach(a => {
       // Agent ayant un score actif dans ce trade
