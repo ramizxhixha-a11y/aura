@@ -1,3 +1,4 @@
+// [MÉRITE DE L'ÉVOLUEUR · 26/09/2026] VERSION 20260926k · evoTrials, evoMerit, _metaMeritMigrated dans le snapshot
 // [MÉRITE DES BOTS · 26/09/2026] VERSION 20260926j · botMerit, _botPredictions, _botMeritMigrated dans le snapshot
 // [FENÊTRE APPRENANTE · 26/09/2026] VERSION 20260926f · _judgments gardés 240 (étaient 60) ; fitWindowRule dans le snapshot
 // [COMPTEURS RÉGLAGES · 24/09/2026] VERSION 20260924a · _realJudgments dans le snapshot
@@ -104,6 +105,9 @@ function buildSnapshot() {
       botMerit: S.botMerit || {},                     // [MÉRITE DES BOTS · 26/09/2026]
       _botPredictions: (S._botPredictions || []).slice(-200),
       _botMeritMigrated: !!S._botMeritMigrated,
+      evoTrials: S.evoTrials || {},                   // [MÉRITE DE L'ÉVOLUEUR · 26/09/2026]
+      evoMerit: S.evoMerit || null,
+      _metaMeritMigrated: !!S._metaMeritMigrated,
       _gbpToBnbDone: !!S._gbpToBnbDone,
       _realJudgments: S._realJudgments || 0,          // [COMPTEURS RÉGLAGES · 24/09/2026]
       botDisciples:   S.botDisciples   || {},   // [15/08] sièges des disciples par bot

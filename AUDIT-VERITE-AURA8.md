@@ -195,4 +195,6 @@ Une régression de vérité = `VERDICT : NON LIVRABLE`, jamais « CONNU, tolér�
 
 - **26/09 — mérite des bots** (`20260926j`) : les 9 bots étaient jugés sur le résultat du système (fenêtres identiques, fitness du système copiée 9 fois → tous à 50 dès que le système perd) ; l'audit des vetos du Risk Bot n'avait jamais fonctionné (`side` inexistant). Un bot est désormais jugé sur ses actes vérifiés (propositions, vetos, flatten 30 min après ; TWAP et taille à leur résultat) ; fenêtres effacées une fois, fitness neutre 350.
 
+- **26/09 — mérite de l'Évolueur** (`20260926k`) : l'Évolueur était jugé sur le résultat du système ; chaque évolution est désormais jugée par un essai contrefactuel (l'ancien génome vote en ombre sur les mêmes événements, 30 jugements) — pas contre le siège mort, qui était le pire par construction.
+
 *Mis à jour à chaque mission. Le prochain audit complet : après 1b-b, sur un backup de 24 h propre.*

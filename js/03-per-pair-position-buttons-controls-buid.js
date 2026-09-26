@@ -1,3 +1,4 @@
+// [MÉRITE DE L'ÉVOLUEUR · 26/09/2026] VERSION 20260926k · l'Évolueur n'est plus jugé sur le résultat du système : chaque évolution ouvre un essai (ancien génome en ombre, voté sur les mêmes événements) ; au bout de 30 jugements, nouveau contre ancien → l'Évolueur est jugé
 // [MÉRITE DES BOTS · 26/09/2026] VERSION 20260926j · un bot n'est plus jugé sur le résultat du système (les 9 bots avaient la MÊME fenêtre et tombaient ensemble à 50) : il est jugé sur SES actes vérifiés (_botPredict / _botMeritAudit / _botJudgeMeasured) ; relevé des vetos réparé (`side` inexistant depuis le 15/08)
 // [MÉMOIRE DES BOTS · 26/09/2026] VERSION 20260926h · showMemoryOverlay : pour un bot / le méta, le résumé réel (jugements, interventions) au lieu de « aucune mémoire »
 // [DOUBLE JUGEMENT · 26/09/2026] VERSION 20260926g · la compétence par régime (regimeFitness) est mise à jour sur les jugements 'position' (chaque fermeture) et plus seulement 'trade' (10f ne rejuge plus)
@@ -1320,10 +1321,9 @@ function learnFromOutcome(source, pnlPct, pair) {
       return;
     }
     if(a.isMeta) {
-      const metaReward = won ? mag * 2 : -mag * 0.5;  // v7.3 OPT · calcul extrait
-      _fitJudge(a, won ? 1 : -1, mag);   // [FITNESS GLISSANTE] poids symétrique
-      a.totalReward = (a.totalReward || 0) + metaReward;  // v7.3 OPT · affichage réel
-      a.learningEvents = (a.learningEvents || 0) + 1;  // v7.3 OPT · compteur visible
+      // [MÉRITE DE L'ÉVOLUEUR · 26/09/2026] l'Évolueur était jugé sur le signe du résultat du système (comme les bots) : il est désormais jugé sur
+      // SES actes — chaque évolution ouvre un essai (_evoTrialStart, 07) : le nouveau génome contre l'ancien, sur les mêmes
+      // événements (ombre calculée au roster, _evoShadowVotes) ; conclu après 30 jugements (_evoTrialConclude).
       return;
     }
 
@@ -1333,6 +1333,7 @@ function learnFromOutcome(source, pnlPct, pair) {
     const _vote         = _agentPairVote(a, pair, a.score || 0);
     const aligned       = (won && _vote > 0) || (!won && _vote < 0);
     const signalStrength= Math.abs(_vote);
+    try { if (S.evoTrials && S.evoTrials[a.id]) _evoTrialJudge(a, pair, won, mag, decay, _vote); } catch(e) {}   // [MÉRITE DE L'ÉVOLUEUR · 26/09/2026] l'ancien génome est jugé sur le MÊME événement
     // [COMPÉTENCE PAR PAIRE · 13/08/2026] le journal identifiait déjà le meilleur/pire
     // agent PAR PAIRE à chaque cycle (Learn[cycle][SOL] → 🏆/⚠) puis jetait l'info.
     // Désormais elle s'accumule : S.agentPairSkill[agent][paire] = {w,l} — et le vote
@@ -4199,6 +4200,7 @@ function runRosterAnalysis(pair) {
         _votes[id] = _muted.has(id) ? 0.05 : (res.status === 'veto' ? -0.5 : res.status === 'warn' ? -0.2 : 0.05);
       });
       _ps.roster = { ts: Date.now(), cycle: S.cycle || 0, votes: _votes, weights: _weights, regime: _regimeNow };   // [POIDS PAR ATTRIBUTION] décomposition lisible
+      try { const _sh = _evoShadowVotes(pair, scoutResults, verdict, (S.tradingAccount || 100) * 0.1); if (_sh) _ps.roster.shadow = _sh; } catch(e) {}   // [MÉRITE DE L'ÉVOLUEUR · 26/09/2026] votes de l'ancien génome des sièges en essai
       // [ATTRIBUTION PAR SOURCE · 17/09/2026] A2 : range ce que chaque SOURCE DE DONNÉES disait à cet instant (10i, RAM,
       // lecture seule) — aucune décision ne le lit. Sert à l'attribution à la clôture (02 → _attributionRecord).
       try { if (typeof _intelPublish === 'function') _intelPublish(pair, _votes, _weights, (getTechSignals(pair) || {}).atScore); } catch(e) {}
@@ -6273,18 +6275,121 @@ setInterval(_botMeritAudit, 60000);
     if (!ready && _t < 120) return;
     clearInterval(_iv);
     try {
-      if (typeof S === 'undefined' || !S || !Array.isArray(S.agents) || S._botMeritMigrated) return;
-      let n = 0;
-      S.agents.forEach(a => { if (a && a.isBot) { a._judgments = []; a.fitness = 350; a.streak = 0; n++; } });
-      S._botMeritMigrated = true;
-      try { delete S._riskVetoes; } catch(e) {}
-      try {
-        if (!S.chainLog) S.chainLog = [];
-        S.chainLog.push({ icon: '\uD83E\uDDEE', desc: 'Bots : ' + n + ' fenêtres effacées (elles copiaient le résultat du système, identiques pour tous) · fitness neutre 350 · désormais jugés sur leurs actes vérifiés', hash: Math.random().toString(36).slice(2, 8), time: new Date().toLocaleTimeString() });
-        if (S.chainLog.length > 100) S.chainLog.splice(0, S.chainLog.length - 100);
-      } catch(e) {}
-      try { if (typeof saveState === 'function') saveState(true); } catch(e) {}
+      if (typeof S === 'undefined' || !S || !Array.isArray(S.agents)) return;
+      let changed = false;
+      if (!S._botMeritMigrated) {
+        let n = 0;
+        S.agents.forEach(a => { if (a && a.isBot) { a._judgments = []; a.fitness = 350; a.streak = 0; n++; } });
+        S._botMeritMigrated = true; changed = true;
+        try { delete S._riskVetoes; } catch(e) {}
+        try {
+          if (!S.chainLog) S.chainLog = [];
+          S.chainLog.push({ icon: '\uD83E\uDDEE', desc: 'Bots : ' + n + ' fenêtres effacées (elles copiaient le résultat du système, identiques pour tous) · fitness neutre 350 · désormais jugés sur leurs actes vérifiés', hash: Math.random().toString(36).slice(2, 8), time: new Date().toLocaleTimeString() });
+          if (S.chainLog.length > 100) S.chainLog.splice(0, S.chainLog.length - 100);
+        } catch(e) {}
+      }
+      if (!S._metaMeritMigrated) {   // [MÉRITE DE L'ÉVOLUEUR · 26/09/2026] même raison pour l'Évolueur : sa fenêtre copiait le résultat du système
+        S.agents.forEach(a => { if (a && a.isMeta) { a._judgments = []; a.fitness = 350; a.streak = 0; } });
+        S._metaMeritMigrated = true; changed = true;
+        try { S.chainLog.push({ icon: '\uD83E\uDDEC', desc: 'Évolueur : fenêtre effacée (elle copiait le résultat du système) · fitness neutre 350 · désormais jugé sur ses évolutions (nouveau génome contre ancien)', hash: Math.random().toString(36).slice(2, 8), time: new Date().toLocaleTimeString() }); } catch(e) {}
+      }
+      if (changed) { try { if (typeof saveState === 'function') saveState(true); } catch(e) {} }
     } catch(e) {}
   }, 500);
 })();
 window._botPredict = _botPredict; window._botMeritAudit = _botMeritAudit; window._botJudgeMeasured = _botJudgeMeasured; window._botJudge = _botJudge;
+
+// ═══ [MÉRITE DE L'ÉVOLUEUR · 26/09/2026] L'ÉVOLUTION A-T-ELLE AMÉLIORÉ LE SIÈGE ? (Rams : « oui je veux ») ═══
+// Une évolution (07 triggerEvolution) change UNE chose dans les décisions d'un siège : son génome (la logique de vote est par
+// id, les nombres par génome). Question posée : le nouveau génome vote-t-il mieux que l'ANCIEN ? Comparer au siège mort serait
+// biaisé (il est choisi parce qu'il était le pire : n'importe quel remplaçant « fait mieux », régression vers la moyenne). Ici,
+// essai contrefactuel : l'ancien génome continue de voter EN OMBRE (même paire, mêmes données, au même roster — aucune décision
+// ne lit l'ombre) et il est jugé comme le nouveau, sur les MÊMES événements (même règle que la fitness : aligné ±1, poids
+// max(0,01, |vote| × amplitude × décroissance)). Après 30 événements informatifs : précision pondérée nouveau contre ancien ;
+// écart ≥ 0,1 (5 points de précision) → l'Évolueur est jugé (+1 amélioration, −1 dégradation, poids = écart) ; sinon non concluant.
+// Essai interrompu (nouvelle évolution du même siège, 3 jours) : conclu s'il a ≥ 10 événements, abandonné sinon.
+var EVO_TRIAL_N = 30, EVO_TRIAL_MIN = 10, EVO_TRIAL_DELTA = 0.1, EVO_TRIAL_MAX_MS = 3 * 24 * 3600 * 1000;
+function _evoTermOf(v, won, mag, decay) {
+  v = Number(v) || 0;
+  var aligned = (won && v > 0) || (!won && v < 0);
+  return { s: aligned ? 1 : -1, w: Math.max(0.01, Math.abs(v) * mag * decay) };
+}
+function _evoTrialStart(seatId, oldG, info) {
+  try {
+    if (!seatId || !oldG || typeof oldG !== 'object') return null;
+    if (!S.evoTrials) S.evoTrials = {};
+    if (S.evoTrials[seatId]) _evoTrialConclude(seatId, 'interrompu : nouvelle évolution du siège');
+    info = info || {};
+    S.evoTrials[seatId] = { oldG: JSON.parse(JSON.stringify(oldG)), t: Date.now(), gen: info.gen || null, name: info.name || seatId, prev: info.prev || '', n: 0, ns: 0, nw: 0, os: 0, ow: 0 };
+    return S.evoTrials[seatId];
+  } catch (e) { return null; }
+}
+// Votes de l'ancien génome pour les sièges en essai (scouts, conseil, gardien génomé). Le génome courant est remis en place
+// quoi qu'il arrive ; l'historique des résonances (seul effet de bord d'une analyse) est restauré.
+function _evoShadowVotes(pair, scoutResults, verdict, stake) {
+  var T = (typeof S !== 'undefined' && S) ? S.evoTrials : null;
+  if (!T) return null;
+  var ids = Object.keys(T);
+  if (!ids.length) return null;
+  if (!S.genome) S.genome = {};
+  var out = {}, n = 0, muted = new Set(S.mutedAgents || []);
+  ids.forEach(function (id) {
+    var tr = T[id]; if (!tr || !tr.oldG) return;
+    var had = Object.prototype.hasOwnProperty.call(S.genome, id), cur = S.genome[id];
+    var rh = Array.isArray(S.resonanceHistory) ? S.resonanceHistory.slice() : null;
+    try {
+      S.genome[id] = tr.oldG;
+      var v = null;
+      if (ROSTER_TIERS.scouts.indexOf(id) >= 0) { var r = scoutAnalysis(id, pair); v = (r && typeof r.score === 'number') ? r.score : 0; }
+      else if (ROSTER_TIERS.council.indexOf(id) >= 0) { var c = councilVote(id, pair, scoutResults); if (c) { var m = Math.abs(c.score || 0.3); v = c.vote === 'long' ? m : c.vote === 'short' ? -m : 0; } }
+      else if (ROSTER_TIERS.guardians.indexOf(id) >= 0) { var g = guardianCheck(id, verdict, pair, stake); if (g) v = g.status === 'veto' ? -0.5 : g.status === 'warn' ? -0.2 : 0.05; }
+      if (v !== null) { out[id] = muted.has(id) ? 0 : v; n++; }
+    } catch (e) {}
+    finally { if (had) S.genome[id] = cur; else delete S.genome[id]; if (rh) S.resonanceHistory = rh; }
+  });
+  return n ? out : null;
+}
+// Juge l'ancien et le nouveau génome du siège sur le MÊME événement (appelé par learnFromOutcome après le vote réel).
+function _evoTrialJudge(a, pair, won, mag, decay, vote) {
+  var tr = S.evoTrials && S.evoTrials[a.id];
+  if (!tr) return null;
+  var ps = S.pairStates && S.pairStates[pair], sh = ps && ps.roster && ps.roster.shadow;
+  if (!sh || typeof sh[a.id] !== 'number') return null;   // pas d'ombre sur ce roster : l'événement ne compte pas
+  var old = sh[a.id];
+  if (Math.abs(vote) <= 0.05 && Math.abs(old) <= 0.05) return null;   // aucun des deux n'a parlé : rien à comparer
+  var tn = _evoTermOf(vote, won, mag, decay), to = _evoTermOf(old, won, mag, decay);
+  tr.n++; tr.ns += tn.s * tn.w; tr.nw += tn.w; tr.os += to.s * to.w; tr.ow += to.w;
+  if (tr.n >= EVO_TRIAL_N) return _evoTrialConclude(a.id, 'complet');
+  if (Date.now() - tr.t > EVO_TRIAL_MAX_MS) return _evoTrialConclude(a.id, 'délai de 3 jours');
+  return null;
+}
+function _evoTrialConclude(seatId, why) {
+  var tr = S.evoTrials && S.evoTrials[seatId];
+  if (!tr) return null;
+  delete S.evoTrials[seatId];
+  if (!S.evoMerit) S.evoMerit = { good: 0, bad: 0, inconclusive: 0, dropped: 0, recent: [] };
+  var M = S.evoMerit;
+  if (tr.n < EVO_TRIAL_MIN) { M.dropped = (M.dropped || 0) + 1; return { verdict: 'abandonné', n: tr.n }; }
+  var eNew = tr.nw > 0 ? tr.ns / tr.nw : 0, eOld = tr.ow > 0 ? tr.os / tr.ow : 0, d = eNew - eOld;
+  var accN = Math.round((eNew + 1) * 500) / 10, accO = Math.round((eOld + 1) * 500) / 10;   // précision pondérée en %
+  var verdict = Math.abs(d) < EVO_TRIAL_DELTA ? 'non concluant' : (d > 0 ? 'amélioration' : 'dégradation');
+  if (verdict === 'non concluant') M.inconclusive++;
+  else {
+    var meta = (S.agents || []).find(function (x) { return x && x.isMeta; });
+    if (meta && typeof _fitJudge === 'function') {
+      _fitJudge(meta, d > 0 ? 1 : -1, Math.abs(d));
+      meta.streak = d > 0 ? (meta.streak || 0) + 1 : 0;
+      meta.learningEvents = (meta.learningEvents || 0) + 1;
+    }
+    if (d > 0) M.good++; else M.bad++;
+  }
+  var row = { seat: seatId, name: tr.name, gen: tr.gen, n: tr.n, accNew: accN, accOld: accO, verdict: verdict, why: why || '', t: Date.now() };
+  M.recent = (Array.isArray(M.recent) ? M.recent : []).concat([row]).slice(-10);
+  try {
+    if (!S.chainLog) S.chainLog = [];
+    S.chainLog.push({ icon: '\uD83E\uDDEC', desc: 'Évolution jugée · ' + tr.name + ' (' + seatId + ') : nouveau génome ' + accN + ' % contre ancien ' + accO + ' % sur ' + tr.n + ' jugements → ' + verdict + (why && why !== 'complet' ? ' (' + why + ')' : ''), hash: Math.random().toString(36).slice(2, 8), time: new Date().toLocaleTimeString() });
+    if (S.chainLog.length > 100) S.chainLog.splice(0, S.chainLog.length - 100);
+  } catch (e) {}
+  return row;
+}
+window._evoTrialStart = _evoTrialStart; window._evoShadowVotes = _evoShadowVotes; window._evoTrialJudge = _evoTrialJudge; window._evoTrialConclude = _evoTrialConclude;

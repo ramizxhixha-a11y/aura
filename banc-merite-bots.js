@@ -74,13 +74,15 @@ T('D3 · _botJudgeMeasured RÉEL (TWAP, Smart Sizer) : en AA rien ; en EV signe 
   assert.strictEqual(sz.streak, 2); assert.deepStrictEqual([t.S.botMerit.smart_sizer_v1.good, t.S.botMerit.smart_sizer_v1.bad], [4, 1]);
   assert.strictEqual(t.run("_botJudgeMeasured('smart_sizer_v1', NaN, 'x')"), null); assert.strictEqual(t.run("_botJudgeMeasured('smart_sizer_v1', null, 'x')"), null);
 });
-T('D4 · migration RÉELLE (une fois, après restauration) : fenêtres des bots effacées, fitness neutre 350, série 0 ; agents et méta intouchés ; journal ; drapeau ; deuxième passage : rien', () => {
+T('D4 · migration RÉELLE (une fois, après restauration) : fenêtres des bots effacées, fitness neutre 350, série 0 ; agents intouchés ; l\'Évolueur migré aussi (son propre drapeau, 26/09 k) ; journal ; une sauvegarde ; deuxième passage : rien', () => {
   const t = mk('paperReal', { S: { _riskVetoes: [{ x: 1 }] } });
   const mig = t.intervals.find(f => /_botMeritMigrated/.test(String(f)) || true);
   t.intervals.forEach(f => { try { f(); } catch (e) {} });
   const arb = t.S.agents.find(a => a.id === 'arb_bot_v1'), macro = t.S.agents.find(a => a.id === 'macro_v1'), meta = t.S.agents.find(a => a.id === 'evolver_v1');
   assert.deepStrictEqual([arb._judgments.length, arb.fitness, arb.streak], [0, 350, 0]);
-  assert.deepStrictEqual([macro.fitness, macro._judgments.length, macro.streak, meta.fitness], [640, 1, 2, 400]);
+  assert.deepStrictEqual([macro.fitness, macro._judgments.length, macro.streak], [640, 1, 2]);
+  assert.deepStrictEqual([meta.fitness, meta._judgments.length, t.S._metaMeritMigrated], [350, 0, true], 'Évolueur migré');
+  assert.ok(/^Évolueur : fenêtre effacée/.test(t.S.chainLog[1].desc), t.S.chainLog[1].desc);
   assert.strictEqual(t.S._botMeritMigrated, true); assert.strictEqual(t.S._riskVetoes, undefined); assert.strictEqual(t.c._saved, 1);
   assert.ok(/^Bots : 3 fenêtres effacées/.test(t.S.chainLog[0].desc), t.S.chainLog[0].desc);
   arb.fitness = 777; t.intervals.forEach(f => { try { f(); } catch (e) {} }); assert.strictEqual(arb.fitness, 777, 'drapeau posé : plus jamais');

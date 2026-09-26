@@ -1,3 +1,4 @@
+// [MÉRITE DE L'ÉVOLUEUR · 26/09/2026] VERSION 20260926k · triggerEvolution ouvre un essai (ancien génome capturé AVANT la mutation) ; bandeau de l'Évolueur sans évolution jugée
 // [MÉRITE DES BOTS · 26/09/2026] VERSION 20260926j · bandeau d'un bot sans acte vérifié : « aucun acte vérifié encore » + bilan des actes (S.botMerit)
 // [PAGE AGENTS STABLE · 26/09/2026] VERSION 20260926i · page Agents stable : la liste n'est plus reconstruite toutes les 5 s (signature), une reconstruction garde barres, bandeaux, filtre et défilement ; badges et bandeau à place fixe ; historique de fitness sur changement ; sparklines redessinées seulement si la série change ; journal d'évolution et bannière de rêve réécrits seulement s'ils changent
 // [MÉMOIRE DES BOTS · 26/09/2026] VERSION 20260926h · la carte d'un bot / du méta affiche sa VRAIE mémoire (fenêtre de jugements, interventions et apport de la flotte) à la place du bandeau vide (_botMemorySummary)
@@ -2840,7 +2841,9 @@ function triggerEvolution(weak) {
   weak._judgments = [];   // [FITNESS GLISSANTE · 16/09/2026] la fenêtre repart de zéro : elle mesure le génome courant
   try {
     const _peakPrev = Math.max.apply(null, (Array.isArray(weak.fitnessHistory) && weak.fitnessHistory.length ? weak.fitnessHistory : [0]).map(Number).filter(isFinite).concat([0]));
+    const _oldG = (typeof _genomeOf === 'function') ? JSON.parse(JSON.stringify(_genomeOf(weak.id) || {})) : null;   // [MÉRITE DE L'ÉVOLUEUR · 26/09/2026] capturé AVANT la mutation
     const _ge = (typeof _genomeEvolve === 'function') ? _genomeEvolve(weak.id, _mutation, _peakPrev) : null;
+    if (_ge && _ge.changed > 0 && _oldG && Object.keys(_oldG).length && typeof _evoTrialStart === 'function') _evoTrialStart(weak.id, _oldG, { gen: genNum, name: weak.name, prev: prevName });   // essai : nouveau génome contre ancien
     if (_ge && S.chainLog) {
       S.chainLog.push({ icon: '\uD83E\uDDEC', desc: 'G\u00e9nome ' + weak.id + ' : ' + _ge.changed + '/' + _ge.genes + ' g\u00e8nes mut\u00e9s (\u00b1' + Math.round(_mutation * 100) + ' %)' + (_ge.archived ? ' \u00b7 version pr\u00e9c\u00e9dente archiv\u00e9e (pointe ' + Math.round(_peakPrev) + ' T$)' : ''), hash: Math.random().toString(36).slice(2, 8), time: new Date().toLocaleTimeString() });
       if (S.chainLog.length > 100) S.chainLog.splice(0, S.chainLog.length - 100);
@@ -5570,6 +5573,16 @@ function patchAgentCards() {
         }
         if(elMemPair) elMemPair.textContent = 'fitness glissante';
         if(elMemLegacy) { elMemLegacy.textContent = '🧮 ' + bm.n + ' jug. · ' + bm.fav + '✓'; elMemLegacy.style.color = bm.pct >= 50 ? 'var(--up)' : 'var(--down)'; }
+      } else if(bm && a.isMeta) {
+        // [MÉRITE DE L'ÉVOLUEUR · 26/09/2026] l'Évolueur est jugé sur ses évolutions : le nouveau génome vote-t-il mieux que l'ancien ?
+        const _em = S.evoMerit || null, _nt = S.evoTrials ? Object.keys(S.evoTrials).length : 0;
+        const lab = elMstrip.querySelector('.memory-strip-label span');
+        if(lab) lab.textContent = '🧬 MÉMOIRE RÉELLE';
+        if(elMemCnt)  elMemCnt.textContent  = '0 jug.';
+        if(elMemText) elMemText.textContent = 'aucune évolution jugée encore — chaque évolution est jugée sur 30 événements : le nouveau génome contre l\'ancien, votés en même temps';
+        if(elMemPnl)  { elMemPnl.textContent = _nt + ' essai' + (_nt > 1 ? 's' : '') + ' en cours' + (_em && _em.inconclusive ? ' · ' + _em.inconclusive + ' non concluant' + (_em.inconclusive > 1 ? 's' : '') : ''); elMemPnl.style.color = 'var(--t3)'; }
+        if(elMemPair) elMemPair.textContent = 'fitness neutre';
+        if(elMemLegacy) { elMemLegacy.textContent = '🧬 0 jug.'; elMemLegacy.style.color = 'var(--t3)'; }
       } else if(bm && a.isBot) {
         // [MÉRITE DES BOTS · 26/09/2026] pas encore d'acte vérifié : on le dit (un bot n'est plus jugé sur le résultat du système)
         const _mr = (S.botMerit && S.botMerit[a.id]) || null;

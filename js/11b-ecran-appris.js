@@ -1,3 +1,4 @@
+// [MÉRITE DE L'ÉVOLUEUR · 26/09/2026] VERSION 20260926k · section « Évolutions jugées » : essais en cours (nouveau contre ancien génome) et derniers verdicts
 // [FENÊTRE APPRENANTE · 26/09/2026] VERSION 20260926f · section « Fenêtre de jugement » : fenêtre courante (apprise ou défaut), événements rejoués, précision par fenêtre
 // [VÉRITÉ DES RÈGLES · 23/09/2026] VERSION 20260923f · sous chaque règle armée : promesse vs réalité depuis l'armement
 // [ÉCRAN APPRIS · 23/09/2026] VERSION 20260923c
@@ -79,6 +80,21 @@ function _learnedPanelHtml() {
     var accTxt = Object.keys(fw.acc || {}).map(function (w) { return w + ' → ' + fw.acc[w] + ' %'; }).join(' · ');
     h += row([{ t: fw.armed ? (fw.window + ' jugements (apprise)') : '60 jugements (défaut)', w: '1.4fr', s: fw.armed ? 'color:#00e87a;font-weight:600;' : 'font-weight:600;' }, { t: fw.n + ' événements rejoués', w: '1fr' }, { t: fw.why || ('meilleure : ' + fw.best), w: '1.6fr', s: 'color:#889;' }]);
     if (accTxt) h += row([{ t: 'précision du conseil', w: '1.4fr', s: 'color:#889;' }, { t: accTxt, w: '2.6fr', s: 'color:#889;' }]);
+  }
+  // 4c · évolutions jugées [MÉRITE DE L'ÉVOLUEUR · 26/09/2026]
+  var et = S.evoTrials || {}, etK = Object.keys(et), em = S.evoMerit || null;
+  h += title('ÉVOLUTIONS JUGÉES', '· le nouveau génome contre l\'ancien, votés sur les mêmes événements (30)');
+  if (!etK.length && !(em && em.recent && em.recent.length)) h += '<div style="color:#667;font-size:11px;">aucune évolution depuis la mise en place (≤ 1 par heure)</div>';
+  etK.forEach(function (id) {
+    var tr = et[id] || {}, pn = tr.nw > 0 ? Math.round((tr.ns / tr.nw + 1) * 50) : null, po = tr.ow > 0 ? Math.round((tr.os / tr.ow + 1) * 50) : null;
+    h += row([{ t: (tr.name || id), w: '1.3fr', s: 'font-weight:600;' }, { t: (tr.n || 0) + '/30', w: '.6fr' }, { t: pn === null ? 'en attente du premier vote' : ('nouveau ' + pn + ' % · ancien ' + po + ' %'), w: '2.1fr', s: 'color:#889;' }]);
+  });
+  if (em && em.recent && em.recent.length) {
+    em.recent.slice(-5).reverse().forEach(function (r) {
+      var col = r.verdict === 'amélioration' ? '#00e87a' : r.verdict === 'dégradation' ? '#ff4d6d' : '#889';
+      h += row([{ t: (r.name || r.seat), w: '1.3fr' }, { t: r.verdict, w: '1fr', s: 'color:' + col + ';font-weight:600;' }, { t: r.accNew + ' % contre ' + r.accOld + ' % · ' + r.n + ' jug.', w: '1.7fr', s: 'color:#889;' }]);
+    });
+    h += '<div style="color:#667;font-size:10px;padding:3px 2px;">bilan : ' + (em.good || 0) + ' amélioration(s) · ' + (em.bad || 0) + ' dégradation(s) · ' + (em.inconclusive || 0) + ' non concluant(s)</div>';
   }
   // 5 · journal
   var es = S.eventStats || {}, days = Object.keys(es).sort().slice(-3);
