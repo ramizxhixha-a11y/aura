@@ -1,3 +1,4 @@
+// [FENÊTRE APPRENANTE · 26/09/2026] VERSION 20260926f · la fenêtre de jugement (60) devient apprise : _fitWindow lit S.fitWindowRule (10i), jugements gardés 240 avec n° d'événement k, _fitOf / _fitRecomputeAll, rejeu après chaque jugement
 // [CONTEXTE 1 H / 4 H · 26/09/2026] VERSION 20260926e · geopolitic_v1 = Contexte 1h·4h : tendance des horizons 1 h et 4 h (02 _ctxHorizonRead), horizons alignés renforcés / en conflit amortis, 11 gènes bornés
 // [LIQUIDATIONS · 26/09/2026] VERSION 20260926d · whale_v1 lit les liquidations (S.liqStats) : shorts liquidés = achats forcés (+), longs liquidés = ventes forcées (−), génomé (wLiq, liqMinUsd)
 // [POSITIONNEMENT · 26/09/2026] VERSION 20260926c · fundamental_v1 = Positionnement : lit S.positioning (financement, OI, long/short), génomé
@@ -1209,19 +1210,48 @@ function _drawActionMiniChartsInner() {
 // en moins de 30 jugements ; les vieux régimes sortent de la fenêtre. Moins de FIT_MIN_N jugements → fitness de
 // naissance conservée. À la fusion (07) la fenêtre repart de zéro : elle mesure le génome courant.
 const FIT_WINDOW = 60, FIT_MIN_N = 5;
+// [FENÊTRE APPRENANTE · 26/09/2026] 60 était MA constante (Rams : « pourquoi 60 et pas plus, et évolutif ? »). La fenêtre EFFECTIVE est
+// désormais apprise par rejeu exact sur les jugements (10i _fitWindowRefresh → S.fitWindowRule) ; 60 reste le défaut tant que la
+// preuve manque. Les jugements sont gardés plus longtemps (FIT_KEEP) pour que les grandes fenêtres soient rejouables, avec le n°
+// de l'événement (k = S._realJudgments) qui aligne tous les agents sur le même jugement.
+const FIT_KEEP = 240;
+function _fitWindow() {
+  var r = (typeof S !== 'undefined' && S) ? S.fitWindowRule : null;
+  var w = (r && r.armed) ? Math.round(Number(r.window)) : 0;
+  return (w >= 10 && w <= FIT_KEEP) ? w : FIT_WINDOW;
+}
+// Fitness sur les W derniers jugements d'une liste (pur) ; null si moins de FIT_MIN_N.
+function _fitOf(js, W) {
+  var n = js.length, start = Math.max(0, n - W);
+  if (n - start < FIT_MIN_N) return null;
+  var sw = 0, se = 0;
+  for (var i = start; i < n; i++) { sw += js[i].w; se += js[i].s * js[i].w; }
+  var E = sw > 0 ? se / sw : 0;
+  return Math.max(50, Math.min(2000, Math.round(350 + 1000 * E)));
+}
 function _fitJudge(a, sign, w) {
   if (!a) return 0;
   if (!Array.isArray(a._judgments)) a._judgments = [];
-  a._judgments.push({ s: sign >= 0 ? 1 : -1, w: Math.max(0.01, Number(w) || 0) });
-  if (a._judgments.length > FIT_WINDOW) a._judgments.splice(0, a._judgments.length - FIT_WINDOW);
-  if (a._judgments.length < FIT_MIN_N) return a.fitness;
-  let sw = 0, se = 0;
-  a._judgments.forEach(j => { sw += j.w; se += j.s * j.w; });
-  const E = sw > 0 ? se / sw : 0;
-  a.fitness = Math.max(50, Math.min(2000, Math.round(350 + 1000 * E)));
+  a._judgments.push({ s: sign >= 0 ? 1 : -1, w: Math.max(0.01, Number(w) || 0), k: (typeof S !== 'undefined' && S && Number(S._realJudgments)) || 0 });
+  if (a._judgments.length > FIT_KEEP) a._judgments.splice(0, a._judgments.length - FIT_KEEP);
+  var f = _fitOf(a._judgments, _fitWindow());
+  if (f === null) return a.fitness;
+  a.fitness = f;
   return a.fitness;
 }
+// Recalcule la fitness de tous les agents avec la fenêtre courante (appelé par 10i quand la règle s'arme ou se désarme).
+function _fitRecomputeAll() {
+  if (typeof S === 'undefined' || !S || !Array.isArray(S.agents)) return 0;
+  var W = _fitWindow(), n = 0;
+  S.agents.forEach(function (a) {
+    if (!a || !Array.isArray(a._judgments)) return;
+    var f = _fitOf(a._judgments, W);
+    if (f !== null && f !== a.fitness) { a.fitness = f; n++; }
+  });
+  return n;
+}
 window._fitJudge = _fitJudge;
+window._fitWindow = _fitWindow; window._fitOf = _fitOf; window._fitRecomputeAll = _fitRecomputeAll;
 
 function learnFromOutcome(source, pnlPct, pair) {
   // ═══ [ÉCOLE · 17/09/2026] L'ÉCOLE NE NOTE PLUS (décision Rams 17/09) ═══
@@ -1473,6 +1503,9 @@ function learnFromOutcome(source, pnlPct, pair) {
       hash: rndHash(), time: nowStr()
     });
   }
+
+  // [FENÊTRE APPRENANTE · 26/09/2026] tous les agents viennent d'être jugés : la fenêtre se rejuge (et recalcule les fitness si elle change) AVANT l'évolution
+  try { if (typeof _fitWindowRefresh === 'function') _fitWindowRefresh(); } catch(e) {}
 
   // ── Déclenchement évolution si agent très faible ──────────
   const sorted = [...S.agents].filter(a=>!a.isBot&&!a.isMeta).sort((a,b)=>a.fitness-b.fitness);

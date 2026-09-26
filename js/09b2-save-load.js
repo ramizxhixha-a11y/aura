@@ -1,3 +1,4 @@
+// [FENÊTRE APPRENANTE · 26/09/2026] VERSION 20260926f · applySnap relit fitWindowRule et 240 jugements par agent, puis rejoue la fenêtre après la fusion des agents
 // [CONTEXTE 1 H / 4 H · 26/09/2026] VERSION 20260926e · applySnap appelle _seatLabelsSync (07) après la fusion des agents : étiquettes vraies dès la restauration, y compris un import manuel
 // [COMPTEURS RÉGLAGES · 24/09/2026] VERSION 20260924a · applySnap relit _realJudgments
 // [STOP APPRIS · 23/09/2026] VERSION 20260923b · applySnap relit stopRules et recalcule au boot
@@ -454,6 +455,7 @@ async function loadState() {
     if (snap._lossStreaks && typeof snap._lossStreaks === 'object')           S._lossStreaks      = snap._lossStreaks;      // [MÉMOIRE DE LA BLACKLIST · 22/09/2026]
     if (snap.gainRules && typeof snap.gainRules === 'object')                 S.gainRules         = snap.gainRules;         // [GAIN APPRIS · 23/09/2026]
     if (snap.stopRules && typeof snap.stopRules === 'object')                 S.stopRules         = snap.stopRules;         // [STOP APPRIS · 23/09/2026]
+    if (snap.fitWindowRule && typeof snap.fitWindowRule === 'object')         S.fitWindowRule     = snap.fitWindowRule;     // [FENÊTRE APPRENANTE · 26/09/2026]
     try { if (typeof _gainRefresh === 'function') _gainRefresh(); } catch(e) {}                                        // recalcul au boot
     try { if (typeof _stopRefresh === 'function') _stopRefresh(); } catch(e) {}                                        // [STOP APPRIS · 23/09/2026] idem
     try { if (typeof _horizonRefresh === 'function') _horizonRefresh(); } catch(e) {}                                     // recalcul au boot sur la mémoire relue
@@ -557,13 +559,14 @@ async function loadState() {
           a.streak         = sa.streak         || 0;
           a.lastPnl        = sa.lastPnl        || 0;
           a.memory         = sa.memory         || [];
-          a._judgments     = Array.isArray(sa._judgments) ? sa._judgments.slice(-60) : [];   // [FITNESS GLISSANTE · 16/09/2026]
+          a._judgments     = Array.isArray(sa._judgments) ? sa._judgments.slice(-240) : [];   // [FITNESS GLISSANTE · 16/09/2026] · [FENÊTRE APPRENANTE · 26/09/2026] 240
           a._probationUntil = sa._probationUntil || 0;                                        // [GÉNOME · 16/09/2026]
           a._bornCycle     = sa._bornCycle      || 0;
         }
       });
     }
   } catch(e) { dbg.push('agents:err'); }
+  try { if (typeof _fitWindowRefresh === 'function') _fitWindowRefresh(); } catch(e) {}   // [FENÊTRE APPRENANTE · 26/09/2026] rejeu de la fenêtre sur les jugements relus (agents fusionnés juste au-dessus)
   try { if (typeof _seatLabelsSync === 'function') _seatLabelsSync(); } catch(e) {}   // [CONTEXTE 1 H / 4 H · 26/09/2026] l'instantané recopie les anciennes étiquettes : on rétablit celles de la logique (07 _SEAT_DEF)
 
   try {
@@ -1199,4 +1202,4 @@ setTimeout(_auraRotatePurge, 20000);
 // relue » — le bug du 16/08 (7 clés perdues à chaque boot) devient structurellement
 // détectable. RÈGLE : toute clé ajoutée à 09b1 s'ajoute à applySnap ET ici.
 window._WALLET_MIRRORS = ['portfolio','totalTrades','winTrades','leverageReserve','leverageTotalFees','fiscalReserveLog','cashLog','ownFundsInjected','_ownFundsLegacyEUR','ownFundsLog','_autoLevBase','dreamJournal'];
-window._APPLYSNAP_MANIFEST = ['genome','genomeHistory','pairGenome','pairGenomeHistory','_pairGenomeDay','attribution','horizonRules','capRules','_gbpToBnbDone','_realJudgments','_lossStreaks','gainRules','stopRules','eventLog','eventStats','feeConfig','vMinor','pairBestWorst','profitSplitCaissePct','vMajor','fiatConvFeePct','agentMemories','globalMemoryPool','dreams','dynamicPairKeys','pairCandidates','proposals','decisionCascade','resonanceHistory','mutedAgents','agentLessons','realTimeframe','realActivePairs','agentLessonsReal','realKillSwitch','realModeStartedAt','preRealSnapshot','agentLessonsPaperReal','paperRealTimeframe','paperRealStartedAt','paperRealKillSwitch','paperRealLastClose','paperRealConsecLosses','paperRealGlobalPauseUntil','_genCount','key','cycle','cycleMax','chainLog','learningHistory','evoLog','agents','pairStates','walletStore','openPositions','pendingActions','botFleet','paperRealConfig','adaptiveState','abTesting','taxConfig','realCandles','preRealSnapshotPaperReal','heatmap','shadow','archives','paperRealStats','realStatsByPair','paperRealActivePairs','fees','tradeContextMemory','agentPairSkill','customPairs','removedPairs','botDisciples','discipleTasks','discipleAngles','discipleTaskSkill','savedAt','version','tradingMode','botAutoMode','fullPowerMode','leverage','_autoLevBorrowed','leverageBorrowed','cashAccount','tradingAccount','fiscalReserveAccount','antiNegReserve','_startPortfolio','_fleetTruthReset0908','_totalCompounded','brainLog','_errStats','_riskVetoes','_botSurplusCarry','_fpByBot','perfLog'];
+window._APPLYSNAP_MANIFEST = ['genome','genomeHistory','pairGenome','pairGenomeHistory','_pairGenomeDay','attribution','horizonRules','capRules','_gbpToBnbDone','_realJudgments','_lossStreaks','gainRules','stopRules','fitWindowRule','eventLog','eventStats','feeConfig','vMinor','pairBestWorst','profitSplitCaissePct','vMajor','fiatConvFeePct','agentMemories','globalMemoryPool','dreams','dynamicPairKeys','pairCandidates','proposals','decisionCascade','resonanceHistory','mutedAgents','agentLessons','realTimeframe','realActivePairs','agentLessonsReal','realKillSwitch','realModeStartedAt','preRealSnapshot','agentLessonsPaperReal','paperRealTimeframe','paperRealStartedAt','paperRealKillSwitch','paperRealLastClose','paperRealConsecLosses','paperRealGlobalPauseUntil','_genCount','key','cycle','cycleMax','chainLog','learningHistory','evoLog','agents','pairStates','walletStore','openPositions','pendingActions','botFleet','paperRealConfig','adaptiveState','abTesting','taxConfig','realCandles','preRealSnapshotPaperReal','heatmap','shadow','archives','paperRealStats','realStatsByPair','paperRealActivePairs','fees','tradeContextMemory','agentPairSkill','customPairs','removedPairs','botDisciples','discipleTasks','discipleAngles','discipleTaskSkill','savedAt','version','tradingMode','botAutoMode','fullPowerMode','leverage','_autoLevBorrowed','leverageBorrowed','cashAccount','tradingAccount','fiscalReserveAccount','antiNegReserve','_startPortfolio','_fleetTruthReset0908','_totalCompounded','brainLog','_errStats','_riskVetoes','_botSurplusCarry','_fpByBot','perfLog'];

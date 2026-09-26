@@ -1,3 +1,4 @@
+// [FENÊTRE APPRENANTE · 26/09/2026] VERSION 20260926f · section « Fenêtre de jugement » : fenêtre courante (apprise ou défaut), événements rejoués, précision par fenêtre
 // [VÉRITÉ DES RÈGLES · 23/09/2026] VERSION 20260923f · sous chaque règle armée : promesse vs réalité depuis l'armement
 // [ÉCRAN APPRIS · 23/09/2026] VERSION 20260923c
 // ═══ CE QUE LE SYSTÈME A APPRIS — ÉCRAN, LECTURE SEULE (« go », Rams 23/09) ═══
@@ -70,6 +71,15 @@ function _learnedPanelHtml() {
     var paused = s.blacklistedUntil && s.blacklistedUntil > Date.now();
     h += row([{ t: p.replace('/USDT', ''), w: '1fr', s: 'font-weight:600;' }, { t: rt.length + ' trades', w: '.8fr' }, { t: rt.length ? Math.round(100 * w / rt.length) + ' %' : '—', w: '.6fr' }, { t: paused ? ('⏸ pause ' + Math.ceil((s.blacklistedUntil - Date.now()) / 60000) + ' min') : 'active', w: '1fr', s: paused ? 'color:#ff4d6d;' : 'color:#889;' }]);
   });
+  // 4b · fenêtre de jugement [FENÊTRE APPRENANTE · 26/09/2026]
+  var fw = S.fitWindowRule;
+  h += title('FENÊTRE DE JUGEMENT', '· combien de jugements font la fitness d\'un siège — apprise par rejeu, 60 par défaut');
+  if (!fw) h += '<div style="color:#667;font-size:11px;">pas encore rejouée</div>';
+  else {
+    var accTxt = Object.keys(fw.acc || {}).map(function (w) { return w + ' → ' + fw.acc[w] + ' %'; }).join(' · ');
+    h += row([{ t: fw.armed ? (fw.window + ' jugements (apprise)') : '60 jugements (défaut)', w: '1.4fr', s: fw.armed ? 'color:#00e87a;font-weight:600;' : 'font-weight:600;' }, { t: fw.n + ' événements rejoués', w: '1fr' }, { t: fw.why || ('meilleure : ' + fw.best), w: '1.6fr', s: 'color:#889;' }]);
+    if (accTxt) h += row([{ t: 'précision du conseil', w: '1.4fr', s: 'color:#889;' }, { t: accTxt, w: '2.6fr', s: 'color:#889;' }]);
+  }
   // 5 · journal
   var es = S.eventStats || {}, days = Object.keys(es).sort().slice(-3);
   h += title('JOURNAL', '· événements comptés par jour');

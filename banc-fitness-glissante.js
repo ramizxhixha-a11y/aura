@@ -16,10 +16,10 @@ const s03 = rd('js/03-per-pair-position-buttons-controls-buid.js');
 function ctx() { const c = { Math, Number, Array, window: {} }; vm.createContext(c); vm.runInContext(between(s03, 'const FIT_WINDOW = 60, FIT_MIN_N = 5;', 'window._fitJudge = _fitJudge;', true), c); return c; }
 const judge = (c, a, s, w) => { c.a = a; c.s = s; c.w = w; return vm.runInContext('_fitJudge(a, s, w)', c); };
 console.log('▶ banc-fitness-glissante');
-T('D1 · 1 000 bonnes réponses : fitness plafonne à 1 350, jamais 2 000 ; fenêtre bornée à 60', () => {
+T('D1 · 1 000 bonnes réponses : fitness plafonne à 1 350, jamais 2 000 ; 240 jugements gardés (fenêtre effective 60 par défaut — [FENÊTRE APPRENANTE 26/09])', () => {
   const c = ctx(), a = { fitness: 350 };
   let mx = 0; for (let i = 0; i < 1000; i++) mx = Math.max(mx, judge(c, a, 1, 0.5 + (i % 7) * 0.1));
-  assert.strictEqual(a.fitness, 1350); assert.strictEqual(mx, 1350); assert.strictEqual(a._judgments.length, 60);
+  assert.strictEqual(a.fitness, 1350); assert.strictEqual(mx, 1350); assert.strictEqual(a._judgments.length, 240);
 });
 T('D2 · pile-ou-face pondéré : fitness ≈ 350 (poids symétriques) ; 1 000 erreurs : plancher 50', () => {
   const c = ctx(), a = { fitness: 650 };
@@ -53,16 +53,17 @@ T('S1 · learnFromOutcome : plus aucune écriture additive de fitness (bots, mé
   assert.ok(lfo.includes("_fitJudge(a, botReward >= 0 ? 1 : -1, mag);"), 'bots : poids = amplitude');
   assert.strictEqual(lfo.includes('a.fitness + 5'), false, 'bonus de série retiré');
   assert.ok(codeStrict(rd('js/07-v90-mode-bunker-sos.js')).includes('weak._judgments = [];'));
-  assert.ok(codeStrict(rd('js/09b1-build-snapshot.js')).includes('_judgments:     (a._judgments     || []).slice(-60),'));
-  assert.ok(codeStrict(rd('js/09b2-save-load.js')).includes('a._judgments     = Array.isArray(sa._judgments) ? sa._judgments.slice(-60) : [];'));
+  assert.ok(codeStrict(rd('js/09b1-build-snapshot.js')).includes('_judgments:     (a._judgments     || []).slice(-240),'));   // [FENÊTRE APPRENANTE 26/09] 240
+  assert.ok(codeStrict(rd('js/09b2-save-load.js')).includes('a._judgments     = Array.isArray(sa._judgments) ? sa._judgments.slice(-240) : [];'));
 });
 T('S2 · redistributeFitness retirée (02), appel retiré (08), hook _payBotSurplus retiré (12) — aucune écriture directe de fitness hors _fitJudge et la naissance (07)', () => {
   const c02 = codeStrict(rd('js/02-state-init.js')), c08 = codeStrict(rd('js/08-learning-history-render.js')), c12 = codeStrict(rd('js/12-bots-disciples.js'));
   assert.strictEqual(c02.includes('function redistributeFitness'), false); assert.strictEqual(c08.includes('redistributeFitness('), false); assert.strictEqual(c12.includes('window._payBotSurplus'), false);
   assert.strictEqual(c02.includes('_payBotSurplus'), false);
   const c03 = codeStrict(s03);
-  const writes = (c03.match(/\ba\.fitness = /g) || []).length, judge = (c03.match(/a\.fitness = Math\.max\(50, Math\.min\(2000, Math\.round\(350 \+ 1000 \* E\)\)\);/g) || []).length, revig = (c03.match(/a\.fitness = 400;\n\s*a\._judgments = \[\];/g) || []).length;
-  assert.strictEqual(judge, 1, '_fitJudge écrit la fitness une fois');
+  const writes = (c03.match(/\ba\.fitness = /g) || []).length, judge = (c03.match(/a\.fitness = f;/g) || []).length, revig = (c03.match(/a\.fitness = 400;\n\s*a\._judgments = \[\];/g) || []).length;
+  assert.strictEqual((c03.match(/return Math\.max\(50, Math\.min\(2000, Math\.round\(350 \+ 1000 \* E\)\)\);/g) || []).length, 1, 'la formule vit une fois, dans _fitOf');
+  assert.strictEqual(judge, 2, '_fitJudge et _fitRecomputeAll écrivent la fitness calculée par _fitOf ([FENÊTRE APPRENANTE 26/09])');
   assert.strictEqual(revig, 3, 'les 3 revigorations (auto agents, auto bots, manuelle) vident la fenêtre (' + revig + ')');
   assert.strictEqual(writes, judge + revig, 'aucune autre écriture directe de fitness dans 03 (' + writes + ')');
 });

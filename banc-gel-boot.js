@@ -13,7 +13,7 @@ const fs = require('fs'), vm = require('vm'), assert = require('assert'), path =
 const ROOT = __dirname;
 const TOK = (function(){ const m = require('fs').readFileSync(require('path').join(__dirname, 'AURA8_v118.html'), 'utf8').match(/DOC_V = '(\d{8}[a-z])'/); if (!m) { console.error('DOC_V introuvable dans AURA8_v118.html'); process.exit(2); } return m[1]; })();   // [12/09/2026] token lu dans le HTML (source unique) : plus jamais figé dans un banc
 const HEAD = '// [GEL BOOT · 11/09/2026] VERSION ';
-const VER = { 'guardian-core.js':'// [GEL BOOT · 12/09/2026] VERSION 20260912b', 'guardian-embed.js':'20260911a', 'js/00-backup-state.js':'20260911a', 'js/08-learning-history-render.js':'// [CONTEXTE 1 H / 4 H · 26/09/2026] VERSION 20260926e', 'js/09b1-build-snapshot.js':'// [COMPTEURS RÉGLAGES · 24/09/2026] VERSION 20260924a', 'js/09b2-save-load.js':'// [CONTEXTE 1 H / 4 H · 26/09/2026] VERSION 20260926e', 'js/09k-init.js':'20260911a' };
+const VER = { 'guardian-core.js':'// [GEL BOOT · 12/09/2026] VERSION 20260912b', 'guardian-embed.js':'20260911a', 'js/00-backup-state.js':'20260911a', 'js/08-learning-history-render.js':'// [CONTEXTE 1 H / 4 H · 26/09/2026] VERSION 20260926e', 'js/09b1-build-snapshot.js':'// [FENÊTRE APPRENANTE · 26/09/2026] VERSION 20260926f', 'js/09b2-save-load.js':'// [FENÊTRE APPRENANTE · 26/09/2026] VERSION 20260926f', 'js/09k-init.js':'20260911a' };
 let pass = 0, fail = 0;
 async function T(name, fn){ try { await fn(); pass++; console.log('  ✅', name); } catch(e){ fail++; console.log('  ❌', name, '\n     ', (e && e.stack || e).toString().split('\n').slice(0,3).join('\n      ')); } }
 process.on('unhandledRejection', e => { fail++; console.log('  ❌ rejet non géré :', e && e.message); });

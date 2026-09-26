@@ -1,3 +1,4 @@
+// [FENÊTRE APPRENANTE · 26/09/2026] VERSION 20260926f · _judgments gardés 240 (étaient 60) ; fitWindowRule dans le snapshot
 // [COMPTEURS RÉGLAGES · 24/09/2026] VERSION 20260924a · _realJudgments dans le snapshot
 // [STOP APPRIS · 23/09/2026] VERSION 20260923b · stopRules dans le snapshot
 // [GAIN APPRIS · 23/09/2026] VERSION 20260923a · gainRules dans le snapshot
@@ -76,7 +77,7 @@ function buildSnapshot() {
         lastPnl:        a.lastPnl         || 0,
         memory:         (a.memory         || []).slice(-20),
         regimeFitness:  a.regimeFitness   || {},
-        _judgments:     (a._judgments     || []).slice(-60),   // [FITNESS GLISSANTE · 16/09/2026]
+        _judgments:     (a._judgments     || []).slice(-240),   // [FITNESS GLISSANTE · 16/09/2026] · [FENÊTRE APPRENANTE · 26/09/2026] 240 (FIT_KEEP, 03)
         _probationUntil: a._probationUntil || 0,               // [GÉNOME · 16/09/2026]
         _bornCycle:     a._bornCycle      || 0
       })),
@@ -98,6 +99,7 @@ function buildSnapshot() {
       _lossStreaks: S._lossStreaks || {},             // [MÉMOIRE DE LA BLACKLIST · 22/09/2026]
       gainRules: S.gainRules || {},                   // [GAIN APPRIS · 23/09/2026]
       stopRules: S.stopRules || {},                   // [STOP APPRIS · 23/09/2026]
+      fitWindowRule: S.fitWindowRule || null,         // [FENÊTRE APPRENANTE · 26/09/2026]
       _gbpToBnbDone: !!S._gbpToBnbDone,
       _realJudgments: S._realJudgments || 0,          // [COMPTEURS RÉGLAGES · 24/09/2026]
       botDisciples:   S.botDisciples   || {},   // [15/08] sièges des disciples par bot

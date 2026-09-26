@@ -1,3 +1,4 @@
+// [FENÊTRE APPRENANTE · 26/09/2026] VERSION 20260926f · règle apprise de la fenêtre de jugement : _fitWindowEval (rejeu exact des jugements, 6 fenêtres candidates, preuve exigée) → S.fitWindowRule ; _fitWindowRefresh après chaque jugement et au boot
 // [CONTEXTE 1 H / 4 H · 26/09/2026] VERSION 20260926e · source d'attribution « contexte » (geopolitic_v1 sorti de « prix ») ; _pathRecord lit le dernier prix réel ACCEPTÉ en EV/RE (celui dont il juge l'âge)
 // [POSITIONNEMENT · 26/09/2026] VERSION 20260926c · sources d'attribution : macro et positionnement séparées (ex « fondamental »)
 // [PRIX FIGÉ + PREUVE D'ACTION · 25/09/2026] VERSION 20260925a · _pathRecord n'écrit rien sur un prix figé ; gain/stop exigent ≥ 4 cas d'action pour s'armer
@@ -486,3 +487,76 @@ window._intelPublish = _intelPublish;
 window._intelRead = _intelRead;
 window._attributionRecord = _attributionRecord;
 window._attributionSummary = _attributionSummary;
+
+// ═══ [FENÊTRE APPRENANTE · 26/09/2026] LA FENÊTRE DE JUGEMENT S'APPREND (Rams : « pourquoi 60 et pas plus, et évolutif ? ») ═══
+// La fitness d'un siège = 350 + 1000 × moyenne pondérée de ses derniers jugements (03 _fitJudge). 60 était une constante de ma
+// main. Rejeu exact sur les jugements gardés (240 par agent, alignés par n° d'événement k) : pour chaque fenêtre candidate, la
+// fitness que chaque agent AURAIT eue juste avant chaque événement, puis « le conseil pondéré par cette fitness aurait-il eu
+// raison ? » (Σ fitness × signe × poids > 0). La fenêtre qui prédit le mieux gagne — armée seulement sur preuve : ≥ 40 événements
+// rejoués, ≥ 5 points de mieux que 60, mieux que 60 sur chacune des deux moitiés ; sinon 60. Désarmement automatique, recalcul
+// après chaque jugement (03) et au boot (09b2) ; quand la fenêtre change, toutes les fitness sont recalculées (03) et le journal
+// le dit. Tant que peu de jugements sont gardés, toutes les fenêtres se valent (même mémoire) : la règle s'armera d'elle-même
+// quand l'historique permettra de les distinguer.
+var FITW_GRID = [20, 40, 60, 100, 160, 240], FITW_DEFAULT = 60, FITW_MIN_EVENTS = 40, FITW_MIN_MARGIN = 0.05, FITW_MIN_AGENTS = 8, FITW_MIN_N = 5;
+function _fitWindowEval(agents) {
+  var lists = [], byK = {};
+  (agents || []).forEach(function (a, ai) {
+    var js = (a && Array.isArray(a._judgments)) ? a._judgments.filter(function (e) { return e && typeof e.k === 'number' && e.k > 0 && typeof e.s === 'number' && typeof e.w === 'number'; }) : [];
+    lists.push(js);
+    js.forEach(function (e) { (byK[e.k] || (byK[e.k] = [])).push({ ai: ai, s: e.s, w: e.w }); });
+  });
+  var keys = Object.keys(byK).map(Number).filter(function (k) { return byK[k].length >= FITW_MIN_AGENTS; }).sort(function (x, y) { return x - y; });
+  var out = { window: FITW_DEFAULT, armed: false, n: keys.length, acc: {}, best: FITW_DEFAULT, t: Date.now() };
+  if (keys.length < FITW_MIN_EVENTS) { out.why = 'événements rejouables ' + keys.length + '/' + FITW_MIN_EVENTS; return out; }
+  var hits = {};
+  FITW_GRID.forEach(function (W) {
+    var ptr = lists.map(function () { return 0; }), h = [];
+    keys.forEach(function (k) {
+      var sum = 0;
+      byK[k].forEach(function (e) {
+        var js = lists[e.ai], p = ptr[e.ai];
+        while (p < js.length && js[p].k < k) p++;
+        ptr[e.ai] = p;
+        var start = Math.max(0, p - W), f = 350;
+        if (p - start >= FITW_MIN_N) {
+          var sw = 0, se = 0;
+          for (var i = start; i < p; i++) { sw += js[i].w; se += js[i].s * js[i].w; }
+          f = sw > 0 ? Math.max(50, Math.min(2000, Math.round(350 + 1000 * se / sw))) : 350;
+        }
+        sum += f * e.s * e.w;
+      });
+      h.push(sum > 0 ? 1 : 0);
+    });
+    hits[W] = h;
+  });
+  var acc = function (h, from, to) { var s = 0, n = 0; for (var i = from; i < to; i++) { s += h[i]; n++; } return n ? s / n : 0; };
+  var N = keys.length, half = Math.floor(N / 2), base = acc(hits[FITW_DEFAULT], 0, N), best = FITW_DEFAULT, bestAcc = base;
+  FITW_GRID.forEach(function (W) { var a = acc(hits[W], 0, N); out.acc[W] = Math.round(a * 1000) / 10; if (W !== FITW_DEFAULT && a > bestAcc + 1e-9) { bestAcc = a; best = W; } });
+  out.best = best;
+  var pc = function (h, a, b) { return Math.round(acc(h, a, b) * 1000) / 10; };
+  out.halves = {}; out.halves[FITW_DEFAULT] = [pc(hits[FITW_DEFAULT], 0, half), pc(hits[FITW_DEFAULT], half, N)]; out.halves[best] = [pc(hits[best], 0, half), pc(hits[best], half, N)];   // preuve lisible : précision par moitié (défaut et meilleure)
+  if (best !== FITW_DEFAULT && bestAcc - base >= FITW_MIN_MARGIN - 1e-9
+      && acc(hits[best], 0, half) >= acc(hits[FITW_DEFAULT], 0, half) && acc(hits[best], half, N) >= acc(hits[FITW_DEFAULT], half, N)) {
+    out.window = best; out.armed = true;
+  } else out.why = (best === FITW_DEFAULT) ? '60 reste la meilleure' : ('marge ' + (Math.round((bestAcc - base) * 1000) / 10) + ' pt < 5, ou instable sur les moitiés');
+  return out;
+}
+function _fitWindowRefresh() {
+  try {
+    if (typeof S === 'undefined' || !S || !Array.isArray(S.agents)) return null;
+    var prev = S.fitWindowRule || null, r = _fitWindowEval(S.agents);
+    var prevW = (prev && prev.armed) ? prev.window : FITW_DEFAULT, newW = r.armed ? r.window : FITW_DEFAULT;
+    r.armedAt = r.armed ? ((prev && prev.armed && prev.window === r.window && prev.armedAt) ? prev.armedAt : (Number(S._realJudgments) || 0)) : null;
+    S.fitWindowRule = r;
+    if (newW !== prevW) {
+      var n = (typeof _fitRecomputeAll === 'function') ? _fitRecomputeAll() : 0;
+      try {
+        if (!S.chainLog) S.chainLog = [];
+        S.chainLog.push({ icon: '🧮', desc: 'Fenêtre de jugement ' + prevW + ' → ' + newW + ' · ' + r.n + ' événements rejoués (' + r.acc[newW] + ' % vs ' + r.acc[FITW_DEFAULT] + ' % pour 60) · ' + n + ' fitness recalculées', hash: Math.random().toString(36).slice(2, 8), time: new Date().toLocaleTimeString() });
+        if (S.chainLog.length > 100) S.chainLog.splice(0, S.chainLog.length - 100);
+      } catch (e) {}
+    }
+    return r;
+  } catch (e) { return null; }
+}
+window._fitWindowEval = _fitWindowEval; window._fitWindowRefresh = _fitWindowRefresh;

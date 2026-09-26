@@ -124,7 +124,7 @@ T('S9 · en-têtes 02/08/10g/09b2 « ' + HDR + ' », 10f « ▓▓▓ VERSION 20
   assert.ok(s10g.startsWith(HDR), F10G);
   assert.ok(s08.startsWith('// [CONTEXTE 1 H / 4 H · 26/09/2026] VERSION 20260926e') && s08.split('\n').slice(0, 9).some(l => l.startsWith(HDR)), F08);   // [1b-b] 08 relivré, en-tête 1b-a en 2e ligne
   assert.ok(s02.startsWith('// [CONTEXTE 1 H / 4 H · 26/09/2026] VERSION 20260926e') && s02.split('\n').slice(0, 17).some(l => l.startsWith(HDR)), F02);   // [SONDE RÉSEAU] 02 relivré, en-tête 1b-a en 2e ligne
-  assert.ok(s9b2.startsWith('// [CONTEXTE 1 H / 4 H · 26/09/2026] VERSION 20260926e') && s9b2.split('\n').slice(0, 17).some(l => l.startsWith(HDR)), F9B2);   // [FITNESS GLISSANTE] 09b2 relivré, en-tête 1b-a dans les 6 premières lignes
+  assert.ok(s9b2.startsWith('// [FENÊTRE APPRENANTE · 26/09/2026] VERSION 20260926f') && s9b2.split('\n').slice(0, 18).some(l => l.startsWith(HDR)), F9B2);   // [FITNESS GLISSANTE] 09b2 relivré, en-tête 1b-a dans les 6 premières lignes
   assert.ok(s10f.startsWith('// ▓▓▓ VERSION 20260926a ▓▓▓'));   // 10f livré au hotfix b, non retouché depuis
   assert.strictEqual(count(html, TOK), 81);   // [ÉCRAN APPRIS 23/09] 11b ajouté (10i le 17/09)
   assert.strictEqual((html.match(/\?v=\d{8}[a-z]/g) || []).length, 80);
