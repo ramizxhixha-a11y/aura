@@ -52,7 +52,7 @@ T('D1 · battement RÉEL : occasion de l\'Arbitrage → trade ouvert TOUT DE SUI
   assert.strictEqual(run(c, '_fleetHeartbeat()'), 1);
   assert.deepStrictEqual(c.opens, [['paperReal', 'SOL/USDT', 'long', 20]]);
   const p = c.S.openPositions[0]; assert.deepStrictEqual([p.pair, p._bot, p._botKind], ['SOL/USDT', 'arb_bot_v1', 'arb']);
-  assert.ok(/^Arbitrage · trade SOL\/USDT LONG ouvert \(arb\)$/.test(c.S.chainLog[0].desc), c.S.chainLog[0].desc);
+  assert.ok(/^Arbitrage · trade SOL\/USDT LONG ouvert \(arb\) · mise de base 20\.0 \$$/.test(c.S.chainLog[0].desc), c.S.chainLog[0].desc);   // [MISE AU MÉRITE 27/09] 0 acte jugé : mise de base
   assert.strictEqual(c.S.pendingActions.length, 0, 'plus rien en attente'); assert.strictEqual(c.saves, 1, 'le livre a changé : sauvegarde');
   assert.deepStrictEqual(c.toasts, ['🤖 Arbitrage · SOL/USDT LONG ouvert']);
 });
@@ -68,15 +68,16 @@ T('D2 · refusée par l\'entonnoir → affirmation (bornes ±1 ATR) jugée par l
   assert.deepStrictEqual(left, [['dca', 'real'], ['harvest', 'paperReal']], 'harvest en attente (tagué EV) ; la proposition RE intacte');
   run(c, '_fleetHeartbeat()'); assert.strictEqual(c.S._botPredictions.length, 1, 'affirmation déjà ouverte : pas de doublon');
 });
-T('D3 · Réel : un bot n\'ouvre qu\'avec des bases solides (Règles Réel v2) — paire à espérance nette apprise > 0 ET bot au mérite prouvé (> 350 sur ≥ 5 actes) ; sinon affirmation seulement ; prouvé : trade ouvert', () => {
+T('D3 · Réel : un bot n\'ouvre qu\'avec des bases solides (Règles Réel v2) — paire à espérance nette apprise > 0 ET avantage du bot PROUVÉ (Wilson 95 %, [MISE AU MÉRITE 27/09]) ; sinon affirmation seulement, raison affichée ; prouvé : trade ouvert', () => {
   const P = [{ type: 'arb', source: 'arb_bot_v1', action: 'open_trade', pair: 'SOL/USDT', side: 'long', payload: { pair: 'SOL/USDT', side: 'long' } }];
   let c = mk({ mode: 'real', propose: P });
   run(c, '_fleetHeartbeat()'); assert.strictEqual(c.opens.length, 0, 'bot non prouvé : pas d\'ordre réel'); assert.strictEqual(c.S._botPredictions.length, 1);
-  assert.ok(/^Réel : SOL\/USDT LONG non ouvert — bases pas encore prouvées/.test(c.S.botFleet.arb_bot_v1.lastAction));
+  assert.ok(/^Réel : SOL\/USDT LONG non ouvert — pas encore de preuve \(0 acte jugé\)/.test(c.S.botFleet.arb_bot_v1.lastAction), c.S.botFleet.arb_bot_v1.lastAction);   // [MISE AU MÉRITE 27/09] raison précise
   c = mk({ mode: 'real', propose: P, net: -0.5 }); const b = c.S.agents[0]; b._judgments = Array.from({ length: 6 }, () => ({ s: 1, w: 1, k: 0 })); b.fitness = 1350;
   run(c, '_fleetHeartbeat()'); assert.strictEqual(c.opens.length, 0, 'paire à espérance nette négative : pas d\'ordre réel');
   c = mk({ mode: 'real', propose: P, net: 0.8 }); const b2 = c.S.agents[0]; b2._judgments = Array.from({ length: 6 }, () => ({ s: 1, w: 1, k: 0 })); b2.fitness = 1350;
-  run(c, '_fleetHeartbeat()'); assert.deepStrictEqual(c.opens, [['real', 'SOL/USDT', 'long', 20]]); assert.strictEqual(c.W.real.openPositions[0]._bot, 'arb_bot_v1');
+  run(c, '_fleetHeartbeat()'); assert.deepStrictEqual(c.opens.map(o => [o[0], o[1], o[2], Math.round(o[3] * 10) / 10]), [['real', 'SOL/USDT', 'long', 32.5]], '6/6 : avantage prouvé (Wilson 61 %) → mise ×1,63');   // [MISE AU MÉRITE 27/09]
+  assert.strictEqual(c.W.real.openPositions[0]._bot, 'arb_bot_v1');
 });
 T('D4 · une proposition s\'exécute dans SON mode : validée depuis l\'écran d\'un autre mode, elle ouvre dans le sien ; Rééquilibrage validé automatiquement → fermeture « bot » (position manuelle jamais fermée)', () => {
   const c = mk({ mode: 'real' });
@@ -113,6 +114,19 @@ T('D7 · Rééquilibrage RÉEL : ne propose jamais de fermer une position manuel
   c.W.paperReal.openPositions[0].auto = true; run(c, 'botRebalance()');
   assert.deepStrictEqual(c.S.pendingActions.map(a => [a.type, a.pair]), [['rebalance', 'SOL/USDT']]);
 });
+T('D8 · mise au mérite RÉELLE (03 _botStakeMult + 04) : moins de 5 actes → base ; se trompe (précision pondérée ≤ 50 %) → mise minimum (plancher) ; 6 sur 6 → avantage prouvé (Wilson 95 % : 61 %) → ×1,63, plafond 15 % ; 60 % sur 40 → pas encore prouvé (Wilson 45 %) → base', () => {
+  const P = [{ type: 'arb', source: 'arb_bot_v1', action: 'open_trade', pair: 'SOL/USDT', side: 'long', payload: { pair: 'SOL/USDT', side: 'long' } }];
+  const withJ = (js) => { const c = mk({ propose: P }); c.S.agents[0]._judgments = js; c.S.stakeFloorPct = 0.05; c._stakeFloor = () => Math.max(2, c.S.tradingAccount * 0.05); return c; };
+  const J1 = (n, s, w) => Array.from({ length: n }, () => ({ s, w: w || 1, k: 0 }));
+  let c = withJ(J1(4, 1)); let m = J(run(c, "_botStakeMult('arb_bot_v1')")); assert.deepStrictEqual([m.mult, m.n], [1, 4]); assert.ok(/pas encore de preuve/.test(m.why));
+  c = withJ([].concat(J1(4, 1), J1(6, -1))); m = J(run(c, "_botStakeMult('arb_bot_v1')")); assert.strictEqual(m.mult, 0); assert.ok(/se trompe au moins autant/.test(m.why));
+  run(c, '_fleetHeartbeat()'); assert.deepStrictEqual(c.opens.map(o => o[3]), [25], 'mise minimum = plancher de l\'entonnoir (5 % de 500 $)');
+  assert.ok(/mise minimum 25\.0 \$$/.test(c.S.chainLog[0].desc), c.S.chainLog[0].desc);
+  c = withJ(J1(6, 1)); m = J(run(c, "_botStakeMult('arb_bot_v1')")); assert.ok(Math.abs(m.lo - 0.61) < 0.005 && Math.abs(m.mult - 1.63) < 0.01, JSON.stringify(m));
+  run(c, '_fleetHeartbeat()'); assert.ok(Math.abs(c.opens[0][3] - 32.5) < 0.2, 'base 20 × 1,63');
+  c = withJ(J1(60, 1)); c.S.pairStates['SOL/USDT'].stake = 40; m = J(run(c, "_botStakeMult('arb_bot_v1')")); assert.ok(m.mult > 3.4, JSON.stringify(m)); run(c, '_fleetHeartbeat()'); assert.strictEqual(c.opens[0][3], 75, 'plafond 15 % du compte (500 $)');
+  c = withJ([].concat(J1(24, 1), J1(16, -1))); m = J(run(c, "_botStakeMult('arb_bot_v1')")); assert.strictEqual(m.mult, 1); assert.ok(m.lo < 0.5 && /pas encore prouvé/.test(m.why), JSON.stringify(m));
+});
 T('S1 · textes : le battement (08) fait tourner la flotte de chaque mode et juge les affirmations à chaque tick ; l\'écran ne la fait plus tourner (accueil, onglet flotte) ; le bot d\'une position est jugé à la clôture sur son résultat réel ; plus de 30 min ni de 0,3 % dans le moteur', () => {
   const c08 = codeStrict(s08);
   const iExit = c08.indexOf('try { if (window._botExitSweep) window._botExitSweep(); } catch(e) {}'), iHb = c08.indexOf('try { if (window._fleetHeartbeat) window._fleetHeartbeat(); }'), iCyc = c08.indexOf('Object.entries(S.pairStates).forEach(([pair, ps]) => {', iHb);
@@ -120,7 +134,7 @@ T('S1 · textes : le battement (08) fait tourner la flotte de chaque mode et jug
   assert.ok(/try \{ if \(window\._botMeritAudit\) window\._botMeritAudit\(\); \} catch\(e\) \{\}[^\n]*\n  _phEnd\('cycles paires \+ protection'\);/.test(c08), 'audit à chaque tick, après la boucle des modes');
   assert.ok(!codeStrict(s02).includes("runBotFleet('tick')"), 'accueil : plus de tick');
   const fp = codeStrict(between(s03, 'function renderFleetPanel() {', '\n  const stats = {', false)); assert.ok(!fp.includes("runBotFleet('tick')"), 'onglet flotte : plus de tick');
-  assert.ok(codeStrict(s02).includes("try { if (pos._bot && typeof _botJudgeMeasured === 'function') { _botJudgeMeasured(pos._bot, realisedUsd, 'trade');"));
+  assert.ok(codeStrict(s02).includes("try { if (pos._bot && typeof _botJudgeMeasured === 'function') { _botJudgeMeasured(pos._bot, realisedPct, 'trade');"));   // [MISE AU MÉRITE 27/09] en %
   const eng = codeStrict(ENGINE); ['BOT_AUDIT_MS', 'BOT_AUDIT_MIN_MOVE', 'BOT_AUDIT_MAX_AGE', '30 * 60 * 1000', '0.003'].forEach(k => assert.ok(!eng.includes(k), 'reste : ' + k));
   assert.ok(codeStrict(s04).includes("if (action.mode && action.mode !== S.tradingMode) continue;") && codeStrict(s04).includes('executePending(action.id, { auto: true });'));
 });

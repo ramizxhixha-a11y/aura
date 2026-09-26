@@ -209,4 +209,6 @@ Une régression de vérité = `VERDICT : NON LIVRABLE`, jamais « CONNU, tolér�
 
 - **27/09 — surveillance permanente** (`20260927a`) : la flotte ne tournait que quand l'écran l'appelait (accueil, onglet flotte) ; propositions retardées de 5 s ; affirmations jugées 30 min après sous 0,3 % (sinon jamais). Désormais : battement par mode en play, exécution immédiate par l'entonnoir, trade d'un bot jugé à son résultat réel, affirmations jugées au premier franchissement de ±1 ATR sans limite de temps. Rejeu 90 h réelles : occasions justes 44-45 % (aucun avantage démontré) — dit à Rams.
 
+- **27/09 — mise au mérite** (`20260927b`) : la mise d'un bot suit son mérite mesuré — minimum s'il se trompe, plus seulement si son avantage est prouvé (Wilson 95 %). Rejeu : la version proportionnelle simple faisait perdre plus l'Arbitrage et le DCA (séries chanceuses) ; la version retenue réduit les pertes des bots de 18 %. En Réel, avantage prouvé exigé.
+
 *Mis à jour à chaque mission. Le prochain audit complet : après 1b-b, sur un backup de 24 h propre.*

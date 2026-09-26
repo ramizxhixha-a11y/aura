@@ -1,3 +1,4 @@
+// [MISE AU MÉRITE · 27/09/2026] VERSION 20260927b · la mise d'un trade de bot suit son mérite (03 _botStakeMult : minimum / base / plus si avantage prouvé) ; en Réel, un bot n'ouvre qu'avec un avantage PROUVÉ et une paire rentable après frais
 // [SURVEILLANCE PERMANENTE · 27/09/2026] VERSION 20260927a · executePending(id, { auto }) : trade d'un bot marqué pos._bot (jugé à son résultat réel), refusé → affirmation ; Réel : un bot n'ouvre qu'avec des bases solides (paire à espérance nette apprise > 0, bot au mérite prouvé) ; mode de la proposition respecté ; Rééquilibrage auto sans position manuelle
 // [MASQUE CORRIGÉ · 26/09/2026] VERSION 20260926p · « Apprentissage accéléré » (modes ×3 / ×8, session rejouée, boost +50 / +200 : fitness écrite sans jugement) remplacé par « Apprentissage réel » ; Déblocages : « Faire évoluer agents cassés »
 // [GEL BOOT · 11/09/2026] VERSION 20260911c · le timer +3 s (_checkAutoBackup + _refreshBackupsCache) était la fenêtre des deux gels de boot : liste/index à +3 s (léger), backup auto du jour à +90 s ; restoreBackup lit UN enregistrement (_getBackup)
@@ -1804,16 +1805,26 @@ function executePending(actionId, opts) {
         const _pr = action.payload.pair, _sd = action.payload.side, _bot = action.source || null;
         const _ba = _bot ? (S.agents || []).find(x => x && x.id === _bot) : null, _bn = (_ba && _ba.name) || _bot || 'bot';
         // [SURVEILLANCE PERMANENTE · 27/09/2026] Réel : un bot n'ouvre qu'avec des bases solides, comme le cerveau (Règles Réel v2 de Rams, 05/07) —
-        // paire à espérance apprise NETTE positive (10e6 _learnedNetUsd) ET bot au mérite prouvé (fitness > 350 sur ≥ 5 actes
-        // jugés). Sinon son occasion reste une affirmation, jugée par le marché. Évaluation : aucune condition de plus.
-        let _reBlock = false;
+        // paire à espérance apprise NETTE positive (10e6 _learnedNetUsd) ET — [MISE AU MÉRITE · 27/09/2026] — avantage du bot PROUVÉ (borne
+        // basse de Wilson à 95 % au-dessus de 50 %, 03 _botStakeMult ; avant : fitness > 350 sur 5 actes, une série chanceuse
+        // suffisait). Sinon son occasion reste une affirmation, jugée par le marché. Évaluation : aucune condition de plus.
+        const _sm = (_bot && typeof _botStakeMult === 'function') ? _botStakeMult(_bot) : null;
+        let _reBlock = false, _reWhy = '';
         if (S.tradingMode === 'real' && _bot) {
           let _ln = null; try { _ln = (typeof _learnedNetUsd === 'function') ? _learnedNetUsd(_pr) : null; } catch(e) {}
-          const _proven = !!(_ba && Array.isArray(_ba._judgments) && _ba._judgments.length >= 5 && (_ba.fitness || 0) > 350);
-          _reBlock = !(_ln && _ln.netUsd > 0 && _proven);
+          const _pairOk = !!(_ln && _ln.netUsd > 0), _botOk = !!(_sm && _sm.mult > 1);
+          _reBlock = !(_pairOk && _botOk);
+          _reWhy = !_botOk ? (_sm ? _sm.why : 'mérite inconnu') : 'paire pas rentable après frais (espérance apprise)';
         }
         const ps = S.pairStates[_pr];
-        const stake = Math.max(10, Math.min(S.tradingAccount * 0.15, ps?.stake || 20));
+        let stake = Math.max(10, Math.min(S.tradingAccount * 0.15, ps?.stake || 20));
+        // [MISE AU MÉRITE · 27/09/2026] mise au mérite : minimum s'il se trompe, plus s'il a un avantage PROUVÉ (plafond 15 % du compte), sinon base
+        let _smTxt = '';
+        if (_sm) {
+          if (_sm.mult <= 0) stake = (typeof _stakeFloor === 'function') ? _stakeFloor() : 10;
+          else if (_sm.mult > 1) stake = Math.min(S.tradingAccount * 0.15, stake * _sm.mult);
+          _smTxt = _sm.mult <= 0 ? 'mise minimum' : (_sm.mult > 1 ? 'mise ×' + _sm.mult.toFixed(2) : 'mise de base');
+        }
         if(!_reBlock && typeof autoOpenPosition === 'function') {
           const _t0 = Date.now(), _cl = S.chainLog || [], _last0 = _cl[_cl.length - 1];
           autoOpenPosition(_pr, _sd, stake);
@@ -1821,8 +1832,8 @@ function executePending(actionId, opts) {
           if (np) {
             _changed = true;
             if (_bot) { np._bot = _bot; np._botKind = action.type || ''; }   // jugé à SON résultat réel à la clôture (02)
-            try { if (_bot && typeof _setBot === 'function') _setBot(_bot, 'active', `Trade ${_pr} ${String(_sd).toUpperCase()} ouvert (${action.type || 'occasion'}) · jugé à son résultat réel`); } catch(e) {}
-            try { if (S.chainLog && _bot) { S.chainLog.push({ icon: '🤖', desc: _bn + ' · trade ' + _pr + ' ' + String(_sd).toUpperCase() + ' ouvert (' + (action.type || 'occasion') + ')', hash: typeof rndHash === 'function' ? rndHash() : '', time: typeof nowStr === 'function' ? nowStr() : '' }); if (S.chainLog.length > 100) S.chainLog.splice(0, S.chainLog.length - 100); } } catch(e) {}
+            try { if (_bot && typeof _setBot === 'function') _setBot(_bot, 'active', `Trade ${_pr} ${String(_sd).toUpperCase()} ouvert (${action.type || 'occasion'})${_smTxt ? ' · ' + _smTxt + ' — ' + _sm.why : ''} · jugé à son résultat réel`); } catch(e) {}
+            try { if (S.chainLog && _bot) { S.chainLog.push({ icon: '🤖', desc: _bn + ' · trade ' + _pr + ' ' + String(_sd).toUpperCase() + ' ouvert (' + (action.type || 'occasion') + ')' + (_smTxt ? ' · ' + _smTxt + ' ' + (Number(np.stakeUsdt) || stake).toFixed(1) + ' $' : ''), hash: typeof rndHash === 'function' ? rndHash() : '', time: typeof nowStr === 'function' ? nowStr() : '' }); if (S.chainLog.length > 100) S.chainLog.splice(0, S.chainLog.length - 100); } } catch(e) {}
             if(typeof showToast === 'function') showToast(_bot ? `🤖 ${_bn} · ${_pr} ${String(_sd).toUpperCase()} ouvert` : `✓ Trade ${_pr} ${String(_sd).toUpperCase()} exécuté`);
           } else if (_bot) {
             // refusée par l'entonnoir : l'occasion reste une affirmation, jugée par le marché ; la raison est affichée
@@ -1837,7 +1848,7 @@ function executePending(actionId, opts) {
           } else if (typeof showToast === 'function') showToast(`⛔ ${_pr} ${String(_sd).toUpperCase()} refusé par l'entonnoir`);
         } else if (_reBlock && _bot) {
           try { if (typeof _botPredict === 'function') _botPredict(_bot, _pr, _sd, action.type || ''); } catch(e) {}
-          try { if (typeof _setBot === 'function') _setBot(_bot, 'scanning', `Réel : ${_pr} ${String(_sd).toUpperCase()} non ouvert — bases pas encore prouvées (paire ou bot) · affirmation suivie`); } catch(e) {}
+          try { if (typeof _setBot === 'function') _setBot(_bot, 'scanning', `Réel : ${_pr} ${String(_sd).toUpperCase()} non ouvert — ${_reWhy} · affirmation suivie`); } catch(e) {}
         }
         break;
       }

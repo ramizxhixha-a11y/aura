@@ -1,3 +1,4 @@
+// [MISE AU MÉRITE · 27/09/2026] VERSION 20260927b · le trade d'un bot est jugé en % de résultat (même unité que ses affirmations) — la mise au mérite lit une seule unité
 // [SURVEILLANCE PERMANENTE · 27/09/2026] VERSION 20260927a · goPage(0) ne fait plus tourner la flotte (le battement s'en charge) ; closePosition juge le bot qui a ouvert la position (pos._bot) sur son résultat réel
 // [MASQUE CORRIGÉ · 26/09/2026] VERSION 20260926p · juge caché « v6.0 » de la clôture retiré : il retrouvait l'agent par le préfixe « Hybrid » et créditait toujours le premier hybride (macro_v1) pour les avis des autres — fitness, erreurs, série, souvenirs
 // [TOUTE PAIRE AUTOMATIQUE · 26/09/2026] VERSION 20260926m · symbole futures découvert pour toute paire (sans préfixe → avec « 1000 » → aucun contrat), mis en cache 24 h — la liste des pièces à préfixe 1000 était figée
@@ -6482,7 +6483,8 @@ function closePosition(id, botClose = false) {
 
   learnFromOutcome('position', realisedPct, pos.pair);
   // [SURVEILLANCE PERMANENTE · 27/09/2026] la position a été ouverte par un bot : il est jugé sur SON résultat réel (en $), comme l'économie du TWAP
-  try { if (pos._bot && typeof _botJudgeMeasured === 'function') { _botJudgeMeasured(pos._bot, realisedUsd, 'trade'); if (S.botFleet && S.botFleet[pos._bot]) S.botFleet[pos._bot].pnlContrib = (S.botFleet[pos._bot].pnlContrib || 0) + (Number(realisedUsd) || 0); } } catch(e) {}
+  // [MISE AU MÉRITE · 27/09/2026] poids en % (realisedPct), la même unité que ses affirmations (mouvement en %) : sa mise se règle sur UNE mesure
+  try { if (pos._bot && typeof _botJudgeMeasured === 'function') { _botJudgeMeasured(pos._bot, realisedPct, 'trade'); if (S.botFleet && S.botFleet[pos._bot]) S.botFleet[pos._bot].pnlContrib = (S.botFleet[pos._bot].pnlContrib || 0) + (Number(realisedUsd) || 0); } } catch(e) {}
   // [ATTRIBUTION PAR SOURCE · 17/09/2026] A5 : crédite chaque source de données selon ce qu'elle disait à l'OUVERTURE
   // de cette position (10i, lecture seule — aucune décision n'utilise S.attribution).
   try { if (typeof _attributionRecord === 'function') _attributionRecord(pos, realisedPct); } catch(e) {}

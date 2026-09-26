@@ -1,3 +1,4 @@
+// [MISE AU MÉRITE · 27/09/2026] VERSION 20260927b · _botStakeMult : la mise d'un bot suit son mérite mesuré — minimum s'il se trompe (précision pondérée ≤ 50 %), plus seulement si son avantage est PROUVÉ (borne basse de Wilson à 95 % > 50 %), sinon mise de base
 // [SURVEILLANCE PERMANENTE · 27/09/2026] VERSION 20260927a · flotte au rythme du système (_fleetHeartbeat, par mode en play) ; affirmations jugées dès que le marché tranche (±1 ATR, plus de 30 min ni de 0,3 %) ; une affirmation ouverte par bot / paire / sens ; Scalper sans pause globale ; Sauvetage qui repart après un flatten ; Rééquilibrage jamais sur une position manuelle
 // [MASQUE CORRIGÉ · 26/09/2026] VERSION 20260926p · « Revigorer » (400 T$, même génome, fenêtre vidée) remplacé par « Faire évoluer maintenant » (_evolveBrokenNow : évolution réelle) ; revigoration forcée des bots retirée (bots et Évolueur jugés sur leurs actes)
 // [ÉVOLUTION SEULE · 26/09/2026] VERSION 20260926o · revigoration AUTOMATIQUE des apprenants retirée (elle remettait à 400 T$, fenêtre vidée, les sièges mesurés faux : leur poids de vote ×5 à ×8 et l'évolution détournée vers un siège sain) ; un siège faible garde sa vraie fitness et l'évolution le remplace ; revigorations manuelles gardées
@@ -6166,6 +6167,34 @@ function _botJudgeMeasured(botId, value, kind) {
   if (!(typeof v === 'number' && isFinite(v)) || Math.abs(v) < 0.001) return null;
   return _botJudge(botId, v > 0, Math.abs(v), kind);
 }
+// ═══ [MISE AU MÉRITE · 27/09/2026] LA MISE D'UN BOT SUIT SON MÉRITE MESURÉ (go Rams 27/09 01:37) ═══
+// « Plus il a raison, plus il mise ; s'il se trompe, il mise le minimum. » Mesure : SES actes jugés (trades au résultat réel,
+// affirmations au premier franchissement de ±1 ATR) sur la fenêtre de la fitness — précision pondérée p, mêmes poids que la
+// fitness (espérance E = 2p − 1 ; fitness = 350 + 1000·E). Rejeu avant livraison (app réelle, 90 h de bougies réelles, occasions
+// jugées, frais 0,2 % aller-retour, mises EV : base 75 $, minimum 52,5 $, plafond 157 $) — la version « mise proportionnelle à
+// la fitness dans les deux sens » montait la mise après des séries chanceuses de 5 à 10 actes et faisait PERDRE PLUS l'Arbitrage
+// (−6,73 $ contre −5,03 $) et le DCA (−3,93 $ contre −3,30 $). Retenu :
+//  · il se trompe au moins autant qu'il a raison (p ≤ 50 % : fitness ≤ 350, sur ≥ 5 actes) → mise minimum (plancher de l'entonnoir) ;
+//  · avantage PROUVÉ — borne basse de Wilson à 95 % au-dessus de 50 %, sur l'effectif pondéré (Kish) → mise × (350 + 1000·(2·borne − 1)) / 350 :
+//    la loi du poids d'un agent dans le vote (proportionnel à sa fitness), appliquée à la part PROUVÉE seulement ; plafond 15 % du compte ;
+//  · sinon (moins de 5 actes, ou avantage pas encore prouvé) → mise de base.
+// Rejeu : pertes des bots −18 % (−22,31 $ → −18,27 $), le Scalper à la mise minimum sur 60 de ses 71 trades ; aucun bot prouvé.
+function _botStakeMult(botId) {
+  try {
+    const a = (S.agents || []).find(x => x && x.id === botId);
+    const W = (typeof _fitWindow === 'function') ? _fitWindow() : 60;
+    const js = (a && Array.isArray(a._judgments)) ? a._judgments.slice(-W) : [];
+    if (js.length < FIT_MIN_N) return { mult: 1, p: null, lo: null, n: js.length, why: 'pas encore de preuve (' + js.length + ' acte' + (js.length > 1 ? 's' : '') + ' jugé' + (js.length > 1 ? 's' : '') + ')' };
+    let sw = 0, se = 0, sw2 = 0;
+    js.forEach(j => { const w = Math.max(0.01, Number(j && j.w) || 0); sw += w; se += ((j && j.s) >= 0 ? 1 : -1) * w; sw2 += w * w; });
+    const E = sw > 0 ? se / sw : 0, p = (E + 1) / 2, n = sw2 > 0 ? (sw * sw) / sw2 : js.length, z = 1.96;
+    const lo = (p + z * z / (2 * n) - z * Math.sqrt(Math.max(0, p * (1 - p) / n + z * z / (4 * n * n)))) / (1 + z * z / n);   // Wilson
+    const pc = Math.round(p * 100), lc = Math.round(lo * 100);
+    if (E <= 0) return { mult: 0, p: p, lo: lo, n: js.length, why: 'se trompe au moins autant qu\'il a raison (' + pc + ' % juste, pondéré)' };
+    if (lo > 0.5) return { mult: (350 + 1000 * (2 * lo - 1)) / 350, p: p, lo: lo, n: js.length, why: 'avantage prouvé : au moins ' + lc + ' % juste (95 %)' };
+    return { mult: 1, p: p, lo: lo, n: js.length, why: 'avantage pas encore prouvé (' + pc + ' % juste, ' + js.length + ' actes)' };
+  } catch (e) { return { mult: 1, p: null, lo: null, n: 0, why: 'mesure indisponible' }; }
+}
 // [SURVEILLANCE PERMANENTE · 27/09/2026] ATR relatif (14 bougies de la timeframe du mode, bougies réelles sinon celles de la paire) : la borne d'une
 // affirmation — ce que le marché de CETTE paire appelle un vrai mouvement (plus un 0,3 % identique pour BTC et PEPE).
 function _botAtrPct(pair) {
@@ -6295,7 +6324,7 @@ function _botMeritAudit() {
   }, 500);
 })();
 window._botPredict = _botPredict; window._botMeritAudit = _botMeritAudit; window._botJudgeMeasured = _botJudgeMeasured; window._botJudge = _botJudge;
-window._botAtrPct = _botAtrPct; window._botHasOpenClaim = _botHasOpenClaim; window._botAlreadyActing = _botAlreadyActing;
+window._botAtrPct = _botAtrPct; window._botHasOpenClaim = _botHasOpenClaim; window._botAlreadyActing = _botAlreadyActing; window._botStakeMult = _botStakeMult;
 
 // ═══ [MÉRITE DE L'ÉVOLUEUR · 26/09/2026] L'ÉVOLUTION A-T-ELLE AMÉLIORÉ LE SIÈGE ? (Rams : « oui je veux ») ═══
 // Une évolution (07 triggerEvolution) change UNE chose dans les décisions d'un siège : son génome (la logique de vote est par
