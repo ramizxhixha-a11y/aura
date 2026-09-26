@@ -1,3 +1,4 @@
+// [MÉMOIRE DES BOTS · 26/09/2026] VERSION 20260926h · showMemoryOverlay : pour un bot / le méta, le résumé réel (jugements, interventions) au lieu de « aucune mémoire »
 // [DOUBLE JUGEMENT · 26/09/2026] VERSION 20260926g · la compétence par régime (regimeFitness) est mise à jour sur les jugements 'position' (chaque fermeture) et plus seulement 'trade' (10f ne rejuge plus)
 // [FENÊTRE APPRENANTE · 26/09/2026] VERSION 20260926f · la fenêtre de jugement (60) devient apprise : _fitWindow lit S.fitWindowRule (10i), jugements gardés 240 avec n° d'événement k, _fitOf / _fitRecomputeAll, rejeu après chaque jugement
 // [CONTEXTE 1 H / 4 H · 26/09/2026] VERSION 20260926e · geopolitic_v1 = Contexte 1h·4h : tendance des horizons 1 h et 4 h (02 _ctxHorizonRead), horizons alignés renforcés / en conflit amortis, 11 gènes bornés
@@ -1616,6 +1617,9 @@ function recallMemory(agent, pair, currentSignal) {
 function showMemoryOverlay(agentId) {
   const agent = S.agents.find(a => a.id === agentId);
   if(!agent || !agent.memory || agent.memory.length === 0) {
+    // [MÉMOIRE DES BOTS · 26/09/2026] un bot n'a pas d'épisodes mais a une mémoire : ses jugements (07 _botMemorySummary)
+    const bm = (agent && typeof _botMemorySummary === 'function') ? _botMemorySummary(agent) : null;
+    if(bm && bm.n > 0) { showToast(`🧮 ${agent.name} · ${bm.fav} jugements favorables sur ${bm.n} (${bm.pct} %) · fenêtre ${bm.window}` + (bm.interventions !== null ? ` · ${bm.interventions} intervention(s)` + (bm.contrib ? ` · apport ${bm.contrib > 0 ? '+' : '−'}$${Math.abs(bm.contrib).toFixed(2)}` : '') : ''), 6000); return; }
     showToast('📭 Aucune mémoire pour cet agent encore'); return;
   }
   let overlay = document.getElementById('memoryOverlay');

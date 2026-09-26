@@ -189,4 +189,6 @@ Une régression de vérité = `VERDICT : NON LIVRABLE`, jamais « CONNU, tolér�
 
 - **26/09 — double jugement** (`20260926g`) : corrigé sur go — 10f ne rejuge plus après closePosition ; la compétence par régime suit désormais chaque fermeture ('position'), elle ne suivait que les fermetures bot ('trade').
 
+- **26/09 — mémoire des bots** (`20260926h`) : les bots n'ont jamais eu d'épisodes (jugés avant la mémoire) ; leur carte montrait le vide alors que leur vraie mémoire (fenêtre de jugements, interventions, apport) existait — affichée telle quelle, sans souvenirs inventés.
+
 *Mis à jour à chaque mission. Le prochain audit complet : après 1b-b, sur un backup de 24 h propre.*

@@ -1,3 +1,4 @@
+// [MÉMOIRE DES BOTS · 26/09/2026] VERSION 20260926h · la carte d'un bot / du méta affiche sa VRAIE mémoire (fenêtre de jugements, interventions et apport de la flotte) à la place du bandeau vide (_botMemorySummary)
 // [CONTEXTE 1 H / 4 H · 26/09/2026] VERSION 20260926e · _SEAT_DEF vrai pour macro / positionnement / contexte ; _seatLabelsSync au boot : type/source/nom des sièges convertis rétablis malgré l'instantané (09b2 recopie les anciens)
 // [MACRO RÉEL · 26/09/2026] VERSION 20260926b · flux macro permanent (_macroFeedRefresh → S.macroFeed) : Fear & Greed, dominance BTC, cap 24 h
 // [PRIX FIGÉ + PREUVE D'ACTION · 25/09/2026] VERSION 20260925a · l'anti-zombie s'efface devant une règle de gain armée ; sa sortie est marquée (zombie)
@@ -36,6 +37,21 @@ const _SEAT_DEF = {
   'hedge_v2': { type: 'Risk·Off·Defender', source: 'Vol·Macro' }
 };
 window._SEAT_DEF = _SEAT_DEF;
+// [MÉMOIRE DES BOTS · 26/09/2026] Les 10 bots et le méta n'ont jamais eu d'épisodes : learnFromOutcome (03) les juge (fitness glissante) et sort
+// AVANT enrichMemory, et le chemin « top 5 à l'ouverture » les exclut. Leur carte montrait donc une mémoire vide (Rams 26/09 :
+// « la mémoire des bots me semble quasi vide ») alors que leur vraie mémoire existe : la fenêtre de jugements (celle qui fait leur
+// fitness) et, pour la flotte, les interventions réelles comptées et l'apport mesuré. Résumé PUR, affiché dans le bandeau mémoire.
+function _botMemorySummary(a) {
+  if (!a || !(a.isBot || a.isMeta)) return null;
+  var js = Array.isArray(a._judgments) ? a._judgments : [];
+  var W = (typeof _fitWindow === 'function') ? _fitWindow() : 60;
+  var win = js.slice(-W), n = win.length, fav = 0, sw = 0, se = 0;
+  win.forEach(function (j) { var up = !!(j && j.s > 0); if (up) fav++; var w = Number(j && j.w) || 0; sw += w; se += (up ? 1 : -1) * w; });
+  var fb = (typeof S !== 'undefined' && S && S.botFleet) ? S.botFleet[a.id] : null;
+  return { n: n, fav: fav, pct: n ? Math.round(100 * fav / n) : null, weighted: sw > 0 ? Math.round(100 * se / sw) / 100 : null, window: W,
+           interventions: fb ? (Number(fb.contributions) || 0) : null, contrib: fb ? (Math.round((Number(fb.pnlContrib) || 0) * 100) / 100) : null };
+}
+window._botMemorySummary = _botMemorySummary;
 // [CONTEXTE 1 H / 4 H · 26/09/2026] Les étiquettes d'un siège (type / source) décrivent SA LOGIQUE, qui est par id (03). Mais 09b2
 // recopie name/emoji/type/source depuis l'instantané à chaque boot : les trois sièges convertis depuis le 26/09 (macro,
 // positionnement, contexte) gardaient donc au DAO leurs anciennes étiquettes mensongères (« Linear·FRED / Fed/BCE/FMI »,
@@ -5505,6 +5521,23 @@ function patchAgentCards() {
       }
       if(elMemPair) elMemPair.textContent = last.pair || '—';
       if(elMemCnt)  elMemCnt.textContent  = a.memory.length + ' ep.';
+    }
+    // [MÉMOIRE DES BOTS · 26/09/2026] bots / méta sans épisodes : la vraie mémoire (jugements, interventions, apport) à la place du bandeau vide
+    if(elMstrip && (a.isBot || a.isMeta) && !(a.memory && a.memory.length > 0) && typeof _botMemorySummary === 'function') {
+      const bm = _botMemorySummary(a);
+      if(bm && bm.n > 0) {
+        elMstrip.style.display = '';
+        const lab = elMstrip.querySelector('.memory-strip-label span');
+        if(lab) lab.textContent = '🧮 MÉMOIRE RÉELLE';
+        if(elMemCnt)  elMemCnt.textContent  = bm.n + ' jug.';
+        if(elMemText) elMemText.textContent = bm.fav + ' jugements favorables sur ' + bm.n + ' (' + bm.pct + ' %) · fenêtre ' + bm.window + ' · bilan pondéré ' + (bm.weighted >= 0 ? '+' : '') + bm.weighted;
+        if(elMemPnl) {
+          elMemPnl.textContent = bm.interventions === null ? 'hors flotte' : (bm.interventions + ' intervention' + (bm.interventions > 1 ? 's' : '') + (bm.contrib ? ' · apport ' + (bm.contrib > 0 ? '+' : '−') + '$' + Math.abs(bm.contrib).toFixed(2) : ''));
+          elMemPnl.style.color = bm.pct >= 50 ? 'var(--up)' : 'var(--down)';
+        }
+        if(elMemPair) elMemPair.textContent = 'fitness glissante';
+        if(elMemLegacy) { elMemLegacy.textContent = '🧮 ' + bm.n + ' jug. · ' + bm.fav + '✓'; elMemLegacy.style.color = bm.pct >= 50 ? 'var(--up)' : 'var(--down)'; }
+      }
     }
 
     // Draw fitness sparkline — retina-aware bezier
