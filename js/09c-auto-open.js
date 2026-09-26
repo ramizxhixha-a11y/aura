@@ -1,4 +1,4 @@
-// ▓▓▓ VERSION 20260922c ▓▓▓
+// ▓▓▓ VERSION 20260926j ▓▓▓ · [MÉRITE DES BOTS · 26/09/2026] l'économie TWAP (signée) juge le Bot Exécution (03 _botJudgeMeasured)
 // [MÉMOIRE DE LA BLACKLIST · 22/09/2026] blacklist / pause série lues en EV/RE seulement
 // [PLAFONDS APPRIS · 22/09/2026] emplacements EV et plafond de sens lus depuis les niveaux appris (10i _capFor)
 // [PLAFOND DE SENS · 21/09/2026] entonnoir : plafond de sens (au plus 2 positions dans le même sens, EV/RE) après l'anti-doublon — 09c inchangé depuis 20260906e jusqu'ici
@@ -1033,7 +1033,7 @@ setInterval(function _twapSweep() {
         const saving = (pos.side === 'long' ? (t.p0 - avg) : (avg - t.p0)) / t.p0 * (pos.stakeUsdt || 0);
         try {
           if (S.botFleet && S.botFleet.exec_bot_v1) {
-            S.botFleet.exec_bot_v1.pnlContrib = (S.botFleet.exec_bot_v1.pnlContrib || 0) + saving;
+            S.botFleet.exec_bot_v1.pnlContrib = (S.botFleet.exec_bot_v1.pnlContrib || 0) + saving; if (typeof _botJudgeMeasured === 'function') _botJudgeMeasured('exec_bot_v1', saving, 'twap');
           }
           if (S.chainLog) {
             S.chainLog.push({ icon: '⚡', desc: 'TWAP ' + t.n + 'x ' + pos.pair + ' terminé · entrée moyenne ' + avg.toFixed(4) + ' vs spot ' + t.p0.toFixed(4) + ' · ' + (saving >= 0 ? 'économie +' : 'coût −') + '$' + Math.abs(saving).toFixed(3), hash: Math.random().toString(36).slice(2, 8), time: new Date().toLocaleTimeString() });

@@ -1,3 +1,4 @@
+// [MÉRITE DES BOTS · 26/09/2026] VERSION 20260926j · _fitWindowRefresh rejoue la fenêtre sur les agents qui VOTENT (bots et méta exclus : leurs jugements ne sont pas des votes)
 // [FENÊTRE APPRENANTE · 26/09/2026] VERSION 20260926f · règle apprise de la fenêtre de jugement : _fitWindowEval (rejeu exact des jugements, 6 fenêtres candidates, preuve exigée) → S.fitWindowRule ; _fitWindowRefresh après chaque jugement et au boot
 // [CONTEXTE 1 H / 4 H · 26/09/2026] VERSION 20260926e · source d'attribution « contexte » (geopolitic_v1 sorti de « prix ») ; _pathRecord lit le dernier prix réel ACCEPTÉ en EV/RE (celui dont il juge l'âge)
 // [POSITIONNEMENT · 26/09/2026] VERSION 20260926c · sources d'attribution : macro et positionnement séparées (ex « fondamental »)
@@ -544,7 +545,7 @@ function _fitWindowEval(agents) {
 function _fitWindowRefresh() {
   try {
     if (typeof S === 'undefined' || !S || !Array.isArray(S.agents)) return null;
-    var prev = S.fitWindowRule || null, r = _fitWindowEval(S.agents);
+    var prev = S.fitWindowRule || null, r = _fitWindowEval(S.agents.filter(function (a) { return a && !a.isBot && !a.isMeta; }));   // [MÉRITE DES BOTS · 26/09/2026] votants seulement
     var prevW = (prev && prev.armed) ? prev.window : FITW_DEFAULT, newW = r.armed ? r.window : FITW_DEFAULT;
     r.armedAt = r.armed ? ((prev && prev.armed && prev.window === r.window && prev.armedAt) ? prev.armedAt : (Number(S._realJudgments) || 0)) : null;
     S.fitWindowRule = r;

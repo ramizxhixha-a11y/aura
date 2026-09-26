@@ -1,3 +1,4 @@
+// [MÉRITE DES BOTS · 26/09/2026] VERSION 20260926j · un bot n'est plus jugé sur le résultat du système (les 9 bots avaient la MÊME fenêtre et tombaient ensemble à 50) : il est jugé sur SES actes vérifiés (_botPredict / _botMeritAudit / _botJudgeMeasured) ; relevé des vetos réparé (`side` inexistant depuis le 15/08)
 // [MÉMOIRE DES BOTS · 26/09/2026] VERSION 20260926h · showMemoryOverlay : pour un bot / le méta, le résumé réel (jugements, interventions) au lieu de « aucune mémoire »
 // [DOUBLE JUGEMENT · 26/09/2026] VERSION 20260926g · la compétence par régime (regimeFitness) est mise à jour sur les jugements 'position' (chaque fermeture) et plus seulement 'trade' (10f ne rejuge plus)
 // [FENÊTRE APPRENANTE · 26/09/2026] VERSION 20260926f · la fenêtre de jugement (60) devient apprise : _fitWindow lit S.fitWindowRule (10i), jugements gardés 240 avec n° d'événement k, _fitOf / _fitRecomputeAll, rejeu après chaque jugement
@@ -1310,27 +1311,12 @@ function learnFromOutcome(source, pnlPct, pair) {
   S.agents.forEach(a => {
     // Bots d'exécution : leur score reste 0 (role neutre), mais leur fitness évolue
     if(a.isBot) {
-      // [ÉCONOMIE BOTS · 15/08/2026] (1) plafond souple bot-only SUPPRIMÉ : près de 1600
-      // un bot ne touchait plus que 20% de sa récompense (un hybride 100%) — même trade,
-      // 4-5× moins de T$. Même règle pour tous ; le plafond 1600 est géré par le VERSEMENT
-      // (02). (2) crédit par MÉRITE MESURÉ : la récompense collective (le trade a gagné)
-      // est complétée par l'apport propre du bot depuis le dernier passage — delta de
-      // pnlContrib (TWAP signé, impact Sizer, etc.), en T$ à 40 T$/$ (échelle des
-      // récompenses mag×5). Un bot qui rapporte monte, un bot qui coûte descend.
-      let botReward = won ? mag * 5 : -mag * 1.2;
-      try {
-        const fb = S.botFleet && S.botFleet[a.id];
-        if (fb) {
-          const cur = Number(fb.pnlContrib) || 0;
-          const prev = (typeof a._lastPnlContrib === 'number') ? a._lastPnlContrib : cur;
-          const delta = cur - prev;
-          if (Math.abs(delta) > 0.0005) botReward += Math.max(-60, Math.min(60, delta * 40));
-          a._lastPnlContrib = cur;
-        }
-      } catch(e) { try{window._decErr&&window._decErr(e)}catch(_e){} }
-      _fitJudge(a, botReward >= 0 ? 1 : -1, mag);   // [FITNESS GLISSANTE] poids symétrique = amplitude du trade
-      a.totalReward = (a.totalReward || 0) + botReward;
-      a.learningEvents = (a.learningEvents || 0) + 1;
+      // [MÉRITE DES BOTS · 26/09/2026] Rams : « les bots sont cassés quasi en permanence » (DAO 26/09 20:04 : les 9 à 50 T$). Ici, chaque bot était
+      // jugé sur le SIGNE de chaque résultat du système (trade gagné / perdu, bougie montée / descendue) × son amplitude : les 9
+      // bots avaient donc la MÊME fenêtre de 60 jugements (backups 21, 23, 25/09 : identiques au jugement près) et la même
+      // fitness — celle du système, pas la leur. Le système perdait → les 9 tombaient ensemble au plancher 50 (« cassés »), et
+      // aucune revigoration automatique ne les relevait. Un bot n'est plus jugé ici : il l'est sur SES actes vérifiés
+      // (_botPredict → _botMeritAudit 30 min plus tard ; TWAP et Smart Sizer à leur résultat : _botJudgeMeasured).
       return;
     }
     if(a.isMeta) {
@@ -4063,13 +4049,12 @@ function guardianCheck(guardianId, verdict, pair, stake) {
       if(expPct > 65) {
         // [ÉCONOMIE BOTS · 15/08/2026] mérite du veto : mémorisé (paire, side, prix, ts) ;
         // _riskVetoAudit juge 30 min plus tard si le trade refusé aurait perdu → crédit.
+        // [MÉRITE DES BOTS · 26/09/2026] ce relevé n'a JAMAIS fonctionné : `side` n'existe pas ici (ReferenceError avalée par le try) — aucun
+        // veto n'a été audité depuis le 15/08. Le côté refusé est celui du verdict du conseil ; le veto prédit que ce trade aurait
+        // perdu, donc que le prix ira CONTRE ce côté — vérifié 30 min plus tard par _botMeritAudit.
         try {
-          const _ps0 = S.pairStates && S.pairStates[pair];
-          if (_ps0 && _ps0.price) {
-            if (!S._riskVetoes) S._riskVetoes = [];
-            S._riskVetoes.push({ pair, side, price: _ps0.price, ts: Date.now() });
-            if (S._riskVetoes.length > 30) S._riskVetoes.splice(0, S._riskVetoes.length - 30);
-          }
+          const _vs = verdict === 'LONG' ? 'long' : verdict === 'SHORT' ? 'short' : null;
+          if (_vs && typeof _botPredict === 'function') _botPredict('risk_bot_v1', pair, _vs === 'long' ? 'short' : 'long', 'veto');
         } catch(e) {}
         return { status:'veto', reasoning:`Cumul positions ${expPct.toFixed(0)}% > 65% du portfolio. Pas d'ajout.` };
       }
@@ -4626,6 +4611,7 @@ function botArb() {
       });
       if(S.pendingActions.length > 10) S.pendingActions.length = 10;
       S.botFleet.arb_bot_v1.contributions++;   // proposition publiée = intervention réelle
+      try { _botPredict('arb_bot_v1', best.lag, 'long', 'convergence'); } catch(e) {}   // [MÉRITE DES BOTS · 26/09/2026]
     }
     _setBot('arb_bot_v1', 'active', `Convergence ${best.lag}/${best.lead} · corr ${best.corr.toFixed(2)} · div ${(Math.abs(best.div)*100).toFixed(1)}%`);
     return best;
@@ -4692,6 +4678,7 @@ function botScalper() {
       });
       if(S.pendingActions.length > 10) S.pendingActions.length = 10;
       S.botFleet.scalper_bot_v1.contributions++;
+      try { _botPredict('scalper_bot_v1', best.pair, best.side, 'scalp'); } catch(e) {}   // [MÉRITE DES BOTS · 26/09/2026]
     }
     _setBot('scalper_bot_v1', 'active', `Signal scalp ${best.pair} ${best.side.toUpperCase()} · proposition créée`);
   } else {
@@ -4740,6 +4727,7 @@ function botFiscal() {
       });
       if(S.pendingActions.length > 10) S.pendingActions.length = 10;
       S.botFleet.fiscal_bot_v1.contributions++;   // [audit 09/08] proposition publiée = intervention réelle
+      try { _botPredict('fiscal_bot_v1', worst.pair, worst.side === 'long' ? 'short' : 'long', 'harvest'); } catch(e) {}   // [MÉRITE DES BOTS · 26/09/2026] fermer maintenant est juste si la perte continue
     }
     _setBot('fiscal_bot_v1', 'active', `Proposition harvest ${worst.pair} · économie estimée ~${harvestSavings.toFixed(2)}$`);
     return { pos: worst, savings: harvestSavings };
@@ -4810,6 +4798,7 @@ function botDCA() {
       });
       if(S.pendingActions.length > 10) S.pendingActions.length = 10;
       S.botFleet.dca_bot_v1.contributions++;   // proposition publiée = intervention réelle
+      try { _botPredict('dca_bot_v1', best.pair, 'long', 'dca'); } catch(e) {}   // [MÉRITE DES BOTS · 26/09/2026]
     }
     _setBot('dca_bot_v1', 'active', `Achat bas de range proposé · ${best.pair} à ${(best.posInRange*100).toFixed(0)}% du range plat`);
     return best;
@@ -4836,6 +4825,7 @@ function botRescue() {
       } catch(e) { console.warn('rescue flatten:', e); }
     });
     S.botFleet.rescue_bot_v1.contributions++;
+    try { snapshot.forEach(p => _botPredict('rescue_bot_v1', p.pair, p.side === 'long' ? 'short' : 'long', 'flatten')); } catch(e) {}   // [MÉRITE DES BOTS · 26/09/2026] le flatten est juste si les prix continuent contre les positions fermées
     _setBot('rescue_bot_v1', 'alert', `🚨 FLATTEN EXÉCUTÉ · ${countBefore} position(s) fermée(s) · DD ${ddPct.toFixed(1)}%`);
     if(typeof showToast === 'function') showToast(`🛟 Rescue · ${countBefore} position(s) fermée(s) (DD ${ddPct.toFixed(1)}%)`);
     if(!S.brainLog) S.brainLog = [];
@@ -4893,6 +4883,7 @@ function botRebalance() {
         payload: { pair: skewed.pair }
       });
       if(S.pendingActions.length > 10) S.pendingActions.length = 10;
+      try { const _rbp = positions.find(p => p.pair === skewed.pair); if (_rbp) _botPredict('rebalance_bot_v1', skewed.pair, _rbp.side === 'long' ? 'short' : 'long', 'rééquilibrage'); } catch(e) {}   // [MÉRITE DES BOTS · 26/09/2026] réduire est juste si la paire recule
     }
     _setBot('rebalance_bot_v1', 'active', `Skew ${skewed.pair} ${(skewed.share*100).toFixed(0)}% · proposition créée`);
     return skewed;
@@ -5003,6 +4994,7 @@ function runBotFleet(event, context) {
       if(S.botFleet.smart_sizer_v1 && typeof context.pnlUsd === 'number' && context.sizerMult && Math.abs(context.sizerMult - 1) > 0.01) {
         const marginal = context.pnlUsd * (context.sizerMult - 1) / context.sizerMult;
         S.botFleet.smart_sizer_v1.pnlContrib += marginal;
+        try { _botJudgeMeasured('smart_sizer_v1', marginal, 'taille'); } catch(e) {}   // [MÉRITE DES BOTS · 26/09/2026] jugé sur l'effet de SA taille sur ce trade
       }
       break;
   }
@@ -6202,34 +6194,97 @@ window.exportBackup = exportBackup;
 
 
 // ════════════════════════════════════════════════════════════════════════
-// [ÉCONOMIE BOTS · 15/08/2026] Audit des vetos du Risk Bot : 30 min après un veto, si
-// le trade refusé AURAIT perdu (prix contre le side > 0.3%), le Bot Gestion Risque est
-// crédité (+8 T$, plafonné) ; s'il aurait gagné > 0.3%, débité (−4 T$) — un garde-fou
-// trop frileux coûte aussi. Le mérite du veto devient mesurable, comme le pnlContrib.
+// [MÉRITE DES BOTS · 26/09/2026] MÉRITE MESURÉ DES BOTS — remplace l'audit des vetos du 15/08 (jamais alimenté : relevé cassé, et son écriture
+// additive de fitness était effacée au jugement suivant). Un bot est jugé sur SES actes, jamais sur le résultat du système :
+//  · prédictions vérifiables (_botPredict) : propositions Arbitrage / Scalper / DCA (le prix ira dans ce sens), Fiscal et
+//    Rééquilibrage (fermer / réduire est juste si le prix continue contre la position), veto du Risk Bot (le trade refusé
+//    aurait perdu), flatten du Sauvetage (les prix continuent contre les positions fermées) — vérifiées 30 min plus tard sur
+//    le dernier prix réel accepté ; mouvement < 0,3 % : non concluant, rien n'est jugé (zéro n'est pas une perte) ;
+//  · résultats mesurés (_botJudgeMeasured) : économie TWAP de l'Exécution (09c), effet de la taille du Smart Sizer.
+// Seulement en EV / RE (un bot qui a regardé les bougies fabriquées de l'école n'est pas jugé). S.botMerit : bilan par bot.
 // ════════════════════════════════════════════════════════════════════════
-setInterval(function _riskVetoAudit() {
+var BOT_AUDIT_MS = 30 * 60 * 1000, BOT_AUDIT_MIN_MOVE = 0.003, BOT_AUDIT_MAX_AGE = 2 * 60 * 60 * 1000;
+function _botMeritRow(botId) {
+  if (!S.botMerit) S.botMerit = {};
+  return S.botMerit[botId] || (S.botMerit[botId] = { good: 0, bad: 0, inconclusive: 0, last: null });
+}
+function _botJudge(botId, good, weight, kind) {
+  const a = (S.agents || []).find(x => x && x.id === botId);
+  if (!a || typeof _fitJudge !== 'function') return null;
+  _fitJudge(a, good ? 1 : -1, Math.max(0.01, Number(weight) || 0));
+  a.streak = good ? (a.streak || 0) + 1 : 0;
+  a.learningEvents = (a.learningEvents || 0) + 1;
+  const m = _botMeritRow(botId);
+  if (good) m.good++; else m.bad++;
+  m.last = { kind: kind || '', good: !!good, w: Math.round((Number(weight) || 0) * 1000) / 1000, t: Date.now() };
+  return a.fitness;
+}
+// Résultat mesuré signé (en $) d'un acte : jugé tout de suite, en EV / RE, s'il n'est pas nul.
+function _botJudgeMeasured(botId, value, kind) {
+  if (!S || (S.tradingMode !== 'paperReal' && S.tradingMode !== 'real')) return null;
+  const v = Number(value);
+  if (!(typeof v === 'number' && isFinite(v)) || Math.abs(v) < 0.001) return null;
+  return _botJudge(botId, v > 0, Math.abs(v), kind);
+}
+// Prédiction vérifiable : « le prix de `pair` ira dans le sens `dir` » (long = hausse). Une par bot, paire et sens par fenêtre d'audit.
+function _botPredict(botId, pair, dir, kind) {
   try {
-    if (typeof S === 'undefined' || !S || !S._riskVetoes || !S._riskVetoes.length) return;
+    if (!S || (S.tradingMode !== 'paperReal' && S.tradingMode !== 'real')) return false;
+    if (dir !== 'long' && dir !== 'short') return false;
+    const px = (typeof _rcLastPrice === 'function') ? _rcLastPrice(pair) : 0;
+    if (!(px > 0) || (typeof _rcPriceAge === 'function' && _rcPriceAge(pair) > 120000)) return false;
+    if (!Array.isArray(S._botPredictions)) S._botPredictions = [];
     const now = Date.now();
-    const bot = (S.agents || []).find(a => a.id === 'risk_bot_v1');
-    if (!bot) return;
-    const keep = [];
-    S._riskVetoes.forEach(v => {
-      if (now - v.ts < 30 * 60 * 1000) { keep.push(v); return; }
-      const ps = S.pairStates && S.pairStates[v.pair];
-      if (!ps || !ps.price || !v.price) return;
-      const move = (ps.price - v.price) / v.price * (v.side === 'short' ? -1 : 1);   // >0 = le trade aurait gagné
-      let d = 0;
-      if (move < -0.003) d = 8; else if (move > 0.003) d = -4;
-      if (d) {
-        bot.fitness = Math.max(50, Math.min(2000, (bot.fitness || 0) + d));
-        bot.totalReward = (bot.totalReward || 0) + d;
-        if (!S.botFleet) S.botFleet = {};
-        if (!S.botFleet.risk_bot_v1) S.botFleet.risk_bot_v1 = { contributions: 0, pnlContrib: 0 };
-        S.botFleet.risk_bot_v1.contributions = (S.botFleet.risk_bot_v1.contributions || 0) + 1;
-        if (d > 0) S.botFleet.risk_bot_v1.pnlContrib = (S.botFleet.risk_bot_v1.pnlContrib || 0) + Math.abs(move) * 10;  // perte évitée sur ~10 $ de mise
-      }
+    if (S._botPredictions.some(q => q.bot === botId && q.pair === pair && q.dir === dir && (now - q.ts) < BOT_AUDIT_MS)) return false;
+    S._botPredictions.push({ bot: botId, pair: pair, dir: dir, px: px, ts: now, kind: kind || '' });
+    if (S._botPredictions.length > 200) S._botPredictions.splice(0, S._botPredictions.length - 200);
+    return true;
+  } catch (e) { return false; }
+}
+function _botMeritAudit() {
+  try {
+    if (typeof S === 'undefined' || !S || !Array.isArray(S._botPredictions) || !S._botPredictions.length) return 0;
+    const now = Date.now(), keep = [];
+    let n = 0;
+    S._botPredictions.forEach(q => {
+      const age = now - q.ts;
+      if (age < BOT_AUDIT_MS) { keep.push(q); return; }
+      if (age > BOT_AUDIT_MAX_AGE) return;   // jamais vérifiable (réseau coupé) : abandonnée sans jugement
+      const px = (typeof _rcLastPrice === 'function') ? _rcLastPrice(q.pair) : 0;
+      if (!(px > 0) || (typeof _rcPriceAge === 'function' && _rcPriceAge(q.pair) > 120000)) { keep.push(q); return; }   // prix figé : on attend
+      const move = (px - q.px) / q.px * (q.dir === 'long' ? 1 : -1);
+      if (Math.abs(move) < BOT_AUDIT_MIN_MOVE) { _botMeritRow(q.bot).inconclusive++; return; }
+      _botJudge(q.bot, move > 0, Math.abs(move) * 100, q.kind);
+      n++;
     });
-    S._riskVetoes = keep;
-  } catch (e) { try{window._decErr&&window._decErr(e)}catch(_e){} }
-}, 60000);
+    S._botPredictions = keep;
+    return n;
+  } catch (e) { try{window._decErr&&window._decErr(e)}catch(_e){} return 0; }
+}
+setInterval(_botMeritAudit, 60000);
+// Migration unique : les fenêtres des bots copiaient le résultat du système (identiques pour les 9) — rien du bot n'y est
+// perdu. Effacées une fois, fitness neutre 350 (« pas encore de preuve »), après la restauration de l'état.
+(function _botMeritMigrate() {
+  let _t = 0;
+  const _iv = setInterval(function () {
+    _t++;
+    let ready = false;
+    try { ready = !!window._stateReady; } catch(e) {}
+    if (!ready && _t < 120) return;
+    clearInterval(_iv);
+    try {
+      if (typeof S === 'undefined' || !S || !Array.isArray(S.agents) || S._botMeritMigrated) return;
+      let n = 0;
+      S.agents.forEach(a => { if (a && a.isBot) { a._judgments = []; a.fitness = 350; a.streak = 0; n++; } });
+      S._botMeritMigrated = true;
+      try { delete S._riskVetoes; } catch(e) {}
+      try {
+        if (!S.chainLog) S.chainLog = [];
+        S.chainLog.push({ icon: '\uD83E\uDDEE', desc: 'Bots : ' + n + ' fenêtres effacées (elles copiaient le résultat du système, identiques pour tous) · fitness neutre 350 · désormais jugés sur leurs actes vérifiés', hash: Math.random().toString(36).slice(2, 8), time: new Date().toLocaleTimeString() });
+        if (S.chainLog.length > 100) S.chainLog.splice(0, S.chainLog.length - 100);
+      } catch(e) {}
+      try { if (typeof saveState === 'function') saveState(true); } catch(e) {}
+    } catch(e) {}
+  }, 500);
+})();
+window._botPredict = _botPredict; window._botMeritAudit = _botMeritAudit; window._botJudgeMeasured = _botJudgeMeasured; window._botJudge = _botJudge;

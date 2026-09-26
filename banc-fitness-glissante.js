@@ -48,9 +48,9 @@ T('S1 · learnFromOutcome : plus aucune écriture additive de fitness (bots, mé
   const lfoStart = s03.indexOf('function learnFromOutcome('); const lfoEnd = s03.indexOf('\n}\n', lfoStart); assert.ok(lfoStart > 0 && lfoEnd > lfoStart);
   const lfo = codeStrict(s03.slice(lfoStart, lfoEnd));
   assert.strictEqual((lfo.match(/a\.fitness\s*=\s*Math\.(min|max)\(/g) || []).length, 0, 'écritures additives restantes');
-  assert.strictEqual((lfo.match(/_fitJudge\(a, /g) || []).length, 4, 'appels _fitJudge');
+  assert.strictEqual((lfo.match(/_fitJudge\(a, /g) || []).length, 3, 'appels _fitJudge (méta, agent aligné, agent en erreur — [MÉRITE DES BOTS 26/09] les bots ne sont plus jugés ici)');
   assert.ok(lfo.includes("_fitJudge(a, 1, signalStrength * mag * decay);") && lfo.includes("_fitJudge(a, -1, signalStrength * mag * decay);"), 'poids symétriques agents');
-  assert.ok(lfo.includes("_fitJudge(a, botReward >= 0 ? 1 : -1, mag);"), 'bots : poids = amplitude');
+  assert.ok(!lfo.includes('botReward') && /if\(a\.isBot\) \{[\s\S]*?return;\n    \}/.test(lfo), 'bots : sortie sans jugement (jugés sur leurs actes, 03 _botMeritAudit)');
   assert.strictEqual(lfo.includes('a.fitness + 5'), false, 'bonus de série retiré');
   assert.ok(codeStrict(rd('js/07-v90-mode-bunker-sos.js')).includes('weak._judgments = [];'));
   assert.ok(codeStrict(rd('js/09b1-build-snapshot.js')).includes('_judgments:     (a._judgments     || []).slice(-240),'));   // [FENÊTRE APPRENANTE 26/09] 240
@@ -62,10 +62,13 @@ T('S2 · redistributeFitness retirée (02), appel retiré (08), hook _payBotSurp
   assert.strictEqual(c02.includes('_payBotSurplus'), false);
   const c03 = codeStrict(s03);
   const writes = (c03.match(/\ba\.fitness = /g) || []).length, judge = (c03.match(/a\.fitness = f;/g) || []).length, revig = (c03.match(/a\.fitness = 400;\n\s*a\._judgments = \[\];/g) || []).length;
+  const migr = (c03.match(/a\._judgments = \[\]; a\.fitness = 350; a\.streak = 0;/g) || []).length;   // [MÉRITE DES BOTS 26/09] migration unique des fenêtres de bots
+  assert.strictEqual(migr, 1, 'migration des bots');
+  assert.strictEqual((c03.match(/\bbot\.fitness = /g) || []).length, 0, 'plus d\'écriture additive du Risk Bot');
   assert.strictEqual((c03.match(/return Math\.max\(50, Math\.min\(2000, Math\.round\(350 \+ 1000 \* E\)\)\);/g) || []).length, 1, 'la formule vit une fois, dans _fitOf');
   assert.strictEqual(judge, 2, '_fitJudge et _fitRecomputeAll écrivent la fitness calculée par _fitOf ([FENÊTRE APPRENANTE 26/09])');
   assert.strictEqual(revig, 3, 'les 3 revigorations (auto agents, auto bots, manuelle) vident la fenêtre (' + revig + ')');
-  assert.strictEqual(writes, judge + revig, 'aucune autre écriture directe de fitness dans 03 (' + writes + ')');
+  assert.strictEqual(writes, judge + revig + migr, 'aucune autre écriture directe de fitness dans 03 (' + writes + ')');
 });
 T('S3 · ÉCOLE : learnFromOutcome sort AVANT toute écriture quand S.tradingMode === "sim" (1re instruction du corps) ; le jury des disciples (12) ne note pas en AA', () => {
   const start = s03.indexOf('function learnFromOutcome(source, pnlPct, pair) {'); const body = codeStrict(s03.slice(start, start + 4000));

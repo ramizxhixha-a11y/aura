@@ -135,7 +135,7 @@ T('site B (bases solides RE) : netUsd > 0 → solide ; ≤ 0 ou null → refus',
 });
 T('10f : _costGate toujours absent (le veto/demi-mise restent dans 09c) ; 09c NON touché (version 20260906e conservée)', () => {
   assert.ok(!F.includes('_costGate'));
-  assert.ok(fs.readFileSync('js/09c-auto-open.js', 'utf8').startsWith('// ▓▓▓ VERSION 20260922c ▓▓▓'));
+  assert.ok(fs.readFileSync('js/09c-auto-open.js', 'utf8').startsWith('// ▓▓▓ VERSION 20260926j ▓▓▓'));
 });
 console.log('━━ D · trades RÉELS du backup ━━');
 T('comptabilité : fees.byPair[p].pnlGross === ps.totalPnlUsd et trades === totalTrades sur 8/8 paires → le brut appris = brut AVANT frais', () => {

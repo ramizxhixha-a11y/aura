@@ -1,3 +1,4 @@
+// [MÉRITE DES BOTS · 26/09/2026] VERSION 20260926j · bandeau d'un bot sans acte vérifié : « aucun acte vérifié encore » + bilan des actes (S.botMerit)
 // [PAGE AGENTS STABLE · 26/09/2026] VERSION 20260926i · page Agents stable : la liste n'est plus reconstruite toutes les 5 s (signature), une reconstruction garde barres, bandeaux, filtre et défilement ; badges et bandeau à place fixe ; historique de fitness sur changement ; sparklines redessinées seulement si la série change ; journal d'évolution et bannière de rêve réécrits seulement s'ils changent
 // [MÉMOIRE DES BOTS · 26/09/2026] VERSION 20260926h · la carte d'un bot / du méta affiche sa VRAIE mémoire (fenêtre de jugements, interventions et apport de la flotte) à la place du bandeau vide (_botMemorySummary)
 // [CONTEXTE 1 H / 4 H · 26/09/2026] VERSION 20260926e · _SEAT_DEF vrai pour macro / positionnement / contexte ; _seatLabelsSync au boot : type/source/nom des sièges convertis rétablis malgré l'instantané (09b2 recopie les anciens)
@@ -5569,6 +5570,16 @@ function patchAgentCards() {
         }
         if(elMemPair) elMemPair.textContent = 'fitness glissante';
         if(elMemLegacy) { elMemLegacy.textContent = '🧮 ' + bm.n + ' jug. · ' + bm.fav + '✓'; elMemLegacy.style.color = bm.pct >= 50 ? 'var(--up)' : 'var(--down)'; }
+      } else if(bm && a.isBot) {
+        // [MÉRITE DES BOTS · 26/09/2026] pas encore d'acte vérifié : on le dit (un bot n'est plus jugé sur le résultat du système)
+        const _mr = (S.botMerit && S.botMerit[a.id]) || null;
+        const lab = elMstrip.querySelector('.memory-strip-label span');
+        if(lab) lab.textContent = '🧮 MÉMOIRE RÉELLE';
+        if(elMemCnt)  elMemCnt.textContent  = '0 jug.';
+        if(elMemText) elMemText.textContent = 'aucun acte vérifié encore — jugé sur ses propres actes (propositions, vetos, flatten, TWAP, taille), 30 min après';
+        if(elMemPnl)  { elMemPnl.textContent = _mr && _mr.inconclusive ? (_mr.inconclusive + ' non concluant' + (_mr.inconclusive > 1 ? 's' : '')) : 'en attente'; elMemPnl.style.color = 'var(--t3)'; }
+        if(elMemPair) elMemPair.textContent = 'fitness neutre';
+        if(elMemLegacy) { elMemLegacy.textContent = '🧮 0 jug.'; elMemLegacy.style.color = 'var(--t3)'; }
       }
     }
 

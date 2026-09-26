@@ -110,7 +110,7 @@ T('backup : feeConfig persisté à taker 0,05 % (antérieur au plancher 09b2) �
 });
 console.log('━━ F · texte LIVRÉ de 09c ━━');
 const c9 = fs.readFileSync('js/09c-auto-open.js', 'utf8');
-T('09c : version 20260906e, anti-flood _costVetoLogTs déclaré une fois', () => { assert.ok(c9.startsWith('// ▓▓▓ VERSION 20260922c ▓▓▓')); assert.strictEqual(c9.split('const _costVetoLogTs = {};').length - 1, 1); });
+T('09c : version 20260906e, anti-flood _costVetoLogTs déclaré une fois', () => { assert.ok(c9.startsWith('// ▓▓▓ VERSION 20260926j ▓▓▓')); assert.strictEqual(c9.split('const _costVetoLogTs = {};').length - 1, 1); });
 T('09c : veto COST après le veto BETA et avant runBotFleet (Smart Sizer), appel unique _costGateForOpen(pair, baseStake, ps._leverageBonus || 0)', () => {
   const iBeta = c9.indexOf("event: 'BETA'"), iCost = c9.indexOf("event: 'COST'"), iFleet = c9.indexOf("runBotFleet('pre_trade'");
   assert.ok(iBeta > 0 && iCost > iBeta && iFleet > iCost);

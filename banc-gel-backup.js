@@ -27,7 +27,7 @@ const ROOT = __dirname;
 const TOK = (function(){ const m = require('fs').readFileSync(require('path').join(__dirname, 'AURA8_v118.html'), 'utf8').match(/DOC_V = '(\d{8}[a-z])'/); if (!m) { console.error('DOC_V introuvable dans AURA8_v118.html'); process.exit(2); } return m[1]; })();   // [12/09/2026] token lu dans le HTML (source unique) : plus jamais figé dans un banc
 const VER03 = '20260911c';   // [12/09] version de la livraison qui a touché 03/04/09b3 en dernier — indépendante du token courant du HTML
 const HEAD = '// [GEL BOOT · 11/09/2026] VERSION ' + VER03;
-const HEAD03 = '// [MÉMOIRE DES BOTS · 26/09/2026] VERSION 20260926h';   // [1b-b · 15/09] 03 relivré (heatmap EV/RE seulement) ; en-tête PHASE 1 20260912c en 2e ligne ; 04/09b3 restent au GEL BOOT 20260911c
+const HEAD03 = '// [MÉRITE DES BOTS · 26/09/2026] VERSION 20260926j';   // [1b-b · 15/09] 03 relivré (heatmap EV/RE seulement) ; en-tête PHASE 1 20260912c en 2e ligne ; 04/09b3 restent au GEL BOOT 20260911c
 const F03 = 'js/03-per-pair-position-buttons-controls-buid.js', F04 = 'js/04-v8-0-livraison-35-mode-max-permissif-v.js', F9B3 = 'js/09b3-import-export.js';
 let pass = 0, fail = 0;
 async function T(name, fn){ try { await fn(); pass++; console.log('  ✅', name); } catch(e){ fail++; console.log('  ❌', name, '\n     ', (e && e.stack || e).toString().split('\n').slice(0,3).join('\n      ')); } }
@@ -161,7 +161,7 @@ function mkCtx(opts){
     navigator: {}, addEventListener(){}, removeEventListener(){} };
   ctx.window = ctx; ctx.globalThis = ctx;
   vm.createContext(ctx);
-  const s03 = between(src(F03), '// v8.0 LIVRAISON 32 · SYSTÈME DE BACKUP / IMPORT / RESTORE', '// [ÉCONOMIE BOTS · 15/08/2026]', 'tranche 03');
+  const s03 = between(src(F03), '// v8.0 LIVRAISON 32 · SYSTÈME DE BACKUP / IMPORT / RESTORE', '// [MÉRITE DES BOTS · 26/09/2026] MÉRITE MESURÉ DES BOTS', 'tranche 03')   /* [26/09] l'audit des vetos du 15/08 remplacé par le mérite des bots : même position */;
   vm.runInContext(s03, ctx, { filename: '03-backup' });
   const s04 = between(src(F04), '// Restaurer un backup historique (depuis IndexedDB)', 'function renderSettingsPanel() {', 'tranche 04');
   vm.runInContext(s04, ctx, { filename: '04-restore' });
@@ -174,7 +174,7 @@ const V1_NOMETA = (cycle) => ({ _type: 'aura_guardian_full', savedAt: '2026-08-0
   console.log('▶ banc-gel-backup · token', TOK);
 
   /* ───── statique ───── */
-  await T('syntaxe : 03, 04, 09b3 compilent + en-têtes VERSION ' + VER03 + ' (03 : MÉMOIRE DES BOTS 20260926h)', () => {
+  await T('syntaxe : 03, 04, 09b3 compilent + en-têtes VERSION ' + VER03 + ' (03 : MÉRITE DES BOTS 20260926j)', () => {
     for (const f of [F03, F04, F9B3]) { new vm.Script(src(f), { filename: f }); assert.ok(src(f).startsWith(f === F03 ? HEAD03 : HEAD), f + ' : en-tête'); }
   });
   await T('oracle : les deux lignes 🐌 réelles nomment 03 @261123 / @262456 ← IDBRequest.onsuccess (format LoAF de 08)', () => {
@@ -203,7 +203,7 @@ const V1_NOMETA = (cycle) => ({ _type: 'aura_guardian_full', savedAt: '2026-08-0
   });
   await T('03 : plus AUCUN getAll() sur le store des enregistrements complets (seul backups_meta est lu en bloc), aucun openCursor, IDB v2, _getBackup, _ensureBackupIndex', () => {
     const s = src(F03);
-    const sl = between(s, '// v8.0 LIVRAISON 32 · SYSTÈME DE BACKUP', '// [ÉCONOMIE BOTS · 15/08/2026]', 'tranche 03');
+    const sl = between(s, '// v8.0 LIVRAISON 32 · SYSTÈME DE BACKUP', '// [MÉRITE DES BOTS · 26/09/2026] MÉRITE MESURÉ DES BOTS', 'tranche 03')   /* [26/09] l'audit des vetos du 15/08 remplacé par le mérite des bots : même position */;
     const code = sl.split('\n').filter(l => !l.trim().startsWith('//'));
     const getAlls = code.filter(l => l.includes('getAll('));
     assert.strictEqual(getAlls.length, 2, 'getAll() : ' + getAlls.length);

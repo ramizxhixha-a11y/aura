@@ -1,3 +1,4 @@
+// [MÉRITE DES BOTS · 26/09/2026] VERSION 20260926j · botMerit, _botPredictions, _botMeritMigrated dans le snapshot
 // [FENÊTRE APPRENANTE · 26/09/2026] VERSION 20260926f · _judgments gardés 240 (étaient 60) ; fitWindowRule dans le snapshot
 // [COMPTEURS RÉGLAGES · 24/09/2026] VERSION 20260924a · _realJudgments dans le snapshot
 // [STOP APPRIS · 23/09/2026] VERSION 20260923b · stopRules dans le snapshot
@@ -100,6 +101,9 @@ function buildSnapshot() {
       gainRules: S.gainRules || {},                   // [GAIN APPRIS · 23/09/2026]
       stopRules: S.stopRules || {},                   // [STOP APPRIS · 23/09/2026]
       fitWindowRule: S.fitWindowRule || null,         // [FENÊTRE APPRENANTE · 26/09/2026]
+      botMerit: S.botMerit || {},                     // [MÉRITE DES BOTS · 26/09/2026]
+      _botPredictions: (S._botPredictions || []).slice(-200),
+      _botMeritMigrated: !!S._botMeritMigrated,
       _gbpToBnbDone: !!S._gbpToBnbDone,
       _realJudgments: S._realJudgments || 0,          // [COMPTEURS RÉGLAGES · 24/09/2026]
       botDisciples:   S.botDisciples   || {},   // [15/08] sièges des disciples par bot
