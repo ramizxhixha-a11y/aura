@@ -1,3 +1,4 @@
+// [CONTEXTE 1 H / 4 H · 26/09/2026] VERSION 20260926e · lecture des horizons 1 h et 4 h (_ctxHorizonRead : EMA et pente en unités d'ATR, séries courtes/périmées/trouées refusées), rafraîchissement REST des séries 1 h/4 h (_ctxCandlesRefresh), _rcLastPrice, siège geopolitic_v1 renommé Contexte 1h·4h
 // [LIQUIDATIONS · 26/09/2026] VERSION 20260926d · flux des liquidations (!forceOrder@arr) → S.liqStats par paire et par minute, résumé _liqSummary
 // [POSITIONNEMENT · 26/09/2026] VERSION 20260926c · flux positionnement (financement, open interest, ratio long/short) des futures Binance → S.positioning ; siège fundamental_v1 renommé Positionnement
 // [STOP CÔTÉ EXCHANGE SIMULÉ · 26/09/2026] VERSION 20260926a · closePosition : prix de sortie imposé (_forcedExitPx) pour le stop côté exchange simulé
@@ -554,7 +555,7 @@ const S = {
   },
   agents:[
     // ── Agents d'Analyse Fondamentale ──────────────────────────────────────
-    { id:'macro_v1',     name:'Macro-Économie',     emoji:'📊', type:'Linear·FRED',    source:'Fed/BCE/FMI',      score:-0.30, conf:0.70, fitness:878,  color:'var(--ice)',
+    { id:'macro_v1',     name:'Macro-Économie',     emoji:'📊', type:'Indices·Marché', source:'F&G·CoinGecko',    score:-0.30, conf:0.70, fitness:878,  color:'var(--ice)',   // [CONTEXTE 1 H / 4 H · 26/09/2026] étiquette vraie (lisait déjà Fear & Greed + cap 24 h depuis 20260926b)
       role:'fundamental', domain:'macro',      errors:0, corrections:0, streak:0, lastPnl:0, memory:[] },
     { id:'fundamental_v1',name:'Positionnement',    emoji:'💹', type:'Futures·Levier', source:'Binance Futures',  score:0.25,  conf:0.65, fitness:620,  color:'var(--up)',   // [POSITIONNEMENT · 26/09/2026] ex « EPS·P/E·EV » (finance d'entreprise, jamais alimenté)
       role:'fundamental', domain:'positioning',  errors:0, corrections:0, streak:0, lastPnl:0, memory:[] },
@@ -570,8 +571,8 @@ const S = {
     { id:'corr_v1',      name:'Corrélation·Cross',  emoji:'🔗', type:'Stat·PCA',       source:'Multi-Asset',      score:0.30,  conf:0.63, fitness:480,  color:'var(--ice)',
       role:'technical',   domain:'correlation',errors:0, corrections:0, streak:0, lastPnl:0, memory:[] },
     // ── Agents de Contexte Global ───────────────────────────────────────────
-    { id:'geopolitic_v1',name:'Géopolitique',       emoji:'🌍', type:'LLM·GPT-4',      source:'GDELT/News',       score:0.20,  conf:0.65, fitness:572,  color:'var(--pur)',
-      role:'context',     domain:'geopolitics',errors:0, corrections:0, streak:0, lastPnl:0, memory:[] },
+    { id:'geopolitic_v1',name:'Contexte 1h·4h',    emoji:'🔭', type:'Multi·Horizon',  source:'Binance 1h·4h',    score:0.20,  conf:0.65, fitness:572,  color:'var(--pur)',   // [CONTEXTE 1 H / 4 H · 26/09/2026] ex « Géopolitique » (LLM·GPT-4 / GDELT : lisait la volatilité 15 min)
+      role:'context',     domain:'contexte',   errors:0, corrections:0, streak:0, lastPnl:0, memory:[] },
     { id:'onchain_v1',   name:'On-Chain Analytics', emoji:'⛓️', type:'Graph·Anomaly',  source:'Etherscan/Glassn', score:0.10,  conf:0.78, fitness:810,  color:'var(--ice)',
       role:'context',     domain:'onchain',    errors:0, corrections:0, streak:1, lastPnl:0, memory:[] },
     { id:'security_v1',  name:'Sécurité·Risque',   emoji:'🔒', type:'Anomaly·Forta',  source:'Forta/CertiK',     score:0.05,  conf:0.60, fitness:400,  color:'var(--gold)',
@@ -3420,6 +3421,91 @@ window._liqPairOf = _liqPairOf; window._liqRecord = _liqRecord; window._liqSumma
 setTimeout(_openLiqWs, 12000);
 setInterval(_openLiqWs, 15000);   // gardien : rouvre si fermé, après le backoff, jamais hors ligne
 
+// ═══ [CONTEXTE 1 H / 4 H · 26/09/2026] LECTURE DES HORIZONS SUPÉRIEURS (lot 4 des sources, Rams « Go 4 ») ═══
+// Chaque siège lisait sa propre bougie de 15 min et rien au-dessus. Les séries 1 h et 4 h existent déjà (S.realCandles,
+// agrégées en direct depuis le flux @trade, 100 gardées en sauvegarde) mais personne ne les lisait, et elles se remplissaient
+// de dojis (_gap) à chaque coupure. Ici : (1) une lecture PURE et bornée d'un horizon — EMA courte moins EMA longue, et pente
+// de la longue, mesurées en unités d'ATR (sans échelle : la même règle vaut pour BTC et PEPE, pour 1 h et 4 h) ; une série
+// courte, périmée (> 2 bougies) ou trouée (> 25 % de dojis) est REFUSÉE (ok:false + motif) — jamais un chiffre inventé ;
+// (2) un rafraîchissement REST des deux séries (klines officielles Binance, 60 bougies) qui remplace les dojis et garde les
+// horizons vrais : une série toutes les 10 s au plus, chaque série au plus toutes les 10 min, et au moins une fois par bougie
+// (1 h / 4 h), jamais hors ligne. Le siège geopolitic_v1 (03) lit _ctxHorizonRead ; l'attribution (10i) le mesure sous « contexte ».
+var CTX_TFS = ['1h', '4h'];
+var CTX_REST_MIN_MS = 600000;   // deux appels REST pour la même série : ≥ 10 min, même en échec
+function _ctxEmaSeries(vals, n) {
+  var k = 2 / (n + 1), out = [], e = null;
+  for (var i = 0; i < vals.length; i++) { e = (e === null) ? vals[i] : vals[i] * k + e * (1 - k); out.push(e); }
+  return out;
+}
+// Lecture d'un horizon. G : gènes du siège (emaF, emaS, slopeN, atrN, minBars, kGap, kSlope). Retour :
+// { ok:true, t (−1…+1), gapAtr, slopeAtr, atrPct, bars, gaps } ou { ok:false, why:'court'|'périmé'|'lacunaire'|'plat', bars }.
+function _ctxHorizonRead(pair, tf, G, now) {
+  var tfMs = REAL_CANDLE_INTERVALS[tf]; if (!tfMs) return null;
+  G = G || {}; now = (typeof now === 'number') ? now : Date.now();
+  var arr = (typeof S !== 'undefined' && S && S.realCandles && S.realCandles[pair] && S.realCandles[pair][tf]) || [];
+  var minBars = Math.max(12, Math.round(Number(G.minBars) || 24));
+  if (arr.length < minBars) return { ok: false, why: 'court', bars: arr.length };
+  var last = arr[arr.length - 1];
+  if (!last || !(typeof last.ts === 'number') || !(now - last.ts < 2 * tfMs)) return { ok: false, why: 'périmé', bars: arr.length };
+  var win = arr.slice(-Math.min(arr.length, 60)), gaps = 0, i;
+  for (i = 0; i < win.length; i++) if (win[i]._gap === true) gaps++;
+  if (gaps / win.length > 0.25) return { ok: false, why: 'lacunaire', bars: win.length, gaps: gaps };
+  var closes = [];
+  for (i = 0; i < win.length; i++) { var cc = Number(win[i].c); if (!(cc > 0)) return { ok: false, why: 'plat', bars: win.length, gaps: gaps }; closes.push(cc); }
+  var eF = Math.max(2, Math.round(Number(G.emaF) || 8)), eS = Math.max(eF + 2, Math.round(Number(G.emaS) || 21));
+  var sN = Math.max(1, Math.round(Number(G.slopeN) || 3)), aN = Math.max(2, Math.round(Number(G.atrN) || 14));
+  var emaF = _ctxEmaSeries(closes, eF), emaS = _ctxEmaSeries(closes, eS), L = win.length - 1;
+  var tr = 0, cnt = 0;
+  for (i = Math.max(1, win.length - aN); i < win.length; i++) {
+    var c = win[i], p = win[i - 1], hi = Number(c.h), lo = Number(c.l), pc = Number(p.c);
+    if (!(hi >= lo) || !(pc > 0)) continue;
+    tr += Math.max(hi - lo, Math.abs(hi - pc), Math.abs(lo - pc)); cnt++;
+  }
+  var atr = cnt ? tr / cnt : 0;
+  if (!(atr > 0)) return { ok: false, why: 'plat', bars: win.length, gaps: gaps };
+  var kGap = (typeof G.kGap === 'number') ? G.kGap : 0.5, kSlope = (typeof G.kSlope === 'number') ? G.kSlope : 0.5;
+  var gapAtr = (emaF[L] - emaS[L]) / atr, slopeAtr = (emaS[L] - emaS[Math.max(0, L - sN)]) / atr;
+  var t = Math.max(-1, Math.min(1, gapAtr * kGap + slopeAtr * kSlope));
+  return { ok: true, t: Math.round(t * 1000) / 1000, gapAtr: Math.round(gapAtr * 1000) / 1000, slopeAtr: Math.round(slopeAtr * 1000) / 1000,
+           atrPct: Math.round(atr / closes[L] * 10000) / 100, bars: win.length, gaps: gaps };
+}
+// Une série de contexte a-t-elle besoin d'un rafraîchissement REST ? courte (< 30), périmée (> 2 bougies), trouée (un doji
+// de coupure dans les 30 dernières), ou simplement pas rafraîchie depuis une bougie entière (les klines officielles valent
+// mieux que l'agrégation du flux).
+var _ctxRestAt = {}, _ctxCursor = 0;
+function _ctxSeriesNeedsRest(pair, tf, now) {
+  var tfMs = REAL_CANDLE_INTERVALS[tf] || 3600000;
+  var arr = (S.realCandles && S.realCandles[pair] && S.realCandles[pair][tf]) || [];
+  if (arr.length < 30) return 'court';
+  if (now - (arr[arr.length - 1].ts || 0) > 2 * tfMs) return 'périmé';
+  for (var i = Math.max(0, arr.length - 30); i < arr.length; i++) if (arr[i]._gap === true) return 'lacunaire';
+  if (now - (_ctxRestAt[pair + '_' + tf] || 0) > tfMs) return 'bougie';
+  return null;
+}
+// Une série (paire·tf) par appel, en tournante, jamais hors ligne. Retourne la clé rafraîchie ou null.
+function _ctxCandlesRefresh() {
+  try {
+    if (window._auraNetOffline) return null;
+    if (typeof _fetchAndBootstrapRealCandles !== 'function') return null;
+    var pairs = (typeof _bgPairsToWatch === 'function') ? _bgPairsToWatch() : [];
+    if (!pairs.length) return null;
+    var now = Date.now(), slots = [];
+    pairs.forEach(function (p) { CTX_TFS.forEach(function (tf) { slots.push([p, tf]); }); });
+    for (var i = 0; i < slots.length; i++) {
+      var s = slots[(_ctxCursor + i) % slots.length], key = s[0] + '_' + s[1];
+      if (now - (_ctxRestAt[key] || 0) < CTX_REST_MIN_MS) continue;
+      if (!_ctxSeriesNeedsRest(s[0], s[1], now)) continue;
+      _ctxRestAt[key] = now; _ctxCursor = (_ctxCursor + i + 1) % slots.length;
+      _fetchAndBootstrapRealCandles(s[0], s[1], true);
+      return key;
+    }
+    return null;
+  } catch (e) { return null; }
+}
+window._ctxHorizonRead = _ctxHorizonRead; window._ctxSeriesNeedsRest = _ctxSeriesNeedsRest; window._ctxCandlesRefresh = _ctxCandlesRefresh;
+setTimeout(_ctxCandlesRefresh, 30000);
+setInterval(_ctxCandlesRefresh, 10000);   // 12 paires × 2 horizons : tour complet en 4 min au boot, puis ≈ 15 appels/h
+
 // ═══ [1b-a · 14/09/2026] FILTRE OUTLIER NON AUTO-BLOQUANT ═══
 // Avant : chaque prix WS était comparé au dernier close 5m (jamais re-bootstrappé) — dès que cette série datait
 // (pause, veille, coupure, mouvement > 2 %), 100 % des prix étaient rejetés pour TOUTES les timeframes, à vie
@@ -3442,6 +3528,9 @@ window._rcOutlier = _rcOutlier;
 // à 15, 30 et 60 min pendant que le marché filait vers −5 %).
 function _rcPriceAge(pair) { var ref = _rcLastPx[pair]; return ref ? (Date.now() - ref.ts) : Infinity; }
 window._rcPriceAge = _rcPriceAge;
+// [CONTEXTE 1 H / 4 H · 26/09/2026] le dernier prix réel ACCEPTÉ (celui dont _rcPriceAge mesure l'âge) — 0 si aucun.
+function _rcLastPrice(pair) { var ref = _rcLastPx[pair]; return (ref && typeof ref.px === 'number' && isFinite(ref.px) && ref.px > 0) ? ref.px : 0; }
+window._rcLastPrice = _rcLastPrice;
 
 /**
  * Agrège un prix réel dans les bougies de toutes les granularités
@@ -4932,7 +5021,9 @@ function _realCandlesStale(pair, tf) {
 }
 window._realCandlesStale = _realCandlesStale;
 var _rcBootstrapAt = {};   // { 'BTC/USDT_15m': ms } — [1b-a] 1 appel REST / 90 s / paire·tf, tous appelants confondus
-async function _fetchAndBootstrapRealCandles(pair, tf) {
+// [CONTEXTE 1 H / 4 H · 26/09/2026] quiet = rafraîchissement d'une série de contexte (1 h / 4 h) : on remplace la série et la référence
+// de prix, sans réveiller les paires pausées « Données obsolètes » (affaire de la tf du mode) ni toucher au bandeau.
+async function _fetchAndBootstrapRealCandles(pair, tf, quiet) {
   const _bk = pair + '_' + (tf || '15m');
   const _bn = Date.now();
   if (_rcBootstrapAt[_bk] && (_bn - _rcBootstrapAt[_bk]) < 90000) return;
@@ -4961,6 +5052,7 @@ async function _fetchAndBootstrapRealCandles(pair, tf) {
     }));
     // [1b-a] le dernier close REST devient la référence fraîche du filtre outlier (le flux WS repart sur du vrai)
     try { const _lc = S.realCandles[pair][tf || '15m']; const _lk = _lc[_lc.length - 1]; if (_lk && isFinite(_lk.c) && _lk.c > 0) _rcLastPx[pair] = { px: _lk.c, ts: Date.now() }; } catch(e) {}
+    if (quiet) return;   // [CONTEXTE 1 H / 4 H · 26/09/2026] série de contexte : pas de réveil, pas de bandeau
     // Réveiller la paire si pausée uniquement pour "Données obsolètes"
     const ks = S.realKillSwitch && S.realKillSwitch[pair];
     if (ks && ks.paused && ks.reason === 'Données obsolètes') {

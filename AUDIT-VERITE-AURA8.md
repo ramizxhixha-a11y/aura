@@ -183,4 +183,6 @@ Une régression de vérité = `VERDICT : NON LIVRABLE`, jamais « CONNU, tolér�
 
 - **26/09 — liquidations** (`20260926d`) : lot 3 des sources — le flux des liquidations forcées de tout le marché (une connexion), rangé par paire et par minute ; whale_v1 les lit (shorts liquidés = achats forcés, longs = capitulation), poids génomé.
 
+- **26/09 — contexte 1 h / 4 h** (`20260926e`) : lot 4 des sources (dernier) — les séries 1 h et 4 h existaient sans lecteur et se trouaient de dojis à chaque coupure ; lecture pure en unités d'ATR (série courte / périmée / trouée refusée avec motif), rafraîchissement REST des deux horizons, le siège « Géopolitique » (volatilité 15 min déguisée) devient Contexte 1h·4h, source d'attribution `contexte`. Vérités rétablies au passage : les trois sièges convertis gardaient leurs anciennes étiquettes au DAO (l'instantané les recopiait) → synchronisées au boot ; le garde « prix figé » mesurait le chemin sur un prix (`ps.price`) autre que celui dont il jugeait l'âge (`_rcLastPx`) → cohérent en EV/RE. Reste connu : le balayage de sortie (10f) a la même incohérence, à traiter avec les stops RE.
+
 *Mis à jour à chaque mission. Le prochain audit complet : après 1b-b, sur un backup de 24 h propre.*

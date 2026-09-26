@@ -64,14 +64,14 @@ function runAll(ctx, st) {
   return JSON.parse(JSON.stringify(out));
 }
 console.log('▶ banc-genome');
-T('1 · NON-RÉGRESSION : génome par défaut = sorties byte-identiques à l\'oracle (10 scouts + 3 conseils + sécurité ; whale/flow/volume et leurs conseils exclus depuis FLUX BINANCE 17/09), 3 paires, 40 états', () => {
+T('1 · NON-RÉGRESSION : génome par défaut = sorties byte-identiques à l\'oracle (7 scouts + 2 conseils + sécurité ; whale/flow/volume/macro/fundamental/geopolitic et leurs conseils exclus, réécrits sur des sources réelles 17→26/09), 3 paires, 40 états', () => {
   let n = 0;
   for (let seed = 1; seed <= 40; seed++) {
     const a = mkState(seed * 7919), b = mkState(seed * 7919);
     const oldOut = runAll(mkCtx(oracle, a), a), newOut = runAll(mkCtx(NEW, b), b);
     // [FLUX BINANCE 17/09] whale_v1 / flow_v1 / volume_v1 lisent désormais le flux et le carnet Binance (comportement
     // volontairement différent de l'oracle) ; les conseils qu'ils conseillent (scalper, contrarian, momentum, mean_rev) suivent.
-    const CHANGED_SCOUTS = ['whale_v1', 'flow_v1', 'volume_v1', 'macro_v1', 'fundamental_v1' /* [26/09] macro lit le flux réel ; fundamental : seul le motif textuel a changé */], CHANGED_COUNCIL = ['scalper_v2', 'contrarian_v2', 'momentum_v1', 'mean_rev_v1'];
+    const CHANGED_SCOUTS = ['whale_v1', 'flow_v1', 'volume_v1', 'macro_v1', 'fundamental_v1', 'geopolitic_v1' /* [26/09] macro lit le flux réel ; fundamental : positionnement ; geopolitic : contexte 1 h / 4 h */], CHANGED_COUNCIL = ['scalper_v2', 'contrarian_v2', 'momentum_v1', 'mean_rev_v1', 'hedge_v2' /* [26/09] consulte geopolitic_v1 dans ce banc */];
     [oldOut, newOut].forEach(o => Object.values(o).forEach(p => { CHANGED_SCOUTS.forEach(id => delete p.scouts[id]); CHANGED_COUNCIL.forEach(id => delete p.council[id]); }));
     assert.deepStrictEqual(newOut, oldOut, 'état ' + seed); n++;
   }

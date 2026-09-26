@@ -1,3 +1,4 @@
+// [CONTEXTE 1 H / 4 H · 26/09/2026] VERSION 20260926e · applySnap appelle _seatLabelsSync (07) après la fusion des agents : étiquettes vraies dès la restauration, y compris un import manuel
 // [COMPTEURS RÉGLAGES · 24/09/2026] VERSION 20260924a · applySnap relit _realJudgments
 // [STOP APPRIS · 23/09/2026] VERSION 20260923b · applySnap relit stopRules et recalcule au boot
 // [GAIN APPRIS · 23/09/2026] VERSION 20260923a · applySnap relit gainRules et recalcule au boot
@@ -563,6 +564,7 @@ async function loadState() {
       });
     }
   } catch(e) { dbg.push('agents:err'); }
+  try { if (typeof _seatLabelsSync === 'function') _seatLabelsSync(); } catch(e) {}   // [CONTEXTE 1 H / 4 H · 26/09/2026] l'instantané recopie les anciennes étiquettes : on rétablit celles de la logique (07 _SEAT_DEF)
 
   try {
     if (snap.agentMemories && S.agents) {

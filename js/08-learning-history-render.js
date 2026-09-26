@@ -1,3 +1,4 @@
+// [CONTEXTE 1 H / 4 H · 26/09/2026] VERSION 20260926e · tuile « Contexte 1 h / 4 h » (ex « Régime de volatilité ») : elle lit le siège converti
 // [MACRO RÉEL · 26/09/2026] VERSION 20260926b · tuiles fondamentales : étiquettes vraies ; la tuile News lit nlp_v1 ; la tuile Macro lit le flux réel
 // [MÉMOIRE DES CHEMINS · 22/09/2026] VERSION 20260922a · le battement enregistre le chemin de chaque position ouverte (_pathRecord) avant le balayage des sorties
 // [JOURNAL DES ÉVÉNEMENTS · 20/09/2026] VERSION 20260920b · le battement repose le relais du journal si besoin
@@ -2197,7 +2198,7 @@ function getFundamentalSignals(pair) {
     debtScore   * 0.04 +   // Debt/Equity (security agent)
     lmsrScore   * 0.14 +   // LMSR consensus interne
     sent.score  * 0.12 +   // Momentum court (ex « sentiment social », proxy assumé)
-    geo.score   * 0.06 +   // Régime de volatilité (ex « géopolitique »)
+    geo.score   * 0.06 +   // Contexte 1 h / 4 h (ex « géopolitique », ex « régime de volatilité »)
     onchain.score * 0.06 + // Accumulation/distribution bougies (ex « on-chain »)
     sec.score   * 0.03 +   // Sécurité
     vol.score   * 0.04 +   // Volume/Flux
@@ -2217,7 +2218,7 @@ function getFundamentalSignals(pair) {
     // Facteurs contextuels agents
     lmsr:    { score:lmsrScore,      conf:1.0,          label:'LMSR marché',     detail:'Consensus agents interne ×'+S.agents.length },
     sentiment:{ score:sent.score,   conf:sent.conf,    label:'Élan (RSI)',      detail:'RSI et momentum des bougies · '+sent.name },
-    geo:     { score:geo.score,      conf:geo.conf,     label:'Régime de volatilité', detail:'Volatilité + score fondamental · '+geo.name },
+    geo:     { score:geo.score,      conf:geo.conf,     label:'Contexte 1 h / 4 h', detail:'Tendance des horizons 1 h et 4 h (EMA en unités d\'ATR) · '+geo.name },   // [CONTEXTE 1 H / 4 H · 26/09/2026]
     onchain: { score:onchain.score,  conf:onchain.conf, label:'Corps de bougies', detail:'Pression acheteuse/vendeuse des bougies · '+onchain.name },
     security:{ score:sec.score,      conf:sec.conf,     label:'Sécurité (volatilité)', detail:'Veto sur volatilité anormale · '+sec.name },
     volume:  { score:vol.score,      conf:vol.conf,     label:'Volume réel',     detail:'Volume des bougies Binance · '+vol.name },

@@ -89,7 +89,7 @@ T('S6 · 07 : évolution ≥ 1 h (_EVO_COOLDOWN_MS 3 600 000), rêve ≥ 24 h (8
   assert.strictEqual(count(c, 'weak.regimeFitness = mergeRegimeFit('), 0);
   const m = s07.match(/const _SEAT_DEF = \{([\s\S]*?)\n\};/); assert.ok(m);
   const ids = (m[1].match(/'([a-z_0-9]+)': \{ type:/g) || []).length; assert.strictEqual(ids, 21, 'sièges dans la carte : ' + ids);
-  assert.ok(m[1].includes("'macro_v1': { type: 'Linear·FRED', source: 'Fed/BCE/FMI' }"));
+  assert.ok(m[1].includes("'macro_v1': { type: 'Indices·Marché', source: 'F&G·CoinGecko' }"));   // [CONTEXTE 1 H / 4 H · 26/09] étiquette vraie (lisait Fear & Greed depuis 20260926b)
 });
 T('D6 · _auraRotatePurge RÉEL : 200 learningHistory → les 80 PLUS RÉCENTS survivent (cycles 121…200), idem dreamJournal (30) et globalMemoryPool (30)', () => {
   const src = between(s9b2, 'function _auraRotatePurge() {', '\nsetInterval(_auraRotatePurge, 120000);', 'purge');
@@ -122,9 +122,9 @@ T('S8 · 02 : _realCandlesStale (critère des portes) utilisé au boot, limiteur
 });
 T('S9 · en-têtes 02/08/10g/09b2 « ' + HDR + ' », 10f « ▓▓▓ VERSION 20260917b ▓▓▓ » (hotfix b), HTML : DOC_V + 78 ?v= (79), aucun autre token', () => {
   assert.ok(s10g.startsWith(HDR), F10G);
-  assert.ok(s08.startsWith('// [MACRO RÉEL · 26/09/2026] VERSION 20260926b') && s08.split('\n').slice(0, 8).some(l => l.startsWith(HDR)), F08);   // [1b-b] 08 relivré, en-tête 1b-a en 2e ligne
-  assert.ok(s02.startsWith('// [LIQUIDATIONS · 26/09/2026] VERSION 20260926d') && s02.split('\n').slice(0, 16).some(l => l.startsWith(HDR)), F02);   // [SONDE RÉSEAU] 02 relivré, en-tête 1b-a en 2e ligne
-  assert.ok(s9b2.startsWith('// [COMPTEURS RÉGLAGES · 24/09/2026] VERSION 20260924a') && s9b2.split('\n').slice(0, 16).some(l => l.startsWith(HDR)), F9B2);   // [FITNESS GLISSANTE] 09b2 relivré, en-tête 1b-a dans les 6 premières lignes
+  assert.ok(s08.startsWith('// [CONTEXTE 1 H / 4 H · 26/09/2026] VERSION 20260926e') && s08.split('\n').slice(0, 9).some(l => l.startsWith(HDR)), F08);   // [1b-b] 08 relivré, en-tête 1b-a en 2e ligne
+  assert.ok(s02.startsWith('// [CONTEXTE 1 H / 4 H · 26/09/2026] VERSION 20260926e') && s02.split('\n').slice(0, 17).some(l => l.startsWith(HDR)), F02);   // [SONDE RÉSEAU] 02 relivré, en-tête 1b-a en 2e ligne
+  assert.ok(s9b2.startsWith('// [CONTEXTE 1 H / 4 H · 26/09/2026] VERSION 20260926e') && s9b2.split('\n').slice(0, 17).some(l => l.startsWith(HDR)), F9B2);   // [FITNESS GLISSANTE] 09b2 relivré, en-tête 1b-a dans les 6 premières lignes
   assert.ok(s10f.startsWith('// ▓▓▓ VERSION 20260926a ▓▓▓'));   // 10f livré au hotfix b, non retouché depuis
   assert.strictEqual(count(html, TOK), 81);   // [ÉCRAN APPRIS 23/09] 11b ajouté (10i le 17/09)
   assert.strictEqual((html.match(/\?v=\d{8}[a-z]/g) || []).length, 80);

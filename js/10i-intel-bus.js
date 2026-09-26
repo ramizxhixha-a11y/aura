@@ -1,3 +1,4 @@
+// [CONTEXTE 1 H / 4 H · 26/09/2026] VERSION 20260926e · source d'attribution « contexte » (geopolitic_v1 sorti de « prix ») ; _pathRecord lit le dernier prix réel ACCEPTÉ en EV/RE (celui dont il juge l'âge)
 // [POSITIONNEMENT · 26/09/2026] VERSION 20260926c · sources d'attribution : macro et positionnement séparées (ex « fondamental »)
 // [PRIX FIGÉ + PREUVE D'ACTION · 25/09/2026] VERSION 20260925a · _pathRecord n'écrit rien sur un prix figé ; gain/stop exigent ≥ 4 cas d'action pour s'armer
 // [VÉRITÉ DES RÈGLES · 23/09/2026] VERSION 20260923f · armedAt/baseMean conservés à l'armement, _ruleTruth : trades de la paire depuis l'armement vs avant, sorties dues à la règle
@@ -31,12 +32,13 @@
 // ferait voter deux fois la même donnée.
 var INTEL_SOURCES = {
   technique:   ['__tech'],                                                   // getTechSignals : 14 indicateurs sur les klines (atScore)
-  prix:        ['sentiment_v2', 'volatility_v1', 'corr_v1', 'geopolitic_v1', 'onchain_v1', 'breakout_v1'],   // dérivés des bougies
+  prix:        ['sentiment_v2', 'volatility_v1', 'corr_v1', 'onchain_v1', 'breakout_v1'],   // dérivés des bougies 15 min ([26/09] geopolitic_v1 → contexte)
   flux:        ['flow_v1', 'whale_v1'],                                      // @trade (quantité + côté preneur) + carnet depth
   volume:      ['volume_v1'],                                                // volume réel des klines
   news:        ['nlp_v1'],                                                   // 10e7-news-nlp
   macro:       ['macro_v1'],                                                 // [26/09] Fear & Greed · dominance · cap 24 h (07)
   positionnement: ['fundamental_v1'],                                        // [26/09] financement · open interest · long/short (02)
+  contexte:    ['geopolitic_v1'],                                            // [26/09] tendance des horizons 1 h / 4 h (02 _ctxHorizonRead)
   harmonique:  ['harmonic_v1']                                               // figures (06)
 };
 var INTEL_KEEP = 40;   // ~40 analyses par paire : couvre largement la vie d'une position
@@ -169,6 +171,9 @@ function _pathRecord() {
     S.openPositions.forEach(function (pos) {
       if (!pos || !pos.pair) return;
       var ps = S.pairStates[pos.pair], px = ps ? Number(ps.price) : 0, entry = Number(pos.entryPrice), t0 = Number(pos.openedAt);
+      // [CONTEXTE 1 H / 4 H · 26/09/2026] en EV/RE, le chemin est mesuré sur le dernier prix réel ACCEPTÉ (celui dont _rcPriceAge juge
+      // l'âge, 02) : ps.price peut rester figé quand le WS dort alors que le REST vit et rafraîchit la référence.
+      if ((S.tradingMode === 'paperReal' || S.tradingMode === 'real') && typeof _rcLastPrice === 'function') { var _lp = _rcLastPrice(pos.pair); if (_lp > 0) px = _lp; }
       if (!(px > 0) || !(entry > 0) || !(t0 > 0)) return;
       // [PRIX FIGÉ · 25/09/2026] prix réel plus vieux que 2 min (coupure) : on n'écrit rien — un chemin sur un prix figé est faux.
       if (typeof _rcPriceAge === 'function' && (S.tradingMode === 'paperReal' || S.tradingMode === 'real') && _rcPriceAge(pos.pair) > 120000) { pos._pathStale = (pos._pathStale || 0) + 1; return; }

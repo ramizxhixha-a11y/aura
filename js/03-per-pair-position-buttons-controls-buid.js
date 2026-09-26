@@ -1,3 +1,4 @@
+// [CONTEXTE 1 H / 4 H · 26/09/2026] VERSION 20260926e · geopolitic_v1 = Contexte 1h·4h : tendance des horizons 1 h et 4 h (02 _ctxHorizonRead), horizons alignés renforcés / en conflit amortis, 11 gènes bornés
 // [LIQUIDATIONS · 26/09/2026] VERSION 20260926d · whale_v1 lit les liquidations (S.liqStats) : shorts liquidés = achats forcés (+), longs liquidés = ventes forcées (−), génomé (wLiq, liqMinUsd)
 // [POSITIONNEMENT · 26/09/2026] VERSION 20260926c · fundamental_v1 = Positionnement : lit S.positioning (financement, OI, long/short), génomé
 // [MACRO RÉEL · 26/09/2026] VERSION 20260926b · macro_v1 lit S.macroFeed (Fear & Greed, dominance, cap 24 h), génomé ; fundamental_v1 reste neutralisé
@@ -3597,7 +3598,7 @@ const GENOME_DEFAULTS = {
   volume_v1:     { recentN: 5, histN: 15, lookback: 5, spike: 1.5, spikeScore: 0.6, low: 0.6, maxScore: 0.4, slope: 0.5 },
   volatility_v1: { adxStrong: 30, cvHigh: 0.03, cvLow: 0.008, wStrong: 0.8, wHigh: 0.5, wLow: 0.6, wNormal: 0.6 },
   corr_v1:       { win: 5, gain: 0.15 },
-  geopolitic_v1: { cvHigh: 0.03, cvMid: 0.02, cvLow: 0.008, riskHigh: 0.6, riskMid: 0.3, riskLow: 0.2, riskBase: 0.05, afW: 0.35 },
+  geopolitic_v1: { emaF: 8, emaS: 21, slopeN: 3, atrN: 14, minBars: 24, kGap: 0.5, kSlope: 0.5, w1h: 0.5, w4h: 0.5, agree: 0.25, disagree: 0.5 },   // [CONTEXTE 1 H / 4 H · 26/09/2026]
   onchain_v1:    { win: 12 },
   whale_v1:      { avgN: 9, big: 2.5, mid: 1.5, bigScore: 0.7, midScore: 0.35, wLiq: 0.3, liqMinUsd: 20000 },   // [LIQUIDATIONS · 26/09/2026] + wLiq, liqMinUsd
   breakout_v1:   { win: 20, margin: 0.002, score: 0.7 },
@@ -3614,7 +3615,7 @@ const GENOME_DEFAULTS = {
   macro_v1:      { fngLow: 25, fngHigh: 75, capScale: 5, wFng: 0.6, wCap: 0.4 },   // [MACRO RÉEL · 26/09/2026]
   fundamental_v1:{ fundScale: 0.05, oiScale: 5, lsHigh: 1.5, lsLow: 0.67, wF: 0.4, wOi: 0.35, wLs: 0.25 }   // [POSITIONNEMENT · 26/09/2026]
 };
-const GENE_INT = { win: 1, recentN: 1, histN: 1, lookback: 1, avgN: 1, resonanceMin: 1 };          // fenêtres : entiers ≥ 2
+const GENE_INT = { win: 1, recentN: 1, histN: 1, lookback: 1, avgN: 1, resonanceMin: 1, emaF: 1, emaS: 1, slopeN: 1, atrN: 1, minBars: 1 };          // fenêtres : entiers ≥ 2 · [CONTEXTE 1 H / 4 H · 26/09/2026] + emaF, emaS, slopeN, atrN, minBars
 const GENE_BOUNDS = {                                                             // sinon [défaut/4, défaut×4]
   rsiHigh: [50, 95], rsiLow: [5, 50], bbHigh: [0.5, 1], bbLow: [0, 0.5], ownW: [0.2, 0.9], voteThr: [0.05, 0.5],
   conf: [0.2, 0.95], score: [0.1, 1], spikeScore: [0.1, 1], bigScore: [0.1, 1], midScore: [0.05, 1], maxScore: [0.1, 1],
@@ -3622,7 +3623,8 @@ const GENE_BOUNDS = {                                                           
   stochHigh: [50, 95], stochLow: [5, 50], adxMin: [10, 60], resonanceMin: [2, 5],   // [HARMONIQUE GÉNOMÉE · 23/09/2026]
   fngLow: [5, 45], fngHigh: [55, 95], capScale: [1, 20], wFng: [0.1, 1], wCap: [0, 1],   // [MACRO RÉEL · 26/09/2026]
   fundScale: [0.01, 0.3], oiScale: [1, 25], lsHigh: [1.05, 4], lsLow: [0.25, 0.95], wF: [0, 1], wOi: [0, 1], wLs: [0, 1],   // [POSITIONNEMENT · 26/09/2026]
-  wLiq: [0, 1], liqMinUsd: [1000, 500000]   // [LIQUIDATIONS · 26/09/2026]
+  wLiq: [0, 1], liqMinUsd: [1000, 500000],   // [LIQUIDATIONS · 26/09/2026]
+  emaF: [3, 20], emaS: [10, 60], slopeN: [1, 10], atrN: [5, 30], minBars: [12, 60], kGap: [0.1, 2], kSlope: [0, 2], w1h: [0.05, 1], w4h: [0.05, 1], agree: [0, 1], disagree: [0, 0.9]   // [CONTEXTE 1 H / 4 H · 26/09/2026]
 };
 function _geneClamp(k, v, def) {
   if (!isFinite(v)) return def;
@@ -3825,16 +3827,28 @@ function scoutAnalysis(agentId, pair) {
       };
     }
     case 'geopolitic_v1': {
-      // v6.7: Geopolitical risk proxy — volatility spike + macro
-      const cv = tech?.raw?.stddev?.cv || 0.015;
-      const af = fund?.fundScore || 0;
-      const riskScore = cv > G.cvHigh ? -G.riskHigh : cv > G.cvMid ? -G.riskMid : cv < G.cvLow ? G.riskLow : G.riskBase;
-      const rawScore  = Math.max(-1, Math.min(1, riskScore + af * G.afW));
-      return {
-        score: rawScore,
-        conf: 0.60,
-        reasoning: rawScore < -0.3 ? `Risque géopolitique élevé (vol ${(cv*100).toFixed(1)}%)` : rawScore > 0.2 ? 'Contexte favorable' : 'Contexte stable'
-      };
+      // [CONTEXTE 1 H / 4 H · 26/09/2026] lot 4 des sources (Rams « Go 4 ») — le siège « Géopolitique » lisait la volatilité de la
+      // bougie 15 min (déjà lue par volatility_v1 et security_v1) et le score fondamental (circulaire). Il lit désormais les horizons
+      // SUPÉRIEURS : tendance 1 h et 4 h (EMA courte − EMA longue et pente de la longue, en unités d'ATR : sans échelle, 02
+      // _ctxHorizonRead), pondérées w1h / w4h ; horizons alignés → score renforcé (agree), en conflit → amorti (disagree) ; un seul
+      // horizon lisible → sa seule part, l'autre compte pour neutre. Sans série vraie (courte, périmée, trouée de dojis de coupure) :
+      // neutre, faible confiance, motif affiché — jamais un chiffre inventé.
+      if (typeof _ctxHorizonRead !== 'function') return { score:0, conf:0.3, reasoning:'En attente des bougies 1 h / 4 h' };
+      const _cNow = Date.now(), h1 = _ctxHorizonRead(pair, '1h', G, _cNow), h4 = _ctxHorizonRead(pair, '4h', G, _cNow);
+      const ok1 = !!(h1 && h1.ok), ok4 = !!(h4 && h4.ok);
+      const why = h => (h && h.why) || '?';
+      if (!ok1 && !ok4) return { score:0, conf:0.3, reasoning:`En attente des bougies 1 h / 4 h (${why(h1)} / ${why(h4)})` };
+      const lab = (tf, h) => `${tf} ${h.t > 0.05 ? '▲' : h.t < -0.05 ? '▼' : '▬'} ${h.t >= 0 ? '+' : ''}${h.t.toFixed(2)}`;
+      if (ok1 && ok4) {
+        let sc = h1.t * G.w1h + h4.t * G.w4h, cf = 0.55, tail = 'contexte calme';
+        const strong = Math.abs(h1.t) > 0.2 && Math.abs(h4.t) > 0.2;
+        if (strong && Math.sign(h1.t) === Math.sign(h4.t)) { sc *= (1 + G.agree); cf = 0.7; tail = 'horizons alignés'; }
+        else if (strong) { sc *= (1 - G.disagree); cf = 0.45; tail = 'horizons en conflit'; }
+        return { score: Math.max(-1, Math.min(1, sc)), conf: cf, reasoning: `${lab('1 h', h1)} · ${lab('4 h', h4)} · ${tail}` };
+      }
+      const h = ok1 ? h1 : h4, w = ok1 ? G.w1h : G.w4h;
+      return { score: Math.max(-1, Math.min(1, h.t * w)), conf: 0.5,
+               reasoning: ok1 ? `${lab('1 h', h1)} · 4 h en attente (${why(h4)})` : `1 h en attente (${why(h1)}) · ${lab('4 h', h4)}` };
     }
     case 'onchain_v1': {
       // v6.7: On-chain proxy via candle efficiency (body/range ratio)

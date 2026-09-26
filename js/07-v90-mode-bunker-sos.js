@@ -1,3 +1,4 @@
+// [CONTEXTE 1 H / 4 H · 26/09/2026] VERSION 20260926e · _SEAT_DEF vrai pour macro / positionnement / contexte ; _seatLabelsSync au boot : type/source/nom des sièges convertis rétablis malgré l'instantané (09b2 recopie les anciens)
 // [MACRO RÉEL · 26/09/2026] VERSION 20260926b · flux macro permanent (_macroFeedRefresh → S.macroFeed) : Fear & Greed, dominance BTC, cap 24 h
 // [PRIX FIGÉ + PREUVE D'ACTION · 25/09/2026] VERSION 20260925a · l'anti-zombie s'efface devant une règle de gain armée ; sa sortie est marquée (zombie)
 // [MÉNAGE · 23/09/2026] VERSION 20260923g · panneau Jumeau sans _totalCompounded ; reset EV/RE vide aussi la mémoire de la blacklist
@@ -12,14 +13,14 @@
 // [1c-LITE · 15/09/2026] VERSION 20260915b · évolution 1/h (était 1/min), type/source du siège restaurés (_SEAT_DEF), regimeFitness du siège conservée (plus clonée des parents), rêve 1/jour (était 4 min)
 // [1c-LITE · 15/09/2026] type/source d'origine des 21 sièges signal (littéral initial de 02) — la logique de vote est par id (03)
 const _SEAT_DEF = {
-  'macro_v1': { type: 'Linear·FRED', source: 'Fed/BCE/FMI' },
-  'fundamental_v1': { type: 'Quant·Alpha', source: 'Bloomberg/AlphaV' },
+  'macro_v1': { type: 'Indices·Marché', source: 'F&G·CoinGecko' },   // [CONTEXTE 1 H / 4 H · 26/09/2026] lit Fear & Greed + cap 24 h depuis 20260926b
+  'fundamental_v1': { type: 'Futures·Levier', source: 'Binance Futures' },   // [CONTEXTE 1 H / 4 H · 26/09/2026] Positionnement depuis 20260926c
   'nlp_v1': { type: 'NLP·BERT-fin', source: 'News/Earnings' },
   'sentiment_v2': { type: 'NLP·BERT', source: 'Twitter/Reddit' },
   'volume_v1': { type: 'Stat·OBV', source: 'Binance/OB' },
   'volatility_v1': { type: 'Stat·GARCH', source: 'Price/Options' },
   'corr_v1': { type: 'Stat·PCA', source: 'Multi-Asset' },
-  'geopolitic_v1': { type: 'LLM·GPT-4', source: 'GDELT/News' },
+  'geopolitic_v1': { type: 'Multi·Horizon', source: 'Binance 1h·4h' },   // [CONTEXTE 1 H / 4 H · 26/09/2026] Contexte 1h·4h depuis 20260926e
   'onchain_v1': { type: 'Graph·Anomaly', source: 'Etherscan/Glassn' },
   'security_v1': { type: 'Anomaly·Forta', source: 'Forta/CertiK' },
   'whale_v1': { type: 'On-Chain·L2', source: 'Mempool·DEX' },
@@ -35,6 +36,32 @@ const _SEAT_DEF = {
   'hedge_v2': { type: 'Risk·Off·Defender', source: 'Vol·Macro' }
 };
 window._SEAT_DEF = _SEAT_DEF;
+// [CONTEXTE 1 H / 4 H · 26/09/2026] Les étiquettes d'un siège (type / source) décrivent SA LOGIQUE, qui est par id (03). Mais 09b2
+// recopie name/emoji/type/source depuis l'instantané à chaque boot : les trois sièges convertis depuis le 26/09 (macro,
+// positionnement, contexte) gardaient donc au DAO leurs anciennes étiquettes mensongères (« Linear·FRED / Fed/BCE/FMI »,
+// « Quant·Alpha / Bloomberg », « LLM·GPT-4 / GDELT »). Après la restauration : type / source depuis _SEAT_DEF pour tout siège
+// connu ; nom, emoji et domaine seulement si le siège porte encore l'ANCIEN nom littéral (un hybride garde son nom).
+var _SEAT_RENAMES = {
+  'EPS·P/E·EV':   { id: 'fundamental_v1', name: 'Positionnement', emoji: '💹', domain: 'positioning' },
+  'Géopolitique': { id: 'geopolitic_v1',  name: 'Contexte 1h·4h', emoji: '🔭', domain: 'contexte' }
+};
+function _seatLabelsSync() {
+  try {
+    if (typeof S === 'undefined' || !S || !Array.isArray(S.agents)) return 0;
+    var n = 0;
+    S.agents.forEach(function (a) {
+      if (!a || !a.id) return;
+      var d = _SEAT_DEF[a.id];
+      if (d && (a.type !== d.type || a.source !== d.source)) { a.type = d.type; a.source = d.source; n++; }
+      var r = _SEAT_RENAMES[a.name];
+      if (r && r.id === a.id) { a.name = r.name; a.emoji = r.emoji; a.domain = r.domain; n++; }
+    });
+    return n;
+  } catch (e) { return 0; }
+}
+window._seatLabelsSync = _seatLabelsSync;
+setTimeout(_seatLabelsSync, 15000);   // après la restauration de l'instantané (comme _migrateGbpToBnb, 11)
+setTimeout(_seatLabelsSync, 60000);   // filet si la restauration a été lente (IndexedDB > 15 s vu au Guardian)
 // [SKILL BORNÉ · 06/09/2026] VERSION 20260906i — triggerEvolution : reset agentPairSkill + discipleTaskSkill du siège recyclé après copie à l'héritier (fin de l'explosion exponentielle)
 // [P0 RÉGIME UNIFIÉ · 05/09/2026] lectures de régime en direct via detectMarketRegime() (source unique, 02) ; fantôme S.regime (jamais écrit) supprimé.
 // [PRIX HOLD FLUIDES · 02/08/2026] tous les prix affiches a 2 decimales (priceStr HOLD 3447, priceStr2, curStr badge, priceStr trades) au lieu de Math.floor -> SOL $73 devient $73.14 et les mouvements <$1 redeviennent visibles (avant "bloque a 73") · updater mort ac2_price_ (id inexistant) retire, le prix HOLD passe par ac2_px_
