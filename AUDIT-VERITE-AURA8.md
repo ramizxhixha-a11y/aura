@@ -191,4 +191,6 @@ Une régression de vérité = `VERDICT : NON LIVRABLE`, jamais « CONNU, tolér�
 
 - **26/09 — mémoire des bots** (`20260926h`) : les bots n'ont jamais eu d'épisodes (jugés avant la mémoire) ; leur carte montrait le vide alors que leur vraie mémoire (fenêtre de jugements, interventions, apport) existait — affichée telle quelle, sans souvenirs inventés.
 
+- **26/09 — page Agents stable** (`20260926i`) : la liste était reconstruite toutes les 5 s (les titres de groupe comptés comme des cartes) — barres reparties de 0, défilement qui saute, filtre perdu ; plus un point de fitness par seconde (courbes qui glissent) et des cartes à hauteur variable. Reconstruction seulement si la composition change, cartes à hauteur fixe, courbes redessinées seulement sur changement.
+
 *Mis à jour à chaque mission. Le prochain audit complet : après 1b-b, sur un backup de 24 h propre.*

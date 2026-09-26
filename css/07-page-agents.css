@@ -241,3 +241,14 @@
 }
 .pair-activate-btn:active { background: rgba(245,200,66,.25); }
 
+/* [PAGE AGENTS STABLE · 26/09/2026] page Agents : chiffres à chasse fixe (une valeur qui change ne fait plus bouger le texte voisin),
+   lignes sans retour à la ligne, souvenir limité à 2 lignes de hauteur FIXE (une carte garde sa hauteur quand un nouveau
+   souvenir arrive), pas de pulsation des cartes au rappel de mémoire (toutes les ~12 s, sur presque toutes les cartes). */
+#mobileAgentList, #agentHeatmapGrid { font-variant-numeric: tabular-nums; }
+#mobileAgentList .agent-name-row > .pill { flex-shrink: 0; min-width: 58px; text-align: center; }
+#mobileAgentList .agent-type-row { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#mobileAgentList .agent-fitness-label { white-space: nowrap; }
+#mobileAgentList .agent-meta-row { flex-wrap: nowrap; overflow: hidden; white-space: nowrap; }
+#mobileAgentList .memory-metaphor { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; height: 2.9em; }
+#mobileAgentList .memory-meta { white-space: nowrap; overflow: hidden; }
+#mobileAgentList .memory-recall-pulse { animation: none; }

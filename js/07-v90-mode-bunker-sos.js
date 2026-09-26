@@ -1,3 +1,4 @@
+// [PAGE AGENTS STABLE · 26/09/2026] VERSION 20260926i · page Agents stable : la liste n'est plus reconstruite toutes les 5 s (signature), une reconstruction garde barres, bandeaux, filtre et défilement ; badges et bandeau à place fixe ; historique de fitness sur changement ; sparklines redessinées seulement si la série change ; journal d'évolution et bannière de rêve réécrits seulement s'ils changent
 // [MÉMOIRE DES BOTS · 26/09/2026] VERSION 20260926h · la carte d'un bot / du méta affiche sa VRAIE mémoire (fenêtre de jugements, interventions et apport de la flotte) à la place du bandeau vide (_botMemorySummary)
 // [CONTEXTE 1 H / 4 H · 26/09/2026] VERSION 20260926e · _SEAT_DEF vrai pour macro / positionnement / contexte ; _seatLabelsSync au boot : type/source/nom des sièges convertis rétablis malgré l'instantané (09b2 recopie les anciens)
 // [MACRO RÉEL · 26/09/2026] VERSION 20260926b · flux macro permanent (_macroFeedRefresh → S.macroFeed) : Fear & Greed, dominance BTC, cap 24 h
@@ -5326,12 +5327,29 @@ function renderHome() {
   try { if(typeof checkBadges === 'function') checkBadges(); } catch(e) {}
 }
 
+var _agSpkResize = true;   // [PAGE AGENTS STABLE · 26/09/2026] relire la largeur des sparklines après un redimensionnement
+try { window.addEventListener('resize', function () { _agSpkResize = true; }); } catch(e) {}
 /* ── stable agent card IDs so we never rebuild the whole list ── */
+// [PAGE AGENTS STABLE · 26/09/2026] Rams : « la page agents n'est pas stable visuellement ». Cause principale : renderAgents (08, toutes les 5 s)
+// reconstruisait la liste si list.children.length !== S.agents.length — or la liste contient AUSSI les titres de groupe : la
+// condition était TOUJOURS vraie → toutes les 5 s, 31 cartes détruites et recréées : barres de fitness reparties de 0 % (transition),
+// bandeaux mémoire masqués puis réaffichés (la page raccourcissait → le défilement sautait), filtre de rôle perdu. Désormais la
+// liste n'est reconstruite que si sa COMPOSITION change (agents, rôles, flotte : une évolution, ≤ 1/h) ; et même alors, les
+// cartes naissent à leur état final (largeur de barre, bandeau visible, filtre réappliqué, défilement restauré).
+var _agCardsSig = '';
+function _agCardsSignature() {
+  return (S.agents || []).map(a => a.id + ':' + (a.role || 'fundamental') + ':' + ((S.botFleet && S.botFleet[a.id]) ? 'f' : '')).join('|');
+}
 function buildAgentCards() {
   const list = document.getElementById('mobileAgentList');
   if(!list) return;
   // Init fitness history if not present
   S.agents.forEach(a => { if(!a.fitnessHistory) a.fitnessHistory = [a.fitness]; });
+  const _sig = _agCardsSignature();
+  if (_sig === _agCardsSig && list.querySelector('.agent-card')) return;   // [PAGE AGENTS STABLE · 26/09/2026] même composition : patchAgentCards met à jour en place
+  _agCardsSig = _sig;
+  const _scrolls = [];   // [PAGE AGENTS STABLE · 26/09/2026] défilement de la page (et de tout conteneur défilé) à restaurer après reconstruction
+  for (let el = list.parentElement; el; el = el.parentElement) { if (el.scrollTop > 0) _scrolls.push([el, el.scrollTop]); }
 
   const roleColor = { fundamental:'var(--ice)', technical:'var(--up)', sentiment:'var(--pur)',
                       context:'var(--gold)', execution:'var(--down)', meta:'var(--pur)', hybrid:'var(--up)' };
@@ -5363,18 +5381,19 @@ function buildAgentCards() {
         : a.isMeta
         ? `<span style="font-size:6px;background:rgba(157,78,221,.2);color:var(--pur);border:1px solid rgba(157,78,221,.3);padding:1px 4px;border-radius:4px;margin-left:3px;">META</span>`
         : '';
-      const errBadge = (a.errors||0) > 3
-        ? `<span style="font-size:6px;background:rgba(255,61,107,.12);color:var(--down);padding:1px 4px;border-radius:4px;margin-left:3px;">⚠ ${a.errors} err.</span>` : '';
-      const streakBadge = (a.streak||0) >= 3
-        ? `<span style="font-size:6px;background:rgba(0,232,122,.1);color:var(--up);padding:1px 4px;border-radius:4px;margin-left:3px;">🔥 ${a.streak}</span>` : '';
+      // [PAGE AGENTS STABLE · 26/09/2026] badges d'erreurs / de série : emplacements FIXES, remplis et montrés par patchAgentCards (ils n'étaient
+      // évalués qu'à la construction — donc justes seulement parce que la liste était reconstruite toutes les 5 s)
+      const errBadge = `<span id="aebdg_${a.id}" style="display:none;flex-shrink:0;font-size:6px;background:rgba(255,61,107,.12);color:var(--down);padding:1px 4px;border-radius:4px;margin-left:3px;"></span>`;
+      const streakBadge = `<span id="asbdg_${a.id}" style="display:none;flex-shrink:0;font-size:6px;background:rgba(0,232,122,.1);color:var(--up);padding:1px 4px;border-radius:4px;margin-left:3px;"></span>`;
+      const fitPct0 = Math.min(100, ((a.fitness || 0) / 1500) * 100);   // [PAGE AGENTS STABLE · 26/09/2026] la barre naît à sa largeur (plus de départ à 0 %)
 
       html += `
-  <div class="agent-card" id="agcard_${a.id}" data-agent-role="${a.role||'fundamental'}" style="animation-delay:${i*.04}s">
+  <div class="agent-card" id="agcard_${a.id}" data-agent-role="${a.role||'fundamental'}">
     <div class="agent-avatar" style="background:rgba(255,255,255,.04)" id="av_${a.id}">${a.emoji}</div>
     <div class="agent-info">
       <div class="agent-name-row">
-        <div style="display:flex;align-items:center;gap:2px;flex-wrap:wrap;">
-          <span class="agent-name" id="an_${a.id}">${a.name}</span>
+        <div style="display:flex;align-items:center;gap:2px;flex-wrap:nowrap;min-width:0;overflow:hidden;">
+          <span class="agent-name" id="an_${a.id}" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;">${a.name}</span>
           ${botBadge}${errBadge}${streakBadge}
         </div>
         <div class="pill pill-up" id="as_${a.id}">+0.000</div>
@@ -5388,7 +5407,7 @@ function buildAgentCards() {
           <span id="aerr_${a.id}" style="color:var(--t3);font-size:8px;"></span>
         </div>
         <div class="agent-fitness-bar">
-          <div class="agent-fitness-fill" id="afb_${a.id}" style="width:0%;background:${a.color};transition:width .4s;"></div>
+          <div class="agent-fitness-fill" id="afb_${a.id}" style="width:${fitPct0}%;background:${a.color};transition:width .4s;"></div>
         </div>
       </div>
       <canvas id="aspk_${a.id}" style="width:100%;height:22px;margin-top:3px;display:block;border-radius:3px;"></canvas>
@@ -5397,16 +5416,16 @@ function buildAgentCards() {
         <span class="pill pill-ice" id="alrn_${a.id}">0 apprent.</span>
         <span id="awratio_${a.id}" style="font-size:8px;color:var(--t3);">—</span>
       </div>
-      <div style="display:flex;justify-content:space-between;font-size:8px;color:var(--t3);margin-top:3px;">
+      <div style="display:flex;justify-content:space-between;font-size:8px;color:var(--t3);margin-top:3px;white-space:nowrap;">
         <span>Série: <span id="arwd_${a.id}" style="color:var(--gold)">0</span></span>
         <span id="amem_${a.id}" style="color:var(--t3);font-size:7px;"></span>
       </div>
-      <div id="amstrip_${a.id}" class="memory-strip" onclick="showMemoryOverlay('${a.id}')" style="display:none;">
+      <div id="amstrip_${a.id}" class="memory-strip" onclick="showMemoryOverlay('${a.id}')">
         <div class="memory-strip-label">
           <span>💭 DERNIÈRE MÉMOIRE</span>
           <span id="amem_cnt_${a.id}" style="color:var(--ice)">0 ep.</span>
         </div>
-        <div class="memory-metaphor" id="amem_text_${a.id}">—</div>
+        <div class="memory-metaphor" id="amem_text_${a.id}">pas encore de souvenir</div>
         <div class="memory-meta">
           <span><span id="amem_pnl_${a.id}">—</span></span>
           <span id="amem_pair_${a.id}" style="color:var(--t3)">—</span>
@@ -5418,6 +5437,12 @@ function buildAgentCards() {
     });
   });
   list.innerHTML = html;
+  // [PAGE AGENTS STABLE · 26/09/2026] le filtre de rôle choisi survit à la reconstruction (03 _agentFilter) ; le défilement est restauré
+  try {
+    if (typeof _agentFilter !== 'undefined' && _agentFilter && _agentFilter !== 'all')
+      list.querySelectorAll('[data-agent-role]').forEach(c => { if ((c.dataset.agentRole || 'fundamental') !== _agentFilter) c.style.display = 'none'; });
+  } catch(e) {}
+  _scrolls.forEach(p => { try { p[0].scrollTop = p[1]; } catch(e) {} });
 }
 
 function patchAgentCards() {
@@ -5429,10 +5454,13 @@ function patchAgentCards() {
   // rouge/vert aléatoires à chaque rendu), et ce bruit était ÉCRIT dans a.fitnessHistory,
   // donnée d'agent sauvegardée. Même famille que BUG-002 : maquillage interdit. On pousse la
   // fitness VRAIE ; une fitness stable trace une ligne plate, et c'est la vérité.
-  if(tick % 1 === 0) {
+  // [PAGE AGENTS STABLE · 26/09/2026] un point seulement quand une fitness a CHANGÉ — pour tous les agents ensemble (séries alignées pour la
+  // corrélation 08) : l'ancien point par seconde faisait glisser toutes les courbes en continu (60 s d'histoire, la même valeur
+  // répétée) sans rien apprendre. 03 learnFromOutcome ajoute aussi un point tous les 3 jugements : pas de doublon (même valeur).
+  if (S.agents.some(a => { const h = a.fitnessHistory; return !h || !h.length || h[h.length - 1] !== Math.round(a.fitness); })) {
     S.agents.forEach(a => {
-      if(!a.fitnessHistory) a.fitnessHistory = [a.fitness, a.fitness];
-      a.fitnessHistory.push(a.fitness);
+      if(!a.fitnessHistory) a.fitnessHistory = [Math.round(a.fitness)];
+      a.fitnessHistory.push(Math.round(a.fitness));
       if(a.fitnessHistory.length > 60) a.fitnessHistory.shift();
     });
   }
@@ -5482,6 +5510,10 @@ function patchAgentCards() {
     if(elName)  elName.textContent = a.name;
     if(elType)  elType.textContent = a.type+' · '+a.source;
     if(elAv)    elAv.textContent   = a.emoji;
+    // [PAGE AGENTS STABLE · 26/09/2026] badges à place fixe : montrés / cachés, jamais recréés
+    const _eB = document.getElementById('aebdg_'+a.id), _sB = document.getElementById('asbdg_'+a.id);
+    if(_eB) { const _e = a.errors || 0; if(_e > 3) { _eB.textContent = '⚠ ' + _e + ' err.'; _eB.style.display = ''; } else _eB.style.display = 'none'; }
+    if(_sB) { const _k = a.streak || 0; if(_k >= 3) { _sB.textContent = '🔥 ' + _k; _sB.style.display = ''; } else _sB.style.display = 'none'; }
 
     if(elLrn) {
       elLrn.textContent = events+' apprent.';
@@ -5540,16 +5572,33 @@ function patchAgentCards() {
       }
     }
 
-    // Draw fitness sparkline — retina-aware bezier
+  });
+
+  // [PAGE AGENTS STABLE · 26/09/2026] sparklines : APRÈS toutes les écritures (une seule mise en page au lieu d'une par carte), et redessinées
+  // seulement si la série ou la largeur a changé — l'ancien code réallouait les 31 canevas à chaque seconde.
+  const _spk = [];
+  S.agents.forEach(a => {
     const cv = document.getElementById('aspk_'+a.id);
-    if(cv && a.fitnessHistory && a.fitnessHistory.length > 1) {
+    if(!(cv && a.fitnessHistory && a.fitnessHistory.length > 1)) return;
+    const _ds = a.fitnessHistory.join(',');
+    if(cv._dsig === _ds && !_agSpkResize) return;
+    const ow = cv.offsetWidth || 0, pw = (cv.parentElement && cv.parentElement.offsetWidth) || 0;   // lectures seulement
+    if(!(ow || pw)) return;   // carte masquée (filtre, onglet) : dessinée quand elle redevient visible
+    _spk.push({ a, cv, ds: _ds, ow, pw });
+  });
+  _agSpkResize = false;
+  _spk.forEach(({ a, cv, ds, ow, pw }) => {
+    // Draw fitness sparkline — retina-aware bezier
+    {
       const dpr = window.devicePixelRatio || 1;
-      const cW  = cv.offsetWidth || cv.parentElement?.offsetWidth || 200;
+      const cW  = ow || pw;
       const cH  = 22;
-      cv.width  = cW * dpr;
-      cv.height = cH * dpr;
+      const _bw = Math.round(cW * dpr), _bh = Math.round(cH * dpr);
+      if(cv.width !== _bw)  cv.width  = _bw;
+      if(cv.height !== _bh) cv.height = _bh;
       const ctx = cv.getContext('2d');
-      ctx.scale(dpr, dpr);
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);   // (ctx.scale se cumulerait : le canevas n'est plus réalloué à chaque dessin)
+      cv._dsig = ds;
       const W = cW, H = cH;
       const data = a.fitnessHistory;
       const mn = Math.min(...data), mx = Math.max(...data);
@@ -5635,7 +5684,7 @@ function renderAgentsEvo() {
     }
     const sc = S.currentDream.scenarios;
     const doneIdx = sc.filter(s => s.outcome).length;
-    dreamBanner.innerHTML = `
+    const _dbHtml = `
       <div class="dream-card">
         <div class="dream-card-header">
           <div class="dream-card-title">
@@ -5663,6 +5712,7 @@ function renderAgentsEvo() {
           <span style="color:var(--pur)">${S.dreamProgress}%</span>
         </div>
       </div>`;
+    if(dreamBanner._html !== _dbHtml) { dreamBanner._html = _dbHtml; dreamBanner.innerHTML = _dbHtml; }   // [PAGE AGENTS STABLE · 26/09/2026]
   } else if(dreamBanner) {
     dreamBanner.remove();
   }
@@ -5674,8 +5724,11 @@ function renderAgentsEvo() {
       ev.innerHTML = '<div id="evoEmpty" style="color:var(--t3);font-size:11px;padding:12px 0;">Premier cycle d\'&eacute;volution en cours&hellip;</div>';
     return;
   }
-  const rendered = ev.querySelectorAll('.evo-item,.dream-evo-item').length;
-  if(allLogs.length !== rendered) {
+  // [PAGE AGENTS STABLE · 26/09/2026] l'ancienne condition (allLogs.length, jusqu'à 50, contre les 25 affichés) reconstruisait le journal à CHAQUE
+  // rendu dès 26 entrées ; une comparaison de nombre seule ne verrait plus rien une fois le journal plein : signature des 25 affichées.
+  const _evoSig = allLogs.slice(0,25).map(e => (e.type||'') + '|' + (e.time||'') + '|' + (e.title||e.desc||'')).join('§');
+  if(ev.dataset.evoSig !== _evoSig) {
+    ev.dataset.evoSig = _evoSig;
     document.getElementById('evoEmpty')?.remove();
     ev.innerHTML = '';
     allLogs.slice(0,25).forEach(e => {
