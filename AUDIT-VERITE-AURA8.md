@@ -181,4 +181,6 @@ Une régression de vérité = `VERDICT : NON LIVRABLE`, jamais « CONNU, tolér�
 
 - **26/09 — positionnement** (`20260926c`) : lot 2 des sources — financement, open interest, ratio long/short des futures Binance ; fundamental_v1 (ex « EPS·P/E·EV », jamais alimenté) devient Positionnement, génomé. Piège `isFinite(null)` attrapé par le banc, règle notée.
 
+- **26/09 — liquidations** (`20260926d`) : lot 3 des sources — le flux des liquidations forcées de tout le marché (une connexion), rangé par paire et par minute ; whale_v1 les lit (shorts liquidés = achats forcés, longs = capitulation), poids génomé.
+
 *Mis à jour à chaque mission. Le prochain audit complet : après 1b-b, sur un backup de 24 h propre.*

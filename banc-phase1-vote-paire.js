@@ -36,9 +36,9 @@ console.log('▶ banc-phase1-vote-paire · token ' + TOK + ' · ' + scripts.leng
 console.log('\n── A · statique : ce qui est retiré, ce qui est publié ──');
 T('en-têtes : 03/12 « [PHASE 1 · 12/09/2026] VERSION 20260912c », 02/08 relivrés par 1b-a « [1b-a · 14/09/2026] VERSION 20260914a », 10f « ▓▓▓ VERSION 20260917b ▓▓▓ »', () => {
   assert.ok(s12.startsWith('// [ÉCOLE · 17/09/2026] VERSION 20260917a') && s12.split('\n').slice(0, 5).some(l => l.startsWith('// [PHASE 1 · 12/09/2026] VERSION 20260912c')), F12);   // [1c-FULL] 12 relivré, en-tête PHASE 1 en 2e ligne
-  assert.ok(s03.startsWith('// [POSITIONNEMENT · 26/09/2026] VERSION 20260926c') && s03.split('\n').slice(0, 16).some(l => l.startsWith('// [PHASE 1 · 12/09/2026] VERSION 20260912c')), F03);   // [FITNESS GLISSANTE] 03 relivré, en-tête PHASE 1 conservé dans les 5 premières lignes
+  assert.ok(s03.startsWith('// [LIQUIDATIONS · 26/09/2026] VERSION 20260926d') && s03.split('\n').slice(0, 17).some(l => l.startsWith('// [PHASE 1 · 12/09/2026] VERSION 20260912c')), F03);   // [FITNESS GLISSANTE] 03 relivré, en-tête PHASE 1 conservé dans les 5 premières lignes
   assert.ok(s08.startsWith('// [MACRO RÉEL · 26/09/2026] VERSION 20260926b') && s08.split('\n').slice(0, 8).some(l => l.startsWith('// [1b-a · 14/09/2026] VERSION 20260914a')), F08);   // [1b-b] 08 relivré, en-tête 1b-a en 2e ligne
-  assert.ok(s02.startsWith('// [POSITIONNEMENT · 26/09/2026] VERSION 20260926c') && s02.split('\n').slice(0, 15).some(l => l.startsWith('// [1b-a · 14/09/2026] VERSION 20260914a')), F02);   // [SONDE RÉSEAU] 02 relivré, en-tête 1b-a en 2e ligne
+  assert.ok(s02.startsWith('// [LIQUIDATIONS · 26/09/2026] VERSION 20260926d') && s02.split('\n').slice(0, 16).some(l => l.startsWith('// [1b-a · 14/09/2026] VERSION 20260914a')), F02);   // [SONDE RÉSEAU] 02 relivré, en-tête 1b-a en 2e ligne
   assert.ok(s10f.startsWith('// ▓▓▓ VERSION 20260926a ▓▓▓'));   // 10f livré au hotfix 1b-a (b), non retouché depuis
 });
 T('HTML : DOC_V + 80 ?v= au token ' + TOK + ' (81 occurrences, 10i le 17/09, 11b le 23/09), aucun autre token, archive/ non chargé', () => {

@@ -1,3 +1,4 @@
+// [LIQUIDATIONS · 26/09/2026] VERSION 20260926d · flux des liquidations (!forceOrder@arr) → S.liqStats par paire et par minute, résumé _liqSummary
 // [POSITIONNEMENT · 26/09/2026] VERSION 20260926c · flux positionnement (financement, open interest, ratio long/short) des futures Binance → S.positioning ; siège fundamental_v1 renommé Positionnement
 // [STOP CÔTÉ EXCHANGE SIMULÉ · 26/09/2026] VERSION 20260926a · closePosition : prix de sortie imposé (_forcedExitPx) pour le stop côté exchange simulé
 // [PRIX FIGÉ + PREUVE D'ACTION · 25/09/2026] VERSION 20260925a · _rcPriceAge : âge du dernier prix réel accepté par paire
@@ -3362,6 +3363,62 @@ async function _positioningRefresh() {
 window._futSymbol = _futSymbol; window._positioningParse = _positioningParse; window._positioningRefresh = _positioningRefresh;
 setTimeout(_positioningRefresh, 25000);
 setInterval(_positioningRefresh, 20000);
+
+// ═══ [LIQUIDATIONS · 26/09/2026] LE FLUX DES LIQUIDATIONS (lot 3 des sources, Rams « je les veux toutes ») ═══
+// Les futures Binance diffusent chaque ordre de liquidation forcée du marché entier sur UN seul flux public
+// (!forceOrder@arr). Une liquidation de long est une vente forcée (pression baissière, capitulation) ; une liquidation
+// de short est un achat forcé (squeeze haussier). On les range par paire et par minute (30 dernières, RAM) :
+// S.liqStats[pair] = [{ t, longUsd, shortUsd, n }]. Lu par whale_v1 (03). Une connexion, réouverte avec backoff
+// 30 s → 5 min, jamais hors ligne. Symboles futures → paires : BTCUSDT → BTC/USDT, 1000PEPEUSDT → PEPE/USDT.
+var _liqWs = null, _liqRetryMs = 30000, _liqNextTry = 0;
+var LIQ_BUCKET_MS = 60000, LIQ_KEEP = 30;
+function _liqPairOf(symbol) {
+  var m = /^(1000)?([A-Z0-9]+?)USDT$/.exec(String(symbol || ''));
+  if (!m) return null;
+  var pair = m[2] + '/USDT';
+  return (typeof PAIRS !== 'undefined' && PAIRS && PAIRS[pair]) ? pair : null;
+}
+// Une liquidation (objet `o` du message forceOrder) : S = 'SELL' → un LONG est liquidé ; 'BUY' → un SHORT. Pure, testée.
+function _liqRecord(o, now) {
+  if (!o) return null;
+  var pair = _liqPairOf(o.s); if (!pair) return null;
+  var px = Number(o.ap || o.p), q = Number(o.q), usd = px * q;
+  if (!(px > 0) || !(q > 0) || !isFinite(usd)) return null;
+  if (!S.liqStats) S.liqStats = {};
+  var arr = S.liqStats[pair] || (S.liqStats[pair] = []);
+  var t0 = Math.floor((now || Date.now()) / LIQ_BUCKET_MS) * LIQ_BUCKET_MS;
+  var b = arr[arr.length - 1];
+  if (!b || b.t !== t0) { if (b && t0 < b.t) return null; b = { t: t0, longUsd: 0, shortUsd: 0, n: 0 }; arr.push(b); if (arr.length > LIQ_KEEP) arr.splice(0, arr.length - LIQ_KEEP); }
+  if (String(o.S).toUpperCase() === 'SELL') b.longUsd += usd; else b.shortUsd += usd;
+  b.n++;
+  return { pair: pair, usd: usd, side: String(o.S).toUpperCase() === 'SELL' ? 'long' : 'short' };
+}
+// Résumé des N dernières minutes : { longUsd, shortUsd, n, net (−1 = que des longs liquidés … +1 = que des shorts), minutes }
+function _liqSummary(pair, minutes, now) {
+  var arr = (S.liqStats && S.liqStats[pair]) || [];
+  var since = Math.floor((now || Date.now()) / LIQ_BUCKET_MS) * LIQ_BUCKET_MS - (Math.max(1, minutes | 0) - 1) * LIQ_BUCKET_MS;
+  var o = { longUsd: 0, shortUsd: 0, n: 0, net: 0, minutes: 0 };
+  arr.forEach(function (b) { if (b.t < since) return; o.minutes++; o.longUsd += b.longUsd; o.shortUsd += b.shortUsd; o.n += b.n; });
+  var tot = o.longUsd + o.shortUsd; o.net = tot > 0 ? (o.shortUsd - o.longUsd) / tot : 0;
+  return o;
+}
+function _openLiqWs() {
+  try {
+    if (window._auraNetOffline) return false;
+    if (_liqWs && (_liqWs.readyState === 0 || _liqWs.readyState === 1)) return false;
+    if (Date.now() < _liqNextTry) return false;
+    var ws = new WebSocket('wss://fstream.binance.com/ws/!forceOrder@arr');
+    _liqWs = ws;
+    ws.onopen = function () { _liqRetryMs = 30000; };
+    ws.onmessage = function (evt) { try { var m = JSON.parse(evt.data); if (m && m.o) _liqRecord(m.o, Number(m.E) || Date.now()); } catch (e) {} };
+    ws.onerror = function () {};
+    ws.onclose = function () { _liqWs = null; _liqNextTry = Date.now() + _liqRetryMs; _liqRetryMs = Math.min(300000, _liqRetryMs * 2); };
+    return true;
+  } catch (e) { _liqNextTry = Date.now() + _liqRetryMs; _liqRetryMs = Math.min(300000, _liqRetryMs * 2); return false; }
+}
+window._liqPairOf = _liqPairOf; window._liqRecord = _liqRecord; window._liqSummary = _liqSummary; window._openLiqWs = _openLiqWs;
+setTimeout(_openLiqWs, 12000);
+setInterval(_openLiqWs, 15000);   // gardien : rouvre si fermé, après le backoff, jamais hors ligne
 
 // ═══ [1b-a · 14/09/2026] FILTRE OUTLIER NON AUTO-BLOQUANT ═══
 // Avant : chaque prix WS était comparé au dernier close 5m (jamais re-bootstrappé) — dès que cette série datait

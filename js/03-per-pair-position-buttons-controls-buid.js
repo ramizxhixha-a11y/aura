@@ -1,3 +1,4 @@
+// [LIQUIDATIONS · 26/09/2026] VERSION 20260926d · whale_v1 lit les liquidations (S.liqStats) : shorts liquidés = achats forcés (+), longs liquidés = ventes forcées (−), génomé (wLiq, liqMinUsd)
 // [POSITIONNEMENT · 26/09/2026] VERSION 20260926c · fundamental_v1 = Positionnement : lit S.positioning (financement, OI, long/short), génomé
 // [MACRO RÉEL · 26/09/2026] VERSION 20260926b · macro_v1 lit S.macroFeed (Fear & Greed, dominance, cap 24 h), génomé ; fundamental_v1 reste neutralisé
 // [COMPTEURS RÉGLAGES · 24/09/2026] VERSION 20260924a · Réglages : jugements réels (_realJudgments) au lieu des 41 M cycles, frais réels, « P&L attribué », Shadow = miroir
@@ -3598,7 +3599,7 @@ const GENOME_DEFAULTS = {
   corr_v1:       { win: 5, gain: 0.15 },
   geopolitic_v1: { cvHigh: 0.03, cvMid: 0.02, cvLow: 0.008, riskHigh: 0.6, riskMid: 0.3, riskLow: 0.2, riskBase: 0.05, afW: 0.35 },
   onchain_v1:    { win: 12 },
-  whale_v1:      { avgN: 9, big: 2.5, mid: 1.5, bigScore: 0.7, midScore: 0.35 },
+  whale_v1:      { avgN: 9, big: 2.5, mid: 1.5, bigScore: 0.7, midScore: 0.35, wLiq: 0.3, liqMinUsd: 20000 },   // [LIQUIDATIONS · 26/09/2026] + wLiq, liqMinUsd
   breakout_v1:   { win: 20, margin: 0.002, score: 0.7 },
   flow_v1:       { win: 5, gain: 0.7 },
   scalper_v2:    { gain: 2, ownW: 0.6, voteThr: 0.18 },
@@ -3620,7 +3621,8 @@ const GENE_BOUNDS = {                                                           
   wStrong: [0.1, 1], wHigh: [0.1, 1], wLow: [0.1, 1], wNormal: [0.1, 1], gain: [0.02, 4], momGain: [1, 40],
   stochHigh: [50, 95], stochLow: [5, 50], adxMin: [10, 60], resonanceMin: [2, 5],   // [HARMONIQUE GÉNOMÉE · 23/09/2026]
   fngLow: [5, 45], fngHigh: [55, 95], capScale: [1, 20], wFng: [0.1, 1], wCap: [0, 1],   // [MACRO RÉEL · 26/09/2026]
-  fundScale: [0.01, 0.3], oiScale: [1, 25], lsHigh: [1.05, 4], lsLow: [0.25, 0.95], wF: [0, 1], wOi: [0, 1], wLs: [0, 1]   // [POSITIONNEMENT · 26/09/2026]
+  fundScale: [0.01, 0.3], oiScale: [1, 25], lsHigh: [1.05, 4], lsLow: [0.25, 0.95], wF: [0, 1], wOi: [0, 1], wLs: [0, 1],   // [POSITIONNEMENT · 26/09/2026]
+  wLiq: [0, 1], liqMinUsd: [1000, 500000]   // [LIQUIDATIONS · 26/09/2026]
 };
 function _geneClamp(k, v, def) {
   if (!isFinite(v)) return def;
@@ -3868,6 +3870,13 @@ function scoutAnalysis(agentId, pair) {
       if (ob) {
         if (ob.bidWall && !ob.askWall) { sc += 0.15; why += ' · mur d\'achat à ' + ob.bidWall.p; }
         else if (ob.askWall && !ob.bidWall) { sc -= 0.15; why += ' · mur de vente à ' + ob.askWall.p; }
+      }
+      // [LIQUIDATIONS · 26/09/2026] les liquidations forcées sont des ordres de baleine que personne n'a voulus : des shorts
+      // liquidés = achats forcés (squeeze haussier, +), des longs liquidés = ventes forcées (capitulation, −). Poids G.wLiq.
+      const lq = (typeof _liqSummary === 'function') ? _liqSummary(pair, G.avgN) : null;
+      if (lq && lq.n > 0 && (lq.longUsd + lq.shortUsd) >= G.liqMinUsd) {
+        sc += lq.net * G.wLiq;
+        why += ' · liquidations ' + Math.round((lq.longUsd + lq.shortUsd) / 1000) + ' k$ (' + (lq.net >= 0 ? 'shorts' : 'longs') + ' ' + Math.round(Math.abs(lq.net) * 100) + ' %)';
       }
       return { score: Math.max(-1, Math.min(1, sc)), conf: bigN > 0 ? 0.80 : 0.5, reasoning: why };
     }
