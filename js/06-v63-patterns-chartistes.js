@@ -1714,16 +1714,21 @@ const _PH_GECKO_IDS = {
 
 async function _phFetch(pair) {
   if(_PH_FETCHING[pair]) return;
-  const geckoId = _PH_GECKO_IDS[pair];
+  // [TOUTE PAIRE AUTOMATIQUE · 26/09/2026] identifiant de TOUTE paire active (02 _cgIdFor : table + recherche) — la liste figée n'en avait que 8 (ni DOT,
+  // ni BNB, ni PEPE, ni EUR). Devise (EUR/GBP) : historique de l'USDT dans la devise, inversé (EUR/USDT = 1 / USDT-en-EUR).
+  const _b = String(pair || '').split('/')[0].toUpperCase();
+  const _fiat = (typeof CG_FIAT !== 'undefined' && CG_FIAT) ? CG_FIAT[_b] : null;
+  const geckoId = ((typeof _cgIdFor === 'function') ? _cgIdFor(pair) : null) || _PH_GECKO_IDS[pair];
   if(!geckoId) return;
   const now = Date.now();
   if(_PH_CACHE[pair] && (now-_PH_CACHE[pair].ts)<_PH_TTL) return;
 
   _PH_FETCHING[pair] = true;
   try {
-    const res  = await fetch(`https://api.coingecko.com/api/v3/coins/${geckoId}/ohlc?vs_currency=usd&days=7`,
+    const res  = await fetch(`https://api.coingecko.com/api/v3/coins/${geckoId}/ohlc?vs_currency=${_fiat || 'usd'}&days=7`,
       {signal:AbortSignal.timeout(10000)});
-    const data = await res.json();
+    let data = await res.json();
+    if (_fiat && Array.isArray(data)) data = data.filter(r => Array.isArray(r) && r[1] > 0 && r[2] > 0 && r[3] > 0 && r[4] > 0).map(r => [r[0], 1 / r[1], 1 / r[3], 1 / r[2], 1 / r[4]]);   // hauts et bas s'inversent
     if(Array.isArray(data) && data.length>0) {
       // data = [[ts, open, high, low, close], ...]
       _PH_CACHE[pair] = {ts:now, ohlc:data};

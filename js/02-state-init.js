@@ -1,3 +1,4 @@
+// [TOUTE PAIRE AUTOMATIQUE · 26/09/2026] VERSION 20260926m · symbole futures découvert pour toute paire (sans préfixe → avec « 1000 » → aucun contrat), mis en cache 24 h — la liste des pièces à préfixe 1000 était figée
 // [PRIX 12 PAIRES · 26/09/2026] VERSION 20260926l · CoinGecko et le secours Binance couvrent les paires ACTIVES (listes figées de 10 avec MATIC : BNB, PEPE, EUR jamais mis à jour) ; EUR/GBP par l'USDT ; symbole inconnu résolu par la recherche CoinGecko ; CoinGecko ne touche plus prix ni bougies d'une paire dont Binance est vivant (< 60 s)
 // [CONTEXTE 1 H / 4 H · 26/09/2026] VERSION 20260926e · lecture des horizons 1 h et 4 h (_ctxHorizonRead : EMA et pente en unités d'ATR, séries courtes/périmées/trouées refusées), rafraîchissement REST des séries 1 h/4 h (_ctxCandlesRefresh), _rcLastPrice, siège geopolitic_v1 renommé Contexte 1h·4h
 // [LIQUIDATIONS · 26/09/2026] VERSION 20260926d · flux des liquidations (!forceOrder@arr) → S.liqStats par paire et par minute, résumé _liqSummary
@@ -3389,11 +3390,37 @@ setInterval(_pollOrderBook, 5000);   // une paire toutes les 5 s → 11 paires e
 // se ferment), et le ratio de comptes long/short. Une paire toutes les 20 s en tournante (≈ 4 min pour les 11 paires
 // négociées en futures ; EUR/USDT n'a pas de contrat), jamais hors ligne, en RAM : S.positioning[pair].
 var _posCursor = 0;
+// [TOUTE PAIRE AUTOMATIQUE · 26/09/2026] symbole futures VÉRIFIÉ par paire : base → { sym ('' = aucun contrat), t } — la liste des pièces cotées « 1000… »
+// était figée (PEPE, SHIB, FLOKI, BONK) : une nouvelle pièce cotée ainsi (ou sans contrat) restait « en attente » pour toujours.
+var _futSymCache = {};
 function _futSymbol(pair) {
   var base = String(pair || '').split('/')[0];
   if (!base || base === 'EUR' || base === 'GBP') return null;          // pas de contrat perpétuel
+  var c = _futSymCache[base];
+  if (c && (Date.now() - c.t) < 86400000) return c.sym || null;        // vérifié il y a moins de 24 h
   if (base === 'PEPE' || base === 'SHIB' || base === 'FLOKI' || base === 'BONK') return '1000' + base + 'USDT';
   return base + 'USDT';
+}
+// Sonde : 'ok' (le contrat existe), 'invalid' (HTTP 400 : symbole inconnu des futures), 'error' (réseau : rien n'est conclu).
+async function _futProbe(sym) {
+  try {
+    var r = await fetch('https://fapi.binance.com/fapi/v1/premiumIndex?symbol=' + sym, { cache: 'no-store', signal: (typeof AbortSignal !== 'undefined' && AbortSignal.timeout) ? AbortSignal.timeout(6000) : undefined });
+    return r.ok ? 'ok' : (r.status === 400 ? 'invalid' : 'error');
+  } catch (e) { return 'error'; }
+}
+// Pas de réponse pour le symbole supposé : on le sonde, puis la variante (avec / sans « 1000 ») ; le résultat est mis en cache 24 h.
+async function _futDiscover(pair, sym) {
+  var base = String(pair || '').split('/')[0];
+  var c = _futSymCache[base];
+  if (c && (Date.now() - c.t) < 86400000) return c.sym;
+  var p1 = await _futProbe(sym);
+  if (p1 === 'ok') { _futSymCache[base] = { sym: sym, t: Date.now() }; return sym; }
+  if (p1 !== 'invalid') return null;
+  var alt = /^1000/.test(sym) ? sym.slice(4) : '1000' + sym;
+  var p2 = await _futProbe(alt);
+  if (p2 === 'ok') { _futSymCache[base] = { sym: alt, t: Date.now() }; return alt; }
+  if (p2 === 'invalid') _futSymCache[base] = { sym: '', t: Date.now() };
+  return null;
 }
 // Interprète les trois réponses (pure, testée) : { funding (%/8 h), oiNow, oiChg2h (%), lsRatio, t } ou null
 function _positioningParse(premium, oiHist, ls) {
@@ -3422,10 +3449,11 @@ async function _positioningRefresh() {
     ]);
     var parsed = _positioningParse(res[0], res[1], res[2]);
     if (parsed) { if (!S.positioning) S.positioning = {}; S.positioning[pair] = parsed; }
+    else if (!res[0]) { try { await _futDiscover(pair, sym); } catch (e) {} }   // [TOUTE PAIRE AUTOMATIQUE · 26/09/2026] symbole à vérifier (préfixe 1000, pas de contrat)
     return parsed;
   } catch (e) { return null; }
 }
-window._futSymbol = _futSymbol; window._positioningParse = _positioningParse; window._positioningRefresh = _positioningRefresh;
+window._futSymbol = _futSymbol; window._positioningParse = _positioningParse; window._positioningRefresh = _positioningRefresh; window._futDiscover = _futDiscover;
 setTimeout(_positioningRefresh, 25000);
 setInterval(_positioningRefresh, 20000);
 

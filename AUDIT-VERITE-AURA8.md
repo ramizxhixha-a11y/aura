@@ -199,4 +199,6 @@ Une régression de vérité = `VERDICT : NON LIVRABLE`, jamais « CONNU, tolér�
 
 - **26/09 — prix 12 paires** (`20260926l`) : CoinGecko et le secours Binance utilisaient des listes figées de 10 paires (avec MATIC, retiré de Binance) : BNB, PEPE, EUR jamais mis à jour, sans secours. Listes construites depuis les paires actives ; CoinGecko devenu secours seulement (il ne mélange plus un prix en retard aux bougies quand Binance est vivant).
 
+- **26/09 — toute paire automatique** (`20260926m`) : audit de l'ajout d'une paire ; trois dernières listes figées supprimées (news : 8 paires ; historique 7 jours : 8 ; pièces « 1000… » des futures : 4). Une paire ajoutée reçoit désormais toutes les sources.
+
 *Mis à jour à chaque mission. Le prochain audit complet : après 1b-b, sur un backup de 24 h propre.*

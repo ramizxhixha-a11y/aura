@@ -1,3 +1,4 @@
+// [TOUTE PAIRE AUTOMATIQUE · 26/09/2026] VERSION 20260926m · news de TOUTE paire active (hors devises) : identifiant CoinStats choisi parmi les candidats par les relatedCoins des articles reçus (la liste était figée à 8 paires : DOT, BNB, PEPE et toute paire ajoutée sans news)
 // [P0b · 08/09/2026] VERSION 20260908b · clé CoinStats hors snapshot : persistance dédiée localStorage `aura_news_key`
 //   (_newsKeyLoad au chargement + migration one-shot depuis nexus_state_v2 ; updateNewsApiKey écrit/efface la clé). Plus jamais dans 09b1/09b2/backups/aura_live.json.
 // ▓▓▓ VERSION 20260906g ▓▓▓
@@ -54,8 +55,24 @@ const NEWS_BULL_MIN     = 70;
 const NEWS_GATE_CACHE_MS = 60 * 1000;
 const NEWS_COIN_IDS = {
   'BTC/USDT':'bitcoin', 'ETH/USDT':'ethereum', 'XRP/USDT':'ripple', 'SOL/USDT':'solana',
-  'DOGE/USDT':'dogecoin', 'ADA/USDT':'cardano', 'AVAX/USDT':'avalanche', 'LINK/USDT':'chainlink'
+  'DOGE/USDT':'dogecoin', 'ADA/USDT':'cardano', 'AVAX/USDT':'avalanche', 'LINK/USDT':'chainlink',
+  'DOT/USDT':'polkadot', 'BNB/USDT':'binance-coin', 'PEPE/USDT':'pepe'   // [TOUTE PAIRE AUTOMATIQUE · 26/09/2026] identifiants connus (vérifiés par les articles, voir _newsCoinIdFor)
 };
+// [TOUTE PAIRE AUTOMATIQUE · 26/09/2026] Identifiant CoinStats d'une paire : candidats = identifiant connu, identifiant CoinGecko (et sans suffixe « -2 »),
+// symbole en minuscules ; le premier qui apparaît VRAIMENT dans les relatedCoins des articles reçus gagne (la donnée décide),
+// sinon le premier candidat. Devises (EUR, GBP) : aucune news de pièce.
+function _newsCoinIdFor(pair, seen) {
+  const base = String(pair || '').split('/')[0].toUpperCase();
+  if (!base || base === 'EUR' || base === 'GBP') return null;
+  const cands = [];
+  const add = v => { if (v && cands.indexOf(v) === -1) cands.push(v); };
+  add(NEWS_COIN_IDS[pair]);
+  const cg = (typeof _cgIdFor === 'function') ? _cgIdFor(pair) : null;
+  if (cg && cg !== 'tether') { add(cg); add(cg.replace(/-\d+$/, '')); }
+  add(base.toLowerCase());
+  if (seen) { for (const c of cands) if (seen.has(c)) return c; }
+  return cands[0] || null;
+}
 const NEWS_LEX_BULL = ['bull','bullish','surge','rally','pump','gain','gains','rise','rises','ath','record','adoption',
   'approval','approved','launch','launches','partnership','growth','positive','buy','long','moon','breakout','recovery',
   'support','accumulate','accumulation','upgrade','listing','soar','soars','jump','jumps','rebound','inflow','inflows'];
@@ -139,8 +156,11 @@ function _newsAggregates(now) {
   const global = _newsAggregate(items, now);
   global.label = _newsLabel(global.score);
   const pairs = {};
-  for (const pair in NEWS_COIN_IDS) {
-    const cid = NEWS_COIN_IDS[pair];
+  const _seen = new Set(); items.forEach(it => (it.coins || []).forEach(c => _seen.add(c)));   // [TOUTE PAIRE AUTOMATIQUE · 26/09/2026]
+  const _pairList = (typeof PAIRS !== 'undefined' && PAIRS) ? Object.keys(PAIRS) : Object.keys(NEWS_COIN_IDS);
+  for (const pair of _pairList) {
+    const cid = _newsCoinIdFor(pair, _seen);
+    if (!cid) continue;
     const sub = items.filter(it => it.coins.indexOf(cid) !== -1);
     const agg = _newsAggregate(sub, now);
     agg.label = _newsLabel(agg.score);

@@ -38,7 +38,7 @@ T('en-têtes : 03/12 « [PHASE 1 · 12/09/2026] VERSION 20260912c », 02/08 reli
   assert.ok(s12.startsWith('// [ÉCOLE · 17/09/2026] VERSION 20260917a') && s12.split('\n').slice(0, 5).some(l => l.startsWith('// [PHASE 1 · 12/09/2026] VERSION 20260912c')), F12);   // [1c-FULL] 12 relivré, en-tête PHASE 1 en 2e ligne
   assert.ok(s03.startsWith("// [MÉRITE DE L'ÉVOLUEUR · 26/09/2026] VERSION 20260926k") && s03.split('\n').slice(0, 23).some(l => l.startsWith('// [PHASE 1 · 12/09/2026] VERSION 20260912c')), F03);   // [FITNESS GLISSANTE] 03 relivré, en-tête PHASE 1 conservé dans les 5 premières lignes
   assert.ok(s08.startsWith('// [CONTEXTE 1 H / 4 H · 26/09/2026] VERSION 20260926e') && s08.split('\n').slice(0, 9).some(l => l.startsWith('// [1b-a · 14/09/2026] VERSION 20260914a')), F08);   // [1b-b] 08 relivré, en-tête 1b-a en 2e ligne
-  assert.ok(s02.startsWith('// [PRIX 12 PAIRES · 26/09/2026] VERSION 20260926l') && s02.split('\n').slice(0, 18).some(l => l.startsWith('// [1b-a · 14/09/2026] VERSION 20260914a')), F02);   // [SONDE RÉSEAU] 02 relivré, en-tête 1b-a en 2e ligne
+  assert.ok(s02.startsWith('// [TOUTE PAIRE AUTOMATIQUE · 26/09/2026] VERSION 20260926m') && s02.split('\n').slice(0, 19).some(l => l.startsWith('// [1b-a · 14/09/2026] VERSION 20260914a')), F02);   // [SONDE RÉSEAU] 02 relivré, en-tête 1b-a en 2e ligne
   assert.ok(s10f.startsWith('// ▓▓▓ VERSION 20260926g ▓▓▓'));   // [DOUBLE JUGEMENT 26/09] 10f relivré
 });
 T('HTML : DOC_V + 80 ?v= au token ' + TOK + ' (81 occurrences, 10i le 17/09, 11b le 23/09), aucun autre token, archive/ non chargé', () => {
