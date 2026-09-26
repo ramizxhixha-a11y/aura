@@ -22,7 +22,7 @@ const LEARN_TXT = between(s03, 'function learnFromOutcome(source, pnlPct, pair) 
 const EVO = between(s03, 'var EVO_TRIAL_N = 30', 'window._evoTrialStart = _evoTrialStart;', false);
 const MIGR = between(s03, '(function _botMeritMigrate() {', '\n})();', true);
 const RESTORE = between(s9b2, "    ['_lastEvolutionAt', '_lastDreamAt'].forEach(function (k) {", '\n    });\n', true);   // [ÉVOLUTION SEULE 26/09] la revigoration automatique est retirée
-const EVOLVE = between(s07, 'function triggerEvolution(weak) {', 'buildAgentCards(); patchAgentCards();\n}', true);
+const EVOLVE = between(s07, 'function triggerEvolution(weak, opts) {', 'buildAgentCards(); patchAgentCards();\n}', true);
 const DREAM_HEAD = between(s07, 'function triggerDreamCycle() {', '\n  S.dreamActive   = true;', false) + '\n}';
 const TIERS = new Function(TIERS_TXT + '\nreturn ROSTER_TIERS;')();
 

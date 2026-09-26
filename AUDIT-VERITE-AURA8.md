@@ -205,4 +205,6 @@ Une régression de vérité = `VERDICT : NON LIVRABLE`, jamais « CONNU, tolér�
 
 - **26/09 — évolution seule** (`20260926o`) : revigoration automatique des apprenants retirée (go Rams). Rejeu 23 et 25/09 : les 7 et 6 vrais cassés (précision pondérée 8 à 36 %) revigorés à 400 prenaient 26 à 31 % du vote au lieu de 4 à 6 %, et l'évolution visait un siège sain. Désormais un siège faible garde sa vraie fitness et l'évolution le remplace ; revigorations manuelles gardées.
 
+- **26/09 — masque corrigé** (`20260926p`) : plus aucune fitness écrite sans jugement — revigorations manuelles (apprenants, bots) remplacées par « Faire évoluer maintenant » (évolution réelle), « Apprentissage accéléré » (modes, session, boost) remplacé par « Apprentissage réel », juge caché de la clôture retiré (il créditait toujours macro_v1 pour les avis des autres, backups 14 → 21/09). Reste connu : le drain LMSR (08), dormant.
+
 *Mis à jour à chaque mission. Le prochain audit complet : après 1b-b, sur un backup de 24 h propre.*

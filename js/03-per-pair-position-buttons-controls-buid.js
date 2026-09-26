@@ -1,3 +1,4 @@
+// [MASQUE CORRIGÉ · 26/09/2026] VERSION 20260926p · « Revigorer » (400 T$, même génome, fenêtre vidée) remplacé par « Faire évoluer maintenant » (_evolveBrokenNow : évolution réelle) ; revigoration forcée des bots retirée (bots et Évolueur jugés sur leurs actes)
 // [ÉVOLUTION SEULE · 26/09/2026] VERSION 20260926o · revigoration AUTOMATIQUE des apprenants retirée (elle remettait à 400 T$, fenêtre vidée, les sièges mesurés faux : leur poids de vote ×5 à ×8 et l'évolution détournée vers un siège sain) ; un siège faible garde sa vraie fitness et l'évolution le remplace ; revigorations manuelles gardées
 // [ABSTENTION · 26/09/2026] VERSION 20260926n · une abstention (|vote| ≤ 0,05 : conseil « hold », scout sans donnée, gardien qui approuve, siège muet) n'est plus jugée comme une erreur — ni fitness, ni erreurs, ni souvenir ; même règle dans l'essai de l'Évolueur ; migration unique : les jugements au poids plancher (0,01, signature d'une abstention) quittent les fenêtres des apprenants, fitness recalculée
 // [MÉRITE DE L'ÉVOLUEUR · 26/09/2026] VERSION 20260926k · l'Évolueur n'est plus jugé sur le résultat du système : chaque évolution ouvre un essai (ancien génome en ombre, voté sur les mêmes événements) ; au bout de 30 jugements, nouveau contre ancien → l'Évolueur est jugé
@@ -5515,15 +5516,9 @@ function _executeAccountReset(accId) {
 
 
 
-// ═══ v7.12 · Q2:A+C · Revigorer agents cassés (manuel + auto) ═══
-
-/**
- * Remet les agents cassés (fitness ≤ 80) à une fitness saine (400)
- * Ne touche pas aux agents sains (fitness > 80)
- * @param {boolean} silent - si true, pas de toast
- */
+// ═══ v7.12 · Agents cassés (≤ 80 T$) — [MASQUE CORRIGÉ · 26/09/2026] plus aucune revigoration : l'évolution les remplace ═══
 // v7.12 LIVRAISON 7 · Affiche le détail des agents cassés
-// Distingue les bots stratégiques (protégés) des agents apprenants (revigorables)
+// Apprenants : « Faire évoluer maintenant » (_evolveBrokenNow). Bots et Évolueur : jugés sur leurs actes vérifiés, pas de bouton.
 function _showBrokenAgentsDetail() {
   if (!S.agents) return;
   const broken = S.agents.filter(a => (a.fitness || 0) <= 80);
@@ -5532,8 +5527,8 @@ function _showBrokenAgentsDetail() {
     return;
   }
   // Séparer bots vs agents apprenants
-  const bots = broken.filter(a => a.isBot);
-  const learners = broken.filter(a => !a.isBot);
+  const bots = broken.filter(a => a.isBot || a.isMeta);            // [MASQUE CORRIGÉ · 26/09/2026] l'Évolueur est jugé sur ses évolutions
+  const learners = broken.filter(a => !a.isBot && !a.isMeta);
 
   const fmtAgent = (a) => {
     const dom = a.domain || a.role || '?';
@@ -5555,28 +5550,25 @@ function _showBrokenAgentsDetail() {
 
   const botsHTML = bots.length > 0
     ? `<div style="font-size:10px;color:var(--gold);font-weight:700;text-transform:uppercase;letter-spacing:.05em;margin:10px 0 6px;display:flex;justify-content:space-between;align-items:center;">
-         <span>🛡 ${bots.length} bot(s) stratégique(s) cassé(s)</span>
-         <span style="font-size:9px;opacity:.7;font-weight:600;letter-spacing:0;text-transform:none;">protégés</span>
+         <span>🛡 ${bots.length} bot(s) / Évolueur</span>
+         <span style="font-size:9px;opacity:.7;font-weight:600;letter-spacing:0;text-transform:none;">jugés sur leurs actes</span>
        </div>
        <div style="font-size:9px;color:var(--t3);line-height:1.4;margin-bottom:6px;">
-         Ces bots (orders, risk, arbitrage, scalping, fiscal, dca, rescue, rebalance, sizing) ne sont pas revigorés automatiquement pour préserver leur stratégie.
+         Jugés sur leurs actes vérifiés (prédiction contrôlée 30 min après, résultat mesuré du TWAP et du Smart Sizer ; l'Évolueur sur ses évolutions) : leur fitness est leur bilan réel — aucun bouton ne la réécrit.
        </div>
-       ${bots.map(fmtAgent).join('')}
-       <button onclick="_revigorBots(); document.getElementById('brokenAgentsDetail')?.remove();" style="width:100%;background:rgba(245,200,66,.10);color:var(--gold);border:1px solid rgba(245,200,66,.35);border-radius:8px;padding:8px;font-size:10px;font-weight:700;cursor:pointer;letter-spacing:.04em;margin-top:8px;">
-         🛡 Revigoration forcée des ${bots.length} bot(s) (avancé ⚠)
-       </button>`
+       ${bots.map(fmtAgent).join('')}`
     : '';
 
   const learnersHTML = learners.length > 0
     ? `<div style="font-size:10px;color:var(--down);font-weight:700;text-transform:uppercase;letter-spacing:.05em;margin:10px 0 6px;display:flex;justify-content:space-between;align-items:center;">
          <span>📉 ${learners.length} agent(s) apprenant(s) cassé(s)</span>
-         <span style="font-size:9px;opacity:.7;font-weight:600;letter-spacing:0;text-transform:none;">revigorables</span>
+         <span style="font-size:9px;opacity:.7;font-weight:600;letter-spacing:0;text-transform:none;">l'évolution les remplace</span>
        </div>
        ${learners.map(fmtAgent).join('')}
-       <button onclick="_revigorBrokenAgents(); document.getElementById('brokenAgentsDetail')?.remove();" style="width:100%;background:rgba(167,139,250,.15);color:var(--pur);border:1px solid rgba(167,139,250,.4);border-radius:8px;padding:10px;font-size:10.5px;font-weight:700;cursor:pointer;letter-spacing:.04em;margin-top:10px;">
-         🔄 Revigorer les ${learners.length} agent(s)
+       <button onclick="_evolveBrokenNow(); document.getElementById('brokenAgentsDetail')?.remove();" style="width:100%;background:rgba(167,139,250,.15);color:var(--pur);border:1px solid rgba(167,139,250,.4);border-radius:8px;padding:10px;font-size:10.5px;font-weight:700;cursor:pointer;letter-spacing:.04em;margin-top:10px;">
+         🧬 Faire évoluer les ${learners.length} agent(s) maintenant
        </button>`
-    : (bots.length > 0 ? '<div style="font-size:9.5px;color:var(--t2);line-height:1.5;margin-top:14px;padding:10px;background:rgba(245,200,66,.05);border:1px solid rgba(245,200,66,.2);border-radius:8px;">💡 Tous les agents cassés sont des bots stratégiques. La revigoration manuelle ne s\'applique pas à eux.</div>' : '');
+    : (bots.length > 0 ? '<div style="font-size:9.5px;color:var(--t2);line-height:1.5;margin-top:14px;padding:10px;background:rgba(245,200,66,.05);border:1px solid rgba(245,200,66,.2);border-radius:8px;">💡 Aucun apprenant cassé : les bots et l\'Évolueur sont jugés sur leurs actes vérifiés.</div>' : '');
 
   const old = document.getElementById('brokenAgentsDetail');
   if (old) old.remove();
@@ -5597,9 +5589,6 @@ function _showBrokenAgentsDetail() {
 }
 window._showBrokenAgentsDetail = _showBrokenAgentsDetail;
 
-// v7.12 LIVRAISON 13 · Revigoration FORCÉE des bots stratégiques cassés
-// Action manuelle uniquement, à utiliser quand les bots restent bloqués à fitness 1
-// après un rollback ou un état très ancien.
 // [ÉVOLUTION SEULE · 26/09/2026] REVIGORATION AUTOMATIQUE RETIRÉE (go Rams 26/09 22:43, après rejeu sur la mémoire).
 // Elle remettait à 400 T$, fenêtre vidée, tout apprenant ≤ 80 T$ dès qu'il y en avait 4 (toutes les 30 min au plus) : son vrai
 // niveau disparaissait, il revotait avec le poids d'un agent moyen, et l'évolution (qui remplace le plus faible, 1 / h) ne le
@@ -5608,116 +5597,35 @@ window._showBrokenAgentsDetail = _showBrokenAgentsDetail;
 // 4,2 % à 25,9 % (25/09) ; l'évolution visait trend_v2 (112 T$) au lieu de sentiment_v2 (50), onchain_v1 (286) au lieu de
 // nlp_v1 (50). Désormais un siège faible garde sa vraie fitness (poids réduit d'autant dans le vote) et l'évolution le
 // remplace : fin de learnFromOutcome (plus faible sous 150 T$ → remplacement immédiat, délai 1 h) et évolution continue (08).
-// Les revigorations MANUELLES (_revigorBrokenAgents, _revigorBots : boutons DAO / Déblocages) restent — c'est Rams qui décide.
-
-function _revigorBots() {
-  if (!S.agents) return;
-  const brokenBots = S.agents.filter(a => a.isBot && (a.fitness || 0) <= 80);
-  if (brokenBots.length === 0) {
-    if (typeof showToast === 'function') showToast('Aucun bot stratégique cassé', 2500, 'user');
-    return;
-  }
-  if (!confirm('🛡 REVIGORATION FORCÉE\n\n' + brokenBots.length + ' bot(s) stratégique(s) cassé(s) seront réinitialisés à fitness 400.\n\n⚠ Cette action contourne la protection normale et peut perturber les stratégies.\n\nÀ utiliser SEULEMENT si les bots restent bloqués après un rollback.\n\nContinuer ?')) {
-    return;
-  }
-  let revigorated = 0;
-  brokenBots.forEach(a => {
-    a.fitness = 400;
-    a._judgments = [];   // [RETRAIT REDISTRIBUTION · 16/09/2026] idem (bots)
-    a.streak = 0;
-    a.errors = 0;
-    a.lastPnl = 0;
-    revigorated++;
+// [MASQUE CORRIGÉ · 26/09/2026] Rams : « le masque, il faut le corriger ». Les revigorations MANUELLES faisaient la même chose — « Revigorer » :
+// apprenants ≤ 80 T$ → 400, même génome, fenêtre vidée ; « Revigoration forcée » des bots : idem. Retirées. Le bouton fait la VRAIE
+// correction : _evolveBrokenNow = l'évolution RÉELLE (07 triggerEvolution) de chaque apprenant ≤ 80 T$, tout de suite — génome
+// recombiné + muté, l'ancien jugé en ombre (essai de l'Évolueur), fitness de naissance, probation ; le délai d'1 h de l'évolution
+// automatique repart de là. Bots et Évolueur : pas de bouton, ils sont jugés sur leurs actes vérifiés (leur fitness = leur bilan).
+function _evolveBrokenNow(silent) {
+  if (typeof S === 'undefined' || !S || !Array.isArray(S.agents) || typeof triggerEvolution !== 'function') return 0;
+  const weak = S.agents.filter(a => a && !a.isBot && !a.isMeta && (a.fitness || 0) <= 80).sort((a, b) => (a.fitness || 0) - (b.fitness || 0));
+  let n = 0;
+  weak.forEach(a => {
+    const g0 = S._genCount;
+    try { triggerEvolution(a, { manual: true, quiet: true }); } catch (e) { try{window._decErr&&window._decErr(e)}catch(_e){} }
+    if (S._genCount !== g0) n++;
   });
-  // Logger dans la blockchain
-  if (!S.chainLog) S.chainLog = [];
-  S.chainLog.push({
-    icon: '🛡',
-    desc: 'Revigoration forcée · ' + revigorated + ' bot(s) stratégique(s)',
-    hash: typeof rndHash==='function' ? rndHash() : '',
-    time: typeof nowStr==='function' ? nowStr() : ''
-  });
-  if (typeof showToast === 'function') {
-    showToast('🛡 ' + revigorated + ' bot(s) revigoré(s)', 3500, 'win');
-  }
-  // Refresh UI
-  document.getElementById('brokenAgentsDetail')?.remove();
-}
-window._revigorBots = _revigorBots;
-
-function _revigorBrokenAgents(silent) {
-  if (typeof S === 'undefined' || !S.agents) {
-    if (!silent) alert('⚠ S.agents introuvable — état non initialisé ?');
-    return 0;
-  }
-  // Comptage et revigoration en deux passes pour pouvoir afficher l'état avant/après
-  const before = S.agents.filter(a => !a.isBot && (a.fitness || 0) <= 80).length;
-  let count = 0;
-  S.agents.forEach(a => {
-    if ((a.fitness || 0) <= 80 && !a.isBot) {
-      a.fitness = 400;
-      a._judgments = [];   // [RETRAIT REDISTRIBUTION · 16/09/2026] idem
-      a.errors = 0;
-      a.streak = 0;
-      count++;
-    }
-  });
-  // Log dans chain (protégé par try/catch pour ne JAMAIS bloquer le toast)
-  if (count > 0) {
+  if (n > 0) {
     try {
       if (!S.chainLog) S.chainLog = [];
-      S.chainLog.push({
-        icon: '🔄',
-        desc: `Revigoration · ${count} agent(s) cassé(s) remis à fitness 400`,
-        hash: typeof rndHash==='function' ? rndHash() : '',
-        time: typeof nowStr==='function' ? nowStr() : ''
-      });
+      S.chainLog.push({ icon: '\uD83E\uDDEC', desc: 'Évolution demandée · ' + n + ' agent(s) ≤ 80 T$ remplacé(s) (nouveau génome, jugé à partir de zéro)', hash: typeof rndHash === 'function' ? rndHash() : '', time: typeof nowStr === 'function' ? nowStr() : '' });
       if (S.chainLog.length > 100) S.chainLog.splice(0, S.chainLog.length - 100);
-    } catch(e) { /* silent — ne bloque pas le toast */ }
+    } catch (e) {}
   }
-  // Feedback utilisateur
   if (!silent) {
-    let msg;
-    if (count > 0) {
-      msg = '✅ ' + count + ' agent(s) revigoré(s) (fitness ≤80 → 400)';
-    } else {
-      // Diagnostiquer pourquoi rien n'a été fait
-      const allCount = S.agents.length;
-      const botBroken = S.agents.filter(a => a.isBot && (a.fitness || 0) <= 80).length;
-      const nonBotBroken = S.agents.filter(a => !a.isBot && (a.fitness || 0) <= 80).length;
-      if (botBroken > 0 && nonBotBroken === 0) {
-        msg = `⚠ ${botBroken} bot(s) cassé(s) trouvé(s) mais ils sont protégés (non revigorables manuellement)`;
-      } else if (allCount === 0) {
-        msg = '⚠ Aucun agent dans S.agents';
-      } else {
-        msg = `Aucun agent cassé · ${allCount} total · ${botBroken} bot(s) cassé(s) protégé(s)`;
-      }
-    }
-    // Toast principal
-    let toastShown = false;
-    try {
-      if (typeof showToast === 'function') {
-        showToast(msg, 4000, count > 0 ? 'win' : 'user');
-        toastShown = true;
-      }
-    } catch(e) { /* fallthrough */ }
-    // Fallback si showToast a échoué
-    if (!toastShown) alert(msg);
+    try { if (typeof showToast === 'function') showToast(n > 0 ? '🧬 ' + n + ' agent(s) faible(s) remplacé(s) par l\'évolution' : 'Aucun agent apprenant ≤ 80 T$', 4000, n > 0 ? 'win' : 'user'); } catch (e) {}
+    try { if (typeof renderSettingsPanel === 'function') renderSettingsPanel(); } catch (e) {}
+    try { if (typeof renderAgents === 'function') renderAgents(); } catch (e) {}
   }
-  // Refresh le panneau Réglages pour MAJ visuelle
-  if (!silent) {
-    try { if (typeof renderSettingsPanel === 'function') renderSettingsPanel(); } catch(e) {}
-    try { if (typeof renderAgents === 'function') renderAgents(); } catch(e) {}
-  }
-  return count;
+  return n;
 }
-
-// v8.0 LIVRAISON 30 · FIX #4+#5 · Doublon supprimé
-// La 2e définition de _autoRevigorCheck (critère ≥8 cassés) écrasait la 1ère
-// (critère >3 cassés + cooldown 30min). On garde la définition #1 plus protectrice.
-// Le 2e setInterval (qui aurait fait tourner la fonction 2× par minute) est aussi supprimé.
-
-window._revigorBrokenAgents = _revigorBrokenAgents;
+window._evolveBrokenNow = _evolveBrokenNow;
 
 // v7.12 · Reset blacklist paires (LIVRAISON 5 · feedback amélioré)
 window._resetPairBlacklists = function() {

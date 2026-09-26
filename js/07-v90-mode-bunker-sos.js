@@ -1,3 +1,4 @@
+// [MASQUE CORRIGÉ · 26/09/2026] VERSION 20260926p · triggerEvolution(weak, opts) : opts.manual (« Faire évoluer maintenant », décision de Rams) passe outre le délai d'1 h, qui repart de là ; opts.quiet : pas de toast par évolution
 // [MÉRITE DE L'ÉVOLUEUR · 26/09/2026] VERSION 20260926k · triggerEvolution ouvre un essai (ancien génome capturé AVANT la mutation) ; bandeau de l'Évolueur sans évolution jugée
 // [MÉRITE DES BOTS · 26/09/2026] VERSION 20260926j · bandeau d'un bot sans acte vérifié : « aucun acte vérifié encore » + bilan des actes (S.botMerit)
 // [PAGE AGENTS STABLE · 26/09/2026] VERSION 20260926i · page Agents stable : la liste n'est plus reconstruite toutes les 5 s (signature), une reconstruction garde barres, bandeaux, filtre et défilement ; badges et bandeau à place fixe ; historique de fitness sur changement ; sparklines redessinées seulement si la série change ; journal d'évolution et bannière de rêve réécrits seulement s'ils changent
@@ -2757,7 +2758,7 @@ function bumpVersion(reason) {
 }
 
 // ── Évolution d'un agent sous-performant ──────────────────────
-function triggerEvolution(weak) {
+function triggerEvolution(weak, opts) {
   // [ANTI-CHURN GC · 03/08/2026] limiteur temporel UNIQUE, ici à la source pour couvrir
   // TOUS les sites d'appel (08: évolution continue x2 ; 03: remplacement immédiat,
   // évolution cyclique, amélioration continue — c'est de là que venaient les rafales de
@@ -2768,7 +2769,9 @@ function triggerEvolution(weak) {
   // les ~5 h → fitness 350, mémoire et compétence-paire perdues avant d'avoir servi (loi 4). Or la logique de vote
   // est PAR SIÈGE (switch sur l'id, 03) : la « fusion » ne change que nom/score/conf. 1 fusion/h = 24/jour, assez.
   const _EVO_COOLDOWN_MS = 3600000;
-  if(S._lastEvolutionAt && (Date.now() - S._lastEvolutionAt) < _EVO_COOLDOWN_MS) return;
+  // [MASQUE CORRIGÉ · 26/09/2026] opts.manual : « Faire évoluer maintenant » (03 _evolveBrokenNow, décision de Rams) passe outre le délai ;
+  // il repart de cette évolution. opts.quiet : pas de toast par évolution (un seul résumé).
+  if(!(opts && opts.manual) && S._lastEvolutionAt && (Date.now() - S._lastEvolutionAt) < _EVO_COOLDOWN_MS) return;
   const candidates = [...S.agents].filter(a=>!a.isBot&&!a.isMeta&&a.id!==weak.id)
                                    .sort((a,b)=>b.fitness-a.fitness);
   if(candidates.length < 2) return;
@@ -2886,7 +2889,7 @@ function triggerEvolution(weak) {
   if(S.evoLog.length > 50) S.evoLog.splice(0, S.evoLog.length - 50);
   S.evoLog.push({ type:'new', title:'🧬 '+weak.name+' déployé', desc:`${_nbParents} parents (div ${_diversity.toFixed(2)}) : ${_parentNames} | Gen-${genNum}`, time:nowStr() });
   S.chainLog.push({ icon:'🧬', desc:`Évolueur: ${weak.name} ← ${_nbParents} ADN fusionnés · mut ${_mutation.toFixed(2)} | remplace ${prevName}`, hash:rndHash(), time:nowStr() });
-  showToast('🧬 '+weak.name+' évolué · '+_nbParents+' parents fusionnés');
+  if (!(opts && opts.quiet)) showToast('🧬 '+weak.name+' évolué · '+_nbParents+' parents fusionnés');
   bumpVersion(`Évolution Gen-${genNum} · ${weak.name}`);
   buildAgentCards(); patchAgentCards();
 }

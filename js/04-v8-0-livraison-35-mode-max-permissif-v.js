@@ -1,3 +1,4 @@
+// [MASQUE CORRIGÉ · 26/09/2026] VERSION 20260926p · « Apprentissage accéléré » (modes ×3 / ×8, session rejouée, boost +50 / +200 : fitness écrite sans jugement) remplacé par « Apprentissage réel » ; Déblocages : « Faire évoluer agents cassés »
 // [GEL BOOT · 11/09/2026] VERSION 20260911c · le timer +3 s (_checkAutoBackup + _refreshBackupsCache) était la fenêtre des deux gels de boot : liste/index à +3 s (léger), backup auto du jour à +90 s ; restoreBackup lit UN enregistrement (_getBackup)
 // [P7 · 06/09/2026] VERSION 20260906g — Sentiment News : fetch CryptoCompare mort + NLP local SUPPRIMÉS, champ clé CoinStats, rendu sur la source unique 10e7
 // [REGLAGES v2 · ETAPE 1 · 07/07/2026] le panneau 'MODE REEL test securise' retrouve son vrai nom (MODE EVALUATION, l examen : vrais prix sans argent reel), ses paires recoivent leurs INTERRUPTEURS (togglePaperRealPair), les deux listes de paires sont renommees sans ambiguite (Evaluation vs MODE REEL argent reel), le texte GBM clarifie — etape 2 a venir : boutons legacy confirmSwitch*
@@ -588,14 +589,14 @@ function renderSettingsPanel() {
           if ((s.count || 0) > 0) withStreak++;
         });
       }
-      if (S.agents) broken = S.agents.filter(a => !a.isBot && (a.fitness || 0) <= 80).length;
+      if (S.agents) broken = S.agents.filter(a => !a.isBot && !a.isMeta && (a.fitness || 0) <= 80).length;   // [MASQUE CORRIGÉ · 26/09/2026] apprenants seulement (évoluables)
     } catch(e) {}
     const btnStyle = (active) => 'background:' + (active ? 'rgba(167,139,250,.18)' : 'rgba(167,139,250,.05)') + ';color:' + (active ? 'var(--pur)' : 'rgba(167,139,250,.55)') + ';border:1px solid ' + (active ? 'rgba(167,139,250,.5)' : 'rgba(167,139,250,.2)') + ';border-radius:8px;padding:10px 12px;font-size:var(--fs-11);font-weight:700;cursor:pointer;letter-spacing:.05em;text-align:left;display:flex;justify-content:space-between;align-items:center;width:100%;';
     const badge = (n, active) => '<span style="background:' + (active ? 'rgba(167,139,250,.3)' : 'rgba(120,130,150,.15)') + ';color:' + (active ? '#fff' : 'var(--t3)') + ';font-size:var(--fs-10);font-weight:800;padding:2px 8px;border-radius:8px;letter-spacing:0;">' + n + '</span>';
     DEBLOCAGES_HTML = '<div style="display:flex;flex-direction:column;gap:6px;">' +
       '<button onclick="window._resetPairBlacklists()" style="' + btnStyle(blacklisted>0) + '"><span>🔓 Réactiver paires blacklistées</span>' + badge(blacklisted, blacklisted>0) + '</button>' +
       '<button onclick="window._resetLossStreaks()" style="' + btnStyle(withStreak>0) + '"><span>🔄 Reset streaks de pertes</span>' + badge(withStreak, withStreak>0) + '</button>' +
-      '<button onclick="window._revigorBrokenAgents()" style="' + btnStyle(broken>0) + '"><span>🔄 Revigorer agents cassés</span>' + badge(broken, broken>0) + '</button>' +
+      '<button onclick="window._evolveBrokenNow()" style="' + btnStyle(broken>0) + '"><span>🧬 Faire évoluer agents cassés</span>' + badge(broken, broken>0) + '</button>' +
     '</div>';
   }
 
@@ -3907,200 +3908,33 @@ function renderAgentHistorySection() {
   }
 }
 window.renderAgentHistorySection = renderAgentHistorySection;
-// ═══ v34 · #10 MODE APPRENTISSAGE ACCÉLÉRÉ ═══
-// 3 modes : Normal · Accéléré · Intensif
-// Multiplie les gains/pertes de fitness des agents après chaque trade
-
-
-if(!window._LA_MODE) window._LA_MODE = 'normal';
-if(!window._LA_SESSION_RUNNING) window._LA_SESSION_RUNNING = false;
-if(!window._LA_SESSION_STATS) window._LA_SESSION_STATS = { trades:0, wins:0, fitnessGained:0, startTs:0 };
-
-const _LA_MODES = {
-  normal:    { label:'Normal',    emoji:'🐢', mult:1,  badge:'×1',  badgeBg:'rgba(255,255,255,.08)',  badgeCol:'var(--t3)',  desc:'Apprentissage standard. Les agents gagnent/perdent de la fitness normalement après chaque trade.' },
-  accel:     { label:'Accéléré', emoji:'⚡', mult:3,  badge:'×3',  badgeBg:'rgba(56,212,245,.12)',  badgeCol:'var(--ice)', desc:'Fitness ×3 par trade. Idéal pour entraîner rapidement une nouvelle génération d\'agents.' },
-  intensif:  { label:'Intensif',  emoji:'🔥', mult:8,  badge:'×8',  badgeBg:'rgba(167,139,250,.15)', badgeCol:'var(--pur)', desc:'Fitness ×8 par trade. Les agents évoluent très vite mais risquent une sur-adaptation. À utiliser avec prudence.' },
-};
-
-// Activer un mode
-function setLearningMode(mode) {
-  if(!_LA_MODES[mode]) return;
-  window._LA_MODE = mode;
-  // Stocker dans S pour persistence
-  if(typeof S !== 'undefined') {
-    if(!S.learningAccel) S.learningAccel = {};
-    S.learningAccel.mode = mode;
-    S.learningAccel.activatedAt = Date.now();
-  }
-  showToast(_LA_MODES[mode].emoji + ' Mode apprentissage : '+_LA_MODES[mode].label, 2000, 'win');
-  renderLearningAccelSection();
-}
-window.setLearningMode = setLearningMode;
-
-// Lancer une session d'entraînement synthétique
-// Rejoue les trades historiques du journal pour entraîner les agents plus vite
-function startLearningSession() {
-  if(window._LA_SESSION_RUNNING) {
-    window._LA_SESSION_RUNNING = false;
-    showToast('⏸ Session d\'entraînement arrêtée', 1500, 'user');
-    renderLearningAccelSection();
-    return;
-  }
-
-  const allTrades = Object.values(S.pairStates||{}).flatMap(ps=>
-    (ps.trades||[]).filter(t=>t.type==='position'&&t.pnlUsdt!=null)
-  );
-  if(allTrades.length < 5) {
-    showToast('⚠ Minimum 5 trades nécessaires pour entraîner', 2000, 'warn');
-    return;
-  }
-
-  window._LA_SESSION_RUNNING = true;
-  window._LA_SESSION_STATS = { trades:0, wins:0, fitnessGained:0, startTs:Date.now() };
-  const mult = _LA_MODES[window._LA_MODE]?.mult || 1;
-
-  showToast('🏋️ Session d\'entraînement démarrée (mode '+_LA_MODES[window._LA_MODE].label+')', 2000, 'win');
-
-  let idx = 0;
-  const agents = S.agents || [];
-  const totalTrades = Math.min(allTrades.length, 30);
-
-  const step = () => {
-    if(!window._LA_SESSION_RUNNING || idx >= totalTrades) {
-      window._LA_SESSION_RUNNING = false;
-      showToast('✅ Session terminée · '+window._LA_SESSION_STATS.trades+' trades rejoués · +'+Math.round(window._LA_SESSION_STATS.fitnessGained)+' T$ distribués', 3000, 'win');
-      renderLearningAccelSection();
-      return;
-    }
-
-    const trade = allTrades[idx];
-    const won   = (trade.pnlUsdt||0) > 0;
-    window._LA_SESSION_STATS.trades++;
-    if(won) window._LA_SESSION_STATS.wins++;
-
-    // Distribuer l'apprentissage accéléré aux agents
-    agents.forEach(agent => {
-      if(!agent) return;
-      const fitDelta = won
-        ? Math.min(2000 - (agent.fitness||0), 5 * mult)
-        : -Math.min((agent.fitness||0) - 50, 3 * mult);
-      agent.fitness = Math.max(50, Math.min(2000, (agent.fitness||0) + fitDelta));
-      agent.learningEvents = (agent.learningEvents||0) + 1;
-      window._LA_SESSION_STATS.fitnessGained += Math.max(0, fitDelta);
-    });
-
-    // Enregistrer dans learningHistory
-    if(S.learningHistory) {
-      S.learningHistory.push({
-        ts: Date.now(), pair: trade.pair||'?',
-        side: trade.side||'?', pnl: trade.pnlUsdt||0,
-        mode: window._LA_MODE, mult
-      });
-      if(S.learningHistory.length > 200) S.learningHistory.shift();
-    }
-
-    idx++;
-    renderLearningAccelSection();
-    setTimeout(step, 150); // 150ms entre chaque trade simulé
-  };
-  step();
-}
-window.startLearningSession = startLearningSession;
-
-// Boost manuel — injecter directement de la fitness aux agents
-function boostAllAgents(amount) {
-  const agents = S.agents || [];
-  let total = 0;
-  agents.forEach(a => {
-    const gain = Math.min(2000 - (a.fitness||0), amount);
-    if(gain > 0) { a.fitness = (a.fitness||0) + gain; total += gain; }
-  });
-  showToast('💉 +'+Math.round(total)+' T$ distribués à '+agents.length+' agents', 2000, 'win');
-  renderLearningAccelSection();
-  renderAgentHistorySection();
-}
-window.boostAllAgents = boostAllAgents;
-
+// ═══ [MASQUE CORRIGÉ · 26/09/2026] APPRENTISSAGE RÉEL (remplace « v34 · #10 MODE APPRENTISSAGE ACCÉLÉRÉ ») ═══
+// Rams : « le masque, il faut le corriger ». Ce panneau écrivait la fitness SANS jugement : modes ×3 / ×8 (multiplicateur du juge
+// caché « v6.0 » de 02, retiré : il créditait toujours le même siège), session d'entraînement (±5 × mode à TOUS les agents par
+// trade rejoué, quel qu'ait été leur vote ; lignes au mauvais format dans l'historique d'apprentissage), boost +50 / +200 T$.
+// La fitness ne vient plus que des jugements réels (03 learnFromOutcome → _fitJudge) et de la naissance (07). Le panneau montre
+// ce qui est vrai — jugements réels, fenêtre, agents faibles, délai de l'évolution — et « Faire évoluer maintenant » (03).
 function renderLearningAccelSection() {
   const el = document.getElementById('learningAccelSection');
-  if(!el) return;
-
-  // Restaurer mode depuis S si disponible
-  if(S.learningAccel?.mode && _LA_MODES[S.learningAccel.mode]) {
-    window._LA_MODE = S.learningAccel.mode;
-  }
-
-  const agents = S.agents || [];
-  const totalFit = agents.reduce((s,a)=>s+(a.fitness||0),0);
-  const avgFit   = agents.length>0 ? totalFit/agents.length : 0;
-  const totalEvents = agents.reduce((s,a)=>s+(a.learningEvents||0),0);
-  const allTrades = Object.values(S.pairStates||{}).flatMap(ps=>
-    (ps.trades||[]).filter(t=>t.type==='position')
-  ).length;
-  const sess = window._LA_SESSION_STATS;
-  const sessWR = sess.trades>0 ? Math.round(sess.wins/sess.trades*100) : 0;
-  const sessDur = sess.startTs>0 ? Math.round((Date.now()-sess.startTs)/1000) : 0;
-
+  if (!el) return;
+  const learners = (S.agents || []).filter(a => a && !a.isBot && !a.isMeta);
+  const weak = learners.filter(a => (a.fitness || 0) <= 80).length;
+  const W = (typeof _fitWindow === 'function') ? _fitWindow() : 60;
+  const learned = !!(S.fitWindowRule && S.fitWindowRule.armed);
+  const left = S._lastEvolutionAt ? Math.max(0, 3600000 - (Date.now() - S._lastEvolutionAt)) : 0;
+  const inTrial = S.evoTrials ? Object.keys(S.evoTrials).length : 0;
   el.innerHTML = `
     <div class="la-section">
-      <div class="la-title">
-        🏋️ Apprentissage Accéléré
-        <span style="font-size:var(--fs-8);color:var(--t3);font-weight:400;">Mode actif : ${_LA_MODES[window._LA_MODE]?.label||'Normal'}</span>
-      </div>
-
-      <!-- Modes -->
-      ${Object.entries(_LA_MODES).map(([key,m])=>{
-        const isActive = window._LA_MODE === key;
-        return `<div class="la-mode-card ${isActive?'active':''}" onclick="setLearningMode('${key}')">
-          <div class="la-mode-header">
-            <span class="la-mode-name">${m.emoji} ${m.label}</span>
-            <span class="la-mode-badge" style="background:${m.badgeBg};color:${m.badgeCol};">${m.badge} fitness/trade</span>
-          </div>
-          <div class="la-mode-desc">${m.desc}</div>
-        </div>`;
-      }).join('')}
-
-      <!-- Stats apprentissage -->
+      <div class="la-title">🧠 Apprentissage réel</div>
+      <div style="font-size:var(--fs-9);color:var(--t2);line-height:1.5;margin-bottom:8px;">La fitness vient uniquement des jugements réels (EV / RE) : chaque agent est jugé sur SON vote, à la clôture de chaque position. Pas d'accélérateur, pas de boost : un agent faible garde sa vraie fitness et l'évolution le remplace.</div>
       <div class="la-stat-grid">
-        <div class="la-stat">
-          <span class="la-stat-val" style="color:var(--pur);">${Math.round(avgFit)}</span>
-          <span class="la-stat-lbl">Fitness moy.</span>
-        </div>
-        <div class="la-stat">
-          <span class="la-stat-val" style="color:var(--ice);">${totalEvents}</span>
-          <span class="la-stat-lbl">Événements</span>
-        </div>
-        <div class="la-stat">
-          <span class="la-stat-val" style="color:var(--t1);">${allTrades}</span>
-          <span class="la-stat-lbl">Trades base</span>
-        </div>
+        <div class="la-stat"><span class="la-stat-val" style="color:var(--ice);">${S._realJudgments || 0}</span><span class="la-stat-lbl">Jugements réels</span></div>
+        <div class="la-stat"><span class="la-stat-val" style="color:var(--pur);">${W}</span><span class="la-stat-lbl">Fenêtre ${learned ? 'apprise' : 'par défaut'}</span></div>
+        <div class="la-stat"><span class="la-stat-val" style="color:${weak > 0 ? 'var(--down)' : 'var(--up)'};">${weak}</span><span class="la-stat-lbl">Agents ≤ 80 T$</span></div>
       </div>
-
-      <!-- Session en cours -->
-      ${window._LA_SESSION_RUNNING || sess.trades>0 ? `
-        <div style="background:rgba(167,139,250,.06);border:1px solid rgba(167,139,250,.2);border-radius:8px;padding:8px 10px;margin-bottom:8px;">
-          <div style="font-size:var(--fs-9);font-weight:700;color:var(--pur);margin-bottom:5px;">
-            ${window._LA_SESSION_RUNNING ? '⚡ Session en cours…' : '✅ Dernière session'}
-          </div>
-          ${window._LA_SESSION_RUNNING ? `<div class="la-progress"><div class="la-progress-fill" style="width:${Math.min(100,sess.trades/30*100).toFixed(0)}%;background:var(--pur);animation:none;"></div></div>` : ''}
-          <div class="la-session-row"><span style="color:var(--t2);">Trades rejoués</span><span style="font-weight:700;">${sess.trades}/30</span></div>
-          <div class="la-session-row"><span style="color:var(--t2);">Win Rate session</span><span style="font-weight:700;color:${sessWR>=55?'var(--up)':'var(--down)'};">${sessWR}%</span></div>
-          <div class="la-session-row"><span style="color:var(--t2);">Fitness distribuée</span><span style="font-weight:700;color:var(--up);">+${Math.round(sess.fitnessGained)} T$</span></div>
-          ${sessDur>0?`<div class="la-session-row"><span style="color:var(--t2);">Durée</span><span style="font-weight:700;">${sessDur}s</span></div>`:''}
-        </div>` : ''}
-
-      <!-- Boutons actions -->
-      <button class="la-boost-btn" onclick="startLearningSession()"
-        style="background:${window._LA_SESSION_RUNNING?'rgba(245,200,66,.12)':'rgba(167,139,250,.12)'};
-               border-color:${window._LA_SESSION_RUNNING?'rgba(245,200,66,.3)':'rgba(167,139,250,.3)'};
-               color:${window._LA_SESSION_RUNNING?'var(--gold)':'var(--pur)'};">
-        ${window._LA_SESSION_RUNNING ? '⏸ Arrêter la session' : '▶ Lancer session d\'entraînement'}
-      </button>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:6px;">
-        <button onclick="boostAllAgents(50)" style="padding:7px;border-radius:7px;background:rgba(0,232,122,.1);border:1px solid rgba(0,232,122,.25);color:var(--up);font-size:var(--fs-10);font-weight:700;cursor:pointer;font-family:inherit;">💉 +50 T$ tous</button>
-        <button onclick="boostAllAgents(200)" style="padding:7px;border-radius:7px;background:rgba(56,212,245,.1);border:1px solid rgba(56,212,245,.25);color:var(--ice);font-size:var(--fs-10);font-weight:700;cursor:pointer;font-family:inherit;">💉 +200 T$ tous</button>
-      </div>
-      <div style="font-size:var(--fs-8);color:var(--t3);margin-top:6px;text-align:center;">Le mode accéléré s'applique automatiquement à chaque trade réel.</div>
+      <div class="la-session-row"><span style="color:var(--t2);">Prochaine évolution</span><span style="font-weight:700;">${left > 0 ? 'dans ' + Math.ceil(left / 60000) + ' min' : 'possible maintenant'}</span></div>
+      <div class="la-session-row"><span style="color:var(--t2);">Évolutions en essai</span><span style="font-weight:700;">${inTrial}</span></div>
+      ${weak > 0 ? `<button class="la-boost-btn" onclick="window._evolveBrokenNow && window._evolveBrokenNow(); renderLearningAccelSection();" style="background:rgba(167,139,250,.12);border-color:rgba(167,139,250,.3);color:var(--pur);margin-top:8px;">🧬 Faire évoluer les ${weak} agent(s) faible(s) maintenant</button>` : ''}
     </div>`;
 }
 window.renderLearningAccelSection = renderLearningAccelSection;
@@ -4281,7 +4115,7 @@ function detectAnomalies() {
   const brokenAgents = agents.filter(a=>(a.fitness||0)<80);
   if(brokenAgents.length > agents.length * 0.3) {
     alerts.push({ level:'warn', icon:'🤖', title:`${brokenAgents.length} agents en détresse`,
-      desc:`Plus de 30% des agents ont une fitness <80 T$. L'intelligence collective est dégradée. Lance une session d'apprentissage accéléré.`,
+      desc:`Plus de 30% des agents ont une fitness <80 T$ : leur poids dans le vote est réduit d'autant. L'évolution les remplace (1 / h) — « Faire évoluer agents cassés » (Déblocages) pour le faire maintenant.`,
       val:`Fitness moy : ${Math.round(agents.reduce((s,a)=>s+(a.fitness||0),0)/Math.max(1,agents.length))} T$` });
   }
   const highScoreAgents = agents.filter(a=>Math.abs(a.score||0)>0.95);

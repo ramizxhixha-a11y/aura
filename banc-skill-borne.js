@@ -32,7 +32,7 @@ const sane = saneCtx._saneSkill;
 
 // ---------- 2. triggerEvolution (07) + _onAgentEvolved (12) — [1c-FULL 16/09] le savoir reste avec le siège ----------
 const s07 = rd('js/07-v90-mode-bunker-sos.js'), s12 = rd('js/12-bots-disciples.js');
-const evoSrc = between(s07, 'function triggerEvolution(weak) {', 'buildAgentCards(); patchAgentCards();\n}') + 'buildAgentCards(); patchAgentCards();\n}';
+const evoSrc = between(s07, 'function triggerEvolution(weak, opts) {', 'buildAgentCards(); patchAgentCards();\n}') + 'buildAgentCards(); patchAgentCards();\n}';
 const heirSrc = between(s12, 'window._onAgentEvolved = function (deadId, prevName, memory, skillCopy) {', '\n(function _disciplesBoot');
 function mkAgent(id, fit) { return { id, name: 'A' + id, type: 'x·y', source: 'a/b', fitness: fit, score: 0.3, conf: 0.6, color: '#fff', memory: [], errors: 0, corrections: 0, streak: 0, regimeFitness: {} }; }
 function mkCtx(withHeir) {

@@ -1,3 +1,4 @@
+// [MASQUE CORRIGÉ · 26/09/2026] VERSION 20260926p · juge caché « v6.0 » de la clôture retiré : il retrouvait l'agent par le préfixe « Hybrid » et créditait toujours le premier hybride (macro_v1) pour les avis des autres — fitness, erreurs, série, souvenirs
 // [TOUTE PAIRE AUTOMATIQUE · 26/09/2026] VERSION 20260926m · symbole futures découvert pour toute paire (sans préfixe → avec « 1000 » → aucun contrat), mis en cache 24 h — la liste des pièces à préfixe 1000 était figée
 // [PRIX 12 PAIRES · 26/09/2026] VERSION 20260926l · CoinGecko et le secours Binance couvrent les paires ACTIVES (listes figées de 10 avec MATIC : BNB, PEPE, EUR jamais mis à jour) ; EUR/GBP par l'USDT ; symbole inconnu résolu par la recherche CoinGecko ; CoinGecko ne touche plus prix ni bougies d'une paire dont Binance est vivant (< 60 s)
 // [CONTEXTE 1 H / 4 H · 26/09/2026] VERSION 20260926e · lecture des horizons 1 h et 4 h (_ctxHorizonRead : EMA et pente en unités d'ATR, séries courtes/périmées/trouées refusées), rafraîchissement REST des séries 1 h/4 h (_ctxCandlesRefresh), _rcLastPrice, siège geopolitic_v1 renommé Contexte 1h·4h
@@ -6469,35 +6470,11 @@ function closePosition(id, botClose = false) {
       // capturé à l'ouverture — mérite par tâche des disciples (module 12).
       try { if (typeof window._judgeDisciples === 'function') window._judgeDisciples(pos, realisedUsd); } catch(e) {}
 
-      // v6.0 · AGENT LEARNING — update fitness of agents who voted for this direction
-      if(pos._openAgents && S.agents) {
-        const won = realisedUsd > 0;
-        (pos._openAgents || []).forEach(openedBy => {
-          const agent = S.agents.find(a => a.name && a.name.includes(openedBy.name));
-          if(!agent) return;
-          // Direction alignment: did this agent's score agree with the trade side?
-          const agentBullish = (openedBy.score || 0) > 0;
-          const tradeLong = pos.side === 'long';
-          const aligned = agentBullish === tradeLong;
-          // v34 · Multiplicateur apprentissage accéléré
-          const _laMult = (_LA_MODES && window._LA_MODE && _LA_MODES[window._LA_MODE]) ? _LA_MODES[window._LA_MODE].mult : 1;
-          // PLAFOND SOUPLE : la récompense fond à l'approche de 2000 (rendements
-          // décroissants). Sans ça, tous les bons agents s'agglutinaient à 2000 et
-          // devenaient indistinguables. Désormais un agent à 1800 gagne moins par
-          // victoire qu'un agent à 500 → la fitness reste une vraie hiérarchie.
-          const _headroom = (agent) => Math.max(0.05, (2000 - (agent.fitness || 500)) / 2000);
-          if(aligned && won)      { agent.fitness = Math.min(2000, (agent.fitness || 500) + 5*_laMult*_headroom(agent)); agent.corrections = (agent.corrections || 0) + 1; agent.streak = Math.max(0, (agent.streak || 0)) + 1; }
-          else if(aligned && !won) { agent.fitness = Math.max(50, (agent.fitness || 500) - 3*_laMult); agent.errors = (agent.errors || 0) + 1; agent.streak = Math.min(0, (agent.streak || 0)) - 1; }
-          else if(!aligned && !won){ agent.fitness = Math.min(2000, (agent.fitness || 500) + 2*_laMult*_headroom(agent)); /* correct skeptic */ }
-          else                    { agent.fitness = Math.max(50, (agent.fitness || 500) - 1*_laMult); }
-          agent.lastPnl = realisedPct;
-          // Store compact memory entry
-          if(!agent.memory) agent.memory = [];
-          agent.memory.push({ ts: Date.now(), pair: pos.pair, side: pos.side, pnl: realisedPct, aligned });
-          if(agent.memory.length > 20) agent.memory.shift();
-          agent.learningEvents = (agent.learningEvents || 0) + 1;
-        });
-      }
+      // [MASQUE CORRIGÉ · 26/09/2026] « v6.0 · AGENT LEARNING » RETIRÉ — un second juge, caché. Il retrouvait l'agent par le PRÉFIXE de son
+      // nom (_openAgents garde name.split(' ')[0] = « Hybrid ») : S.agents.find(name.includes('Hybrid')) = toujours le PREMIER
+      // hybride — macro_v1 dans tous les backups du 14 au 21/09 —, crédité ou puni jusqu'à 5 fois par clôture pour les avis des
+      // AUTRES : fitness ±5 × mode « accéléré » (masque), erreurs (→ « auto-recalibré »), série perdante (→ poids ÷ 2), souvenirs.
+      // Le juge unique est learnFromOutcome (03), juste après : chaque agent sur SON vote de la paire. _openAgents reste affiché.
     } catch(e) { console.warn('post-close hooks:', e); }
     S.winTrades   = Object.values(S.pairStates).reduce((s,p)=>s+p.winTrades,0);
   }

@@ -2,8 +2,8 @@
 // Go Rams (26/09 22:43) : la revigoration AUTOMATIQUE des apprenants est retirée. Elle remettait à 400 T$ (fenêtre vidée) tout
 // apprenant ≤ 80 T$ dès qu'il y en avait 4 : son vrai niveau disparaissait, il revotait avec le poids d'un agent moyen, et
 // l'évolution — qui remplace le plus faible — ne le voyait plus. Désormais un siège faible garde sa vraie fitness et l'évolution
-// le remplace. Code RÉEL : déclencheur d'évolution (fin de learnFromOutcome, 03), migration des abstentions (03, n), revigoration
-// manuelle (03, gardée) ; rejeu sur les backups réels s'ils sont là.
+// le remplace. Code RÉEL : déclencheur d'évolution (fin de learnFromOutcome, 03), migration des abstentions (03, n) ; rejeu sur
+// les backups réels s'ils sont là. [MASQUE CORRIGÉ 26/09] les revigorations manuelles sont retirées aussi (banc-masque.js).
 'use strict';
 const fs = require('fs'), vm = require('vm'), assert = require('assert'), path = require('path');
 const ROOT = __dirname, rd = f => fs.readFileSync(path.join(ROOT, f), 'utf8');
@@ -15,7 +15,6 @@ const s03 = rd('js/03-per-pair-position-buttons-controls-buid.js'), s04 = rd('js
 const JUDGE = between(s03, 'const FIT_WINDOW = 60, FIT_MIN_N = 5;', 'window._fitJudge = _fitJudge;', false) + '\nwindow._fitJudge = _fitJudge;\n';
 const MIGR = between(s03, '(function _botMeritMigrate() {', '\n})();', true);
 const TRIG = 'function _evoTrigger() {\n' + between(s03, '  const sorted = [...S.agents].filter(a=>!a.isBot&&!a.isMeta).sort((a,b)=>a.fitness-b.fitness);', '\n  }\n', true) + '}\n';
-const MANUAL = between(s03, 'function _revigorBrokenAgents(silent) {', '\n  return count;\n}', true);
 const sum = xs => xs.reduce((t, x) => t + x, 0);
 function evoTarget(agents, cycle) {   // déclencheur RÉEL : qui l'évolution vise-t-elle à la prochaine clôture ?
   const c = { S: { agents, cycle }, Math, hit: [] };
@@ -39,14 +38,11 @@ T('D1 · déclencheur RÉEL (fin de learnFromOutcome) : les sièges faux gardent
   const t1 = evoTarget(revived, 15); assert.strictEqual(t1, 'sain_0', 'revigorés : l\'évolution cyclique tombe sur un siège sain');
   assert.strictEqual(evoTarget(revived, 1), null, 'revigorés : aucun siège sous 150 → pas de remplacement immédiat');
 });
-T('D2 · un siège faux garde un poids réduit dans le vote (fitness 50 contre 400 revigoré : ×8) ; la revigoration MANUELLE RÉELLE reste disponible (bouton) : ≤ 80 T$ → 400, fenêtre vide, journal', () => {
+T('D2 · un siège faux garde un poids réduit dans le vote (fitness 50 contre 400 revigoré : ×8) ; [MASQUE CORRIGÉ 26/09] plus aucune revigoration, même manuelle', () => {
   const A = mkLearners(), L = A.filter(a => !a.isBot && !a.isMeta), faux = L.filter(a => a.fitness <= 80);
   const share = sum(faux.map(a => a.fitness)) / sum(L.map(a => a.fitness)), shareR = faux.length * 400 / (sum(L.map(a => a.fitness)) + sum(faux.map(a => 400 - a.fitness)));
   assert.ok(shareR > 4 * share, 'poids revigorés ' + (shareR * 100).toFixed(1) + ' % contre ' + (share * 100).toFixed(1) + ' %');
-  const c = { S: { agents: A, chainLog: [] }, Math, window: {}, rndHash: () => 'h', nowStr: () => '' }; vm.createContext(c); vm.runInContext(MANUAL, c);
-  assert.strictEqual(vm.runInContext('_revigorBrokenAgents(true)', c), 7, 'les 6 sièges faux + l\'Évolueur (le bouton couvre tout ce qui n\'est pas un bot)');
-  assert.ok(A.filter(a => /^faux_/.test(a.id)).every(a => a.fitness === 400 && a._judgments.length === 0));
-  assert.strictEqual(A.find(a => a.isBot).fitness, 20, 'bots : bouton séparé'); assert.ok(/^Revigoration · 7 agent\(s\)/.test(c.S.chainLog[0].desc));
+  const c03 = codeStrict(s03); assert.ok(!c03.includes('function _revigorBrokenAgents') && !c03.includes('function _revigorBots'), 'revigorations manuelles retirées');
 });
 T('D3 · rejeu sur la mémoire réelle (backups 23 et 25/09, après la migration RÉELLE des abstentions) : 7 et 6 vrais cassés, précision pondérée < 40 % chacun ; revigorés, leur poids dans le vote est > 4 × leur poids réel ; l\'évolution (déclencheur RÉEL) vise un cassé, et un siège non cassé s\'ils sont revigorés', () => {
   const UP = '/mnt/user-data/uploads/', cases = [['aura_guardian_full_20260923-123512.json', 7, 'sentiment_v2'], ['aura_guardian_full_20260925-194758.json', 6, 'nlp_v1']];
@@ -67,11 +63,11 @@ T('D3 · rejeu sur la mémoire réelle (backups 23 et 25/09, après la migration
     const t1 = evoTarget(revived, 15); assert.ok(t1 && !broken.some(b => b.id === t1), fn + ' : revigorés, cible ' + t1);
   });
 });
-T('S1 · textes : plus de revigoration automatique (ni fonction, ni minuterie, ni délai sauvegardé) ; revigorations manuelles exposées et bouton Déblocages intact ; manifeste cohérent', () => {
+T('S1 · textes : plus de revigoration automatique (ni fonction, ni minuterie, ni délai sauvegardé) ; « Faire évoluer maintenant » exposé, bouton Déblocages branché dessus ; manifeste cohérent', () => {
   const c03 = codeStrict(s03);
   assert.ok(!c03.includes('_autoRevigorCheck') && !c03.includes('_lastAutoRevigorTs') && !c03.includes('Auto-revigoration'));
-  assert.ok(c03.includes('window._revigorBrokenAgents = _revigorBrokenAgents;') && c03.includes('window._revigorBots = _revigorBots;'));
-  assert.ok(codeStrict(s04).includes('<button onclick="window._revigorBrokenAgents()"'));
+  assert.ok(c03.includes('window._evolveBrokenNow = _evolveBrokenNow;') && !c03.includes('_revigorBots'));   // [MASQUE CORRIGÉ 26/09]
+  assert.ok(codeStrict(s04).includes('<button onclick="window._evolveBrokenNow()"'));
   assert.ok(!codeStrict(s9b1).includes('_lastAutoRevigorTs') && !codeStrict(s9b2).includes('_lastAutoRevigorTs'));
   assert.ok(codeStrict(s9b2).includes("'_lastEvolutionAt','_lastDreamAt','_abstMigrated',"));
 });
