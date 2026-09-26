@@ -1,3 +1,4 @@
+// [REDÉMARRAGE · 26/09/2026] VERSION 20260926n · _lastEvolutionAt, _lastAutoRevigorTs, _lastDreamAt dans le snapshot (délais de 1 h, 30 min, 24 h) ; _abstMigrated
 // [MÉRITE DE L'ÉVOLUEUR · 26/09/2026] VERSION 20260926k · evoTrials, evoMerit, _metaMeritMigrated dans le snapshot
 // [MÉRITE DES BOTS · 26/09/2026] VERSION 20260926j · botMerit, _botPredictions, _botMeritMigrated dans le snapshot
 // [FENÊTRE APPRENANTE · 26/09/2026] VERSION 20260926f · _judgments gardés 240 (étaient 60) ; fitWindowRule dans le snapshot
@@ -108,6 +109,10 @@ function buildSnapshot() {
       evoTrials: S.evoTrials || {},                   // [MÉRITE DE L'ÉVOLUEUR · 26/09/2026]
       evoMerit: S.evoMerit || null,
       _metaMeritMigrated: !!S._metaMeritMigrated,
+      _lastEvolutionAt: S._lastEvolutionAt || 0,      // [REDÉMARRAGE · 26/09/2026] sans eux, chaque rechargement déclenchait une évolution, un rêve et une revigoration
+      _lastAutoRevigorTs: S._lastAutoRevigorTs || 0,
+      _lastDreamAt: S._lastDreamAt || 0,
+      _abstMigrated: !!S._abstMigrated,              // [ABSTENTION · 26/09/2026]
       _gbpToBnbDone: !!S._gbpToBnbDone,
       _realJudgments: S._realJudgments || 0,          // [COMPTEURS RÉGLAGES · 24/09/2026]
       botDisciples:   S.botDisciples   || {},   // [15/08] sièges des disciples par bot

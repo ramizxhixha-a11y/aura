@@ -201,4 +201,6 @@ Une régression de vérité = `VERDICT : NON LIVRABLE`, jamais « CONNU, tolér�
 
 - **26/09 — toute paire automatique** (`20260926m`) : audit de l'ajout d'une paire ; trois dernières listes figées supprimées (news : 8 paires ; historique 7 jours : 8 ; pièces « 1000… » des futures : 4). Une paire ajoutée reçoit désormais toutes les sources.
 
+- **26/09 — abstention + redémarrage** (`20260926n`) : une abstention (|vote| ≤ 0,05 : « hold », scout sans donnée, gardien qui approuve) était jugée fausse (−1) → sièges « cassés » à tort (rejeu 23 et 25/09 : 14 et 13 → 7 et 6) et « erreurs » fantômes ; les délais de l'évolution, de la revigoration et du rêve n'étaient pas sauvegardés → les trois repartaient à chaque rechargement. Corrigé ; migration unique des fenêtres (poids plancher retirés).
+
 *Mis à jour à chaque mission. Le prochain audit complet : après 1b-b, sur un backup de 24 h propre.*

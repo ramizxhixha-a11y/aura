@@ -1,3 +1,4 @@
+// [ABSTENTION · 26/09/2026] VERSION 20260926n · une abstention (|vote| ≤ 0,05 : conseil « hold », scout sans donnée, gardien qui approuve, siège muet) n'est plus jugée comme une erreur — ni fitness, ni erreurs, ni souvenir ; même règle dans l'essai de l'Évolueur ; migration unique : les jugements au poids plancher (0,01, signature d'une abstention) quittent les fenêtres des apprenants, fitness recalculée
 // [MÉRITE DE L'ÉVOLUEUR · 26/09/2026] VERSION 20260926k · l'Évolueur n'est plus jugé sur le résultat du système : chaque évolution ouvre un essai (ancien génome en ombre, voté sur les mêmes événements) ; au bout de 30 jugements, nouveau contre ancien → l'Évolueur est jugé
 // [MÉRITE DES BOTS · 26/09/2026] VERSION 20260926j · un bot n'est plus jugé sur le résultat du système (les 9 bots avaient la MÊME fenêtre et tombaient ensemble à 50) : il est jugé sur SES actes vérifiés (_botPredict / _botMeritAudit / _botJudgeMeasured) ; relevé des vetos réparé (`side` inexistant depuis le 15/08)
 // [MÉMOIRE DES BOTS · 26/09/2026] VERSION 20260926h · showMemoryOverlay : pour un bot / le méta, le résumé réel (jugements, interventions) au lieu de « aucune mémoire »
@@ -1334,6 +1335,19 @@ function learnFromOutcome(source, pnlPct, pair) {
     const aligned       = (won && _vote > 0) || (!won && _vote < 0);
     const signalStrength= Math.abs(_vote);
     try { if (S.evoTrials && S.evoTrials[a.id]) _evoTrialJudge(a, pair, won, mag, decay, _vote); } catch(e) {}   // [MÉRITE DE L'ÉVOLUEUR · 26/09/2026] l'ancien génome est jugé sur le MÊME événement
+    // [ABSTENTION · 26/09/2026] Rams : « à chaque fois que tu pousses, auto-revigoration, c'est normal ? ». Une abstention était jugée FAUSSE :
+    // aligned = (gagné et vote > 0) ou (perdu et vote < 0) — un vote nul n'est jamais aligné → −1 à chaque événement (poids plancher
+    // 0,01). Un conseiller qui dit « hold », un scout qui attend sa donnée (flux, positionnement, bougies 1 h/4 h après un redémarrage),
+    // un gardien qui approuve (+0,05) accumulaient des « erreurs » sans avoir rien dit. Rejeu backups 23 et 25/09 : 14 et 13 sièges
+    // « cassés » (≤ 80 T$) ; sans ces jugements, 7 et 6 (macro, fundamental, mean_rev, contrarian, hedge : 100 % de leurs jugements
+    // étaient des abstentions) → 4 cassés ou plus en permanence → revigoration. Même règle que « zéro n'est pas une perte » (30/07)
+    // et que la compétence par paire / par régime (seuil 0,05) : sans avis, pas de jugement.
+    if (signalStrength <= 0.05) {
+      // Pas de jugement, mais la fitness reste celle de SA fenêtre, comme pour un siège jugé : avant, le jugement (même faux)
+      // la recalculait à chaque clôture et effaçait les écritures additives héritées (02 clôture « v6.0 », 08 ordres LMSR).
+      try { const _fw = _fitOf(a._judgments || [], _fitWindow()); if (_fw !== null) a.fitness = _fw; } catch(e) {}
+      return;
+    }
     // [COMPÉTENCE PAR PAIRE · 13/08/2026] le journal identifiait déjà le meilleur/pire
     // agent PAR PAIRE à chaque cycle (Learn[cycle][SOL] → 🏆/⚠) puis jetait l'info.
     // Désormais elle s'accumule : S.agentPairSkill[agent][paire] = {w,l} — et le vote
@@ -6293,6 +6307,31 @@ setInterval(_botMeritAudit, 60000);
         S._metaMeritMigrated = true; changed = true;
         try { S.chainLog.push({ icon: '\uD83E\uDDEC', desc: 'Évolueur : fenêtre effacée (elle copiait le résultat du système) · fitness neutre 350 · désormais jugé sur ses évolutions (nouveau génome contre ancien)', hash: Math.random().toString(36).slice(2, 8), time: new Date().toLocaleTimeString() }); } catch(e) {}
       }
+      if (!S._abstMigrated) {   // [ABSTENTION · 26/09/2026] une abstention était jugée « fausse » au poids plancher 0,01
+        // Un jugement au poids plancher est soit une abstention (vote nul : toujours −1), soit un vrai vote minuscule sur un
+        // mouvement minuscule (±1, poids ≤ 0,01 : presque aucune information). Indiscernables après coup : les deux partent, dans
+        // les deux sens (pas de biais). Rejeu backups 23 et 25/09 : 14 et 13 apprenants « cassés » (≤ 80 T$) → 7 et 6.
+        let nA = 0, nJ = 0;
+        S.agents.forEach(a => {
+          if (!a || a.isBot || a.isMeta || !Array.isArray(a._judgments)) return;
+          const before = a._judgments.length;
+          const kept = a._judgments.filter(j => j && Number(j.w) > 0.0100001);
+          const removed = before - kept.length;
+          if (!removed) return;
+          const removedNeg = a._judgments.filter(j => j && !(Number(j.w) > 0.0100001) && j.s < 0).length;
+          a._judgments = kept; nA++; nJ += removed;
+          a.errors = Math.max(0, (a.errors || 0) - removedNeg);   // chaque abstention comptait une « erreur » (→ « auto-recalibré »)
+          const _fa = _fitOf(kept, _fitWindow());
+          if (_fa !== null) a.fitness = _fa;
+          else if (before >= FIT_MIN_N) a.fitness = 350;   // la fitness venait d'une fenêtre d'abstentions : plus aucune preuve → neutre
+        });
+        S._abstMigrated = true; changed = true;
+        try {
+          if (!S.chainLog) S.chainLog = [];
+          S.chainLog.push({ icon: '\u2696\uFE0F', desc: 'Abstentions : ' + nJ + ' jugements au poids plancher retirés des fenêtres de ' + nA + ' agents (une abstention était jugée « fausse ») · fitness recalculée', hash: Math.random().toString(16).slice(2, 10), time: (typeof nowStr === 'function') ? nowStr() : '' });
+          if (S.chainLog.length > 100) S.chainLog.splice(0, S.chainLog.length - 100);
+        } catch(e) {}
+      }
       if (changed) { try { if (typeof saveState === 'function') saveState(true); } catch(e) {} }
     } catch(e) {}
   }, 500);
@@ -6311,6 +6350,7 @@ window._botPredict = _botPredict; window._botMeritAudit = _botMeritAudit; window
 var EVO_TRIAL_N = 30, EVO_TRIAL_MIN = 10, EVO_TRIAL_DELTA = 0.1, EVO_TRIAL_MAX_MS = 3 * 24 * 3600 * 1000;
 function _evoTermOf(v, won, mag, decay) {
   v = Number(v) || 0;
+  if (Math.abs(v) <= 0.05) return null;   // [ABSTENTION · 26/09/2026] même règle que la fitness : une abstention n'est pas jugée
   var aligned = (won && v > 0) || (!won && v < 0);
   return { s: aligned ? 1 : -1, w: Math.max(0.01, Math.abs(v) * mag * decay) };
 }
@@ -6358,7 +6398,9 @@ function _evoTrialJudge(a, pair, won, mag, decay, vote) {
   var old = sh[a.id];
   if (Math.abs(vote) <= 0.05 && Math.abs(old) <= 0.05) return null;   // aucun des deux n'a parlé : rien à comparer
   var tn = _evoTermOf(vote, won, mag, decay), to = _evoTermOf(old, won, mag, decay);
-  tr.n++; tr.ns += tn.s * tn.w; tr.nw += tn.w; tr.os += to.s * to.w; tr.ow += to.w;
+  tr.n++;
+  if (tn) { tr.ns += tn.s * tn.w; tr.nw += tn.w; }   // [ABSTENTION · 26/09/2026] le génome qui s'abstient n'est pas jugé sur cet événement
+  if (to) { tr.os += to.s * to.w; tr.ow += to.w; }
   if (tr.n >= EVO_TRIAL_N) return _evoTrialConclude(a.id, 'complet');
   if (Date.now() - tr.t > EVO_TRIAL_MAX_MS) return _evoTrialConclude(a.id, 'délai de 3 jours');
   return null;
