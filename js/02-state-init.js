@@ -1,3 +1,4 @@
+// [PRIX 12 PAIRES · 26/09/2026] VERSION 20260926l · CoinGecko et le secours Binance couvrent les paires ACTIVES (listes figées de 10 avec MATIC : BNB, PEPE, EUR jamais mis à jour) ; EUR/GBP par l'USDT ; symbole inconnu résolu par la recherche CoinGecko ; CoinGecko ne touche plus prix ni bougies d'une paire dont Binance est vivant (< 60 s)
 // [CONTEXTE 1 H / 4 H · 26/09/2026] VERSION 20260926e · lecture des horizons 1 h et 4 h (_ctxHorizonRead : EMA et pente en unités d'ATR, séries courtes/périmées/trouées refusées), rafraîchissement REST des séries 1 h/4 h (_ctxCandlesRefresh), _rcLastPrice, siège geopolitic_v1 renommé Contexte 1h·4h
 // [LIQUIDATIONS · 26/09/2026] VERSION 20260926d · flux des liquidations (!forceOrder@arr) → S.liqStats par paire et par minute, résumé _liqSummary
 // [POSITIONNEMENT · 26/09/2026] VERSION 20260926c · flux positionnement (financement, open interest, ratio long/short) des futures Binance → S.positioning ; siège fundamental_v1 renommé Positionnement
@@ -752,18 +753,79 @@ function setEl(id, val) { const e = document.getElementById(id); if(e) e.textCon
 // ============================================================
 
 // ============================================================
-const COINGECKO_IDS = {
-  'BTC/USDT':  'bitcoin',
-  'ETH/USDT':  'ethereum',
-  'XRP/USDT':  'ripple',
-  'SOL/USDT':  'solana',
-  'DOGE/USDT': 'dogecoin',
-  'DOT/USDT':  'polkadot',
-  'ADA/USDT':  'cardano',
-  'AVAX/USDT': 'avalanche-2',
-  'LINK/USDT': 'chainlink',
-  'MATIC/USDT':'matic-network',
+// [PRIX 12 PAIRES · 26/09/2026] Rams : « prix réels mis à jour : 9 paires via CoinGecko — pourquoi pas 12 ? ». La liste était FIGÉE (10 paires
+// du 07/2026, dont MATIC — retiré de Binance en 09/2024 au profit de POL) : les paires ajoutées depuis (BNB, PEPE, EUR) n'étaient
+// jamais demandées → ni variation 24 h, ni calibrage, ni prix de secours quand le flux Binance tombe. Désormais la demande est
+// construite à chaque fois depuis les paires ACTIVES : table symbole → identifiant CoinGecko (vérifiée sur l'API le 26/09, 40/40),
+// devises (EUR, GBP) déduites du prix de l'USDT dans cette devise, symbole inconnu résolu une fois par la recherche CoinGecko.
+const CG_IDS_BY_SYM = {
+  BTC: 'bitcoin', ETH: 'ethereum', XRP: 'ripple', SOL: 'solana', DOGE: 'dogecoin', DOT: 'polkadot', ADA: 'cardano',
+  AVAX: 'avalanche-2', LINK: 'chainlink', MATIC: 'matic-network', POL: 'polygon-ecosystem-token', BNB: 'binancecoin',
+  PEPE: 'pepe', SHIB: 'shiba-inu', TRX: 'tron', LTC: 'litecoin', BCH: 'bitcoin-cash', UNI: 'uniswap', ATOM: 'cosmos',
+  NEAR: 'near', APT: 'aptos', ARB: 'arbitrum', OP: 'optimism', SUI: 'sui', TON: 'the-open-network', FIL: 'filecoin',
+  ICP: 'internet-computer', ETC: 'ethereum-classic', XLM: 'stellar', HBAR: 'hedera-hashgraph', INJ: 'injective-protocol',
+  AAVE: 'aave', RENDER: 'render-token', FET: 'fetch-ai', WIF: 'dogwifcoin', BONK: 'bonk', FLOKI: 'floki', SEI: 'sei-network',
+  TIA: 'celestia'
 };
+const CG_FIAT = { EUR: 'eur', GBP: 'gbp' };   // EUR/USDT = 1 / (prix d'un USDT en EUR)
+var _cgIdsCache = null;   // symboles résolus par la recherche (cache de l'appareil, recalculable)
+function _cgCacheGet() {
+  if (_cgIdsCache) return _cgIdsCache;
+  try { _cgIdsCache = JSON.parse(localStorage.getItem('aura_cg_ids') || '{}') || {}; } catch (e) { _cgIdsCache = {}; }
+  return _cgIdsCache;
+}
+function _cgIdFor(pair) {
+  const b = String(pair || '').split('/')[0].toUpperCase();
+  if (!b) return null;
+  if (CG_FIAT[b]) return 'tether';
+  if (CG_IDS_BY_SYM[b]) return CG_IDS_BY_SYM[b];
+  const c = _cgCacheGet()[b];
+  return (typeof c === 'string' && c) ? c : null;
+}
+// Prix et variation 24 h d'une paire depuis la réponse CoinGecko (pure) ; null si la réponse ne la contient pas.
+function _cgQuote(pair, data) {
+  const b = String(pair || '').split('/')[0].toUpperCase();
+  if (CG_FIAT[b]) {
+    const t = data && data.tether, cur = CG_FIAT[b], px = t ? Number(t[cur]) : NaN;
+    if (!(px > 0)) return null;
+    const c = t ? Number(t[cur + '_24h_change']) : NaN;
+    return { price: 1 / px, change: (typeof c === 'number' && isFinite(c)) ? (1 / (1 + c / 100) - 1) * 100 : 0 };
+  }
+  const id = _cgIdFor(pair), it = (id && data) ? data[id] : null;
+  const usd = it ? Number(it.usd) : NaN;
+  if (!(usd > 0)) return null;
+  const ch = Number(it.usd_24h_change);
+  return { price: usd, change: (typeof ch === 'number' && isFinite(ch)) ? ch : 0 };
+}
+// Symbole absent de la table : une recherche CoinGecko (1er résultat au symbole EXACT, classés par capitalisation), mise en cache ;
+// au plus une recherche par passage, un essai par symbole et par 24 h, jamais hors ligne.
+var _cgResolveAt = {};
+async function _cgResolveUnknown() {
+  try {
+    if (typeof window !== 'undefined' && window._auraNetOffline) return 0;
+    const now = Date.now();
+    for (const pair of Object.keys(PAIRS || {})) {
+      const b = pair.split('/')[0].toUpperCase();
+      if (_cgIdFor(pair)) continue;
+      if (_cgResolveAt[b] && now - _cgResolveAt[b] < 86400000) continue;
+      _cgResolveAt[b] = now;
+      const r = await fetch('https://api.coingecko.com/api/v3/search?query=' + encodeURIComponent(b), { signal: AbortSignal.timeout(8000) });
+      if (!r || !r.ok) return 0;
+      const d = await r.json();
+      const hit = (d && Array.isArray(d.coins) ? d.coins : []).find(c => c && String(c.symbol || '').toUpperCase() === b);
+      if (!hit || !hit.id) return 0;
+      const cache = _cgCacheGet(); cache[b] = hit.id;
+      try { localStorage.setItem('aura_cg_ids', JSON.stringify(cache)); } catch (e) {}
+      return 1;
+    }
+    return 0;
+  } catch (e) { return 0; }
+}
+// Dernier prix reçu du flux Binance (WS) par paire : quand il a moins de 60 s, CoinGecko (agrégé, en retard jusqu'à ~1 min) ne
+// touche ni au prix ni aux bougies de cette paire — il ne sert que de variation 24 h, de calibrage et de SECOURS.
+var _bnLiveTs = {};
+function _bnLive(pair) { return (Date.now() - (_bnLiveTs[pair] || 0)) < 60000; }
+window._cgIdFor = _cgIdFor; window._cgQuote = _cgQuote; window._bnLive = _bnLive;
 
 let _lastPriceFetch   = 0;
 let _pricesFetched    = false;
@@ -801,15 +863,16 @@ let _priceSource = 0;  // current tier
 let _cgFailCount = 0;  // consecutive CG failures
 const _CG_FAIL_THRESHOLD = 2;  // after 2 consecutive fails, switch to Binance
 
-// Binance symbol mapping
-const BINANCE_SYMBOLS = {
-  'BTC/USDT':'BTCUSDT','ETH/USDT':'ETHUSDT','XRP/USDT':'XRPUSDT','SOL/USDT':'SOLUSDT',
-  'DOGE/USDT':'DOGEUSDT','DOT/USDT':'DOTUSDT','ADA/USDT':'ADAUSDT','AVAX/USDT':'AVAXUSDT',
-  'LINK/USDT':'LINKUSDT','MATIC/USDT':'MATICUSDT'
-};
+// [PRIX 12 PAIRES · 26/09/2026] symboles Binance des paires ACTIVES (la liste figée contenait MATICUSDT, retiré de Binance, et pas BNB / PEPE / EUR)
+function _bnSymbolMap() {
+  const m = {};
+  Object.keys(PAIRS || {}).forEach(p => { const sym = String(p).replace('/', '').toUpperCase(); if (/^[A-Z0-9]{5,20}$/.test(sym)) m[p] = sym; });
+  return m;
+}
 
 async function fetchBinancePrices() {
   try {
+    const BINANCE_SYMBOLS = _bnSymbolMap();
     const symbols = Object.values(BINANCE_SYMBOLS).filter(s => s).map(s => `"${s}"`).join(',');
     const url = `https://api.binance.com/api/v3/ticker/24hr?symbols=[${symbols}]`;
     const resp = await fetch(url, { signal: AbortSignal.timeout(8000) });
@@ -1226,6 +1289,7 @@ function _rcConnectWS(pair) {
         const price = parseFloat(msg.p);
         if (isFinite(price) && price > 0) {
           _realCandlesState.wsLastTradeTs = msg.T;
+          try { if (_realCandlesState.wsPair) _bnLiveTs[_realCandlesState.wsPair] = Date.now(); } catch(e) {}   // [PRIX 12 PAIRES · 26/09/2026]
           if (_realCandlesState.wsPair === _realCandlesState.selectedPair) {
             try {
               const ps = (S && S.pairStates) ? S.pairStates[_realCandlesState.selectedPair] : null;
@@ -3543,6 +3607,7 @@ window._rcLastPrice = _rcLastPrice;
 // (données OHLCV officielles Binance, plus précises que l'agrégation depuis @trade)
 function _upsertKlineCandle(pair, interval, k) {
   if (!pair || !interval || !k) return;
+  _bnLiveTs[pair] = Date.now();   // [PRIX 12 PAIRES · 26/09/2026] kline Binance reçue
 
   // v7.12 LIVRAISON 11 · Signaler au watchdog réseau (kline est un prix réel reçu)
   if (typeof markRealPriceReceived === 'function') markRealPriceReceived();
@@ -3759,39 +3824,49 @@ async function fetchLivePrices(force = false) {
   _setLiveIndicator('fetching');
 
   try {
-    const ids   = Object.values(COINGECKO_IDS).join(',');
-    const url   = `https://api.coingecko.com/api/v3/simple/price?ids=${ids}&vs_currencies=usd&include_24hr_change=true`;
+    // [PRIX 12 PAIRES · 26/09/2026] demande construite depuis les paires ACTIVES (identifiants uniques, devises si EUR / GBP)
+    const _cgPairs = Object.keys(PAIRS || {}), _cgIdSet = new Set(), _cgVs = new Set(['usd']);
+    _cgPairs.forEach(p => { const id = _cgIdFor(p); if (id) _cgIdSet.add(id); const b = p.split('/')[0].toUpperCase(); if (CG_FIAT[b]) _cgVs.add(CG_FIAT[b]); });
+    if (_cgPairs.some(p => !_cgIdFor(p))) { try { _cgResolveUnknown(); } catch(e) {} }
+    const ids   = Array.from(_cgIdSet).join(',');
+    const url   = `https://api.coingecko.com/api/v3/simple/price?ids=${ids}&vs_currencies=${Array.from(_cgVs).join(',')}&include_24hr_change=true`;
     const resp  = await fetch(url, { signal: AbortSignal.timeout(10000) });  // v7.0: 10s timeout
 
     if(!resp.ok) throw new Error('HTTP '+resp.status);
     const data  = await resp.json();
     try { if (typeof window !== 'undefined' && window._perfOp) window._perfOp('traitement CoinGecko'); } catch(e) {}   // [16/08] continuation réseau marquée pour la sonde
 
-    let updated = 0;
-    Object.entries(COINGECKO_IDS).forEach(([pair, cgId]) => {
-      const item = data[cgId];
-      if(!item || !item.usd) return;
+    let updated = 0, _cgFallback = 0;
+    const _cgMissing = [];
+    _cgPairs.forEach(pair => {
+      const _q = _cgQuote(pair, data);
+      if(!_q) { _cgMissing.push(pair.split('/')[0]); return; }
 
-      const realPrice   = parseFloat(item.usd);
-      const change24h   = parseFloat(item.usd_24h_change || 0);
+      const realPrice   = _q.price;
+      const change24h   = _q.change;
       const ps          = S.pairStates[pair];
       const cfg         = PAIRS[pair];
       if(!ps || !cfg) return;
 
       const prevPrice   = ps.price;
       const priceDelta  = Math.abs(realPrice - prevPrice);
+      // [PRIX 12 PAIRES · 26/09/2026] Binance vivant pour cette paire (< 60 s) : CoinGecko (agrégé, jusqu'à ~1 min de retard, EUR déduit de l'USDT)
+      // ne touche ni au prix des modes réels ni aux bougies réelles — il créait de fausses mèches. L'école (AA) garde son ancrage.
+      const _bnOk = _bnLive(pair);
 
       // Smooth transition: blend real price over 3 ticks to avoid jarring jumps
       // v6.9: first fetch = prix immédiat, suivants = blend doux
-      if(!ps._targetPrice && Math.abs(realPrice - ps.price) / ps.price > 0.005) {
-        ps.price = realPrice;  // premier sync: immédiat
-        if(ps.candles.length > 0) ps.candles[ps.candles.length-1].c = realPrice;
+      if(S.tradingMode === 'sim' || !_bnOk) {
+        if(!ps._targetPrice && Math.abs(realPrice - ps.price) / ps.price > 0.005) {
+          ps.price = realPrice;  // premier sync: immédiat
+          if(ps.candles.length > 0) ps.candles[ps.candles.length-1].c = realPrice;
+        }
+        ps._targetPrice   = realPrice;
       }
-      ps._targetPrice   = realPrice;
       ps.pnl24h         = change24h;
 
-      // v7.12 LIVRAISON 1 · agrège dans les bougies temps réel (5m/15m/1h)
-      try { _aggregateRealPrice(pair, realPrice); } catch(e) { /* silent */ }
+      // v7.12 LIVRAISON 1 · agrège dans les bougies temps réel (5m/15m/1h) — [PRIX 12 PAIRES] seulement en secours de Binance
+      if(!_bnOk) { _cgFallback++; try { _aggregateRealPrice(pair, realPrice); } catch(e) { /* silent */ } }
 
       // Update dynamic min/max around real price (±35% — never locked)
       cfg.minP          = realPrice * 0.65;
@@ -3823,7 +3898,7 @@ async function fetchLivePrices(force = false) {
       const _nowPx = Date.now();
       if (!S._lastPriceChainLog || _nowPx - S._lastPriceChainLog >= 120000) {
         S._lastPriceChainLog = _nowPx;
-        S.chainLog.push({ icon:'📡', desc:`Prix réels mis à jour: ${updated} paires via CoinGecko`, hash:rndHash(), time:nowStr() });
+        S.chainLog.push({ icon:'📡', desc:`Prix réels mis à jour: ${updated}/${_cgPairs.length} paires via CoinGecko` + (_cgFallback ? ` · secours de Binance pour ${_cgFallback}` : '') + (_cgMissing.length ? ` · manque : ${_cgMissing.join(', ')}` : ''), hash:rndHash(), time:nowStr() });   // [PRIX 12 PAIRES · 26/09/2026]
       }
       // Save live prices to localStorage pour restore rapide au prochain load
       try {
@@ -4907,6 +4982,7 @@ function _openBgWs(pair) {
       if (!msg || !msg.p || !msg.T) return;
       const price = parseFloat(msg.p);
       if (!isFinite(price) || price <= 0) return;
+      _bnLiveTs[pair] = Date.now();   // [PRIX 12 PAIRES · 26/09/2026] Binance vivant pour cette paire
       if (_realCandlesState && _realCandlesState.wsConnected && _realCandlesState.wsPair === pair) return;
       try { if (_wsAggGate(pair)) _aggregateRealPrice(pair, price, msg.T); } catch(e) {}
       try { _recordTrade(pair, price, parseFloat(msg.q), msg.m === true, msg.T); } catch(e) {}   // [FLUX BINANCE · 17/09/2026] flux réel : quantité + côté preneur

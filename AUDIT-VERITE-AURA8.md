@@ -197,4 +197,6 @@ Une régression de vérité = `VERDICT : NON LIVRABLE`, jamais « CONNU, tolér�
 
 - **26/09 — mérite de l'Évolueur** (`20260926k`) : l'Évolueur était jugé sur le résultat du système ; chaque évolution est désormais jugée par un essai contrefactuel (l'ancien génome vote en ombre sur les mêmes événements, 30 jugements) — pas contre le siège mort, qui était le pire par construction.
 
+- **26/09 — prix 12 paires** (`20260926l`) : CoinGecko et le secours Binance utilisaient des listes figées de 10 paires (avec MATIC, retiré de Binance) : BNB, PEPE, EUR jamais mis à jour, sans secours. Listes construites depuis les paires actives ; CoinGecko devenu secours seulement (il ne mélange plus un prix en retard aux bougies quand Binance est vivant).
+
 *Mis à jour à chaque mission. Le prochain audit complet : après 1b-b, sur un backup de 24 h propre.*
