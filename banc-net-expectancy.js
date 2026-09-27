@@ -89,8 +89,8 @@ console.log('━━ C · texte LIVRÉ de 10f : 4 sites alignés, plus aucune lec
 const F = fs.readFileSync('js/10f-resolveur-cycle.js', 'utf8');
 const codeLines = F.split('\n').filter(l => !/^\s*\/\//.test(l));
 T('10f : version ' + TOK_10F + ', ≤ 500 lignes de code hors commentaires ? non — 765 lignes totales (module hérité, non redécoupé ici ; [P7] +18 ; [PHASE 1] +18 ; [1b-a] +40), 0 lecture de totalPnlPct / totalPnlUsd / _recentNet / _learned hors commentaires', () => {
-  assert.ok(F.startsWith('// ▓▓▓ VERSION ' + TOK_10F + ' ▓▓▓'));
-  assert.strictEqual(F.split('\n').length, 765);   // [1b-a hotfix b] 659 → 693 : +1 en-tête, +_closeCompleted, gardes dans les deux balayages   // [1b-a] 619 → 659 : +1 en-tête, +6 cibles _tpPct/_slPct (−11 breakeven/tpHit/slHit), +44 _botExitSweep ; [PHASE 1] 601 → 619
+  assert.ok(F.split('\n').slice(0, 3).some(l => l.startsWith('// ▓▓▓ VERSION ' + TOK_10F + ' ▓▓▓')));   // [DÉCISION COMMUNE · 27/09/2026] 10f relivré, en-tête 20260926g en 2e ligne
+  assert.strictEqual(F.split('\n').length, 772);   // [DÉCISION COMMUNE · 27/09/2026] 765 → 772 : +1 en-tête, jugement sur l'avenir (+4), signal commun (+4), votes à l'ouverture (+1), 3 jugements sur un mouvement déjà vu retirés (−3)   // [1b-a hotfix b] 659 → 693 : +1 en-tête, +_closeCompleted, gardes dans les deux balayages   // [1b-a] 619 → 659 : +1 en-tête, +6 cibles _tpPct/_slPct (−11 breakeven/tpHit/slHit), +44 _botExitSweep ; [PHASE 1] 601 → 619
   const code = codeLines.join('\n');
   ['totalPnlPct', 'totalPnlUsd', '_recentNet', '_recentCloses', '_learned ', '_learned +=', 'ps.totalTrades || 0) >= 20', '_pt >= 15'].forEach(k => assert.strictEqual(code.split(k).length - 1, 0, k));
 });

@@ -1,3 +1,4 @@
+// [DÉCISION COMMUNE · 27/09/2026] VERSION 20260927g · moteur de la décision commune : voix de chaque bot sur LA paire (_botView), bilan mesuré (_dcMerit), consensus (_dcConsensus), bilan pris SUR L'AVENIR (_dcForwardJudge : votes du cycle précédent jugés sur le mouvement survenu depuis) ; _agentPairVote lit le vote tel qu'il était au moment du pari
 // [FREIN · 27/09/2026] VERSION 20260927f · commentaire de _botStakeMult : un bot au bilan négatif (mult 0) n'ouvre plus en EV (04) — sa « mise minimum » (plancher, 5 % du compte) valait la mise normale
 // [SANS PLAFOND 15 % · 27/09/2026] VERSION 20260927c · commentaire de _botStakeMult : plus de plafond 15 % (la mise d'un bot est bornée par la politique de capital de l'entonnoir, comme tout trade)
 // [MISE AU MÉRITE · 27/09/2026] VERSION 20260927b · _botStakeMult : la mise d'un bot suit son mérite mesuré — minimum s'il se trompe (précision pondérée ≤ 50 %), plus seulement si son avantage est PROUVÉ (borne basse de Wilson à 95 % > 50 %), sinon mise de base
@@ -4263,6 +4264,9 @@ function runRosterAnalysis(pair) {
 // (défaut 0) tant que la paire n'a pas de roster ou que l'agent n'y vote pas (bots, méta).
 function _agentPairVote(a, pair, fallback) {
   try {
+    // [DÉCISION COMMUNE · 27/09/2026] le vote tel qu'il était AU MOMENT du pari (cycle précédent, ou ouverture de la position) — posé le temps d'un jugement
+    const _ov = (typeof window !== 'undefined') ? window.__voteOverride : null;
+    if (_ov && _ov.pair === pair && _ov.votes) return (a && typeof _ov.votes[a.id] === 'number') ? _ov.votes[a.id] : 0;
     const r = a && pair && S.pairStates && S.pairStates[pair] && S.pairStates[pair].roster;
     if (r && r.votes && typeof r.votes[a.id] === 'number') return r.votes[a.id];
   } catch(e) {}
@@ -6176,8 +6180,9 @@ function _botJudgeMeasured(botId, value, kind) {
 // jugées, frais 0,2 % aller-retour, mises EV : base 75 $, minimum 52,5 $, plafond 157 $) — la version « mise proportionnelle à
 // la fitness dans les deux sens » montait la mise après des séries chanceuses de 5 à 10 actes et faisait PERDRE PLUS l'Arbitrage
 // (−6,73 $ contre −5,03 $) et le DCA (−3,93 $ contre −3,30 $). Retenu :
-//  · il se trompe au moins autant qu'il a raison (p ≤ 50 % : fitness ≤ 350, sur ≥ 5 actes) → mult 0 : [FREIN · 27/09/2026] en EV il n'ouvre plus (04
-//    executePending ; son occasion reste une affirmation). La « mise minimum » (plancher de l'entonnoir, 5 % du compte) valait la mise normale ;
+//  · il se trompe au moins autant qu'il a raison (p ≤ 50 % : fitness ≤ 350, sur ≥ 5 actes) → mult 0 : mise minimum (plancher de l'entonnoir,
+//    5 % du compte — la mise normale). [DÉCISION COMMUNE · 27/09/2026] cette mise ne sert plus qu'à TA validation à la main d'une proposition :
+//    en automatique, aucun bot n'ouvre seul (04) — sa lecture de la paire est une voix de la décision commune, pesée par son bilan ;
 //  · avantage PROUVÉ — borne basse de Wilson à 95 % au-dessus de 50 %, sur l'effectif pondéré (Kish) → mise × (350 + 1000·(2·borne − 1)) / 350 :
 //    la loi du poids d'un agent dans le vote (proportionnel à sa fitness), appliquée à la part PROUVÉE seulement ; bornée par la politique
 //    de capital de l'entonnoir comme tout trade ([SANS PLAFOND 15 % · 27/09/2026] : le plafond de 15 % du compte, sans raison, est retiré) ;
@@ -6327,6 +6332,124 @@ function _botMeritAudit() {
     } catch(e) {}
   }, 500);
 })();
+// ═══ [DÉCISION COMMUNE · 27/09/2026] UNE SEULE DÉCISION PAR PAIRE (go Rams 27/09 11:41) ═══
+// Rams : « les bots rassemblent toutes leurs infos, leurs analyses et leur savoir vécu, avec l'appui de leur hybride dédié, et une décision
+// tombe par un consensus commun pour ouvrir ou fermer un trade ». Avant (vérifié dans le code, backup 27/09 10:54) : trois décideurs qui ne se
+// parlaient pas — chaque bot ouvrait SEUL sur UN signal (ses 3 hybrides ne pouvaient que le retenir, un seul regardait le sens) ; le cerveau
+// décidait avec des poids posés à la main (0,3 composite + 0,5 agents + 0,2 LMSR, bonus d'alignement ×1,2) ; le conseil laissait passer les
+// trades de bot sans avis net ; la bascule LMSR (07) fermait les longs des bots en 2 s.
+// Maintenant, pour chaque paire, à chaque cycle du cerveau, TOUTES les voix :
+//  · chaque agent : son vote sur LA paire (sa mémoire s'ajoute ensuite, comme avant) ;
+//  · chaque bot de trading (Scalper, Arbitrage, DCA) : sa lecture de LA paire (_botView, mêmes règles que son scan), pesée par l'avis de ses
+//    3 hybrides dédiés (_consultDisciples, ×0,85 à ×1,15). Le LMSR entre par le Scalper, dont c'est le seul signal ;
+//  · l'analyse technique + fondamentale (composite, avant 30 % d'office) : une voix comme les autres (S.dcVoices.composite).
+// Chaque voix pèse son BILAN MESURÉ E = (justes − fausses) pondérées sur la fenêtre de la fitness, au moins 5 actes jugés ; une voix qui se
+// trompe au moins autant qu'elle a raison pèse 0 — aucun poids posé à la main. C = Σ bilan × voix / Σ bilan de toutes les voix qui ont un
+// bilan (une voix prouvée qui s'abstient dilue). C devient le signal du cerveau (sens, conviction, mise) ; la sortie « bascule » (07) le relit.
+// BILAN SUR L'AVENIR : avant, à chaque cycle, le vote (calculé sur le prix du moment) était jugé sur le mouvement depuis la dernière clôture —
+// déjà vu par le vote — et, à la fermeture, sur le vote de la FIN (qui avait vu tout le trajet). Rejeu : bilans affichés jusqu'à 83 % juste pour
+// des agents qui, jugés sur la suite, ont raison 45 à 54 % du temps (corrélation bilan ↔ prévision 0,36). Désormais : les votes pris au cycle
+// PRÉCÉDENT de la paire sont jugés sur le mouvement survenu DEPUIS (_dcForwardJudge) ; à la fermeture, les votes pris à l'OUVERTURE (02).
+// Rejeu : corrélation bilan ↔ prévision 0,36 → 0,77. Les bots gardent leurs affirmations (±1 ATR) et leurs trades ouverts à la main.
+// Rejeu avant livraison (app réelle en accéléré, 81 h, 9 fenêtres, état de départ = backup précédent, frais du barème) : actuel (20260927f) : tirage 1 375 trades, avant frais −0,68 $, frais 30,74 $, net −31,41 $ ; tirage 2 381 trades, avant frais +3,70 $, frais 39,67 $, net −35,97 $ — décision commune (ce code) : tirage 1 146 trades, avant frais +5,11 $, frais 14,35 $, net −9,24 $ ; tirage 2 122 trades, avant frais +1,00 $, frais 10,98 $, net −9,98 $ — perte nette −71 % et −72 %, trades −61 % et −68 %.
+// Ce que ça ne règle pas : chaque trade reste perdant en moyenne après frais ; aucune voix ne prévoit les 15-60 min suivantes au-delà de
+// 45-54 % (agents), 47 % (Scalper / LMSR), 49 % (Arbitrage) — le gain vient surtout de trades moins nombreux.
+const _DC_BOTS = ['scalper_bot_v1', 'arb_bot_v1', 'dca_bot_v1'];
+function _dcVoice(id) {
+  if (!S.dcVoices || typeof S.dcVoices !== 'object') S.dcVoices = {};
+  if (!S.dcVoices[id] || !Array.isArray(S.dcVoices[id]._judgments)) S.dcVoices[id] = { id: id, _judgments: [], fitness: 350 };
+  return S.dcVoices[id];
+}
+function _dcMerit(v) {
+  try {
+    const W = (typeof _fitWindow === 'function') ? _fitWindow() : FIT_WINDOW;
+    const js = (v && Array.isArray(v._judgments)) ? v._judgments.slice(-W) : [];
+    if (js.length < FIT_MIN_N) return 0;
+    let sw = 0, se = 0;
+    js.forEach(j => { const w = Math.max(0.01, Number(j && j.w) || 0); sw += w; se += ((j && j.s) >= 0 ? 1 : -1) * w; });
+    return sw > 0 ? Math.max(0, se / sw) : 0;
+  } catch (e) { return 0; }
+}
+// Lecture d'UNE paire par un bot : mêmes règles que son scan (botScalper, botArb, botDCA ci-dessus). null = il ne dit rien.
+function _botView(botId, pair) {
+  try {
+    const ps = S.pairStates && S.pairStates[pair]; if (!ps) return null;
+    const tech = (typeof getTechSignals === 'function') ? getTechSignals(pair) : null;
+    const cv = (tech && tech.raw && tech.raw.stddev && tech.raw.stddev.cv) || 0;
+    if (botId === 'scalper_bot_v1') {   // LMSR décollé (> 12 points de 50 %) + volatilité présente
+      const P = (typeof lmsrP === 'function') ? lmsrP(ps) : 0.5;
+      return (Math.abs(P - 0.5) > 0.12 && cv > 0.0008) ? { dir: P > 0.5 ? 1 : -1 } : null;
+    }
+    if (botId === 'arb_bot_v1') {       // la paire est en retard de plus de 2,5 % sur une paire corrélée (> 0,65) : long du retardataire
+      const rP = (typeof _getPairReturns === 'function') ? _getPairReturns(pair) : null;
+      if (!rP || rP.length < 10) return null;
+      const perfP = rP.slice(-20).reduce((a, x) => a + x, 0);
+      for (const q of Object.keys(PAIRS || {})) {
+        if (q === pair) continue;
+        const corr = (typeof _getPairCorrelation === 'function') ? _getPairCorrelation(pair, q) : null;
+        if (!(typeof corr === 'number' && corr > 0.65)) continue;
+        const rQ = _getPairReturns(q); if (!rQ || rQ.length < 10) continue;
+        if (rQ.slice(-20).reduce((a, x) => a + x, 0) - perfP > 0.025) return { dir: 1 };
+      }
+      return null;
+    }
+    if (botId === 'dca_bot_v1') {       // marché calme (cv < 0,12 %, ADX < 20) et prix dans le bas 15 % de la fourchette des 20 dernières bougies
+      const adx = (tech && tech.raw && tech.raw.adx && tech.raw.adx.adx) || 20;
+      const c = ps.candles; if (!(cv < 0.0012 && adx < 20) || !c || c.length < 20) return null;
+      const cl = c.slice(-20).map(k => k.c), lo = Math.min(...cl), hi = Math.max(...cl);
+      return (hi > lo && (ps.price - lo) / (hi - lo) <= 0.15) ? { dir: 1 } : null;
+    }
+  } catch (e) {}
+  return null;
+}
+function _dcConsensus(pair, voteOf, composite) {
+  let num = 0, den = 0, n = 0; const top = [];
+  const add = (id, w, v) => { if (!(w > 0)) return; den += w; if (v) { num += w * v; n++; top.push({ id: id, c: w * v }); } };
+  (S.agents || []).forEach(a => {
+    if (!a || a.isMeta) return;
+    if (a.isBot) {
+      if (_DC_BOTS.indexOf(a.id) === -1) return;
+      const w = _dcMerit(a); if (!(w > 0)) return;
+      const vw = _botView(a.id, pair); let v = 0;
+      if (vw) { v = vw.dir; try { if (typeof window._consultDisciples === 'function') v *= (Number(window._consultDisciples(a.id, pair, v > 0 ? 'long' : 'short').mod) || 1); } catch (e) {} }
+      add(a.id, w, v); return;
+    }
+    let v = Number(voteOf(a)) || 0; if (Math.abs(v) < 0.03) v = 0;
+    add(a.id, _dcMerit(a), v);
+  });
+  if (typeof composite === 'number' && isFinite(composite)) { let v = composite; if (Math.abs(v) < 0.03) v = 0; add('composite', _dcMerit(_dcVoice('composite')), v); }
+  top.sort((x, y) => Math.abs(y.c) - Math.abs(x.c));
+  return { C: den > 0 ? Math.max(-1, Math.min(1, num / den)) : 0, n: n, den: den, top: top.slice(0, 3) };
+}
+// Composite jugé comme un agent : sens de sa valeur au moment du pari contre le mouvement survenu ensuite (EV / RE seulement).
+function _dcJudgeComposite(comp, movePct, decay) {
+  try {
+    if (!(S.tradingMode === 'paperReal' || S.tradingMode === 'real')) return false;
+    if (!(typeof comp === 'number' && Math.abs(comp) > 0.05) || !(Math.abs(Number(movePct)) > 0)) return false;
+    const modeW = (S.tradingMode === 'real') ? 5 : 3;
+    _fitJudge(_dcVoice('composite'), ((movePct > 0) === (comp > 0)) ? 1 : -1, Math.abs(comp) * Math.abs(movePct) * modeW * (decay || 0.7));
+    return true;
+  } catch (e) { return false; }
+}
+function _dcForwardJudge(pair, ps) {
+  try {
+    const snap = ps && ps._voteSnap, px = ps && ps.price;
+    if (!(snap && snap.px > 0 && px > 0)) return 0;
+    const mv = (px - snap.px) / snap.px * 100;
+    if (!(Math.abs(mv) > 0)) return 0;
+    if (snap.votes && typeof learnFromOutcome === 'function') {
+      window.__voteOverride = { pair: pair, votes: snap.votes };
+      try { learnFromOutcome('cycle', mv, pair); } finally { window.__voteOverride = null; }
+    }
+    _dcJudgeComposite(snap.comp, mv, 0.7);
+    return 1;
+  } catch (e) { try { window.__voteOverride = null; } catch (_e) {} return 0; }
+}
+function _dcSnapVotes(pair, ps, composite) {
+  try { ps._voteSnap = { px: ps.price, t: Date.now(), votes: Object.assign({}, (ps.roster && ps.roster.votes) || {}), comp: (typeof composite === 'number' && isFinite(composite)) ? composite : null }; } catch (e) {}
+}
+window._botView = _botView; window._dcMerit = _dcMerit; window._dcConsensus = _dcConsensus; window._dcVoice = _dcVoice;
+window._dcForwardJudge = _dcForwardJudge; window._dcSnapVotes = _dcSnapVotes; window._dcJudgeComposite = _dcJudgeComposite;
 window._botPredict = _botPredict; window._botMeritAudit = _botMeritAudit; window._botJudgeMeasured = _botJudgeMeasured; window._botJudge = _botJudge;
 window._botAtrPct = _botAtrPct; window._botHasOpenClaim = _botHasOpenClaim; window._botAlreadyActing = _botAlreadyActing; window._botStakeMult = _botStakeMult;
 

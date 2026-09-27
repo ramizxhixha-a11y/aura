@@ -15,7 +15,7 @@ T('S1 · 10f : plus aucun learnFromOutcome après une fermeture (les deux voies 
   const c10 = codeStrict(s10f), c02 = codeStrict(s02);
   assert.strictEqual((c10.match(/learnFromOutcome\('trade'/g) || []).length, 0, 'jugement « trade » restant dans 10f');
   assert.ok(c10.includes('closePosition(botPos.id,true);') && c10.includes("if (!_closeCompleted(pos, 'bot ' + why)) return;"), 'les deux fermetures existent toujours');
-  assert.strictEqual((c10.match(/learnFromOutcome\('cycle'/g) || []).length, 7, 'jugements de cycle inchangés (7)');
+  assert.strictEqual((c10.match(/learnFromOutcome\('cycle'/g) || []).length, 4, '[DÉCISION COMMUNE · 27/09/2026] 4 (compteurs à 0) : les 3 jugements sur un mouvement déjà vu sont retirés — le bilan se prend sur l\'avenir (03 _dcForwardJudge)');
   const cp = between(s02, 'function closePosition(id, botClose = false) {', '\n}\n', false);   // corps entier (jusqu\'à la première accolade fermante en colonne 0)
   assert.strictEqual((cp.match(/learnFromOutcome\(/g) || []).length, 1); assert.ok(cp.includes("learnFromOutcome('position', realisedPct, pos.pair);"));
 });

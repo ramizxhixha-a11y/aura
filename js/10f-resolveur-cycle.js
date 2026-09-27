@@ -1,3 +1,4 @@
+// [DÉCISION COMMUNE · 27/09/2026] VERSION 20260927g · le signal du cerveau = la décision commune (03 _dcConsensus : toutes les voix pesées par leur bilan) au lieu de 0,3 composite + 0,5 agents + 0,2 LMSR ; plus d'alignement LMSR exigé ; bilan sur l'avenir : votes du cycle précédent jugés sur le mouvement depuis, plus sur un mouvement déjà vu
 // ▓▓▓ VERSION 20260926g ▓▓▓ · [DOUBLE JUGEMENT · 26/09/2026] une fermeture bot ne juge plus les agents deux fois (closePosition juge déjà, source 'position')
 // [STOP CÔTÉ EXCHANGE SIMULÉ · 26/09/2026] _botExitSweep : à la reconnexion, un stop traversé pendant la coupure est exécuté AU stop (EV)
 // [VÉRITÉ DES RÈGLES · 23/09/2026] une sortie par règle apprise marque la position (pos._ruleExit)
@@ -73,7 +74,11 @@ function _resolvePairCycleCore(pair, ps) {
   // [PHASE 1 · 12/09/2026] roster FRAIS de LA paire, dans le mode du cycle traité (pairStates/ps sont multiplexés par mode).
   // getTechSignals/getFundamentalSignals sont déjà en cache pour cette paire (calculés ci-dessus). Marqué pour la sonde gel.
   try { if (typeof window !== 'undefined' && window._perfOp) window._perfOp('roster:' + pair); } catch(e) {}
+  // [DÉCISION COMMUNE · 27/09/2026] bilan SUR L'AVENIR : les votes pris au cycle précédent de cette paire (et le composite) sont jugés sur le mouvement survenu
+  // DEPUIS ; puis les votes de maintenant sont gardés pour le prochain cycle (03 _dcForwardJudge / _dcSnapVotes).
+  try { if (typeof _dcForwardJudge === 'function') _dcForwardJudge(pair, ps); } catch(e) {}
   if (typeof runRosterAnalysis === 'function') { try { runRosterAnalysis(pair); } catch(e) {} }
+  try { if (typeof _dcSnapVotes === 'function') _dcSnapVotes(pair, ps, composite); } catch(e) {}
   const _votes  = (ps.roster && ps.roster.votes) || {};
   const _voteOf = a => (typeof _votes[a.id] === 'number') ? _votes[a.id] : 0;
 
@@ -108,8 +113,12 @@ function _resolvePairCycleCore(pair, ps) {
     Math.abs(composite) > 0.15 && Math.abs(agentConsensus) > 0.15 &&
     Math.sign(composite) !== Math.sign(agentConsensus);
   const _alignBonus = _allAligned ? 1.20 : (_strongDisagree ? 0.85 : 1.0);
-  const _rawFinal = composite*0.30 + agentConsensus*0.50 + lmsrScore*0.20;
-  const finalSignal = Math.max(-1, Math.min(1, _rawFinal * _alignBonus));
+  // [DÉCISION COMMUNE · 27/09/2026] le signal = la DÉCISION COMMUNE : agents, bots (lecture de LA paire × leurs hybrides), composite et LMSR (par le Scalper),
+  // chacun pesé par son bilan mesuré (03 _dcConsensus). L'ancienne formule (poids posés à la main) ne sert plus que si le moteur manque.
+  const _dcR = (typeof _dcConsensus === 'function') ? _dcConsensus(pair, _voteOf, composite) : null;
+  const _rawFinal = _dcR ? _dcR.C : composite*0.30 + agentConsensus*0.50 + lmsrScore*0.20;
+  const finalSignal = Math.max(-1, Math.min(1, _dcR ? _dcR.C : _rawFinal * _alignBonus));
+  ps._dc = _dcR ? { C: _dcR.C, n: _dcR.n, ts: Date.now() } : null;   // relu par la sortie « bascule » (07)
 
   let memBias = 0, memBiasCnt = 0;
   S.agents.filter(a => !a.isBot && !a.isMeta).forEach(a => {
@@ -226,8 +235,9 @@ function _resolvePairCycleCore(pair, ps) {
   const lmsrAlignSell = adjProb < 0.50;
   const convOverride  = effectiveConviction > 0.40;   // [S2] 0.25→0.40 : le LMSR ne se contourne qu'en vraie conviction
 
-  const isBuy  = finalSignalWithMem > 0 && convGate && dirGate && (lmsrAlignBuy  || convOverride);
-  const isSell = finalSignalWithMem < 0 && convGate && dirGate && (lmsrAlignSell || convOverride);
+  // [DÉCISION COMMUNE · 27/09/2026] plus d'alignement LMSR exigé : le LMSR n'est plus qu'une voix (celle du Scalper), pesée par son bilan dans la décision commune
+  const isBuy  = finalSignalWithMem > 0 && convGate && dirGate && (_dcR ? true : (lmsrAlignBuy  || convOverride));
+  const isSell = finalSignalWithMem < 0 && convGate && dirGate && (_dcR ? true : (lmsrAlignSell || convOverride));
   const action = isBuy ? 'buy' : isSell ? 'sell' : 'hold';
   ps.lastAction = action;
   if(action==='hold'){if(!ps.holdStartTs)ps.holdStartTs=Date.now();}else{ps.holdStartTs=0;}
@@ -243,7 +253,7 @@ function _resolvePairCycleCore(pair, ps) {
     const mPnl=manualPos.side==='long'
       ?((ps.price-manualPos.entryPrice)/manualPos.entryPrice*100)
       :((manualPos.entryPrice-ps.price)/manualPos.entryPrice*100);
-    if(Math.abs(mPnl)>0.2)learnFromOutcome('cycle',mPnl,pair);
+    // [DÉCISION COMMUNE · 27/09/2026] plus de jugement des agents sur le P&L d'une position manuelle (un mouvement déjà vu) : le bilan se prend sur l'avenir
     return;
   }
 
@@ -291,9 +301,7 @@ function _resolvePairCycleCore(pair, ps) {
       // [DOUBLE JUGEMENT · 26/09/2026] plus de second jugement ici : closePosition (02) vient de juger les agents (source 'position', décroissance 1,3) — l'appel 'trade' qui suivait comptait le même trade DEUX fois (fitness, compétence par paire, souvenirs, régime)
       showToast(`${pnlPct>=0?'💰':'📉'} Bot ${pair} ${why} · ${pnlPct>=0?'+':''}${pnlPct.toFixed(2)}%`);
       ps.qYes=100+Math.floor(Math.random()*20); ps.qNo=100+Math.floor(Math.random()*20);
-    } else {
-      learnFromOutcome('cycle',pnlPct*0.08,pair);
-    }
+    }   // [DÉCISION COMMUNE · 27/09/2026] plus de jugement sur le P&L déjà vu d'une position ouverte : jugée à sa fermeture, sur les votes de son OUVERTURE (02)
     S.totalTrades=Object.values(S.pairStates).reduce((s,p)=>s+p.totalTrades,0);
     S.winTrades=Object.values(S.pairStates).reduce((s,p)=>s+p.winTrades,0);
     if(S.chainLog.length>100)S.chainLog.splice(0,S.chainLog.length-100);
@@ -310,9 +318,7 @@ function _resolvePairCycleCore(pair, ps) {
     // [P7] la porte par régime a-t-elle fermé à CAUSE des news contre le pari ? (passe sans, refus avec)
     if(_newsDelta > 0 && finalSignalWithMem !== 0 && !convGate && dirGate &&
        effectiveConviction >= (_gates.conv + _expPenalty + _ecoMalus + _heatDelta - _corrBonus - (S._convBoost || 0))) _newsTrace(pair, _newsG, false);
-    const candles=ps.candles;
-    const move=candles.length>1?(candles[candles.length-1].c-candles[candles.length-2].c)/ps.price*100:0;
-    learnFromOutcome('cycle',move,pair);
+    // [DÉCISION COMMUNE · 27/09/2026] plus de jugement sur le mouvement de la bougie en cours (le vote l'avait déjà vu) : _dcForwardJudge juge le cycle précédent
     ps.qYes = Math.max(20, 100 + (ps.qYes - 100) * 0.95);
     ps.qNo  = Math.max(20, 100 + (ps.qNo  - 100) * 0.95);
     return;
@@ -545,6 +551,7 @@ function _resolvePairCycleCore(pair, ps) {
   // fantomes annoncant un trade qui n'existe pas.
   if(!np) return;
   np.tp=tpE; np.sl=slE; np._holdCycles=0;
+  try { np._votes = Object.assign({}, (ps.roster && ps.roster.votes) || {}); np._comp = composite; np._dcC = _dcR ? _dcR.C : null; } catch(e) {}   // [DÉCISION COMMUNE · 27/09/2026] jugés à la fermeture sur ce qu'ils disaient À L'OUVERTURE
   // [P1] trace de diversification : ouverture obtenue grâce au bonus anti-corrélé
   if(_corrDecisive){
     S.chainLog.push({icon:'🔗',
@@ -560,7 +567,7 @@ function _resolvePairCycleCore(pair, ps) {
   const tt=cfg.dec>=4?tpE.toFixed(cfg.dec):Math.floor(tpE).toLocaleString();
   const st=cfg.dec>=4?slE.toFixed(cfg.dec):Math.floor(slE).toLocaleString();
   S.chainLog.push({icon:side==='long'?'🟢':'🔴',
-    desc:`BOT ${side.toUpperCase()} ${pair} @${pt} | AT:${(atScore*100).toFixed(0)}% AF:${(fundScore*100).toFixed(0)}% Ag:${(agentConsensus*100).toFixed(0)}% Conv:${(effectiveConviction*100).toFixed(0)}% | TP:${tt} SL:${st}`,
+    desc:`BOT ${side.toUpperCase()} ${pair} @${pt} | ${_dcR ? 'Commun:' + (_dcR.C*100).toFixed(0) + '% (' + _dcR.n + ' voix) ' : ''}AT:${(atScore*100).toFixed(0)}% AF:${(fundScore*100).toFixed(0)}% Ag:${(agentConsensus*100).toFixed(0)}% Conv:${(effectiveConviction*100).toFixed(0)}% | TP:${tt} SL:${st}`,
     hash:rndHash(),time:nowStr()});
   showToast(`🤖 Bot ${side.toUpperCase()} ${pair} · AT${atScore>=0?'+':''}${(atScore*100).toFixed(0)}% AF${fundScore>=0?'+':''}${(fundScore*100).toFixed(0)}% · ${(effectiveConviction*100).toFixed(0)}%`);
 

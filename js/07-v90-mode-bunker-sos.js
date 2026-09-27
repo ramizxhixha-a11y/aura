@@ -1,3 +1,4 @@
+// [DÉCISION COMMUNE · 27/09/2026] VERSION 20260927g · sortie « bascule » : relit la décision commune de la paire (10f ps._dc) au lieu du LMSR — mêmes seuils (≤ −0,30 contre un long, ≥ +0,30 contre un short)
 // [SURVEILLANCE PERMANENTE · 27/09/2026] VERSION 20260927a · bandeau d'un bot sans acte jugé : affirmations en cours et trades ouverts (plus de « 30 min après »)
 // [MASQUE CORRIGÉ · 26/09/2026] VERSION 20260926p · triggerEvolution(weak, opts) : opts.manual (« Faire évoluer maintenant », décision de Rams) passe outre le délai d'1 h, qui repart de là ; opts.quiet : pas de toast par évolution
 // [MÉRITE DE L'ÉVOLUEUR · 26/09/2026] VERSION 20260926k · triggerEvolution ouvre un essai (ancien génome capturé AVANT la mutation) ; bandeau de l'Évolueur sans évolution jugée
@@ -3311,14 +3312,17 @@ function learnFromOpenPositions() {
     // (LONG détient, Brain vote SHORT fortement → fermer)
     // On utilise LMSR (prob de LONG) : < 0.35 = strong SHORT, > 0.65 = strong LONG
     if (pos.auto === true && typeof lmsrP === 'function') {
-      const brainProb = lmsrP(ps);  // 0 = SHORT, 1 = LONG
+      // [DÉCISION COMMUNE · 27/09/2026] la décision commune de la paire (10f ps._dc.C), ramenée sur la même échelle (0 = SHORT, 1 = LONG) ; le LMSR seulement
+      // si elle n'a pas encore été calculée. Avant : le LMSR seul — le 27/09 il fermait en 2 s les longs du DCA et de l'Arbitrage.
+      const _dcC = (ps._dc && typeof ps._dc.C === 'number') ? ps._dc.C : null;
+      const brainProb = _dcC !== null ? (0.5 + _dcC / 2) : lmsrP(ps);  // 0 = SHORT, 1 = LONG
       const conflict = (pos.side === 'long' && brainProb < 0.35) ||
                        (pos.side === 'short' && brainProb > 0.65);
       if (conflict && _cExitPct > -0.2) {  // seulement si pas trop en perte (éviter sell au pire moment)
         closePosition(pos.id, true);
         S.chainLog.push({
           icon: '🔄',
-          desc: `Consensus switch · ${pos.pair} ${pos.side.toUpperCase()} · Brain bascule (LMSR ${(brainProb*100).toFixed(0)}%)`,
+          desc: `Consensus switch · ${pos.pair} ${pos.side.toUpperCase()} · ` + (_dcC !== null ? `décision commune ${_dcC >= 0 ? '+' : ''}${_dcC.toFixed(2)}` : `Brain bascule (LMSR ${(brainProb*100).toFixed(0)}%)`),
           hash: rndHash(), time: nowStr()
         });
         if (S.chainLog.length > 100) S.chainLog.splice(0, S.chainLog.length - 100);

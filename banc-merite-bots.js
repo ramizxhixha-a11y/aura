@@ -117,7 +117,7 @@ T('S1 · textes : learnFromOutcome ne juge plus les bots ; propositions / flatte
   assert.ok(s09c.includes("S.botFleet.exec_bot_v1.pnlContrib = (S.botFleet.exec_bot_v1.pnlContrib || 0) + saving; if (typeof _botJudgeMeasured === 'function') _botJudgeMeasured('exec_bot_v1', saving, 'twap');"));
   assert.ok(codeStrict(s10i).includes("r = _fitWindowEval(S.agents.filter(function (a) { return a && !a.isBot && !a.isMeta; }));"));
   assert.ok(codeStrict(s9b1).includes('botMerit: S.botMerit || {},') && codeStrict(s9b1).includes('_botMeritMigrated: !!S._botMeritMigrated,'));
-  assert.ok(codeStrict(s9b2).includes("'fitWindowRule','botMerit','_botPredictions','_botMeritMigrated',") && codeStrict(s9b2).includes('if (snap._botMeritMigrated)                                               S._botMeritMigrated = true;'));
+  assert.ok(codeStrict(s9b2).includes("'fitWindowRule','botMerit','dcVoices','_botPredictions','_botMeritMigrated',") && codeStrict(s9b2).includes('if (snap._botMeritMigrated)                                               S._botMeritMigrated = true;'));
   assert.ok(codeStrict(s07).includes("elMemText.textContent = 'aucun acte jugé encore — jugé sur ses propres actes : résultat réel de ses trades, affirmations dès que le marché tranche (±1 ATR), TWAP, taille';"));
 });
 console.log('\n' + (fail ? '❌ ' : '✅ ') + pass + '/' + (pass + fail) + ' tests passés' + (fail ? ' — ' + fail + ' ÉCHEC(S)' : ''));

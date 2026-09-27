@@ -1,3 +1,4 @@
+// [DÉCISION COMMUNE · 27/09/2026] VERSION 20260927g · à la fermeture, les agents (et le composite) sont jugés sur leurs votes À L'OUVERTURE (pos._votes, pos._comp), plus sur ceux de la fin qui avaient vu tout le trajet
 // [MISE AU MÉRITE · 27/09/2026] VERSION 20260927b · le trade d'un bot est jugé en % de résultat (même unité que ses affirmations) — la mise au mérite lit une seule unité
 // [SURVEILLANCE PERMANENTE · 27/09/2026] VERSION 20260927a · goPage(0) ne fait plus tourner la flotte (le battement s'en charge) ; closePosition juge le bot qui a ouvert la position (pos._bot) sur son résultat réel
 // [MASQUE CORRIGÉ · 26/09/2026] VERSION 20260926p · juge caché « v6.0 » de la clôture retiré : il retrouvait l'agent par le préfixe « Hybrid » et créditait toujours le premier hybride (macro_v1) pour les avis des autres — fitness, erreurs, série, souvenirs
@@ -6481,7 +6482,9 @@ function closePosition(id, botClose = false) {
     S.winTrades   = Object.values(S.pairStates).reduce((s,p)=>s+p.winTrades,0);
   }
 
-  learnFromOutcome('position', realisedPct, pos.pair);
+  // [DÉCISION COMMUNE · 27/09/2026] jugés sur ce qu'ils disaient À L'OUVERTURE (10f pos._votes) — avant : sur le vote de la fin, qui avait vu tout le trajet
+  try { window.__voteOverride = (pos._votes && typeof pos._votes === 'object') ? { pair: pos.pair, votes: pos._votes } : null; learnFromOutcome('position', realisedPct, pos.pair); } finally { window.__voteOverride = null; }
+  try { if (typeof _dcJudgeComposite === 'function') _dcJudgeComposite(pos._comp, realisedPct, 1.3); } catch(e) {}
   // [SURVEILLANCE PERMANENTE · 27/09/2026] la position a été ouverte par un bot : il est jugé sur SON résultat réel (en $), comme l'économie du TWAP
   // [MISE AU MÉRITE · 27/09/2026] poids en % (realisedPct), la même unité que ses affirmations (mouvement en %) : sa mise se règle sur UNE mesure
   try { if (pos._bot && typeof _botJudgeMeasured === 'function') { _botJudgeMeasured(pos._bot, realisedPct, 'trade'); if (S.botFleet && S.botFleet[pos._bot]) S.botFleet[pos._bot].pnlContrib = (S.botFleet[pos._bot].pnlContrib || 0) + (Number(realisedUsd) || 0); } } catch(e) {}

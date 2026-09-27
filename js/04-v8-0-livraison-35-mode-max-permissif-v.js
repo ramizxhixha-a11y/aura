@@ -1,3 +1,4 @@
+// [DÉCISION COMMUNE · 27/09/2026] VERSION 20260927g · en automatique, un bot ne trade plus seul (aucun mode) : son occasion devient une affirmation jugée par le marché et sa lecture de la paire est une VOIX de la décision commune (03), lue par le cerveau ; ta validation à la main passe toujours
 // [FREIN · 27/09/2026] VERSION 20260927f · EV : un bot qui se trompe au moins autant qu'il a raison (≥ 5 actes jugés) n'ouvre plus de trade en automatique — son occasion reste une affirmation jugée par le marché, il retrade dès que son bilan redevient positif (la « mise minimum » valait la mise normale) ; Réel et AA inchangés
 // [PLAFOND DU CERVEAU · 27/09/2026] VERSION 20260927d · une ouverture de bot se signale à l'entonnoir (window._openingBot) et marque son entrée « open » (bot) : le plafond d'ouvertures par jour du cerveau ne la compte ni ne la bloque
 // [SANS PLAFOND 15 % · 27/09/2026] VERSION 20260927c · trade de bot : plus de plafond 15 % du compte ni de 10 $ / 20 $ en dur — base = celle de l'entonnoir (mise de la paire, sinon le plancher), bornée comme tout trade par la politique de capital (Rams 06/07) ; idem pour les trades FORCE (toast honnête si l'entonnoir refuse)
@@ -1842,8 +1843,11 @@ function executePending(actionId, opts) {
         // après frais. Son occasion reste une affirmation jugée par le marché (±1 ATR) ; dès que son bilan redevient positif, il retrade (mise
         // de base, plus si avantage prouvé). Rejeu du matin : 25 de ses 36 trades n'auraient pas été ouverts (−5,78 $ évités). Réel : déjà plus
         // strict (avantage PROUVÉ exigé, ci-dessus) ; AA (l'école : bougies fabriquées, bots non jugés) : inchangé ; ta validation à la main passe.
-        const _brake = !!(_auto && _bot && _sm && _sm.mult <= 0 && S.tradingMode === 'paperReal');
-        if(!_reBlock && !_brake && typeof autoOpenPosition === 'function') {
+        // [DÉCISION COMMUNE · 27/09/2026] le frein ci-dessus est remplacé : en automatique, AUCUN bot n'ouvre seul, dans aucun mode — son occasion devient une
+        // affirmation jugée par le marché (son bilan) et sa lecture de la paire est une voix de la décision commune (03 _botView / _dcConsensus),
+        // pesée par ce bilan et par ses 3 hybrides. Seule ta validation à la main d'une de ses propositions ouvre encore un trade de bot.
+        const _voice = !!(_auto && _bot);
+        if(!_reBlock && !_voice && typeof autoOpenPosition === 'function') {
           const _t0 = Date.now(), _cl = S.chainLog || [], _last0 = _cl[_cl.length - 1];
           // [PLAFOND DU CERVEAU · 27/09/2026] l'entonnoir sait que c'est un bot : le plafond d'ouvertures par jour (fait pour le cerveau) ne le bloque pas
           try { window._openingBot = _bot || null; autoOpenPosition(_pr, _sd, stake); } finally { window._openingBot = null; }
@@ -1866,14 +1870,16 @@ function executePending(actionId, opts) {
             try { if (typeof _setBot === 'function') _setBot(_bot, 'scanning', `Occasion ${_pr} ${String(_sd).toUpperCase()} refusée par l'entonnoir${_why ? ' (' + _why + ')' : ''} · affirmation suivie`); } catch(e) {}
             if (!_auto && typeof showToast === 'function') showToast(`⛔ ${_pr} ${String(_sd).toUpperCase()} refusé par l'entonnoir${_why ? ' · ' + _why : ''}`);
           } else if (typeof showToast === 'function') showToast(`⛔ ${_pr} ${String(_sd).toUpperCase()} refusé par l'entonnoir`);
+        } else if (_voice) {
+          // [DÉCISION COMMUNE · 27/09/2026] une ligne de journal par NOUVELLE affirmation (une seule ouverte par bot / paire / sens), avec le poids de sa voix
+          let _nq = false; try { if (typeof _botPredict === 'function') _nq = _botPredict(_bot, _pr, _sd, action.type || ''); } catch(e) {}
+          let _w = 0; try { if (typeof _dcMerit === 'function') _w = _dcMerit(_ba); } catch(e) {}
+          const _wTxt = _w > 0 ? 'pèse ' + _w.toFixed(2) + ' (bilan)' : 'ne pèse rien tant que son bilan n\'est pas positif';
+          try { if (typeof _setBot === 'function') _setBot(_bot, 'scanning', `Voix ${_pr} ${String(_sd).toUpperCase()} → décision commune (${_wTxt}) · affirmation jugée par le marché`); } catch(e) {}
+          try { if (_nq && S.chainLog) { S.chainLog.push({ icon: '🗳', desc: _bn + ' · voix ' + _pr + ' ' + String(_sd).toUpperCase() + ' → décision commune · ' + _wTxt, hash: typeof rndHash === 'function' ? rndHash() : '', time: typeof nowStr === 'function' ? nowStr() : '' }); if (S.chainLog.length > 100) S.chainLog.splice(0, S.chainLog.length - 100); } } catch(e) {}
         } else if (_reBlock && _bot) {
           try { if (typeof _botPredict === 'function') _botPredict(_bot, _pr, _sd, action.type || ''); } catch(e) {}
           try { if (typeof _setBot === 'function') _setBot(_bot, 'scanning', `Réel : ${_pr} ${String(_sd).toUpperCase()} non ouvert — ${_reWhy} · affirmation suivie`); } catch(e) {}
-        } else if (_brake) {
-          // [FREIN · 27/09/2026] une ligne de journal par NOUVELLE affirmation (une seule ouverte par bot / paire / sens) : visible sans inonder
-          let _nq = false; try { if (typeof _botPredict === 'function') _nq = _botPredict(_bot, _pr, _sd, action.type || ''); } catch(e) {}
-          try { if (typeof _setBot === 'function') _setBot(_bot, 'scanning', `EV : ${_pr} ${String(_sd).toUpperCase()} non ouvert — ${_sm.why} · affirmation jugée par le marché ; il retrade dès que son bilan redevient positif`); } catch(e) {}
-          try { if (_nq && S.chainLog) { S.chainLog.push({ icon: '🧊', desc: _bn + ' · ' + _pr + ' ' + String(_sd).toUpperCase() + ' non ouvert — ' + _sm.why + ' · affirmation jugée par le marché', hash: typeof rndHash === 'function' ? rndHash() : '', time: typeof nowStr === 'function' ? nowStr() : '' }); if (S.chainLog.length > 100) S.chainLog.splice(0, S.chainLog.length - 100); } } catch(e) {}
         }
         break;
       }
