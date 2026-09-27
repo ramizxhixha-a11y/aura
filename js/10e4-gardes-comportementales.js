@@ -1,3 +1,4 @@
+// [PLAFOND DU CERVEAU · 27/09/2026] VERSION 20260927e · transition : le jour de la mise à jour, les ouvertures d'AVANT (bots et cerveau mêlés, non marquées) ne comptent plus pour le cerveau — sinon il restait bloqué jusqu'à minuit
 // [PLAFOND DU CERVEAU · 27/09/2026] VERSION 20260927d · le plafond d'ouvertures par jour ne compte plus et ne bloque plus les trades des bots (ouverture marquée « bot ») — il reste pour le cerveau ; le refroidissement de 15 min après une perte s'applique à tous
 // ▓▓▓ VERSION 20260906c ▓▓▓
 // 10e4-gardes-comportementales.js — Gardes comportementales : cooldown par paire après perte,
@@ -37,10 +38,18 @@ function _behavLastClose(trades) {
   return null;
 }
 
+// [PLAFOND DU CERVEAU · 27/09/2026] transition (une seule journée) : ce matin, 40 ouvertures non marquées — bots et cerveau mêlés, indiscernables —
+// ont rempli le plafond. L'heure du premier chargement de cette version est gardée sur l'appareil ; ce jour-là, les ouvertures
+// non marquées d'AVANT ne comptent pas pour le cerveau (le cerveau n'a jamais dépassé 26 ouvertures / jour). Dès le lendemain :
+// sans effet (chaque ouverture de bot est marquée).
+var _behavSplitAt = 0;
+try { _behavSplitAt = Number(localStorage.getItem('aura_behav_bot_split')) || 0; if (!_behavSplitAt) { _behavSplitAt = Date.now(); localStorage.setItem('aura_behav_bot_split', String(_behavSplitAt)); } } catch (e) { _behavSplitAt = 0; }
 // Nombre d'ouvertures du jour local courant, toutes paires du wallet passé.
 function _behavDayOpens(pairStates, now) {
   const d = new Date(now);
   const y = d.getFullYear(), m = d.getMonth(), j = d.getDate();
+  const _sd = _behavSplitAt ? new Date(_behavSplitAt) : null;
+  const _splitToday = !!(_sd && _sd.getFullYear() === y && _sd.getMonth() === m && _sd.getDate() === j);
   let n = 0;
   Object.keys(pairStates || {}).forEach(function (k) {
     const tr = pairStates[k] && pairStates[k].trades;
@@ -49,6 +58,7 @@ function _behavDayOpens(pairStates, now) {
       const t = tr[i];
       if (!t || t.type !== 'open' || typeof t.ts !== 'number') continue;
       if (t.bot) continue;   // [PLAFOND DU CERVEAU · 27/09/2026] ouverture d'un bot : sa cadence est réglée par son mérite (03 _botStakeMult), pas par ce plafond
+      if (_splitToday && t.ts < _behavSplitAt) continue;   // transition : avant la séparation, le jour même
       const td = new Date(t.ts);
       if (td.getFullYear() === y && td.getMonth() === m && td.getDate() === j) n++;
     }

@@ -113,6 +113,20 @@ T('[PLAFOND DU CERVEAU · 27/09/2026] ouvertures des bots : ni comptées ni bloq
   ctx.window._openingBot = null; assert.strictEqual(ctx._behavGateForOpen('SOL/USDT').veto, true, 'porte réelle : le cerveau');
   S.pairStates = {}; _regime = _r0;
 });
+T('[PLAFOND DU CERVEAU · 27/09/2026] transition du jour de la mise à jour : les ouvertures non marquées d\'AVANT ne comptent pas pour le cerveau ce jour-là ; le lendemain, sans effet', () => {
+  const src = fs.readFileSync('js/10e4-gardes-comportementales.js', 'utf8');
+  const store = {}; const ls = { getItem: k => (k in store ? store[k] : null), setItem: (k, v) => { store[k] = String(v); } };
+  const c2 = { window: {}, S: { pairStates: {} }, localStorage: ls, detectMarketRegime: () => 'calm', Date: ctx.Date, Number, Math };
+  vm.createContext(c2); vm.runInContext(src, c2);
+  assert.strictEqual(Number(store.aura_behav_bot_split), _fakeNow, 'heure du premier chargement gardée');
+  const before = Array.from({ length: 40 }, () => open(3600000, 5));   // ce matin, avant la mise à jour
+  assert.strictEqual(c2._behavVerdict({ 'BTC/USDT': { trades: before } }, 'SOL/USDT', 'calm', _fakeNow).veto, false, 'le cerveau n\'est plus bloqué le jour même');
+  const after = Array.from({ length: 40 }, () => ({ type: 'open', stakeUsdt: 5, ts: _fakeNow + 60000 }));
+  assert.strictEqual(c2._behavVerdict({ 'BTC/USDT': { trades: after } }, 'SOL/USDT', 'calm', _fakeNow + 120000).veto, true, 'après la mise à jour : le cerveau compte de nouveau');
+  const tomorrow = _fakeNow + 24 * 3600000;
+  const t2 = Array.from({ length: 40 }, () => ({ type: 'open', stakeUsdt: 5, ts: tomorrow - 3600000 }));
+  assert.strictEqual(c2._behavVerdict({ 'BTC/USDT': { trades: t2 } }, 'SOL/USDT', 'calm', tomorrow).veto, true, 'le lendemain : règle normale');
+});
 T('10e4 : module ≤ 500 lignes, lit uniquement S.pairStates, une seule horloge (locale)', () => {
   const src = fs.readFileSync('js/10e4-gardes-comportementales.js', 'utf8');
   assert.ok(src.split('\n').length <= 500);
@@ -128,9 +142,9 @@ T('HTML : 10e4 chargé juste après 10e3 et avant 10f, même token que DOC_V, an
   assert.ok(i3 > 0 && i4 > i3 && i5 > i4);
   assert.ok(!html.includes('20260906c') && !html.includes('20260906b') && !html.includes('20260906a'));
 });
-T('versions en tête : 10e4 = 20260927d ([PLAFOND DU CERVEAU · 27/09/2026], en-tête 20260906c gardé) ; 09c = token DOC_V', () => {
+T('versions en tête : 10e4 = 20260927e ([PLAFOND DU CERVEAU · 27/09/2026], en-tête 20260906c gardé) ; 09c = token DOC_V', () => {
   const tok = (html.match(/DOC_V = '([0-9a-z]+)'/) || [])[1];
-  const _s4 = fs.readFileSync('js/10e4-gardes-comportementales.js', 'utf8'); assert.ok(_s4.startsWith('// [PLAFOND DU CERVEAU · 27/09/2026] VERSION 20260927d') && _s4.split('\n').slice(0, 5).some(l => l.startsWith('// ▓▓▓ VERSION 20260906c ▓▓▓')));   // [PLAFOND DU CERVEAU · 27/09/2026] 10e4 relivré
+  const _s4 = fs.readFileSync('js/10e4-gardes-comportementales.js', 'utf8'); assert.ok(_s4.startsWith('// [PLAFOND DU CERVEAU · 27/09/2026] VERSION 20260927e') && _s4.split('\n').slice(0, 6).some(l => l.startsWith('// ▓▓▓ VERSION 20260906c ▓▓▓')));   // [PLAFOND DU CERVEAU · 27/09/2026] 10e4 relivré
   assert.ok(src09c.startsWith('// ▓▓▓ VERSION 20260926j ▓▓▓'));   // [NET 06/09] 09c non relivre
 });
 
