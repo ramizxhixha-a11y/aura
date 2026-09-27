@@ -1,3 +1,4 @@
+// [PLAFOND DU CERVEAU · 27/09/2026] VERSION 20260927d · une ouverture de bot se signale à l'entonnoir (window._openingBot) et marque son entrée « open » (bot) : le plafond d'ouvertures par jour du cerveau ne la compte ni ne la bloque
 // [SANS PLAFOND 15 % · 27/09/2026] VERSION 20260927c · trade de bot : plus de plafond 15 % du compte ni de 10 $ / 20 $ en dur — base = celle de l'entonnoir (mise de la paire, sinon le plancher), bornée comme tout trade par la politique de capital (Rams 06/07) ; idem pour les trades FORCE (toast honnête si l'entonnoir refuse)
 // [MISE AU MÉRITE · 27/09/2026] VERSION 20260927b · la mise d'un trade de bot suit son mérite (03 _botStakeMult : minimum / base / plus si avantage prouvé) ; en Réel, un bot n'ouvre qu'avec un avantage PROUVÉ et une paire rentable après frais
 // [SURVEILLANCE PERMANENTE · 27/09/2026] VERSION 20260927a · executePending(id, { auto }) : trade d'un bot marqué pos._bot (jugé à son résultat réel), refusé → affirmation ; Réel : un bot n'ouvre qu'avec des bases solides (paire à espérance nette apprise > 0, bot au mérite prouvé) ; mode de la proposition respecté ; Rééquilibrage auto sans position manuelle
@@ -1836,11 +1837,13 @@ function executePending(actionId, opts) {
         }
         if(!_reBlock && typeof autoOpenPosition === 'function') {
           const _t0 = Date.now(), _cl = S.chainLog || [], _last0 = _cl[_cl.length - 1];
-          autoOpenPosition(_pr, _sd, stake);
+          // [PLAFOND DU CERVEAU · 27/09/2026] l'entonnoir sait que c'est un bot : le plafond d'ouvertures par jour (fait pour le cerveau) ne le bloque pas
+          try { window._openingBot = _bot || null; autoOpenPosition(_pr, _sd, stake); } finally { window._openingBot = null; }
           const np = (S.openPositions || []).find(p => p && p.pair === _pr && (p.openedAt || 0) >= _t0);
           if (np) {
             _changed = true;
             if (_bot) { np._bot = _bot; np._botKind = action.type || ''; }   // jugé à SON résultat réel à la clôture (02)
+            try { const _trs = (ps && Array.isArray(ps.trades)) ? ps.trades : []; for (let _k = _trs.length - 1; _k >= Math.max(0, _trs.length - 5); _k--) { const _t = _trs[_k]; if (_t && _t.type === 'open' && (_t.ts || 0) >= _t0) { if (_bot) _t.bot = _bot; break; } } } catch(e) {}   // [PLAFOND DU CERVEAU · 27/09/2026] l'entrée « open » porte le bot : hors du compte du plafond du cerveau
             try { if (_bot && typeof _setBot === 'function') _setBot(_bot, 'active', `Trade ${_pr} ${String(_sd).toUpperCase()} ouvert (${action.type || 'occasion'})${_smTxt ? ' · ' + _smTxt + ' — ' + _sm.why : ''} · jugé à son résultat réel`); } catch(e) {}
             try { if (S.chainLog && _bot) { S.chainLog.push({ icon: '🤖', desc: _bn + ' · trade ' + _pr + ' ' + String(_sd).toUpperCase() + ' ouvert (' + (action.type || 'occasion') + ')' + (_smTxt ? ' · ' + _smTxt + ' ' + (Number(np.stakeUsdt) || stake).toFixed(1) + ' $' : ''), hash: typeof rndHash === 'function' ? rndHash() : '', time: typeof nowStr === 'function' ? nowStr() : '' }); if (S.chainLog.length > 100) S.chainLog.splice(0, S.chainLog.length - 100); } } catch(e) {}
             if(typeof showToast === 'function') showToast(_bot ? `🤖 ${_bn} · ${_pr} ${String(_sd).toUpperCase()} ouvert` : `✓ Trade ${_pr} ${String(_sd).toUpperCase()} exécuté`);

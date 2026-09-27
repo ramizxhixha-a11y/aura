@@ -213,4 +213,6 @@ Une régression de vérité = `VERDICT : NON LIVRABLE`, jamais « CONNU, tolér�
 
 - **27/09 — sans plafond 15 %** (`20260927c`) : le plafond de 15 % du compte sur les trades de bot et FORCE n'avait aucune raison (code d'origine de mai) et contredisait la politique de capital du 06/07 ; retiré — l'entonnoir borne ces trades comme les autres. Toast FORCE honnête.
 
+- **27/09 — plafond du cerveau** (`20260927d`) : le plafond d'ouvertures par jour (40 en CALM) comptait les trades des bots depuis leur surveillance permanente : atteint à 10:30, il bloquait tout, cerveau compris. Les ouvertures des bots ne comptent plus et ne sont plus bloquées ; le plafond reste pour le cerveau (jamais atteint : max 26 / jour).
+
 *Mis à jour à chaque mission. Le prochain audit complet : après 1b-b, sur un backup de 24 h propre.*

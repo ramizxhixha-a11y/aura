@@ -129,6 +129,14 @@ T('D8 · mise au mérite RÉELLE (03 _botStakeMult + 04) : moins de 5 actes → 
   c = withJ([]); c.S.pairStates['SOL/USDT'].stake = 10; run(c, '_fleetHeartbeat()'); assert.strictEqual(c.opens[0][3], 25, 'mise de paire « 10 » = défaut d\'époque → plancher, comme l\'entonnoir');
   c = withJ([].concat(J1(24, 1), J1(16, -1))); m = J(run(c, "_botStakeMult('arb_bot_v1')")); assert.strictEqual(m.mult, 1); assert.ok(m.lo < 0.5 && /pas encore prouvé/.test(m.why), JSON.stringify(m));
 });
+T('D9 · [PLAFOND DU CERVEAU 27/09] l\'entonnoir sait que l\'ouverture vient d\'un bot (window._openingBot, remis à zéro après) et son entrée « open » porte le bot — le plafond d\'ouvertures par jour du cerveau ne la compte pas', () => {
+  const c = mk({ propose: [{ type: 'dca', source: 'dca_bot_v1', action: 'open_trade', pair: 'BTC/USDT', side: 'long', payload: { pair: 'BTC/USDT', side: 'long' } }] });
+  c.S.pairStates['BTC/USDT'].trades = [];
+  c.autoOpenPosition = (pair, side, stake) => { c.seen = c.window._openingBot; c.S.pairStates[pair].trades.push({ type: 'open', stakeUsdt: stake, ts: Date.now() }); c.S.openPositions.push({ id: 'q1', pair, side, stakeUsdt: stake, openedAt: Date.now(), auto: true }); };
+  run(c, '_fleetHeartbeat()');
+  assert.strictEqual(c.seen, 'dca_bot_v1'); assert.strictEqual(c.window._openingBot, null, 'remis à zéro');
+  assert.strictEqual(c.S.pairStates['BTC/USDT'].trades[0].bot, 'dca_bot_v1');
+});
 T('S1 · textes : le battement (08) fait tourner la flotte de chaque mode et juge les affirmations à chaque tick ; l\'écran ne la fait plus tourner (accueil, onglet flotte) ; le bot d\'une position est jugé à la clôture sur son résultat réel ; plus de 30 min ni de 0,3 % dans le moteur', () => {
   const c08 = codeStrict(s08);
   const iExit = c08.indexOf('try { if (window._botExitSweep) window._botExitSweep(); } catch(e) {}'), iHb = c08.indexOf('try { if (window._fleetHeartbeat) window._fleetHeartbeat(); }'), iCyc = c08.indexOf('Object.entries(S.pairStates).forEach(([pair, ps]) => {', iHb);

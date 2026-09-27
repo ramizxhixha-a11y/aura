@@ -1,3 +1,4 @@
+// [PLAFOND DU CERVEAU · 27/09/2026] VERSION 20260927d · le plafond d'ouvertures par jour ne compte plus et ne bloque plus les trades des bots (ouverture marquée « bot ») — il reste pour le cerveau ; le refroidissement de 15 min après une perte s'applique à tous
 // ▓▓▓ VERSION 20260906c ▓▓▓
 // 10e4-gardes-comportementales.js — Gardes comportementales : cooldown par paire après perte,
 // mise ≤ précédente après perte, plafond d'ouvertures par jour selon le régime (décision 09c)
@@ -47,6 +48,7 @@ function _behavDayOpens(pairStates, now) {
     for (let i = tr.length - 1; i >= 0; i--) {
       const t = tr[i];
       if (!t || t.type !== 'open' || typeof t.ts !== 'number') continue;
+      if (t.bot) continue;   // [PLAFOND DU CERVEAU · 27/09/2026] ouverture d'un bot : sa cadence est réglée par son mérite (03 _botStakeMult), pas par ce plafond
       const td = new Date(t.ts);
       if (td.getFullYear() === y && td.getMonth() === m && td.getDate() === j) n++;
     }
@@ -55,7 +57,11 @@ function _behavDayOpens(pairStates, now) {
 }
 
 // Verdict pur : {veto, reason, coolLeftMin, stakeCap, lastLossUsd, dayCount, dayCap, regime}.
-function _behavVerdict(pairStates, pair, regime, now) {
+// [PLAFOND DU CERVEAU · 27/09/2026] opts.bot : l'ouverture vient d'un bot (04 executePending) — le plafond du jour ne s'applique pas à lui.
+// Posé le 06/09 contre l'excès de trades du CERVEAU (backups : jamais atteint, max 26 ouvertures / jour en EV) ; depuis que
+// les bots surveillent en permanence (20260927a), leurs ouvertures l'ont rempli dès 10:30 (capture Rams 27/09 10:45) et
+// bloquaient le cerveau le reste de la journée. Le refroidissement après perte et le plafond de mise s'appliquent à tous.
+function _behavVerdict(pairStates, pair, regime, now, opts) {
   const out = { veto: false, reason: null, coolLeftMin: 0, stakeCap: 0, lastLossUsd: 0, dayCount: 0, dayCap: Infinity, regime: regime };
   const ps = pairStates && pairStates[pair];
   const last = _behavLastClose(ps && ps.trades);
@@ -70,7 +76,7 @@ function _behavVerdict(pairStates, pair, regime, now) {
       return out;
     }
   }
-  out.dayCap = _behavRegimeCap(regime);
+  out.dayCap = (opts && opts.bot) ? Infinity : _behavRegimeCap(regime);
   out.dayCount = _behavDayOpens(pairStates, now);
   if (out.dayCount >= out.dayCap) {
     out.veto = true;
@@ -83,7 +89,8 @@ function _behavVerdict(pairStates, pair, regime, now) {
 function _behavGateForOpen(pair) {
   const regime = (typeof detectMarketRegime === 'function') ? detectMarketRegime() : 'calm';
   const pairStates = (typeof S !== 'undefined' && S && S.pairStates) ? S.pairStates : null;
-  return _behavVerdict(pairStates, pair, regime, Date.now());
+  const bot = (typeof window !== 'undefined' && window._openingBot) || null;   // [PLAFOND DU CERVEAU · 27/09/2026] posé par 04 le temps d'une ouverture de bot
+  return _behavVerdict(pairStates, pair, regime, Date.now(), bot ? { bot: bot } : null);
 }
 window._behavVerdict = _behavVerdict;
 window._behavGateForOpen = _behavGateForOpen;
