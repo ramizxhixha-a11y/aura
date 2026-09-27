@@ -1,3 +1,4 @@
+// [FREIN · 27/09/2026] VERSION 20260927f · commentaire de _botStakeMult : un bot au bilan négatif (mult 0) n'ouvre plus en EV (04) — sa « mise minimum » (plancher, 5 % du compte) valait la mise normale
 // [SANS PLAFOND 15 % · 27/09/2026] VERSION 20260927c · commentaire de _botStakeMult : plus de plafond 15 % (la mise d'un bot est bornée par la politique de capital de l'entonnoir, comme tout trade)
 // [MISE AU MÉRITE · 27/09/2026] VERSION 20260927b · _botStakeMult : la mise d'un bot suit son mérite mesuré — minimum s'il se trompe (précision pondérée ≤ 50 %), plus seulement si son avantage est PROUVÉ (borne basse de Wilson à 95 % > 50 %), sinon mise de base
 // [SURVEILLANCE PERMANENTE · 27/09/2026] VERSION 20260927a · flotte au rythme du système (_fleetHeartbeat, par mode en play) ; affirmations jugées dès que le marché tranche (±1 ATR, plus de 30 min ni de 0,3 %) ; une affirmation ouverte par bot / paire / sens ; Scalper sans pause globale ; Sauvetage qui repart après un flatten ; Rééquilibrage jamais sur une position manuelle
@@ -6175,7 +6176,8 @@ function _botJudgeMeasured(botId, value, kind) {
 // jugées, frais 0,2 % aller-retour, mises EV : base 75 $, minimum 52,5 $, plafond 157 $) — la version « mise proportionnelle à
 // la fitness dans les deux sens » montait la mise après des séries chanceuses de 5 à 10 actes et faisait PERDRE PLUS l'Arbitrage
 // (−6,73 $ contre −5,03 $) et le DCA (−3,93 $ contre −3,30 $). Retenu :
-//  · il se trompe au moins autant qu'il a raison (p ≤ 50 % : fitness ≤ 350, sur ≥ 5 actes) → mise minimum (plancher de l'entonnoir) ;
+//  · il se trompe au moins autant qu'il a raison (p ≤ 50 % : fitness ≤ 350, sur ≥ 5 actes) → mult 0 : [FREIN · 27/09/2026] en EV il n'ouvre plus (04
+//    executePending ; son occasion reste une affirmation). La « mise minimum » (plancher de l'entonnoir, 5 % du compte) valait la mise normale ;
 //  · avantage PROUVÉ — borne basse de Wilson à 95 % au-dessus de 50 %, sur l'effectif pondéré (Kish) → mise × (350 + 1000·(2·borne − 1)) / 350 :
 //    la loi du poids d'un agent dans le vote (proportionnel à sa fitness), appliquée à la part PROUVÉE seulement ; bornée par la politique
 //    de capital de l'entonnoir comme tout trade ([SANS PLAFOND 15 % · 27/09/2026] : le plafond de 15 % du compte, sans raison, est retiré) ;

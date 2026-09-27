@@ -142,9 +142,9 @@ T('HTML : 10e4 chargé juste après 10e3 et avant 10f, même token que DOC_V, an
   assert.ok(i3 > 0 && i4 > i3 && i5 > i4);
   assert.ok(!html.includes('20260906c') && !html.includes('20260906b') && !html.includes('20260906a'));
 });
-T('versions en tête : 10e4 = 20260927e ([PLAFOND DU CERVEAU · 27/09/2026], en-tête 20260906c gardé) ; 09c = token DOC_V', () => {
+T('versions en tête : 10e4 = 20260927f ([FREIN · 27/09/2026] commentaire, en-tête 20260906c gardé) ; 09c = token DOC_V', () => {
   const tok = (html.match(/DOC_V = '([0-9a-z]+)'/) || [])[1];
-  const _s4 = fs.readFileSync('js/10e4-gardes-comportementales.js', 'utf8'); assert.ok(_s4.startsWith('// [PLAFOND DU CERVEAU · 27/09/2026] VERSION 20260927e') && _s4.split('\n').slice(0, 6).some(l => l.startsWith('// ▓▓▓ VERSION 20260906c ▓▓▓')));   // [PLAFOND DU CERVEAU · 27/09/2026] 10e4 relivré
+  const _s4 = fs.readFileSync('js/10e4-gardes-comportementales.js', 'utf8'); assert.ok(_s4.startsWith('// [FREIN · 27/09/2026] VERSION 20260927f') && _s4.split('\n').slice(0, 6).some(l => l.startsWith('// ▓▓▓ VERSION 20260906c ▓▓▓')));   // [PLAFOND DU CERVEAU · 27/09/2026] 10e4 relivré
   assert.ok(src09c.startsWith('// ▓▓▓ VERSION 20260926j ▓▓▓'));   // [NET 06/09] 09c non relivre
 });
 

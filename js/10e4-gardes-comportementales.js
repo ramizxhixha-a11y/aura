@@ -1,3 +1,4 @@
+// [FREIN · 27/09/2026] VERSION 20260927f · commentaire corrigé : le plafond du jour a été atteint à 09:24 (backup Rams 10:54), pas à 10:30 — aucun changement de code
 // [PLAFOND DU CERVEAU · 27/09/2026] VERSION 20260927e · transition : le jour de la mise à jour, les ouvertures d'AVANT (bots et cerveau mêlés, non marquées) ne comptent plus pour le cerveau — sinon il restait bloqué jusqu'à minuit
 // [PLAFOND DU CERVEAU · 27/09/2026] VERSION 20260927d · le plafond d'ouvertures par jour ne compte plus et ne bloque plus les trades des bots (ouverture marquée « bot ») — il reste pour le cerveau ; le refroidissement de 15 min après une perte s'applique à tous
 // ▓▓▓ VERSION 20260906c ▓▓▓
@@ -69,7 +70,7 @@ function _behavDayOpens(pairStates, now) {
 // Verdict pur : {veto, reason, coolLeftMin, stakeCap, lastLossUsd, dayCount, dayCap, regime}.
 // [PLAFOND DU CERVEAU · 27/09/2026] opts.bot : l'ouverture vient d'un bot (04 executePending) — le plafond du jour ne s'applique pas à lui.
 // Posé le 06/09 contre l'excès de trades du CERVEAU (backups : jamais atteint, max 26 ouvertures / jour en EV) ; depuis que
-// les bots surveillent en permanence (20260927a), leurs ouvertures l'ont rempli dès 10:30 (capture Rams 27/09 10:45) et
+// les bots surveillent en permanence (20260927a), leurs ouvertures l'ont rempli à 09:24 (backup Rams 27/09 10:54 ; 10:30 écrit avant, faux) et
 // bloquaient le cerveau le reste de la journée. Le refroidissement après perte et le plafond de mise s'appliquent à tous.
 function _behavVerdict(pairStates, pair, regime, now, opts) {
   const out = { veto: false, reason: null, coolLeftMin: 0, stakeCap: 0, lastLossUsd: 0, dayCount: 0, dayCap: Infinity, regime: regime };
