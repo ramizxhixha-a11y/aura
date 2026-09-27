@@ -211,4 +211,6 @@ Une régression de vérité = `VERDICT : NON LIVRABLE`, jamais « CONNU, tolér�
 
 - **27/09 — mise au mérite** (`20260927b`) : la mise d'un bot suit son mérite mesuré — minimum s'il se trompe, plus seulement si son avantage est prouvé (Wilson 95 %). Rejeu : la version proportionnelle simple faisait perdre plus l'Arbitrage et le DCA (séries chanceuses) ; la version retenue réduit les pertes des bots de 18 %. En Réel, avantage prouvé exigé.
 
+- **27/09 — sans plafond 15 %** (`20260927c`) : le plafond de 15 % du compte sur les trades de bot et FORCE n'avait aucune raison (code d'origine de mai) et contredisait la politique de capital du 06/07 ; retiré — l'entonnoir borne ces trades comme les autres. Toast FORCE honnête.
+
 *Mis à jour à chaque mission. Le prochain audit complet : après 1b-b, sur un backup de 24 h propre.*

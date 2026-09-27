@@ -1,3 +1,4 @@
+// [SANS PLAFOND 15 % · 27/09/2026] VERSION 20260927c · trade de bot : plus de plafond 15 % du compte ni de 10 $ / 20 $ en dur — base = celle de l'entonnoir (mise de la paire, sinon le plancher), bornée comme tout trade par la politique de capital (Rams 06/07) ; idem pour les trades FORCE (toast honnête si l'entonnoir refuse)
 // [MISE AU MÉRITE · 27/09/2026] VERSION 20260927b · la mise d'un trade de bot suit son mérite (03 _botStakeMult : minimum / base / plus si avantage prouvé) ; en Réel, un bot n'ouvre qu'avec un avantage PROUVÉ et une paire rentable après frais
 // [SURVEILLANCE PERMANENTE · 27/09/2026] VERSION 20260927a · executePending(id, { auto }) : trade d'un bot marqué pos._bot (jugé à son résultat réel), refusé → affirmation ; Réel : un bot n'ouvre qu'avec des bases solides (paire à espérance nette apprise > 0, bot au mérite prouvé) ; mode de la proposition respecté ; Rééquilibrage auto sans position manuelle
 // [MASQUE CORRIGÉ · 26/09/2026] VERSION 20260926p · « Apprentissage accéléré » (modes ×3 / ×8, session rejouée, boost +50 / +200 : fitness écrite sans jugement) remplacé par « Apprentissage réel » ; Déblocages : « Faire évoluer agents cassés »
@@ -1817,12 +1818,20 @@ function executePending(actionId, opts) {
           _reWhy = !_botOk ? (_sm ? _sm.why : 'mérite inconnu') : 'paire pas rentable après frais (espérance apprise)';
         }
         const ps = S.pairStates[_pr];
-        let stake = Math.max(10, Math.min(S.tradingAccount * 0.15, ps?.stake || 20));
-        // [MISE AU MÉRITE · 27/09/2026] mise au mérite : minimum s'il se trompe, plus s'il a un avantage PROUVÉ (plafond 15 % du compte), sinon base
+        // [SANS PLAFOND 15 % · 27/09/2026] Rams : « pourquoi un plafond de 15 % du compte trading ? ». Il n'avait pas de raison : ligne d'origine du
+        // code des propositions (mai 2026 : max(10 $, min(15 % du compte, mise de la paire || 20 $))), gardée telle quelle en 20260927b.
+        // Elle contredisait ta politique de capital du 06/07 (quasi-totalité investie, bornée au disponible moins la couverture des
+        // frais, divisée par les emplacements libres — le repli arbitraire à 25 % avait été retiré) : un bot au mérite PROUVÉ était
+        // bridé là où un trade du cerveau ne l'est pas. Base = celle que l'entonnoir prendrait (09c : mise de la paire, sinon le
+        // plancher ; « 10 » = défaut d'époque, pas un choix) ; la mise au mérite s'applique dessus ; l'entonnoir la borne comme tout
+        // trade (enveloppe / emplacements libres, exposition totale, anti-négatif).
+        const _fl = (typeof _stakeFloor === 'function') ? _stakeFloor() : 10;
+        let stake = (ps && ps.stake > 0 && ps.stake !== 10) ? ps.stake : _fl;
+        // [MISE AU MÉRITE · 27/09/2026] mise au mérite : minimum s'il se trompe, plus s'il a un avantage PROUVÉ, sinon base
         let _smTxt = '';
         if (_sm) {
-          if (_sm.mult <= 0) stake = (typeof _stakeFloor === 'function') ? _stakeFloor() : 10;
-          else if (_sm.mult > 1) stake = Math.min(S.tradingAccount * 0.15, stake * _sm.mult);
+          if (_sm.mult <= 0) stake = _fl;
+          else if (_sm.mult > 1) stake = stake * _sm.mult;
           _smTxt = _sm.mult <= 0 ? 'mise minimum' : (_sm.mult > 1 ? 'mise ×' + _sm.mult.toFixed(2) : 'mise de base');
         }
         if(!_reBlock && typeof autoOpenPosition === 'function') {
@@ -1978,14 +1987,19 @@ function forceTrade(direction) {
   // Execute trade with default stake
   try {
     const ps = S.pairStates[pair];
-    const stake = Math.max(10, Math.min(S.tradingAccount * 0.15, ps?.stake || 20));
+    // [SANS PLAFOND 15 % · 27/09/2026] même base que l'entonnoir (mise de la paire, sinon le plancher) : le plafond de 15 % du compte
+    // (code d'origine de mai, sans raison) bridait aussi tes trades FORCE ; l'entonnoir les borne par ta politique de capital.
+    const _fl = (typeof _stakeFloor === 'function') ? _stakeFloor() : 10;
+    const stake = (ps && ps.stake > 0 && ps.stake !== 10) ? ps.stake : _fl;
     if(typeof autoOpenPosition === 'function') {
       // Temporarily set botAutoMode true so the trade goes through (respecting user intent)
       const wasAuto = S.botAutoMode;
       if(S.botAutoMode === false) S.botAutoMode = true;
+      const _t0 = Date.now();
       autoOpenPosition(pair, direction, stake);
       S.botAutoMode = wasAuto;
-      if(typeof showToast === 'function') showToast(`🎯 Trade forcé · ${pair} ${direction.toUpperCase()}`);
+      const _opened = (S.openPositions || []).some(p => p && p.pair === pair && (p.openedAt || 0) >= _t0);
+      if(typeof showToast === 'function') showToast(_opened ? `🎯 Trade forcé · ${pair} ${direction.toUpperCase()}` : `⛔ ${pair} ${direction.toUpperCase()} refusé par l'entonnoir`);
       if(!S.brainLog) S.brainLog = [];
       S.brainLog.unshift({ ts: Date.now(), pair, event:'FORCE', side:direction, reason:'Décision utilisateur' });
       if(S.brainLog.length > 30) S.brainLog.length = 30;

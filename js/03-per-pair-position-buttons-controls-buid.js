@@ -1,3 +1,4 @@
+// [SANS PLAFOND 15 % · 27/09/2026] VERSION 20260927c · commentaire de _botStakeMult : plus de plafond 15 % (la mise d'un bot est bornée par la politique de capital de l'entonnoir, comme tout trade)
 // [MISE AU MÉRITE · 27/09/2026] VERSION 20260927b · _botStakeMult : la mise d'un bot suit son mérite mesuré — minimum s'il se trompe (précision pondérée ≤ 50 %), plus seulement si son avantage est PROUVÉ (borne basse de Wilson à 95 % > 50 %), sinon mise de base
 // [SURVEILLANCE PERMANENTE · 27/09/2026] VERSION 20260927a · flotte au rythme du système (_fleetHeartbeat, par mode en play) ; affirmations jugées dès que le marché tranche (±1 ATR, plus de 30 min ni de 0,3 %) ; une affirmation ouverte par bot / paire / sens ; Scalper sans pause globale ; Sauvetage qui repart après un flatten ; Rééquilibrage jamais sur une position manuelle
 // [MASQUE CORRIGÉ · 26/09/2026] VERSION 20260926p · « Revigorer » (400 T$, même génome, fenêtre vidée) remplacé par « Faire évoluer maintenant » (_evolveBrokenNow : évolution réelle) ; revigoration forcée des bots retirée (bots et Évolueur jugés sur leurs actes)
@@ -6176,7 +6177,8 @@ function _botJudgeMeasured(botId, value, kind) {
 // (−6,73 $ contre −5,03 $) et le DCA (−3,93 $ contre −3,30 $). Retenu :
 //  · il se trompe au moins autant qu'il a raison (p ≤ 50 % : fitness ≤ 350, sur ≥ 5 actes) → mise minimum (plancher de l'entonnoir) ;
 //  · avantage PROUVÉ — borne basse de Wilson à 95 % au-dessus de 50 %, sur l'effectif pondéré (Kish) → mise × (350 + 1000·(2·borne − 1)) / 350 :
-//    la loi du poids d'un agent dans le vote (proportionnel à sa fitness), appliquée à la part PROUVÉE seulement ; plafond 15 % du compte ;
+//    la loi du poids d'un agent dans le vote (proportionnel à sa fitness), appliquée à la part PROUVÉE seulement ; bornée par la politique
+//    de capital de l'entonnoir comme tout trade ([SANS PLAFOND 15 % · 27/09/2026] : le plafond de 15 % du compte, sans raison, est retiré) ;
 //  · sinon (moins de 5 actes, ou avantage pas encore prouvé) → mise de base.
 // Rejeu : pertes des bots −18 % (−22,31 $ → −18,27 $), le Scalper à la mise minimum sur 60 de ses 71 trades ; aucun bot prouvé.
 function _botStakeMult(botId) {

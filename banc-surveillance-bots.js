@@ -114,7 +114,7 @@ T('D7 · Rééquilibrage RÉEL : ne propose jamais de fermer une position manuel
   c.W.paperReal.openPositions[0].auto = true; run(c, 'botRebalance()');
   assert.deepStrictEqual(c.S.pendingActions.map(a => [a.type, a.pair]), [['rebalance', 'SOL/USDT']]);
 });
-T('D8 · mise au mérite RÉELLE (03 _botStakeMult + 04) : moins de 5 actes → base ; se trompe (précision pondérée ≤ 50 %) → mise minimum (plancher) ; 6 sur 6 → avantage prouvé (Wilson 95 % : 61 %) → ×1,63, plafond 15 % ; 60 % sur 40 → pas encore prouvé (Wilson 45 %) → base', () => {
+T('D8 · mise au mérite RÉELLE (03 _botStakeMult + 04) : moins de 5 actes → base ; se trompe (précision pondérée ≤ 50 %) → mise minimum (plancher) ; 6 sur 6 → avantage prouvé (Wilson 95 % : 61 %) → ×1,63, sans plafond 15 % ([SANS PLAFOND 15 % 27/09] l\'entonnoir borne) ; 60 % sur 40 → pas encore prouvé (Wilson 45 %) → base', () => {
   const P = [{ type: 'arb', source: 'arb_bot_v1', action: 'open_trade', pair: 'SOL/USDT', side: 'long', payload: { pair: 'SOL/USDT', side: 'long' } }];
   const withJ = (js) => { const c = mk({ propose: P }); c.S.agents[0]._judgments = js; c.S.stakeFloorPct = 0.05; c._stakeFloor = () => Math.max(2, c.S.tradingAccount * 0.05); return c; };
   const J1 = (n, s, w) => Array.from({ length: n }, () => ({ s, w: w || 1, k: 0 }));
@@ -124,7 +124,9 @@ T('D8 · mise au mérite RÉELLE (03 _botStakeMult + 04) : moins de 5 actes → 
   assert.ok(/mise minimum 25\.0 \$$/.test(c.S.chainLog[0].desc), c.S.chainLog[0].desc);
   c = withJ(J1(6, 1)); m = J(run(c, "_botStakeMult('arb_bot_v1')")); assert.ok(Math.abs(m.lo - 0.61) < 0.005 && Math.abs(m.mult - 1.63) < 0.01, JSON.stringify(m));
   run(c, '_fleetHeartbeat()'); assert.ok(Math.abs(c.opens[0][3] - 32.5) < 0.2, 'base 20 × 1,63');
-  c = withJ(J1(60, 1)); c.S.pairStates['SOL/USDT'].stake = 40; m = J(run(c, "_botStakeMult('arb_bot_v1')")); assert.ok(m.mult > 3.4, JSON.stringify(m)); run(c, '_fleetHeartbeat()'); assert.strictEqual(c.opens[0][3], 75, 'plafond 15 % du compte (500 $)');
+  c = withJ(J1(60, 1)); c.S.pairStates['SOL/USDT'].stake = 40; m = J(run(c, "_botStakeMult('arb_bot_v1')")); assert.ok(m.mult > 3.4, JSON.stringify(m)); run(c, '_fleetHeartbeat()');
+  assert.ok(Math.abs(c.opens[0][3] - 40 * m.mult) < 0.01 && c.opens[0][3] > 75, 'plus de plafond 15 % (75 $) : ' + c.opens[0][3]);   // [SANS PLAFOND 15 % 27/09] l'entonnoir (09c) borne par la politique de capital
+  c = withJ([]); c.S.pairStates['SOL/USDT'].stake = 10; run(c, '_fleetHeartbeat()'); assert.strictEqual(c.opens[0][3], 25, 'mise de paire « 10 » = défaut d\'époque → plancher, comme l\'entonnoir');
   c = withJ([].concat(J1(24, 1), J1(16, -1))); m = J(run(c, "_botStakeMult('arb_bot_v1')")); assert.strictEqual(m.mult, 1); assert.ok(m.lo < 0.5 && /pas encore prouvé/.test(m.why), JSON.stringify(m));
 });
 T('S1 · textes : le battement (08) fait tourner la flotte de chaque mode et juge les affirmations à chaque tick ; l\'écran ne la fait plus tourner (accueil, onglet flotte) ; le bot d\'une position est jugé à la clôture sur son résultat réel ; plus de 30 min ni de 0,3 % dans le moteur', () => {
@@ -137,6 +139,7 @@ T('S1 · textes : le battement (08) fait tourner la flotte de chaque mode et jug
   assert.ok(codeStrict(s02).includes("try { if (pos._bot && typeof _botJudgeMeasured === 'function') { _botJudgeMeasured(pos._bot, realisedPct, 'trade');"));   // [MISE AU MÉRITE 27/09] en %
   const eng = codeStrict(ENGINE); ['BOT_AUDIT_MS', 'BOT_AUDIT_MIN_MOVE', 'BOT_AUDIT_MAX_AGE', '30 * 60 * 1000', '0.003'].forEach(k => assert.ok(!eng.includes(k), 'reste : ' + k));
   assert.ok(codeStrict(s04).includes("if (action.mode && action.mode !== S.tradingMode) continue;") && codeStrict(s04).includes('executePending(action.id, { auto: true });'));
+  assert.ok(!codeStrict(s04).includes('S.tradingAccount * 0.15'), '[SANS PLAFOND 15 % 27/09] plus de plafond 15 % du compte');
 });
 console.log('\n' + (fail ? '❌ ' : '✅ ') + pass + '/' + (pass + fail) + ' tests passés' + (fail ? ' — ' + fail + ' ÉCHEC(S)' : ''));
 process.exit(fail ? 1 : 0);
