@@ -1,3 +1,4 @@
+// [SENS CONTRAIRE · 27/09/2026] VERSION 20260927j · chaque décision de cycle (EV / RE) est aussi jugée dans le SENS CONTRAIRE comme trade virtuel à 5 horizons (sa propre perte max, même preuve, listes à part), sur les seules décisions notées à partir de cette version — mesuré seulement, rien n'est tradé dans ce sens ; le sens décidé est inchangé (go Rams 27/09 19:31)
 // [HORIZONS APPRIS · 27/09/2026] VERSION 20260927i · chaque décision de cycle (EV / RE) jugée à 5 horizons (1, 2, 4, 8, 16 bougies = 15 min à 4 h en 15 min) avec la perte max du vrai trade ; un seuil prouvé par horizon et par pas de temps (5 niveaux de conviction, ≥ 30 trades et ≥ 20 créneaux, Student au niveau Φ(−2) / 25) ; _thPick choisit l'horizon à tenir (la meilleure moyenne par bougie tenue parmi ceux que la conviction atteint)
 // [SEUIL APPRIS · 27/09/2026] VERSION 20260927h · moteur du seuil d'ouverture appris : chaque décision de cycle (EV / RE) devient un trade virtuel (entrée au dernier prix réel, sortie H bougies plus tard, net de frais) jugé sans jamais inventer de prix (_thNote / _thJudge) ; le seuil = le niveau de conviction dont les trades virtuels ont prouvé gagner (≥ 30 trades, ≥ 10 créneaux, moyenne au-dessus de zéro de plus de 2 erreurs types prises par créneau, recouvrement compris), sinon marché fermé (_thEval / _thLevel)
 // [DÉCISION COMMUNE · 27/09/2026] VERSION 20260927g · moteur de la décision commune : voix de chaque bot sur LA paire (_botView), bilan mesuré (_dcMerit), consensus (_dcConsensus), bilan pris SUR L'AVENIR (_dcForwardJudge : votes du cycle précédent jugés sur le mouvement survenu depuis) ; _agentPairVote lit le vote tel qu'il était au moment du pari
@@ -6491,6 +6492,22 @@ function _dcSnapVotes(pair, ps, composite) {
 // Rejeu avant livraison (app réelle en accéléré, 81 h, 9 fenêtres, 2 tirages) : décision commune seule (20260927g) : tirage 1 146 trades, net −9,24 $ ; tirage 2 122 trades, net −9,98 $ — avec les horizons appris (ce code) : tirage 1 0 trades, net 0 $ ; tirage 2 0 trades, net 0 $.
 // Trades virtuels du rejeu, net moyen par horizon (tous niveaux) : tirage 1 (4091 décisions) : 15 min −0,28 %/trade (≥ 0,4 : −0,46 %) ; 30 min −0,29 %/trade (≥ 0,4 : −0,49 %) ; 1 h −0,27 %/trade (≥ 0,4 : −0,54 %) ; 2 h −0,26 %/trade (≥ 0,4 : −0,66 %) ; 4 h −0,32 %/trade (≥ 0,4 : −1,13 %) — tirage 2 (4091 décisions) : 15 min −0,31 %/trade (≥ 0,4 : −0,44 %) ; 30 min −0,31 %/trade (≥ 0,4 : −0,48 %) ; 1 h −0,30 %/trade (≥ 0,4 : −0,57 %) ; 2 h −0,31 %/trade (≥ 0,4 : −0,73 %) ; 4 h −0,37 %/trade (≥ 0,4 : −0,97 %).
 // Simulation (cette fonction _thEval, 24 historiques de 8 jours calibrés sur le rejeu) : sans avantage : 0 % des historiques de 8 jours ouverts au moins une fois (0,0 % du temps) ; net exactement nul partout : 17 % des historiques de 8 jours ouverts au moins une fois (0,2 % du temps, 23 décisions ouvertes, net moyen +0,13 %) ; net −0,03 % partout : 0 % des historiques de 8 jours ouverts au moins une fois (0,0 % du temps) ; tout perdant, presque à l'équilibre en haut : 0 % des historiques de 8 jours ouverts au moins une fois (0,0 % du temps) ; vrai avantage aux horizons longs : 4 % des historiques de 8 jours ouverts au moins une fois (0,1 % du temps, 1 décision ouverte, net moyen −2,27 %) ; avantage fort dès 1 h : 92 % des historiques de 8 jours ouverts au moins une fois (38,1 % du temps, 3416 décisions ouvertes, net moyen +0,19 %).
+// ═══ [SENS CONTRAIRE · 27/09/2026] LE SENS CONTRAIRE, JUGÉ AUSSI — MESURÉ SEULEMENT (go Rams 27/09 19:31) ═══
+// Rejeu 20260927i (81 h) : au-dessus de 0,4, la décision commune se trompait de sens environ 2 fois sur 3, de 15 min à 4 h. Piste, pas preuve :
+// 116 à 193 décisions très liées selon l'horizon et le tirage (sans le biais de fin de fenêtre), et la piste vient de ces mêmes données. Désormais chaque décision notée engendre AUSSI son trade virtuel
+// CONTRAIRE : même entrée (dernier prix réel), mêmes sorties, même coût, et SA perte max — celle qu'aurait le vrai trade dans ce sens (10f :
+// même formule, avec le bonus des signaux techniques de SON sens), touchée par les mouvements qui servent le sens décidé. Il est jugé par
+// les MÊMES règles, par construction : _thWalk (le chemin et les horizons, extraits mot pour mot de _thJudge) sert aux deux sens.
+// Il vit À PART (T.pendC, T.recC, T.rulesC, T.dirtyC) : les listes, les créneaux et le calendrier de recalcul du sens décidé sont ceux
+// d'avant — le sens décidé est inchangé. Même preuve (_thEval, 5 niveaux, Student Φ(−2)/25, ≥ 30 trades, ≥ 20 créneaux, un résultat par
+// horizon). Seules les décisions notées à partir de cette version comptent (T.ctSince) : la piste est jugée sur des données qu'elle n'a pas
+// vues. Son seuil se recalcule dans une tâche à part (hors du chemin de trading), au plus toutes les 5 min après de nouveaux jugements et dès
+// qu'il a plus d'une bougie. Rien n'est tradé dans ce sens : _thLevel, _thPick et l'ouverture (10f) ne lisent que le sens décidé.
+// Journal 🎚 quand le sens contraire devient prouvé, change de niveau ou cesse de l'être ; écran 🧠 Appris : un état par horizon.
+// Rejeu avant livraison (app réelle en accéléré, 81 h, 9 fenêtres, 2 tirages, ce code) : tirage 1 : 0 trades, net 0 $ ; tirage 2 : 0 trades, net 0 $ ; 0 erreur.
+// Sens contraire au rejeu — MÊMES données que la piste, donc pas une preuve (la mesure en ligne repart de zéro) : tirage 1 (4091 décisions) : 15 min −0,25 %/trade (≥ 0,4 : −0,13 %, bon sens 62 %) ; 30 min −0,24 %/trade (≥ 0,4 : −0,07 %, bon sens 60 %) ; 1 h −0,25 %/trade (≥ 0,4 : +0,01 %, bon sens 55 %) ; 2 h −0,25 %/trade (≥ 0,4 : +0,01 %, bon sens 55 %) ; 4 h −0,25 %/trade (≥ 0,4 : +0,31 %, bon sens 63 %) — tirage 2 (4091 décisions) : 15 min −0,24 %/trade (≥ 0,4 : −0,06 %, bon sens 66 %) ; 30 min −0,23 %/trade (≥ 0,4 : −0,03 %, bon sens 63 %) ; 1 h −0,24 %/trade (≥ 0,4 : +0,04 %, bon sens 62 %) ; 2 h −0,26 %/trade (≥ 0,4 : +0,02 %, bon sens 53 %) ; 4 h −0,32 %/trade (≥ 0,4 : +0,15 %, bon sens 56 %).
+// Preuve ponctuelle : rejeu différentiel contre 20260927i (150 scénarios de 500 pas + 8 de 6 h à la seconde, tâches asynchrones, EV et RE sur
+// des pas de temps différents) — sens décidé identique à chaque pas ; sens contraire identique au moteur 20260927i nourri du signal inversé.
 var TH_MIN_N = 30, TH_MIN_B = 20, TH_HZ = [1, 2, 4, 8, 16], TH_TOP = [1, 0.5, 0.25, 0.1, 0.05], TH_REC_MAX = 8000, TH_PEND_MAX = 2000;
 var TH_ALPHA = 0.0227501319481792 / (TH_HZ.length * TH_TOP.length);   // Φ(−2) = 0,02275 (2 erreurs types, un côté) partagé entre les 25 essais
 // Inverse de la loi normale (Acklam, erreur relative < 1,2e-9).
@@ -6520,6 +6537,11 @@ function _thState() {
   if (!Array.isArray(T.pend)) T.pend = [];
   if (!T.rules || typeof T.rules !== 'object') T.rules = {};
   if (!T.dirty || typeof T.dirty !== 'object') T.dirty = {};   // par pas de temps : de nouveaux jugements attendent le recalcul de CE seuil
+  // [SENS CONTRAIRE · 27/09/2026] le sens contraire vit à part, jamais mêlé au sens décidé : en attente, jugés, seuil, recalcul
+  if (!Array.isArray(T.pendC)) T.pendC = [];
+  if (!Array.isArray(T.recC)) T.recC = [];
+  if (!T.rulesC || typeof T.rulesC !== 'object') T.rulesC = {};
+  if (!T.dirtyC || typeof T.dirtyC !== 'object') T.dirtyC = {};
   // 20260927h (un seul horizon, rule.h) : ses trades jugés deviennent les résultats de cet horizon s'il est dans la grille ; ses trades en
   // attente (quelques heures au plus) sont abandonnés ; un seuil par pas de temps désormais (T.rules)
   if (Array.isArray(T.obs)) {
@@ -6540,7 +6562,7 @@ function _thCandle(arr, ts) {
 }
 // La décision d'un cycle (10f, bougie close, EV / RE) devient un trade virtuel : entrée au dernier prix réel (refusé s'il a plus de 2 min),
 // sortie à la clôture de la bougie qui contient « maintenant + h bougies » pour chaque horizon h, perte max capPct (même formule que le vrai).
-function _thNote(pair, signal, capPct) {
+function _thNote(pair, signal, capPct, capPctC) {
   try {
     if (!_thRealLike()) return false;
     const s = Number(signal); if (!(Math.abs(s) > 0)) return false;
@@ -6561,8 +6583,70 @@ function _thNote(pair, signal, capPct) {
     T.pend.push({ p: pair, k: k, t: tn, px: px, d: s > 0 ? 1 : -1, c: Math.round(Math.abs(s) * 1000) / 1000, f: f, tf: tf,
       cap: Math.round(cap * 1000) / 1000, x: TH_HZ.map(h => Math.floor((tn + h * f) / f) * f), n: TH_HZ.map(() => null),
       s: s0 - f, s0: s0, el: cur ? Number(cur.l) : px, eh: cur ? Number(cur.h) : px, hit: 0 });
+    // [SENS CONTRAIRE · 27/09/2026] le même trade dans l'autre sens, avec SA perte max (10f : bonus des signaux techniques de son sens ; sinon la même)
+    if (T.pendC.length < TH_PEND_MAX) {
+      const q0 = T.pend[T.pend.length - 1], capC = Math.min(3, Math.max(1.5, Number(capPctC) || cap));
+      T.pendC.push(Object.assign({}, q0, { d: -q0.d, cap: Math.round(capC * 1000) / 1000, x: q0.x.slice(), n: q0.n.map(() => null), hit: 0 }));
+      if (!(T.ctSince > 0)) T.ctSince = tn;   // début de la mesure : décisions nouvelles seulement
+    }
     return true;
   } catch (e) { return false; }
+}
+// [SENS CONTRAIRE · 27/09/2026] Un trade virtuel en attente (sens décidé OU contraire) : son chemin sur les bougies closes, puis chaque horizon
+// dont la bougie de sortie est close. Corps de _thJudge d'avant, mot pour mot : les deux sens suivent exactement les mêmes règles. Rend le
+// nombre d'horizons jugés (n), s'il en reste en attente (open) et le pas de temps (f).
+function _thWalk(q, cost, now) {
+  const f = q.f || _thTfMs(q.tf), arr = (S.realCandles && S.realCandles[q.p] && S.realCandles[q.p][q.tf]) || [];
+  let cut = 0, n = 0;
+  for (let i = 0; i < arr.length - 1; i++) {   // la dernière bougie est en cours : jamais lue
+    const b = arr[i]; if (!b || !(b.ts > q.s)) continue;
+    if (b._gap || b.ts > q.s + f) { cut = (b.ts > q.s + f) ? q.s + f : b.ts; break; }   // bouche-trou ou bougie manquante : chemin inconnu
+    let lo = Number(b.l), hi = Number(b.h);
+    if (b.ts === q.s0) { lo = lo < q.el ? lo : Infinity; hi = hi > q.eh ? hi : -Infinity; }   // bougie d'entrée : seuls ses extrêmes nouveaux sont d'après l'entrée
+    const adv = q.d > 0 ? (q.px - lo) / q.px * 100 : (hi - q.px) / q.px * 100;
+    if (!q.hit && adv >= q.cap) q.hit = b.ts;
+    q.s = b.ts;
+  }
+  let open = false;
+  q.x.forEach((x, i) => {
+    if (q.n[i] !== null) return;   // déjà jugé (nombre) ou abandonné (false)
+    if (q.hit && q.hit <= x) { q.n[i] = Math.round((-q.cap - cost) * 10000) / 10000; n++; return; }
+    if (cut && x >= cut - f) { q.n[i] = false; return; }   // la sortie tombe dans une coupure ou juste avant : prix inconnu
+    const j = _thCandle(arr, x);
+    if (j >= 0 && j < arr.length - 1 && q.s >= x && !arr[j]._gap && !(arr[j + 1] && arr[j + 1]._gap) && Number(arr[j].c) > 0) {
+      const mv = (Number(arr[j].c) - q.px) / q.px * 100;
+      q.n[i] = Math.round((q.d * mv - cost) * 10000) / 10000; n++; return;
+    }
+    if (now > x + 4 * f) { q.n[i] = false; return; }   // série coupée ou paire retirée : abandonné
+    open = true;
+  });
+  return { n: n, open: open, f: f };
+}
+// [SENS CONTRAIRE · 27/09/2026] Les trades virtuels contraires : mêmes règles (_thWalk), leurs propres listes, forme compacte en ENTIERS COURTS
+// [conviction × 1000, heure (s) − TH_CT_T0, pas (min), 5 nets × 10 000] — deux fois plus rapide à sauvegarder, relue à l'identique. Leur seuil se
+// recalcule dans une tâche à part (hors du chemin de trading), pour le pas de temps du mode qui l'a demandé (08 traite EV et RE à tour de
+// rôle), au plus toutes les 5 min après de nouveaux jugements et dès qu'il a plus d'une bougie ; une demande restée sans suite 60 s est refaite.
+var _thCtBusy = {}, TH_CT_T0 = 1700000000;   // origine de l'heure de la forme compacte contraire (s)
+function _thJudgeC(T) {
+  const now = Date.now(), f0 = _thTfMs(_thTf()), fm = f0 / 60000, RC = T.rulesC[fm];
+  if (T.pendC.length) {
+    const cost = (typeof _ownStakeCostPct === 'function') ? Number(_ownStakeCostPct()) || 0 : 0, keep = [];
+    T.pendC.forEach(q => {
+      if (!q || !(q.px > 0) || !Array.isArray(q.x) || !Array.isArray(q.n)) return;
+      const w = _thWalk(q, cost, now);
+      if (w.n > 0) T.dirtyC[Math.round(w.f / 60000)] = true;
+      if (w.open) keep.push(q);
+      else T.recC.push([Math.round(q.c * 1000), Math.round(q.t / 1000) - TH_CT_T0, Math.round(w.f / 60000)].concat(q.n.map(v => (typeof v === 'number' ? Math.round(v * 10000) : false))));
+    });
+    T.pendC = keep;
+  }
+  const due = RC ? ((T.dirtyC[fm] && now - RC.t >= 300000) || now - RC.t > f0) : (T.recC.length + T.pendC.length > 0);
+  const b0 = _thCtBusy[fm] || 0;
+  if (due && !(b0 > 0 && now - b0 < 60000)) {
+    _thCtBusy[fm] = now > 0 ? now : 1;
+    const go = () => { _thCtBusy[fm] = 0; _thRefreshC(f0); };
+    if (typeof setTimeout === 'function') setTimeout(go, 0); else go();
+  }
 }
 // Trades virtuels : chemin parcouru sur les bougies CLOSES, dans l'ordre (perte max touchée après l'entrée ? coupure ? bougie manquante ?),
 // puis chaque horizon dont la bougie de sortie est close est jugé : perte max touchée avant ou pendant → −perte max − coût ; sinon sens ×
@@ -6570,38 +6654,17 @@ function _thNote(pair, signal, capPct) {
 function _thJudge() {
   try {
     if (!_thRealLike()) return 0;
-    const T = _thState(); if (!T.pend.length) return 0;
+    const T = _thState();
+    try { _thJudgeC(T); } catch (e) {}   // [SENS CONTRAIRE · 27/09/2026] à part, avant le sens décidé, sans effet sur lui
+    if (!T.pend.length) return 0;
     const cost = (typeof _ownStakeCostPct === 'function') ? Number(_ownStakeCostPct()) || 0 : 0;
     const now = Date.now(); let n = 0; const keep = [], dm = {};
     T.pend.forEach(q => {
       if (!q || !(q.px > 0) || !Array.isArray(q.x) || !Array.isArray(q.n)) return;
-      const n0 = n;
-      const f = q.f || _thTfMs(q.tf), arr = (S.realCandles && S.realCandles[q.p] && S.realCandles[q.p][q.tf]) || [];
-      let cut = 0;
-      for (let i = 0; i < arr.length - 1; i++) {   // la dernière bougie est en cours : jamais lue
-        const b = arr[i]; if (!b || !(b.ts > q.s)) continue;
-        if (b._gap || b.ts > q.s + f) { cut = (b.ts > q.s + f) ? q.s + f : b.ts; break; }   // bouche-trou ou bougie manquante : chemin inconnu
-        let lo = Number(b.l), hi = Number(b.h);
-        if (b.ts === q.s0) { lo = lo < q.el ? lo : Infinity; hi = hi > q.eh ? hi : -Infinity; }   // bougie d'entrée : seuls ses extrêmes nouveaux sont d'après l'entrée
-        const adv = q.d > 0 ? (q.px - lo) / q.px * 100 : (hi - q.px) / q.px * 100;
-        if (!q.hit && adv >= q.cap) q.hit = b.ts;
-        q.s = b.ts;
-      }
-      let open = false;
-      q.x.forEach((x, i) => {
-        if (q.n[i] !== null) return;   // déjà jugé (nombre) ou abandonné (false)
-        if (q.hit && q.hit <= x) { q.n[i] = Math.round((-q.cap - cost) * 10000) / 10000; n++; return; }
-        if (cut && x >= cut - f) { q.n[i] = false; return; }   // la sortie tombe dans une coupure ou juste avant : prix inconnu
-        const j = _thCandle(arr, x);
-        if (j >= 0 && j < arr.length - 1 && q.s >= x && !arr[j]._gap && !(arr[j + 1] && arr[j + 1]._gap) && Number(arr[j].c) > 0) {
-          const mv = (Number(arr[j].c) - q.px) / q.px * 100;
-          q.n[i] = Math.round((q.d * mv - cost) * 10000) / 10000; n++; return;
-        }
-        if (now > x + 4 * f) { q.n[i] = false; return; }   // série coupée ou paire retirée : abandonné
-        open = true;
-      });
-      if (n > n0) dm[Math.round(f / 60000)] = true;
-      if (open) keep.push(q);
+      const w = _thWalk(q, cost, now), f = w.f;   // [SENS CONTRAIRE · 27/09/2026] chemin et horizons : _thWalk (mot pour mot l'ancien corps)
+      n += w.n;
+      if (w.n > 0) dm[Math.round(f / 60000)] = true;
+      if (w.open) keep.push(q);
       else T.rec.push([q.c, Math.round(q.t / 1000), Math.round(f / 60000)].concat(q.n.map(v => (typeof v === 'number' ? v : false))));   // forme compacte
     });
     T.pend = keep;
@@ -6638,11 +6701,12 @@ function _thEval(obs) {
   }
   return { open: !!best, level: best ? best.level : null, best: best, near: near, n: a.length };
 }
-// Un horizon (indice i de TH_HZ), un pas de temps : créneaux de h+1 bougies.
-function _thEvalH(i, T, f) {
+// Un horizon (indice i de TH_HZ), un pas de temps : créneaux de h+1 bougies. [SENS CONTRAIRE · 27/09/2026] ct : les listes du sens contraire.
+function _thEvalH(i, T, f, ct) {
   const h = TH_HZ[i], L = (h + 1) * f, fm = f / 60000, obs = [];
-  T.rec.forEach(r => { const v = r && r[3 + i]; if (r && r[2] === fm && typeof v === 'number' && isFinite(v)) obs.push({ c: r[0], n: v, b: Math.floor(r[1] * 1000 / L) }); });
-  T.pend.forEach(q => { const v = q && q.n && q.n[i]; if (q && q.f === f && typeof v === 'number' && isFinite(v)) obs.push({ c: q.c, n: v, b: Math.floor(q.t / L) }); });
+  if (ct) (T.recC || []).forEach(r => { const v = r && r[3 + i]; if (r && r[2] === fm && typeof v === 'number' && isFinite(v)) obs.push({ c: r[0] / 1000, n: v / 10000, b: Math.floor((r[1] + TH_CT_T0) * 1000 / L) }); });   // entiers courts
+  else T.rec.forEach(r => { const v = r && r[3 + i]; if (r && r[2] === fm && typeof v === 'number' && isFinite(v)) obs.push({ c: r[0], n: v, b: Math.floor(r[1] * 1000 / L) }); });
+  ((ct ? T.pendC : T.pend) || []).forEach(q => { const v = q && q.n && q.n[i]; if (q && q.f === f && typeof v === 'number' && isFinite(v)) obs.push({ c: q.c, n: v, b: Math.floor(q.t / L) }); });
   const r = _thEval(obs); r.h = h; r.score = r.open ? r.best.mean / h : null;
   return r;
 }
@@ -6665,6 +6729,30 @@ function _thRefresh() {
         desc = 'Seuil appris · marché fermé — aucun horizon (' + _thHzLab(TH_HZ[0], f) + ' à ' + _thHzLab(TH_HZ[TH_HZ.length - 1], f) + ') ne paie encore les frais (' +
           (nr ? ('le plus proche : ' + _thHzLab(nr.h, f) + ', conviction ≥ ' + lv(nr.near.level) + ' → ' + f2(nr.near.mean) + ' %/trade sur ' + nr.near.n + ' trades virtuels') : ('pas encore assez de trades virtuels : ' + rule.n + ' décisions')) + ')';
       }
+      S.chainLog.push({ icon: '🎚', desc: desc, hash: Math.random().toString(36).slice(2, 8), time: (typeof nowStr === 'function') ? nowStr() : '' });
+      if (S.chainLog.length > 100) S.chainLog.splice(0, S.chainLog.length - 100);
+    }
+    return rule;
+  } catch (e) { return null; }
+}
+// [SENS CONTRAIRE · 27/09/2026] Le seuil du sens contraire, pour un pas de temps (celui du mode qui l'a demandé ; à défaut, du mode courant) :
+// même fenêtre, même preuve que le sens décidé ;
+// journal quand il devient prouvé, change de niveau ou cesse de l'être (rien sinon). Mesuré seulement : personne ne le lit pour trader.
+function _thRefreshC(fArg) {
+  try {
+    const T = _thState(), f = Number(fArg) > 0 ? Number(fArg) : _thTfMs(_thTf()), fm = f / 60000, old = T.rulesC[fm] || null, now = Date.now(), hmax = Math.max.apply(null, TH_HZ);
+    T.recC = T.recC.filter(r => Array.isArray(r) && (r[1] + TH_CT_T0) * 1000 >= now - 1.5 * TH_MIN_B * (hmax + 1) * r[2] * 60000);
+    if (T.recC.length > TH_REC_MAX) T.recC.splice(0, T.recC.length - TH_REC_MAX);
+    const hz = TH_HZ.map((h, i) => _thEvalH(i, T, f, true)), op = hz.filter(x => x.open);
+    let nC = 0; T.recC.forEach(r => { if (r[2] === fm) nC++; }); T.pendC.forEach(q => { if (q && q.f === f) nC++; });
+    const rule = { open: op.length > 0, level: op.length ? Math.min.apply(null, op.map(x => x.level)) : null, hz: hz, t: now, tfMs: f, alpha: TH_ALPHA, n: nC, since: T.ctSince || null };
+    T.rulesC[fm] = rule; T.dirtyC[fm] = false;
+    const same = !!(old && Array.isArray(old.hz) && old.hz.length === hz.length && hz.every((x, i) => x.open === old.hz[i].open && (!x.open || Math.abs(x.level - old.hz[i].level) < 0.02)));
+    if (!same && (op.length || (old && old.open)) && S.chainLog) {
+      const f2 = x => (x >= 0 ? '+' : '') + x.toFixed(2).replace('.', ','), lv = x => x.toFixed(2).replace('.', ',');
+      let nr = null; hz.forEach(x => { if (x.near && (!nr || x.near.mean - x.near.crit * x.near.se > nr.near.mean - nr.near.crit * nr.near.se)) nr = x; });
+      const desc = op.length ? ('Sens contraire · prouvé — ' + op.map(x => _thHzLab(x.h, f) + ' dès conviction ≥ ' + lv(x.level) + ' (' + f2(x.best.mean) + ' %/trade net de frais, ' + x.best.n + ' trades, ' + x.best.blocks + ' créneaux)').join(' ; ') + ' — mesuré seulement : rien n\'est tradé dans ce sens')
+        : ('Sens contraire · plus prouvé' + (nr ? (' (le plus proche : ' + _thHzLab(nr.h, f) + ', conviction ≥ ' + lv(nr.near.level) + ' → ' + f2(nr.near.mean) + ' %/trade sur ' + nr.near.n + ' trades virtuels)') : ''));
       S.chainLog.push({ icon: '🎚', desc: desc, hash: Math.random().toString(36).slice(2, 8), time: (typeof nowStr === 'function') ? nowStr() : '' });
       if (S.chainLog.length > 100) S.chainLog.splice(0, S.chainLog.length - 100);
     }

@@ -125,7 +125,7 @@ T('S9 · en-têtes 02/08/10g/09b2 « ' + HDR + ' », 10f « ▓▓▓ VERSION 20
   assert.ok(s08.startsWith('// [HORIZONS APPRIS · 27/09/2026] VERSION 20260927i') && s08.split('\n').slice(0, 10).some(l => l.startsWith(HDR)), F08);   // [1b-b] 08 relivré, en-tête 1b-a en 2e ligne
   assert.ok(s02.startsWith('// [DÉCISION COMMUNE · 27/09/2026] VERSION 20260927g') && s02.split('\n').slice(0, 23).some(l => l.startsWith(HDR)), F02);   // [SONDE RÉSEAU] 02 relivré, en-tête 1b-a en 2e ligne
   assert.ok(s9b2.startsWith('// [SEUIL APPRIS · 27/09/2026] VERSION 20260927h') && s9b2.split('\n').slice(0, 23).some(l => l.startsWith(HDR)), F9B2);   // [FITNESS GLISSANTE] 09b2 relivré, en-tête 1b-a dans les 6 premières lignes
-  assert.ok(s10f.startsWith('// [HORIZONS APPRIS · 27/09/2026] VERSION 20260927i') && s10f.split('\n').slice(0, 4).some(l => l.startsWith('// ▓▓▓ VERSION 20260926g ▓▓▓')));   // [HORIZONS APPRIS · 27/09] 10f relivré, en-tête ▓▓▓ en 4e ligne   // [DÉCISION COMMUNE · 27/09/2026] 10f relivré
+  assert.ok(s10f.startsWith('// [SENS CONTRAIRE · 27/09/2026] VERSION 20260927j') && s10f.split('\n').slice(0, 5).some(l => l.startsWith('// ▓▓▓ VERSION 20260926g ▓▓▓')));   // [SENS CONTRAIRE · 27/09] 10f relivré, en-tête ▓▓▓ en 5e ligne   // [HORIZONS APPRIS · 27/09] 10f relivré, en-tête ▓▓▓ en 4e ligne   // [DÉCISION COMMUNE · 27/09/2026] 10f relivré
   assert.strictEqual(count(html, TOK), 81);   // [ÉCRAN APPRIS 23/09] 11b ajouté (10i le 17/09)
   assert.strictEqual((html.match(/\?v=\d{8}[a-z]/g) || []).length, 80);
   assert.strictEqual((html.match(/\?v=\d{8}[a-z]/g) || []).filter(t => t !== '?v=' + TOK).length, 0);

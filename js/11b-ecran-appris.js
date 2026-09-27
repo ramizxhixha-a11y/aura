@@ -1,3 +1,4 @@
+// [SENS CONTRAIRE · 27/09/2026] VERSION 20260927j · section « Seuil d'ouverture appris » : le sens contraire de chaque décision, horizon par horizon (même preuve, décisions notées depuis sa mise en service) — mesuré seulement, rien n'est tradé
 // [HORIZONS APPRIS · 27/09/2026] VERSION 20260927i · section « Seuil d'ouverture appris » : un état par horizon (15 min à 4 h) pour le pas de temps du mode — prouvé ≥ seuil ou fermé, meilleur niveau ou le plus proche (net %/trade ± erreur, trades, créneaux, valeur exigée)
 // [SEUIL APPRIS · 27/09/2026] VERSION 20260927h · section « Seuil d'ouverture appris » : ouvert au niveau prouvé ou marché fermé, trades virtuels jugés / en attente, horizon, coût, niveau prouvé ou le plus proche, net par régime
 // [MÉRITE DE L'ÉVOLUEUR · 26/09/2026] VERSION 20260926k · section « Évolutions jugées » : essais en cours (nouveau contre ancien génome) et derniers verdicts
@@ -70,6 +71,20 @@ function _learnedPanelHtml() {
     th.hz.forEach(function (x) {
       var bt = x.open ? x.best : x.near, lab = (typeof _thHzLab === 'function') ? _thHzLab(x.h, th.tfMs) : (x.h + ' bougie' + (x.h > 1 ? 's' : ''));
       h += row([{ t: lab, w: '.8fr', s: 'font-weight:600;' }, { t: x.open ? ('prouvé ≥ ' + Number(x.level).toFixed(2)) : 'fermé', w: '1fr', s: 'color:' + (x.open ? '#00e87a' : '#889') + ';' },
+        { t: bt ? ('≥ ' + Number(bt.level).toFixed(2) + ' : ' + f2(bt.mean) + '/trade (± ' + Number(bt.se).toFixed(2) + ')') : 'pas encore jugeable', w: '1.8fr', s: 'color:' + (bt ? (bt.mean >= 0 ? '#00e87a' : '#ff4d6d') : '#556') + ';' },
+        { t: bt ? (bt.n + ' · ' + bt.blocks + (bt.crit ? ' · exigé ' + Number(bt.crit).toFixed(1) + ' ET' : '')) : '—', w: '.9fr', s: 'color:#889;' }]);
+    });
+  }
+  // [SENS CONTRAIRE · 27/09/2026] le sens contraire de chaque décision : même preuve, décisions notées depuis sa mise en service — mesuré, jamais tradé
+  var thCt = T3 && T3.rulesC && T3.rulesC[thFm], thCs = (T3 && T3.ctSince) ? new Date(T3.ctSince) : null, thDd = function (x) { return (x < 10 ? '0' : '') + x; };
+  var thCn = ((T3 && T3.recC) || []).filter(function (r) { return r && r[2] === thFm; }).length + ((T3 && T3.pendC) || []).filter(function (q) { return q && q.f === thFm * 60000; }).length;   // pas de temps du mode
+  if (T3 && (thCt || thCn || thCs)) {
+    h += row([{ t: 'sens contraire', w: '1.2fr', s: 'font-weight:600;color:' + (thCt && thCt.open ? '#00e87a' : '#ffd166') + ';' },
+      { t: (thCt ? (thCt.open ? ('prouvé · conviction ≥ ' + Number(thCt.level).toFixed(2)) : 'pas prouvé') : 'pas encore jugé') + ' · ' + thCn + ' décisions', w: '1.5fr' },
+      { t: (thCs ? ('mesuré depuis le ' + thDd(thCs.getDate()) + '/' + thDd(thCs.getMonth() + 1) + ' ' + thDd(thCs.getHours()) + ':' + thDd(thCs.getMinutes())) : 'mesure pas commencée') + ' · rien n\'est tradé', w: '1.3fr', s: 'color:#889;' }]);
+    if (thCt && Array.isArray(thCt.hz)) thCt.hz.forEach(function (x) {
+      var bt = x.open ? x.best : x.near, lab = (typeof _thHzLab === 'function') ? _thHzLab(x.h, thCt.tfMs) : (x.h + ' bougie' + (x.h > 1 ? 's' : ''));
+      h += row([{ t: '↳ ' + lab, w: '.8fr', s: 'font-weight:600;' }, { t: x.open ? ('prouvé ≥ ' + Number(x.level).toFixed(2)) : 'pas prouvé', w: '1fr', s: 'color:' + (x.open ? '#00e87a' : '#889') + ';' },
         { t: bt ? ('≥ ' + Number(bt.level).toFixed(2) + ' : ' + f2(bt.mean) + '/trade (± ' + Number(bt.se).toFixed(2) + ')') : 'pas encore jugeable', w: '1.8fr', s: 'color:' + (bt ? (bt.mean >= 0 ? '#00e87a' : '#ff4d6d') : '#556') + ';' },
         { t: bt ? (bt.n + ' · ' + bt.blocks + (bt.crit ? ' · exigé ' + Number(bt.crit).toFixed(1) + ' ET' : '')) : '—', w: '.9fr', s: 'color:#889;' }]);
     });

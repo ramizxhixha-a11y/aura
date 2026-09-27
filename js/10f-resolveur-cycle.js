@@ -1,3 +1,4 @@
+// [SENS CONTRAIRE · 27/09/2026] VERSION 20260927j · la décision notée en trade virtuel porte aussi la perte max qu'aurait le trade CONTRAIRE (même formule, bonus des signaux techniques de SON sens) — mesuré seulement, rien n'est tradé dans ce sens
 // [HORIZONS APPRIS · 27/09/2026] VERSION 20260927i · trade virtuel noté avec la perte max du vrai trade (2 × stop prévu, bornée 1,5-3 %) ; places prises (10g) : décision notée puis retour ; position ouverte dans le sens décidé sur un horizon prouvé marquée (_thPick → np._thH / np._thX) et tenue jusqu'à sa bougie de sortie : ni le cycle ni _botExitSweep ne la ferment avant ; sortie « Horizon appris » au dernier prix réel ; sur coupure, son stop est la perte max ; _thJudge aussi appelé depuis _botExitSweep (toutes les 10 s)
 // [SEUIL APPRIS · 27/09/2026] VERSION 20260927h · en EV / RE, pour ouvrir, les portes posées à la main (conviction 0,35 / 0,25 / 0,18, sens 0,20 / 0,15 / 0,10, plancher 0,30) cèdent la place au seuil appris (03 _thLevel, Infinity = marché fermé) ; le coup de pouce anti-stagnation ne l'abaisse plus ; la sortie « Signal inversé » garde la règle d'avant ; chaque décision de cycle devient un trade virtuel au dernier prix réel (_thNote), ceux arrivés à terme sont jugés (_thJudge)
 // [DÉCISION COMMUNE · 27/09/2026] VERSION 20260927g · le signal du cerveau = la décision commune (03 _dcConsensus : toutes les voix pesées par leur bilan) au lieu de 0,3 composite + 0,5 agents + 0,2 LMSR ; plus d'alignement LMSR exigé ; bilan sur l'avenir : votes du cycle précédent jugés sur le mouvement depuis, plus sur un mouvement déjà vu
@@ -170,7 +171,13 @@ function _resolvePairCycleCore(pair, ps) {
     if (typeof _thNote === 'function') {
       const _thTp = Math.max(0.6, effectiveConviction * 3.2 * (1 + volCV * 9));
       const _thSl = Math.max(0.45, Math.min((volCV * 100) * 1.4, _thTp / 1.4));
-      _thNote(pair, finalSignalWithMem, Math.min(3, Math.max(1.5, 2 * _thSl)));
+      // [SENS CONTRAIRE · 27/09/2026] la perte max qu'aurait le trade CONTRAIRE (jugé à part, jamais tradé) : même formule, avec le bonus des signaux
+      // techniques de SON sens (techBonus ci-dessus compte ceux du sens décidé)
+      let _thTbC = 0;
+      if (tech) { const _dC = finalSignalWithMem > 0 ? 'bear' : 'bull'; Object.values(tech.signals || {}).forEach(s => { if (s?.signal === _dC) _thTbC += 0.04; }); _thTbC = Math.min(0.25, _thTbC); }
+      const _thTpC = Math.max(0.6, Math.min(1, conviction + _thTbC) * 3.2 * (1 + volCV * 9));
+      const _thSlC = Math.max(0.45, Math.min((volCV * 100) * 1.4, _thTpC / 1.4));
+      _thNote(pair, finalSignalWithMem, Math.min(3, Math.max(1.5, 2 * _thSl)), Math.min(3, Math.max(1.5, 2 * _thSlC)));
     }
   } catch(e) {}
   // [HORIZONS APPRIS · 27/09/2026] places prises (10g) : le cycle a tourné pour noter la décision (et juger les voix sur l'avenir) — rien ne s'ouvre ni ne se ferme
