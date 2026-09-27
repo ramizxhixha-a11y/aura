@@ -71,9 +71,9 @@ T('P1 intact : bonus corr décisif calculé AVEC le delta (0.41 passe grâce à 
 T('P2 intact : éco +0.10 seul, CALM 0.40 fermée, plancher 0.40', () => { const g = gates(0.40, 'calm', 0, 0.10); assert.strictEqual(g.convGate, false); assert.ok(Math.abs(g.floor - 0.40) < 1e-9); });
 
 console.log('\n── C · 10f livré : traces et structure ──');
-T('un seul appel _heatGateForOpen dans 10f, 12 usages de _heatDelta (déclaration + 11 lectures ; [P7] +2 : trace news du hold, _newsDecisive)', () => {
+T('un seul appel _heatGateForOpen dans 10f, 13 usages de _heatDelta (déclaration + 12 lectures ; [P7] +2 : trace news du hold, _newsDecisive ; [SEUIL APPRIS] +1 : sens du retournement _revConv)', () => {
   assert.strictEqual((src10f.match(/_heatGateForOpen\(/g) || []).length, 1);
-  assert.strictEqual((src10f.match(/_heatDelta/g) || []).length, 12);
+  assert.strictEqual((src10f.match(/_heatDelta/g) || []).length, 13);   // [SEUIL APPRIS · 27/09] +1 : _revConv (la sortie « Signal inversé » garde la règle d'avant)
 });
 T('trace froid dans le hold (porte régime) et au plancher ; trace or à l’ouverture', () => {
   assert.strictEqual((src10f.match(/_heatTrace\(pair, _heatG, false\)/g) || []).length, 2);
@@ -91,7 +91,7 @@ T('_heatTrace : 1×/5 min/paire, icône 🕐, plafond 100 chainLog', () => {
   assert.ok(c.S.chainLog[1].desc.includes("créneau d'or 14h") && c.S.chainLog[1].desc.includes('−0.03'));
 });
 T('trace éco du hold recalculée avec le delta heatmap (seul l’éco est isolé)', () => {
-  assert.ok(src10f.includes('effectiveConviction >= (_gates.conv + _expPenalty + _heatDelta + _newsDelta - _corrBonus - (S._convBoost || 0))) _ecoMalusTrace'));
+  assert.ok(src10f.includes('effectiveConviction >= (_gates.conv + _expPenalty + _heatDelta + _newsDelta - _corrBonus - _boost)) _ecoMalusTrace'));   // [SEUIL APPRIS · 27/09] le coup de pouce passe par _boost (0 quand le seuil est appris)
 });
 T('_heatDecisive exclut le delta du seuil de référence (porte ET plancher)', () => {
   assert.ok(src10f.includes('effectiveConviction < (_convFloor - _heatDelta));'));

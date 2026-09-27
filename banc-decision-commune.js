@@ -132,7 +132,7 @@ T('S2 · 02 : à la fermeture, jugés sur leurs votes À L\'OUVERTURE (une seule
   const c7 = codeStrict(s07); assert.ok(c7.includes("const _dcC = (ps._dc && typeof ps._dc.C === 'number') ? ps._dc.C : null;") && c7.includes('const brainProb = _dcC !== null ? (0.5 + _dcC / 2) : lmsrP(ps);'));
   const c4 = codeStrict(s04); assert.ok(c4.includes('const _voice = !!(_auto && _bot);') && c4.includes("if(!_reBlock && !_voice && typeof autoOpenPosition === 'function') {") && c4.includes("icon: '🗳'"));
   assert.ok(!c4.includes('const _brake ='), 'le frein est remplacé');
-  assert.ok(codeStrict(s9b1).includes('dcVoices: S.dcVoices || {},') && codeStrict(s9b2).includes("if (snap.dcVoices && typeof snap.dcVoices === 'object')") && s9b2.includes("'botMerit','dcVoices','_botPredictions',"));
+  assert.ok(codeStrict(s9b1).includes('dcVoices: S.dcVoices || {},') && codeStrict(s9b2).includes("if (snap.dcVoices && typeof snap.dcVoices === 'object')") && s9b2.includes("'botMerit','dcVoices','dcThreshold','_botPredictions',"));
 });
 
 console.log('\n' + (fail ? '❌ ' : '✅ ') + pass + '/' + (pass + fail) + ' tests passés' + (fail ? ' — ' + fail + ' ÉCHEC(S)' : ''));

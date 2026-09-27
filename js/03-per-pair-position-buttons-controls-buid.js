@@ -1,3 +1,4 @@
+// [SEUIL APPRIS · 27/09/2026] VERSION 20260927h · moteur du seuil d'ouverture appris : chaque décision de cycle (EV / RE) devient un trade virtuel (entrée au dernier prix réel, sortie H bougies plus tard, net de frais) jugé sans jamais inventer de prix (_thNote / _thJudge) ; le seuil = le niveau de conviction dont les trades virtuels ont prouvé gagner (≥ 30 trades, ≥ 10 créneaux, moyenne au-dessus de zéro de plus de 2 erreurs types prises par créneau, recouvrement compris), sinon marché fermé (_thEval / _thLevel)
 // [DÉCISION COMMUNE · 27/09/2026] VERSION 20260927g · moteur de la décision commune : voix de chaque bot sur LA paire (_botView), bilan mesuré (_dcMerit), consensus (_dcConsensus), bilan pris SUR L'AVENIR (_dcForwardJudge : votes du cycle précédent jugés sur le mouvement survenu depuis) ; _agentPairVote lit le vote tel qu'il était au moment du pari
 // [FREIN · 27/09/2026] VERSION 20260927f · commentaire de _botStakeMult : un bot au bilan négatif (mult 0) n'ouvre plus en EV (04) — sa « mise minimum » (plancher, 5 % du compte) valait la mise normale
 // [SANS PLAFOND 15 % · 27/09/2026] VERSION 20260927c · commentaire de _botStakeMult : plus de plafond 15 % (la mise d'un bot est bornée par la politique de capital de l'entonnoir, comme tout trade)
@@ -6448,6 +6449,149 @@ function _dcForwardJudge(pair, ps) {
 function _dcSnapVotes(pair, ps, composite) {
   try { ps._voteSnap = { px: ps.price, t: Date.now(), votes: Object.assign({}, (ps.roster && ps.roster.votes) || {}), comp: (typeof composite === 'number' && isFinite(composite)) ? composite : null }; } catch (e) {}
 }
+// ═══ [SEUIL APPRIS · 27/09/2026] LE NIVEAU DE CONSENSUS QUI PAIE LES FRAIS — APPRIS, PLUS POSÉ À LA MAIN (go Rams 27/09 14:46) ═══
+// Avant : pour ouvrir, la décision commune devait passer des portes posées à la main par régime (conviction 0,35 / 0,25 / 0,18, sens
+// 0,20 / 0,15 / 0,10, plancher 0,30), abaissées de 0,06 par le coup de pouce anti-stagnation après 2 min 30 sans trade.
+// Maintenant (EV / RE, prix réels) : à chaque cycle où le système pouvait ouvrir (bougie close, paire active, hors pause), la décision du
+// moment devient un TRADE VIRTUEL — dans le sens de la décision, entrée au dernier prix réel reçu de la paire (celui qu'aurait payé un vrai
+// trade ; refusé s'il date de plus de 2 min, comme _botPredict), sortie à la clôture de la bougie qui contient « maintenant + H bougies »
+// (H = durée médiane des 30 derniers trades réels clos), net = mouvement dans le sens − coût aller-retour du barème (10e6 _ownStakeCostPct).
+// Qu'il ait tradé ou non, le marché répond : le système apprend sans payer. Jamais de prix inventé : une bougie de bouche-trou (coupure
+// réseau, _gap) n'est ni une entrée ni une sortie, ni la bougie qui la précède (sa clôture est le dernier prix avant la coupure).
+// Le seuil = le niveau de conviction à partir duquel l'ensemble des trades virtuels de ce niveau et au-dessus a PROUVÉ gagner net de frais :
+// au moins TH_MIN_N trades répartis sur au moins TH_MIN_B créneaux, moyenne au-dessus de zéro de plus de TH_Z erreurs types. L'erreur type se
+// prend PAR CRÉNEAU de H+1 bougies (les paires bougent ensemble : 10 paires au même instant ne font pas 10 preuves) en comptant ce qu'un
+// créneau partage avec le suivant (un trade de H bougies déborde sur le créneau d'après). Parmi les niveaux prouvés : celui qui aurait
+// rapporté le plus au total. Aucun niveau prouvé → marché fermé (seuil au-dessus de tout) ; il se rouvre SEUL dès qu'un niveau prouve.
+// Fenêtre : les TH_KEEP derniers trades virtuels (≈ 2 jours à 10 paires). Conventions statistiques, pas des seuils de marché.
+// Rejeu avant livraison (app réelle en accéléré, 81 h, 9 fenêtres, état de départ = backup précédent, 2 tirages) : décision commune seule (20260927g) : tirage 1 146 trades, net −9,24 $ ; tirage 2 122 trades, net −9,98 $ — avec le seuil appris (ce code) : tirage 1 0 trades, net +0,00 $ ; tirage 2 0 trades, net +0,00 $.
+// Trades virtuels du rejeu : tirage 1 : 3598 trades virtuels, net moyen −0,192 %/trade (juste 46 % du temps sur le sens), conviction ≥ 0,3 : −0,374 % (n 410), ≥ 0,4 : −0,541 % (n 169) ; règle sur tout le cumul : fermé (le plus proche : tous niveaux, −0,192 % ± 0,09) ; tirage 2 : 3598 trades virtuels, net moyen −0,237 %/trade (juste 44 % du temps sur le sens), conviction ≥ 0,3 : −0,475 % (n 441), ≥ 0,4 : −0,528 % (n 158) ; règle sur tout le cumul : fermé (le plus proche : tous niveaux, −0,237 % ± 0,08).
+// Simulation des faux positifs (cette fonction _thEval, 100 historiques de 5 jours calibrés sur le rejeu) : monde où tout perd après frais mais presque à l'équilibre en haut : première version ouverte au moins une fois dans 67 % des historiques de 5 jours, version livrée 6 % ; monde avec un vrai avantage (net > 0 au-dessus de 0,28) : ouverte 46 % du temps, première ouverture ≈ 20 h, +0,063 %/trade ; avantage fort : 87 % du temps, ≈ 8 h, +0,118 %/trade.
+var TH_MIN_N = 30, TH_MIN_B = 10, TH_Z = 2, TH_KEEP = 2000, TH_HOLD_N = 30, TH_PEND_MAX = 2000;
+function _thState() {
+  if (!S.dcThreshold || typeof S.dcThreshold !== 'object') S.dcThreshold = {};
+  const T = S.dcThreshold;
+  if (!Array.isArray(T.obs)) T.obs = [];
+  if (!Array.isArray(T.pend)) T.pend = [];
+  return T;
+}
+function _thRealLike() { return S.tradingMode === 'paperReal' || S.tradingMode === 'real'; }
+function _thTf() { return (S.tradingMode === 'real') ? (S.realTimeframe || '15m') : (S.paperRealTimeframe || '15m'); }
+function _thTfMs(tf) { return { '5m': 300000, '15m': 900000, '1h': 3600000, '4h': 14400000, '1j': 86400000 }[tf] || 900000; }
+function _thGroup(reg) { return reg === 'calm' ? 'c' : (String(reg || '').indexOf('volatile') === 0 ? 'v' : 'o'); }
+// Horizon du trade virtuel, en bougies : durée médiane des 30 derniers trades réels clos (mémoire des contextes). Sans aucun trade clos : 1 bougie.
+function _thHorizon(tfMs) {
+  try {
+    const h = (S.tradeContextMemory || []).filter(t => t && t.closedAt && isFinite(t.holdMinutes)).slice(-TH_HOLD_N).map(t => Number(t.holdMinutes)).sort((a, b) => a - b);
+    if (!h.length) return 1;
+    const med = h.length % 2 ? h[(h.length - 1) / 2] : (h[h.length / 2 - 1] + h[h.length / 2]) / 2;
+    return Math.max(1, Math.round(med * 60000 / (tfMs || 900000)));
+  } catch (e) { return 1; }
+}
+function _thCandle(arr, ts) {
+  for (let i = arr.length - 1; i >= 0; i--) { const b = arr[i]; if (!b) continue; if (b.ts === ts) return i; if (b.ts < ts) break; }
+  return -1;
+}
+// La décision d'un cycle (10f, bougie close, EV / RE) devient un trade virtuel : entrée au dernier prix réel, en attente de sa bougie de sortie.
+function _thNote(pair, signal, regime) {
+  try {
+    if (!_thRealLike()) return false;
+    const s = Number(signal); if (!(Math.abs(s) > 0)) return false;
+    // ps.price peut dater (mode traité en arrière-plan : seul le mode à l'écran reçoit le prix) → le dernier prix RÉEL accepté (02), comme _botPredict
+    const px = (typeof _rcLastPrice === 'function') ? Number(_rcLastPrice(pair)) : 0;
+    if (!(px > 0) || (typeof _rcPriceAge === 'function' && _rcPriceAge(pair) > 120000)) return false;   // prix figé (> 2 min) : pas de pari
+    const k = S.realPairCycle && S.realPairCycle[pair]; if (!(k > 0)) return false;
+    const tf = _thTf(), tfMs = _thTfMs(tf);
+    const arr = (S.realCandles && S.realCandles[pair] && S.realCandles[pair][tf]) || [];
+    const ik = _thCandle(arr, k), last = arr[arr.length - 1];
+    if (ik < 0 || arr[ik]._gap || !last || last._gap) return false;   // bougie close inconnue ou bouche-trou : pas de prix sûr
+    const T = _thState();
+    if (T.pend.some(q => q.p === pair && q.k === k)) return false;
+    if (T.pend.length >= TH_PEND_MAX) return false;   // garde mémoire : on refuse les nouveaux, jamais ceux qui arrivent à terme
+    const H = _thHorizon(tfMs), tn = Date.now();
+    T.pend.push({ p: pair, k: k, tn: tn, px: px, d: s > 0 ? 1 : -1, c: Math.round(Math.abs(s) * 1000) / 1000, h: H,
+      x: Math.floor((tn + H * tfMs) / tfMs) * tfMs, b: Math.floor(tn / ((H + 1) * tfMs)), r: _thGroup(regime), tf: tf });
+    return true;
+  } catch (e) { return false; }
+}
+// Trades virtuels arrivés à terme (bougie de sortie CLOSE et réelle) → jugés. Sortie introuvable ou bouche-trou : abandonné, jamais inventé.
+function _thJudge() {
+  try {
+    if (!_thRealLike()) return 0;
+    const T = _thState(); if (!T.pend.length) return 0;
+    const cost = (typeof _ownStakeCostPct === 'function') ? Number(_ownStakeCostPct()) || 0 : 0;
+    const now = Date.now(); let n = 0; const keep = [];
+    T.pend.forEach(q => {
+      if (!q || !(q.px > 0)) return;
+      const tfMs = _thTfMs(q.tf);
+      const arr = (S.realCandles && S.realCandles[q.p] && S.realCandles[q.p][q.tf]) || [];
+      const j = _thCandle(arr, q.x);
+      if (j >= 0 && (arr[j]._gap || (arr[j + 1] && arr[j + 1]._gap))) return;   // la sortie tombe dans une coupure (ou juste avant) : prix inconnu
+      if (j >= 0 && j < arr.length - 1 && Number(arr[j].c) > 0) {
+        const mv = (Number(arr[j].c) - q.px) / q.px * 100;
+        T.obs.push({ c: q.c, n: Math.round((q.d * mv - cost) * 10000) / 10000, b: q.b, r: q.r, t: q.tn, p: q.p });
+        n++; return;
+      }
+      if (now > q.x + 4 * tfMs) return;   // série coupée ou paire retirée : abandonné
+      keep.push(q);
+    });
+    T.pend = keep;
+    if (n) { if (T.obs.length > TH_KEEP) T.obs.splice(0, T.obs.length - TH_KEEP); _thRefresh(); }
+    return n;
+  } catch (e) { return 0; }
+}
+// Pur : trades virtuels jugés {c: conviction, n: net %, b: créneau (entier)} → le seuil prouvé (ou aucun). Pour chaque niveau (du plus fort
+// au plus faible), la queue « ce niveau et au-dessus » : n, moyenne, erreur type par créneau = √(Σ r_b² + 2 Σ r_b r_{b+1}) / n (r_b = somme
+// des écarts du créneau b ; jamais moins que sans recouvrement), × √(créneaux / (créneaux − 1)).
+function _thEval(obs) {
+  const a = (obs || []).filter(o => o && isFinite(o.c) && isFinite(o.n) && isFinite(o.b)).slice().sort((x, y) => y.c - x.c);
+  const blk = {}; let n = 0, sum = 0, A = 0, B = 0, Q = 0, P1 = 0, P2 = 0, P3 = 0, nb = 0, best = null, near = null;
+  for (let i = 0; i < a.length; i++) {
+    const o = a[i], x = Number(o.n), b = Number(o.b);
+    let e = blk[b]; if (!e) { e = blk[b] = { s: 0, m: 0 }; nb++; }
+    const L = blk[b - 1], R = blk[b + 1], sN = (L ? L.s : 0) + (R ? R.s : 0), mN = (L ? L.m : 0) + (R ? R.m : 0);
+    A += 2 * e.s * x + x * x; B += e.s + x * e.m + x; Q += 2 * e.m + 1;   // Σ S_b², Σ S_b·n_b, Σ n_b²
+    P1 += x * sN; P2 += x * mN + sN; P3 += mN;                          // Σ S_b·S_b+1, Σ (S_b·n_b+1 + n_b·S_b+1), Σ n_b·n_b+1
+    e.s += x; e.m += 1; n++; sum += x;
+    if (i + 1 < a.length && a[i + 1].c === o.c) continue;   // ex æquo : le niveau se juge avec tous ses trades
+    if (n < TH_MIN_N || nb < TH_MIN_B) continue;
+    const mean = sum / n, v0 = Math.max(0, A - 2 * mean * B + mean * mean * Q), c1 = P1 - mean * P2 + mean * mean * P3;
+    const se = Math.sqrt(Math.max(v0, v0 + 2 * c1) / (n * n) * (nb / (nb - 1)));
+    const tail = { level: o.c, n: n, blocks: nb, mean: mean, se: se, total: sum };
+    if (!near || mean - TH_Z * se > near.mean - TH_Z * near.se) near = tail;
+    if (mean - TH_Z * se > 0 && (!best || sum > best.total)) best = tail;
+  }
+  return { open: !!best, level: best ? best.level : null, best: best, near: near, n: a.length, z: TH_Z };
+}
+function _thRefresh() {
+  try {
+    const T = _thState(), old = T.rule || null, r = _thEval(T.obs);
+    const g = {}; T.obs.forEach(o => { const k = o.r || 'o'; if (!g[k]) g[k] = { n: 0, s: 0 }; g[k].n++; g[k].s += Number(o.n) || 0; });
+    r.byRegime = g; r.t = Date.now(); r.h = _thHorizon(_thTfMs(_thTf())); r.cost = (typeof _ownStakeCostPct === 'function') ? Number(_ownStakeCostPct()) || 0 : 0;
+    T.rule = r;
+    const moved = !old || old.open !== r.open || (r.open && Math.abs((old.level || 0) - r.level) >= 0.02);
+    if (moved && S.chainLog) {
+      const f2 = x => (x >= 0 ? '+' : '') + x.toFixed(2).replace('.', ',');
+      const nr = r.near ? ('le plus proche : conviction ≥ ' + r.near.level.toFixed(2).replace('.', ',') + ' → ' + f2(r.near.mean) + ' %/trade sur ' + r.near.n + ' trades virtuels') : ('pas encore assez de trades virtuels : ' + r.n + ' jugés');
+      const desc = r.open
+        ? ('Seuil appris · ouvert à conviction ≥ ' + r.level.toFixed(2).replace('.', ',') + ' — les trades virtuels de ce niveau et au-dessus gagnent ' + f2(r.best.mean) + ' %/trade net de frais (' + r.best.n + ' trades, ' + r.best.blocks + ' créneaux)')
+        : ('Seuil appris · marché fermé — aucun niveau de consensus ne paie encore les frais (' + nr + ')');
+      S.chainLog.push({ icon: '🎚', desc: desc, hash: Math.random().toString(36).slice(2, 8), time: (typeof nowStr === 'function') ? nowStr() : '' });
+      if (S.chainLog.length > 100) S.chainLog.splice(0, S.chainLog.length - 100);
+    }
+    return r;
+  } catch (e) { return null; }
+}
+// Seuil courant pour 10f : null hors EV / RE (prix simulés : les portes d'avant restent) ; Infinity = marché fermé.
+function _thLevel() {
+  try {
+    if (!_thRealLike()) return null;
+    const T = _thState();
+    if (!T.rule) _thRefresh();
+    return (T.rule && T.rule.open && isFinite(T.rule.level)) ? Number(T.rule.level) : Infinity;
+  } catch (e) { return null; }
+}
+window._thNote = _thNote; window._thJudge = _thJudge; window._thEval = _thEval; window._thRefresh = _thRefresh; window._thLevel = _thLevel; window._thHorizon = _thHorizon;
 window._botView = _botView; window._dcMerit = _dcMerit; window._dcConsensus = _dcConsensus; window._dcVoice = _dcVoice;
 window._dcForwardJudge = _dcForwardJudge; window._dcSnapVotes = _dcSnapVotes; window._dcJudgeComposite = _dcJudgeComposite;
 window._botPredict = _botPredict; window._botMeritAudit = _botMeritAudit; window._botJudgeMeasured = _botJudgeMeasured; window._botJudge = _botJudge;

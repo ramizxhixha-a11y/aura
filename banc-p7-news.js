@@ -252,7 +252,7 @@ await T('sans clé : aucun fetch, lastError = no_key, source inactive, signaux n
   });
   T('10f : _newsDelta présent dans convGate, _convFloor, les 2 « décisifs » P1/P3 et les traces eco/heat du hold (12 usages)', () => {
     assert.strictEqual((src10f.match(/_newsDelta/g) || []).length, 12);
-    assert.ok(src10f.includes('_heatDelta + _newsDelta - _corrBonus - (S._convBoost || 0));'));
+    assert.ok(src10f.includes('_heatDelta + _newsDelta - _corrBonus - _boost);'));   // [SEUIL APPRIS · 27/09] le coup de pouce passe par _boost
     assert.ok(src10f.includes('+ _ecoMalus + _heatDelta + _newsDelta;'));
     assert.ok(src10f.includes('_newsTrace(pair, _newsG, false)') && src10f.includes('_newsTrace(pair, _newsG, true)'));
     assert.strictEqual((src10f.match(/_newsTrace\(/g) || []).length, 3);

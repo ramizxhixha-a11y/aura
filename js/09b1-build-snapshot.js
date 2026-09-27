@@ -1,3 +1,4 @@
+// [SEUIL APPRIS · 27/09/2026] VERSION 20260927h · dcThreshold (trades virtuels jugés, en attente, seuil d'ouverture courant) dans le snapshot
 // [DÉCISION COMMUNE · 27/09/2026] VERSION 20260927g · dcVoices (bilan du composite, voix de la décision commune) dans le snapshot
 // [ÉVOLUTION SEULE · 26/09/2026] VERSION 20260926o · _lastAutoRevigorTs retiré du snapshot (revigoration automatique retirée)
 // [REDÉMARRAGE · 26/09/2026] VERSION 20260926n · _lastEvolutionAt, _lastAutoRevigorTs, _lastDreamAt dans le snapshot (délais de 1 h, 30 min, 24 h) ; _abstMigrated
@@ -107,6 +108,7 @@ function buildSnapshot() {
       fitWindowRule: S.fitWindowRule || null,         // [FENÊTRE APPRENANTE · 26/09/2026]
       botMerit: S.botMerit || {},                     // [MÉRITE DES BOTS · 26/09/2026]
       dcVoices: S.dcVoices || {},                     // [DÉCISION COMMUNE · 27/09/2026]
+      dcThreshold: S.dcThreshold || null,             // [SEUIL APPRIS · 27/09/2026] trades virtuels jugés + seuil courant
       _botPredictions: (S._botPredictions || []).slice(-200),
       _botMeritMigrated: !!S._botMeritMigrated,
       evoTrials: S.evoTrials || {},                   // [MÉRITE DE L'ÉVOLUEUR · 26/09/2026]

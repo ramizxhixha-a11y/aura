@@ -1,3 +1,4 @@
+// [SEUIL APPRIS · 27/09/2026] VERSION 20260927h · en EV / RE, pour ouvrir, les portes posées à la main (conviction 0,35 / 0,25 / 0,18, sens 0,20 / 0,15 / 0,10, plancher 0,30) cèdent la place au seuil appris (03 _thLevel, Infinity = marché fermé) ; le coup de pouce anti-stagnation ne l'abaisse plus ; la sortie « Signal inversé » garde la règle d'avant ; chaque décision de cycle devient un trade virtuel au dernier prix réel (_thNote), ceux arrivés à terme sont jugés (_thJudge)
 // [DÉCISION COMMUNE · 27/09/2026] VERSION 20260927g · le signal du cerveau = la décision commune (03 _dcConsensus : toutes les voix pesées par leur bilan) au lieu de 0,3 composite + 0,5 agents + 0,2 LMSR ; plus d'alignement LMSR exigé ; bilan sur l'avenir : votes du cycle précédent jugés sur le mouvement depuis, plus sur un mouvement déjà vu
 // ▓▓▓ VERSION 20260926g ▓▓▓ · [DOUBLE JUGEMENT · 26/09/2026] une fermeture bot ne juge plus les agents deux fois (closePosition juge déjà, source 'position')
 // [STOP CÔTÉ EXCHANGE SIMULÉ · 26/09/2026] _botExitSweep : à la reconnexion, un stop traversé pendant la coupure est exécuté AU stop (EV)
@@ -77,6 +78,8 @@ function _resolvePairCycleCore(pair, ps) {
   // [DÉCISION COMMUNE · 27/09/2026] bilan SUR L'AVENIR : les votes pris au cycle précédent de cette paire (et le composite) sont jugés sur le mouvement survenu
   // DEPUIS ; puis les votes de maintenant sont gardés pour le prochain cycle (03 _dcForwardJudge / _dcSnapVotes).
   try { if (typeof _dcForwardJudge === 'function') _dcForwardJudge(pair, ps); } catch(e) {}
+  // [SEUIL APPRIS · 27/09/2026] les trades virtuels arrivés à terme (toutes paires) sont jugés net de frais (03 _thJudge)
+  try { if (typeof _thJudge === 'function') _thJudge(); } catch(e) {}
   if (typeof runRosterAnalysis === 'function') { try { runRosterAnalysis(pair); } catch(e) {} }
   try { if (typeof _dcSnapVotes === 'function') _dcSnapVotes(pair, ps, composite); } catch(e) {}
   const _votes  = (ps.roster && ps.roster.votes) || {};
@@ -149,6 +152,8 @@ function _resolvePairCycleCore(pair, ps) {
 
   const conviction         = Math.abs(finalSignalWithMem);
   const effectiveConviction = Math.min(1, conviction + techBonus);
+  // [SEUIL APPRIS · 27/09/2026] la décision de ce cycle devient un trade virtuel au dernier prix réel (jugé H bougies plus tard, tradé ou non) — EV / RE seulement
+  try { if (typeof _thNote === 'function') _thNote(pair, finalSignalWithMem, _currentRegime); } catch(e) {}
 
   const targetProb = 0.5 + finalSignalWithMem * 0.40;
   const curProb    = lmsrP(ps);
@@ -192,9 +197,19 @@ function _resolvePairCycleCore(pair, ps) {
   // (270 trades/45h, brut −13$, frais 12$). En CALM le marché ne paie pas les frais :
   // on exige une vraie conviction. L'exploration reste où la volatilité la finance.
   const _mktReg = (typeof detectMarketRegime==='function' ? detectMarketRegime() : 'calm') || 'calm';
-  const _gates = (_mktReg==='calm') ? {conv:0.35, dir:0.20}
+  const _gatesHand = (_mktReg==='calm') ? {conv:0.35, dir:0.20}
                : (_mktReg==='volatile'||_mktReg==='volatile_bull'||_mktReg==='volatile_bear') ? {conv:0.18, dir:0.10}
                : {conv:0.25, dir:0.15};   // bull / bear / autres
+  // [SEUIL APPRIS · 27/09/2026] en EV / RE, pour OUVRIR, ces portes posées à la main cèdent la place au SEUIL APPRIS (03 _thLevel) : le niveau de
+  // conviction à partir duquel les trades virtuels ont prouvé gagner net de frais. Infinity = aucun niveau ne paie → pas d'ouverture. Il remplace les
+  // trois bases (conviction, sens, plancher 0,30) ; le coup de pouce anti-stagnation ne l'abaisse pas (ne pas trader quand rien ne paie n'est pas
+  // une panne) ; les ajustements par contexte (expectancy, éco, heatmap, news, diversification) s'appliquent comme avant. La sortie « Signal
+  // inversé » garde les portes d'avant (le seuil appris ne décide que des ouvertures). Hors EV / RE : inchangé.
+  const _thL  = (typeof _thLevel === 'function') ? _thLevel() : null;
+  const _thOn = (_thL !== null);
+  const _boostHand = (S._convBoost || 0);
+  const _boost = _thOn ? 0 : _boostHand;
+  const _gates = _thOn ? {conv:_thL, dir:_thL} : _gatesHand;
   // [S3+ · 03/09/2026, NET 06/09/2026] PORTE D'EXPECTANCY PAR PAIRE — le système possédait l'historique
   // de chaque paire sans le consulter à l'ouverture (PEPE : 114 trades, −17,9$, rouvert sans cesse).
   // Les 20 dernières clôtures de LA paire, dans LE mode courant, décident — NETTES de frais (source unique
@@ -229,8 +244,8 @@ function _resolvePairCycleCore(pair, ps) {
   // ≥ 5 articles scorés), lues dans le SENS du pari : contre lui → +0.05 / +0.08, pour lui → −0.02.
   const _newsG = _newsGateForOpen(pair, finalSignalWithMem > 0 ? 'long' : 'short');
   const _newsDelta = _newsG.delta || 0;
-  const convGate = effectiveConviction >= (_gates.conv + _expPenalty + _ecoMalus + _heatDelta + _newsDelta - _corrBonus - (S._convBoost || 0));
-  const dirGate  = Math.abs(finalSignalWithMem) >= (_gates.dir - (S._convBoost || 0) * 0.5);
+  const convGate = effectiveConviction >= (_gates.conv + _expPenalty + _ecoMalus + _heatDelta + _newsDelta - _corrBonus - _boost);
+  const dirGate  = Math.abs(finalSignalWithMem) >= (_gates.dir - _boost * 0.5);
   const lmsrAlignBuy  = adjProb > 0.50;
   const lmsrAlignSell = adjProb < 0.50;
   const convOverride  = effectiveConviction > 0.40;   // [S2] 0.25→0.40 : le LMSR ne se contourne qu'en vraie conviction
@@ -238,6 +253,12 @@ function _resolvePairCycleCore(pair, ps) {
   // [DÉCISION COMMUNE · 27/09/2026] plus d'alignement LMSR exigé : le LMSR n'est plus qu'une voix (celle du Scalper), pesée par son bilan dans la décision commune
   const isBuy  = finalSignalWithMem > 0 && convGate && dirGate && (_dcR ? true : (lmsrAlignBuy  || convOverride));
   const isSell = finalSignalWithMem < 0 && convGate && dirGate && (_dcR ? true : (lmsrAlignSell || convOverride));
+  // [SEUIL APPRIS · 27/09/2026] sens pour la sortie « Signal inversé » d'une position ouverte : la règle d'AVANT (portes par régime + coup de pouce) —
+  // identique à isBuy / isSell hors EV / RE ; en EV / RE, une position ouverte reste coupée sur un vrai retournement même quand le seuil est fermé
+  const _revConv = effectiveConviction >= (_gatesHand.conv + _expPenalty + _ecoMalus + _heatDelta + _newsDelta - _corrBonus - _boostHand);
+  const _revDir  = Math.abs(finalSignalWithMem) >= (_gatesHand.dir - _boostHand * 0.5);
+  const _revBuy  = finalSignalWithMem > 0 && _revConv && _revDir && (_dcR ? true : (lmsrAlignBuy  || convOverride));
+  const _revSell = finalSignalWithMem < 0 && _revConv && _revDir && (_dcR ? true : (lmsrAlignSell || convOverride));
   const action = isBuy ? 'buy' : isSell ? 'sell' : 'hold';
   ps.lastAction = action;
   if(action==='hold'){if(!ps.holdStartTs)ps.holdStartTs=Date.now();}else{ps.holdStartTs=0;}
@@ -260,7 +281,7 @@ function _resolvePairCycleCore(pair, ps) {
   const botPos=S.openPositions.find(p=>p.pair===pair&&p.auto===true);
   if(botPos){
     const posDir=botPos.side==='long'?1:-1;
-    const sigDir=isBuy?1:isSell?-1:0;
+    const sigDir=_revBuy?1:_revSell?-1:0;   // [SEUIL APPRIS · 27/09/2026] règle d'avant (voir _revBuy) : le seuil appris ne décide que des ouvertures
     const pnlPct=botPos.side==='long'
       ?((ps.price-botPos.entryPrice)/botPos.entryPrice*100)
       :((botPos.entryPrice-ps.price)/botPos.entryPrice*100);
@@ -311,13 +332,13 @@ function _resolvePairCycleCore(pair, ps) {
   if(action==='hold' || effectiveConviction < 0.15) {
     // [P2] la porte par régime a-t-elle fermé À CAUSE du malus éco ? (passe sans, refusé avec)
     if(_ecoMalus > 0 && finalSignalWithMem !== 0 && !convGate && dirGate &&
-       effectiveConviction >= (_gates.conv + _expPenalty + _heatDelta + _newsDelta - _corrBonus - (S._convBoost || 0))) _ecoMalusTrace(pair, _ecoG);
+       effectiveConviction >= (_gates.conv + _expPenalty + _heatDelta + _newsDelta - _corrBonus - _boost)) _ecoMalusTrace(pair, _ecoG);
     // [P3] la porte par régime a-t-elle fermé À CAUSE du créneau froid ? (passe sans, refusé avec)
     if(_heatDelta > 0 && finalSignalWithMem !== 0 && !convGate && dirGate &&
-       effectiveConviction >= (_gates.conv + _expPenalty + _ecoMalus + _newsDelta - _corrBonus - (S._convBoost || 0))) _heatTrace(pair, _heatG, false);
+       effectiveConviction >= (_gates.conv + _expPenalty + _ecoMalus + _newsDelta - _corrBonus - _boost)) _heatTrace(pair, _heatG, false);
     // [P7] la porte par régime a-t-elle fermé à CAUSE des news contre le pari ? (passe sans, refus avec)
     if(_newsDelta > 0 && finalSignalWithMem !== 0 && !convGate && dirGate &&
-       effectiveConviction >= (_gates.conv + _expPenalty + _ecoMalus + _heatDelta - _corrBonus - (S._convBoost || 0))) _newsTrace(pair, _newsG, false);
+       effectiveConviction >= (_gates.conv + _expPenalty + _ecoMalus + _heatDelta - _corrBonus - _boost)) _newsTrace(pair, _newsG, false);
     // [DÉCISION COMMUNE · 27/09/2026] plus de jugement sur le mouvement de la bougie en cours (le vote l'avait déjà vu) : _dcForwardJudge juge le cycle précédent
     ps.qYes = Math.max(20, 100 + (ps.qYes - 100) * 0.95);
     ps.qNo  = Math.max(20, 100 + (ps.qNo  - 100) * 0.95);
@@ -410,18 +431,18 @@ function _resolvePairCycleCore(pair, ps) {
     _pairGood  = _pairExp > 0.03;
   }
   window._pairWatchMult = _pairWatch ? 0.25 : (_pairGood ? 1.8 : 1);
-  const _convFloor = (0.30 - Math.min(0.04, (S._convBoost || 0) * 0.5)) + (_pairWatch ? 0.12 : 0) - _corrBonus + _ecoMalus + _heatDelta + _newsDelta;
+  const _convFloor = ((_thOn ? _thL : 0.30) - Math.min(0.04, _boost * 0.5)) + (_pairWatch ? 0.12 : 0) - _corrBonus + _ecoMalus + _heatDelta + _newsDelta;
   // [P1] le bonus a-t-il été DÉCISIF ? (le trade passe avec, il n'aurait pas passé sans)
   const _corrDecisive = _corrBonus > 0 && (
-    effectiveConviction < (_gates.conv + _expPenalty + _ecoMalus + _heatDelta + _newsDelta - (S._convBoost || 0)) ||
+    effectiveConviction < (_gates.conv + _expPenalty + _ecoMalus + _heatDelta + _newsDelta - _boost) ||
     effectiveConviction < (_convFloor + _corrBonus));
   // [P3] le créneau d'or a-t-il été DÉCISIF ? (le trade passe avec, il n'aurait pas passé sans)
   const _heatDecisive = _heatDelta < 0 && (
-    effectiveConviction < (_gates.conv + _expPenalty + _ecoMalus + _newsDelta - _corrBonus - (S._convBoost || 0)) ||
+    effectiveConviction < (_gates.conv + _expPenalty + _ecoMalus + _newsDelta - _corrBonus - _boost) ||
     effectiveConviction < (_convFloor - _heatDelta));
   // [P7] les news pour le pari ont-elles été DÉCISIVES ? (le trade passe avec, il n'aurait pas passé sans)
   const _newsDecisive = _newsDelta < 0 && (
-    effectiveConviction < (_gates.conv + _expPenalty + _ecoMalus + _heatDelta - _corrBonus - (S._convBoost || 0)) ||
+    effectiveConviction < (_gates.conv + _expPenalty + _ecoMalus + _heatDelta - _corrBonus - _boost) ||
     effectiveConviction < (_convFloor - _newsDelta));
   if(_gainNet < _minNetGain || effectiveConviction < _convFloor) {
     // [P2] le plancher a-t-il fermé À CAUSE du malus éco ?
@@ -551,7 +572,7 @@ function _resolvePairCycleCore(pair, ps) {
   // fantomes annoncant un trade qui n'existe pas.
   if(!np) return;
   np.tp=tpE; np.sl=slE; np._holdCycles=0;
-  try { np._votes = Object.assign({}, (ps.roster && ps.roster.votes) || {}); np._comp = composite; np._dcC = _dcR ? _dcR.C : null; } catch(e) {}   // [DÉCISION COMMUNE · 27/09/2026] jugés à la fermeture sur ce qu'ils disaient À L'OUVERTURE
+  try { np._votes = Object.assign({}, (ps.roster && ps.roster.votes) || {}); np._comp = composite; np._dcC = _dcR ? _dcR.C : null; np._thL = _thOn ? _thL : null; } catch(e) {}   // [DÉCISION COMMUNE · 27/09/2026] jugés à la fermeture sur ce qu'ils disaient À L'OUVERTURE
   // [P1] trace de diversification : ouverture obtenue grâce au bonus anti-corrélé
   if(_corrDecisive){
     S.chainLog.push({icon:'🔗',
@@ -567,7 +588,7 @@ function _resolvePairCycleCore(pair, ps) {
   const tt=cfg.dec>=4?tpE.toFixed(cfg.dec):Math.floor(tpE).toLocaleString();
   const st=cfg.dec>=4?slE.toFixed(cfg.dec):Math.floor(slE).toLocaleString();
   S.chainLog.push({icon:side==='long'?'🟢':'🔴',
-    desc:`BOT ${side.toUpperCase()} ${pair} @${pt} | ${_dcR ? 'Commun:' + (_dcR.C*100).toFixed(0) + '% (' + _dcR.n + ' voix) ' : ''}AT:${(atScore*100).toFixed(0)}% AF:${(fundScore*100).toFixed(0)}% Ag:${(agentConsensus*100).toFixed(0)}% Conv:${(effectiveConviction*100).toFixed(0)}% | TP:${tt} SL:${st}`,
+    desc:`BOT ${side.toUpperCase()} ${pair} @${pt} | ${_dcR ? 'Commun:' + (_dcR.C*100).toFixed(0) + '% (' + _dcR.n + ' voix) ' : ''}${_thOn ? 'Seuil appris:' + (_thL*100).toFixed(0) + '% ' : ''}AT:${(atScore*100).toFixed(0)}% AF:${(fundScore*100).toFixed(0)}% Ag:${(agentConsensus*100).toFixed(0)}% Conv:${(effectiveConviction*100).toFixed(0)}% | TP:${tt} SL:${st}`,
     hash:rndHash(),time:nowStr()});
   showToast(`🤖 Bot ${side.toUpperCase()} ${pair} · AT${atScore>=0?'+':''}${(atScore*100).toFixed(0)}% AF${fundScore>=0?'+':''}${(fundScore*100).toFixed(0)}% · ${(effectiveConviction*100).toFixed(0)}%`);
 
