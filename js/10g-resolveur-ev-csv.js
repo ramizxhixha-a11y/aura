@@ -1,3 +1,4 @@
+// [HORIZONS APPRIS · 27/09/2026] VERSION 20260927i · places prises : le cycle de la paire tourne quand même en mode « noter seulement » (trade virtuel, voix jugées) — aucune ouverture ni fermeture (10f)
 // [1b-a · 14/09/2026] VERSION 20260914a · porte EV : test de fraîcheur AVANT `closedTs <= lastSeenTs` (le refetch « données obsolètes » était inatteignable sur une série figée)
 // ▓▓▓ VERSION 20260905a ▓▓▓ · [P0 RÉGIME UNIFIÉ · 05/09/2026] écriture de S._paperRealCurrentRegime supprimée (photo périmée) — le régime se lit partout en direct via detectMarketRegime()
 // 10g-resolveur-ev-csv.js — Résolveur EV (_resolvePaperRealCycle), consignes MAN, force-close UI, indicateur réseau, profit split, exports CSV, modales, disable FP
@@ -61,7 +62,10 @@ function _resolvePaperRealCycle(pair, ps) {
   // concerne que AA/EV jusqu'à validation sur données (décision Rams : « garde à l'œil »).
   const maxConcurrent = (S.tradingMode === 'real') ? 1 : (cfg.maxConcurrentPos || 1);
   const openPositions = (S.openPositions || []).filter(p => p.auto === true);
-  if (openPositions.length >= maxConcurrent) return;
+  // [HORIZONS APPRIS · 27/09/2026] places prises : le cycle tourne quand même pour NOTER la décision (trade virtuel à 5 horizons, voix jugées sur
+  // l'avenir) ; 10f s'arrête juste après, avant toute ouverture ou fermeture. Avant, rien n'était noté ni jugé pendant que les places étaient prises,
+  // et la décision commune restait figée (la bascule 07 ne pouvait plus fermer une position) : elle est de nouveau à jour.
+  if (openPositions.length >= maxConcurrent) { window.__thNoteOnly = true; try { return _resolvePairCycleCore(pair, ps); } finally { window.__thNoteOnly = false; } }
 
   return _resolvePairCycleCore(pair, ps);
 }

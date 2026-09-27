@@ -1,3 +1,4 @@
+// [HORIZONS APPRIS · 27/09/2026] VERSION 20260927i · _checkReversalsAndClose : une position tenue jusqu'à son horizon prouvé (np._thX) n'est pas fermée sur retournement avant l'horizon
 // ▓▓▓ VERSION 20260809k ▓▓▓
 // 10d-protections-indicateurs.js — Hedging, reversals, TP adaptatif, indicateurs, Sharpe, force-close, sparkline, cooldown adaptatif
 // [DÉCOUPE 10 · 09/08/2026] Tranche BYTE-IDENTIQUE de 10-fin-bloc-restauration-v93.js
@@ -70,6 +71,7 @@ function _checkReversalsAndClose() {
   S.openPositions.forEach(pos => {
     if (!pos.auto || !pos._paperRealMode) return;
     if (!pos.pair) return;
+    if (pos._thX) return;   // [HORIZONS APPRIS · 27/09/2026] tenue jusqu'à son horizon prouvé : pas de fermeture préventive sur retournement
     const ps = S.pairStates ? S.pairStates[pos.pair] : null;
     if (!ps || !isFinite(ps.price)) return;
     const isLong = pos.side === 'long';

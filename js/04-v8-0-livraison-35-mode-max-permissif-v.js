@@ -1,3 +1,4 @@
+// [HORIZONS APPRIS · 27/09/2026] VERSION 20260927i · propositions exécutées automatiquement (fermer une position, rééquilibrer une paire) : jamais une position tenue jusqu'à son horizon prouvé ; validées à la main, inchangées
 // [DÉCISION COMMUNE · 27/09/2026] VERSION 20260927g · en automatique, un bot ne trade plus seul (aucun mode) : son occasion devient une affirmation jugée par le marché et sa lecture de la paire est une VOIX de la décision commune (03), lue par le cerveau ; ta validation à la main passe toujours
 // [FREIN · 27/09/2026] VERSION 20260927f · EV : un bot qui se trompe au moins autant qu'il a raison (≥ 5 actes jugés) n'ouvre plus de trade en automatique — son occasion reste une affirmation jugée par le marché, il retrade dès que son bilan redevient positif (la « mise minimum » valait la mise normale) ; Réel et AA inchangés
 // [PLAFOND DU CERVEAU · 27/09/2026] VERSION 20260927d · une ouverture de bot se signale à l'entonnoir (window._openingBot) et marque son entrée « open » (bot) : le plafond d'ouvertures par jour du cerveau ne la compte ni ne la bloque
@@ -1884,6 +1885,9 @@ function executePending(actionId, opts) {
         break;
       }
       case 'close_position': {
+        // [HORIZONS APPRIS · 27/09/2026] exécutée automatiquement, une proposition ne ferme pas une position tenue jusqu'à son horizon prouvé (10f np._thX) ;
+        // validée par TOI, elle la ferme
+        if (_auto && (S.openPositions || []).some(p => p && p.id === action.payload.posId && p._thX)) break;
         if(typeof closePosition === 'function') {
           const _n0 = (S.openPositions || []).length;
           closePosition(action.payload.posId, false);
@@ -1895,7 +1899,7 @@ function executePending(actionId, opts) {
       case 'close_skewed': {
         // Close the largest position of the skewed pair
         // [SURVEILLANCE PERMANENTE · 27/09/2026] validé automatiquement → fermeture « bot » : une position manuelle n'est jamais fermée (règle absolue)
-        const positions = (S.openPositions || []).filter(p => p.pair === action.payload.pair);
+        const positions = (S.openPositions || []).filter(p => p.pair === action.payload.pair && !(_auto && p._thX));   // [HORIZONS APPRIS · 27/09/2026] en automatique : pas une position tenue jusqu'à son horizon
         if(positions.length > 0) {
           const largest = positions.sort((a,b) => (b.stakeUsdt||0) - (a.stakeUsdt||0))[0];
           if(typeof closePosition === 'function') {

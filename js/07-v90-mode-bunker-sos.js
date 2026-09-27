@@ -1,3 +1,4 @@
+// [HORIZONS APPRIS · 27/09/2026] VERSION 20260927i · learnFromOpenPositions : une position ouverte sur un horizon prouvé (np._thX) n'est fermée ni par le trailing, ni par l'anti-zombie, ni par la bascule avant son horizon
 // [DÉCISION COMMUNE · 27/09/2026] VERSION 20260927g · sortie « bascule » : relit la décision commune de la paire (10f ps._dc) au lieu du LMSR — mêmes seuils (≤ −0,30 contre un long, ≥ +0,30 contre un short)
 // [SURVEILLANCE PERMANENTE · 27/09/2026] VERSION 20260927a · bandeau d'un bot sans acte jugé : affirmations en cours et trades ouverts (plus de « 30 min après »)
 // [MASQUE CORRIGÉ · 26/09/2026] VERSION 20260926p · triggerEvolution(weak, opts) : opts.manual (« Faire évoluer maintenant », décision de Rams) passe outre le délai d'1 h, qui repart de là ; opts.quiet : pas de toast par évolution
@@ -3271,6 +3272,10 @@ function learnFromOpenPositions() {
     // Mémoriser le peak P&L pour trailing stop
     if (!pos._peakPct) pos._peakPct = 0;
     if (_cExitPct > pos._peakPct) pos._peakPct = _cExitPct;
+
+    // [HORIZONS APPRIS · 27/09/2026] position ouverte sur un horizon prouvé (10f np._thX) : tenue jusqu'à sa bougie de sortie, comme le trade
+    // virtuel qui l'a prouvée (sortie en 10f _botExitSweep ; la perte max _lossCapSweep reste) — trailing, anti-zombie et bascule attendent l'horizon.
+    if (pos.auto === true && pos._thX) return;
 
     // ── A. TRAILING STOP PROPORTIONNEL ── [19/09/2026] voir _trailStopHit ci-dessus (armé à 60 % du chemin vers le
     // TP ATR, rend au plus 40 % du gain acquis ou un quart de la distance ; règle v7.12 conservée sans niveau TP).

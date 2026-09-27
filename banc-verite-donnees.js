@@ -70,7 +70,7 @@ T('S4 · 10f : aucune vérification TP/SL dans _resolvePairCycleCore (écrit _tp
   const cc = codeStrict(core);
   assert.strictEqual(count(cc, 'tpHit'), 0); assert.strictEqual(count(cc, 'slHit'), 0);
   assert.strictEqual(count(cc, 'botPos._tpPct=tpPct; botPos._slPct=slPct;'), 1);
-  assert.ok(cc.includes('if(canBotClose && minHoldMet && (sigRev||timeClose||hardTime||consRev)){'));
+  assert.ok(cc.includes('if(canBotClose && !botPos._thX && minHoldMet && (sigRev||timeClose||hardTime||consRev)){'))   // [HORIZONS APPRIS · 27/09] une position marquée d'un horizon sort à son horizon (_botExitSweep);
   assert.strictEqual(count(s10f, 'window._botExitSweep = function _botExitSweep()'), 1);
   assert.strictEqual(count(s10f, 'window._lossCapSweep = function _lossCapSweep()'), 1);
   assert.strictEqual(count(html, '10-fin-bloc-restauration-v93.js'), 0, 'la copie morte de 10-fin-bloc n\'est pas chargée');
@@ -121,11 +121,11 @@ T('S8 · 02 : _realCandlesStale (critère des portes) utilisé au boot, limiteur
   assert.strictEqual(count(c, "'bootstrap candles '"), 0);
 });
 T('S9 · en-têtes 02/08/10g/09b2 « ' + HDR + ' », 10f « ▓▓▓ VERSION 20260917b ▓▓▓ » (hotfix b), HTML : DOC_V + 78 ?v= (79), aucun autre token', () => {
-  assert.ok(s10g.startsWith(HDR), F10G);
-  assert.ok(s08.startsWith('// [SURVEILLANCE PERMANENTE · 27/09/2026] VERSION 20260927a') && s08.split('\n').slice(0, 10).some(l => l.startsWith(HDR)), F08);   // [1b-b] 08 relivré, en-tête 1b-a en 2e ligne
+  assert.ok(s10g.startsWith('// [HORIZONS APPRIS · 27/09/2026] VERSION 20260927i') && s10g.split('\n').slice(0, 3).some(l => l.startsWith(HDR)), F10G);   // [HORIZONS APPRIS · 27/09] 10g relivré (places prises : noter seulement), en-tête 1b-a en 2e ligne
+  assert.ok(s08.startsWith('// [HORIZONS APPRIS · 27/09/2026] VERSION 20260927i') && s08.split('\n').slice(0, 10).some(l => l.startsWith(HDR)), F08);   // [1b-b] 08 relivré, en-tête 1b-a en 2e ligne
   assert.ok(s02.startsWith('// [DÉCISION COMMUNE · 27/09/2026] VERSION 20260927g') && s02.split('\n').slice(0, 23).some(l => l.startsWith(HDR)), F02);   // [SONDE RÉSEAU] 02 relivré, en-tête 1b-a en 2e ligne
   assert.ok(s9b2.startsWith('// [SEUIL APPRIS · 27/09/2026] VERSION 20260927h') && s9b2.split('\n').slice(0, 23).some(l => l.startsWith(HDR)), F9B2);   // [FITNESS GLISSANTE] 09b2 relivré, en-tête 1b-a dans les 6 premières lignes
-  assert.ok(s10f.startsWith('// [SEUIL APPRIS · 27/09/2026] VERSION 20260927h') && s10f.split('\n').slice(0, 3).some(l => l.startsWith('// ▓▓▓ VERSION 20260926g ▓▓▓')));   // [SEUIL APPRIS · 27/09] 10f relivré   // [DÉCISION COMMUNE · 27/09/2026] 10f relivré
+  assert.ok(s10f.startsWith('// [HORIZONS APPRIS · 27/09/2026] VERSION 20260927i') && s10f.split('\n').slice(0, 4).some(l => l.startsWith('// ▓▓▓ VERSION 20260926g ▓▓▓')));   // [HORIZONS APPRIS · 27/09] 10f relivré, en-tête ▓▓▓ en 4e ligne   // [DÉCISION COMMUNE · 27/09/2026] 10f relivré
   assert.strictEqual(count(html, TOK), 81);   // [ÉCRAN APPRIS 23/09] 11b ajouté (10i le 17/09)
   assert.strictEqual((html.match(/\?v=\d{8}[a-z]/g) || []).length, 80);
   assert.strictEqual((html.match(/\?v=\d{8}[a-z]/g) || []).filter(t => t !== '?v=' + TOK).length, 0);

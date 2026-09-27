@@ -1,3 +1,4 @@
+// [HORIZONS APPRIS · 27/09/2026] VERSION 20260927i · mode réel (EV / RE) traité en arrière-plan : ses paires reçoivent le dernier prix réel accepté (< 2 min) à chaque passage — avant, son ps.price datait du dernier passage à l'écran
 // [SURVEILLANCE PERMANENTE · 27/09/2026] VERSION 20260927a · le battement fait tourner la flotte de chaque mode en play (_fleetHeartbeat, dans le contexte du mode) et juge les affirmations des bots à chaque tick (_botMeritAudit)
 // [CONTEXTE 1 H / 4 H · 26/09/2026] VERSION 20260926e · tuile « Contexte 1 h / 4 h » (ex « Régime de volatilité ») : elle lit le siège converti
 // [MACRO RÉEL · 26/09/2026] VERSION 20260926b · tuiles fondamentales : étiquettes vraies ; la tuile News lit nlp_v1 ; la tuile Macro lit le flux réel
@@ -3033,6 +3034,12 @@ function simTick() {
     if (_isBg && (tick % 3 !== 0)) return;
     var _step = _isBg ? 3 : 1;
     if (_isBg) { S.tradingMode = _m; window._bgResolve = true; }
+    // [HORIZONS APPRIS · 27/09/2026] mode réel (EV / RE) traité en arrière-plan : ses paires reçoivent le dernier prix RÉEL accepté (02 _rcLastPrice,
+    // s'il a moins de 2 min) — le flux n'écrit ps.price que dans le mode à l'écran : sans ça, les entrées, stops, perte max et sorties de ce mode
+    // lisaient un prix qui datait (relecture indépendante du 27/09)
+    if (_isBg && (S.tradingMode === 'paperReal' || S.tradingMode === 'real') && typeof _rcLastPrice === 'function' && typeof _rcPriceAge === 'function') {
+      try { Object.keys(S.pairStates || {}).forEach(function (p) { var q = S.pairStates[p]; if (q && _rcPriceAge(p) <= 120000) { var lp = Number(_rcLastPrice(p)); if (lp > 0) q.price = lp; } }); } catch (e) {}
+    }
     try {
       // Protection SL/TP du mode traite (les positions EV/RE sont surveillees
       // MEME quand un autre mode est a l'ecran — "stop si je l'ai oublie").

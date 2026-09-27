@@ -1,3 +1,4 @@
+// [HORIZONS APPRIS · 27/09/2026] VERSION 20260927i · section « Seuil d'ouverture appris » : un état par horizon (15 min à 4 h) pour le pas de temps du mode — prouvé ≥ seuil ou fermé, meilleur niveau ou le plus proche (net %/trade ± erreur, trades, créneaux, valeur exigée)
 // [SEUIL APPRIS · 27/09/2026] VERSION 20260927h · section « Seuil d'ouverture appris » : ouvert au niveau prouvé ou marché fermé, trades virtuels jugés / en attente, horizon, coût, niveau prouvé ou le plus proche, net par régime
 // [MÉRITE DE L'ÉVOLUEUR · 26/09/2026] VERSION 20260926k · section « Évolutions jugées » : essais en cours (nouveau contre ancien génome) et derniers verdicts
 // [FENÊTRE APPRENANTE · 26/09/2026] VERSION 20260926f · section « Fenêtre de jugement » : fenêtre courante (apprise ou défaut), événements rejoués, précision par fenêtre
@@ -56,19 +57,22 @@ function _learnedPanelHtml() {
       h += row([{ t: '', w: '1fr' }, { t: '↳ ' + kv[0], w: '.7fr', s: 'color:#889;' }, { t: txt, w: '2.9fr', s: 'color:' + (tr.delta === null ? '#889' : tr.delta >= 0 ? '#00e87a' : '#ff4d6d') + ';' }]);
     });
   });
-  // 2b · seuil d'ouverture [SEUIL APPRIS · 27/09/2026]
-  var th = S.dcThreshold && S.dcThreshold.rule, thObs = (S.dcThreshold && S.dcThreshold.obs) || [], thPend = (S.dcThreshold && S.dcThreshold.pend) || [];
+  // 2b · seuil d'ouverture [SEUIL APPRIS · 27/09/2026] · [HORIZONS APPRIS · 27/09/2026] un seuil par horizon, pour le pas de temps du mode
+  var T3 = S.dcThreshold || null, thFm = (typeof _thTfMs === 'function' && typeof _thTf === 'function') ? _thTfMs(_thTf()) / 60000 : 15;
+  var th = T3 && T3.rules && T3.rules[thFm], thRec = (T3 && T3.rec) || [], thPend = (T3 && T3.pend) || [];
   var f2 = function (x) { return (x >= 0 ? '+' : '') + Number(x).toFixed(2) + ' %'; };
-  h += title('SEUIL D\'OUVERTURE APPRIS', '· à chaque bougie close, la décision de chaque paire est un trade virtuel jugé net de frais (EV/RE)');
-  if (!th) h += '<div style="color:#667;font-size:11px;">pas encore de trade virtuel jugé (' + thPend.length + ' en attente)</div>';
+  h += title('SEUIL D\'OUVERTURE APPRIS', '· chaque décision est un trade virtuel jugé net de frais à 5 horizons, sans trader (EV/RE)');
+  if (!th || !Array.isArray(th.hz)) h += '<div style="color:#667;font-size:11px;">pas encore de trade virtuel jugé (' + thPend.length + ' en attente)</div>';
   else {
-    h += row([{ t: th.open ? ('ouvert · conviction ≥ ' + Number(th.level).toFixed(2)) : 'marché fermé', w: '1.3fr', s: 'font-weight:600;color:' + (th.open ? '#00e87a' : '#ffd166') + ';' },
-      { t: thObs.length + ' jugés · ' + thPend.length + ' en attente', w: '1.2fr' }, { t: 'horizon ' + (th.h || 1) + ' bougie' + ((th.h || 1) > 1 ? 's' : '') + ' · coût ' + Number(th.cost || 0).toFixed(3) + ' %', w: '1.5fr', s: 'color:#889;' }]);
-    var bt = th.open ? th.best : th.near;
-    if (bt) h += row([{ t: th.open ? 'niveau prouvé' : 'le plus proche', w: '1.3fr', s: 'color:#889;' }, { t: '≥ ' + Number(bt.level).toFixed(2) + ' : ' + f2(bt.mean) + '/trade (± ' + Number(bt.se).toFixed(2) + ')', w: '1.6fr', s: 'color:' + (bt.mean >= 0 ? '#00e87a' : '#ff4d6d') + ';' }, { t: bt.n + ' trades · ' + bt.blocks + ' créneaux', w: '1.1fr', s: 'color:#889;' }]);
-    else h += '<div style="color:#667;font-size:11px;">aucun niveau n\'a encore 30 trades virtuels sur 10 créneaux</div>';
-    var rg = th.byRegime || {}, rgTxt = [['c', 'calme'], ['o', 'haussier / baissier'], ['v', 'volatil']].filter(function (x) { return rg[x[0]] && rg[x[0]].n; }).map(function (x) { return x[1] + ' ' + f2(rg[x[0]].s / rg[x[0]].n) + ' (' + rg[x[0]].n + ')'; }).join(' · ');
-    if (rgTxt) h += row([{ t: 'par régime, tous niveaux', w: '1.3fr', s: 'color:#889;' }, { t: rgTxt, w: '2.7fr', s: 'color:#aab;' }]);
+    h += row([{ t: th.open ? ('ouvert · conviction ≥ ' + Number(th.level).toFixed(2)) : 'marché fermé', w: '1.2fr', s: 'font-weight:600;color:' + (th.open ? '#00e87a' : '#ffd166') + ';' },
+      { t: thRec.length + ' décisions jugées · ' + thPend.length + ' en cours', w: '1.5fr' }, { t: 'coût ' + Number(th.cost || 0).toFixed(3) + ' % · preuve ≥ 20 créneaux', w: '1.3fr', s: 'color:#889;' }]);
+    h += row([{ t: 'horizon', w: '.8fr' }, { t: 'état', w: '1fr' }, { t: 'meilleur / le plus proche', w: '1.8fr' }, { t: 'trades · créneaux', w: '.9fr' }], true);
+    th.hz.forEach(function (x) {
+      var bt = x.open ? x.best : x.near, lab = (typeof _thHzLab === 'function') ? _thHzLab(x.h, th.tfMs) : (x.h + ' bougie' + (x.h > 1 ? 's' : ''));
+      h += row([{ t: lab, w: '.8fr', s: 'font-weight:600;' }, { t: x.open ? ('prouvé ≥ ' + Number(x.level).toFixed(2)) : 'fermé', w: '1fr', s: 'color:' + (x.open ? '#00e87a' : '#889') + ';' },
+        { t: bt ? ('≥ ' + Number(bt.level).toFixed(2) + ' : ' + f2(bt.mean) + '/trade (± ' + Number(bt.se).toFixed(2) + ')') : 'pas encore jugeable', w: '1.8fr', s: 'color:' + (bt ? (bt.mean >= 0 ? '#00e87a' : '#ff4d6d') : '#556') + ';' },
+        { t: bt ? (bt.n + ' · ' + bt.blocks + (bt.crit ? ' · exigé ' + Number(bt.crit).toFixed(1) + ' ET' : '')) : '—', w: '.9fr', s: 'color:#889;' }]);
+    });
   }
   // 3 · emplacements
   var cr = S.capRules || {}, ceil = (typeof _capCeiling === 'function') ? _capCeiling() : pairs.length;

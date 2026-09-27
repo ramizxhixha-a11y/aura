@@ -1,3 +1,4 @@
+// [HORIZONS APPRIS · 27/09/2026] VERSION 20260927i · trade virtuel noté avec la perte max du vrai trade (2 × stop prévu, bornée 1,5-3 %) ; places prises (10g) : décision notée puis retour ; position ouverte dans le sens décidé sur un horizon prouvé marquée (_thPick → np._thH / np._thX) et tenue jusqu'à sa bougie de sortie : ni le cycle ni _botExitSweep ne la ferment avant ; sortie « Horizon appris » au dernier prix réel ; sur coupure, son stop est la perte max ; _thJudge aussi appelé depuis _botExitSweep (toutes les 10 s)
 // [SEUIL APPRIS · 27/09/2026] VERSION 20260927h · en EV / RE, pour ouvrir, les portes posées à la main (conviction 0,35 / 0,25 / 0,18, sens 0,20 / 0,15 / 0,10, plancher 0,30) cèdent la place au seuil appris (03 _thLevel, Infinity = marché fermé) ; le coup de pouce anti-stagnation ne l'abaisse plus ; la sortie « Signal inversé » garde la règle d'avant ; chaque décision de cycle devient un trade virtuel au dernier prix réel (_thNote), ceux arrivés à terme sont jugés (_thJudge)
 // [DÉCISION COMMUNE · 27/09/2026] VERSION 20260927g · le signal du cerveau = la décision commune (03 _dcConsensus : toutes les voix pesées par leur bilan) au lieu de 0,3 composite + 0,5 agents + 0,2 LMSR ; plus d'alignement LMSR exigé ; bilan sur l'avenir : votes du cycle précédent jugés sur le mouvement depuis, plus sur un mouvement déjà vu
 // ▓▓▓ VERSION 20260926g ▓▓▓ · [DOUBLE JUGEMENT · 26/09/2026] une fermeture bot ne juge plus les agents deux fois (closePosition juge déjà, source 'position')
@@ -152,8 +153,6 @@ function _resolvePairCycleCore(pair, ps) {
 
   const conviction         = Math.abs(finalSignalWithMem);
   const effectiveConviction = Math.min(1, conviction + techBonus);
-  // [SEUIL APPRIS · 27/09/2026] la décision de ce cycle devient un trade virtuel au dernier prix réel (jugé H bougies plus tard, tradé ou non) — EV / RE seulement
-  try { if (typeof _thNote === 'function') _thNote(pair, finalSignalWithMem, _currentRegime); } catch(e) {}
 
   const targetProb = 0.5 + finalSignalWithMem * 0.40;
   const curProb    = lmsrP(ps);
@@ -165,6 +164,18 @@ function _resolvePairCycleCore(pair, ps) {
 
   const adxVal    = raw?.adx?.adx || 20;
   const volCV     = raw?.stddev?.cv || 0.015;
+  // [HORIZONS APPRIS · 27/09/2026] la décision de ce cycle devient un trade virtuel au dernier prix réel, jugé à 15 min, 30 min, 1 h, 2 h et 4 h
+  // (tradé ou non), avec la perte max qu'aurait le vrai trade : 2 × stop prévu (même formule que slPctE plus bas), bornée 1,5-3 % (_lossCapSweep)
+  try {
+    if (typeof _thNote === 'function') {
+      const _thTp = Math.max(0.6, effectiveConviction * 3.2 * (1 + volCV * 9));
+      const _thSl = Math.max(0.45, Math.min((volCV * 100) * 1.4, _thTp / 1.4));
+      _thNote(pair, finalSignalWithMem, Math.min(3, Math.max(1.5, 2 * _thSl)));
+    }
+  } catch(e) {}
+  // [HORIZONS APPRIS · 27/09/2026] places prises (10g) : le cycle a tourné pour noter la décision (et juger les voix sur l'avenir) — rien ne s'ouvre ni ne se ferme
+  // ici ; la décision commune de la paire (ps._dc) est donc à jour : la bascule (07) peut fermer une position non marquée même quand les places sont prises
+  if (typeof window !== 'undefined' && window.__thNoteOnly) return;
   const adxFilter = adxVal<18?0.75:adxVal<25?0.90:1.0;
   const volFilter = volCV>0.05?0.85:volCV<0.008?1.10:1.0;
   const minConv   = 0.48;
@@ -316,7 +327,8 @@ function _resolvePairCycleCore(pair, ps) {
     const consRev=oppWeight>0.75&&effectiveConviction>0.55;
 
     const canBotClose = S.botAutoMode !== false;
-    if(canBotClose && minHoldMet && (sigRev||timeClose||hardTime||consRev)){
+    // [HORIZONS APPRIS · 27/09/2026] une position ouverte sur un horizon prouvé (botPos._thX) n'est pas fermée par le cycle : elle sort à son horizon (_botExitSweep)
+    if(canBotClose && !botPos._thX && minHoldMet && (sigRev||timeClose||hardTime||consRev)){
       const why=(sigRev||consRev)?'Signal inversé':'Timeout';
       closePosition(botPos.id,true);
       // [DOUBLE JUGEMENT · 26/09/2026] plus de second jugement ici : closePosition (02) vient de juger les agents (source 'position', décroissance 1,3) — l'appel 'trade' qui suivait comptait le même trade DEUX fois (fitness, compétence par paire, souvenirs, régime)
@@ -572,7 +584,15 @@ function _resolvePairCycleCore(pair, ps) {
   // fantomes annoncant un trade qui n'existe pas.
   if(!np) return;
   np.tp=tpE; np.sl=slE; np._holdCycles=0;
-  try { np._votes = Object.assign({}, (ps.roster && ps.roster.votes) || {}); np._comp = composite; np._dcC = _dcR ? _dcR.C : null; np._thL = _thOn ? _thL : null; } catch(e) {}   // [DÉCISION COMMUNE · 27/09/2026] jugés à la fermeture sur ce qu'ils disaient À L'OUVERTURE
+  try { np._votes = Object.assign({}, (ps.roster && ps.roster.votes) || {}); np._comp = composite; np._dcC = _dcR ? _dcR.C : null; np._thL = _thOn ? _thL : null; } catch(e) {}
+  // [HORIZONS APPRIS · 27/09/2026] la position est MARQUÉE de l'horizon prouvé que cette conviction atteint (03 _thPick) : tenue jusqu'à la clôture
+  // de sa bougie de sortie (_botExitSweep), comme le trade virtuel qui l'a prouvée — seulement si elle a été ouverte dans le sens décidé (l'entonnoir
+  // 09c peut la retourner : ce pari-là n'a rien prouvé, il garde les sorties habituelles)
+  let _thP = null;
+  try {
+    _thP = (_thOn && np.side === side && typeof _thPick === 'function') ? _thPick(Math.abs(finalSignalWithMem)) : null;
+    if (_thP && _thP.f > 0) { const _t0 = Number(np.openedAt) || Date.now(); np._thH = _thP.h; np._thX = Math.floor((_t0 + _thP.h * _thP.f) / _thP.f) * _thP.f + _thP.f; }
+  } catch(e) { _thP = null; }   // [DÉCISION COMMUNE · 27/09/2026] jugés à la fermeture sur ce qu'ils disaient À L'OUVERTURE
   // [P1] trace de diversification : ouverture obtenue grâce au bonus anti-corrélé
   if(_corrDecisive){
     S.chainLog.push({icon:'🔗',
@@ -588,7 +608,7 @@ function _resolvePairCycleCore(pair, ps) {
   const tt=cfg.dec>=4?tpE.toFixed(cfg.dec):Math.floor(tpE).toLocaleString();
   const st=cfg.dec>=4?slE.toFixed(cfg.dec):Math.floor(slE).toLocaleString();
   S.chainLog.push({icon:side==='long'?'🟢':'🔴',
-    desc:`BOT ${side.toUpperCase()} ${pair} @${pt} | ${_dcR ? 'Commun:' + (_dcR.C*100).toFixed(0) + '% (' + _dcR.n + ' voix) ' : ''}${_thOn ? 'Seuil appris:' + (_thL*100).toFixed(0) + '% ' : ''}AT:${(atScore*100).toFixed(0)}% AF:${(fundScore*100).toFixed(0)}% Ag:${(agentConsensus*100).toFixed(0)}% Conv:${(effectiveConviction*100).toFixed(0)}% | TP:${tt} SL:${st}`,
+    desc:`BOT ${side.toUpperCase()} ${pair} @${pt} | ${_dcR ? 'Commun:' + (_dcR.C*100).toFixed(0) + '% (' + _dcR.n + ' voix) ' : ''}${_thOn ? 'Seuil appris:' + (_thL*100).toFixed(0) + '% ' : ''}${_thP && typeof _thHzLab === 'function' ? '· tenue ' + _thHzLab(_thP.h, _thP.f) + ' ' : ''}AT:${(atScore*100).toFixed(0)}% AF:${(fundScore*100).toFixed(0)}% Ag:${(agentConsensus*100).toFixed(0)}% Conv:${(effectiveConviction*100).toFixed(0)}% | TP:${tt} SL:${st}`,
     hash:rndHash(),time:nowStr()});
   showToast(`🤖 Bot ${side.toUpperCase()} ${pair} · AT${atScore>=0?'+':''}${(atScore*100).toFixed(0)}% AF${fundScore>=0?'+':''}${(fundScore*100).toFixed(0)}% · ${(effectiveConviction*100).toFixed(0)}%`);
 
@@ -648,6 +668,9 @@ window._closeCompleted = _closeCompleted;
 window._botExitSweep = function _botExitSweep() {
   try {
     if (!S || !S.openPositions || !S.pairStates) return;
+    // [HORIZONS APPRIS · 27/09/2026] les trades virtuels arrivés à terme sont jugés ici aussi (au plus toutes les 10 s) : les horizons longs
+    // n'attendent pas le cycle d'une paire
+    try { if (typeof _thJudge === 'function' && (Date.now() - (window.__thJudgeTs || 0)) >= 10000) { window.__thJudgeTs = Date.now(); _thJudge(); } } catch(e) {}
     if (S.botAutoMode === false) return;   // canBotClose, même règle qu'à la résolution
     S.openPositions.slice().forEach(function(pos){
       if (!pos || pos.auto !== true) return;
@@ -667,14 +690,33 @@ window._botExitSweep = function _botExitSweep() {
       // rien : on ne sait pas ce que la mèche a fait, on suppose que non.
       if (S.tradingMode === 'paperReal' && pos._pathStale > 0 && typeof _rcPriceAge === 'function' && _rcPriceAge(pos.pair) <= 120000) {
         var _staleTicks = pos._pathStale; pos._pathStale = 0;
-        if (isFinite(pos.sl) && pos.sl > 0 && (isLong ? px <= pos.sl : px >= pos.sl)) {
-          pos._forcedExitPx = pos.sl;
-          var _slPnl = (isLong ? (pos.sl - entry) / entry : (entry - pos.sl) / entry) * 100;
+        // [HORIZONS APPRIS · 27/09/2026] position marquée d'un horizon : son stop est la perte max (même formule que _lossCapSweep), pas le SL
+        var _stopLv = Number(pos.sl);
+        if (pos._thX && isFinite(_stopLv) && _stopLv > 0) { var _capPc = Math.min(3, Math.max(1.5, 2 * Math.abs(entry - _stopLv) / entry * 100)); _stopLv = entry * (1 + (isLong ? -1 : 1) * _capPc / 100); }
+        if (isFinite(_stopLv) && _stopLv > 0 && (isLong ? px <= _stopLv : px >= _stopLv)) {
+          pos._forcedExitPx = _stopLv;
+          var _slPnl = (isLong ? (_stopLv - entry) / entry : (entry - _stopLv) / entry) * 100;
           pos._ruleExit = { kind: 'stop_exchange', at: Math.round(_slPnl * 1000) / 1000, t: Date.now() };
           if (!_closeCompleted(pos, 'bot stop exchange simul\u00e9 (coupure)')) { delete pos._forcedExitPx; return; }
           try { S.chainLog.push({ icon: '\uD83D\uDD0C', desc: 'Stop c\u00f4t\u00e9 exchange (simul\u00e9) \u00b7 ' + pos.pair + ' ' + String(pos.side).toUpperCase() + ' \u00b7 coupure ' + Math.round(_staleTicks / 60) + ' min, prix revenu \u00e0 ' + pnlPct.toFixed(2) + ' % \u2192 compt\u00e9 au stop ' + _slPnl.toFixed(2) + ' %', hash: Math.random().toString(36).slice(2, 8), time: new Date().toLocaleTimeString() }); if (S.chainLog.length > 100) S.chainLog.splice(0, S.chainLog.length - 100); } catch(e) {}
           return;
         }
+      }
+      // [HORIZONS APPRIS · 27/09/2026] position ouverte sur un horizon prouvé (10f np._thX) : elle sort à la clôture de sa bougie de sortie, comme
+      // le trade virtuel qui l'a prouvée, au dernier prix RÉEL (ps.price peut dater : mode en arrière-plan, coupure, réouverture de l'app) — figé
+      // depuis plus de 2 min : on attend un prix frais ; d'ici là, aucune autre sortie de ce balayage (règles apprises, TP / SL, breakeven) — la
+      // perte max (_lossCapSweep) et le stop sur coupure ci-dessus restent.
+      if (pos._thX) {
+        if (Date.now() < pos._thX) return;
+        var _hxPx = (typeof _rcLastPrice === 'function') ? Number(_rcLastPrice(pos.pair)) : 0;
+        if (!(_hxPx > 0) || (typeof _rcPriceAge === 'function' && _rcPriceAge(pos.pair) > 120000)) return;
+        var _hxPnl = (isLong ? (_hxPx - entry) / entry : (entry - _hxPx) / entry) * 100;
+        pos._forcedExitPx = _hxPx;
+        pos._ruleExit = { kind: 'horizon_appris', at: Math.round(_hxPnl * 1000) / 1000, t: Date.now() };
+        var _hzL = (typeof _thHzLab === 'function') ? _thHzLab(pos._thH || 1, (typeof _thTfMs === 'function' && typeof _thTf === 'function') ? _thTfMs(_thTf()) : 900000) : ((pos._thH || 1) + ' bougies');
+        if (!_closeCompleted(pos, 'bot horizon appris ' + _hzL)) { delete pos._forcedExitPx; return; }
+        try { S.chainLog.push({ icon: '\u23F3', desc: 'Horizon appris \u00b7 ' + pos.pair + ' ' + String(pos.side).toUpperCase() + ' \u00b7 tenue ' + _hzL + ' \u00b7 @' + _hxPnl.toFixed(2) + ' %', hash: Math.random().toString(36).slice(2, 8), time: (typeof nowStr === 'function') ? nowStr() : '' }); if (S.chainLog.length > 100) S.chainLog.splice(0, S.chainLog.length - 100); } catch(e) {}
+        return;
       }
       // [MÉMOIRE DES CHEMINS · 22/09/2026] HORIZON APPRIS : si la règle de la paire est armée par ses propres chemins
       // (10i _horizonRefresh) et que la position est encore négative passé H minutes, elle est fermée ici — avant les

@@ -1,3 +1,4 @@
+// [HORIZONS APPRIS · 27/09/2026] VERSION 20260927i · chaque décision de cycle (EV / RE) jugée à 5 horizons (1, 2, 4, 8, 16 bougies = 15 min à 4 h en 15 min) avec la perte max du vrai trade ; un seuil prouvé par horizon et par pas de temps (5 niveaux de conviction, ≥ 30 trades et ≥ 20 créneaux, Student au niveau Φ(−2) / 25) ; _thPick choisit l'horizon à tenir (la meilleure moyenne par bougie tenue parmi ceux que la conviction atteint)
 // [SEUIL APPRIS · 27/09/2026] VERSION 20260927h · moteur du seuil d'ouverture appris : chaque décision de cycle (EV / RE) devient un trade virtuel (entrée au dernier prix réel, sortie H bougies plus tard, net de frais) jugé sans jamais inventer de prix (_thNote / _thJudge) ; le seuil = le niveau de conviction dont les trades virtuels ont prouvé gagner (≥ 30 trades, ≥ 10 créneaux, moyenne au-dessus de zéro de plus de 2 erreurs types prises par créneau, recouvrement compris), sinon marché fermé (_thEval / _thLevel)
 // [DÉCISION COMMUNE · 27/09/2026] VERSION 20260927g · moteur de la décision commune : voix de chaque bot sur LA paire (_botView), bilan mesuré (_dcMerit), consensus (_dcConsensus), bilan pris SUR L'AVENIR (_dcForwardJudge : votes du cycle précédent jugés sur le mouvement survenu depuis) ; _agentPairVote lit le vote tel qu'il était au moment du pari
 // [FREIN · 27/09/2026] VERSION 20260927f · commentaire de _botStakeMult : un bot au bilan négatif (mult 0) n'ouvre plus en EV (04) — sa « mise minimum » (plancher, 5 % du compte) valait la mise normale
@@ -6467,33 +6468,79 @@ function _dcSnapVotes(pair, ps, composite) {
 // Rejeu avant livraison (app réelle en accéléré, 81 h, 9 fenêtres, état de départ = backup précédent, 2 tirages) : décision commune seule (20260927g) : tirage 1 146 trades, net −9,24 $ ; tirage 2 122 trades, net −9,98 $ — avec le seuil appris (ce code) : tirage 1 0 trades, net +0,00 $ ; tirage 2 0 trades, net +0,00 $.
 // Trades virtuels du rejeu : tirage 1 : 3598 trades virtuels, net moyen −0,192 %/trade (juste 46 % du temps sur le sens), conviction ≥ 0,3 : −0,374 % (n 410), ≥ 0,4 : −0,541 % (n 169) ; règle sur tout le cumul : fermé (le plus proche : tous niveaux, −0,192 % ± 0,09) ; tirage 2 : 3598 trades virtuels, net moyen −0,237 %/trade (juste 44 % du temps sur le sens), conviction ≥ 0,3 : −0,475 % (n 441), ≥ 0,4 : −0,528 % (n 158) ; règle sur tout le cumul : fermé (le plus proche : tous niveaux, −0,237 % ± 0,08).
 // Simulation des faux positifs (cette fonction _thEval, 100 historiques de 5 jours calibrés sur le rejeu) : monde où tout perd après frais mais presque à l'équilibre en haut : première version ouverte au moins une fois dans 67 % des historiques de 5 jours, version livrée 6 % ; monde avec un vrai avantage (net > 0 au-dessus de 0,28) : ouverte 46 % du temps, première ouverture ≈ 20 h, +0,063 %/trade ; avantage fort : 87 % du temps, ≈ 8 h, +0,118 %/trade.
-var TH_MIN_N = 30, TH_MIN_B = 10, TH_Z = 2, TH_KEEP = 2000, TH_HOLD_N = 30, TH_PEND_MAX = 2000;
+// ═══ [HORIZONS APPRIS · 27/09/2026] COMBIEN DE TEMPS TENIR — APPRIS AUSSI (go Rams 27/09 16:54) ═══
+// 20260927h jugeait chaque décision à UN horizon : la durée médiane des trades réels (30 min, fixée surtout par la sortie « 30 min à plat »).
+// À 30 min, aucun niveau ne payait les frais. Maintenant chaque décision est jugée à 5 horizons — 1, 2, 4, 8 et 16 bougies (en 15 min :
+// 15 min, 30 min, 1 h, 2 h, 4 h) — toujours sans trader, et le trade virtuel porte la protection du vrai : la perte max (_lossCapSweep :
+// 2 × stop prévu, bornée 1,5-3 %) — si le chemin la touche après l'entrée et avant l'horizon, le trade virtuel sort à ce niveau. Coupure
+// réseau ou bougie manquante sur le chemin : les horizons qui la traversent sont abandonnés (jamais de prix inventé).
+// La preuve (par horizon, créneaux de h+1 bougies) : 5 niveaux de conviction seulement — toutes les décisions, la moitié, le quart, le dixième
+// et le vingtième les plus forts —, au moins 30 trades et 20 créneaux, moyenne au-dessus de zéro de plus que la valeur critique de Student
+// (créneaux − 1 degrés de liberté) au niveau de 2 erreurs types partagé entre les 25 essais (5 horizons × 5 niveaux : Φ(−2) / 25, ≈ 3,6 à
+// 20 créneaux, 3,3 à 60). Pourquoi si exigeant : une relecture indépendante a montré qu'en essayant TOUS les niveaux (des centaines), un
+// marché sans avantage « prouvait » un horizon dans 18 historiques de 5 jours sur 40. Parmi les niveaux prouvés d'un horizon : celui qui
+// aurait rapporté le plus au total. Un seuil par pas de temps (EV et RE peuvent différer). Fenêtre : les décisions des 30 derniers créneaux
+// du plus long horizon (≈ 5 jours en 15 min), plafond mémoire TH_REC_MAX ; les décisions jugées sont gardées sous forme compacte
+// [conviction, heure (s), pas (min), net à chaque horizon].
+// Quand un horizon est prouvé, la position ouverte à ce niveau est MARQUÉE de cet horizon (10f) et tenue jusqu'à la clôture de sa bougie de
+// sortie, comme le trade virtuel qui l'a prouvée : trailing, anti-zombie, bascule (07), règles apprises, TP / SL, breakeven (10f), sorties
+// du cycle (signal inversé, timeout), fermeture préventive sur retournement (10d) et propositions exécutées automatiquement (04) attendent
+// l'horizon ; restent : la perte max, le stop sur coupure (au niveau de la perte max), la marge du levier, les sécurités de drawdown
+// (sauvetage, plein régime, appel de marge) et TES fermetures à la main. Elle sort au dernier prix réel (jamais sur un prix figé). Plusieurs
+// horizons prouvés : parmi ceux dont le seuil est atteint, celui qui rapporte le plus par bougie tenue (moyenne prouvée ÷ horizon).
+// Rejeu avant livraison (app réelle en accéléré, 81 h, 9 fenêtres, 2 tirages) : décision commune seule (20260927g) : tirage 1 146 trades, net −9,24 $ ; tirage 2 122 trades, net −9,98 $ — avec les horizons appris (ce code) : tirage 1 0 trades, net 0 $ ; tirage 2 0 trades, net 0 $.
+// Trades virtuels du rejeu, net moyen par horizon (tous niveaux) : tirage 1 (4091 décisions) : 15 min −0,28 %/trade (≥ 0,4 : −0,46 %) ; 30 min −0,29 %/trade (≥ 0,4 : −0,49 %) ; 1 h −0,27 %/trade (≥ 0,4 : −0,54 %) ; 2 h −0,26 %/trade (≥ 0,4 : −0,66 %) ; 4 h −0,32 %/trade (≥ 0,4 : −1,13 %) — tirage 2 (4091 décisions) : 15 min −0,31 %/trade (≥ 0,4 : −0,44 %) ; 30 min −0,31 %/trade (≥ 0,4 : −0,48 %) ; 1 h −0,30 %/trade (≥ 0,4 : −0,57 %) ; 2 h −0,31 %/trade (≥ 0,4 : −0,73 %) ; 4 h −0,37 %/trade (≥ 0,4 : −0,97 %).
+// Simulation (cette fonction _thEval, 24 historiques de 8 jours calibrés sur le rejeu) : sans avantage : 0 % des historiques de 8 jours ouverts au moins une fois (0,0 % du temps) ; net exactement nul partout : 17 % des historiques de 8 jours ouverts au moins une fois (0,2 % du temps, 23 décisions ouvertes, net moyen +0,13 %) ; net −0,03 % partout : 0 % des historiques de 8 jours ouverts au moins une fois (0,0 % du temps) ; tout perdant, presque à l'équilibre en haut : 0 % des historiques de 8 jours ouverts au moins une fois (0,0 % du temps) ; vrai avantage aux horizons longs : 4 % des historiques de 8 jours ouverts au moins une fois (0,1 % du temps, 1 décision ouverte, net moyen −2,27 %) ; avantage fort dès 1 h : 92 % des historiques de 8 jours ouverts au moins une fois (38,1 % du temps, 3416 décisions ouvertes, net moyen +0,19 %).
+var TH_MIN_N = 30, TH_MIN_B = 20, TH_HZ = [1, 2, 4, 8, 16], TH_TOP = [1, 0.5, 0.25, 0.1, 0.05], TH_REC_MAX = 8000, TH_PEND_MAX = 2000;
+var TH_ALPHA = 0.0227501319481792 / (TH_HZ.length * TH_TOP.length);   // Φ(−2) = 0,02275 (2 erreurs types, un côté) partagé entre les 25 essais
+// Inverse de la loi normale (Acklam, erreur relative < 1,2e-9).
+function _thNormInv(p) {
+  const a = [-3.969683028665376e+01, 2.209460984245205e+02, -2.759285104469687e+02, 1.383577518672690e+02, -3.066479806614716e+01, 2.506628277459239e+00];
+  const b = [-5.447609879822406e+01, 1.615858368580409e+02, -1.556989798598866e+02, 6.680131188771972e+01, -1.328068155288572e+01];
+  const c = [-7.784894002430293e-03, -3.223964580411365e-01, -2.400758277161838e+00, -2.549732539343734e+00, 4.374664141464968e+00, 2.938163982698783e+00];
+  const d = [7.784695709041462e-03, 3.224671290700398e-01, 2.445134137142996e+00, 3.754408661907416e+00];
+  let q, r;
+  if (p < 0.02425) { q = Math.sqrt(-2 * Math.log(p)); return (((((c[0] * q + c[1]) * q + c[2]) * q + c[3]) * q + c[4]) * q + c[5]) / ((((d[0] * q + d[1]) * q + d[2]) * q + d[3]) * q + 1); }
+  if (p > 1 - 0.02425) { q = Math.sqrt(-2 * Math.log(1 - p)); return -(((((c[0] * q + c[1]) * q + c[2]) * q + c[3]) * q + c[4]) * q + c[5]) / ((((d[0] * q + d[1]) * q + d[2]) * q + d[3]) * q + 1); }
+  q = p - 0.5; r = q * q;
+  return (((((a[0] * r + a[1]) * r + a[2]) * r + a[3]) * r + a[4]) * r + a[5]) * q / (((((b[0] * r + b[1]) * r + b[2]) * r + b[3]) * r + b[4]) * r + 1);
+}
+// Quantile de Student (Cornish-Fisher, Abramowitz-Stegun 26.7.5 : écart < 0,1 % dès 9 degrés de liberté).
+function _thTInv(p, v) {
+  const z = _thNormInv(p), z2 = z * z;
+  return z + (z2 * z + z) / (4 * v) + ((5 * z2 + 16) * z2 * z + 3 * z) / (96 * v * v) + (((3 * z2 + 19) * z2 + 17) * z2 * z - 15 * z) / (384 * v * v * v)
+    + ((((79 * z2 + 776) * z2 + 1482) * z2 - 1920) * z2 * z - 945 * z) / (92160 * v * v * v * v);
+}
+var _thCritC = {};
+function _thCrit(nb) { const v = Math.max(1, (nb | 0) - 1); return _thCritC[v] || (_thCritC[v] = _thTInv(1 - TH_ALPHA, v)); }
 function _thState() {
   if (!S.dcThreshold || typeof S.dcThreshold !== 'object') S.dcThreshold = {};
   const T = S.dcThreshold;
-  if (!Array.isArray(T.obs)) T.obs = [];
+  if (!Array.isArray(T.rec)) T.rec = [];
   if (!Array.isArray(T.pend)) T.pend = [];
+  if (!T.rules || typeof T.rules !== 'object') T.rules = {};
+  if (!T.dirty || typeof T.dirty !== 'object') T.dirty = {};   // par pas de temps : de nouveaux jugements attendent le recalcul de CE seuil
+  // 20260927h (un seul horizon, rule.h) : ses trades jugés deviennent les résultats de cet horizon s'il est dans la grille ; ses trades en
+  // attente (quelques heures au plus) sont abandonnés ; un seuil par pas de temps désormais (T.rules)
+  if (Array.isArray(T.obs)) {
+    const iOld = TH_HZ.indexOf(Number(T.rule && T.rule.h)), fm = _thTfMs(_thTf()) / 60000;
+    if (iOld >= 0) T.obs.forEach(o => { if (o && isFinite(o.c) && isFinite(o.n) && isFinite(o.t)) { const r = [Number(o.c), Math.round(o.t / 1000), fm, false, false, false, false, false]; r[3 + iOld] = Number(o.n); T.rec.push(r); } });
+    delete T.obs; T.pend = T.pend.filter(q => q && Array.isArray(q.x));
+  }
+  if (T.rule !== undefined) delete T.rule;
   return T;
 }
 function _thRealLike() { return S.tradingMode === 'paperReal' || S.tradingMode === 'real'; }
 function _thTf() { return (S.tradingMode === 'real') ? (S.realTimeframe || '15m') : (S.paperRealTimeframe || '15m'); }
 function _thTfMs(tf) { return { '5m': 300000, '15m': 900000, '1h': 3600000, '4h': 14400000, '1j': 86400000 }[tf] || 900000; }
-function _thGroup(reg) { return reg === 'calm' ? 'c' : (String(reg || '').indexOf('volatile') === 0 ? 'v' : 'o'); }
-// Horizon du trade virtuel, en bougies : durée médiane des 30 derniers trades réels clos (mémoire des contextes). Sans aucun trade clos : 1 bougie.
-function _thHorizon(tfMs) {
-  try {
-    const h = (S.tradeContextMemory || []).filter(t => t && t.closedAt && isFinite(t.holdMinutes)).slice(-TH_HOLD_N).map(t => Number(t.holdMinutes)).sort((a, b) => a - b);
-    if (!h.length) return 1;
-    const med = h.length % 2 ? h[(h.length - 1) / 2] : (h[h.length / 2 - 1] + h[h.length / 2]) / 2;
-    return Math.max(1, Math.round(med * 60000 / (tfMs || 900000)));
-  } catch (e) { return 1; }
-}
+function _thHzLab(h, f) { const m = Math.round(h * (f || 900000) / 60000); return m < 60 ? (m + ' min') : (m % 60 ? (Math.floor(m / 60) + ' h ' + (m % 60)) : (m / 60 + ' h')); }
 function _thCandle(arr, ts) {
   for (let i = arr.length - 1; i >= 0; i--) { const b = arr[i]; if (!b) continue; if (b.ts === ts) return i; if (b.ts < ts) break; }
   return -1;
 }
-// La décision d'un cycle (10f, bougie close, EV / RE) devient un trade virtuel : entrée au dernier prix réel, en attente de sa bougie de sortie.
-function _thNote(pair, signal, regime) {
+// La décision d'un cycle (10f, bougie close, EV / RE) devient un trade virtuel : entrée au dernier prix réel (refusé s'il a plus de 2 min),
+// sortie à la clôture de la bougie qui contient « maintenant + h bougies » pour chaque horizon h, perte max capPct (même formule que le vrai).
+function _thNote(pair, signal, capPct) {
   try {
     if (!_thRealLike()) return false;
     const s = Number(signal); if (!(Math.abs(s) > 0)) return false;
@@ -6501,51 +6548,77 @@ function _thNote(pair, signal, regime) {
     const px = (typeof _rcLastPrice === 'function') ? Number(_rcLastPrice(pair)) : 0;
     if (!(px > 0) || (typeof _rcPriceAge === 'function' && _rcPriceAge(pair) > 120000)) return false;   // prix figé (> 2 min) : pas de pari
     const k = S.realPairCycle && S.realPairCycle[pair]; if (!(k > 0)) return false;
-    const tf = _thTf(), tfMs = _thTfMs(tf);
+    const tf = _thTf(), f = _thTfMs(tf);
     const arr = (S.realCandles && S.realCandles[pair] && S.realCandles[pair][tf]) || [];
     const ik = _thCandle(arr, k), last = arr[arr.length - 1];
     if (ik < 0 || arr[ik]._gap || !last || last._gap) return false;   // bougie close inconnue ou bouche-trou : pas de prix sûr
     const T = _thState();
     if (T.pend.some(q => q.p === pair && q.k === k)) return false;
     if (T.pend.length >= TH_PEND_MAX) return false;   // garde mémoire : on refuse les nouveaux, jamais ceux qui arrivent à terme
-    const H = _thHorizon(tfMs), tn = Date.now();
-    T.pend.push({ p: pair, k: k, tn: tn, px: px, d: s > 0 ? 1 : -1, c: Math.round(Math.abs(s) * 1000) / 1000, h: H,
-      x: Math.floor((tn + H * tfMs) / tfMs) * tfMs, b: Math.floor(tn / ((H + 1) * tfMs)), r: _thGroup(regime), tf: tf });
+    const tn = Date.now(), s0 = Math.floor(tn / f) * f, cap = Math.min(3, Math.max(1.5, Number(capPct) || 2));   // sans stop connu : 2 %, comme _lossCapSweep
+    // l'entrée tombe dans la bougie en cours : ses extrêmes d'AVANT l'entrée sont gardés, seuls les nouveaux compteront pour la perte max
+    const cur = (last.ts === s0) ? last : null;
+    T.pend.push({ p: pair, k: k, t: tn, px: px, d: s > 0 ? 1 : -1, c: Math.round(Math.abs(s) * 1000) / 1000, f: f, tf: tf,
+      cap: Math.round(cap * 1000) / 1000, x: TH_HZ.map(h => Math.floor((tn + h * f) / f) * f), n: TH_HZ.map(() => null),
+      s: s0 - f, s0: s0, el: cur ? Number(cur.l) : px, eh: cur ? Number(cur.h) : px, hit: 0 });
     return true;
   } catch (e) { return false; }
 }
-// Trades virtuels arrivés à terme (bougie de sortie CLOSE et réelle) → jugés. Sortie introuvable ou bouche-trou : abandonné, jamais inventé.
+// Trades virtuels : chemin parcouru sur les bougies CLOSES, dans l'ordre (perte max touchée après l'entrée ? coupure ? bougie manquante ?),
+// puis chaque horizon dont la bougie de sortie est close est jugé : perte max touchée avant ou pendant → −perte max − coût ; sinon sens ×
+// mouvement − coût. Sortie introuvable → abandonnée. Le seuil est recalculé au plus toutes les 5 min (et dès qu'il a plus d'une bougie).
 function _thJudge() {
   try {
     if (!_thRealLike()) return 0;
     const T = _thState(); if (!T.pend.length) return 0;
     const cost = (typeof _ownStakeCostPct === 'function') ? Number(_ownStakeCostPct()) || 0 : 0;
-    const now = Date.now(); let n = 0; const keep = [];
+    const now = Date.now(); let n = 0; const keep = [], dm = {};
     T.pend.forEach(q => {
-      if (!q || !(q.px > 0)) return;
-      const tfMs = _thTfMs(q.tf);
-      const arr = (S.realCandles && S.realCandles[q.p] && S.realCandles[q.p][q.tf]) || [];
-      const j = _thCandle(arr, q.x);
-      if (j >= 0 && (arr[j]._gap || (arr[j + 1] && arr[j + 1]._gap))) return;   // la sortie tombe dans une coupure (ou juste avant) : prix inconnu
-      if (j >= 0 && j < arr.length - 1 && Number(arr[j].c) > 0) {
-        const mv = (Number(arr[j].c) - q.px) / q.px * 100;
-        T.obs.push({ c: q.c, n: Math.round((q.d * mv - cost) * 10000) / 10000, b: q.b, r: q.r, t: q.tn, p: q.p });
-        n++; return;
+      if (!q || !(q.px > 0) || !Array.isArray(q.x) || !Array.isArray(q.n)) return;
+      const n0 = n;
+      const f = q.f || _thTfMs(q.tf), arr = (S.realCandles && S.realCandles[q.p] && S.realCandles[q.p][q.tf]) || [];
+      let cut = 0;
+      for (let i = 0; i < arr.length - 1; i++) {   // la dernière bougie est en cours : jamais lue
+        const b = arr[i]; if (!b || !(b.ts > q.s)) continue;
+        if (b._gap || b.ts > q.s + f) { cut = (b.ts > q.s + f) ? q.s + f : b.ts; break; }   // bouche-trou ou bougie manquante : chemin inconnu
+        let lo = Number(b.l), hi = Number(b.h);
+        if (b.ts === q.s0) { lo = lo < q.el ? lo : Infinity; hi = hi > q.eh ? hi : -Infinity; }   // bougie d'entrée : seuls ses extrêmes nouveaux sont d'après l'entrée
+        const adv = q.d > 0 ? (q.px - lo) / q.px * 100 : (hi - q.px) / q.px * 100;
+        if (!q.hit && adv >= q.cap) q.hit = b.ts;
+        q.s = b.ts;
       }
-      if (now > q.x + 4 * tfMs) return;   // série coupée ou paire retirée : abandonné
-      keep.push(q);
+      let open = false;
+      q.x.forEach((x, i) => {
+        if (q.n[i] !== null) return;   // déjà jugé (nombre) ou abandonné (false)
+        if (q.hit && q.hit <= x) { q.n[i] = Math.round((-q.cap - cost) * 10000) / 10000; n++; return; }
+        if (cut && x >= cut - f) { q.n[i] = false; return; }   // la sortie tombe dans une coupure ou juste avant : prix inconnu
+        const j = _thCandle(arr, x);
+        if (j >= 0 && j < arr.length - 1 && q.s >= x && !arr[j]._gap && !(arr[j + 1] && arr[j + 1]._gap) && Number(arr[j].c) > 0) {
+          const mv = (Number(arr[j].c) - q.px) / q.px * 100;
+          q.n[i] = Math.round((q.d * mv - cost) * 10000) / 10000; n++; return;
+        }
+        if (now > x + 4 * f) { q.n[i] = false; return; }   // série coupée ou paire retirée : abandonné
+        open = true;
+      });
+      if (n > n0) dm[Math.round(f / 60000)] = true;
+      if (open) keep.push(q);
+      else T.rec.push([q.c, Math.round(q.t / 1000), Math.round(f / 60000)].concat(q.n.map(v => (typeof v === 'number' ? v : false))));   // forme compacte
     });
     T.pend = keep;
-    if (n) { if (T.obs.length > TH_KEEP) T.obs.splice(0, T.obs.length - TH_KEEP); _thRefresh(); }
+    Object.keys(dm).forEach(k => { T.dirty[k] = true; });
+    const fm = _thTfMs(_thTf()) / 60000, R = T.rules[fm];
+    if (T.dirty[fm] && (!R || now - R.t >= 300000)) _thRefresh();
     return n;
   } catch (e) { return 0; }
 }
-// Pur : trades virtuels jugés {c: conviction, n: net %, b: créneau (entier)} → le seuil prouvé (ou aucun). Pour chaque niveau (du plus fort
-// au plus faible), la queue « ce niveau et au-dessus » : n, moyenne, erreur type par créneau = √(Σ r_b² + 2 Σ r_b r_{b+1}) / n (r_b = somme
-// des écarts du créneau b ; jamais moins que sans recouvrement), × √(créneaux / (créneaux − 1)).
+// Pur : trades virtuels jugés {c: conviction, n: net %, b: créneau (entier)} → le seuil prouvé (ou aucun). 5 niveaux seulement : les queues
+// qui contiennent tout, la moitié, le quart, le dixième, le vingtième des décisions les plus fortes (ex æquo compris). Pour chacune : n,
+// moyenne, erreur type par créneau = √(Σ r_b² + 2 Σ r_b·r_b+1) / n (r_b = somme des écarts du créneau b ; jamais moins que sans recouvrement),
+// × √(créneaux / (créneaux − 1)). Prouvée : n ≥ 30, créneaux ≥ 20, moyenne > _thCrit(créneaux) × erreur.
 function _thEval(obs) {
   const a = (obs || []).filter(o => o && isFinite(o.c) && isFinite(o.n) && isFinite(o.b)).slice().sort((x, y) => y.c - x.c);
-  const blk = {}; let n = 0, sum = 0, A = 0, B = 0, Q = 0, P1 = 0, P2 = 0, P3 = 0, nb = 0, best = null, near = null;
+  const tgt = TH_TOP.map(q => Math.max(1, Math.ceil(q * a.length))).sort((x, y) => x - y);
+  const blk = {}; let n = 0, sum = 0, A = 0, B = 0, Q = 0, P1 = 0, P2 = 0, P3 = 0, nb = 0, ti = 0, best = null, near = null;
   for (let i = 0; i < a.length; i++) {
     const o = a[i], x = Number(o.n), b = Number(o.b);
     let e = blk[b]; if (!e) { e = blk[b] = { s: 0, m: 0 }; nb++; }
@@ -6554,44 +6627,75 @@ function _thEval(obs) {
     P1 += x * sN; P2 += x * mN + sN; P3 += mN;                          // Σ S_b·S_b+1, Σ (S_b·n_b+1 + n_b·S_b+1), Σ n_b·n_b+1
     e.s += x; e.m += 1; n++; sum += x;
     if (i + 1 < a.length && a[i + 1].c === o.c) continue;   // ex æquo : le niveau se juge avec tous ses trades
+    if (ti >= tgt.length || n < tgt[ti]) continue;          // pas un des 5 niveaux
+    while (ti < tgt.length && tgt[ti] <= n) ti++;
     if (n < TH_MIN_N || nb < TH_MIN_B) continue;
     const mean = sum / n, v0 = Math.max(0, A - 2 * mean * B + mean * mean * Q), c1 = P1 - mean * P2 + mean * mean * P3;
     const se = Math.sqrt(Math.max(v0, v0 + 2 * c1) / (n * n) * (nb / (nb - 1)));
-    const tail = { level: o.c, n: n, blocks: nb, mean: mean, se: se, total: sum };
-    if (!near || mean - TH_Z * se > near.mean - TH_Z * near.se) near = tail;
-    if (mean - TH_Z * se > 0 && (!best || sum > best.total)) best = tail;
+    const k = _thCrit(nb), tail = { level: o.c, n: n, blocks: nb, mean: mean, se: se, total: sum, crit: k };
+    if (!near || mean - k * se > near.mean - near.crit * near.se) near = tail;
+    if (mean - k * se > 0 && (!best || sum > best.total)) best = tail;
   }
-  return { open: !!best, level: best ? best.level : null, best: best, near: near, n: a.length, z: TH_Z };
+  return { open: !!best, level: best ? best.level : null, best: best, near: near, n: a.length };
+}
+// Un horizon (indice i de TH_HZ), un pas de temps : créneaux de h+1 bougies.
+function _thEvalH(i, T, f) {
+  const h = TH_HZ[i], L = (h + 1) * f, fm = f / 60000, obs = [];
+  T.rec.forEach(r => { const v = r && r[3 + i]; if (r && r[2] === fm && typeof v === 'number' && isFinite(v)) obs.push({ c: r[0], n: v, b: Math.floor(r[1] * 1000 / L) }); });
+  T.pend.forEach(q => { const v = q && q.n && q.n[i]; if (q && q.f === f && typeof v === 'number' && isFinite(v)) obs.push({ c: q.c, n: v, b: Math.floor(q.t / L) }); });
+  const r = _thEval(obs); r.h = h; r.score = r.open ? r.best.mean / h : null;
+  return r;
 }
 function _thRefresh() {
   try {
-    const T = _thState(), old = T.rule || null, r = _thEval(T.obs);
-    const g = {}; T.obs.forEach(o => { const k = o.r || 'o'; if (!g[k]) g[k] = { n: 0, s: 0 }; g[k].n++; g[k].s += Number(o.n) || 0; });
-    r.byRegime = g; r.t = Date.now(); r.h = _thHorizon(_thTfMs(_thTf())); r.cost = (typeof _ownStakeCostPct === 'function') ? Number(_ownStakeCostPct()) || 0 : 0;
-    T.rule = r;
-    const moved = !old || old.open !== r.open || (r.open && Math.abs((old.level || 0) - r.level) >= 0.02);
-    if (moved && S.chainLog) {
-      const f2 = x => (x >= 0 ? '+' : '') + x.toFixed(2).replace('.', ',');
-      const nr = r.near ? ('le plus proche : conviction ≥ ' + r.near.level.toFixed(2).replace('.', ',') + ' → ' + f2(r.near.mean) + ' %/trade sur ' + r.near.n + ' trades virtuels') : ('pas encore assez de trades virtuels : ' + r.n + ' jugés');
-      const desc = r.open
-        ? ('Seuil appris · ouvert à conviction ≥ ' + r.level.toFixed(2).replace('.', ',') + ' — les trades virtuels de ce niveau et au-dessus gagnent ' + f2(r.best.mean) + ' %/trade net de frais (' + r.best.n + ' trades, ' + r.best.blocks + ' créneaux)')
-        : ('Seuil appris · marché fermé — aucun niveau de consensus ne paie encore les frais (' + nr + ')');
+    const T = _thState(), f = _thTfMs(_thTf()), fm = f / 60000, old = T.rules[fm] || null, now = Date.now(), hmax = Math.max.apply(null, TH_HZ);
+    T.rec = T.rec.filter(r => Array.isArray(r) && r[1] * 1000 >= now - 1.5 * TH_MIN_B * (hmax + 1) * r[2] * 60000);   // 30 créneaux du plus long horizon, par pas de temps
+    if (T.rec.length > TH_REC_MAX) T.rec.splice(0, T.rec.length - TH_REC_MAX);
+    const hz = TH_HZ.map((h, i) => _thEvalH(i, T, f)), op = hz.filter(x => x.open);
+    const rule = { open: op.length > 0, level: op.length ? Math.min.apply(null, op.map(x => x.level)) : null, hz: hz, t: now, tfMs: f, alpha: TH_ALPHA,
+      cost: (typeof _ownStakeCostPct === 'function') ? Number(_ownStakeCostPct()) || 0 : 0, n: T.rec.length + T.pend.length };
+    T.rules[fm] = rule; T.dirty[fm] = false;
+    const same = !!(old && Array.isArray(old.hz) && old.hz.length === hz.length && hz.every((x, i) => x.open === old.hz[i].open && (!x.open || Math.abs(x.level - old.hz[i].level) < 0.02)));
+    if (!same && S.chainLog) {
+      const f2 = x => (x >= 0 ? '+' : '') + x.toFixed(2).replace('.', ','), lv = x => x.toFixed(2).replace('.', ',');
+      let desc;
+      if (op.length) desc = 'Seuil appris · ouvert — ' + op.map(x => _thHzLab(x.h, f) + ' dès conviction ≥ ' + lv(x.level) + ' (' + f2(x.best.mean) + ' %/trade net de frais, ' + x.best.n + ' trades, ' + x.best.blocks + ' créneaux)').join(' ; ');
+      else {
+        let nr = null; hz.forEach(x => { if (x.near && (!nr || x.near.mean - x.near.crit * x.near.se > nr.near.mean - nr.near.crit * nr.near.se)) nr = x; });
+        desc = 'Seuil appris · marché fermé — aucun horizon (' + _thHzLab(TH_HZ[0], f) + ' à ' + _thHzLab(TH_HZ[TH_HZ.length - 1], f) + ') ne paie encore les frais (' +
+          (nr ? ('le plus proche : ' + _thHzLab(nr.h, f) + ', conviction ≥ ' + lv(nr.near.level) + ' → ' + f2(nr.near.mean) + ' %/trade sur ' + nr.near.n + ' trades virtuels') : ('pas encore assez de trades virtuels : ' + rule.n + ' décisions')) + ')';
+      }
       S.chainLog.push({ icon: '🎚', desc: desc, hash: Math.random().toString(36).slice(2, 8), time: (typeof nowStr === 'function') ? nowStr() : '' });
       if (S.chainLog.length > 100) S.chainLog.splice(0, S.chainLog.length - 100);
     }
-    return r;
+    return rule;
   } catch (e) { return null; }
 }
-// Seuil courant pour 10f : null hors EV / RE (prix simulés : les portes d'avant restent) ; Infinity = marché fermé.
+// Le seuil du pas de temps du mode, recalculé s'il manque, s'il a plus d'une bougie, ou si de nouveaux jugements attendent depuis 5 min.
+function _thRule() {
+  const T = _thState(), f = _thTfMs(_thTf()), now = Date.now(); let R = T.rules[f / 60000];
+  if (!R || !Array.isArray(R.hz) || (now - R.t) > f || (T.dirty[f / 60000] && (now - R.t) >= 300000)) R = _thRefresh();
+  return R;
+}
+// Seuil courant pour 10f : null hors EV / RE (prix simulés : les portes d'avant restent) ; Infinity = marché fermé ; sinon le plus bas des
+// seuils prouvés (la conviction qui l'atteint a au moins un horizon prouvé — _thPick le choisit).
 function _thLevel() {
   try {
     if (!_thRealLike()) return null;
-    const T = _thState();
-    if (!T.rule) _thRefresh();
-    return (T.rule && T.rule.open && isFinite(T.rule.level)) ? Number(T.rule.level) : Infinity;
+    const R = _thRule();
+    return (R && R.open && isFinite(R.level)) ? Number(R.level) : Infinity;
   } catch (e) { return null; }
 }
-window._thNote = _thNote; window._thJudge = _thJudge; window._thEval = _thEval; window._thRefresh = _thRefresh; window._thLevel = _thLevel; window._thHorizon = _thHorizon;
+// Horizon à tenir pour une conviction c : parmi les horizons prouvés dont le seuil est atteint, celui qui rapporte le plus par bougie tenue.
+function _thPick(c) {
+  try {
+    if (!_thRealLike()) return null;
+    const r = _thRule(); if (!r || !r.open || !Array.isArray(r.hz)) return null;
+    let best = null; r.hz.forEach(x => { if (x && x.open && Number(c) >= x.level && (!best || x.score > best.score)) best = x; });
+    return best ? { h: best.h, level: best.level, mean: best.best.mean, f: r.tfMs } : null;
+  } catch (e) { return null; }
+}
+window._thNote = _thNote; window._thJudge = _thJudge; window._thEval = _thEval; window._thRefresh = _thRefresh; window._thLevel = _thLevel; window._thPick = _thPick; window._thHzLab = _thHzLab; window._thCrit = _thCrit; window._thRule = _thRule;
 window._botView = _botView; window._dcMerit = _dcMerit; window._dcConsensus = _dcConsensus; window._dcVoice = _dcVoice;
 window._dcForwardJudge = _dcForwardJudge; window._dcSnapVotes = _dcSnapVotes; window._dcJudgeComposite = _dcJudgeComposite;
 window._botPredict = _botPredict; window._botMeritAudit = _botMeritAudit; window._botJudgeMeasured = _botJudgeMeasured; window._botJudge = _botJudge;

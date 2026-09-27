@@ -47,7 +47,9 @@ T('D4 · closePosition RÉEL consomme le prix imposé UNE fois, et ne l\'utilise
   const c = codeStrict(s02);
   assert.ok(c.includes("const _forced = (isFinite(pos._forcedExitPx) && pos._forcedExitPx > 0) ? pos._forcedExitPx : null;") && c.includes('if (_forced !== null) delete pos._forcedExitPx;') && c.includes('const cur = _forced !== null ? _forced : (ps ? ps.price : pos.entryPrice);'));
   assert.strictEqual((c.match(/_forcedExitPx = /g) || []).length, 0, '02 ne le pose jamais lui-même');
-  assert.strictEqual((codeStrict(s10f).match(/pos\._forcedExitPx = pos\.sl;/g) || []).length, 1, 'un seul écrivain : 10f, à la reconnexion, au stop');
+  // [HORIZONS APPRIS · 27/09/2026] deux écrivains dans 10f : le stop sur coupure (au SL, ou à la perte max pour une position marquée d'un horizon) et la sortie « Horizon appris » (au dernier prix réel)
+  assert.strictEqual((codeStrict(s10f).match(/pos\._forcedExitPx = /g) || []).length, 2, 'deux écrivains, tous deux dans 10f');
+  assert.ok(codeStrict(s10f).includes('pos._forcedExitPx = _stopLv;') && codeStrict(s10f).includes('pos._forcedExitPx = _hxPx;') && codeStrict(s10f).includes('var _stopLv = Number(pos.sl);'), 'au stop (le SL hors horizon) · au dernier prix réel');
 });
 console.log('\n' + (fail ? '❌ ' : '✅ ') + pass + '/' + (pass + fail) + ' tests passés' + (fail ? ' — ' + fail + ' ÉCHEC(S)' : ''));
 process.exit(fail ? 1 : 0);
