@@ -1,3 +1,4 @@
+// [MARCHÉ LMSR À PART · 28/09/2026] VERSION 20260928b · section « Fitness des sièges » : colonne « marché » (portefeuille de marché du siège · dépense du génome, à part de la fitness) ; la fitness vivante n'est plus débitée entre deux jugements
 // [FITNESS AUX HORIZONS · 28/09/2026] VERSION 20260928a · section « Fitness des sièges » : définition vivante (horizons ou bougie), écart des sièges retirés par horizon, fitness bougie / horizons / vivante de chaque siège
 // [BILAN AUX HORIZONS · 27/09/2026] VERSION 20260927k · section « Poids des voix » : pesée vivante (horizons ou bougie), écart apparié des deux pesées par horizon, poids de chaque voix (bougie / horizons)
 // [SENS CONTRAIRE · 27/09/2026] VERSION 20260927j · section « Seuil d'ouverture appris » : le sens contraire de chaque décision, horizon par horizon (même preuve, décisions notées depuis sa mise en service) — mesuré seulement, rien n'est tradé
@@ -122,6 +123,7 @@ function _learnedPanelHtml() {
   var fr = T3 && T3.fRules && T3.fRules[thFm], fmodeTf = (T3 && T3.fModes && T3.fModes[thFm] === 'bougie') ? 'bougie' : 'hz';
   var fmode = (typeof _fjMode === 'function') ? _fjMode() : fmodeTf;   // la définition vivante : une par siège, tous pas de temps (bougie dès qu'un pas l'a prouvé)
   var seats = (S.agents || []).filter(function (a) { return a && !a.isBot && !a.isMeta; });
+  var kf = function (x) { x = Math.abs(Number(x) || 0); return x < 1000 ? String(Math.round(x)) : x < 1e6 ? ((x / 1000).toFixed(1) + ' k') : ((x / 1e6).toFixed(2) + ' M'); };   // [MARCHÉ LMSR À PART · 28/09/2026] la dépense de marché se compte en milliers par jour
   h += title('FITNESS DES SIÈGES', '· ce qui décide l\'évolution : le siège le plus faible est recyclé — sa fitness suit son bilan aux horizons dès qu\'il l\'a, la bougie suivante sinon');
   if (!vN && !fr) h += '<div style="color:#667;font-size:11px;">pas encore de siège jugé aux horizons</div>';
   else {
@@ -133,14 +135,14 @@ function _learnedPanelHtml() {
       h += row([{ t: '↳ ' + lab, w: '.8fr', s: 'font-weight:600;' }, { t: x.mean === null ? 'pas encore d\'écart' : ((x.mean >= 0 ? '+' : '') + Number(x.mean).toFixed(3) + ' %×vote/cycle' + (x.se !== null ? ' (± ' + Number(x.se).toFixed(3) + ')' : '')), w: '1.4fr', s: 'color:' + (x.mean === null ? '#556' : x.mean >= 0 ? '#00e87a' : '#ff4d6d') + ';' },
         { t: x.n + ' cycles · ' + x.blocks + ' créneaux' + (x.crit ? ' · exigé ' + Number(x.crit).toFixed(1) + ' ET' : ''), w: '1.2fr', s: 'color:#889;' }, { t: st, w: '.9fr', s: 'color:' + (x.better ? '#00e87a' : x.worse ? '#ffd166' : '#889') + ';' }]);
     });
-    h += row([{ t: 'siège', w: '1.3fr' }, { t: 'bougie', w: '.8fr' }, { t: 'horizons', w: '.8fr' }, { t: 'vivante (entre deux jugements, le marché LMSR de 08 la débite)', w: '.8fr' }], true);
+    h += row([{ t: 'siège', w: '1.3fr' }, { t: 'bougie', w: '.8fr' }, { t: 'horizons', w: '.8fr' }, { t: 'vivante', w: '.8fr' }, { t: 'marché (portefeuille · dépensé, à part)', w: '.9fr' }], true);
     seats.map(function (a) {
       var fb = null, fh = null; try { fb = (typeof _fitOf === 'function' && typeof _fitWindow === 'function') ? _fitOf(Array.isArray(a._judgments) ? a._judgments : [], _fitWindow()) : null; } catch (e) {}
       try { fh = (typeof _fitHz === 'function') ? _fitHz(a) : null; } catch (e) {}
-      return { name: a.name || a.id, fb: fb, fh: fh, f: Number(a.fitness) || 0 };
+      return { name: a.name || a.id, fb: fb, fh: fh, f: Number(a.fitness) || 0, m: Number(a.lmsrSpent) || 0, wl: (typeof a.lmsrWallet === 'number' && isFinite(a.lmsrWallet)) ? a.lmsrWallet : null };
     }).sort(function (x, y) { return x.f - y.f; }).forEach(function (r) {
       h += row([{ t: r.name, w: '1.3fr', s: 'font-weight:600;' }, { t: r.fb === null ? '—' : String(Math.round(r.fb)), w: '.8fr', s: 'color:#889;' },
-        { t: r.fh === null ? 'pas encore' : String(Math.round(r.fh)), w: '.8fr', s: 'color:' + (r.fh === null ? '#556' : r.fh >= 350 ? '#00e87a' : '#ff4d6d') + ';' }, { t: String(Math.round(r.f)) + ' T$', w: '.8fr', s: 'color:' + (r.f <= 80 ? '#ff4d6d' : '#cde') + ';font-weight:600;' }]);
+        { t: r.fh === null ? 'pas encore' : String(Math.round(r.fh)), w: '.8fr', s: 'color:' + (r.fh === null ? '#556' : r.fh >= 350 ? '#00e87a' : '#ff4d6d') + ';' }, { t: String(Math.round(r.f)) + ' T$', w: '.8fr', s: 'color:' + (r.f <= 80 ? '#ff4d6d' : '#cde') + ';font-weight:600;' }, { t: (r.wl === null ? '—' : String(Math.round(r.wl))) + ' · ' + (Math.round(r.m) ? ('−' + kf(r.m)) : '0'), w: '.9fr', s: 'color:#889;' }]);
     });
   }
   // 3 · emplacements

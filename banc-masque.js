@@ -33,10 +33,11 @@ function mkEvoCtx(S) {
 console.log('▶ banc-masque');
 T('D1 · « Faire évoluer maintenant » RÉEL (03 + 07) : les 3 apprenants ≤ 80 T$ ÉVOLUENT (nouveau nom, génome, fenêtre vide, naissance ≥ 350, probation) même si l\'évolution automatique attend son heure ; bots, Évolueur et sains intacts ; un seul résumé ; le délai d\'1 h repart', () => {
   const now = Date.now(), S = mkState(now), c = mkEvoCtx(S), before = JSON.stringify(S.agents.filter(a => /^h|_bot_|evolver/.test(a.id)));
+  ['w1', 'w2', 'w3'].forEach(id => { const a = S.agents.find(x => x.id === id); a.lmsrWallet = 7; a.lmsrSpent = 999; });   // [MARCHÉ LMSR À PART · 28/09/2026] portefeuille fondu, dépense de l'ancien génome
   assert.strictEqual(vm.runInContext('_evolveBrokenNow(true)', c), 3);
   ['w1', 'w2', 'w3'].forEach(id => { const a = S.agents.find(x => x.id === id);
     assert.ok(/^Hybrid Gen-10[1-3]$/.test(a.name), id + ' renommé : ' + a.name); assert.ok(a.fitness >= 350, id + ' naissance ' + a.fitness);
-    assert.strictEqual(a._judgments.length, 0); assert.strictEqual(a._probationUntil, 40); });
+    assert.strictEqual(a._judgments.length, 0); assert.strictEqual(a._probationUntil, 40); assert.deepStrictEqual([a.lmsrWallet, a.lmsrSpent], [a.fitness, 0], id + ' : portefeuille de marché = fitness de naissance, dépense du génome à zéro [MARCHÉ LMSR À PART · 28/09/2026]'); });
   assert.strictEqual(JSON.stringify(S.agents.filter(a => /^h|_bot_|evolver/.test(a.id))), before, 'sains, bot, Évolueur intacts');
   assert.strictEqual(S._genCount, 103); assert.ok(Math.abs(S._lastEvolutionAt - now) < 5000, 'délai repart');
   assert.strictEqual(c.toasts.length, 0, 'pas de toast par évolution (quiet) ni de résumé (silent)');
@@ -70,11 +71,11 @@ T('D3 · panneau « Apprentissage réel » RÉEL (04) : jugements réels, fenêt
   S.agents = [{ fitness: 500 }]; S._lastEvolutionAt = now - 2 * 3600000; vm.runInContext('renderLearningAccelSection();', c);
   assert.ok(!el.innerHTML.includes('Faire évoluer') && el.innerHTML.includes('possible maintenant'));
 });
-T('D4 · invariant sur TOUT le code : la fitness ne s\'écrit que par le jugement (03), la naissance (07), la restauration (09b2) — plus la démo (05, restaurée à la sortie) et le marché LMSR (08, connu) ; aucune autre écriture', () => {
+T('D4 · invariant sur TOUT le code : la fitness ne s\'écrit que par le jugement (03), la naissance (07), la restauration (09b2) — plus la démo (05, restaurée à la sortie) ; le marché LMSR (08) ne la débite plus [MARCHÉ LMSR À PART · 28/09/2026] ; aucune autre écriture', () => {
   const ALLOW = [
     ['03', 'a.fitness = f;', 2], ['03', 'if (_fw !== null) a.fitness = _fw;', 1], ['03', 'if (_fa !== null) a.fitness = _fa;', 1], ['03', 'else if (before >= FIT_MIN_N) a.fitness = 350;', 1],
     ['03', 'a._judgments = []; a.fitness = 350; a.streak = 0;', 2], ['05', 'a.fitness = preset.agentFitness', 1], ['07', 'weak.fitness = Math.max(350,', 1],
-    ['08', 'a.fitness -= cost;', 2], ['09b2', 'a.fitness        = sa.fitness;', 1], ['09b2', 'a.fitness = r.f;', 1]];
+    ['09b2', 'a.fitness        = sa.fitness;', 1], ['09b2', 'a.fitness = r.f;', 1], ['09b2', 'a.fitness = 350; a.lmsrWallet = 350;', 1]];   // [MARCHÉ LMSR À PART · 28/09/2026] plus d'écriture additive du marché (08) ; résidu des sauvegardes d'avant remis à 350 une fois (09b2)
   const found = [];
   fs.readdirSync(path.join(ROOT, 'js')).filter(f => /\.js$/.test(f)).forEach(f => rd('js/' + f).split('\n').forEach((l, i) => {
     if (/^\s*\/\//.test(l)) return;

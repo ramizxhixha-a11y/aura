@@ -209,7 +209,7 @@ T('M6 · _vjReset (07 : le siège qui évolue repart de zéro) : son record est 
   assert.strictEqual(t.c._vjReset('a1'), 2); assert.deepStrictEqual(J([T3.vHz, T3.pendV[0].v, T3.vIds]), [{ a2: [[500, 1], [], [], [], []] }, [[1, -300]], ['a1', 'a2']]);
   assert.strictEqual(t.c._vjReset('inconnu'), 0); assert.strictEqual(t.c._dcMeritHz('a1'), null, 'la décision reprend son ancien poids');
   const c07 = codeStrict(s07), i1 = c07.indexOf('weak._judgments = [];'), i2 = c07.indexOf("try { if (typeof _vjReset === 'function') _vjReset(weak.id); } catch(e) {}");
-  assert.ok(i1 > 0 && i2 > i1 && i2 - i1 < 300, '07 : reset juste après la fenêtre de fitness'); assert.ok(s07.startsWith('// [BILAN AUX HORIZONS · 27/09/2026] VERSION 20260927k'));
+  assert.ok(i1 > 0 && i2 > i1 && i2 - i1 < 300, '07 : reset juste après la fenêtre de fitness'); assert.ok(s07.split('\n').slice(0, 3).some(l => l.startsWith('// [BILAN AUX HORIZONS · 27/09/2026] VERSION 20260927k')), 'en-tête BILAN AUX HORIZONS dans les 3 premières lignes de 07 (relivré par MARCHÉ LMSR À PART)');
 });
 
 T('S1 · 10f : _vjNote appelé juste après _thNote, à chaque cycle (décision nulle comprise, places prises comprises), perte max long / short dans le bon ordre selon le sens décidé ; _dcConsensus lu avant ; rien d\'autre ne lit le sens contraire ni les voix', () => {

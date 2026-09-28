@@ -1,3 +1,4 @@
+// [MARCHÉ LMSR À PART · 28/09/2026] VERSION 20260928b · le marché LMSR (08) ne débite plus la fitness — le jugement (porte unique _fitCurrent) en est la seule écriture courante ; à chaque évaluation avec preuve (jugement, abstention, recompute) elle recharge le portefeuille de marché du siège (_lmsrRefill, 08) : le marché garde sa dynamique d'avant ; la fitness, elle, ne bouge plus entre deux jugements
 // [FITNESS AUX HORIZONS · 28/09/2026] VERSION 20260928a · la fitness d'un siège (ce qui décide l'évolution : le plus faible est recyclé ; aussi le tournoi des parents, la pépinière, la sortie « signal inversé », l'affichage) suit son bilan aux horizons — le même record que le poids de sa voix (20260927k) : 350 + 1 000 × moyenne des E_h — tant qu'un garde-fou appris propre à la fitness ne prouve pas que la fitness de la bougie retirait de plus mauvais sièges (le siège que chaque définition retirerait est comparé sur ses votes suivants pesés par leur conviction, par horizon et par pas de temps ; une seule définition vivante par siège : un retour prouvé à un pas de temps vaut pour tous) ; les bots et l'Évolueur gardent leur propre jugement ; rien de plus n'est tradé
 // [BILAN AUX HORIZONS · 27/09/2026] VERSION 20260927k · chaque voix de la décision commune (agents, bots, analyse tech. + fond.) est jugée sur les deux trades virtuels de la paire — long et short, 15 min à 4 h, chacun sa perte max, mêmes règles que le seuil appris : ce que son sens a rapporté de plus que l'autre (les frais, payés des deux côtés, s'annulent) — et la décision commune la pèse sur ce bilan au lieu de la bougie suivante ; garde-fou appris (écart apparié des deux pesées, preuve du seuil) ; le bilan d'un siège repart de zéro à son évolution ; mesuré, rien n'est tradé de plus
 // [SENS CONTRAIRE · 27/09/2026] VERSION 20260927j · chaque décision de cycle (EV / RE) est aussi jugée dans le SENS CONTRAIRE comme trade virtuel à 5 horizons (sa propre perte max, même preuve, listes à part), sur les seules décisions notées à partir de cette version — mesuré seulement, rien n'est tradé dans ce sens ; le sens décidé est inchangé (go Rams 27/09 19:31)
@@ -1256,6 +1257,7 @@ function _fitJudge(a, sign, w) {
   var f = (typeof _fitCurrent === 'function') ? _fitCurrent(a) : _fitOf(a._judgments, _fitWindow());   // [FITNESS AUX HORIZONS · 28/09/2026] un siège : son bilan aux horizons quand il l'a (et que le garde-fou le laisse) ; sinon, et pour un bot / le méta / le composite : sa fenêtre de jugements
   if (f === null) return a.fitness;
   a.fitness = f;
+  if (typeof _lmsrRefill === 'function') _lmsrRefill(a);   // [MARCHÉ LMSR À PART · 28/09/2026] le portefeuille de marché repart de la fitness jugée (avant : c'était la même variable)
   return a.fitness;
 }
 // Recalcule la fitness de tous les agents avec la fenêtre courante (appelé par 10i quand la règle s'arme ou se désarme).
@@ -1267,7 +1269,7 @@ function _fitRecomputeAll(only) {
   S.agents.forEach(function (a) {
     if (!a || (only && !only[a.id])) return;
     var f = (typeof _fitCurrent === 'function') ? _fitCurrent(a) : _fitOf(Array.isArray(a._judgments) ? a._judgments : [], W);   // [FITNESS AUX HORIZONS · 28/09/2026] même porte que _fitJudge
-    if (f !== null && f !== a.fitness) { a.fitness = f; n++; }
+    if (f !== null) { if (f !== a.fitness) { a.fitness = f; n++; } if (typeof _lmsrRefill === 'function') _lmsrRefill(a); }   // [MARCHÉ LMSR À PART · 28/09/2026] recharge dès qu'il y a une valeur : avant, la fitness débitée différait toujours → écriture → recharge
   });
   return n;
 }
@@ -1362,7 +1364,7 @@ function learnFromOutcome(source, pnlPct, pair) {
     if (signalStrength <= 0.05) {
       // Pas de jugement, mais la fitness reste celle de SA fenêtre, comme pour un siège jugé : avant, le jugement (même faux)
       // la recalculait à chaque clôture et effaçait les écritures additives héritées (02 clôture « v6.0 », 08 ordres LMSR).
-      try { const _fw = (typeof _fitCurrent === 'function') ? _fitCurrent(a) : _fitOf(a._judgments || [], _fitWindow()); if (_fw !== null) a.fitness = _fw; } catch(e) {}   // [FITNESS AUX HORIZONS · 28/09/2026] même porte que _fitJudge
+      try { const _fw = (typeof _fitCurrent === 'function') ? _fitCurrent(a) : _fitOf(a._judgments || [], _fitWindow()); if (_fw !== null) a.fitness = _fw; if (_fw !== null && typeof _lmsrRefill === 'function') _lmsrRefill(a); } catch(e) {}   // [FITNESS AUX HORIZONS · 28/09/2026] même porte que _fitJudge · [MARCHÉ LMSR À PART · 28/09/2026] et même recharge du portefeuille de marché
       return;
     }
     // [COMPÉTENCE PAR PAIRE · 13/08/2026] le journal identifiait déjà le meilleur/pire
@@ -7050,8 +7052,10 @@ function _dcMeritHz(id) {
 // par elle (_fitJudge, la branche d'abstention, _fitRecomputeAll — aussi pour les sièges qui viennent d'être jugés aux horizons, _vjJudge). Les bots
 // (jugés sur leurs actes), le méta (l'Évolueur, jugé sur ses évolutions) et l'analyse (voix composite) gardent leur propre jugement. La première
 // fitness aux horizons est journalisée une fois (T.fSince, _fitHzFirst). Une preuve de retour ne survit pas à ses données : un pas de temps sans plus
-// aucun créneau dans sa fenêtre revient aux horizons (_vjRefresh). Hors périmètre, constaté au rejeu : le marché LMSR de 08 (héritage) débite
-// a.fitness toutes les 6 s entre deux jugements (≈ 0,14 × fitness × |score| × prix par passe) — la porte la remet à sa valeur au jugement suivant.
+// aucun créneau dans sa fenêtre revient aux horizons (_vjRefresh). Constaté au rejeu de cette livraison : le marché LMSR de 08 (héritage) débitait
+// a.fitness toutes les 6 s entre deux jugements (≈ 0,14 × fitness × |score| × prix par passe) — depuis 20260928b [MARCHÉ LMSR À PART] il débite son
+// portefeuille par siège (a.lmsrWallet, rechargé ici à chaque écriture de la fitness : même dynamique de marché qu'avant) : entre deux jugements la
+// fitness ne bouge plus, le jugement en est la seule écriture courante.
 // Garde-fou appris PROPRE À LA FITNESS (la pesée des voix a le sien) : à chaque cycle noté, le siège que chaque définition retirerait maintenant
 // (le plus faible : bougie wB, horizons wH) est mémorisé AVEC son vote (qB, qH — une évolution d'ici l'horizon ne l'efface pas de la preuve) ;
 // quand l'horizon est jugé et que les deux ont voté sur ce cycle, écart = qualité du vote de wB − qualité du vote de wH, qualité = v·D (pesée

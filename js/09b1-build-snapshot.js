@@ -1,3 +1,4 @@
+// [MARCHÉ LMSR À PART · 28/09/2026] VERSION 20260928b · lmsrWallet (portefeuille de marché du siège) et lmsrSpent (dépense du génome) dans le snapshot des agents — le marché LMSR ne débite plus la fitness (08)
 // [SEUIL APPRIS · 27/09/2026] VERSION 20260927h · dcThreshold (trades virtuels jugés, en attente, seuil d'ouverture courant) dans le snapshot
 // [DÉCISION COMMUNE · 27/09/2026] VERSION 20260927g · dcVoices (bilan du composite, voix de la décision commune) dans le snapshot
 // [ÉVOLUTION SEULE · 26/09/2026] VERSION 20260926o · _lastAutoRevigorTs retiré du snapshot (revigoration automatique retirée)
@@ -81,6 +82,8 @@ function buildSnapshot() {
         corrections:    a.corrections     || 0,
         streak:         a.streak          || 0,
         lastPnl:        a.lastPnl         || 0,
+        lmsrWallet:     (typeof a.lmsrWallet === 'number' && isFinite(a.lmsrWallet)) ? a.lmsrWallet : a.fitness,   // [MARCHÉ LMSR À PART · 28/09/2026] portefeuille de marché (= fitness au dernier jugement − ordres)
+        lmsrSpent:      a.lmsrSpent       || 0,   // [MARCHÉ LMSR À PART · 28/09/2026] dépense de marché du génome
         memory:         (a.memory         || []).slice(-20),
         regimeFitness:  a.regimeFitness   || {},
         _judgments:     (a._judgments     || []).slice(-240),   // [FITNESS GLISSANTE · 16/09/2026] · [FENÊTRE APPRENANTE · 26/09/2026] 240 (FIT_KEEP, 03)

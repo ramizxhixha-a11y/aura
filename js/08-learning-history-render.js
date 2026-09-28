@@ -1,3 +1,4 @@
+// [MARCHÉ LMSR À PART · 28/09/2026] VERSION 20260928b · le marché LMSR (ordres des agents toutes les 6 s) ne débite plus a.fitness : il a son portefeuille par siège, a.lmsrWallet — rechargé à la fitness à chaque écriture du jugement (03, porte unique), débité par les ordres (_lmsrSpend), lu par la taille des ordres et les gardes à la place de a.fitness — et sa dépense a.lmsrSpent (celle du génome, remise à zéro à l'évolution). Le flux d'ordres, le marché (qYes / qNo, lmsrP) et tout ce qui le lit gardent la dynamique d'avant (le flux s'éteint entre deux jugements, repart au jugement — équivalence prouvée passe à passe contre l'ancien bloc, banc-marche-lmsr ; deux écarts voulus : un coût NaN n'est ni retiré ni compté, et pendant la démo 05 le marché tourne sur les portefeuilles réels) ; seule la fitness ne bouge plus entre deux jugements — avant, ≈ 0,14 × fitness × |score| × prix lui étaient retirés par passe (jusqu'à −30 à −50 % par minute) ; c'est cette valeur débitée que lisaient l'évolution de la page Home (ici, toutes les 8 s, sans recalcul), le compte des cassés (≤ 80) et la part de fitness du levier (_favConsensus, 02), et qu'un siège sans preuve (jamais réécrit par le jugement) gardait pour toujours
 // [HORIZONS APPRIS · 27/09/2026] VERSION 20260927i · mode réel (EV / RE) traité en arrière-plan : ses paires reçoivent le dernier prix réel accepté (< 2 min) à chaque passage — avant, son ps.price datait du dernier passage à l'écran
 // [SURVEILLANCE PERMANENTE · 27/09/2026] VERSION 20260927a · le battement fait tourner la flotte de chaque mode en play (_fleetHeartbeat, dans le contexte du mode) et juge les affirmations des bots à chaque tick (_botMeritAudit)
 // [CONTEXTE 1 H / 4 H · 26/09/2026] VERSION 20260926e · tuile « Contexte 1 h / 4 h » (ex « Régime de volatilité ») : elle lit le siège converti
@@ -2878,6 +2879,17 @@ function _projectRealCandles() {
 }
 window._projectRealCandles = _projectRealCandles;
 
+// [MARCHÉ LMSR À PART · 28/09/2026] Le portefeuille de marché d'un agent : a.lmsrWallet — sa fitness au dernier jugement (_lmsrRefill, appelée par la porte
+// unique de 03 à chaque écriture de la fitness : jugement, abstention, recompute), moins le coût de ses ordres depuis (_lmsrSpend, qui compte aussi la
+// dépense du génome dans a.lmsrSpent ; 07 remet les deux à la naissance). Sans portefeuille (agent d'avant, première passe) : sa fitness, comme avant.
+// Un coût non fini (S.b nul → exp(q/0) → NaN) n'est ni retiré ni compté : avant il rendait la fitness NaN.
+function _lmsrWallet(a) { if (!a) return 0; if (typeof a.lmsrWallet !== 'number' || !isFinite(a.lmsrWallet)) a.lmsrWallet = Number(a.fitness) || 0; return a.lmsrWallet; }
+function _lmsrRefill(a) { if (a) a.lmsrWallet = Number(a.fitness) || 0; return a ? a.lmsrWallet : 0; }
+function _lmsrSpend(a, cost) { if (a && isFinite(cost)) { a.lmsrWallet = _lmsrWallet(a) - cost; a.lmsrSpent = (Number(a.lmsrSpent) || 0) + cost; } }
+window._lmsrWallet = _lmsrWallet; window._lmsrRefill = _lmsrRefill; window._lmsrSpend = _lmsrSpend;
+// Rejeu avant livraison (app réelle en accéléré, 81 h, 9 fenêtres de 9 h, 2 tirages, ce code, comparé au même rejeu avec 20260928a) : tirage 1 : 0 trades, net 0 $ ; tirage 2 : 0 trades, net 0 $ ; 0 erreur. Fitness vivante hors de sa
+// définition en fin de fenêtre (le débit du marché) : avec ce code : tirage 1 0 sur 144, tirage 2 0 sur 141 — avec 20260928a (même harnais, mêmes fenêtres) : 12 sur 144 (écart moyen -242 T$, jusqu'à -737) et 15 sur 142 (écart moyen -228 T$, jusqu'à -580). sièges ≤ 80 T$ en fin de fenêtre (cumul des 9 fenêtres) : ce code 40 vivante / 38 bougie et 38 vivante / 32 bougie — 20260928a : 43 vivante / 35 bougie et 42 vivante / 31 bougie. fitness vivante = horizons pour les sièges au record complet en fin de fenêtre : ce code 97/97 et 96/96 — 20260928a : 90/100 et 85/96.
+// Évolutions (hook du harnais dans triggerEvolution) : tirage 1 : 78 évolutions (03 (après jugements) : 78), cible = le plus faible par fitness vivante 78, = le siège que les horizons retireraient 78, désaccord des deux définitions 16, cible au record complet 18, cible débitée 0 — tirage 2 : 77 évolutions (03 (après jugements) : 77), cible = le plus faible par fitness vivante 77, = le siège que les horizons retireraient 77, désaccord des deux définitions 19, cible au record complet 18, cible débitée 0 — 20260928a : 77 et 77 évolutions. Nouveau-nés : ce code : tirage 1 39 nouveau-nés en fin de fenêtre, fitness moyenne 436, 11 sous 150, 4 sans preuve (dont 0 sous 350) ; tirage 2 42 nouveau-nés en fin de fenêtre, fitness moyenne 385, 16 sous 150, 6 sans preuve (dont 0 sous 350) — 20260928a : 42 nouveau-nés en fin de fenêtre, fitness moyenne 345, 14 sous 150, 4 sans preuve (dont 1 sous 350) ; 41 nouveau-nés en fin de fenêtre, fitness moyenne 379, 12 sous 150, 6 sans preuve (dont 1 sous 350). Dépense de marché : tirage 1 : 81 sièges-fenêtres avec dépense, 1025 T$ en moyenne par siège et par fenêtre de 9 h, max 15651 ; tirage 2 : 85 sièges-fenêtres avec dépense, 1027 T$ en moyenne par siège et par fenêtre de 9 h, max 18595.
 function simTick() {
   // v7.2 Phase 18 · Perf monitoring (rolling window, sans impact perceptible)
   const _perfStart = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
@@ -3130,6 +3142,10 @@ function simTick() {
 
   _phEnd('nudge scores + frais + redistribution');
   // LMSR orders — agents votent sur toutes les paires (toutes les 6s)
+  // [MARCHÉ LMSR À PART · 28/09/2026] le portefeuille de marché du siège (a.lmsrWallet = sa fitness au dernier jugement, moins ses ordres depuis) remplace
+  // a.fitness ici, et seulement ici : la taille des ordres (8 % du portefeuille, réparti par paire) et les gardes (portefeuille > moitié de l'ordre) le lisent,
+  // le coût lui est retiré (_lmsrSpend) et compté dans a.lmsrSpent ; la fitness n'est plus touchée. Même arithmétique qu'avant, même flux, même marché.
+  // Un coût non fini (S.b nul après un retour arrière : exp(q/0)) n'est ni retiré ni compté.
   if(tick % 6 === 0) {
     const pairList  = Object.keys(PAIRS);
     const nPairs    = pairList.length;
@@ -3137,7 +3153,7 @@ function simTick() {
     S.agents.forEach(a => {
       const sig        = a.score;
       // Budget total divisé par le nb de paires pour éviter la sur-exposition
-      const budgetPerPair = (a.fitness * .08) / nPairs;
+      const budgetPerPair = (_lmsrWallet(a) * .08) / nPairs;   // [MARCHÉ LMSR À PART · 28/09/2026] le portefeuille de marché (avant : la fitness)
       if(budgetPerPair <= 0) return;
 
       pairList.forEach(pair => {
@@ -3150,15 +3166,15 @@ function simTick() {
 
         if(sig > .1) {
           const d = Math.floor(budget * sig * 1.8);
-          if(d > 0 && a.fitness > d * .5) {
+          if(d > 0 && a.lmsrWallet > d * .5) {   // [MARCHÉ LMSR À PART · 28/09/2026] (avant : la fitness)
             const cost = lmsrBuyYes(ps, d);
-            a.fitness -= cost;
+            _lmsrSpend(a, cost);   // [MARCHÉ LMSR À PART · 28/09/2026] (avant : retiré de la fitness)
           }
         } else if(sig < -.1) {
           const d = Math.floor(budget * Math.abs(sig) * 1.8);
-          if(d > 0 && a.fitness > d * .4) {
+          if(d > 0 && a.lmsrWallet > d * .4) {   // [MARCHÉ LMSR À PART · 28/09/2026] (avant : la fitness)
             const cost = lmsrBuyNo(ps, d);
-            a.fitness -= cost;
+            _lmsrSpend(a, cost);   // [MARCHÉ LMSR À PART · 28/09/2026] (avant : retiré de la fitness)
           }
         }
       });

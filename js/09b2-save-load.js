@@ -1,3 +1,4 @@
+// [MARCHÉ LMSR À PART · 28/09/2026] VERSION 20260928b · loadState relit lmsrWallet (à défaut : la fitness relue, comme avant) et lmsrSpent (0 pour un snapshot d'avant) ; résidu des sauvegardes d'avant : un siège sans preuve que le marché avait débité repart de la fitness neutre (350), une fois, journalisé
 // [SEUIL APPRIS · 27/09/2026] VERSION 20260927h · applySnap relit dcThreshold (trades virtuels jugés, en attente, seuil d'ouverture courant)
 // [DÉCISION COMMUNE · 27/09/2026] VERSION 20260927g · applySnap relit dcVoices (bilan du composite, voix de la décision commune)
 // [ÉVOLUTION SEULE · 26/09/2026] VERSION 20260926o · _lastAutoRevigorTs n'est plus relu (revigoration automatique retirée)
@@ -580,6 +581,8 @@ async function loadState() {
           a.corrections    = sa.corrections    || 0;
           a.streak         = sa.streak         || 0;
           a.lastPnl        = sa.lastPnl        || 0;
+          a.lmsrSpent      = Number(sa.lmsrSpent) || 0;   // [MARCHÉ LMSR À PART · 28/09/2026] dépense de marché du génome (0 pour un snapshot d'avant)
+          a.lmsrWallet     = (typeof sa.lmsrWallet === 'number' && isFinite(sa.lmsrWallet)) ? sa.lmsrWallet : a.fitness;   // [MARCHÉ LMSR À PART · 28/09/2026] portefeuille de marché (snapshot d'avant : la fitness, c'était la même variable)
           a.memory         = sa.memory         || [];
           a._judgments     = Array.isArray(sa._judgments) ? sa._judgments.slice(-240) : [];   // [FITNESS GLISSANTE · 16/09/2026] · [FENÊTRE APPRENANTE · 26/09/2026] 240
           a._probationUntil = sa._probationUntil || 0;                                        // [GÉNOME · 16/09/2026]
@@ -588,6 +591,22 @@ async function loadState() {
       });
     }
   } catch(e) { dbg.push('agents:err'); }
+  // [MARCHÉ LMSR À PART · 28/09/2026] résidu des sauvegardes d'avant : le marché débitait a.fitness entre deux jugements ; un siège SANS preuve (ni 5 jugements à la
+  // bougie ni record complet aux horizons) n'est jamais réécrit par le jugement → sa fitness débitée resterait pour toujours (l'évolution de la page Home, le compte des
+  // cassés la liraient). Sans preuve, une fitness ne peut venir que d'une naissance (≥ 350) ou de l'init (≥ 400) : sous 350 sans preuve = débit du marché → repart
+  // de la fitness neutre 350 (portefeuille de marché avec), une fois par siège concerné, journalisé. Sans effet sur un snapshot déjà passé par là.
+  try {
+    if (typeof _fitCurrent === 'function' && Array.isArray(S.agents)) {
+      let nR = 0;
+      S.agents.forEach(a => { if (!a || a.isBot || a.isMeta || a.id === 'composite') return; if (Number(a.fitness) < 350 && _fitCurrent(a) === null && !(typeof _fitHz === 'function' && _fitHz(a) !== null)) { a.fitness = 350; a.lmsrWallet = 350; nR++; } });
+      if (nR) {
+        dbg.push('lmsr:' + nR);
+        if (!S.chainLog) S.chainLog = [];
+        S.chainLog.push({ icon: '\uD83E\uDDEC', desc: 'Marché LMSR à part : ' + nR + ' siège(s) sans preuve (ni 5 jugements ni record aux horizons) repartent de la fitness neutre 350 — le marché les avait débités entre deux jugements ; il a désormais son portefeuille à lui', hash: Math.random().toString(36).slice(2, 8), time: (typeof nowStr === 'function') ? nowStr() : '' });
+        if (S.chainLog.length > 100) S.chainLog.splice(0, S.chainLog.length - 100);
+      }
+    }
+  } catch(e) { dbg.push('lmsr:err'); }
   try { if (typeof _fitWindowRefresh === 'function') _fitWindowRefresh(); } catch(e) {}   // [FENÊTRE APPRENANTE · 26/09/2026] rejeu de la fenêtre sur les jugements relus (agents fusionnés juste au-dessus)
   try { if (typeof _seatLabelsSync === 'function') _seatLabelsSync(); } catch(e) {}   // [CONTEXTE 1 H / 4 H · 26/09/2026] l'instantané recopie les anciennes étiquettes : on rétablit celles de la logique (07 _SEAT_DEF)
 

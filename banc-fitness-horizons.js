@@ -77,7 +77,7 @@ T('M3 · _fitJudge, la branche d\'abstention et _fitRecomputeAll passent par _fi
   // le texte : les trois portes
   const c03 = codeStrict(s03);
   assert.ok(c03.includes("  var f = (typeof _fitCurrent === 'function') ? _fitCurrent(a) : _fitOf(a._judgments, _fitWindow());"), '_fitJudge');
-  assert.ok(c03.includes("      try { const _fw = (typeof _fitCurrent === 'function') ? _fitCurrent(a) : _fitOf(a._judgments || [], _fitWindow()); if (_fw !== null) a.fitness = _fw; } catch(e) {}"), 'abstention');
+  assert.ok(c03.includes("      try { const _fw = (typeof _fitCurrent === 'function') ? _fitCurrent(a) : _fitOf(a._judgments || [], _fitWindow()); if (_fw !== null) a.fitness = _fw; if (_fw !== null && typeof _lmsrRefill === 'function') _lmsrRefill(a); } catch(e) {}"), 'abstention (+ recharge du portefeuille de marché, MARCHÉ LMSR À PART)');
   assert.ok(c03.includes("    var f = (typeof _fitCurrent === 'function') ? _fitCurrent(a) : _fitOf(Array.isArray(a._judgments) ? a._judgments : [], W);"), '_fitRecomputeAll');
   assert.strictEqual((c03.match(/\ba\.fitness = /g) || []).length, (codeStrict(rd('js/03-per-pair-position-buttons-controls-buid.js')).match(/\ba\.fitness = /g) || []).length, 'aucun écrivain de fitness ajouté : _vjJudge passe par _fitRecomputeAll(only)');
   assert.ok(c03.includes('    if (nS) _fitRecomputeAll(only);') && !c03.includes('a.fitness = fv'), 'queue de _vjJudge : la porte, pas un écrivain');
@@ -206,7 +206,7 @@ T('S1 · textes : 07 remet le record du siège à zéro à l\'évolution (déjà
   const c03 = codeStrict(s03); assert.ok(c03.includes('_evoTrialJudge(a, pair, won, mag, decay, _vote)'), 'essai d\'évolution : inchangé (bougie)');
   assert.ok(!/_fitHz|_fitCurrent|_fjMode|fModes|fRules|fCmp/.test(codeStrict(rd('js/10f-resolveur-cycle.js'))));
   const s9b1 = rd('js/09b1-build-snapshot.js'), s9b2 = rd('js/09b2-save-load.js'); assert.ok(s9b1.includes('dcThreshold: S.dcThreshold || null,') && s9b2.includes("if (snap.dcThreshold && typeof snap.dcThreshold === 'object')"));
-  assert.ok(s03.startsWith('// [FITNESS AUX HORIZONS · 28/09/2026] VERSION 20260928a'));
+  assert.ok(s03.split('\n').slice(0, 3).some(l => l.startsWith('// [FITNESS AUX HORIZONS · 28/09/2026] VERSION 20260928a')), 'en-tête FITNESS AUX HORIZONS dans les 3 premières lignes (03 relivré par MARCHÉ LMSR À PART)');
   // écran
   const src = rd('js/11b-ecran-appris.js').replace(/setInterval\(function \(\) \{ try \{ _injectLearnedButton\(\); \} catch \(e\) \{\} \}, 2000\);/, '');
   const hz = HZ.map((h, i) => ({ h, n: 72, blocks: 24, mean: i === 0 ? -0.45 : null, se: i === 0 ? 0.05 : null, crit: i === 0 ? 3.5 : null, better: false, worse: i === 0 }));
