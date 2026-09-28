@@ -154,7 +154,7 @@ T('S1 · textes : le saut d\'abstention suit l\'essai de l\'Évolueur et précè
   const lfo = codeStrict(LEARN_TXT);
   const iEvo = lfo.indexOf('_evoTrialJudge(a, pair, won, mag, decay, _vote); } catch(e) {}'), iSkip = lfo.indexOf('    if (signalStrength <= 0.05) {'), iSkill = lfo.indexOf('    if (pair && signalStrength > 0.05) {'), iAl = lfo.indexOf('    if(aligned) {');
   assert.ok(iEvo > 0 && iSkip > iEvo && iSkill > iSkip && iAl > iSkill, 'ordre : essai → saut → compétence → jugement');
-  assert.ok(lfo.includes('try { const _fw = _fitOf(a._judgments || [], _fitWindow()); if (_fw !== null) a.fitness = _fw; } catch(e) {}\n      return;\n    }'));
+  assert.ok(/try \{ const _fw = \(typeof _fitCurrent === 'function'\) \? _fitCurrent\(a\) : _fitOf\(a\._judgments \|\| \[\], _fitWindow\(\)\); if \(_fw !== null\) a\.fitness = _fw; \} catch\(e\) \{\}[^\n]*\n      return;\n    \}/.test(lfo), 'abstention : la fitness reste celle de la porte unique (_fitCurrent), puis sortie [FITNESS AUX HORIZONS · 28/09/2026]');
   assert.ok(codeStrict(EVO).includes('if (Math.abs(v) <= 0.05) return null;'));
   const b1 = codeStrict(s9b1); ['_lastEvolutionAt: S._lastEvolutionAt || 0,', '_lastDreamAt: S._lastDreamAt || 0,', '_abstMigrated: !!S._abstMigrated,'].forEach(t => assert.ok(b1.includes(t), t));
   const b2 = codeStrict(s9b2); assert.ok(b2.includes("'_lastEvolutionAt','_lastDreamAt','_abstMigrated',") && b2.includes('if (snap._abstMigrated)'));

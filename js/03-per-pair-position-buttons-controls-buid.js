@@ -1,3 +1,4 @@
+// [FITNESS AUX HORIZONS · 28/09/2026] VERSION 20260928a · la fitness d'un siège (ce qui décide l'évolution : le plus faible est recyclé ; aussi le tournoi des parents, la pépinière, la sortie « signal inversé », l'affichage) suit son bilan aux horizons — le même record que le poids de sa voix (20260927k) : 350 + 1 000 × moyenne des E_h — tant qu'un garde-fou appris propre à la fitness ne prouve pas que la fitness de la bougie retirait de plus mauvais sièges (le siège que chaque définition retirerait est comparé sur ses votes suivants pesés par leur conviction, par horizon et par pas de temps ; une seule définition vivante par siège : un retour prouvé à un pas de temps vaut pour tous) ; les bots et l'Évolueur gardent leur propre jugement ; rien de plus n'est tradé
 // [BILAN AUX HORIZONS · 27/09/2026] VERSION 20260927k · chaque voix de la décision commune (agents, bots, analyse tech. + fond.) est jugée sur les deux trades virtuels de la paire — long et short, 15 min à 4 h, chacun sa perte max, mêmes règles que le seuil appris : ce que son sens a rapporté de plus que l'autre (les frais, payés des deux côtés, s'annulent) — et la décision commune la pèse sur ce bilan au lieu de la bougie suivante ; garde-fou appris (écart apparié des deux pesées, preuve du seuil) ; le bilan d'un siège repart de zéro à son évolution ; mesuré, rien n'est tradé de plus
 // [SENS CONTRAIRE · 27/09/2026] VERSION 20260927j · chaque décision de cycle (EV / RE) est aussi jugée dans le SENS CONTRAIRE comme trade virtuel à 5 horizons (sa propre perte max, même preuve, listes à part), sur les seules décisions notées à partir de cette version — mesuré seulement, rien n'est tradé dans ce sens ; le sens décidé est inchangé (go Rams 27/09 19:31)
 // [HORIZONS APPRIS · 27/09/2026] VERSION 20260927i · chaque décision de cycle (EV / RE) jugée à 5 horizons (1, 2, 4, 8, 16 bougies = 15 min à 4 h en 15 min) avec la perte max du vrai trade ; un seuil prouvé par horizon et par pas de temps (5 niveaux de conviction, ≥ 30 trades et ≥ 20 créneaux, Student au niveau Φ(−2) / 25) ; _thPick choisit l'horizon à tenir (la meilleure moyenne par bougie tenue parmi ceux que la conviction atteint)
@@ -1236,6 +1237,8 @@ function _fitWindow() {
   var w = (r && r.armed) ? Math.round(Number(r.window)) : 0;
   return (w >= 10 && w <= FIT_KEEP) ? w : FIT_WINDOW;
 }
+// Échelle de la fitness — une seule, pour la bougie (_fitOf) et les horizons (_fitHz) : 350 + 1 000 × E, bornée 50-2 000. [FITNESS AUX HORIZONS · 28/09/2026]
+function _fitScale(E) { return Math.max(50, Math.min(2000, Math.round(350 + 1000 * E))); }
 // Fitness sur les W derniers jugements d'une liste (pur) ; null si moins de FIT_MIN_N.
 function _fitOf(js, W) {
   var n = js.length, start = Math.max(0, n - W);
@@ -1243,31 +1246,33 @@ function _fitOf(js, W) {
   var sw = 0, se = 0;
   for (var i = start; i < n; i++) { sw += js[i].w; se += js[i].s * js[i].w; }
   var E = sw > 0 ? se / sw : 0;
-  return Math.max(50, Math.min(2000, Math.round(350 + 1000 * E)));
+  return _fitScale(E);
 }
 function _fitJudge(a, sign, w) {
   if (!a) return 0;
   if (!Array.isArray(a._judgments)) a._judgments = [];
   a._judgments.push({ s: sign >= 0 ? 1 : -1, w: Math.max(0.01, Number(w) || 0), k: (typeof S !== 'undefined' && S && Number(S._realJudgments)) || 0 });
   if (a._judgments.length > FIT_KEEP) a._judgments.splice(0, a._judgments.length - FIT_KEEP);
-  var f = _fitOf(a._judgments, _fitWindow());
+  var f = (typeof _fitCurrent === 'function') ? _fitCurrent(a) : _fitOf(a._judgments, _fitWindow());   // [FITNESS AUX HORIZONS · 28/09/2026] un siège : son bilan aux horizons quand il l'a (et que le garde-fou le laisse) ; sinon, et pour un bot / le méta / le composite : sa fenêtre de jugements
   if (f === null) return a.fitness;
   a.fitness = f;
   return a.fitness;
 }
 // Recalcule la fitness de tous les agents avec la fenêtre courante (appelé par 10i quand la règle s'arme ou se désarme).
-function _fitRecomputeAll() {
+// [FITNESS AUX HORIZONS · 28/09/2026] only (facultatif) : {id: 1} → ces agents seulement (les sièges qui viennent d'être jugés aux horizons, _vjJudge) ;
+// aussi appelé quand la définition vivante de la fitness bascule (_vjRefresh). Toujours la même porte (_fitCurrent), aucun autre écrivain.
+function _fitRecomputeAll(only) {
   if (typeof S === 'undefined' || !S || !Array.isArray(S.agents)) return 0;
   var W = _fitWindow(), n = 0;
   S.agents.forEach(function (a) {
-    if (!a || !Array.isArray(a._judgments)) return;
-    var f = _fitOf(a._judgments, W);
+    if (!a || (only && !only[a.id])) return;
+    var f = (typeof _fitCurrent === 'function') ? _fitCurrent(a) : _fitOf(Array.isArray(a._judgments) ? a._judgments : [], W);   // [FITNESS AUX HORIZONS · 28/09/2026] même porte que _fitJudge
     if (f !== null && f !== a.fitness) { a.fitness = f; n++; }
   });
   return n;
 }
 window._fitJudge = _fitJudge;
-window._fitWindow = _fitWindow; window._fitOf = _fitOf; window._fitRecomputeAll = _fitRecomputeAll;
+window._fitWindow = _fitWindow; window._fitOf = _fitOf; window._fitRecomputeAll = _fitRecomputeAll; window._fitScale = _fitScale;
 
 function learnFromOutcome(source, pnlPct, pair) {
   // ═══ [ÉCOLE · 17/09/2026] L'ÉCOLE NE NOTE PLUS (décision Rams 17/09) ═══
@@ -1357,7 +1362,7 @@ function learnFromOutcome(source, pnlPct, pair) {
     if (signalStrength <= 0.05) {
       // Pas de jugement, mais la fitness reste celle de SA fenêtre, comme pour un siège jugé : avant, le jugement (même faux)
       // la recalculait à chaque clôture et effaçait les écritures additives héritées (02 clôture « v6.0 », 08 ordres LMSR).
-      try { const _fw = _fitOf(a._judgments || [], _fitWindow()); if (_fw !== null) a.fitness = _fw; } catch(e) {}
+      try { const _fw = (typeof _fitCurrent === 'function') ? _fitCurrent(a) : _fitOf(a._judgments || [], _fitWindow()); if (_fw !== null) a.fitness = _fw; } catch(e) {}   // [FITNESS AUX HORIZONS · 28/09/2026] même porte que _fitJudge
       return;
     }
     // [COMPÉTENCE PAR PAIRE · 13/08/2026] le journal identifiait déjà le meilleur/pire
@@ -1522,6 +1527,8 @@ function learnFromOutcome(source, pnlPct, pair) {
 
   // [FENÊTRE APPRENANTE · 26/09/2026] tous les agents viennent d'être jugés : la fenêtre se rejuge (et recalcule les fitness si elle change) AVANT l'évolution
   try { if (typeof _fitWindowRefresh === 'function') _fitWindowRefresh(); } catch(e) {}
+  // [FITNESS AUX HORIZONS · 28/09/2026] les sièges viennent d'être jugés par la porte unique : si c'est la première fois que la fitness suit les horizons, la ligne au journal vient ici, AVANT l'évolution qui va lire cette fitness
+  try { if (typeof _fitHzFirst === 'function') _fitHzFirst(); } catch(e) {}
 
   // ── Déclenchement évolution si agent très faible ──────────
   const sorted = [...S.agents].filter(a=>!a.isBot&&!a.isMeta).sort((a,b)=>a.fitness-b.fitness);
@@ -6578,6 +6585,11 @@ function _thState() {
   if (!T.vModes || typeof T.vModes !== 'object') T.vModes = {};     // pesée vivante par pas de temps ('hz' / 'bougie')
   if (!T.vRules || typeof T.vRules !== 'object') T.vRules = {};     // écart apparié jugé, par pas de temps
   if (!T.vDirtyF || typeof T.vDirtyF !== 'object') T.vDirtyF = {};  // nouveaux écarts en attente de jugement, par pas de temps
+  // [FITNESS AUX HORIZONS · 28/09/2026] garde-fou propre à la fitness : écart apparié des sièges retirés (par horizon, par créneau), mode / règle / attente par pas de temps
+  if (!Array.isArray(T.fCmp) || T.fCmp.length !== TH_HZ.length) T.fCmp = TH_HZ.map(() => ({}));
+  if (!T.fModes || typeof T.fModes !== 'object') T.fModes = {};
+  if (!T.fRules || typeof T.fRules !== 'object') T.fRules = {};
+  if (!T.fDirtyF || typeof T.fDirtyF !== 'object') T.fDirtyF = {};
   Object.keys(T.vHz).forEach(id => { const R = T.vHz[id]; if (!Array.isArray(R) || R.length !== TH_HZ.length || R.some(L => !Array.isArray(L) || Array.isArray(L[0]))) delete T.vHz[id]; });   // record d'une autre forme (essai jamais livré, corruption) : écarté, la voix se rejuge
   // 20260927h (un seul horizon, rule.h) : ses trades jugés deviennent les résultats de cet horizon s'il est dans la grille ; ses trades en
   // attente (quelques heures au plus) sont abandonnés ; un seuil par pas de temps désormais (T.rules)
@@ -6847,7 +6859,12 @@ function _vjNote(pair, capL, capS) {
     const tn = Date.now(), s0 = Math.floor(tn / f) * f, cur = (last.ts === s0) ? last : null, cp = c => Math.round(Math.min(3, Math.max(1.5, Number(c) || 2)) * 1000) / 1000;
     const trade = (d, cap) => ({ p: pair, k: k, t: tn, px: px, d: d, c: 0, f: f, tf: tf, cap: cp(cap), x: TH_HZ.map(h => Math.floor((tn + h * f) / f) * f), n: TH_HZ.map(() => null),
       s: s0 - f, s0: s0, el: cur ? Number(cur.l) : px, eh: cur ? Number(cur.h) : px, hit: 0 });
-    T.pendV.push({ p: pair, k: k, t: tn, f: f, v: v, dO: Math.sign(Number(sn.C1) || 0), dH: Math.sign(Number(sn.Ch) || 0), a: TH_HZ.map(() => 0), L: trade(1, capL), S: trade(-1, capS) });
+    // [FITNESS AUX HORIZONS · 28/09/2026] le siège que chaque définition de la fitness retirerait maintenant (le plus faible) : bougie (wB) / horizons (wH) —
+    // indices dans vIds, −1 si moins de deux sièges jugés ; leurs votes de ce cycle (qB, qH, ×1000, 0 = pas voté) sont mémorisés ici même : une évolution
+    // d'ici l'horizon (_vjReset retire les votes du siège de la file) ne les efface pas de la preuve — c'est justement le siège retiré qu'elle juge (_vjJudge)
+    const pk = _fitPicks(), wi = id => { if (!id) return -1; let i = ids.indexOf(id); if (i < 0) { ids.push(id); i = ids.length - 1; } return i; };
+    const wB = wi(pk.b), wH = wi(pk.h), qv = i => { const e = i >= 0 ? v.find(x => x[0] === i) : null; return e ? e[1] : 0; };
+    T.pendV.push({ p: pair, k: k, t: tn, f: f, v: v, dO: Math.sign(Number(sn.C1) || 0), dH: Math.sign(Number(sn.Ch) || 0), a: TH_HZ.map(() => 0), L: trade(1, capL), S: trade(-1, capS), wB: wB, wH: wH, qB: qv(wB), qH: qv(wH) });
     if (!(T.vSince > 0)) T.vSince = tn;
     return true;
   } catch (e) { try { window._decErr && window._decErr(e); } catch (_e) {} return false; }
@@ -6859,7 +6876,7 @@ function _vjJudge(T) {
   try {
   if (!T.pendV.length) return 0;
   const cost = (typeof _ownStakeCostPct === 'function') ? Number(_ownStakeCostPct()) || 0 : 0, now = Date.now();
-  const KEEP = (typeof FIT_KEEP !== 'undefined') ? FIT_KEEP : 240, keep = [], dm = {}; let nJ = 0;   // gardés comme les jugements de la fitness (240) ; lus sur la fenêtre apprise (_dcMeritHz)
+  const KEEP = (typeof FIT_KEEP !== 'undefined') ? FIT_KEEP : 240, keep = [], dm = {}, dmF = {}, touched = {}; let nJ = 0;   // gardés comme les jugements de la fitness (240) ; lus sur la fenêtre apprise (_dcMeritHz)
   T.pendV.forEach(q => {
     try {   // une entrée abîmée (restauration) est signalée et retirée : la file continue
     if (!q || !q.L || !q.S || !Array.isArray(q.v) || !Array.isArray(q.a) || !Array.isArray(q.L.n) || !Array.isArray(q.S.n) || !Array.isArray(q.L.x) || !Array.isArray(q.S.x)) throw new Error('bilan aux horizons : entrée abîmée ' + (q && q.p));
@@ -6876,22 +6893,41 @@ function _vjJudge(T) {
         const Jv = (Array.isArray(T.vHz[id]) && T.vHz[id].length === TH_HZ.length) ? T.vHz[id] : (T.vHz[id] = TH_HZ.map(() => []));
         if (!Array.isArray(Jv[i])) Jv[i] = [];   // record abîmé : régénéré, la passe continue
         const Lh = Jv[i]; Lh.push(e[1], Di); if (Lh.length > 2 * KEEP) Lh.splice(0, Lh.length - 2 * KEEP);   // à plat : v, D, v, D, …
-        nJ++;
+        nJ++; touched[id] = 1;
       });
       if (q.dO && q.dH) { _vjCmpAdd(T, i, q.t, q.f, (q.dH - q.dO) * D); dm[Math.round(q.f / 60000)] = true; }
+      // [FITNESS AUX HORIZONS · 28/09/2026] les deux sièges « à retirer » ont-ils voté ici ? qualité de leur vote = v·D (pesée par la conviction : c'est
+      // l'impact du siège sur la décision qui est jugé, un siège timide pèse peu) ; écart = bougie − horizons : positif = le siège retiré par la fitness
+      // aux horizons a fait pire (donc mieux retiré). Votes lus dans l'entrée (qB, qH : mémorisés à la note) ; entrée d'avant cette mémoire : relus dans la file.
+      if (q.wB >= 0 && q.wH >= 0) {
+        const qv = (w, q0) => (typeof q0 === 'number') ? q0 : (e => e ? e[1] : 0)(q.v.find(e => e[0] === w)), qB = qv(q.wB, q.qB), qH = qv(q.wH, q.qH);
+        if (Math.abs(qB) >= 30 && Math.abs(qH) >= 30) { _vjCmpAdd(T, i, q.t, q.f, (qB - qH) / 1000 * D, 'f'); dmF[Math.round(q.f / 60000)] = true; }
+      }
     });
     if (!q.a.every(x => x)) keep.push(q);
     } catch (e) { try { window._decErr && window._decErr(e); } catch (_e) {} }
   });
   T.pendV = keep;
   Object.keys(dm).forEach(k => { T.vDirtyF[k] = true; });
-  const f0 = _thTfMs(_thTf()), fm = f0 / 60000, R = T.vRules[fm];
+  Object.keys(dmF).forEach(k => { T.fDirtyF[k] = true; });
+  const f0 = _thTfMs(_thTf()), fm = f0 / 60000, R = T.vRules[fm], RF = T.fRules[fm];
   if (T.vDirtyF[fm] && (!R || now - R.t >= 300000)) _vjRefresh(f0);   // le pas de temps du mode courant, comme le seuil
+  if (T.fDirtyF[fm] && (!RF || now - RF.t >= 300000)) _vjRefresh(f0, 'f');   // [FITNESS AUX HORIZONS · 28/09/2026] idem pour le garde-fou de la fitness
+  // [FITNESS AUX HORIZONS · 28/09/2026] les sièges qui viennent d'être jugés aux horizons : leur fitness suit sans attendre un jugement à la bougie — par la
+  // même porte (_fitRecomputeAll restreint à eux ; bots, méta et composite n'ont pas de fitness aux horizons, rien à suivre). Première fitness aux
+  // horizons : la ligne au journal (_fitHzFirst), si learnFromOutcome ne l'a pas déjà écrite.
+  if (nJ) {
+    const only = {}, isSeat = a => a && typeof a.id === 'string' && !a.isBot && !a.isMeta && a.id !== 'composite'; let nS = 0;
+    (S.agents || []).forEach(a => { if (isSeat(a) && touched[a.id]) { only[a.id] = 1; nS++; } });
+    if (nS) _fitRecomputeAll(only);
+    _fitHzFirst();
+  }
   return nJ;
   } catch (e) { try { window._decErr && window._decErr(e); } catch (_e) {} return 0; }
 }
-function _vjCmpAdd(T, i, t, f, diff) {
-  const M = T.vCmp[i] || (T.vCmp[i] = {}), key = Math.round(f / 60000) + ':' + Math.floor(t / ((TH_HZ[i] + 1) * f));
+function _vjCmpAdd(T, i, t, f, diff, kind) {   // [FITNESS AUX HORIZONS · 28/09/2026] kind 'f' : l'écart des sièges retirés (T.fCmp) ; sinon celui des pesées (T.vCmp)
+  const C = (kind === 'f') ? (T.fCmp || (T.fCmp = TH_HZ.map(() => ({})))) : T.vCmp;
+  const M = C[i] || (C[i] = {}), key = Math.round(f / 60000) + ':' + Math.floor(t / ((TH_HZ[i] + 1) * f));
   const e = M[key] || (M[key] = [0, 0]); e[0] += Math.round(diff * 10000); e[1] += 1;
 }
 // Écart apparié d'un horizon : créneaux {fm, b, s (Σ écart, %), n} → moyenne par cycle, erreur type par créneau avec recouvrement (même calcul que
@@ -6911,35 +6947,63 @@ function _vjCmpEval(bl) {
   return out;
 }
 // Juge l'écart par horizon (fenêtre : 30 créneaux du plus long horizon, comme le seuil) et bascule la pesée si une preuve le demande.
-function _vjRefresh(fArg) {
+// [FITNESS AUX HORIZONS · 28/09/2026] kind 'f' : même jugement pour la fitness des sièges (écart des sièges retirés, T.fCmp → T.fModes / T.fRules) ;
+// une bascule de la fitness recalcule la fitness de tous les sièges (_fitRecomputeAll).
+function _vjRefresh(fArg, kind) {
   try {
-    const T = _thState(), now = Date.now(), hmax = Math.max.apply(null, TH_HZ), f = Number(fArg) > 0 ? Number(fArg) : _thTfMs(_thTf()), fm = f / 60000, prev = _vjMode(fm);
+    const KF = (kind === 'f'), T = _thState(), now = Date.now(), hmax = Math.max.apply(null, TH_HZ), f = Number(fArg) > 0 ? Number(fArg) : _thTfMs(_thTf()), fm = f / 60000, prev = _vjMode(fm, kind);
+    const CMP = KF ? T.fCmp : T.vCmp, MODES = KF ? T.fModes : T.vModes, RULES = KF ? T.fRules : T.vRules, DIRTY = KF ? T.fDirtyF : T.vDirtyF, g0 = KF ? _fjMode() : null;
+    const left = {};   // [FITNESS AUX HORIZONS · 28/09/2026] créneaux encore dans leur fenêtre, par pas de temps (une preuve ne survit pas à ses données)
     const hz = TH_HZ.map((h, i) => {
-      const M = T.vCmp[i] || (T.vCmp[i] = {}), bl = [];
+      const M = CMP[i] || (CMP[i] = {}), bl = [];
       Object.keys(M).forEach(key => {
         const kf = Number(key.split(':')[0]), b = Number(key.split(':')[1]), e = M[key];
         if (!(kf > 0) || !Array.isArray(e) || (b + 1) * (h + 1) * kf * 60000 < now - 1.5 * TH_MIN_B * (hmax + 1) * kf * 60000) { delete M[key]; return; }
+        left[kf] = (left[kf] || 0) + 1;
         if (kf === fm) bl.push({ fm: kf, b: b, s: e[0] / 10000, n: e[1] });   // ce pas de temps seulement : EV 15 min et RE 1 h ne se mêlent pas
       });
       const r = _vjCmpEval(bl); r.h = h; return r;
     });
     const better = hz.some(x => x.better), worse = hz.some(x => x.worse);
-    let mode = prev;
+    let mode = prev, expCur = false;
     if (prev === 'hz' && worse && !better) mode = 'bougie';
     else if (prev === 'bougie' && better && !worse) mode = 'hz';
-    T.vModes[fm] = mode; T.vDirtyF[fm] = false; T.vRules[fm] = { t: now, mode: mode, hz: hz, tfMs: f };
-    if (mode !== prev && S.chainLog) {
-      const f2 = x => (x >= 0 ? '+' : '') + x.toFixed(3).replace('.', ','), L = (x) => _thHzLab(x.h, f);
-      const pr = hz.filter(x => (mode === 'bougie') ? x.worse : x.better).map(x => L(x) + ' (écart ' + f2(x.mean) + ' %/cycle ± ' + x.se.toFixed(3).replace('.', ',') + ', ' + x.n + ' cycles)').join(' ; ');
-      S.chainLog.push({ icon: '⚖️', desc: (mode === 'bougie' ? 'Poids des voix · retour à la bougie — l\'ancienne pesée a fait mieux : ' : 'Poids des voix · aux horizons — la pesée aux horizons a fait mieux : ') + pr,
-        hash: Math.random().toString(36).slice(2, 8), time: (typeof nowStr === 'function') ? nowStr() : '' });
+    // [FITNESS AUX HORIZONS · 28/09/2026] une preuve ne survit pas à ses données : un pas de temps « bougie » dont plus aucun créneau n'est dans sa fenêtre
+    // (purge ci-dessus — le pas courant sans cycle depuis longtemps, ou un pas qu'on ne joue plus) revient aux horizons. Sinon un retour prouvé sur un pas
+    // abandonné verrouillerait la fitness de tous les sièges sans qu'aucune donnée ne puisse plus le lever. Les pesées des voix (par pas) ne sont pas concernées.
+    if (KF && mode === 'bougie' && !left[fm]) { mode = 'hz'; expCur = true; }
+    MODES[fm] = mode; DIRTY[fm] = false; RULES[fm] = { t: now, mode: mode, hz: hz, tfMs: f, expired: expCur || undefined };
+    const expired = [];
+    if (KF) Object.keys(MODES).forEach(k => { if (Number(k) !== fm && MODES[k] === 'bougie' && !left[k]) { MODES[k] = 'hz'; RULES[k] = { t: now, mode: 'hz', hz: [], tfMs: Number(k) * 60000, expired: true }; expired.push(Number(k)); } });
+    const g1 = KF ? _fjMode() : null;   // [FITNESS AUX HORIZONS · 28/09/2026] la définition vivante (une par siège, tous pas de temps) a-t-elle changé ?
+    if ((mode !== prev || expired.length) && S.chainLog) {
+      const f2 = x => (x >= 0 ? '+' : '') + x.toFixed(3).replace('.', ','), L = (x) => _thHzLab(x.h, f), tfl = ' (pas de temps ' + _thHzLab(1, f) + ')';
+      const exp = k => 'Fitness des sièges · la preuve du pas de temps ' + _thHzLab(1, k * 60000) + ' a expiré avec ses données (plus aucun créneau dans sa fenêtre) : ce pas revient aux horizons';
+      const lines = [];
+      if (mode !== prev) {
+        if (expCur) lines.push(exp(fm));
+        else {
+          const pr = hz.filter(x => (mode === 'bougie') ? x.worse : x.better).map(x => L(x) + ' (écart ' + f2(x.mean) + (KF ? ' %×vote/cycle ± ' : ' %/cycle ± ') + x.se.toFixed(3).replace('.', ',') + ', ' + x.n + ' cycles)').join(' ; ');
+          const what = KF ? ['Fitness des sièges · retour à la bougie — elle retirait de plus mauvais sièges' + tfl + ' : ', 'Fitness des sièges · aux horizons — elle retire de plus mauvais sièges' + tfl + ' : ']
+                          : ['Poids des voix · retour à la bougie — l\'ancienne pesée a fait mieux : ', 'Poids des voix · aux horizons — la pesée aux horizons a fait mieux : '];
+          lines.push((mode === 'bougie' ? what[0] : what[1]) + pr);
+        }
+      }
+      expired.forEach(k => lines.push(exp(k)));
+      const tail = !KF ? '' : (g1 !== g0 ? ' → une seule fitness par siège : tous recalculés (' + (g1 === 'bougie' ? 'bougie' : 'horizons') + ')' : ' → la définition vivante reste à la bougie (retour prouvé à un autre pas de temps)');
+      lines.forEach((d, i) => S.chainLog.push({ icon: '⚖️', desc: d + (i === lines.length - 1 ? tail : ''), hash: Math.random().toString(36).slice(2, 8), time: (typeof nowStr === 'function') ? nowStr() : '' }));
       if (S.chainLog.length > 100) S.chainLog.splice(0, S.chainLog.length - 100);
     }
-    return T.vRules[fm];
+    if (KF && g1 !== g0) { try { _fitRecomputeAll(); } catch (e) { try { window._decErr && window._decErr(e); } catch (_e) {} } }   // la fitness de tous les sièges suit la définition vivante
+    return RULES[fm];
   } catch (e) { try { window._decErr && window._decErr(e); } catch (_e) {} return null; }
 }
 // Pesée vivante du pas de temps (celui du mode courant à défaut) : 'hz' tant qu'un retour à la bougie n'est pas prouvé.
-function _vjMode(fm) { const T = S.dcThreshold, k = Number(fm) > 0 ? Number(fm) : _thTfMs(_thTf()) / 60000; return (T && T.vModes && T.vModes[k] === 'bougie') ? 'bougie' : 'hz'; }
+function _vjMode(fm, kind) { const T = S.dcThreshold, k = Number(fm) > 0 ? Number(fm) : _thTfMs(_thTf()) / 60000, M = T && (kind === 'f' ? T.fModes : T.vModes); return (M && M[k] === 'bougie') ? 'bougie' : 'hz'; }
+// [FITNESS AUX HORIZONS · 28/09/2026] définition vivante de la fitness des sièges — UNE par siège, partagée par tous les pas de temps (la fitness est un
+// scalaire lu par l'évolution, la sortie « signal inversé », l'affichage, quel que soit le mode qui bat à cet instant) : 'bougie' dès qu'UN pas de
+// temps a prouvé le retour (T.fModes), 'hz' sinon. La preuve, elle, reste accumulée et jugée par pas de temps (_vjMode(fm, 'f'), écran 11b).
+function _fjMode() { const T = S.dcThreshold, M = T && T.fModes; return (M && Object.keys(M).some(k => M[k] === 'bougie')) ? 'bougie' : 'hz'; }
 // Le siège évolue (07 : « la fenêtre repart de zéro : elle mesure le génome courant ») : son bilan aux horizons repart aussi de zéro — record
 // effacé, ses votes encore en attente retirés (ils étaient ceux de l'ancien génome). La décision reprend son ancien poids le temps qu'il se rejuge.
 function _vjReset(id) {
@@ -6953,24 +7017,105 @@ function _vjReset(id) {
 }
 // Poids d'une voix aux horizons : max(0, moyenne des E_h), E_h = Σ v·D / Σ |v·D| sur ses W derniers jugements à l'horizon h (W = fenêtre apprise
 // de la fitness) ; null tant qu'un horizon a moins de 5 jugements (la décision prend alors son ancien poids). Une erreur ici est signalée (_decErr).
+// [FITNESS AUX HORIZONS · 28/09/2026] Le bilan aux horizons d'une voix, brut : moyenne des E_h ∈ [−1, 1] sur ses W derniers jugements à chaque
+// horizon ; null tant qu'un horizon a moins de 5 jugements. Sert au poids de la voix (_dcMeritHz, borné à 0) et à la fitness du siège (_fitHz).
+function _vjE(id, W) {
+  const T = S.dcThreshold, Jv = T && T.vHz && T.vHz[id];
+  if (!Array.isArray(Jv) || Jv.length !== TH_HZ.length) return null;
+  const nMin = (typeof FIT_MIN_N !== 'undefined') ? FIT_MIN_N : 5;
+  let s = 0;
+  for (let i = 0; i < Jv.length; i++) {
+    const L = Array.isArray(Jv[i]) ? Jv[i] : [], n = Math.min(L.length >> 1, W);   // à plat : v, D, v, D, … ; comptés dans la fenêtre, comme _dcMerit
+    if (n < nMin) return null;
+    let a = 0, b = 0;
+    for (let j = Math.max(0, L.length - 2 * W); j + 1 < L.length; j += 2) { const x = Number(L[j]) * Number(L[j + 1]); if (isFinite(x)) { a += x; b += Math.abs(x); } }
+    s += b > 0 ? a / b : 0;
+  }
+  return s / Jv.length;
+}
 function _dcMeritHz(id) {
   try {
-    const T = S.dcThreshold, Jv = T && T.vHz && T.vHz[id];
-    if (!Array.isArray(Jv) || Jv.length !== TH_HZ.length) return null;
-    const W = (typeof _fitWindow === 'function') ? _fitWindow() : 60, nMin = (typeof FIT_MIN_N !== 'undefined') ? FIT_MIN_N : 5;
-    let s = 0;
-    for (let i = 0; i < Jv.length; i++) {
-      const L = Array.isArray(Jv[i]) ? Jv[i] : [], n = Math.min(L.length >> 1, W);   // à plat : v, D, v, D, … ; comptés dans la fenêtre, comme _dcMerit
-      if (n < nMin) return null;
-      let a = 0, b = 0;
-      for (let j = Math.max(0, L.length - 2 * W); j + 1 < L.length; j += 2) { const x = Number(L[j]) * Number(L[j + 1]); if (isFinite(x)) { a += x; b += Math.abs(x); } }
-      s += b > 0 ? a / b : 0;
-    }
-    return Math.max(0, s / Jv.length);
+    const e = _vjE(id, (typeof _fitWindow === 'function') ? _fitWindow() : 60);
+    return e === null ? null : Math.max(0, e);
   } catch (e) { try { window._decErr && window._decErr(e); } catch (_e) {} return null; }
+}
+// ═══ [FITNESS AUX HORIZONS · 28/09/2026] LE SIÈGE VAUT CE QUE SES VOTES ONT DONNÉ AUX HORIZONS (go Rams 28/09 04:29) ═══
+// Avant : la fitness d'un siège = 350 + 1 000 × E, E = bilan de ses jugements à la BOUGIE SUIVANTE (sens du vote contre le mouvement jusqu'au
+// cycle suivant, sans frais) — c'est elle qui décide l'évolution (07 triggerEvolution : le siège le plus faible est recyclé, 1 fois par heure au
+// plus ; tournoi des parents, fitness de naissance, pépinière), la sortie « signal inversé » (10f consRev : poids des agents opposés), le poids
+// contextuel de repli et l'affichage. Or la décision est jugée — et serait tradée — de 15 min à 4 h. Maintenant la fitness d'un siège suit son
+// bilan aux horizons (le même record que le poids de sa voix, 20260927k : E_h = Σ v·D / Σ |v·D| sur la fenêtre apprise, D = ce que le long a
+// rapporté de plus que le short à l'horizon) : fitness = 350 + 1 000 × moyenne des 5 E_h (bornée 50-2 000 comme avant), dès qu'il a 5 jugements
+// à chaque horizon ; sinon sa fenêtre de jugements à la bougie, comme avant. Une seule porte de calcul (_fitCurrent) et trois écritures, toutes
+// par elle (_fitJudge, la branche d'abstention, _fitRecomputeAll — aussi pour les sièges qui viennent d'être jugés aux horizons, _vjJudge). Les bots
+// (jugés sur leurs actes), le méta (l'Évolueur, jugé sur ses évolutions) et l'analyse (voix composite) gardent leur propre jugement. La première
+// fitness aux horizons est journalisée une fois (T.fSince, _fitHzFirst). Une preuve de retour ne survit pas à ses données : un pas de temps sans plus
+// aucun créneau dans sa fenêtre revient aux horizons (_vjRefresh). Hors périmètre, constaté au rejeu : le marché LMSR de 08 (héritage) débite
+// a.fitness toutes les 6 s entre deux jugements (≈ 0,14 × fitness × |score| × prix par passe) — la porte la remet à sa valeur au jugement suivant.
+// Garde-fou appris PROPRE À LA FITNESS (la pesée des voix a le sien) : à chaque cycle noté, le siège que chaque définition retirerait maintenant
+// (le plus faible : bougie wB, horizons wH) est mémorisé AVEC son vote (qB, qH — une évolution d'ici l'horizon ne l'efface pas de la preuve) ;
+// quand l'horizon est jugé et que les deux ont voté sur ce cycle, écart = qualité du vote de wB − qualité du vote de wH, qualité = v·D (pesée
+// par la conviction : c'est l'impact du siège sur la décision qui est jugé, un siège timide pèse peu) : positif = la fitness aux horizons a
+// désigné un siège qui a fait pire — un meilleur choix à retirer. Jugé par horizon et par pas de temps comme le seuil (créneaux, recouvrement,
+// Student Φ(−2)/25, ≥ 30 cycles, ≥ 20 créneaux) : « pire » prouvé à un horizon et « meilleur » à aucun → ce pas de temps repasse à la bougie ;
+// retour inverse. La fitness étant UN scalaire par siège, sa définition vivante est une (_fjMode) : bougie dès qu'un pas de temps l'a prouvé,
+// pour tous les sièges (journal ⚖️, _fitRecomputeAll). Le siège qui évolue repart de zéro (_vjReset, 07). L'essai d'évolution (nouveau génome
+// contre l'ancien, _evoTrialJudge) reste jugé à la bougie.
+// Rejeu avant livraison (app réelle en accéléré, 81 h, 9 fenêtres de 9 h, 2 tirages, ce code ; chaque fenêtre part sans record aux horizons — la fitness aux horizons
+// n'agit qu'une fois 5 jugements réunis à 4 h) : tirage 1 : 0 trades, net 0 $ ; tirage 2 : 0 trades, net 0 $ ; 0 erreur. Sièges : tirage 1 : 189 sièges-fenêtres, 100 au record complet en fin de fenêtre (fitness vivante = horizons pour 90, le reste débité par le LMSR, voir plus bas), cassés (≤ 80 T$) : 43 vivante / 35 bougie / 32 horizons ; Spearman bougie-horizons 0,57, écart moyen |bougie − horizons| 195 T$ — tirage 2 : 189 sièges-fenêtres, 96 au record complet en fin de fenêtre (fitness vivante = horizons pour 85, le reste débité par le LMSR, voir plus bas), cassés (≤ 80 T$) : 42 vivante / 31 bougie / 33 horizons ; Spearman bougie-horizons 0,63, écart moyen |bougie − horizons| 170 T$. Sièges désignés : tirage 1 : 4048 cycles notés, deux sièges désignés dans 4020, désaccord des deux définitions dans 1050 (26 %), les deux ont voté dans 2845 — tirage 2 : 4048 cycles notés, deux sièges désignés dans 4020, désaccord des deux définitions dans 1075 (27 %), les deux ont voté dans 2786.
+// Écart apparié bougie − horizons (qualité v·D du siège que chaque définition retirerait, %×vote/cycle ± erreur type, `_vjCmpEval` livrée, sans le biais de fin de
+// fenêtre) : tirage 1 : 15 min −0,004 ± 0,004 (2677 cycles, 169 créneaux) ; 30 min −0,005 ± 0,005 (2597 cycles, 116 créneaux) ; 1 h −0,004 ± 0,006 (2478 cycles, 70 créneaux) ; 2 h −0,006 ± 0,012 (2170 cycles, 38 créneaux) ; 4 h +0,010 ± 0,005 (1605 cycles, 23 créneaux) — tirage 2 : 15 min −0,008 ± 0,005 (2628 cycles, 167 créneaux) ; 30 min −0,006 ± 0,004 (2561 cycles, 114 créneaux) ; 1 h −0,002 ± 0,005 (2426 cycles, 70 créneaux) ; 2 h −0,007 ± 0,005 (2113 cycles, 38 créneaux) ; 4 h +0,003 ± 0,003 (1541 cycles, 23 créneaux). Évolutions : tirage 1 : 77 évolutions (0 manuelles), cible = le plus faible par fitness vivante dans 77 ; deux sièges désignés au moment même dans 77 : cible = celui des horizons 77, = celui de la bougie 58, ni l'un ni l'autre 0 ; désaccord des deux définitions à cet instant 19, dont cible = celui des horizons (elle aurait été différente à la bougie) 19 ; cible sans preuve (nouveau-né) 0, au record complet 17 ; cible dont la fitness vivante était débitée de plus de 50 T$ sous sa définition (LMSR) 0 (écart moyen — T$) — tirage 2 : 77 évolutions (0 manuelles), cible = le plus faible par fitness vivante dans 77 ; deux sièges désignés au moment même dans 77 : cible = celui des horizons 77, = celui de la bougie 56, ni l'un ni l'autre 0 ; désaccord des deux définitions à cet instant 21, dont cible = celui des horizons (elle aurait été différente à la bougie) 21 ; cible sans preuve (nouveau-né) 0, au record complet 20 ; cible dont la fitness vivante était débitée de plus de 50 T$ sous sa définition (LMSR) 0 (écart moyen — T$). Fitness vivante hors des deux définitions (débit LMSR de 08) : tirage 1 : 12 sièges-fenêtres sur 144 hors de leur définition en fin de fenêtre (écart moyen -242 T$, jusqu'à -737) — tirage 2 : 15 sièges-fenêtres sur 142 hors de leur définition en fin de fenêtre (écart moyen -228 T$, jusqu'à -580). Journal : tirage 1 : ligne « désormais aux horizons » dans 9 fenêtres sur 9, bascules ⚖️ fitness 0, voix 0, preuves expirées 0 — tirage 2 : ligne « désormais aux horizons » dans 9 fenêtres sur 9, bascules ⚖️ fitness 0, voix 0, preuves expirées 0.
+function _fitHz(a) {
+  try {
+    if (!a || a.isBot || a.isMeta || a.id === 'composite' || typeof a.id !== 'string') return null;
+    const e = _vjE(a.id, (typeof _fitWindow === 'function') ? _fitWindow() : 60);
+    return e === null ? null : _fitScale(e);
+  } catch (e) { try { window._decErr && window._decErr(e); } catch (_e) {} return null; }
+}
+// La fitness d'un agent telle qu'elle doit être maintenant : un siège → aux horizons si son record est complet et que la définition vivante est
+// 'hz' ; sinon (et bots / méta / composite) sa fenêtre de jugements ; null = pas de preuve, la valeur en place reste (fitness de naissance).
+function _fitCurrent(a) {
+  if (!a) return null;
+  if (_fjMode() === 'hz') { const f = _fitHz(a); if (f !== null) return f; }
+  return _fitOf(Array.isArray(a._judgments) ? a._judgments : [], _fitWindow());
+}
+// Le siège que chaque définition retirerait maintenant : le plus faible parmi les sièges déjà jugés (au moins 5 jugements à la bougie ; la
+// définition aux horizons prend la bougie pour un siège pas encore jugé aux 5 horizons, comme _fitCurrent). Moins de deux sièges → rien.
+// Cas limite assumé : un siège au record horizons complet mais sans 5 jugements à la bougie (votes toujours entre 0,03 et 0,05) n'est candidat
+// sous aucune définition ici, bien que _fitCurrent lui donne sa fitness aux horizons ; les sièges à fitness de naissance non plus. Une erreur
+// ici est signalée (_decErr) : sinon le garde-fou se tairait sans trace.
+function _fitPicks() {
+  try {
+    const W = _fitWindow(), rows = [];
+    (S.agents || []).forEach(a => {
+      if (!a || a.isBot || a.isMeta || typeof a.id !== 'string') return;
+      const fb = _fitOf(Array.isArray(a._judgments) ? a._judgments : [], W); if (fb === null) return;
+      const fh = _fitHz(a); rows.push({ id: a.id, b: fb, h: fh === null ? fb : fh });
+    });
+    if (rows.length < 2) return { b: null, h: null };
+    let wb = rows[0], wh = rows[0];
+    rows.forEach(r => { if (r.b < wb.b) wb = r; if (r.h < wh.h) wh = r; });
+    return { b: wb.id, h: wh.id };
+  } catch (e) { try { window._decErr && window._decErr(e); } catch (_e) {} return { b: null, h: null }; }
+}
+// [FITNESS AUX HORIZONS · 28/09/2026] La première fois qu'un siège reçoit sa fitness aux horizons : une ligne au journal, datée (T.fSince, persisté avec
+// dcThreshold), comme toute transition du projet. Tentée après les jugements d'un cycle (learnFromOutcome, avant l'évolution qui lit cette fitness) et
+// après les jugements aux horizons (_vjJudge) ; rien tant que la définition vivante n'est pas « horizons » ou qu'aucun siège n'a son record complet.
+function _fitHzFirst() {
+  try {
+    const T = S.dcThreshold; if (!T || T.fSince > 0 || !S.chainLog || _fjMode() !== 'hz') return false;
+    const isSeat = a => a && typeof a.id === 'string' && !a.isBot && !a.isMeta && a.id !== 'composite';
+    const hzN = (S.agents || []).filter(a => isSeat(a) && _fitHz(a) !== null).length; if (!hzN) return false;
+    T.fSince = Date.now();
+    S.chainLog.push({ icon: '\uD83E\uDDEC', desc: 'Fitness des sièges : désormais leur bilan aux horizons — ' + hzN + ' siège(s) au record complet recalculé(s), les autres restent à la bougie le temps de l\'avoir · le garde-fou appris la ramène à la bougie si elle retirait de plus mauvais sièges',
+      hash: Math.random().toString(36).slice(2, 8), time: (typeof nowStr === 'function') ? nowStr() : '' });
+    if (S.chainLog.length > 100) S.chainLog.splice(0, S.chainLog.length - 100);
+    return true;
+  } catch (e) { try { window._decErr && window._decErr(e); } catch (_e) {} return false; }
 }
 window._thNote = _thNote; window._thJudge = _thJudge; window._thEval = _thEval; window._thRefresh = _thRefresh; window._thLevel = _thLevel; window._thPick = _thPick; window._thHzLab = _thHzLab; window._thCrit = _thCrit; window._thRule = _thRule;
 window._vjNote = _vjNote; window._vjRefresh = _vjRefresh; window._dcMeritHz = _dcMeritHz; window._vjMode = _vjMode; window._vjReset = _vjReset;   // [BILAN AUX HORIZONS · 27/09/2026]
+window._vjE = _vjE; window._fitHz = _fitHz; window._fitCurrent = _fitCurrent; window._fjMode = _fjMode; window._fitPicks = _fitPicks; window._fitHzFirst = _fitHzFirst;   // [FITNESS AUX HORIZONS · 28/09/2026]
 window._botView = _botView; window._dcMerit = _dcMerit; window._dcConsensus = _dcConsensus; window._dcVoice = _dcVoice;
 window._dcForwardJudge = _dcForwardJudge; window._dcSnapVotes = _dcSnapVotes; window._dcJudgeComposite = _dcJudgeComposite;
 window._botPredict = _botPredict; window._botMeritAudit = _botMeritAudit; window._botJudgeMeasured = _botJudgeMeasured; window._botJudge = _botJudge;
