@@ -1,3 +1,4 @@
+// [ÉVOLUTION APPRISE · 28/09/2026] VERSION 20260928c · triggerEvolution transmet à l'essai la fitness du siège À l'évolution, le déclencheur (opts.trig : A B C D E M) et si l'évolution est manuelle — l'observation de la règle apprise (03)
 // [MARCHÉ LMSR À PART · 28/09/2026] VERSION 20260928b · à la naissance d'un génome (triggerEvolution) : portefeuille de marché = fitness de naissance, dépense de marché remise à zéro (a.lmsrWallet, a.lmsrSpent — 08)
 // [BILAN AUX HORIZONS · 27/09/2026] VERSION 20260927k · évolution d'un siège : son bilan aux horizons (03 _vjReset) repart de zéro avec sa fenêtre de fitness
 // [HORIZONS APPRIS · 27/09/2026] VERSION 20260927i · learnFromOpenPositions : une position ouverte sur un horizon prouvé (np._thX) n'est fermée ni par le trailing, ni par l'anti-zombie, ni par la bascule avant son horizon
@@ -2781,6 +2782,7 @@ function triggerEvolution(weak, opts) {
                                    .sort((a,b)=>b.fitness-a.fitness);
   if(candidates.length < 2) return;
   S._lastEvolutionAt = Date.now();
+  const _fitOld = Number(weak.fitness) || 0;   // [ÉVOLUTION APPRISE · 28/09/2026] la fitness du siège À l'évolution (lue avant la naissance) : l'observation de la règle apprise
 
   // ── ÉVOLUEUR ADAPTATIF ──────────────────────────────────────────────
   // Le nombre de parents (2 à 6) et la mutation s'adaptent à la DIVERSITÉ de
@@ -2853,7 +2855,7 @@ function triggerEvolution(weak, opts) {
     const _peakPrev = Math.max.apply(null, (Array.isArray(weak.fitnessHistory) && weak.fitnessHistory.length ? weak.fitnessHistory : [0]).map(Number).filter(isFinite).concat([0]));
     const _oldG = (typeof _genomeOf === 'function') ? JSON.parse(JSON.stringify(_genomeOf(weak.id) || {})) : null;   // [MÉRITE DE L'ÉVOLUEUR · 26/09/2026] capturé AVANT la mutation
     const _ge = (typeof _genomeEvolve === 'function') ? _genomeEvolve(weak.id, _mutation, _peakPrev) : null;
-    if (_ge && _ge.changed > 0 && _oldG && Object.keys(_oldG).length && typeof _evoTrialStart === 'function') _evoTrialStart(weak.id, _oldG, { gen: genNum, name: weak.name, prev: prevName });   // essai : nouveau génome contre ancien
+    if (_ge && _ge.changed > 0 && _oldG && Object.keys(_oldG).length && typeof _evoTrialStart === 'function') _evoTrialStart(weak.id, _oldG, { gen: genNum, name: weak.name, prev: prevName, fit: _fitOld, trig: (opts && opts.trig) || '?', man: !!(opts && opts.manual) });   // essai : nouveau génome contre ancien · [ÉVOLUTION APPRISE · 28/09/2026] + fitness à l'évolution, déclencheur, manuelle
     if (_ge && S.chainLog) {
       S.chainLog.push({ icon: '\uD83E\uDDEC', desc: 'G\u00e9nome ' + weak.id + ' : ' + _ge.changed + '/' + _ge.genes + ' g\u00e8nes mut\u00e9s (\u00b1' + Math.round(_mutation * 100) + ' %)' + (_ge.archived ? ' \u00b7 version pr\u00e9c\u00e9dente archiv\u00e9e (pointe ' + Math.round(_peakPrev) + ' T$)' : ''), hash: Math.random().toString(36).slice(2, 8), time: new Date().toLocaleTimeString() });
       if (S.chainLog.length > 100) S.chainLog.splice(0, S.chainLog.length - 100);

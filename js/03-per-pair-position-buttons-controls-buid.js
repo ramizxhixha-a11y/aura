@@ -1,3 +1,4 @@
+// [ÉVOLUTION APPRISE · 28/09/2026] VERSION 20260928c · les déclencheurs de l'évolution (03 : plus faible sous 150 tout de suite, tous les 15 cycles, sous 300 tous les 8 cycles ; 08 : sous 300, stagnation sous 400) lisent une règle apprise sur ce que les évolutions ont rapporté (essai nouveau génome contre ancien, une observation par évolution jugée : fitness du siège à l'évolution, écart, créneau de 4 h, déclencheur) — gain prouvé sous un niveau F* : tout siège de fitness ≤ F* est recyclable tout de suite (le gain ÉTEND ; au-dessus de F*, rien n'est prouvé : les nombres posés à la main restent) ; nuisance prouvée sous H* : plus d'évolution automatique d'un siège ≤ H* tant que la preuve tient (elle meurt avec ses données : 5 jours au plus sans nouvelle observation) — le plus faible RECYCLABLE est recyclé ; rien de prouvé : les nombres posés à la main, tels quels (repli). Même preuve que le seuil (_thEval) ; observations gardées 5 jours (S.evoRule, persisté)
 // [MARCHÉ LMSR À PART · 28/09/2026] VERSION 20260928b · le marché LMSR (08) ne débite plus la fitness — le jugement (porte unique _fitCurrent) en est la seule écriture courante ; à chaque évaluation avec preuve (jugement, abstention, recompute) elle recharge le portefeuille de marché du siège (_lmsrRefill, 08) : le marché garde sa dynamique d'avant ; la fitness, elle, ne bouge plus entre deux jugements
 // [FITNESS AUX HORIZONS · 28/09/2026] VERSION 20260928a · la fitness d'un siège (ce qui décide l'évolution : le plus faible est recyclé ; aussi le tournoi des parents, la pépinière, la sortie « signal inversé », l'affichage) suit son bilan aux horizons — le même record que le poids de sa voix (20260927k) : 350 + 1 000 × moyenne des E_h — tant qu'un garde-fou appris propre à la fitness ne prouve pas que la fitness de la bougie retirait de plus mauvais sièges (le siège que chaque définition retirerait est comparé sur ses votes suivants pesés par leur conviction, par horizon et par pas de temps ; une seule définition vivante par siège : un retour prouvé à un pas de temps vaut pour tous) ; les bots et l'Évolueur gardent leur propre jugement ; rien de plus n'est tradé
 // [BILAN AUX HORIZONS · 27/09/2026] VERSION 20260927k · chaque voix de la décision commune (agents, bots, analyse tech. + fond.) est jugée sur les deux trades virtuels de la paire — long et short, 15 min à 4 h, chacun sa perte max, mêmes règles que le seuil appris : ce que son sens a rapporté de plus que l'autre (les frais, payés des deux côtés, s'annulent) — et la décision commune la pèse sur ce bilan au lieu de la bougie suivante ; garde-fou appris (écart apparié des deux pesées, preuve du seuil) ; le bilan d'un siège repart de zéro à son évolution ; mesuré, rien n'est tradé de plus
@@ -1535,12 +1536,17 @@ function learnFromOutcome(source, pnlPct, pair) {
   // ── Déclenchement évolution si agent très faible ──────────
   const sorted = [...S.agents].filter(a=>!a.isBot&&!a.isMeta).sort((a,b)=>a.fitness-b.fitness);
   // v6.8: évolution infinie & agressive — déclenchement permanent
-  if(sorted[0] && sorted[0].fitness < 150) {
-    triggerEvolution(sorted[0]);  // agent faible → remplacement immédiat
-  } else if(sorted[0] && S.cycle % 15 === 0) {
-    triggerEvolution(sorted[0]);  // évolution cyclique forcée (toutes les 15 décisions)
-  } else if(sorted[0] && sorted[0].fitness < 300 && S.cycle % 8 === 0) {
-    triggerEvolution(sorted[0]);  // amélioration continue des agents en retard
+  // [ÉVOLUTION APPRISE · 28/09/2026] _evoOk : le niveau appris (gain / nuisance) quand il est prouvé, sinon le nombre posé à la main de chaque déclencheur (150, aucun, 300) ;
+  // le déclencheur est transmis (A / B / C) : chaque évolution jugée devient une observation de la règle
+  // le plus faible RECYCLABLE (find sur la liste triée : sans règle et sous gain c'est sorted[0], comme avant ; sous nuisance, le premier au-dessus des sièges protégés)
+  const _eok = (a, d) => (typeof _evoOk === 'function') ? _evoOk(a, d) : (a.fitness < d);
+  const wA = sorted.find(a => _eok(a, 150)), wB = sorted.find(a => _eok(a, Infinity)), wC = sorted.find(a => _eok(a, 300));
+  if(wA) {
+    triggerEvolution(wA, { trig: 'A' });  // agent faible → remplacement immédiat
+  } else if(wB && S.cycle % 15 === 0) {
+    triggerEvolution(wB, { trig: 'B' });  // évolution cyclique forcée (toutes les 15 décisions)
+  } else if(wC && S.cycle % 8 === 0) {
+    triggerEvolution(wC, { trig: 'C' });  // amélioration continue des agents en retard
   }
 }
 
@@ -5676,7 +5682,7 @@ function _evolveBrokenNow(silent) {
   let n = 0;
   weak.forEach(a => {
     const g0 = S._genCount;
-    try { triggerEvolution(a, { manual: true, quiet: true }); } catch (e) { try{window._decErr&&window._decErr(e)}catch(_e){} }
+    try { triggerEvolution(a, { manual: true, quiet: true, trig: 'M' }); } catch (e) { try{window._decErr&&window._decErr(e)}catch(_e){} }   // [ÉVOLUTION APPRISE · 28/09/2026] M : décision de Rams, jamais retenue par la règle
     if (S._genCount !== g0) n++;
   });
   if (n > 0) {
@@ -7147,7 +7153,8 @@ function _evoTrialStart(seatId, oldG, info) {
     if (!S.evoTrials) S.evoTrials = {};
     if (S.evoTrials[seatId]) _evoTrialConclude(seatId, 'interrompu : nouvelle évolution du siège');
     info = info || {};
-    S.evoTrials[seatId] = { oldG: JSON.parse(JSON.stringify(oldG)), t: Date.now(), gen: info.gen || null, name: info.name || seatId, prev: info.prev || '', n: 0, ns: 0, nw: 0, os: 0, ow: 0 };
+    S.evoTrials[seatId] = { oldG: JSON.parse(JSON.stringify(oldG)), t: Date.now(), gen: info.gen || null, name: info.name || seatId, prev: info.prev || '', n: 0, ns: 0, nw: 0, os: 0, ow: 0,
+      fit: (typeof info.fit === 'number' && isFinite(info.fit)) ? info.fit : null, trig: String(info.trig || '?'), man: !!info.man, seat: seatId };   // [ÉVOLUTION APPRISE · 28/09/2026] fitness du siège à l'évolution (null : appelant d'avant → pas d'observation), déclencheur (A B C D E M), manuelle
     return S.evoTrials[seatId];
   } catch (e) { return null; }
 }
@@ -7212,7 +7219,8 @@ function _evoTrialConclude(seatId, why) {
     }
     if (d > 0) M.good++; else M.bad++;
   }
-  var row = { seat: seatId, name: tr.name, gen: tr.gen, n: tr.n, accNew: accN, accOld: accO, verdict: verdict, why: why || '', t: Date.now() };
+  try { if (typeof _evoRuleNote === 'function') _evoRuleNote(tr, d, tr.n); } catch (e) { try { window._decErr && window._decErr(e); } catch (_e) {} }   // [ÉVOLUTION APPRISE · 28/09/2026] l'observation de la règle apprise (écart brut, même non concluant)
+  var row = { seat: seatId, name: tr.name, gen: tr.gen, n: tr.n, accNew: accN, accOld: accO, verdict: verdict, why: why || '', t: Date.now(), fit: tr.fit, trig: tr.trig };
   M.recent = (Array.isArray(M.recent) ? M.recent : []).concat([row]).slice(-10);
   try {
     if (!S.chainLog) S.chainLog = [];
@@ -7222,3 +7230,97 @@ function _evoTrialConclude(seatId, why) {
   return row;
 }
 window._evoTrialStart = _evoTrialStart; window._evoShadowVotes = _evoShadowVotes; window._evoTrialJudge = _evoTrialJudge; window._evoTrialConclude = _evoTrialConclude;
+
+// ═══ [ÉVOLUTION APPRISE · 28/09/2026] QUAND RECYCLER UN SIÈGE ? CE QUE LES ÉVOLUTIONS ONT RAPPORTÉ (go Rams 28/09 15:41) ═══
+// Avant : les déclencheurs de l'évolution étaient des nombres posés à la main — 03 (après les jugements d'un cycle) : le plus faible sous
+// 150 T$ → recyclé tout de suite ; tous les 15 cycles, quel que soit son niveau ; sous 300 tous les 8 cycles — 08 (page Home) : le plus
+// faible évoluable (hors 60 cycles de grâce) sous 300 ; un siège au score plat sous 400 (stagnation). Tous bornés par le délai d'1 h (07).
+// Or chaque évolution est déjà jugée (MÉRITE DE L'ÉVOLUEUR, 26/09) : l'ancien génome vote en ombre sur les mêmes événements que le
+// nouveau ; après 30 événements, l'écart de précision pondérée d = nouveau − ancien dit si recycler CE siège, à CE niveau de fitness, a
+// aidé. Maintenant chaque évolution jugée (≥ 10 événements) est une observation [fitness du siège à l'évolution, d, créneau de 4 h,
+// déclencheur], gardée 5 jours (30 créneaux, comme le seuil), et la règle est jugée avec la preuve du seuil (_thEval : 5 niveaux = les
+// évolutions des sièges les plus faibles — toutes, la moitié, le quart, le dixième, le vingtième ; erreur type par créneau avec
+// recouvrement ; Student Φ(−2)/25 ; ≥ 30 évolutions, ≥ 20 créneaux), dans les deux sens :
+//  · GAIN prouvé sous un niveau F* → tout siège de fitness ≤ F* est recyclable tout de suite : le gain ÉTEND ce que les nombres posés à la
+//    main permettaient ; au-dessus de F*, rien n'est prouvé dans aucun sens → les nombres posés à la main restent (rien n'est retiré sans
+//    preuve, et la règle continue d'observer au-dessus de son niveau — une observation n'existe que si une évolution a lieu) ;
+//  · NUISANCE prouvée sous un niveau H* → plus d'évolution automatique d'un siège dont la fitness ≤ H* tant que la preuve tient (recycler
+//    ces sièges a fait pire que garder leur génome) ; c'est alors le plus faible RECYCLABLE (au-dessus de H*) qui est recyclé ; les évolutions
+//    manuelles (« Faire évoluer maintenant ») restent — et sont la seule source d'observations sous H* : la preuve meurt avec ses données
+//    (5 jours au plus sans nouvelle observation), puis le repli recycle à nouveau et la règle se rejuge ;
+//  · les deux prouvés → la preuve la plus INTÉRIEURE décide (gain à 50 et nuisance à 200 : le plancher est recyclé, 51-200 non ; nuisance
+//    à 50 et gain à 200 : le plancher est protégé, 51-200 recyclé) ;
+//  · rien de prouvé → les nombres posés à la main, tels quels (rien n'est retiré : ils sont le repli).
+// Une preuve ne survit pas à ses données (règle recalculée au plus tard un créneau après). Le délai d'1 h entre deux évolutions et la
+// période de grâce de 08 ne sont pas appris ici (dit à Rams). Un créneau = 4 h : au plus 4 évolutions (délai d'1 h), un essai dure 45 min
+// à 4 h (rejeu du 28/09) → deux créneaux voisins peuvent partager un essai : le recouvrement est compté. Un essai ouvert avant cette
+// version (sans fitness à l'évolution) ne donne pas d'observation.
+// Rejeu avant livraison (app réelle en accéléré, 81 h, 9 fenêtres de 9 h, 2 tirages, ce code) : tirage 1 : 0 trades, net 0 $ ; tirage 2 : 0 trades, net 0 $ ; 0 erreur. Observations : tirage 1 : 77 évolutions, 59 observations (59 cohérentes avec l'évolution notée : même instant, même siège, même fitness ; 0 incohérentes), déclencheurs A : 56, B : 1, C : 2, fitness à l'évolution : 52/59 au plancher 50 (min 50, max 252), écart moyen nouveau − ancien −0,036, 0 ligne(s) 🧬 « Évolution apprise » — tirage 2 : 78 évolutions, 58 observations (58 cohérentes avec l'évolution notée : même instant, même siège, même fitness ; 0 incohérentes), déclencheurs A : 54, B : 3, C : 1, fitness à l'évolution : 53/58 au plancher 50 (min 50, max 331), écart moyen nouveau − ancien +0,025, 0 ligne(s) 🧬 « Évolution apprise ». Règle : tirage 1 : au plus 8 observations et 3 créneaux de 4 h par fenêtre (preuve exigée : ≥ 30 et ≥ 20) → rien de prouvé dans 9 fenêtres sur 9 — tirage 2 : au plus 9 observations et 3 créneaux de 4 h par fenêtre (preuve exigée : ≥ 30 et ≥ 20) → rien de prouvé dans 9 fenêtres sur 9.
+// Identité avec le rejeu de 20260928b (sans preuve, le comportement doit être celui d'avant ; le rejeu n'est pas déterministe d'une exécution à l'autre — même code, même graine, la fenêtre 1 rejouée deux fois donne les mêmes instants mais d'autres sièges parmi les ex æquo au plancher) : tirage 1 : 8 fenêtres sur 9 au même nombre d'évolutions, 7 aux mêmes instants (grille du délai d'1 h), 1 aux mêmes sièges ; cibles au plancher 50 : 66/77 ici, 69/78 là — tirage 2 : 8 fenêtres sur 9 au même nombre d'évolutions, 6 aux mêmes instants (grille du délai d'1 h), 1 aux mêmes sièges ; cibles au plancher 50 : 72/78 ici, 69/77 là. La règle sur 243 évolutions des rejeux du 28/09 (20260928a et b, 2 tirages, 81 h chacun), 25 créneaux de 4 h : gain non prouvé, nuisance non prouvée ; la queue la plus proche d'une preuve de gain — sièges ≤ 269 T$ : −0,011 ± 0,006 (243 évolutions, 25 créneaux, exigé 3,5 ET) ; de nuisance — sièges ≤ 269 T$ : −0,011 ± 0,006 (243 évolutions, 25 créneaux, exigé 3,5 ET).
+var EVO_BLOCK_MS = 4 * 3600000, EVO_OBS_MAX = 2000;
+function _evoRuleState() { if (!S.evoRule || typeof S.evoRule !== 'object') S.evoRule = { obs: [], rule: null, since: 0 }; var E = S.evoRule; if (!Array.isArray(E.obs)) E.obs = []; return E; }
+function _evoRulePurge(E) { var lim = (Date.now() - 1.5 * TH_MIN_B * EVO_BLOCK_MS) / 1000; E.obs = E.obs.filter(function (o) { return Array.isArray(o) && o[0] >= lim; }); if (E.obs.length > EVO_OBS_MAX) E.obs.splice(0, E.obs.length - EVO_OBS_MAX); }
+// Une évolution jugée (essai tr, écart d = précision pondérée nouveau − ancien, n événements) → une observation compacte :
+// [t de l'évolution (s), fitness du siège à l'évolution (entier), d × 10000 (entier), n, déclencheur, manuelle 0/1, siège]. Puis la règle est rejugée.
+function _evoRuleNote(tr, d, n) {
+  try {
+    if (!tr || !isFinite(d) || typeof tr.fit !== 'number' || !isFinite(tr.fit)) return null;   // essai ouvert avant cette version : pas de fitness à l'évolution → rien
+    var E = _evoRuleState(), t = Number(tr.t) || Date.now();
+    E.obs.push([Math.round(t / 1000), Math.round(Number(tr.fit) || 0), Math.round(d * 10000), n | 0, String(tr.trig || '?'), tr.man ? 1 : 0, String(tr.seat || '')]);
+    if (!(E.since > 0)) E.since = t;
+    return _evoRuleRefresh();
+  } catch (e) { try { window._decErr && window._decErr(e); } catch (_e) {} return null; }
+}
+// Pur : observations → { gain, harm, near, n } — queues prouvées par _thEval (conviction = −fitness : la queue « la plus forte » = les sièges les plus
+// faibles), dans les deux sens (d, puis −d) ; niveaux rendus en fitness (≤ niveau).
+function _evoRuleEval(obs) {
+  var pos = [], neg = [];
+  (obs || []).forEach(function (o) { if (!Array.isArray(o) || !isFinite(o[1]) || !isFinite(o[2])) return; var c = -Number(o[1]), n = Number(o[2]) / 10000, b = Math.floor(Number(o[0]) * 1000 / EVO_BLOCK_MS); pos.push({ c: c, n: n, b: b }); neg.push({ c: c, n: -n, b: b }); });
+  var g = _thEval(pos), h = _thEval(neg);
+  var lv = function (x, sgn) { return x ? { level: -x.level, n: x.n, blocks: x.blocks, mean: sgn * x.mean, se: x.se, crit: x.crit } : null; };
+  return { gain: g.open ? lv(g.best, 1) : null, harm: h.open ? lv(h.best, -1) : null, near: lv(g.near, 1), nearH: lv(h.near, -1), n: pos.length };
+}
+function _evoRuleRefresh() {
+  try {
+    var E = _evoRuleState(); _evoRulePurge(E);
+    var old = E.rule || null, r = _evoRuleEval(E.obs); r.t = Date.now();
+    var bl = {}; E.obs.forEach(function (o) { bl[Math.floor(o[0] * 1000 / EVO_BLOCK_MS)] = 1; }); r.blocks = Object.keys(bl).length;
+    E.rule = r;
+    r.oldest = E.obs.length ? Math.min.apply(null, E.obs.map(function (o) { return o[0]; })) * 1000 : null;   // la plus vieille observation : la preuve vit au plus jusqu'à sa sortie de la fenêtre (m5)
+    var gl = r.gain ? r.gain.level : null, hl = r.harm ? r.harm.level : null, ogl = old && old.gain ? old.gain.level : null, ohl = old && old.harm ? old.harm.level : null;
+    if (gl !== ogl || hl !== ohl) {
+      if (!S.chainLog) S.chainLog = [];
+      var f3 = function (x) { return (x >= 0 ? '+' : '') + x.toFixed(3).replace('.', ','); }, u3 = function (x) { return x.toFixed(3).replace('.', ','); }, parts = [];
+      if (r.gain) parts.push('recycler un siège aide en dessous de ' + Math.round(gl) + ' T$ (écart nouveau − ancien génome ' + f3(r.gain.mean) + ' ± ' + u3(r.gain.se) + ' par évolution, ' + r.gain.n + ' évolutions, ' + r.gain.blocks + ' créneaux) : tout siège ≤ ' + Math.round(gl) + ' T$ est recyclable tout de suite ; au-dessus, les nombres posés à la main restent');
+      else if (ogl !== null) parts.push('le gain n\'est plus prouvé : les nombres posés à la main reprennent');
+      if (r.harm) parts.push('recycler un siège à ' + Math.round(hl) + ' T$ ou moins est prouvé nuisible (' + f3(r.harm.mean) + ' ± ' + u3(r.harm.se) + ', ' + r.harm.n + ' évolutions, ' + r.harm.blocks + ' créneaux) : plus d\'évolution automatique de ces sièges tant que la preuve tient — au plus jusqu\'au ' + new Date(r.oldest + 1.5 * TH_MIN_B * EVO_BLOCK_MS).toLocaleString('fr-BE', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) + ' sans nouvelle observation (les manuelles restent)');
+      else if (ohl !== null) parts.push('la nuisance n\'est plus prouvée : ces sièges redeviennent recyclables');
+      S.chainLog.push({ icon: '\uD83E\uDDEC', desc: 'Évolution apprise · ' + parts.join(' ; '), hash: Math.random().toString(36).slice(2, 8), time: (typeof nowStr === 'function') ? nowStr() : '' });
+      if (S.chainLog.length > 100) S.chainLog.splice(0, S.chainLog.length - 100);
+    }
+    return r;
+  } catch (e) { try { window._decErr && window._decErr(e); } catch (_e) {} return null; }
+}
+// Les niveaux vivants { gain, harm } (fitness, null = pas prouvé) ou null quand rien n'est prouvé ; rejugés au plus tard un créneau après (une preuve ne survit pas à ses données).
+function _evoLevels() {
+  try {
+    var E = S.evoRule; if (!E || !Array.isArray(E.obs) || !E.obs.length) return null;
+    if (!E.rule || !(Date.now() - E.rule.t <= EVO_BLOCK_MS)) _evoRuleRefresh();
+    var r = E.rule; if (!r || (!r.gain && !r.harm)) return null;
+    return { gain: r.gain ? r.gain.level : null, harm: r.harm ? r.harm.level : null };
+  } catch (e) { return null; }
+}
+// Un siège peut-il être recyclé maintenant par un déclencheur AUTOMATIQUE ? dflt = le nombre posé à la main de ce déclencheur (Infinity : aucun).
+// Fitness non finie → non (comme avant : NaN < 150 est faux). Les deux preuves : la plus intérieure décide. Nuisance prouvée et fitness ≤ H* → non ;
+// gain prouvé et fitness ≤ F* → oui ; sinon fitness < dflt (le repli posé à la main : rien n'est retiré là où rien n'est prouvé).
+function _evoOk(a, dflt) {
+  if (!a) return false;
+  var f = Number(a.fitness); if (!isFinite(f)) return false;
+  var L = _evoLevels();
+  if (!L) return f < dflt;
+  if (L.gain !== null && L.harm !== null && L.gain < L.harm && f <= L.gain) return true;   // gain dedans, nuisance dehors : le dedans décide
+  if (L.harm !== null && f <= L.harm) return false;
+  if (L.gain !== null && f <= L.gain) return true;
+  return f < dflt;
+}
+window._evoRuleState = _evoRuleState; window._evoRuleNote = _evoRuleNote; window._evoRuleEval = _evoRuleEval; window._evoRuleRefresh = _evoRuleRefresh; window._evoLevels = _evoLevels; window._evoOk = _evoOk;

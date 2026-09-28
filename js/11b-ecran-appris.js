@@ -1,3 +1,4 @@
+// [ÉVOLUTION APPRISE · 28/09/2026] VERSION 20260928c · section « Évolution apprise » : niveaux prouvés (gain / nuisance) ou repli posé à la main, observations (fitness à l'évolution, écart, déclencheur), queues jugées
 // [MARCHÉ LMSR À PART · 28/09/2026] VERSION 20260928b · section « Fitness des sièges » : colonne « marché » (portefeuille de marché du siège · dépense du génome, à part de la fitness) ; la fitness vivante n'est plus débitée entre deux jugements
 // [FITNESS AUX HORIZONS · 28/09/2026] VERSION 20260928a · section « Fitness des sièges » : définition vivante (horizons ou bougie), écart des sièges retirés par horizon, fitness bougie / horizons / vivante de chaque siège
 // [BILAN AUX HORIZONS · 27/09/2026] VERSION 20260927k · section « Poids des voix » : pesée vivante (horizons ou bougie), écart apparié des deux pesées par horizon, poids de chaque voix (bougie / horizons)
@@ -143,6 +144,24 @@ function _learnedPanelHtml() {
     }).sort(function (x, y) { return x.f - y.f; }).forEach(function (r) {
       h += row([{ t: r.name, w: '1.3fr', s: 'font-weight:600;' }, { t: r.fb === null ? '—' : String(Math.round(r.fb)), w: '.8fr', s: 'color:#889;' },
         { t: r.fh === null ? 'pas encore' : String(Math.round(r.fh)), w: '.8fr', s: 'color:' + (r.fh === null ? '#556' : r.fh >= 350 ? '#00e87a' : '#ff4d6d') + ';' }, { t: String(Math.round(r.f)) + ' T$', w: '.8fr', s: 'color:' + (r.f <= 80 ? '#ff4d6d' : '#cde') + ';font-weight:600;' }, { t: (r.wl === null ? '—' : String(Math.round(r.wl))) + ' · ' + (Math.round(r.m) ? ('−' + kf(r.m)) : '0'), w: '.9fr', s: 'color:#889;' }]);
+    });
+  }
+  // 2e · évolution apprise [ÉVOLUTION APPRISE · 28/09/2026] (lecture seule)
+  var EL = (typeof _evoLevels === 'function') ? _evoLevels() : null;   // d'abord (peut purger et rejuger), puis l'état
+  var ER = S.evoRule, EO = (ER && Array.isArray(ER.obs)) ? ER.obs : [], ERR = ER && ER.rule;
+  var TRIG = { A: '03 · sous le niveau', B: '03 · tous les 15 cycles', C: '03 · sous 300, tous les 8', D: 'Home · sous le niveau', E: 'Home · stagnation', M: 'manuelle' };
+  var f3 = function (x) { return (x >= 0 ? '+' : '') + Number(x).toFixed(3); };
+  h += title('ÉVOLUTION APPRISE', '· quand recycler un siège : ce que les évolutions ont rapporté (nouveau génome contre ancien, même preuve que le seuil)');
+  if (!EO.length) h += '<div style="color:#667;font-size:11px;">pas encore d\'évolution jugée — repli : plus faible sous 150 tout de suite, tous les 15 cycles, sous 300 tous les 8 (03) ; sous 300, stagnation sous 400 (Home)</div>';
+  else {
+    var st = !EL ? 'rien de prouvé : les nombres posés à la main décident (150 / 300 / 400, tous les 15 cycles)' : ((EL.gain !== null ? ('gain prouvé : recyclable dès que fitness ≤ ' + Math.round(EL.gain) + ' T$ (au-dessus : les nombres posés à la main)') : '') + (EL.gain !== null && EL.harm !== null ? ' · ' : '') + (EL.harm !== null ? ('nuisance prouvée : plus d\'évolution automatique à ' + Math.round(EL.harm) + ' T$ ou moins' + (ERR && ERR.oldest ? ' (au plus jusqu\'au ' + new Date(ERR.oldest + 1.5 * 20 * 4 * 3600000).toLocaleString('fr-BE', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) + ' sans nouvelle observation)' : '')) : ''));
+    h += row([{ t: st, w: '1.6fr', s: 'font-weight:600;color:' + (!EL ? '#889' : EL.harm !== null && EL.gain === null ? '#ffd166' : '#00e87a') + ';' }, { t: EO.length + ' évolutions jugées · ' + (ERR ? ERR.blocks : '?') + ' créneaux de 4 h (preuve : ≥ 30 et ≥ 20)', w: '1.2fr', s: 'color:#889;' }]);
+    [['gain', ERR && ERR.near], ['nuisance', ERR && ERR.nearH]].forEach(function (kv) { var q = kv[1]; if (!q) return; h += row([{ t: '↳ la queue la plus proche d\'une preuve de ' + kv[0] + ' : sièges ≤ ' + Math.round(q.level) + ' T$', w: '1.6fr' }, { t: f3(q.mean) + ' ± ' + (q.se === null || q.se === undefined ? '—' : Number(q.se).toFixed(3)) + ' (' + q.n + ' évolutions, ' + q.blocks + ' créneaux' + (q.crit ? ', exigé ' + Number(q.crit).toFixed(1) + ' ET' : '') + ')', w: '1.2fr', s: 'color:#889;' }]); });
+    h += row([{ t: 'évolution', w: '.9fr' }, { t: 'siège', w: '1fr' }, { t: 'fitness', w: '.6fr' }, { t: 'déclencheur', w: '1fr' }, { t: 'écart', w: '.7fr' }], true);
+    EO.slice(-8).reverse().forEach(function (o) {
+      var dd = o[2] / 10000;
+      h += row([{ t: new Date(o[0] * 1000).toLocaleString('fr-BE', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }), w: '.9fr', s: 'color:#889;' }, { t: String(o[6] || '—'), w: '1fr', s: 'font-weight:600;' }, { t: String(o[1]) + ' T$', w: '.6fr' },
+        { t: (TRIG[o[4]] || o[4]) + (o[5] ? ' (Rams)' : ''), w: '1fr', s: 'color:#889;' }, { t: f3(dd) + ' (' + o[3] + ' év.)', w: '.7fr', s: 'color:' + (Math.abs(dd) < 0.1 ? '#889' : dd > 0 ? '#00e87a' : '#ff4d6d') + ';' }]);
     });
   }
   // 3 · emplacements

@@ -1,3 +1,4 @@
+// [ÉVOLUTION APPRISE · 28/09/2026] VERSION 20260928c · evoRule (observations et règle apprise de l'évolution, 03) dans le snapshot
 // [MARCHÉ LMSR À PART · 28/09/2026] VERSION 20260928b · lmsrWallet (portefeuille de marché du siège) et lmsrSpent (dépense du génome) dans le snapshot des agents — le marché LMSR ne débite plus la fitness (08)
 // [SEUIL APPRIS · 27/09/2026] VERSION 20260927h · dcThreshold (trades virtuels jugés, en attente, seuil d'ouverture courant) dans le snapshot
 // [DÉCISION COMMUNE · 27/09/2026] VERSION 20260927g · dcVoices (bilan du composite, voix de la décision commune) dans le snapshot
@@ -116,6 +117,7 @@ function buildSnapshot() {
       _botMeritMigrated: !!S._botMeritMigrated,
       evoTrials: S.evoTrials || {},                   // [MÉRITE DE L'ÉVOLUEUR · 26/09/2026]
       evoMerit: S.evoMerit || null,
+      evoRule: S.evoRule || null,                     // [ÉVOLUTION APPRISE · 28/09/2026]
       _metaMeritMigrated: !!S._metaMeritMigrated,
       _lastEvolutionAt: S._lastEvolutionAt || 0,      // [REDÉMARRAGE · 26/09/2026] sans eux, chaque rechargement déclenchait une évolution et un rêve
       _lastDreamAt: S._lastDreamAt || 0,
