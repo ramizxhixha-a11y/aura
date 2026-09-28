@@ -1,3 +1,4 @@
+// [BILAN AUX HORIZONS · 27/09/2026] VERSION 20260927k · section « Poids des voix » : pesée vivante (horizons ou bougie), écart apparié des deux pesées par horizon, poids de chaque voix (bougie / horizons)
 // [SENS CONTRAIRE · 27/09/2026] VERSION 20260927j · section « Seuil d'ouverture appris » : le sens contraire de chaque décision, horizon par horizon (même preuve, décisions notées depuis sa mise en service) — mesuré seulement, rien n'est tradé
 // [HORIZONS APPRIS · 27/09/2026] VERSION 20260927i · section « Seuil d'ouverture appris » : un état par horizon (15 min à 4 h) pour le pas de temps du mode — prouvé ≥ seuil ou fermé, meilleur niveau ou le plus proche (net %/trade ± erreur, trades, créneaux, valeur exigée)
 // [SEUIL APPRIS · 27/09/2026] VERSION 20260927h · section « Seuil d'ouverture appris » : ouvert au niveau prouvé ou marché fermé, trades virtuels jugés / en attente, horizon, coût, niveau prouvé ou le plus proche, net par régime
@@ -87,6 +88,33 @@ function _learnedPanelHtml() {
       h += row([{ t: '↳ ' + lab, w: '.8fr', s: 'font-weight:600;' }, { t: x.open ? ('prouvé ≥ ' + Number(x.level).toFixed(2)) : 'pas prouvé', w: '1fr', s: 'color:' + (x.open ? '#00e87a' : '#889') + ';' },
         { t: bt ? ('≥ ' + Number(bt.level).toFixed(2) + ' : ' + f2(bt.mean) + '/trade (± ' + Number(bt.se).toFixed(2) + ')') : 'pas encore jugeable', w: '1.8fr', s: 'color:' + (bt ? (bt.mean >= 0 ? '#00e87a' : '#ff4d6d') : '#556') + ';' },
         { t: bt ? (bt.n + ' · ' + bt.blocks + (bt.crit ? ' · exigé ' + Number(bt.crit).toFixed(1) + ' ET' : '')) : '—', w: '.9fr', s: 'color:#889;' }]);
+    });
+  }
+  // 2c · poids des voix [BILAN AUX HORIZONS · 27/09/2026] (lecture seule)
+  var vr = T3 && T3.vRules && T3.vRules[thFm], vHz = (T3 && T3.vHz) || {}, vmode = (T3 && T3.vModes && T3.vModes[thFm] === 'bougie') ? 'bougie' : 'hz';   // le pas de temps du mode
+  h += title('POIDS DES VOIX', '· chaque voix pèse ce que SON trade virtuel a donné de 15 min à 4 h (perte max comprise) — tant qu\'elle n\'y est pas jugée, sa bougie suivante');
+  var vN = Object.keys(vHz).length;
+  if (!vN && !vr) h += '<div style="color:#667;font-size:11px;">pas encore de voix jugée aux horizons' + ((T3 && T3.pendV && T3.pendV.length) ? ' (' + T3.pendV.length + ' cycles en cours)' : '') + '</div>';
+  else {
+    h += row([{ t: vmode === 'hz' ? 'pesée aux horizons' : 'pesée à la bougie (retour prouvé)', w: '1.3fr', s: 'font-weight:600;color:' + (vmode === 'hz' ? '#00e87a' : '#ffd166') + ';' },
+      { t: vN + ' voix jugées · ' + ((T3 && T3.pendV) || []).length + ' cycles en cours', w: '1.4fr' }, { t: (T3 && T3.vSince ? ('mesuré depuis le ' + thDd(new Date(T3.vSince).getDate()) + '/' + thDd(new Date(T3.vSince).getMonth() + 1) + ' ' + thDd(new Date(T3.vSince).getHours()) + ':' + thDd(new Date(T3.vSince).getMinutes())) : 'mesure pas commencée') + ' · écart apparié : horizons − bougie, par cycle', w: '1.3fr', s: 'color:#889;' }]);
+    if (vr && Array.isArray(vr.hz)) vr.hz.forEach(function (x) {
+      var lab = (typeof _thHzLab === 'function') ? _thHzLab(x.h, (typeof _thTfMs === 'function' && typeof _thTf === 'function') ? _thTfMs(_thTf()) : 900000) : (x.h + ' b');
+      var st = x.better ? 'horizons prouvés meilleurs' : x.worse ? 'bougie prouvée meilleure' : 'pas prouvé';
+      h += row([{ t: '↳ ' + lab, w: '.8fr', s: 'font-weight:600;' }, { t: x.mean === null ? 'pas encore d\'écart' : ((x.mean >= 0 ? '+' : '') + Number(x.mean).toFixed(3) + ' %/cycle' + (x.se !== null ? ' (± ' + Number(x.se).toFixed(3) + ')' : '')), w: '1.4fr', s: 'color:' + (x.mean === null ? '#556' : x.mean >= 0 ? '#00e87a' : '#ff4d6d') + ';' },
+        { t: x.n + ' cycles · ' + x.blocks + ' créneaux' + (x.crit ? ' · exigé ' + Number(x.crit).toFixed(1) + ' ET' : ''), w: '1.2fr', s: 'color:#889;' }, { t: st, w: '.9fr', s: 'color:' + (x.better ? '#00e87a' : x.worse ? '#ffd166' : '#889') + ';' }]);
+    });
+    h += row([{ t: 'voix', w: '1.3fr' }, { t: 'poids bougie', w: '.8fr' }, { t: 'poids horizons', w: '.8fr' }, { t: 'jugements (le moins jugé des 5)', w: '1.1fr' }], true);
+    var vRows = Object.keys(vHz).map(function (id) {
+      var ag = (S.agents || []).find(function (a) { return a && a.id === id; }), cv = (S.dcVoices && S.dcVoices.composite) || null;
+      var wO = null; try { wO = (typeof _dcMerit === 'function') ? _dcMerit(id === 'composite' ? cv : ag) : null; } catch (e) {}
+      var wH = null; try { wH = (typeof _dcMeritHz === 'function') ? _dcMeritHz(id) : null; } catch (e) {}
+      var nMin = Array.isArray(vHz[id]) ? Math.min.apply(null, vHz[id].map(function (L) { return Array.isArray(L) ? (L.length >> 1) : 0; })) : 0;   // à plat : v, D, v, D, …
+      return { name: id === 'composite' ? 'Analyse tech. + fond.' : ((ag && ag.name) || id), wO: wO, wH: wH, n: nMin };
+    }).sort(function (x, y) { return (y.wH === null ? -1 : y.wH) - (x.wH === null ? -1 : x.wH); });
+    vRows.forEach(function (r) {
+      h += row([{ t: r.name, w: '1.3fr', s: 'font-weight:600;' }, { t: r.wO === null ? '—' : Number(r.wO).toFixed(2), w: '.8fr', s: 'color:#889;' },
+        { t: r.wH === null ? 'pas encore' : Number(r.wH).toFixed(2), w: '.8fr', s: 'color:' + (r.wH === null ? '#556' : r.wH > 0 ? '#00e87a' : '#889') + ';' }, { t: String(r.n), w: '1.1fr', s: 'color:#889;' }]);
     });
   }
   // 3 · emplacements

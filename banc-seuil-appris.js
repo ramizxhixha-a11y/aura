@@ -291,7 +291,7 @@ T('S1 · 10f : trade virtuel noté avec la perte max du vrai trade ; position ma
   const s10g = rd('js/10g-resolveur-ev-csv.js');
   assert.ok(codeStrict(s10g).includes('if (openPositions.length >= maxConcurrent) { window.__thNoteOnly = true; try { return _resolvePairCycleCore(pair, ps); } finally { window.__thNoteOnly = false; } }'), '10g : places prises → cycle « noter seulement »');
   assert.ok(s10g.startsWith('// [HORIZONS APPRIS · 27/09/2026] VERSION 20260927i'));
-  assert.ok(s10f.startsWith('// [SENS CONTRAIRE · 27/09/2026] VERSION 20260927j'));
+  assert.ok(s10f.startsWith('// [BILAN AUX HORIZONS · 27/09/2026] VERSION 20260927k') && s10f.split('\n')[1].startsWith('// [SENS CONTRAIRE · 27/09/2026] VERSION 20260927j'));   // [BILAN AUX HORIZONS · 27/09] 10f relivré
 });
 
 T('S2 · portes de 10f EXÉCUTÉES (texte livré) : seuil 0,30 → 0,31 passe, 0,29 non, le consensus seul doit l\'atteindre ; fermé → rien ne passe mais le retournement reste vu ; coup de pouce sans effet sur le seuil appris ; sans seuil → tout comme avant', () => {

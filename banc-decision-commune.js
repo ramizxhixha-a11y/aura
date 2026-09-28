@@ -91,7 +91,7 @@ T('M3 · consensus (_dcConsensus) : Σ bilan × voix / Σ bilan de TOUTES les vo
   assert.ok(Math.abs(r.C - (1 - 0.8) / (den + 1)) < 1e-9, 'composite prouvé (E 1) : une voix comme les autres ' + JSON.stringify(r));
   t = mk({ S: { agents: [{ id: 'x', _judgments: Jn(9, 1) }], pairStates: {} } });
   assert.strictEqual(J(t.run("_dcConsensus('SOL/USDT', () => 2, null)")).C, 1, 'borné à +1');
-  assert.deepStrictEqual(J(mk().run("_dcConsensus('SOL/USDT', () => 1, null)")), { C: 0, n: 0, den: 0, top: [] }, 'aucune voix prouvée : 0');
+  assert.deepStrictEqual(J(mk().run("_dcConsensus('SOL/USDT', () => 1, null)")), { C: 0, n: 0, den: 0, top: [], C1: 0, Ch: 0, mode: 'hz' }, 'aucune voix prouvée : 0');   // [BILAN AUX HORIZONS · 27/09] + C1 (bougie), Ch (horizons), mode
 });
 
 T('M4 · bilan SUR L\'AVENIR : _dcForwardJudge juge les votes du cycle PRÉCÉDENT (instantané) sur le mouvement survenu depuis — l\'agent est lu tel qu\'il votait alors (_agentPairVote), pas son vote d\'aujourd\'hui ; le composite est jugé pareil ; _dcSnapVotes garde les votes et le composite de maintenant', () => {

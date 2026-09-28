@@ -1,3 +1,4 @@
+// [BILAN AUX HORIZONS · 27/09/2026] VERSION 20260927k · chaque voix de la décision commune (agents, bots, analyse tech. + fond.) est jugée sur les deux trades virtuels de la paire — long et short, 15 min à 4 h, chacun sa perte max, mêmes règles que le seuil appris : ce que son sens a rapporté de plus que l'autre (les frais, payés des deux côtés, s'annulent) — et la décision commune la pèse sur ce bilan au lieu de la bougie suivante ; garde-fou appris (écart apparié des deux pesées, preuve du seuil) ; le bilan d'un siège repart de zéro à son évolution ; mesuré, rien n'est tradé de plus
 // [SENS CONTRAIRE · 27/09/2026] VERSION 20260927j · chaque décision de cycle (EV / RE) est aussi jugée dans le SENS CONTRAIRE comme trade virtuel à 5 horizons (sa propre perte max, même preuve, listes à part), sur les seules décisions notées à partir de cette version — mesuré seulement, rien n'est tradé dans ce sens ; le sens décidé est inchangé (go Rams 27/09 19:31)
 // [HORIZONS APPRIS · 27/09/2026] VERSION 20260927i · chaque décision de cycle (EV / RE) jugée à 5 horizons (1, 2, 4, 8, 16 bougies = 15 min à 4 h en 15 min) avec la perte max du vrai trade ; un seuil prouvé par horizon et par pas de temps (5 niveaux de conviction, ≥ 30 trades et ≥ 20 créneaux, Student au niveau Φ(−2) / 25) ; _thPick choisit l'horizon à tenir (la meilleure moyenne par bougie tenue parmi ceux que la conviction atteint)
 // [SEUIL APPRIS · 27/09/2026] VERSION 20260927h · moteur du seuil d'ouverture appris : chaque décision de cycle (EV / RE) devient un trade virtuel (entrée au dernier prix réel, sortie H bougies plus tard, net de frais) jugé sans jamais inventer de prix (_thNote / _thJudge) ; le seuil = le niveau de conviction dont les trades virtuels ont prouvé gagner (≥ 30 trades, ≥ 10 créneaux, moyenne au-dessus de zéro de plus de 2 erreurs types prises par créneau, recouvrement compris), sinon marché fermé (_thEval / _thLevel)
@@ -6357,6 +6358,26 @@ function _botMeritAudit() {
 // Rejeu avant livraison (app réelle en accéléré, 81 h, 9 fenêtres, état de départ = backup précédent, frais du barème) : actuel (20260927f) : tirage 1 375 trades, avant frais −0,68 $, frais 30,74 $, net −31,41 $ ; tirage 2 381 trades, avant frais +3,70 $, frais 39,67 $, net −35,97 $ — décision commune (ce code) : tirage 1 146 trades, avant frais +5,11 $, frais 14,35 $, net −9,24 $ ; tirage 2 122 trades, avant frais +1,00 $, frais 10,98 $, net −9,98 $ — perte nette −71 % et −72 %, trades −61 % et −68 %.
 // Ce que ça ne règle pas : chaque trade reste perdant en moyenne après frais ; aucune voix ne prévoit les 15-60 min suivantes au-delà de
 // 45-54 % (agents), 47 % (Scalper / LMSR), 49 % (Arbitrage) — le gain vient surtout de trades moins nombreux.
+// ═══ [BILAN AUX HORIZONS · 27/09/2026] LA VOIX PÈSE CE QUE SON TRADE AURAIT DONNÉ (go Rams 27/09 23:20) ═══
+// Avant : une voix pesait son bilan de la BOUGIE SUIVANTE (sens de son vote contre le mouvement jusqu'au cycle suivant, sans frais), alors que
+// la décision est jugée — et serait tradée — de 15 min à 4 h, perte max et frais compris. Maintenant, à chaque cycle d'une paire (EV / RE,
+// bougie close), les votes de TOUTES les voix sont notés avec les deux trades virtuels de la paire — long et short, même entrée (dernier prix
+// réel), mêmes sorties, chacun SA perte max (celle du sens décidé et celle du sens contraire, 10f), mêmes règles (_thWalk) — indépendamment de
+// la décision (même nulle). À chaque horizon, D = (net long − net short) / 2 : ce que le long a rapporté de plus qu'un pile-ou-face (les frais,
+// payés des deux côtés, s'annulent — ils ne changent pas QUI a raison ; savoir si ça paie reste l'affaire du seuil appris). Chaque voix
+// (vote v, |v| ≥ 0,03) reçoit le jugement v·D. Son bilan à un horizon : E_h = Σ v·D / Σ |v·D| sur la fenêtre de la fitness (apprise, 60 par
+// défaut), au moins 5 jugements — même forme que l'ancien bilan, (justes − fausses) pondérées, mais pondérées par ce que le trade a gagné ou
+// perdu à l'horizon. Poids de la voix = max(0, moyenne des 5 E_h) ; tant qu'une voix n'est pas jugée aux 5 horizons, son ancien poids. Pourquoi
+// la comparaison et pas le net de chaque voix : aujourd'hui aucun sens ne paie les frais — jugée sur son net, toute voix pèserait 0, il n'y
+// aurait plus de décision, donc plus rien à noter ni à apprendre. Le siège qui évolue repart de zéro (_vjReset, 07), comme sa fitness.
+// Garde-fou appris : les deux décisions (ancienne pesée, pesée aux horizons) sont calculées à chaque cycle ; leur écart apparié, cycle par cycle
+// (même paire, même instant : (sens nouveau − sens ancien) × D), est jugé par horizon avec la preuve du seuil appris (créneaux, Student
+// Φ(−2)/25). Si l'ancienne pesée est prouvée meilleure à un horizon et la nouvelle à aucun, la décision revient à l'ancienne ; elle repasse
+// aux horizons dans le cas inverse — par pas de temps, comme le seuil (EV 15 min et RE 1 h ne se mêlent pas). Journal ⚖️ à chaque bascule ;
+// écran 🧠 Appris : poids des voix. La fitness des agents (évolution, affichage) est inchangée : seul le poids des voix dans la décision commune change.
+// Rejeu avant livraison (app réelle en accéléré, 81 h, 9 fenêtres de 9 h, 2 tirages, ce code ; chaque fenêtre part sans bilan aux horizons — la nouvelle pesée n'agit
+// qu'une fois 5 jugements réunis à 4 h, soit sur la fin de chaque fenêtre) : tirage 1 : 0 trades, net 0 $ ; tirage 2 : 0 trades, net 0 $ ; 0 erreur. Écart apparié horizons − bougie, %/cycle ± erreur type (preuve exigée :
+// > 3,2 à 3,5 erreurs types) : tirage 1 : 15 min +0,015 ± 0,010 (3615 cycles, 173 créneaux) ; 30 min +0,006 ± 0,009 (3513 cycles, 118 créneaux) ; 1 h +0,007 ± 0,011 (3309 cycles, 71 créneaux) ; 2 h +0,016 ± 0,015 (2901 cycles, 39 créneaux) ; 4 h +0,002 ± 0,017 (2114 cycles, 24 créneaux) — tirage 2 : 15 min +0,009 ± 0,013 (3651 cycles, 173 créneaux) ; 30 min +0,005 ± 0,012 (3549 cycles, 118 créneaux) ; 1 h −0,001 ± 0,015 (3345 cycles, 71 créneaux) ; 2 h −0,003 ± 0,024 (2937 cycles, 39 créneaux) ; 4 h −0,023 ± 0,014 (2139 cycles, 24 créneaux). Net des trades virtuels dans le sens de chaque pesée : tirage 1 : 15 min bougie −0,30 % / horizons −0,29 % ; 30 min bougie −0,30 % / horizons −0,29 % ; 1 h bougie −0,27 % / horizons −0,26 % ; 2 h bougie −0,22 % / horizons −0,21 % ; 4 h bougie −0,10 % / horizons −0,09 % — tirage 2 : 15 min bougie −0,31 % / horizons −0,30 % ; 30 min bougie −0,31 % / horizons −0,30 % ; 1 h bougie −0,28 % / horizons −0,29 % ; 2 h bougie −0,25 % / horizons −0,25 % ; 4 h bougie −0,16 % / horizons −0,16 %. Aucune des deux ne paie les frais ; rien de prouvé.
 const _DC_BOTS = ['scalper_bot_v1', 'arb_bot_v1', 'dca_bot_v1'];
 function _dcVoice(id) {
   if (!S.dcVoices || typeof S.dcVoices !== 'object') S.dcVoices = {};
@@ -6406,23 +6427,28 @@ function _botView(botId, pair) {
   return null;
 }
 function _dcConsensus(pair, voteOf, composite) {
-  let num = 0, den = 0, n = 0; const top = [];
-  const add = (id, w, v) => { if (!(w > 0)) return; den += w; if (v) { num += w * v; n++; top.push({ id: id, c: w * v }); } };
+  // [BILAN AUX HORIZONS · 27/09/2026] deux pesées côte à côte, mêmes voix, même ordre : l'ancienne (bilan de la bougie suivante, _dcMerit) et
+  // celle aux horizons (_dcMeritHz ; voix pas encore jugée aux 5 horizons → son ancien poids). La décision vivante suit _vjMode(). Les votes de
+  // ce cycle (toutes les voix, bots compris même sans poids) partent avec les trades long / short de la paire (_vjNote).
+  const P = { o: { num: 0, den: 0, n: 0, top: [] }, h: { num: 0, den: 0, n: 0, top: [] } }, snap = [];
+  const add1 = (A, id, w, v) => { if (!(w > 0)) return; A.den += w; if (v) { A.num += w * v; A.n++; A.top.push({ id: id, c: w * v }); } };
+  const add = (id, wO, v) => { const wH = _dcMeritHz(id); add1(P.o, id, wO, v); add1(P.h, id, wH === null ? wO : wH, v); if (v) snap.push([id, v]); };
   (S.agents || []).forEach(a => {
     if (!a || a.isMeta) return;
     if (a.isBot) {
       if (_DC_BOTS.indexOf(a.id) === -1) return;
-      const w = _dcMerit(a); if (!(w > 0)) return;
       const vw = _botView(a.id, pair); let v = 0;
       if (vw) { v = vw.dir; try { if (typeof window._consultDisciples === 'function') v *= (Number(window._consultDisciples(a.id, pair, v > 0 ? 'long' : 'short').mod) || 1); } catch (e) {} }
-      add(a.id, w, v); return;
+      add(a.id, _dcMerit(a), v); return;
     }
     let v = Number(voteOf(a)) || 0; if (Math.abs(v) < 0.03) v = 0;
     add(a.id, _dcMerit(a), v);
   });
   if (typeof composite === 'number' && isFinite(composite)) { let v = composite; if (Math.abs(v) < 0.03) v = 0; add('composite', _dcMerit(_dcVoice('composite')), v); }
-  top.sort((x, y) => Math.abs(y.c) - Math.abs(x.c));
-  return { C: den > 0 ? Math.max(-1, Math.min(1, num / den)) : 0, n: n, den: den, top: top.slice(0, 3) };
+  const fin = A => { A.top.sort((x, y) => Math.abs(y.c) - Math.abs(x.c)); return { C: A.den > 0 ? Math.max(-1, Math.min(1, A.num / A.den)) : 0, n: A.n, den: A.den, top: A.top.slice(0, 3) }; };
+  const O = fin(P.o), H = fin(P.h), mode = _vjMode(), L = (mode === 'hz') ? H : O;
+  try { const ps = S.pairStates && S.pairStates[pair]; if (ps) ps._dcVj = { t: Date.now(), v: snap, C1: O.C, Ch: H.C }; } catch (e) {}
+  return { C: L.C, n: L.n, den: L.den, top: L.top, C1: O.C, Ch: H.C, mode: mode };
 }
 // Composite jugé comme un agent : sens de sa valeur au moment du pari contre le mouvement survenu ensuite (EV / RE seulement).
 function _dcJudgeComposite(comp, movePct, decay) {
@@ -6542,6 +6568,17 @@ function _thState() {
   if (!Array.isArray(T.recC)) T.recC = [];
   if (!T.rulesC || typeof T.rulesC !== 'object') T.rulesC = {};
   if (!T.dirtyC || typeof T.dirtyC !== 'object') T.dirtyC = {};
+  // [BILAN AUX HORIZONS · 27/09/2026] les trades long / short de chaque cycle et les votes qui les accompagnent ; le bilan de chaque voix par
+  // horizon (à plat : v × 1000, D × 10 000, v, D, … — les FIT_KEEP derniers, lus sur la fenêtre apprise de la fitness) ; l'écart apparié des deux
+  // pesées (par horizon, par créneau fm:b : [Σ écart × 10 000, n]) ; pesée vivante et écart jugé PAR PAS DE TEMPS (EV et RE ne se mêlent pas)
+  if (!Array.isArray(T.pendV)) T.pendV = [];
+  if (!Array.isArray(T.vIds)) T.vIds = [];
+  if (!T.vHz || typeof T.vHz !== 'object') T.vHz = {};
+  if (!Array.isArray(T.vCmp) || T.vCmp.length !== TH_HZ.length) T.vCmp = TH_HZ.map(() => ({}));
+  if (!T.vModes || typeof T.vModes !== 'object') T.vModes = {};     // pesée vivante par pas de temps ('hz' / 'bougie')
+  if (!T.vRules || typeof T.vRules !== 'object') T.vRules = {};     // écart apparié jugé, par pas de temps
+  if (!T.vDirtyF || typeof T.vDirtyF !== 'object') T.vDirtyF = {};  // nouveaux écarts en attente de jugement, par pas de temps
+  Object.keys(T.vHz).forEach(id => { const R = T.vHz[id]; if (!Array.isArray(R) || R.length !== TH_HZ.length || R.some(L => !Array.isArray(L) || Array.isArray(L[0]))) delete T.vHz[id]; });   // record d'une autre forme (essai jamais livré, corruption) : écarté, la voix se rejuge
   // 20260927h (un seul horizon, rule.h) : ses trades jugés deviennent les résultats de cet horizon s'il est dans la grille ; ses trades en
   // attente (quelques heures au plus) sont abandonnés ; un seuil par pas de temps désormais (T.rules)
   if (Array.isArray(T.obs)) {
@@ -6656,6 +6693,7 @@ function _thJudge() {
     if (!_thRealLike()) return 0;
     const T = _thState();
     try { _thJudgeC(T); } catch (e) {}   // [SENS CONTRAIRE · 27/09/2026] à part, avant le sens décidé, sans effet sur lui
+    try { _vjJudge(T); } catch (e) {}   // [BILAN AUX HORIZONS · 27/09/2026] les trades des voix : à part, sans effet sur les listes du sens décidé
     if (!T.pend.length) return 0;
     const cost = (typeof _ownStakeCostPct === 'function') ? Number(_ownStakeCostPct()) || 0 : 0;
     const now = Date.now(); let n = 0; const keep = [], dm = {};
@@ -6783,7 +6821,156 @@ function _thPick(c) {
     return best ? { h: best.h, level: best.level, mean: best.best.mean, f: r.tfMs } : null;
   } catch (e) { return null; }
 }
+// ═══ [BILAN AUX HORIZONS · 27/09/2026] les voix jugées sur leurs trades virtuels ═══
+// Un cycle de paire (appelé par 10f juste après _thNote, que la décision soit nulle ou non) : les votes de ce cycle (ps._dcVj, posés par
+// _dcConsensus) et les deux trades de la paire — long et short, entrée au dernier prix réel (refusé s'il a plus de 2 min), sorties aux 5
+// horizons, chacun sa perte max (capL, capS : même formule que le vrai trade dans ce sens, bornée 1,5-3 %). Mêmes refus que _thNote (bougie
+// close inconnue ou bouche-trou, bougie en cours bouche-trou, une fois par bougie, file pleine).
+function _vjNote(pair, capL, capS) {
+  try {
+    if (!_thRealLike()) return false;
+    const ps = S.pairStates && S.pairStates[pair], sn = ps && ps._dcVj;
+    if (!sn || !Array.isArray(sn.v) || !sn.v.length || !(Math.abs(Date.now() - sn.t) < 60000)) return false;   // les votes de CE cycle
+    const px = (typeof _rcLastPrice === 'function') ? Number(_rcLastPrice(pair)) : 0;
+    if (!(px > 0) || (typeof _rcPriceAge === 'function' && _rcPriceAge(pair) > 120000)) return false;
+    const k = S.realPairCycle && S.realPairCycle[pair]; if (!(k > 0)) return false;
+    const tf = _thTf(), f = _thTfMs(tf);
+    const arr = (S.realCandles && S.realCandles[pair] && S.realCandles[pair][tf]) || [];
+    const ik = _thCandle(arr, k), last = arr[arr.length - 1];
+    if (ik < 0 || arr[ik]._gap || !last || last._gap) return false;
+    const T = _thState();
+    if (T.pendV.some(q => q.p === pair && q.k === k)) return false;
+    if (T.pendV.length >= TH_PEND_MAX) return false;
+    const ids = T.vIds, v = [];
+    sn.v.forEach(e => { const x = Math.round(Number(e[1]) * 1000); if (!x || typeof e[0] !== 'string') return; let i = ids.indexOf(e[0]); if (i < 0) { ids.push(e[0]); i = ids.length - 1; } v.push([i, x]); });
+    if (!v.length) return false;
+    const tn = Date.now(), s0 = Math.floor(tn / f) * f, cur = (last.ts === s0) ? last : null, cp = c => Math.round(Math.min(3, Math.max(1.5, Number(c) || 2)) * 1000) / 1000;
+    const trade = (d, cap) => ({ p: pair, k: k, t: tn, px: px, d: d, c: 0, f: f, tf: tf, cap: cp(cap), x: TH_HZ.map(h => Math.floor((tn + h * f) / f) * f), n: TH_HZ.map(() => null),
+      s: s0 - f, s0: s0, el: cur ? Number(cur.l) : px, eh: cur ? Number(cur.h) : px, hit: 0 });
+    T.pendV.push({ p: pair, k: k, t: tn, f: f, v: v, dO: Math.sign(Number(sn.C1) || 0), dH: Math.sign(Number(sn.Ch) || 0), a: TH_HZ.map(() => 0), L: trade(1, capL), S: trade(-1, capS) });
+    if (!(T.vSince > 0)) T.vSince = tn;
+    return true;
+  } catch (e) { try { window._decErr && window._decErr(e); } catch (_e) {} return false; }
+}
+// Les trades des voix, parcourus par _thWalk (mêmes règles que le sens décidé). Dès qu'un horizon est jugé des deux côtés : D = (long − short) / 2,
+// chaque voix reçoit [v, D] à cet horizon (fenêtre de la fitness), et l'écart apparié des deux pesées ((sens nouveau − sens ancien) × D) entre
+// dans son créneau. Un côté abandonné (coupure, bougie manquante) : l'horizon ne juge personne.
+function _vjJudge(T) {
+  try {
+  if (!T.pendV.length) return 0;
+  const cost = (typeof _ownStakeCostPct === 'function') ? Number(_ownStakeCostPct()) || 0 : 0, now = Date.now();
+  const KEEP = (typeof FIT_KEEP !== 'undefined') ? FIT_KEEP : 240, keep = [], dm = {}; let nJ = 0;   // gardés comme les jugements de la fitness (240) ; lus sur la fenêtre apprise (_dcMeritHz)
+  T.pendV.forEach(q => {
+    try {   // une entrée abîmée (restauration) est signalée et retirée : la file continue
+    if (!q || !q.L || !q.S || !Array.isArray(q.v) || !Array.isArray(q.a) || !Array.isArray(q.L.n) || !Array.isArray(q.S.n) || !Array.isArray(q.L.x) || !Array.isArray(q.S.x)) throw new Error('bilan aux horizons : entrée abîmée ' + (q && q.p));
+    _thWalk(q.L, cost, now); _thWalk(q.S, cost, now);
+    TH_HZ.forEach((h, i) => {
+      if (q.a[i]) return;
+      const a = q.L.n[i], b = q.S.n[i];
+      if (a === null || b === null) return;   // pas encore jugé d'un côté
+      q.a[i] = 1;
+      if (typeof a !== 'number' || typeof b !== 'number') return;   // abandonné d'un côté : ne juge personne
+      const D = (a - b) / 2, Di = Math.round(D * 10000);
+      q.v.forEach(e => {
+        const id = T.vIds[e[0]]; if (typeof id !== 'string' || Math.abs(e[1]) < 30) return;
+        const Jv = (Array.isArray(T.vHz[id]) && T.vHz[id].length === TH_HZ.length) ? T.vHz[id] : (T.vHz[id] = TH_HZ.map(() => []));
+        if (!Array.isArray(Jv[i])) Jv[i] = [];   // record abîmé : régénéré, la passe continue
+        const Lh = Jv[i]; Lh.push(e[1], Di); if (Lh.length > 2 * KEEP) Lh.splice(0, Lh.length - 2 * KEEP);   // à plat : v, D, v, D, …
+        nJ++;
+      });
+      if (q.dO && q.dH) { _vjCmpAdd(T, i, q.t, q.f, (q.dH - q.dO) * D); dm[Math.round(q.f / 60000)] = true; }
+    });
+    if (!q.a.every(x => x)) keep.push(q);
+    } catch (e) { try { window._decErr && window._decErr(e); } catch (_e) {} }
+  });
+  T.pendV = keep;
+  Object.keys(dm).forEach(k => { T.vDirtyF[k] = true; });
+  const f0 = _thTfMs(_thTf()), fm = f0 / 60000, R = T.vRules[fm];
+  if (T.vDirtyF[fm] && (!R || now - R.t >= 300000)) _vjRefresh(f0);   // le pas de temps du mode courant, comme le seuil
+  return nJ;
+  } catch (e) { try { window._decErr && window._decErr(e); } catch (_e) {} return 0; }
+}
+function _vjCmpAdd(T, i, t, f, diff) {
+  const M = T.vCmp[i] || (T.vCmp[i] = {}), key = Math.round(f / 60000) + ':' + Math.floor(t / ((TH_HZ[i] + 1) * f));
+  const e = M[key] || (M[key] = [0, 0]); e[0] += Math.round(diff * 10000); e[1] += 1;
+}
+// Écart apparié d'un horizon : créneaux {fm, b, s (Σ écart, %), n} → moyenne par cycle, erreur type par créneau avec recouvrement (même calcul que
+// _thEval pour un seul niveau), preuve au niveau Φ(−2)/25 (≥ 30 cycles, ≥ 20 créneaux) dans un sens ou dans l'autre.
+function _vjCmpEval(bl) {
+  const idx = {}; bl.forEach(x => { idx[x.fm + ':' + x.b] = x; });
+  let N = 0, Ss = 0, A = 0, B = 0, Q = 0, P1 = 0, P2 = 0, P3 = 0, nb = 0;
+  bl.forEach(x => {
+    N += x.n; Ss += x.s; A += x.s * x.s; B += x.s * x.n; Q += x.n * x.n; nb++;
+    const y = idx[x.fm + ':' + (x.b + 1)]; if (y) { P1 += x.s * y.s; P2 += x.s * y.n + x.n * y.s; P3 += x.n * y.n; }
+  });
+  const out = { n: N, blocks: nb, mean: N ? Ss / N : null, se: null, crit: null, better: false, worse: false };
+  if (N < TH_MIN_N || nb < TH_MIN_B) return out;
+  const m = Ss / N, v0 = Math.max(0, A - 2 * m * B + m * m * Q), c1 = P1 - m * P2 + m * m * P3;
+  const se = Math.sqrt(Math.max(v0, v0 + 2 * c1) / (N * N) * (nb / (nb - 1))), k = _thCrit(nb);
+  out.se = se; out.crit = k; out.better = m - k * se > 0; out.worse = m + k * se < 0;
+  return out;
+}
+// Juge l'écart par horizon (fenêtre : 30 créneaux du plus long horizon, comme le seuil) et bascule la pesée si une preuve le demande.
+function _vjRefresh(fArg) {
+  try {
+    const T = _thState(), now = Date.now(), hmax = Math.max.apply(null, TH_HZ), f = Number(fArg) > 0 ? Number(fArg) : _thTfMs(_thTf()), fm = f / 60000, prev = _vjMode(fm);
+    const hz = TH_HZ.map((h, i) => {
+      const M = T.vCmp[i] || (T.vCmp[i] = {}), bl = [];
+      Object.keys(M).forEach(key => {
+        const kf = Number(key.split(':')[0]), b = Number(key.split(':')[1]), e = M[key];
+        if (!(kf > 0) || !Array.isArray(e) || (b + 1) * (h + 1) * kf * 60000 < now - 1.5 * TH_MIN_B * (hmax + 1) * kf * 60000) { delete M[key]; return; }
+        if (kf === fm) bl.push({ fm: kf, b: b, s: e[0] / 10000, n: e[1] });   // ce pas de temps seulement : EV 15 min et RE 1 h ne se mêlent pas
+      });
+      const r = _vjCmpEval(bl); r.h = h; return r;
+    });
+    const better = hz.some(x => x.better), worse = hz.some(x => x.worse);
+    let mode = prev;
+    if (prev === 'hz' && worse && !better) mode = 'bougie';
+    else if (prev === 'bougie' && better && !worse) mode = 'hz';
+    T.vModes[fm] = mode; T.vDirtyF[fm] = false; T.vRules[fm] = { t: now, mode: mode, hz: hz, tfMs: f };
+    if (mode !== prev && S.chainLog) {
+      const f2 = x => (x >= 0 ? '+' : '') + x.toFixed(3).replace('.', ','), L = (x) => _thHzLab(x.h, f);
+      const pr = hz.filter(x => (mode === 'bougie') ? x.worse : x.better).map(x => L(x) + ' (écart ' + f2(x.mean) + ' %/cycle ± ' + x.se.toFixed(3).replace('.', ',') + ', ' + x.n + ' cycles)').join(' ; ');
+      S.chainLog.push({ icon: '⚖️', desc: (mode === 'bougie' ? 'Poids des voix · retour à la bougie — l\'ancienne pesée a fait mieux : ' : 'Poids des voix · aux horizons — la pesée aux horizons a fait mieux : ') + pr,
+        hash: Math.random().toString(36).slice(2, 8), time: (typeof nowStr === 'function') ? nowStr() : '' });
+      if (S.chainLog.length > 100) S.chainLog.splice(0, S.chainLog.length - 100);
+    }
+    return T.vRules[fm];
+  } catch (e) { try { window._decErr && window._decErr(e); } catch (_e) {} return null; }
+}
+// Pesée vivante du pas de temps (celui du mode courant à défaut) : 'hz' tant qu'un retour à la bougie n'est pas prouvé.
+function _vjMode(fm) { const T = S.dcThreshold, k = Number(fm) > 0 ? Number(fm) : _thTfMs(_thTf()) / 60000; return (T && T.vModes && T.vModes[k] === 'bougie') ? 'bougie' : 'hz'; }
+// Le siège évolue (07 : « la fenêtre repart de zéro : elle mesure le génome courant ») : son bilan aux horizons repart aussi de zéro — record
+// effacé, ses votes encore en attente retirés (ils étaient ceux de l'ancien génome). La décision reprend son ancien poids le temps qu'il se rejuge.
+function _vjReset(id) {
+  try {
+    const T = _thState(); let n = 0;
+    if (T.vHz && T.vHz[id]) { delete T.vHz[id]; n++; }
+    const i = T.vIds.indexOf(id);
+    if (i >= 0) T.pendV.forEach(q => { if (q && Array.isArray(q.v)) { const k = q.v.length; q.v = q.v.filter(e => e[0] !== i); n += k - q.v.length; } });
+    return n;
+  } catch (e) { return 0; }
+}
+// Poids d'une voix aux horizons : max(0, moyenne des E_h), E_h = Σ v·D / Σ |v·D| sur ses W derniers jugements à l'horizon h (W = fenêtre apprise
+// de la fitness) ; null tant qu'un horizon a moins de 5 jugements (la décision prend alors son ancien poids). Une erreur ici est signalée (_decErr).
+function _dcMeritHz(id) {
+  try {
+    const T = S.dcThreshold, Jv = T && T.vHz && T.vHz[id];
+    if (!Array.isArray(Jv) || Jv.length !== TH_HZ.length) return null;
+    const W = (typeof _fitWindow === 'function') ? _fitWindow() : 60, nMin = (typeof FIT_MIN_N !== 'undefined') ? FIT_MIN_N : 5;
+    let s = 0;
+    for (let i = 0; i < Jv.length; i++) {
+      const L = Array.isArray(Jv[i]) ? Jv[i] : [], n = Math.min(L.length >> 1, W);   // à plat : v, D, v, D, … ; comptés dans la fenêtre, comme _dcMerit
+      if (n < nMin) return null;
+      let a = 0, b = 0;
+      for (let j = Math.max(0, L.length - 2 * W); j + 1 < L.length; j += 2) { const x = Number(L[j]) * Number(L[j + 1]); if (isFinite(x)) { a += x; b += Math.abs(x); } }
+      s += b > 0 ? a / b : 0;
+    }
+    return Math.max(0, s / Jv.length);
+  } catch (e) { try { window._decErr && window._decErr(e); } catch (_e) {} return null; }
+}
 window._thNote = _thNote; window._thJudge = _thJudge; window._thEval = _thEval; window._thRefresh = _thRefresh; window._thLevel = _thLevel; window._thPick = _thPick; window._thHzLab = _thHzLab; window._thCrit = _thCrit; window._thRule = _thRule;
+window._vjNote = _vjNote; window._vjRefresh = _vjRefresh; window._dcMeritHz = _dcMeritHz; window._vjMode = _vjMode; window._vjReset = _vjReset;   // [BILAN AUX HORIZONS · 27/09/2026]
 window._botView = _botView; window._dcMerit = _dcMerit; window._dcConsensus = _dcConsensus; window._dcVoice = _dcVoice;
 window._dcForwardJudge = _dcForwardJudge; window._dcSnapVotes = _dcSnapVotes; window._dcJudgeComposite = _dcJudgeComposite;
 window._botPredict = _botPredict; window._botMeritAudit = _botMeritAudit; window._botJudgeMeasured = _botJudgeMeasured; window._botJudge = _botJudge;

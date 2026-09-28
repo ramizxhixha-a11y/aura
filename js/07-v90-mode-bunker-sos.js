@@ -1,3 +1,4 @@
+// [BILAN AUX HORIZONS · 27/09/2026] VERSION 20260927k · évolution d'un siège : son bilan aux horizons (03 _vjReset) repart de zéro avec sa fenêtre de fitness
 // [HORIZONS APPRIS · 27/09/2026] VERSION 20260927i · learnFromOpenPositions : une position ouverte sur un horizon prouvé (np._thX) n'est fermée ni par le trailing, ni par l'anti-zombie, ni par la bascule avant son horizon
 // [DÉCISION COMMUNE · 27/09/2026] VERSION 20260927g · sortie « bascule » : relit la décision commune de la paire (10f ps._dc) au lieu du LMSR — mêmes seuils (≤ −0,30 contre un long, ≥ +0,30 contre un short)
 // [SURVEILLANCE PERMANENTE · 27/09/2026] VERSION 20260927a · bandeau d'un bot sans acte jugé : affirmations en cours et trades ouverts (plus de « 30 min après »)
@@ -2845,6 +2846,7 @@ function triggerEvolution(weak, opts) {
   // Probation : le nouveau-né pèse moitié dans le roster pendant 30 résolutions (03).
   weak._probationUntil = weak._bornCycle + 30;
   weak._judgments = [];   // [FITNESS GLISSANTE · 16/09/2026] la fenêtre repart de zéro : elle mesure le génome courant
+  try { if (typeof _vjReset === 'function') _vjReset(weak.id); } catch(e) {}   // [BILAN AUX HORIZONS · 27/09/2026] son bilan aux horizons aussi (03)
   try {
     const _peakPrev = Math.max.apply(null, (Array.isArray(weak.fitnessHistory) && weak.fitnessHistory.length ? weak.fitnessHistory : [0]).map(Number).filter(isFinite).concat([0]));
     const _oldG = (typeof _genomeOf === 'function') ? JSON.parse(JSON.stringify(_genomeOf(weak.id) || {})) : null;   // [MÉRITE DE L'ÉVOLUEUR · 26/09/2026] capturé AVANT la mutation

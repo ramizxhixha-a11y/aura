@@ -1,3 +1,4 @@
+// [BILAN AUX HORIZONS · 27/09/2026] VERSION 20260927k · chaque cycle note aussi les trades long et short de la paire (chacun sa perte max) avec les votes de toutes les voix (03 _vjNote) : le poids de chaque voix se juge sur SON trade virtuel
 // [SENS CONTRAIRE · 27/09/2026] VERSION 20260927j · la décision notée en trade virtuel porte aussi la perte max qu'aurait le trade CONTRAIRE (même formule, bonus des signaux techniques de SON sens) — mesuré seulement, rien n'est tradé dans ce sens
 // [HORIZONS APPRIS · 27/09/2026] VERSION 20260927i · trade virtuel noté avec la perte max du vrai trade (2 × stop prévu, bornée 1,5-3 %) ; places prises (10g) : décision notée puis retour ; position ouverte dans le sens décidé sur un horizon prouvé marquée (_thPick → np._thH / np._thX) et tenue jusqu'à sa bougie de sortie : ni le cycle ni _botExitSweep ne la ferment avant ; sortie « Horizon appris » au dernier prix réel ; sur coupure, son stop est la perte max ; _thJudge aussi appelé depuis _botExitSweep (toutes les 10 s)
 // [SEUIL APPRIS · 27/09/2026] VERSION 20260927h · en EV / RE, pour ouvrir, les portes posées à la main (conviction 0,35 / 0,25 / 0,18, sens 0,20 / 0,15 / 0,10, plancher 0,30) cèdent la place au seuil appris (03 _thLevel, Infinity = marché fermé) ; le coup de pouce anti-stagnation ne l'abaisse plus ; la sortie « Signal inversé » garde la règle d'avant ; chaque décision de cycle devient un trade virtuel au dernier prix réel (_thNote), ceux arrivés à terme sont jugés (_thJudge)
@@ -178,6 +179,10 @@ function _resolvePairCycleCore(pair, ps) {
       const _thTpC = Math.max(0.6, Math.min(1, conviction + _thTbC) * 3.2 * (1 + volCV * 9));
       const _thSlC = Math.max(0.45, Math.min((volCV * 100) * 1.4, _thTpC / 1.4));
       _thNote(pair, finalSignalWithMem, Math.min(3, Math.max(1.5, 2 * _thSl)), Math.min(3, Math.max(1.5, 2 * _thSlC)));
+      // [BILAN AUX HORIZONS · 27/09/2026] les deux trades de la paire — long et short, chacun sa perte max — jugent chaque voix dans SON sens,
+      // que la décision soit nulle ou non (03 _vjNote : votes posés par _dcConsensus à ce cycle)
+      const _thCapD = Math.min(3, Math.max(1.5, 2 * _thSl)), _thCapC = Math.min(3, Math.max(1.5, 2 * _thSlC));
+      if (typeof _vjNote === 'function') _vjNote(pair, finalSignalWithMem > 0 ? _thCapD : _thCapC, finalSignalWithMem > 0 ? _thCapC : _thCapD);
     }
   } catch(e) {}
   // [HORIZONS APPRIS · 27/09/2026] places prises (10g) : le cycle a tourné pour noter la décision (et juger les voix sur l'avenir) — rien ne s'ouvre ni ne se ferme
