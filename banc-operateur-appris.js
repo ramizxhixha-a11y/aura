@@ -197,6 +197,8 @@ T('T3 · _evoOpRefresh (rejugée avec la règle de l\'évolution) : E.opRule (n,
   // une naissance forcée après la preuve ne lève pas la tenue ; une naissance libre la rend aux données
   const hf = mk({ S: { evoRule: { obs: gen(30, 'M', -0.3), rule: null, since: 1 } } }); hf.run('_evoRuleRefresh()'); const HF = hf.S.evoRule.opRule.M.held; assert.ok(HF);
   hf.c.__now = NOW + 3 * 86400000; hf.S.evoTrials = { k: { op: 'M', t: NOW + 3 * 86400000 - 60000, forced: true } }; hf.run('_evoRuleRefresh()'); assert.strictEqual(hf.S.evoRule.opRule.M.held, HF, 'forcée : tenue');
+  hf.S.evoTrials = {}; hf.S.evoRule.obs.push([Math.round((NOW + 3 * 86400000 - 60000) / 1000), 50, 0, 30, 'A', 0, 'whale_v1', 'M', 1]); hf.run('_evoRuleRefresh()'); assert.strictEqual(hf.S.evoRule.opRule.M.held, HF, 'observation forcée (index 8 = 1) après la preuve : tenue');
+  hf.S.evoRule.obs[hf.S.evoRule.obs.length - 1].pop(); hf.run('_evoRuleRefresh()'); assert.strictEqual(hf.S.evoRule.opRule.M.held, null, 'la même, libre : rendue aux données');
   const h = mk({ S: { evoRule: { obs: gen(30, 'M', -0.3), rule: null, since: 1 } } }); h.run('_evoRuleRefresh()'); assert.ok(h.S.evoRule.opRule.M.held);
   h.c.__now = NOW + 3 * 86400000; h.S.evoTrials = { k: { op: 'M', t: NOW + 3 * 86400000 - 60000 } }; h.run('_evoRuleRefresh()'); const LH = h.S.chainLog.filter(x => /Opérateur appris/.test(x.desc)).map(x => x.desc);
   assert.strictEqual(LH.length, 2); assert.strictEqual(LH[1], 'Opérateur appris · ' + LM + ' : plus rien de prouvé → naissances : ' + ROT + LAB + ' / ' + LB + ' / ' + LM); assert.strictEqual(h.S.evoRule.opRule.M.held, null);
