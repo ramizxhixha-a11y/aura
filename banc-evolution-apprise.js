@@ -85,14 +85,15 @@ T('M3 · essai RÉEL → observation : l\'essai reçoit la fitness à l\'évolut
   const feed = (vn, vo, won, k) => { for (let i = 0; i < k; i++) { t.S.pairStates['BTC/USDT'].roster = { shadow: { x: vo } }; t.c.__a = t.S.agents[0]; t.run('_evoTrialJudge(__a, "BTC/USDT", ' + won + ', 3, 1, ' + vn + ')'); } };
   t.c.__now = NOW + 50 * 60000; feed(0.5, 0.5, true, 20); feed(0.5, -0.5, true, 10);   // nouveau juste 30/30, ancien juste 20/30 → eNew = 1, eOld = 1/3 → d = +0,667
   assert.strictEqual(t.S.evoTrials.x, undefined, 'conclu à 30'); const o = t.S.evoRule.obs; assert.strictEqual(o.length, 1);
-  assert.deepStrictEqual(J(o[0].slice(0, 2).concat(o[0].slice(3))), [NOW / 1000, 62, 30, 'A', 0, 'x'], JSON.stringify(o[0])); assert.ok(Math.abs(o[0][2] / 10000 - 2 / 3) < 0.001, 'écart brut nouveau − ancien : ' + o[0][2]);
+  assert.deepStrictEqual(J(o[0].slice(0, 2).concat(o[0].slice(3))), [NOW / 1000, 62, 30, 'A', 0, 'x', 'R'], JSON.stringify(o[0]));   // [OPÉRATEUR APPRIS] index 7 : la source (R par défaut)
+  assert.ok(Math.abs(o[0][2] / 10000 - 2 / 3) < 0.001, 'écart brut nouveau − ancien : ' + o[0][2]);
   assert.strictEqual(t.S.evoRule.since, NOW); assert.ok(t.S.evoRule.rule && t.S.evoRule.rule.n === 1 && !t.S.evoRule.rule.gain, 'règle rejugée : 1 observation, rien de prouvé');
   const row = t.S.evoMerit.recent[0]; assert.deepStrictEqual([row.verdict, row.fit, row.trig], ['amélioration', 61.7, 'A']);
   // non concluant : l'écart brut entre quand même ; manuelle ; abandonné : rien
   t.S.agents.push({ id: 'y', fitness: 50, _judgments: [] }); t.run("_evoTrialStart('y', { g: 1 }, { name: 'G', fit: 50, trig: 'M', man: true })");
   const feedY = (vn, vo, won, k) => { for (let i = 0; i < k; i++) { t.S.pairStates['BTC/USDT'].roster = { shadow: { y: vo } }; t.c.__a = t.S.agents[2]; t.run('_evoTrialJudge(__a, "BTC/USDT", ' + won + ', 3, 1, ' + vn + ')'); } };
   feedY(0.5, 0.5, true, 28); feedY(0.5, -0.5, true, 1); feedY(0.5, 0.5, true, 1);   // nouveau 30/30 justes, ancien 29/30 → d = 1 − 28/30 = +0,0667 : « non concluant » (< 0,1) mais l'écart brut compte
-  assert.strictEqual(t.S.evoRule.obs.length, 2); assert.deepStrictEqual(J(t.S.evoRule.obs[1].slice(1)), [50, 667, 30, 'M', 1, 'y'], 'non concluant (écart +0,067 brut, pas 0), manuelle'); assert.strictEqual(t.S.evoMerit.recent[1].verdict, 'non concluant');
+  assert.strictEqual(t.S.evoRule.obs.length, 2); assert.deepStrictEqual(J(t.S.evoRule.obs[1].slice(1)), [50, 667, 30, 'M', 1, 'y', 'R'], 'non concluant (écart +0,067 brut, pas 0), manuelle'); assert.strictEqual(t.S.evoMerit.recent[1].verdict, 'non concluant');
   // essai ouvert AVANT cette version (sans fitness à l'évolution) : pas d'observation
   t.S.agents.push({ id: 'z', fitness: 50, _judgments: [] }); t.run("_evoTrialStart('z', { g: 1 }, { name: 'Ancien' })"); for (let i = 0; i < 30; i++) { t.S.pairStates['BTC/USDT'].roster = { shadow: { z: 0.5 } }; t.c.__a = t.S.agents[3]; t.run('_evoTrialJudge(__a, "BTC/USDT", true, 3, 1, 0.5)'); }
   assert.strictEqual(t.S.evoTrials.z, undefined); assert.strictEqual(t.S.evoRule.obs.length, 2, 'essai d\'avant : conclu, pas d\'observation');
@@ -154,7 +155,7 @@ T('M5 · triggerEvolution RÉEL (07, comme banc-masque) : l\'essai reçoit la fi
 T('S1 · textes : 09b1 écrit evoRule, 09b2 le relit, manifeste ; en-têtes des six fichiers ; écran 11b « Évolution apprise » (repli sans observation ; niveaux et observations avec) ; lecture seule', () => {
   assert.ok(codeStrict(s9b1).includes('evoRule: S.evoRule || null,') && codeStrict(s9b2).includes("if (snap.evoRule && typeof snap.evoRule === 'object')                     S.evoRule           = snap.evoRule;"));
   const man = (codeStrict(s9b2).match(/window\._APPLYSNAP_MANIFEST = \[([^\]]*)\]/) || [])[1] || ''; assert.ok(man.includes("'evoRule'"), 'manifeste');
-  [s03, s07, s08, s9b1, s9b2, s11].forEach((s, i) => assert.ok(s.startsWith('// [ÉVOLUTION APPRISE · 28/09/2026] VERSION 20260928c'), 'en-tête ' + i));
+  [s03, s07, s08, s9b1, s9b2, s11].forEach((s, i) => assert.ok(s.split('\n').slice(0, 6).some(l => l.startsWith('// [ÉVOLUTION APPRISE · 28/09/2026] VERSION 20260928c')), 'en-tête ' + i + ' (dans les 6 premières lignes : relivré depuis)'));
   const src = s11.replace(/setInterval\(function \(\) \{ try \{ _injectLearnedButton\(\); \} catch \(e\) \{\} \}, 2000\);/, '');
   const mkS = evoRule => ({ tradingMode: 'paperReal', paperRealActivePairs: {}, tradeContextMemory: [], capRules: {}, _lossStreaks: {}, eventStats: {}, agents: [], dcThreshold: { rec: [], pend: [], rules: {}, pendV: [], vHz: {} }, evoRule });
   const mkC = S => ({ S, PAIRS: {}, document: { getElementById: () => null }, Math, Number, Object, Array, JSON, isFinite, String, window: {}, Date, _attributionSummary: () => [], _thHzLab: h => h + ' b', _thTfMs: () => 900000, _thTf: () => '15m', _fitWindow: () => 60, _fitOf: () => null, _fitHz: () => null, _dcMerit: () => 0, _dcMeritHz: () => null, _fjMode: () => 'hz' });

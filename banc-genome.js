@@ -121,7 +121,7 @@ T('5 · persistance : 09b1 écrit genome + genomeHistory, 09b2 les relit, manife
   assert.ok(c1.includes('genome: S.genome || {},') && c1.includes('genomeHistory: S.genomeHistory || {},'));
   assert.ok(c2.includes("S.genome        = snap.genome;") && c2.includes("S.genomeHistory = snap.genomeHistory;"));
   assert.ok(c2.includes("window._APPLYSNAP_MANIFEST = ['genome','genomeHistory',"));
-  assert.ok(c7.includes("_genomeEvolve(weak.id, _mutation, _peakPrev)") && c7.includes("weak._probationUntil = weak._bornCycle + 30;"));
+  assert.ok(c7.includes("_genomeEvolve(weak.id, _mutation, _peakPrev, _op)") && c7.includes("weak._probationUntil = weak._bornCycle + 30;"));   // [OPÉRATEUR APPRIS · 28/09/2026] + la source choisie par la règle
   assert.ok(c3.includes("if (agent._probationUntil && (S.cycle || 0) < agent._probationUntil) weight *= 0.5;"));
   assert.strictEqual((c3.match(/const G = _genomeOf\(/g) || []).length, 3, 'scoutAnalysis, councilVote, guardianCheck lisent le génome');
   const defs = Object.keys(JSON.parse(JSON.stringify(vm.runInContext('GENOME_DEFAULTS', mkCtx(NEW, mkState(1)))))); assert.strictEqual(defs.length, 20, 'sièges génomés : ' + defs.length);   // [23/09] + harmonic_v1 · [26/09] + macro_v1 + fundamental_v1

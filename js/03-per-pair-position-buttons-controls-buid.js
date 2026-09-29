@@ -1,3 +1,4 @@
+// [OPÉRATEUR APPRIS · 28/09/2026] VERSION 20260928d · la source de chaque naissance (07) est choisie parmi trois — R recombinaison avec la meilleure version passée + mutation (l'opérateur d'avant, byte-identique), B retour à la meilleure version passée du siège telle quelle, M mutation seule — et jugée sur les mêmes essais que l'évolution apprise (_genomeEvolve(…, op), _evoOpStats, _evoOpPick) : source prouvée bénéfique → c'est elle (une naissance sur deux aux sources encore à juger) ; source prouvée nuisible écartée, la preuve tenue jusqu'à 5 jours après sa plus jeune observation (une naissance libre de la source la rend aux données) ; sinon rotation par siège (B seulement si le siège a une version passée complète où revenir). L'observation de la règle porte la source (index 7) ; écran 🧠 Appris
 // [ÉVOLUTION APPRISE · 28/09/2026] VERSION 20260928c · les déclencheurs de l'évolution (03 : plus faible sous 150 tout de suite, tous les 15 cycles, sous 300 tous les 8 cycles ; 08 : sous 300, stagnation sous 400) lisent une règle apprise sur ce que les évolutions ont rapporté (essai nouveau génome contre ancien, une observation par évolution jugée : fitness du siège à l'évolution, écart, créneau de 4 h, déclencheur) — gain prouvé sous un niveau F* : tout siège de fitness ≤ F* est recyclable tout de suite (le gain ÉTEND ; au-dessus de F*, rien n'est prouvé : les nombres posés à la main restent) ; nuisance prouvée sous H* : plus d'évolution automatique d'un siège ≤ H* tant que la preuve tient (elle meurt avec ses données : 5 jours au plus sans nouvelle observation) — le plus faible RECYCLABLE est recyclé ; rien de prouvé : les nombres posés à la main, tels quels (repli). Même preuve que le seuil (_thEval) ; observations gardées 5 jours (S.evoRule, persisté)
 // [MARCHÉ LMSR À PART · 28/09/2026] VERSION 20260928b · le marché LMSR (08) ne débite plus la fitness — le jugement (porte unique _fitCurrent) en est la seule écriture courante ; à chaque évaluation avec preuve (jugement, abstention, recompute) elle recharge le portefeuille de marché du siège (_lmsrRefill, 08) : le marché garde sa dynamique d'avant ; la fitness, elle, ne bouge plus entre deux jugements
 // [FITNESS AUX HORIZONS · 28/09/2026] VERSION 20260928a · la fitness d'un siège (ce qui décide l'évolution : le plus faible est recyclé ; aussi le tournoi des parents, la pépinière, la sortie « signal inversé », l'affichage) suit son bilan aux horizons — le même record que le poids de sa voix (20260927k) : 350 + 1 000 × moyenne des E_h — tant qu'un garde-fou appris propre à la fitness ne prouve pas que la fitness de la bougie retirait de plus mauvais sièges (le siège que chaque définition retirerait est comparé sur ses votes suivants pesés par leur conviction, par horizon et par pas de temps ; une seule définition vivante par siège : un retour prouvé à un pas de temps vaut pour tous) ; les bots et l'Évolueur gardent leur propre jugement ; rien de plus n'est tradé
@@ -3711,7 +3712,30 @@ function _genomeOf(id) {
 }
 // Archive la version courante (fitness de pointe atteinte), puis nouveau génome = recombinaison avec la meilleure
 // version passée du siège + mutation ±mut. Retourne { changed, archived } ou null (siège sans génome).
-function _genomeEvolve(id, mut, fitnessPeak) {
+// [OPÉRATEUR APPRIS · 28/09/2026] op : la source de la naissance — 'R' (défaut : recombinaison + mutation, l'opérateur d'avant, byte-identique,
+// même consommation du hasard), 'B' (retour à la meilleure version passée COMPLÈTE et différente de la courante, telle quelle, sans mutation ;
+// aucune → R), 'M' (mutation seule de la version courante, sans recombinaison). Retourne aussi op (la source réellement appliquée), pour B la
+// pointe de la version reprise, pour R self (rien à prendre de la meilleure version passée : R revient alors à M).
+// [OPÉRATEUR APPRIS · 28/09/2026] Pur : dans l'historique (trié par pointe), la meilleure version passée COMPLÈTE (tous les gènes du jeu actuel)
+// dont les gènes bornés diffèrent de la courante → { h, next, changed } ou null. Passées : une entrée sans génome ; une version d'un autre jeu de
+// gènes (il en manque : gènes ajoutés ou refondus depuis — y revenir serait une remise aux défauts sous une pointe d'une autre logique) ; une
+// version égale une fois bornée.
+function _genomePastOf(def, cur, sig, hist) {
+  for (var i = 0; i < hist.length; i++) {
+    var hg = hist[i] && hist[i].g; if (!hg || typeof hg !== 'object' || JSON.stringify(hg) === sig) continue;
+    if (Object.keys(def).some(function(k){ return !isFinite(Number(hg[k])); })) continue;   // un autre jeu de gènes : pas une version où revenir
+    var cand = {}, ch = 0; Object.keys(def).forEach(function(k){ var v = _geneClamp(k, Number(hg[k]), def[k]); if (v !== cur[k]) ch++; cand[k] = v; });
+    if (ch > 0) return { h: hist[i], next: cand, changed: ch };
+  }
+  return null;
+}
+// Lecture seule (_evoOpPick) : le siège a-t-il une version passée où revenir ? (même choix que B, sans rien écrire)
+function _genomePast(id) {
+  var def = GENOME_DEFAULTS[id]; if (!def) return null;
+  var hist = (S.genomeHistory && Array.isArray(S.genomeHistory[id])) ? S.genomeHistory[id].slice().sort(function(a, b){ return ((b && b.f) || 0) - ((a && a.f) || 0); }) : [];
+  var cur = _genomeOf(id); return _genomePastOf(def, cur, JSON.stringify(cur), hist);
+}
+function _genomeEvolve(id, mut, fitnessPeak, op) {
   var def = GENOME_DEFAULTS[id]; if (!def) return null;
   if (!S.genome) S.genome = {}; if (!S.genomeHistory) S.genomeHistory = {};
   var cur = _genomeOf(id);
@@ -3722,14 +3746,21 @@ function _genomeEvolve(id, mut, fitnessPeak) {
   if (hist.length > 10) hist.splice(10);
   var best = hist[0].g, next = {}, changed = 0;
   mut = Math.max(0.02, Math.min(0.5, Number(mut) || 0.1));
+  op = (op === 'B' || op === 'M') ? op : 'R';
+  if (op === 'B') {   // [OPÉRATEUR APPRIS · 28/09/2026] la meilleure version passée dont les gènes bornés diffèrent de la courante, telle quelle
+    var past = _genomePastOf(def, cur, sig, hist);
+    if (past) { S.genome[id] = past.next; return { changed: past.changed, archived: archived, genes: Object.keys(def).length, op: 'B', peak: past.h.f }; }
+    op = 'R';   // aucune version passée où revenir : l'opérateur d'avant (et la naissance est dite R)
+  }
+  var self = (op === 'R') && !!best && typeof best === 'object' && Object.keys(def).every(function(k){ return !isFinite(best[k]) || best[k] === cur[k]; });   // [OPÉRATEUR APPRIS] R sans rien à prendre de la meilleure version passée (c'est la courante, ou un autre jeu de gènes) : R revient à M ; aucun tirage, rien lu sur un best absent
   Object.keys(def).forEach(function(k){
-    var base = (Math.random() < 0.5) ? cur[k] : (isFinite(best[k]) ? best[k] : cur[k]);
+    var base = (op === 'M') ? cur[k] : ((Math.random() < 0.5) ? cur[k] : (isFinite(best[k]) ? best[k] : cur[k]));   // [OPÉRATEUR APPRIS] M : la version courante seule
     var v = _geneClamp(k, base * (1 + (Math.random() * 2 - 1) * mut), def[k]);
     if (v !== cur[k]) changed++;
     next[k] = v;
   });
   S.genome[id] = next;
-  return { changed: changed, archived: archived, genes: Object.keys(def).length };
+  return { changed: changed, archived: archived, genes: Object.keys(def).length, op: op, self: self };
 }
 // ═══ [GÉNOME DE PAIRE · 17/09/2026] LES PÉRIODES DES INDICATEURS ÉVOLUENT PAR PAIRE ═══
 // getTechSignals (08) = 14 indicateurs, 60 % du composite, PARTAGÉS par tous les sièges d'une paire : ses périodes
@@ -3777,7 +3808,7 @@ function _pairGenomeEvolve(pair, mut, score) {
 }
 window.PAIR_GENOME_DEFAULTS = PAIR_GENOME_DEFAULTS; window._pairGenomeOf = _pairGenomeOf; window._pairGenomeEvolve = _pairGenomeEvolve;
 
-window.GENOME_DEFAULTS = GENOME_DEFAULTS; window._genomeOf = _genomeOf; window._genomeEvolve = _genomeEvolve;
+window.GENOME_DEFAULTS = GENOME_DEFAULTS; window._genomeOf = _genomeOf; window._genomeEvolve = _genomeEvolve; window._genomePast = _genomePast;
 
 function scoutAnalysis(agentId, pair) {
   const ps   = S.pairStates?.[pair];
@@ -7154,7 +7185,7 @@ function _evoTrialStart(seatId, oldG, info) {
     if (S.evoTrials[seatId]) _evoTrialConclude(seatId, 'interrompu : nouvelle évolution du siège');
     info = info || {};
     S.evoTrials[seatId] = { oldG: JSON.parse(JSON.stringify(oldG)), t: Date.now(), gen: info.gen || null, name: info.name || seatId, prev: info.prev || '', n: 0, ns: 0, nw: 0, os: 0, ow: 0,
-      fit: (typeof info.fit === 'number' && isFinite(info.fit)) ? info.fit : null, trig: String(info.trig || '?'), man: !!info.man, seat: seatId };   // [ÉVOLUTION APPRISE · 28/09/2026] fitness du siège à l'évolution (null : appelant d'avant → pas d'observation), déclencheur (A B C D E M), manuelle
+      fit: (typeof info.fit === 'number' && isFinite(info.fit)) ? info.fit : null, trig: String(info.trig || '?'), man: !!info.man, seat: seatId, op: String(info.op || 'R'), forced: !!info.forced };   // [OPÉRATEUR APPRIS · 28/09/2026] + la source de la naissance   // [ÉVOLUTION APPRISE · 28/09/2026] fitness du siège à l'évolution (null : appelant d'avant → pas d'observation), déclencheur (A B C D E M), manuelle
     return S.evoTrials[seatId];
   } catch (e) { return null; }
 }
@@ -7220,7 +7251,7 @@ function _evoTrialConclude(seatId, why) {
     if (d > 0) M.good++; else M.bad++;
   }
   try { if (typeof _evoRuleNote === 'function') _evoRuleNote(tr, d, tr.n); } catch (e) { try { window._decErr && window._decErr(e); } catch (_e) {} }   // [ÉVOLUTION APPRISE · 28/09/2026] l'observation de la règle apprise (écart brut, même non concluant)
-  var row = { seat: seatId, name: tr.name, gen: tr.gen, n: tr.n, accNew: accN, accOld: accO, verdict: verdict, why: why || '', t: Date.now(), fit: tr.fit, trig: tr.trig };
+  var row = { seat: seatId, name: tr.name, gen: tr.gen, n: tr.n, accNew: accN, accOld: accO, verdict: verdict, why: why || '', t: Date.now(), fit: tr.fit, trig: tr.trig, op: tr.op || 'R' };
   M.recent = (Array.isArray(M.recent) ? M.recent : []).concat([row]).slice(-10);
   try {
     if (!S.chainLog) S.chainLog = [];
@@ -7266,7 +7297,7 @@ function _evoRuleNote(tr, d, n) {
   try {
     if (!tr || !isFinite(d) || typeof tr.fit !== 'number' || !isFinite(tr.fit)) return null;   // essai ouvert avant cette version : pas de fitness à l'évolution → rien
     var E = _evoRuleState(), t = Number(tr.t) || Date.now();
-    E.obs.push([Math.round(t / 1000), Math.round(Number(tr.fit) || 0), Math.round(d * 10000), n | 0, String(tr.trig || '?'), tr.man ? 1 : 0, String(tr.seat || '')]);
+    E.obs.push([Math.round(t / 1000), Math.round(Number(tr.fit) || 0), Math.round(d * 10000), n | 0, String(tr.trig || '?'), tr.man ? 1 : 0, String(tr.seat || ''), String(tr.op || 'R')].concat(tr.forced ? [1] : []));   // [OPÉRATEUR APPRIS · 28/09/2026] index 7 : la source (absente = R, la seule d'avant) ; index 8 = 1 : naissance forcée (absent : libre)
     if (!(E.since > 0)) E.since = t;
     return _evoRuleRefresh();
   } catch (e) { try { window._decErr && window._decErr(e); } catch (_e) {} return null; }
@@ -7286,6 +7317,7 @@ function _evoRuleRefresh() {
     var old = E.rule || null, r = _evoRuleEval(E.obs); r.t = Date.now();
     var bl = {}; E.obs.forEach(function (o) { bl[Math.floor(o[0] * 1000 / EVO_BLOCK_MS)] = 1; }); r.blocks = Object.keys(bl).length;
     E.rule = r;
+    try { _evoOpRefresh(E); } catch (e2) { try { window._decErr && window._decErr(e2); } catch (_e) {} }   // [OPÉRATEUR APPRIS · 28/09/2026] la règle des sources, rejugée avec
     r.oldest = E.obs.length ? Math.min.apply(null, E.obs.map(function (o) { return o[0]; })) * 1000 : null;   // la plus vieille observation : la preuve vit au plus jusqu'à sa sortie de la fenêtre (m5)
     var gl = r.gain ? r.gain.level : null, hl = r.harm ? r.harm.level : null, ogl = old && old.gain ? old.gain.level : null, ohl = old && old.harm ? old.harm.level : null;
     if (gl !== ogl || hl !== ohl) {
@@ -7324,3 +7356,114 @@ function _evoOk(a, dflt) {
   return f < dflt;
 }
 window._evoRuleState = _evoRuleState; window._evoRuleNote = _evoRuleNote; window._evoRuleEval = _evoRuleEval; window._evoRuleRefresh = _evoRuleRefresh; window._evoLevels = _evoLevels; window._evoOk = _evoOk;
+
+// ═══ [OPÉRATEUR APPRIS · 28/09/2026] D'OÙ FAIRE NAÎTRE LE NOUVEAU GÉNOME ? (go Rams 28/09 20:15) ═══
+// Les 243 évolutions des rejeux du 28/09 ne prouvent aucun gain du nouveau génome sur l'ancien (écart −0,011 ± 0,006, 1,8 ET : rien de
+// prouvé dans aucun sens) : l'opérateur de naissance est le premier suspect, et le seul jugeable sur les mêmes essais. Jusqu'ici une seule
+// source, R : recombinaison gène à gène entre la version courante et la meilleure version passée du siège, puis mutation ±4-16 % (selon la
+// diversité de l'essaim). Maintenant trois sources, jugées sur les MÊMES essais (nouveau génome contre ancien, en ombre, mêmes événements) :
+// R (inchangée, byte-identique — quand la meilleure version passée n'a rien à donner, parce que c'est la courante ou un autre jeu de gènes,
+// R revient à M, et le journal le dit), B = retour à la meilleure version passée du siège COMPLÈTE (le jeu de gènes actuel) et différente
+// une fois bornée, telle quelle (sans mutation ; s'il n'y en a pas : R, et la naissance est dite R), M = mutation seule de la version
+// courante. Chaque évolution jugée porte sa source dans l'observation de l'évolution apprise (même fenêtre de 5 jours, mêmes créneaux de
+// 4 h) ; par source, même preuve que le seuil (_thEval, toutes les évolutions de la source en une queue, dans les deux sens).
+// La source de chaque naissance (_evoOpPick(siège), 07 ; manuelles comprises), sur la vue purgée, sans rien écrire :
+//  · une source prouvée nuisible est écartée, et la preuve TIENT jusqu'à 5 jours après sa plus jeune observation (repoussé si une nouvelle
+//    observation la reprouve) — sinon, privée de données par l'écartement, elle retombait sous la taille de preuve aux premières purges et
+//    revenait aussitôt ; une naissance LIBRE de la source après la preuve rend la main aux données ; une naissance FORCÉE (un siège sans
+//    autre source disponible, observation index 8 = 1) ne la lève pas ; toutes nuisibles → aucune n'est écartée ;
+//  · B n'est pas candidate sur un siège sans version passée complète où revenir (sinon elle retomberait en R sans jamais être observée) ;
+//  · rien de prouvé bénéfique → rotation : la source qui attend depuis le plus longtemps SUR CE SIÈGE, puis sur l'ensemble (dernière
+//    naissance observée ou en cours ; jamais servie d'abord ; à égalité R, B, M) — par siège d'abord, pour qu'un siège souvent recyclé ne
+//    reçoive pas toujours la même source (un effet de siège pris pour un effet de source) ; parts égales, sans rafale de rattrapage ;
+//  · une source prouvée bénéfique → elle (la meilleure si plusieurs), sauf s'il reste des sources « à juger » (échantillon sous la taille
+//    de preuve : < 30 évolutions ou < 20 créneaux) : alors une naissance sur deux leur revient (la dernière naissance de ce siège — sinon de
+//    l'ensemble — venait de la prouvée → la source à juger qui attend le plus ; sinon la prouvée) : une preuve ne verrouille pas les autres.
+// Écran et journal disent la politique en cours (« naissances : … »), pas une prédiction (la source dépend du siège recyclé).
+// Ce qui n'est PAS appris ici (posé) : le taux de mutation (±4-16 %, selon la diversité), le nombre de parents (score, confiance : 2 à 6 au
+// tournoi par fitness), le jeu des trois sources, « la meilleure version passée » comme définition de B, l'ordre d'égalité R, B, M, la
+// rotation et « une sur deux » — dits à Rams.
+// Simulation avant livraison (ces fonctions, 30 jours, 1 naissance/h, 20 sièges, 8 graines ; écarts tirés au hasard) : aucun effet : parts R/B/M 33 % / 34 % / 33 %, une source écartée à tort 2,3 % du temps au plus, 0,4 ligne « Opérateur appris » par mois ; M nuisible (−0,25) : M écartée 57 % du temps, 20 % des naissances (33 % sans règle ; 28 % avant la tenue, mesure de la relecture), 6,9 lignes par mois ; M nuisible (−0,15) : écartée 42 % du temps, 23 % des naissances ; B bénéfique (+0,25) : 48 % des naissances ; R et M nuisibles avec 2 sièges sur 20 sans version passée : R / M 21 % / 19 % des naissances (20 % / 20 % quand tous en ont une) ; B bénéfique mais 4 sièges sur 20 seulement avec une version passée : B 6,8 % des naissances — trop peu pour atteindre 30 évolutions en 5 jours, donc jamais prouvable (structurel) ; toutes nuisibles : rotation égale, rien d'écarté, 33 lignes par mois ; sièges au plancher recyclés à tour de rôle, chacun avec son propre effet, aucun effet de source : preuve parasite 0,0 % à 0,3 % du temps (2 à 6 sièges) ; plus long trou sans naissance d'une source : 124 h (la tenue).
+// Rejeu avant livraison (app réelle en accéléré, 81 h, 9 fenêtres de 9 h, 2 tirages, ce code) : tirage 1 : 0 trades, net 0 $ ; tirage 2 : 0 trades, net 0 $ ; 0 erreur. 154 naissances (143 avec essai), 126 observations toutes cohérentes avec leur naissance (même seconde, même siège, même source), 0 sans source, 0 source demandée non appliquée, 0 ligne « Opérateur appris » (aucune preuve possible en 9 h : ≥ 20 créneaux de 4 h exigés), politique en fin de fenêtre : « rotation par siège entre recombinaison + mutation / retour à la meilleure version passée / mutation seule » (18/18). Par source : R 55 naissances, 48 jugées, écart moyen +0,037 ± 0,041 (24 créneaux ; 9 améliorations, 8 dégradations, 31 non concluantes) ; B 45 naissances, 38 jugées, écart moyen +0,007 ± 0,033 (20 créneaux ; 6 améliorations, 4 dégradations, 28 non concluantes) ; M 52 naissances, 40 jugées, écart moyen −0,015 ± 0,018 (21 créneaux ; 3 améliorations, 4 dégradations, 33 non concluantes) ; différences B−R −0,031 ± 0,051, M−R −0,053 ± 0,045, B−M +0,022 ± 0,035 — rien de prouvé, aucune différence mesurable à cette taille ; 39 des 55 naissances R sans rien à prendre de la meilleure version passée (c'est la courante, ou un autre jeu de gènes : R y revient à M).
+var EVO_OPS = ['R', 'B', 'M'], EVO_OP_LABEL = { R: 'recombinaison + mutation', B: 'retour à la meilleure version passée', M: 'mutation seule' };
+function _evoOpOf(x) { return (x === 'B' || x === 'M') ? x : 'R'; }   // la source d'une observation ou d'un essai (absente : R, la seule d'avant)
+// Pur : observations → { R: { n, blocks, mean, se, gain, harm }, B: …, M: … } (gain / harm : la queue « toutes » de la source prouvée par _thEval, dans les deux sens).
+function _evoOpStats(obs) {
+  var out = {};
+  EVO_OPS.forEach(function (op) {
+    var pos = [], neg = [], bl = {}, sum = 0;
+    (obs || []).forEach(function (o) { if (!Array.isArray(o) || !isFinite(o[2]) || _evoOpOf(o[7]) !== op) return; var n = Number(o[2]) / 10000, b = Math.floor(Number(o[0]) * 1000 / EVO_BLOCK_MS); pos.push({ c: 0, n: n, b: b }); neg.push({ c: 0, n: -n, b: b }); bl[b] = 1; sum += n; });
+    var g = _thEval(pos), h = _thEval(neg), st = g.near || h.near;
+    out[op] = { n: pos.length, blocks: Object.keys(bl).length, mean: pos.length ? sum / pos.length : null, se: st && st.se !== null ? st.se : null, crit: st ? st.crit : null,
+      gain: g.open ? { mean: g.best.mean, se: g.best.se, n: g.best.n, blocks: g.best.blocks } : null, harm: h.open ? { mean: -h.best.mean, se: h.best.se, n: h.best.n, blocks: h.best.blocks } : null };
+  });
+  return out;
+}
+// Pur (lecture seule) : l'état de la règle des sources pour un siège (null : hors siège) — vue purgée, preuves vivantes et tenues, candidates.
+function _evoOpPlan(seatId) {
+  var E = S.evoRule, now = Date.now(), lim = (now - 1.5 * TH_MIN_B * EVO_BLOCK_MS) / 1000, OR = E && E.opRule, sid = (seatId != null) ? String(seatId) : null;
+  var obs = ((E && Array.isArray(E.obs)) ? E.obs : []).filter(function (o) { return Array.isArray(o) && o[0] >= lim; }), st = _evoOpStats(obs);
+  var last = { R: -Infinity, B: -Infinity, M: -Infinity }, mine = { R: -Infinity, B: -Infinity, M: -Infinity }, free = { R: -Infinity, B: -Infinity, M: -Infinity };   // dernière naissance (s) de chaque source : partout / sur ce siège / libre (observée, ou essai en cours)
+  var see = function (so, t, here, forced) { if (!isFinite(t)) return; if (t > last[so]) last[so] = t; if (here && t > mine[so]) mine[so] = t; if (!forced && t > free[so]) free[so] = t; };
+  obs.forEach(function (o) { see(_evoOpOf(o[7]), Number(o[0]), sid !== null && String(o[6]) === sid, o[8] === 1); });
+  Object.keys(S.evoTrials || {}).forEach(function (k) { var tr = S.evoTrials[k]; if (tr) see(_evoOpOf(tr.op), Number(tr.t) / 1000, sid !== null && k === sid, !!tr.forced); });
+  var harm = {}; EVO_OPS.forEach(function (o) { var h = OR && OR[o] && OR[o].held; harm[o] = !!(st[o].harm || (h && now < h.until && !(free[o] > h.t))); });   // prouvée, ou tenue sans naissance libre depuis
+  var avail = EVO_OPS.filter(function (o) { return !(o === 'B' && sid !== null && !_genomePast(sid)); });
+  var cands = avail.filter(function (o) { return !harm[o]; }), allHarm = !cands.length; if (allHarm) cands = avail.slice();
+  var proven = cands.filter(function (o) { return st[o].gain; }).sort(function (a, b) { return st[b].gain.mean - st[a].gain.mean; });
+  var open = cands.filter(function (o) { return !st[o].gain && (st[o].n < TH_MIN_N || st[o].blocks < TH_MIN_B); });
+  var ord = function (x) { return EVO_OPS.indexOf(x); }, top = function (m) { var r = null; EVO_OPS.forEach(function (o) { if (m[o] > -Infinity && (r === null || m[o] > m[r])) r = o; }); return r; };
+  return { st: st, last: last, mine: mine, harm: harm, avail: avail, cands: cands, allHarm: allHarm, proven: proven, open: open, prev: top(mine) || top(last),
+    wait: function (c) { return c.slice().sort(function (a, b) { return (mine[a] - mine[b]) || (last[a] - last[b]) || (ord(a) - ord(b)); })[0]; } };   // celle qui attend le plus : sur ce siège, puis partout
+}
+// La source de la naissance de ce siège (07) — règle du bloc ci-dessus. Sur erreur : R (l'opérateur d'avant).
+function _evoOpPick(seatId) {
+  try {
+    var P = _evoOpPlan(seatId);
+    if (!P.proven.length) return P.wait(P.cands);
+    if (!P.open.length) return P.proven[0];
+    return (P.prev === P.proven[0]) ? P.wait(P.open) : P.proven[0];
+  } catch (e) { try { window._decErr && window._decErr(e); } catch (_e) {} return 'R'; }
+}
+// La politique en cours, en mots (journal, écran) — hors siège.
+function _evoOpPolicy() {
+  try {
+    var P = _evoOpPlan(null), L = function (o) { return EVO_OP_LABEL[o]; };
+    if (!P.proven.length) return 'rotation par siège entre ' + P.cands.map(L).join(' / ');
+    if (!P.open.length) return L(P.proven[0]) + ' (prouvée) à chaque naissance';
+    return L(P.proven[0]) + ' (prouvée) une naissance sur deux ; l\'autre : ' + P.open.map(L).join(' / ') + ' (à juger), en rotation par siège';
+  } catch (e) { try { window._decErr && window._decErr(e); } catch (_e) {} return ''; }
+}
+// Rejugée avec la règle de l'évolution (mêmes observations, purgées) : preuves vivantes et tenues ; journal 🧬 quand une source devient
+// prouvée (bénéfique ou nuisible) ou cesse de l'être.
+function _evoOpRefresh(E) {
+  var st = _evoOpStats(E.obs), old = E.opRule || null, now = Date.now(), young = { R: -Infinity, B: -Infinity, M: -Infinity }, free = { R: -Infinity, B: -Infinity, M: -Infinity };   // plus jeune observation ; dernière naissance libre
+  (E.obs || []).forEach(function (o) { if (!Array.isArray(o)) return; var so = _evoOpOf(o[7]), t = Number(o[0]); if (t > young[so]) young[so] = t; if (o[8] !== 1 && t > free[so]) free[so] = t; });
+  Object.keys(S.evoTrials || {}).forEach(function (k) { var tr = S.evoTrials[k], t = tr ? Number(tr.t) / 1000 : NaN; if (isFinite(t) && !tr.forced && t > free[_evoOpOf(tr.op)]) free[_evoOpOf(tr.op)] = t; });
+  var hk = function (y, t) { return !!(y && (y.harm || (y.held && y.held.until > t))); };   // nuisible (vivante ou tenue) à l'instant t de sa règle
+  var key = function (x) { return EVO_OPS.map(function (o) { var y = x && x[o]; return o + ':' + (y && y.gain ? 'g' : hk(y, (x && x.t) || 0) ? 'h' : '-'); }).join(','); };
+  var rule = { t: now };
+  EVO_OPS.forEach(function (o) {
+    var s = st[o], ph = old && old[o] && old[o].held, held = null;
+    if (s.harm) held = { t: now / 1000, until: young[o] * 1000 + 1.5 * TH_MIN_B * EVO_BLOCK_MS, mean: s.harm.mean, se: s.harm.se, n: s.harm.n, blocks: s.harm.blocks };   // tenue jusqu'à l'expiration de sa plus jeune observation
+    else if (ph && now < ph.until && !(free[o] > ph.t)) held = ph;   // plus prouvée sur la fenêtre (purges, ou essais nés avant la preuve), sans naissance libre de cette source depuis : tenue jusqu'à son terme
+    rule[o] = { n: s.n, blocks: s.blocks, mean: s.mean, se: s.se, gain: s.gain, harm: s.harm, held: held, open: !s.gain && !held && (s.n < TH_MIN_N || s.blocks < TH_MIN_B) };
+  });
+  var changed = key(old) !== key(rule), allHarm = EVO_OPS.every(function (o) { return !!rule[o].held; });   // première évaluation comprise (old absent : rien de prouvé)
+  E.opRule = rule; rule.policy = _evoOpPolicy();   // après : la politique lit les preuves tenues de cette règle
+  if (changed) {
+    if (!S.chainLog) S.chainLog = [];
+    var f3 = function (x) { return (x >= 0 ? '+' : '') + x.toFixed(3).replace('.', ','); }, u3 = function (x) { return x.toFixed(3).replace('.', ','); }, parts = [], days = Math.round(1.5 * TH_MIN_B * EVO_BLOCK_MS / 86400000);
+    EVO_OPS.forEach(function (o) {
+      var a = (old && old[o]) || {}, b = rule[o], ah = hk(a, old ? old.t || 0 : 0);
+      if (b.gain && !a.gain) parts.push(EVO_OP_LABEL[o] + ' : prouvée bénéfique (' + f3(b.gain.mean) + ' ± ' + u3(b.gain.se) + ', ' + b.gain.n + ' évolutions, ' + b.gain.blocks + ' créneaux)');
+      else if (b.held && !ah) parts.push(EVO_OP_LABEL[o] + ' : prouvée nuisible (' + f3(b.held.mean) + ' ± ' + u3(b.held.se) + ', ' + b.held.n + ' évolutions, ' + b.held.blocks + ' créneaux)' + (allHarm ? '' : ' — écartée jusqu\'à ' + days + ' jours après sa plus jeune observation (repoussé si une nouvelle observation la reprouve)'));
+      else if (!b.gain && !b.held && (a.gain || ah)) parts.push(EVO_OP_LABEL[o] + ' : plus rien de prouvé');
+    });
+    if (allHarm) parts.push('toutes prouvées nuisibles : aucune n\'est écartée (rien n\'est retiré)');
+    S.chainLog.push({ icon: '🧬', desc: 'Opérateur appris · ' + parts.join(' ; ') + ' → naissances : ' + rule.policy, hash: Math.random().toString(36).slice(2, 8), time: (typeof nowStr === 'function') ? nowStr() : '' });
+    if (S.chainLog.length > 100) S.chainLog.splice(0, S.chainLog.length - 100);
+  }
+  return rule;
+}
+window._evoOpStats = _evoOpStats; window._evoOpPick = _evoOpPick; window._evoOpRefresh = _evoOpRefresh; window._evoOpPlan = _evoOpPlan; window._evoOpPolicy = _evoOpPolicy;

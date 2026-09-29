@@ -94,7 +94,7 @@ T('S1 · textes : learnFromOutcome ne juge plus l\'Évolueur et juge l\'ombre ju
   assert.ok(lfo.includes("    const signalStrength= Math.abs(_vote);\n    try { if (S.evoTrials && S.evoTrials[a.id]) _evoTrialJudge(a, pair, won, mag, decay, _vote); } catch(e) {}"));
   assert.ok(codeStrict(s03).includes("try { const _sh = _evoShadowVotes(pair, scoutResults, verdict, (S.tradingAccount || 100) * 0.1); if (_sh) _ps.roster.shadow = _sh; } catch(e) {}"));
   const evo = between(s07, 'function triggerEvolution(weak, opts) {', 'buildAgentCards(); patchAgentCards();\n}', true);
-  const iCap = evo.indexOf('const _oldG = '), iEvolve = evo.indexOf('_genomeEvolve(weak.id, _mutation, _peakPrev)'), iStart = evo.indexOf('_evoTrialStart(weak.id, _oldG,');
+  const iCap = evo.indexOf('const _oldG = '), iEvolve = evo.indexOf('_genomeEvolve(weak.id, _mutation, _peakPrev, _op)'), iStart = evo.indexOf('_evoTrialStart(weak.id, _oldG,');
   assert.ok(iCap > 0 && iEvolve > iCap && iStart > iEvolve, 'capture → mutation → essai');
   assert.ok(evo.includes('if (_ge && _ge.changed > 0 && _oldG && Object.keys(_oldG).length && typeof _evoTrialStart === \'function\')'));
   assert.ok(codeStrict(s11b).includes("title('ÉVOLUTIONS JUGÉES'") && codeStrict(s07).includes("lab.textContent = '🧬 MÉMOIRE RÉELLE';"));

@@ -1,3 +1,4 @@
+// [OPÉRATEUR APPRIS · 28/09/2026] VERSION 20260928d · section « Évolution apprise » : les trois sources de naissance (évolutions, écart moyen, état : prouvée bénéfique, nuisible écartée jusqu'au …, à juger), politique en cours (« naissances : … ») ; colonne « source » des observations
 // [ÉVOLUTION APPRISE · 28/09/2026] VERSION 20260928c · section « Évolution apprise » : niveaux prouvés (gain / nuisance) ou repli posé à la main, observations (fitness à l'évolution, écart, déclencheur), queues jugées
 // [MARCHÉ LMSR À PART · 28/09/2026] VERSION 20260928b · section « Fitness des sièges » : colonne « marché » (portefeuille de marché du siège · dépense du génome, à part de la fitness) ; la fitness vivante n'est plus débitée entre deux jugements
 // [FITNESS AUX HORIZONS · 28/09/2026] VERSION 20260928a · section « Fitness des sièges » : définition vivante (horizons ou bougie), écart des sièges retirés par horizon, fitness bougie / horizons / vivante de chaque siège
@@ -157,11 +158,23 @@ function _learnedPanelHtml() {
     var st = !EL ? 'rien de prouvé : les nombres posés à la main décident (150 / 300 / 400, tous les 15 cycles)' : ((EL.gain !== null ? ('gain prouvé : recyclable dès que fitness ≤ ' + Math.round(EL.gain) + ' T$ (au-dessus : les nombres posés à la main)') : '') + (EL.gain !== null && EL.harm !== null ? ' · ' : '') + (EL.harm !== null ? ('nuisance prouvée : plus d\'évolution automatique à ' + Math.round(EL.harm) + ' T$ ou moins' + (ERR && ERR.oldest ? ' (au plus jusqu\'au ' + new Date(ERR.oldest + 1.5 * 20 * 4 * 3600000).toLocaleString('fr-BE', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) + ' sans nouvelle observation)' : '')) : ''));
     h += row([{ t: st, w: '1.6fr', s: 'font-weight:600;color:' + (!EL ? '#889' : EL.harm !== null && EL.gain === null ? '#ffd166' : '#00e87a') + ';' }, { t: EO.length + ' évolutions jugées · ' + (ERR ? ERR.blocks : '?') + ' créneaux de 4 h (preuve : ≥ 30 et ≥ 20)', w: '1.2fr', s: 'color:#889;' }]);
     [['gain', ERR && ERR.near], ['nuisance', ERR && ERR.nearH]].forEach(function (kv) { var q = kv[1]; if (!q) return; h += row([{ t: '↳ la queue la plus proche d\'une preuve de ' + kv[0] + ' : sièges ≤ ' + Math.round(q.level) + ' T$', w: '1.6fr' }, { t: f3(q.mean) + ' ± ' + (q.se === null || q.se === undefined ? '—' : Number(q.se).toFixed(3)) + ' (' + q.n + ' évolutions, ' + q.blocks + ' créneaux' + (q.crit ? ', exigé ' + Number(q.crit).toFixed(1) + ' ET' : '') + ')', w: '1.2fr', s: 'color:#889;' }]); });
-    h += row([{ t: 'évolution', w: '.9fr' }, { t: 'siège', w: '1fr' }, { t: 'fitness', w: '.6fr' }, { t: 'déclencheur', w: '1fr' }, { t: 'écart', w: '.7fr' }], true);
+    // [OPÉRATEUR APPRIS · 28/09/2026] les trois sources de naissance
+    var OPR = ER && ER.opRule, OPL = (typeof EVO_OP_LABEL === 'object' && EVO_OP_LABEL) ? EVO_OP_LABEL : { R: 'R', B: 'B', M: 'M' }, NOWT = Date.now(), HV = function (x) { return !!(x && (x.harm || (x.held && x.held.until > NOWT))); }, ALLH = !!(OPR && HV(OPR.R) && HV(OPR.B) && HV(OPR.M));
+    if (OPR) {
+      h += row([{ t: 'source de naissance', w: '1.3fr' }, { t: 'évolutions', w: '.7fr' }, { t: 'écart moyen', w: '.9fr' }, { t: 'état', w: '1.1fr' }], true);
+      ['R', 'B', 'M'].forEach(function (op) {
+        var x = OPR[op] || {}, hv = HV(x); var st = x.gain ? 'prouvée bénéfique' : hv ? (ALLH ? 'prouvée nuisible (toutes : aucune écartée)' : ('prouvée nuisible (écartée' + (x.held && x.held.until ? ' jusqu\'au ' + new Date(x.held.until).toLocaleString('fr-BE', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) + ' sans nouvelle observation' : '') + ')')) : x.open ? 'à juger (sous 30 évolutions ou 20 créneaux)' : 'pas prouvé';
+        h += row([{ t: OPL[op], w: '1.3fr', s: 'font-weight:600;' }, { t: String(x.n || 0) + (x.blocks ? ' · ' + x.blocks + ' cr.' : ''), w: '.7fr', s: 'color:#889;' },
+          { t: x.mean === null || x.mean === undefined ? '—' : (f3(x.mean) + (x.se !== null && x.se !== undefined ? ' ± ' + Number(x.se).toFixed(3) : '')), w: '.9fr', s: 'color:' + (x.mean === null || x.mean === undefined ? '#556' : x.mean >= 0 ? '#00e87a' : '#ff4d6d') + ';' }, { t: st, w: '1.1fr', s: 'color:' + (x.gain ? '#00e87a' : hv ? '#ffd166' : '#889') + ';' }]);
+      });
+      var POL = (typeof _evoOpPolicy === 'function') ? _evoOpPolicy() : (OPR.policy || '');   // la politique en cours (pas une prédiction : la source dépend du siège recyclé)
+      if (POL) h += row([{ t: 'naissances : ' + POL + ' · B seulement sur un siège qui a une version passée complète où revenir', w: '1fr', s: 'color:#889;' }]);
+    }
+    h += row([{ t: 'évolution', w: '.9fr' }, { t: 'siège', w: '1fr' }, { t: 'fitness', w: '.6fr' }, { t: 'déclencheur', w: '1fr' }, { t: 'source', w: '.8fr' }, { t: 'écart', w: '.7fr' }], true);
     EO.slice(-8).reverse().forEach(function (o) {
-      var dd = o[2] / 10000;
+      var dd = o[2] / 10000, so = (o[7] === 'B' || o[7] === 'M') ? o[7] : 'R';
       h += row([{ t: new Date(o[0] * 1000).toLocaleString('fr-BE', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }), w: '.9fr', s: 'color:#889;' }, { t: String(o[6] || '—'), w: '1fr', s: 'font-weight:600;' }, { t: String(o[1]) + ' T$', w: '.6fr' },
-        { t: (TRIG[o[4]] || o[4]) + (o[5] ? ' (Rams)' : ''), w: '1fr', s: 'color:#889;' }, { t: f3(dd) + ' (' + o[3] + ' év.)', w: '.7fr', s: 'color:' + (Math.abs(dd) < 0.1 ? '#889' : dd > 0 ? '#00e87a' : '#ff4d6d') + ';' }]);
+        { t: (TRIG[o[4]] || o[4]) + (o[5] ? ' (Rams)' : ''), w: '1fr', s: 'color:#889;' }, { t: OPL[so], w: '.8fr', s: 'color:#889;' }, { t: f3(dd) + ' (' + o[3] + ' év.)', w: '.7fr', s: 'color:' + (Math.abs(dd) < 0.1 ? '#889' : dd > 0 ? '#00e87a' : '#ff4d6d') + ';' }]);
     });
   }
   // 3 · emplacements

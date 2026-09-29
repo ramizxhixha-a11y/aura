@@ -75,7 +75,7 @@ T('T1 · textes : plus aucune écriture additive de fitness dans tout js/ ; 08 :
   assert.ok(codeStrict(s9b1).includes("lmsrWallet:     (typeof a.lmsrWallet === 'number' && isFinite(a.lmsrWallet)) ? a.lmsrWallet : a.fitness,") && codeStrict(s9b1).includes('lmsrSpent:      a.lmsrSpent       || 0,'), '09b1');
   assert.ok(codeStrict(s9b2).includes("a.lmsrWallet     = (typeof sa.lmsrWallet === 'number' && isFinite(sa.lmsrWallet)) ? sa.lmsrWallet : a.fitness;") && codeStrict(s9b2).includes('a.lmsrSpent      = Number(sa.lmsrSpent) || 0;'), '09b2');
   assert.ok(codeStrict(s9b2).includes("if (Number(a.fitness) < 350 && _fitCurrent(a) === null && !(typeof _fitHz === 'function' && _fitHz(a) !== null)) { a.fitness = 350; a.lmsrWallet = 350; nR++; }"), '09b2 : résidu des sauvegardes d\'avant (sans preuve : ni porte, ni record aux horizons)');
-  [s03, s07, s08, s9b1, s9b2, s11].forEach((s, i) => assert.ok(s.split('\n').slice(0, 3).some(l => l.startsWith('// [MARCHÉ LMSR À PART · 28/09/2026] VERSION 20260928b')), 'en-tête ' + i + ' (dans les 3 premières lignes : relivré par ÉVOLUTION APPRISE)'));
+  [s03, s07, s08, s9b1, s9b2, s11].forEach((s, i) => assert.ok(s.split('\n').slice(0, 6).some(l => l.startsWith('// [MARCHÉ LMSR À PART · 28/09/2026] VERSION 20260928b')), 'en-tête ' + i + ' (dans les 6 premières lignes : relivré depuis)'));
 });
 
 T('T2 · bloc RÉEL de 08 : la fitness ne bouge plus d\'un centime ; le portefeuille est débité du coût réel (02), la dépense comptée ; |score| ≤ 0,1, budget nul : rien ; S.b nul (coût NaN) : rien retiré ni compté, la fitness jamais NaN ; agent d\'avant (sans portefeuille) : sa fitness, comme avant', () => {
