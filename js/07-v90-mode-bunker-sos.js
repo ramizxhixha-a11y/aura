@@ -1,3 +1,4 @@
+// [MARCHÉ RÉPARÉ · 30/09/2026] VERSION 20260930a · à la naissance d'un génome : T$ du marché = fitness de naissance, gain et manches à zéro, génération suivante (une mise encore ouverte du génome retiré n'est ni payée ni rendue au nouveau-né, 03 _mktSettle)
 // [OPÉRATEUR APPRIS · 28/09/2026] VERSION 20260928d · la naissance du génome prend la source choisie par la règle apprise pour CE siège (_evoOpPick, 03 : recombinaison + mutation / retour à la meilleure version passée / mutation seule) ; la source réellement appliquée est transmise à l'essai (et « forcée » : source nuisible appliquée faute d'autre choix sur ce siège) et écrite au journal
 // [ÉVOLUTION APPRISE · 28/09/2026] VERSION 20260928c · triggerEvolution transmet à l'essai la fitness du siège À l'évolution, le déclencheur (opts.trig : A B C D E M) et si l'évolution est manuelle — l'observation de la règle apprise (03)
 // [MARCHÉ LMSR À PART · 28/09/2026] VERSION 20260928b · à la naissance d'un génome (triggerEvolution) : portefeuille de marché = fitness de naissance, dépense de marché remise à zéro (a.lmsrWallet, a.lmsrSpent — 08)
@@ -2852,6 +2853,7 @@ function triggerEvolution(weak, opts) {
   weak._judgments = [];   // [FITNESS GLISSANTE · 16/09/2026] la fenêtre repart de zéro : elle mesure le génome courant
   try { if (typeof _vjReset === 'function') _vjReset(weak.id); } catch(e) {}   // [BILAN AUX HORIZONS · 27/09/2026] son bilan aux horizons aussi (03)
   weak.lmsrWallet = weak.fitness; weak.lmsrSpent = 0;   // [MARCHÉ LMSR À PART · 28/09/2026] le portefeuille de marché naît avec la fitness de naissance (avant : même variable) ; la dépense est celle du génome
+  weak.mktWallet = weak.fitness; weak.mktGain = 0; weak.mktN = 0; weak.mktGen = (Number(weak.mktGen) || 0) + 1;   // [MARCHÉ RÉPARÉ · 30/09/2026] les T$ du nouveau génome : sa fitness de naissance ; génération suivante : une mise encore ouverte du génome retiré ne lui est ni payée ni rendue (03 _mktSettle)
   try {
     const _peakPrev = Math.max.apply(null, (Array.isArray(weak.fitnessHistory) && weak.fitnessHistory.length ? weak.fitnessHistory : [0]).map(Number).filter(isFinite).concat([0]));
     const _oldG = (typeof _genomeOf === 'function') ? JSON.parse(JSON.stringify(_genomeOf(weak.id) || {})) : null;   // [MÉRITE DE L'ÉVOLUEUR · 26/09/2026] capturé AVANT la mutation

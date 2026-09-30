@@ -1,3 +1,4 @@
+// [MARCHÉ RÉPARÉ · 30/09/2026] VERSION 20260930a · lmsrP : en EV / RE, le vrai prix LMSR de la manche ouverte de la paire (03 _mktP : 1 / (1 + e^((qNo − qYes) / 100))), 50 % hors manche — AA garde l'ancien rapport qYes / (qYes + qNo)
 // [DÉCISION COMMUNE · 27/09/2026] VERSION 20260927g · à la fermeture, les agents (et le composite) sont jugés sur leurs votes À L'OUVERTURE (pos._votes, pos._comp), plus sur ceux de la fin qui avaient vu tout le trajet
 // [MISE AU MÉRITE · 27/09/2026] VERSION 20260927b · le trade d'un bot est jugé en % de résultat (même unité que ses affirmations) — la mise au mérite lit une seule unité
 // [SURVEILLANCE PERMANENTE · 27/09/2026] VERSION 20260927a · goPage(0) ne fait plus tourner la flotte (le battement s'en charge) ; closePosition juge le bot qui a ouvert la position (pos._bot) sur son résultat réel
@@ -750,7 +751,7 @@ function getContextualWeight(agent, currentRegime) {
   return base * mult;
 }
 
-function lmsrP(ps){ ps=ps||AP(); return ps.qYes/(ps.qYes+ps.qNo); }
+function lmsrP(ps){ ps=ps||AP(); if (typeof _mktOn === 'function' && _mktOn()) return _mktP(ps); return ps.qYes/(ps.qYes+ps.qNo); }   // [MARCHÉ RÉPARÉ · 30/09/2026] EV / RE : le vrai prix LMSR de la manche ouverte de la paire (03 _mktP), 50 % hors manche — AA : l'ancien rapport, inchangé
 function fmtPrice(v,dec){ return dec>=4?v.toFixed(dec):'$'+Math.floor(v).toLocaleString(); }
 // Safe DOM text setter — never throws on missing element
 function setEl(id, val) { const e = document.getElementById(id); if(e) e.textContent = val; }

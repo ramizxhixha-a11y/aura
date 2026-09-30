@@ -1,3 +1,4 @@
+// [MARCHÉ RÉPARÉ · 30/09/2026] VERSION 20260930a · section « Marché des agents » (manches soldées / nulles, erreur du prix contre pile ou face, bon sens, T$ misés / rendus, prix de chaque paire, qui pèse le plus sur le prix, poids de sa voix) ; « Poids des voix » nomme la voix du marché ; « Fitness des sièges » : colonne T$ du marché (l'ancienne colonne devient « marché AA »)
 // [OPÉRATEUR APPRIS · 28/09/2026] VERSION 20260928d · section « Évolution apprise » : les trois sources de naissance (évolutions, écart moyen, état : prouvée bénéfique, nuisible écartée jusqu'au …, à juger), politique en cours (« naissances : … ») ; colonne « source » des observations
 // [ÉVOLUTION APPRISE · 28/09/2026] VERSION 20260928c · section « Évolution apprise » : niveaux prouvés (gain / nuisance) ou repli posé à la main, observations (fitness à l'évolution, écart, déclencheur), queues jugées
 // [MARCHÉ LMSR À PART · 28/09/2026] VERSION 20260928b · section « Fitness des sièges » : colonne « marché » (portefeuille de marché du siège · dépense du génome, à part de la fitness) ; la fitness vivante n'est plus débitée entre deux jugements
@@ -110,17 +111,55 @@ function _learnedPanelHtml() {
     });
     h += row([{ t: 'voix', w: '1.3fr' }, { t: 'poids bougie', w: '.8fr' }, { t: 'poids horizons', w: '.8fr' }, { t: 'jugements (le moins jugé des 5)', w: '1.1fr' }], true);
     var vRows = Object.keys(vHz).map(function (id) {
-      var ag = (S.agents || []).find(function (a) { return a && a.id === id; }), cv = (S.dcVoices && S.dcVoices.composite) || null;
-      var wO = null; try { wO = (typeof _dcMerit === 'function') ? _dcMerit(id === 'composite' ? cv : ag) : null; } catch (e) {}
+      var ag = (S.agents || []).find(function (a) { return a && a.id === id; }), cv = (S.dcVoices && S.dcVoices.composite) || null, mv = (S.dcVoices && S.dcVoices.marche) || null;   // [MARCHÉ RÉPARÉ · 30/09/2026] la voix du marché
+      var wO = null; try { wO = (typeof _dcMerit === 'function') ? _dcMerit(id === 'composite' ? cv : id === 'marche' ? mv : ag) : null; } catch (e) {}
       var wH = null; try { wH = (typeof _dcMeritHz === 'function') ? _dcMeritHz(id) : null; } catch (e) {}
       var nMin = Array.isArray(vHz[id]) ? Math.min.apply(null, vHz[id].map(function (L) { return Array.isArray(L) ? (L.length >> 1) : 0; })) : 0;   // à plat : v, D, v, D, …
-      return { name: id === 'composite' ? 'Analyse tech. + fond.' : ((ag && ag.name) || id), wO: wO, wH: wH, n: nMin };
+      return { name: id === 'composite' ? 'Analyse tech. + fond.' : id === 'marche' ? 'Marché des agents (prix)' : ((ag && ag.name) || id), wO: wO, wH: wH, n: nMin };
     }).sort(function (x, y) { return (y.wH === null ? -1 : y.wH) - (x.wH === null ? -1 : x.wH); });
     vRows.forEach(function (r) {
       h += row([{ t: r.name, w: '1.3fr', s: 'font-weight:600;' }, { t: r.wO === null ? '—' : Number(r.wO).toFixed(2), w: '.8fr', s: 'color:#889;' },
         { t: r.wH === null ? 'pas encore' : Number(r.wH).toFixed(2), w: '.8fr', s: 'color:' + (r.wH === null ? '#556' : r.wH > 0 ? '#00e87a' : '#889') + ';' }, { t: String(r.n), w: '1.1fr', s: 'color:#889;' }]);
     });
   }
+  // 2c-bis · marché des agents [MARCHÉ RÉPARÉ · 30/09/2026] (lecture seule)
+  var mkM = (S.tradingMode === 'real') ? 'R' : 'E', mkL = (mkM === 'R') ? 'RE' : 'EV', mkOn = (S.tradingMode === 'paperReal' || S.tradingMode === 'real'), MSt = (S.mktStats && S.mktStats[mkM]) || null;
+  var kT = function (x) { x = Number(x) || 0; var a = Math.abs(x); return a < 1000 ? String(Math.round(a)) : a < 1e6 ? ((a / 1000).toFixed(1) + ' k') : ((a / 1e6).toFixed(2) + ' M'); };
+  var sgT = function (x) { x = Number(x) || 0; return (x >= 0 ? '+' : '−') + kT(x); };
+  var pcT = function (x) { return Math.round(Number(x) * 100) + ' %'; };
+  h += title('MARCHÉ DES AGENTS', '· à chaque bougie close, chaque agent mise ses T$ sur SON vote de la paire ; à la clôture de la bougie suivante, chaque part juste paie 1 T$ — le prix est une voix de la décision (EV/RE)');
+  if (!mkOn) h += '<div style="color:#667;font-size:11px;">AA : l\'ancien marché (bac à sable, rien n\'y est jugé) — ci-dessous, le marché des agents en EV</div>';
+  if (!MSt || !((MSt.n || 0) + (MSt.v || 0))) h += '<div style="color:#667;font-size:11px;">pas encore de manche soldée en ' + mkL + ' — une manche s\'ouvre à chaque bougie close de chaque paire active</div>';
+  else {
+    var brT = MSt.b ? MSt.br / MSt.b : null;
+    h += row([{ t: mkL + ' : ' + MSt.n + ' manches soldées · ' + MSt.v + ' nulles (mises rendues)', w: '1.2fr', s: 'font-weight:600;' },
+      { t: brT === null ? 'aucune mise encore' : ('erreur du prix (Brier) ' + brT.toFixed(3) + ' — pile ou face : 0,250'), w: '1.4fr', s: 'color:' + (brT !== null && brT < 0.25 ? '#00e87a' : '#ffd166') + ';' },
+      { t: MSt.d ? ('bon sens ' + pcT(MSt.ok / MSt.d) + ' des ' + MSt.d + ' manches où il penchait') : '—', w: '1.2fr', s: 'color:#889;' }]);
+    h += row([{ t: 'T$ misés ' + kT(MSt.vol) + ' · rendus aux agents ' + kT(MSt.paid) + ' (' + sgT((MSt.paid || 0) - (MSt.vol || 0)) + ')', w: '2fr', s: 'color:#889;' },
+      { t: 'hausses ' + pcT((MSt.up || 0) / Math.max(1, MSt.n)) + ' des manches', w: '1fr', s: 'color:#889;' }]);
+  }
+  var mkPairs = (mkM === 'R') ? Object.keys(S.realActivePairs || {}).filter(function (p) { return S.realActivePairs[p]; }) : _lrnActivePairs();   // RE : ses paires
+  if (mkOn && mkPairs.length) {
+    h += row([{ t: 'paire', w: '1fr' }, { t: 'manche ouverte : prix · mises', w: '1.5fr' }, { t: 'manche précédente', w: '1.3fr' }], true);
+    mkPairs.forEach(function (p) {
+      var ps = S.pairStates && S.pairStates[p], R = ps && ps.mkt, col = (typeof PAIRS !== 'undefined' && PAIRS[p] && PAIRS[p].color) || '#ccc';
+      var Pn = (R && R.open && typeof _mktPrice === 'function') ? _mktPrice(ps.qYes, ps.qNo) : null;
+      var L = R ? (R.open ? R.prev : R) : null;
+      h += row([{ t: p.replace('/USDT', ''), w: '1fr', s: 'color:' + col + ';font-weight:600;' },
+        { t: Pn === null ? '—' : (pcT(Pn) + ' hausse · ' + R.n + ' mise' + (R.n > 1 ? 's' : '') + ' (' + kT(R.vol) + ' T$)'), w: '1.5fr', s: 'color:' + (Pn === null ? '#556' : Pn > 0.5 ? '#00e87a' : Pn < 0.5 ? '#ff8fb1' : '#889') + ';' },
+        { t: L ? (pcT(L.P) + ' → ' + (L.out > 0 ? 'hausse' : L.out < 0 ? 'baisse' : 'nulle')) : '—', w: '1.3fr', s: 'color:#889;' }]);
+    });
+  }
+  var mkSeats = (S.agents || []).filter(function (a) { return a && !a.isBot && !a.isMeta && typeof a.mktWallet === 'number' && isFinite(a.mktWallet); }).sort(function (x, y) { return y.mktWallet - x.mktWallet; });
+  if (mkSeats.length) {
+    var nmT = function (a) { return String(a.name || a.id).split(' ')[0] + ' ' + kT(a.mktWallet) + ' (' + sgT(a.mktGain) + ')'; };
+    h += row([{ t: 'pèsent le plus sur le prix (T$, gain)', w: '1.2fr', s: 'color:#889;' }, { t: mkSeats.slice(0, 4).map(nmT).join(' · '), w: '2.8fr', s: 'color:#00e87a;' }]);
+    if (mkSeats.length > 4) h += row([{ t: 'le moins', w: '1.2fr', s: 'color:#889;' }, { t: mkSeats.slice(-3).map(nmT).join(' · '), w: '2.8fr', s: 'color:#ff8fb1;' }]);
+  }
+  var mvO = null, mvH = null;
+  try { mvO = (typeof _dcMerit === 'function') ? _dcMerit(S.dcVoices && S.dcVoices.marche) : null; } catch (e) {}
+  try { mvH = (typeof _dcMeritHz === 'function') ? _dcMeritHz('marche') : null; } catch (e) {}
+  h += row([{ t: 'poids de sa voix dans la décision', w: '1.2fr', s: 'color:#889;' }, { t: 'bougie ' + (mvO === null ? '—' : Number(mvO).toFixed(2)) + ' · horizons ' + (mvH === null ? 'pas encore' : Number(mvH).toFixed(2)), w: '2.8fr' }]);
   // 2d · fitness des sièges [FITNESS AUX HORIZONS · 28/09/2026] (lecture seule)
   var fr = T3 && T3.fRules && T3.fRules[thFm], fmodeTf = (T3 && T3.fModes && T3.fModes[thFm] === 'bougie') ? 'bougie' : 'hz';
   var fmode = (typeof _fjMode === 'function') ? _fjMode() : fmodeTf;   // la définition vivante : une par siège, tous pas de temps (bougie dès qu'un pas l'a prouvé)
@@ -137,14 +176,16 @@ function _learnedPanelHtml() {
       h += row([{ t: '↳ ' + lab, w: '.8fr', s: 'font-weight:600;' }, { t: x.mean === null ? 'pas encore d\'écart' : ((x.mean >= 0 ? '+' : '') + Number(x.mean).toFixed(3) + ' %×vote/cycle' + (x.se !== null ? ' (± ' + Number(x.se).toFixed(3) + ')' : '')), w: '1.4fr', s: 'color:' + (x.mean === null ? '#556' : x.mean >= 0 ? '#00e87a' : '#ff4d6d') + ';' },
         { t: x.n + ' cycles · ' + x.blocks + ' créneaux' + (x.crit ? ' · exigé ' + Number(x.crit).toFixed(1) + ' ET' : ''), w: '1.2fr', s: 'color:#889;' }, { t: st, w: '.9fr', s: 'color:' + (x.better ? '#00e87a' : x.worse ? '#ffd166' : '#889') + ';' }]);
     });
-    h += row([{ t: 'siège', w: '1.3fr' }, { t: 'bougie', w: '.8fr' }, { t: 'horizons', w: '.8fr' }, { t: 'vivante', w: '.8fr' }, { t: 'marché (portefeuille · dépensé, à part)', w: '.9fr' }], true);
+    h += row([{ t: 'siège', w: '1.3fr' }, { t: 'bougie', w: '.8fr' }, { t: 'horizons', w: '.8fr' }, { t: 'vivante', w: '.8fr' }, { t: 'marché AA (portefeuille · dépensé)', w: '.9fr' }, { t: 'T$ du marché (gain · manches)', w: '1fr' }], true);
     seats.map(function (a) {
       var fb = null, fh = null; try { fb = (typeof _fitOf === 'function' && typeof _fitWindow === 'function') ? _fitOf(Array.isArray(a._judgments) ? a._judgments : [], _fitWindow()) : null; } catch (e) {}
       try { fh = (typeof _fitHz === 'function') ? _fitHz(a) : null; } catch (e) {}
-      return { name: a.name || a.id, fb: fb, fh: fh, f: Number(a.fitness) || 0, m: Number(a.lmsrSpent) || 0, wl: (typeof a.lmsrWallet === 'number' && isFinite(a.lmsrWallet)) ? a.lmsrWallet : null };
+      return { name: a.name || a.id, fb: fb, fh: fh, f: Number(a.fitness) || 0, m: Number(a.lmsrSpent) || 0, wl: (typeof a.lmsrWallet === 'number' && isFinite(a.lmsrWallet)) ? a.lmsrWallet : null,
+        tw: (typeof a.mktWallet === 'number' && isFinite(a.mktWallet)) ? a.mktWallet : null, tg: Number(a.mktGain) || 0, tn: Number(a.mktN) || 0 };   // [MARCHÉ RÉPARÉ · 30/09/2026]
     }).sort(function (x, y) { return x.f - y.f; }).forEach(function (r) {
       h += row([{ t: r.name, w: '1.3fr', s: 'font-weight:600;' }, { t: r.fb === null ? '—' : String(Math.round(r.fb)), w: '.8fr', s: 'color:#889;' },
-        { t: r.fh === null ? 'pas encore' : String(Math.round(r.fh)), w: '.8fr', s: 'color:' + (r.fh === null ? '#556' : r.fh >= 350 ? '#00e87a' : '#ff4d6d') + ';' }, { t: String(Math.round(r.f)) + ' T$', w: '.8fr', s: 'color:' + (r.f <= 80 ? '#ff4d6d' : '#cde') + ';font-weight:600;' }, { t: (r.wl === null ? '—' : String(Math.round(r.wl))) + ' · ' + (Math.round(r.m) ? ('−' + kf(r.m)) : '0'), w: '.9fr', s: 'color:#889;' }]);
+        { t: r.fh === null ? 'pas encore' : String(Math.round(r.fh)), w: '.8fr', s: 'color:' + (r.fh === null ? '#556' : r.fh >= 350 ? '#00e87a' : '#ff4d6d') + ';' }, { t: String(Math.round(r.f)) + ' T$', w: '.8fr', s: 'color:' + (r.f <= 80 ? '#ff4d6d' : '#cde') + ';font-weight:600;' }, { t: (r.wl === null ? '—' : String(Math.round(r.wl))) + ' · ' + (Math.round(r.m) ? ('−' + kf(r.m)) : '0'), w: '.9fr', s: 'color:#889;' },
+          { t: r.tw === null ? '—' : (kf(r.tw) + ' · ' + (r.tg >= 0 ? '+' : '−') + kf(r.tg) + ' · ' + r.tn), w: '1fr', s: 'color:' + (r.tw === null ? '#556' : r.tg >= 0 ? '#00e87a' : '#ff8fb1') + ';' }]);
     });
   }
   // 2e · évolution apprise [ÉVOLUTION APPRISE · 28/09/2026] (lecture seule)

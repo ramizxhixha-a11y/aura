@@ -220,7 +220,7 @@ T('S1 · 10f : _vjNote appelé juste après _thNote, à chaque cycle (décision 
   assert.ok(core.includes('const _thCapD = Math.min(3, Math.max(1.5, 2 * _thSl)), _thCapC = Math.min(3, Math.max(1.5, 2 * _thSlC));'));
   assert.strictEqual((core.match(/_vjNote\(/g) || []).length, 1);
   assert.ok(!/rulesC|recC|pendC|vHz|vCmp|_dcMeritHz|_vjMode|\.C1\b|\.Ch\b/.test(core), '10f ne lit ni le sens contraire ni le bilan des voix : la décision vivante lui vient toute faite (_dcR.C)');
-  assert.ok(s10f.startsWith('// [BILAN AUX HORIZONS · 27/09/2026] VERSION 20260927k'));
+  assert.ok(s10f.startsWith('// [MARCHÉ RÉPARÉ · 30/09/2026] VERSION 20260930a') && s10f.split('\n')[1].startsWith('// [BILAN AUX HORIZONS · 27/09/2026] VERSION 20260927k'));   // [MARCHÉ RÉPARÉ · 30/09] 10f relivré (manche du marché à chaque cycle), en-tête BILAN en 2e ligne
   // le sens décidé (seuil appris) n'est pas touché par les voix : _thRefresh / _thRule / _thLevel / _thPick ne lisent rien d'elles
   const lv = codeStrict(between(s03, 'function _thRefresh() {', 'function _thRefreshC(', false) + between(s03, 'function _thRule() {', 'function _vjNote(', false));
   assert.ok(!/pendV|vHz|vCmp|vIds|vModes|vRules|_dcMeritHz|_vjMode/.test(lv));

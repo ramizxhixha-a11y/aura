@@ -134,7 +134,7 @@ T('T3 · écran 11b « Fitness des sièges » : colonne « marché » = portefeu
     _fitWindow: () => 60, _fitOf: (js) => (js.length >= 5 ? (js[0].s > 0 ? 1350 : 50) : null), _fitHz: a => (a.id === 'a1' ? 1350 : a.id === 'a2' ? 50 : null), _dcMerit: () => 0, _dcMeritHz: () => null, _fjMode: () => 'bougie' };
   vm.createContext(c); vm.runInContext(src, c);
   const h = vm.runInContext('_learnedPanelHtml()', c), seg = h.slice(h.indexOf('FITNESS DES SIÈGES'));
-  assert.ok(seg.includes('>vivante<') && seg.includes('>marché (portefeuille · dépensé, à part)<') && !seg.includes('débite'), seg.slice(0, 1200));
+  assert.ok(seg.includes('>vivante<') && seg.includes('>marché AA (portefeuille · dépensé)<') && seg.includes('>T$ du marché (gain · manches)<') && !seg.includes('débite'), seg.slice(0, 1200));
   const rowOf = name => { const i = seg.indexOf('>' + name + '<'); return seg.slice(seg.lastIndexOf('<span', i), i + 600).match(/<span[^>]*>([^<]*)<\/span>/g).map(x => x.replace(/<[^>]+>/g, '')); };
   assert.deepStrictEqual(rowOf('Momentum Alpha').slice(0, 5), ['Momentum Alpha', '1350', '1350', '1350 T$', '1200 · −12'], 'siège, bougie, horizons, vivante, marché');
   assert.deepStrictEqual(rowOf('On-chain').slice(0, 5), ['On-chain', '50', '50', '50 T$', '— · 0'], 'agent d\'avant : pas de portefeuille encore, rien dépensé');

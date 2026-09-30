@@ -122,10 +122,10 @@ T('S8 · 02 : _realCandlesStale (critère des portes) utilisé au boot, limiteur
 });
 T('S9 · en-têtes 02/08/10g/09b2 « ' + HDR + ' », 10f « ▓▓▓ VERSION 20260917b ▓▓▓ » (hotfix b), HTML : DOC_V + 78 ?v= (79), aucun autre token', () => {
   assert.ok(s10g.startsWith('// [HORIZONS APPRIS · 27/09/2026] VERSION 20260927i') && s10g.split('\n').slice(0, 3).some(l => l.startsWith(HDR)), F10G);   // [HORIZONS APPRIS · 27/09] 10g relivré (places prises : noter seulement), en-tête 1b-a en 2e ligne
-  assert.ok(s08.startsWith('// [ÉVOLUTION APPRISE · 28/09/2026] VERSION 20260928c') && s08.split('\n').slice(0, 12).some(l => l.startsWith(HDR)), F08);   // [1b-b] 08 relivré, en-tête 1b-a en 2e ligne
-  assert.ok(s02.startsWith('// [DÉCISION COMMUNE · 27/09/2026] VERSION 20260927g') && s02.split('\n').slice(0, 23).some(l => l.startsWith(HDR)), F02);   // [SONDE RÉSEAU] 02 relivré, en-tête 1b-a en 2e ligne
-  assert.ok(s9b2.startsWith('// [ÉVOLUTION APPRISE · 28/09/2026] VERSION 20260928c') && s9b2.split('\n').slice(0, 25).some(l => l.startsWith(HDR)), F9B2);   // [FITNESS GLISSANTE] 09b2 relivré, en-tête 1b-a dans les 6 premières lignes
-  assert.ok(s10f.startsWith('// [BILAN AUX HORIZONS · 27/09/2026] VERSION 20260927k') && s10f.split('\n').slice(0, 6).some(l => l.startsWith('// ▓▓▓ VERSION 20260926g ▓▓▓')));   // [BILAN AUX HORIZONS · 27/09] 10f relivré, en-tête ▓▓▓ en 6e ligne   // [SENS CONTRAIRE · 27/09] 10f relivré, en-tête ▓▓▓ en 5e ligne   // [HORIZONS APPRIS · 27/09] 10f relivré, en-tête ▓▓▓ en 4e ligne   // [DÉCISION COMMUNE · 27/09/2026] 10f relivré
+  assert.ok(s08.startsWith('// [MARCHÉ RÉPARÉ · 30/09/2026] VERSION 20260930a') && s08.split('\n').slice(0, 13).some(l => l.startsWith(HDR)), F08);   // [1b-b] 08 relivré, en-tête 1b-a en 2e ligne
+  assert.ok(s02.startsWith('// [MARCHÉ RÉPARÉ · 30/09/2026] VERSION 20260930a') && s02.split('\n').slice(0, 24).some(l => l.startsWith(HDR)), F02);   // [SONDE RÉSEAU] 02 relivré, en-tête 1b-a en 2e ligne
+  assert.ok(s9b2.startsWith('// [MARCHÉ RÉPARÉ · 30/09/2026] VERSION 20260930a') && s9b2.split('\n').slice(0, 26).some(l => l.startsWith(HDR)), F9B2);   // [FITNESS GLISSANTE] 09b2 relivré, en-tête 1b-a dans les 6 premières lignes
+  assert.ok(s10f.startsWith('// [MARCHÉ RÉPARÉ · 30/09/2026] VERSION 20260930a') && s10f.split('\n').slice(0, 7).some(l => l.startsWith('// ▓▓▓ VERSION 20260926g ▓▓▓')));   // [BILAN AUX HORIZONS · 27/09] 10f relivré, en-tête ▓▓▓ en 6e ligne   // [SENS CONTRAIRE · 27/09] 10f relivré, en-tête ▓▓▓ en 5e ligne   // [HORIZONS APPRIS · 27/09] 10f relivré, en-tête ▓▓▓ en 4e ligne   // [DÉCISION COMMUNE · 27/09/2026] 10f relivré
   assert.strictEqual(count(html, TOK), 81);   // [ÉCRAN APPRIS 23/09] 11b ajouté (10i le 17/09)
   assert.strictEqual((html.match(/\?v=\d{8}[a-z]/g) || []).length, 80);
   assert.strictEqual((html.match(/\?v=\d{8}[a-z]/g) || []).filter(t => t !== '?v=' + TOK).length, 0);

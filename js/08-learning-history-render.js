@@ -1,3 +1,4 @@
+// [MARCHÉ RÉPARÉ · 30/09/2026] VERSION 20260930a · en EV / RE, les ordres LMSR toutes les 6 s (biais global a.score, jamais payés) et l'injection du composite dans le marché (rendu) ne tournent plus : le marché d'une paire, ce sont ses manches (03 _mktCycle) — AA inchangé
 // [ÉVOLUTION APPRISE · 28/09/2026] VERSION 20260928c · déclencheurs d'évolution de la page Home (plus faible évoluable sous 300, stagnation sous 400) : niveau appris s'il est prouvé (_evoOk, 03), sinon les nombres posés à la main ; déclencheur transmis (D / E)
 // [MARCHÉ LMSR À PART · 28/09/2026] VERSION 20260928b · le marché LMSR (ordres des agents toutes les 6 s) ne débite plus a.fitness : il a son portefeuille par siège, a.lmsrWallet — rechargé à la fitness à chaque écriture du jugement (03, porte unique), débité par les ordres (_lmsrSpend), lu par la taille des ordres et les gardes à la place de a.fitness — et sa dépense a.lmsrSpent (celle du génome, remise à zéro à l'évolution). Le flux d'ordres, le marché (qYes / qNo, lmsrP) et tout ce qui le lit gardent la dynamique d'avant (le flux s'éteint entre deux jugements, repart au jugement — équivalence prouvée passe à passe contre l'ancien bloc, banc-marche-lmsr ; deux écarts voulus : un coût NaN n'est ni retiré ni compté, et pendant la démo 05 le marché tourne sur les portefeuilles réels) ; seule la fitness ne bouge plus entre deux jugements — avant, ≈ 0,14 × fitness × |score| × prix lui étaient retirés par passe (jusqu'à −30 à −50 % par minute) ; c'est cette valeur débitée que lisaient l'évolution de la page Home (ici, toutes les 8 s, sans recalcul), le compte des cassés (≤ 80) et la part de fitness du levier (_favConsensus, 02), et qu'un siège sans preuve (jamais réécrit par le jugement) gardait pour toujours
 // [HORIZONS APPRIS · 27/09/2026] VERSION 20260927i · mode réel (EV / RE) traité en arrière-plan : ses paires reçoivent le dernier prix réel accepté (< 2 min) à chaque passage — avant, son ps.price datait du dernier passage à l'écran
@@ -2399,7 +2400,8 @@ function renderCompositePanel() {
   const pairs   = Object.keys(PAIRS);
 
   // ── Inject composite into LMSR + nudge agents for ALL pairs ──
-  pairs.forEach(pair => {
+  // [MARCHÉ RÉPARÉ · 30/09/2026] en EV / RE plus rien n'écrit le marché d'une paire que les mises des agents (03 _mktCycle) : cette injection reste en AA
+  if (!((typeof _mktOn === 'function') && _mktOn())) pairs.forEach(pair => {
     const comp = allSigs[pair];
     const ps   = S.pairStates[pair];
     if(!comp || !ps) return;
@@ -3151,7 +3153,9 @@ function simTick() {
     const pairList  = Object.keys(PAIRS);
     const nPairs    = pairList.length;
 
-    S.agents.forEach(a => {
+    // [MARCHÉ RÉPARÉ · 30/09/2026] en EV / RE, le marché d'une paire, ce sont ses manches (03 _mktCycle : chaque agent mise SON vote de la paire, payé à
+    // la clôture de la bougie) ; ces ordres-ci — le biais global a.score sur toutes les paires, jamais payés — ne tournent plus qu'en AA, inchangés
+    if (!((typeof _mktOn === 'function') && _mktOn())) S.agents.forEach(a => {
       const sig        = a.score;
       // Budget total divisé par le nb de paires pour éviter la sur-exposition
       const budgetPerPair = (_lmsrWallet(a) * .08) / nPairs;   // [MARCHÉ LMSR À PART · 28/09/2026] le portefeuille de marché (avant : la fitness)

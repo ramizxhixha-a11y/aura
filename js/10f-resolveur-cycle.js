@@ -1,3 +1,4 @@
+// [MARCHÉ RÉPARÉ · 30/09/2026] VERSION 20260930a · à chaque cycle (EV / RE), juste après le roster frais de la paire, la manche du marché se solde et une nouvelle s'ouvre (03 _mktCycle) ; la décision ne pousse plus le marché, ni la décroissance ni la remise à 50/50 d'une fermeture n'y touchent plus — AA inchangé
 // [BILAN AUX HORIZONS · 27/09/2026] VERSION 20260927k · chaque cycle note aussi les trades long et short de la paire (chacun sa perte max) avec les votes de toutes les voix (03 _vjNote) : le poids de chaque voix se juge sur SON trade virtuel
 // [SENS CONTRAIRE · 27/09/2026] VERSION 20260927j · la décision notée en trade virtuel porte aussi la perte max qu'aurait le trade CONTRAIRE (même formule, bonus des signaux techniques de SON sens) — mesuré seulement, rien n'est tradé dans ce sens
 // [HORIZONS APPRIS · 27/09/2026] VERSION 20260927i · trade virtuel noté avec la perte max du vrai trade (2 × stop prévu, bornée 1,5-3 %) ; places prises (10g) : décision notée puis retour ; position ouverte dans le sens décidé sur un horizon prouvé marquée (_thPick → np._thH / np._thX) et tenue jusqu'à sa bougie de sortie : ni le cycle ni _botExitSweep ne la ferment avant ; sortie « Horizon appris » au dernier prix réel ; sur coupure, son stop est la perte max ; _thJudge aussi appelé depuis _botExitSweep (toutes les 10 s)
@@ -84,6 +85,9 @@ function _resolvePairCycleCore(pair, ps) {
   // [SEUIL APPRIS · 27/09/2026] les trades virtuels arrivés à terme (toutes paires) sont jugés net de frais (03 _thJudge)
   try { if (typeof _thJudge === 'function') _thJudge(); } catch(e) {}
   if (typeof runRosterAnalysis === 'function') { try { runRosterAnalysis(pair); } catch(e) {} }
+  // [MARCHÉ RÉPARÉ · 30/09/2026] EV / RE : la manche de la paire se solde (bougie de sortie close : chaque part juste paie 1 T$) puis une nouvelle s'ouvre
+  // à 50/50 où chaque agent mise SON vote frais de la paire (03 _mktCycle) — avant la photo des votes : le prix de ce cycle en fait partie
+  try { if (typeof _mktCycle === 'function') _mktCycle(pair, ps); } catch(e) {}
   try { if (typeof _dcSnapVotes === 'function') _dcSnapVotes(pair, ps, composite); } catch(e) {}
   const _votes  = (ps.roster && ps.roster.votes) || {};
   const _voteOf = a => (typeof _votes[a.id] === 'number') ? _votes[a.id] : 0;
@@ -159,10 +163,13 @@ function _resolvePairCycleCore(pair, ps) {
   const targetProb = 0.5 + finalSignalWithMem * 0.40;
   const curProb    = lmsrP(ps);
   const nudge      = (targetProb - curProb) * Math.max(0.3, effectiveConviction) * 8;
-  if(nudge > 0)      ps.qYes = Math.max(10, ps.qYes + nudge);
-  else if(nudge < 0) ps.qNo  = Math.max(10, ps.qNo  - nudge);
+  // [MARCHÉ RÉPARÉ · 30/09/2026] en EV / RE la décision ne pousse plus le marché vers elle-même (le prix devenait l'écho de la décision) : seules les
+  // mises des agents font le prix de la manche (03 _mktCycle) ; décroissance et remise à 50/50 d'une fermeture (plus bas) : AA seulement aussi
+  const _mktQ = (typeof _mktOn === 'function') && _mktOn();
+  if(!_mktQ && nudge > 0)      ps.qYes = Math.max(10, ps.qYes + nudge);
+  else if(!_mktQ && nudge < 0) ps.qNo  = Math.max(10, ps.qNo  - nudge);
   const qTotal = ps.qYes + ps.qNo;
-  if(qTotal > 800) { const r = 200/qTotal; ps.qYes = Math.max(10, ps.qYes*r); ps.qNo = Math.max(10, ps.qNo*r); }
+  if(!_mktQ && qTotal > 800) { const r = 200/qTotal; ps.qYes = Math.max(10, ps.qYes*r); ps.qNo = Math.max(10, ps.qNo*r); }
 
   const adxVal    = raw?.adx?.adx || 20;
   const volCV     = raw?.stddev?.cv || 0.015;
@@ -345,7 +352,7 @@ function _resolvePairCycleCore(pair, ps) {
       closePosition(botPos.id,true);
       // [DOUBLE JUGEMENT · 26/09/2026] plus de second jugement ici : closePosition (02) vient de juger les agents (source 'position', décroissance 1,3) — l'appel 'trade' qui suivait comptait le même trade DEUX fois (fitness, compétence par paire, souvenirs, régime)
       showToast(`${pnlPct>=0?'💰':'📉'} Bot ${pair} ${why} · ${pnlPct>=0?'+':''}${pnlPct.toFixed(2)}%`);
-      ps.qYes=100+Math.floor(Math.random()*20); ps.qNo=100+Math.floor(Math.random()*20);
+      if (!_mktQ) { ps.qYes=100+Math.floor(Math.random()*20); ps.qNo=100+Math.floor(Math.random()*20); }   // [MARCHÉ RÉPARÉ · 30/09/2026] AA seulement
     }   // [DÉCISION COMMUNE · 27/09/2026] plus de jugement sur le P&L déjà vu d'une position ouverte : jugée à sa fermeture, sur les votes de son OUVERTURE (02)
     S.totalTrades=Object.values(S.pairStates).reduce((s,p)=>s+p.totalTrades,0);
     S.winTrades=Object.values(S.pairStates).reduce((s,p)=>s+p.winTrades,0);
@@ -364,8 +371,7 @@ function _resolvePairCycleCore(pair, ps) {
     if(_newsDelta > 0 && finalSignalWithMem !== 0 && !convGate && dirGate &&
        effectiveConviction >= (_gates.conv + _expPenalty + _ecoMalus + _heatDelta - _corrBonus - _boost)) _newsTrace(pair, _newsG, false);
     // [DÉCISION COMMUNE · 27/09/2026] plus de jugement sur le mouvement de la bougie en cours (le vote l'avait déjà vu) : _dcForwardJudge juge le cycle précédent
-    ps.qYes = Math.max(20, 100 + (ps.qYes - 100) * 0.95);
-    ps.qNo  = Math.max(20, 100 + (ps.qNo  - 100) * 0.95);
+    if (!_mktQ) { ps.qYes = Math.max(20, 100 + (ps.qYes - 100) * 0.95); ps.qNo = Math.max(20, 100 + (ps.qNo - 100) * 0.95); }   // [MARCHÉ RÉPARÉ · 30/09/2026] AA seulement
     return;
   }
 
@@ -425,8 +431,7 @@ function _resolvePairCycleCore(pair, ps) {
     }
     if (!_reSolid) {
       learnFromOutcome('cycle', 0, pair);
-      ps.qYes = Math.max(20, 100 + (ps.qYes - 100) * 0.95);
-      ps.qNo  = Math.max(20, 100 + (ps.qNo  - 100) * 0.95);
+      if (!_mktQ) { ps.qYes = Math.max(20, 100 + (ps.qYes - 100) * 0.95); ps.qNo = Math.max(20, 100 + (ps.qNo - 100) * 0.95); }   // [MARCHÉ RÉPARÉ · 30/09/2026] AA seulement
       return;
     }
   }
@@ -476,8 +481,7 @@ function _resolvePairCycleCore(pair, ps) {
     // [P7] le plancher a-t-il fermé à CAUSE des news contre le pari ?
     if(_newsDelta > 0 && _gainNet >= _minNetGain && effectiveConviction >= (_convFloor - _newsDelta)) _newsTrace(pair, _newsG, false);
     learnFromOutcome('cycle', 0, pair);
-    ps.qYes = Math.max(20, 100 + (ps.qYes - 100) * 0.95);
-    ps.qNo  = Math.max(20, 100 + (ps.qNo  - 100) * 0.95);
+    if (!_mktQ) { ps.qYes = Math.max(20, 100 + (ps.qYes - 100) * 0.95); ps.qNo = Math.max(20, 100 + (ps.qNo - 100) * 0.95); }   // [MARCHÉ RÉPARÉ · 30/09/2026] AA seulement
     return;
   }
   if(!ps.userCycleSet) {
@@ -799,7 +803,7 @@ window._botExitSweep = function _botExitSweep() {
       if (!_closeCompleted(pos, 'bot ' + why)) return;
       // [DOUBLE JUGEMENT · 26/09/2026] idem : _closeCompleted → closePosition a jugé (source 'position') ; le second jugement 'trade' est retiré
       try { showToast((pnlPct >= 0 ? '\uD83D\uDCB0' : '\uD83D\uDCC9') + ' Bot ' + pos.pair + ' ' + why + ' \u00b7 ' + (pnlPct >= 0 ? '+' : '') + pnlPct.toFixed(2) + '%'); } catch(e) {}
-      if (ps) { ps.qYes = 100 + Math.floor(Math.random() * 20); ps.qNo = 100 + Math.floor(Math.random() * 20); }
+      if (ps && !((typeof _mktOn === 'function') && _mktOn())) { ps.qYes = 100 + Math.floor(Math.random() * 20); ps.qNo = 100 + Math.floor(Math.random() * 20); }   // [MARCHÉ RÉPARÉ · 30/09/2026] AA seulement
     });
   } catch(e){ try{window._decErr&&window._decErr(e)}catch(_e){} }
 };

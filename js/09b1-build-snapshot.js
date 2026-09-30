@@ -1,3 +1,4 @@
+// [MARCHÉ RÉPARÉ · 30/09/2026] VERSION 20260930a · T$ du marché des sièges (mktWallet, mktGain, mktN, mktGen), mktLog (dernières manches soldées) et mktStats (compteurs) dans le snapshot ; les manches ouvertes vivent dans walletStore (ps.mkt)
 // [ÉVOLUTION APPRISE · 28/09/2026] VERSION 20260928c · evoRule (observations et règle apprise de l'évolution, 03) dans le snapshot
 // [MARCHÉ LMSR À PART · 28/09/2026] VERSION 20260928b · lmsrWallet (portefeuille de marché du siège) et lmsrSpent (dépense du génome) dans le snapshot des agents — le marché LMSR ne débite plus la fitness (08)
 // [SEUIL APPRIS · 27/09/2026] VERSION 20260927h · dcThreshold (trades virtuels jugés, en attente, seuil d'ouverture courant) dans le snapshot
@@ -85,6 +86,10 @@ function buildSnapshot() {
         lastPnl:        a.lastPnl         || 0,
         lmsrWallet:     (typeof a.lmsrWallet === 'number' && isFinite(a.lmsrWallet)) ? a.lmsrWallet : a.fitness,   // [MARCHÉ LMSR À PART · 28/09/2026] portefeuille de marché (= fitness au dernier jugement − ordres)
         lmsrSpent:      a.lmsrSpent       || 0,   // [MARCHÉ LMSR À PART · 28/09/2026] dépense de marché du génome
+        mktWallet:      (typeof a.mktWallet === 'number' && isFinite(a.mktWallet)) ? a.mktWallet : null,   // [MARCHÉ RÉPARÉ · 30/09/2026] T$ du marché (null : pas encore misé)
+        mktGain:        Number(a.mktGain) || 0,   // [MARCHÉ RÉPARÉ · 30/09/2026] gain net cumulé des manches soldées
+        mktN:           Number(a.mktN)    || 0,   // [MARCHÉ RÉPARÉ · 30/09/2026] manches soldées où il a misé
+        mktGen:         Number(a.mktGen)  || 0,   // [MARCHÉ RÉPARÉ · 30/09/2026] génération du siège (07) : une mise d'une génération précédente n'est ni payée ni rendue
         memory:         (a.memory         || []).slice(-20),
         regimeFitness:  a.regimeFitness   || {},
         _judgments:     (a._judgments     || []).slice(-240),   // [FITNESS GLISSANTE · 16/09/2026] · [FENÊTRE APPRENANTE · 26/09/2026] 240 (FIT_KEEP, 03)
@@ -118,6 +123,8 @@ function buildSnapshot() {
       evoTrials: S.evoTrials || {},                   // [MÉRITE DE L'ÉVOLUEUR · 26/09/2026]
       evoMerit: S.evoMerit || null,
       evoRule: S.evoRule || null,                     // [ÉVOLUTION APPRISE · 28/09/2026]
+      mktLog: S.mktLog || null,                       // [MARCHÉ RÉPARÉ · 30/09/2026] dernières manches soldées [t (s), mode, paire, prix × 1000, issue, mises, T$ misés, horizon (s)]
+      mktStats: S.mktStats || null,                   // [MARCHÉ RÉPARÉ · 30/09/2026] compteurs depuis la mise en service (les manches ouvertes : walletStore, ps.mkt)
       _metaMeritMigrated: !!S._metaMeritMigrated,
       _lastEvolutionAt: S._lastEvolutionAt || 0,      // [REDÉMARRAGE · 26/09/2026] sans eux, chaque rechargement déclenchait une évolution et un rêve
       _lastDreamAt: S._lastDreamAt || 0,

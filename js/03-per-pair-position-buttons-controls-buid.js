@@ -1,3 +1,4 @@
+// [MARCHÉ RÉPARÉ · 30/09/2026] VERSION 20260930a · le marché des agents tel qu'il a été conçu (EV / RE) : une manche par paire et par bougie close — chaque agent mise ses T$ sur SON vote de la paire (croyance 0,5 + vote / 2, au plus 8 % de ses T$ répartis sur les paires actives), vrai prix LMSR (b = 100, départ 50/50), solde à la clôture de la bougie en cours (part juste = 1 T$ ; manche nulle = mises rendues), puis 50/50 ; les T$ restent au siège (plus de remise à la fitness) ; le prix = voix « marche » de la décision commune, jugée comme le composite (_mktCycle, _mktOpen, _mktSettle, _mktBet, _mktVote, _dcJudgeMarket) ; clôture sûre seulement si la bougie suivante est là, contiguë, pas un bouche-trou (sinon nulle) ; syncPairPresets : la cadence de lecture d'une paire ne suit plus le prix en EV / RE
 // [OPÉRATEUR APPRIS · 28/09/2026] VERSION 20260928d · la source de chaque naissance (07) est choisie parmi trois — R recombinaison avec la meilleure version passée + mutation (l'opérateur d'avant, byte-identique), B retour à la meilleure version passée du siège telle quelle, M mutation seule — et jugée sur les mêmes essais que l'évolution apprise (_genomeEvolve(…, op), _evoOpStats, _evoOpPick) : source prouvée bénéfique → c'est elle (une naissance sur deux aux sources encore à juger) ; source prouvée nuisible écartée, la preuve tenue jusqu'à 5 jours après sa plus jeune observation (une naissance libre de la source la rend aux données) ; sinon rotation par siège (B seulement si le siège a une version passée complète où revenir). L'observation de la règle porte la source (index 7) ; écran 🧠 Appris
 // [ÉVOLUTION APPRISE · 28/09/2026] VERSION 20260928c · les déclencheurs de l'évolution (03 : plus faible sous 150 tout de suite, tous les 15 cycles, sous 300 tous les 8 cycles ; 08 : sous 300, stagnation sous 400) lisent une règle apprise sur ce que les évolutions ont rapporté (essai nouveau génome contre ancien, une observation par évolution jugée : fitness du siège à l'évolution, écart, créneau de 4 h, déclencheur) — gain prouvé sous un niveau F* : tout siège de fitness ≤ F* est recyclable tout de suite (le gain ÉTEND ; au-dessus de F*, rien n'est prouvé : les nombres posés à la main restent) ; nuisance prouvée sous H* : plus d'évolution automatique d'un siège ≤ H* tant que la preuve tient (elle meurt avec ses données : 5 jours au plus sans nouvelle observation) — le plus faible RECYCLABLE est recyclé ; rien de prouvé : les nombres posés à la main, tels quels (repli). Même preuve que le seuil (_thEval) ; observations gardées 5 jours (S.evoRule, persisté)
 // [MARCHÉ LMSR À PART · 28/09/2026] VERSION 20260928b · le marché LMSR (08) ne débite plus la fitness — le jugement (porte unique _fitCurrent) en est la seule écriture courante ; à chaque évaluation avec preuve (jugement, abstention, recompute) elle recharge le portefeuille de marché du siège (_lmsrRefill, 08) : le marché garde sa dynamique d'avant ; la fitness, elle, ne bouge plus entre deux jugements
@@ -961,7 +962,10 @@ function syncPairPresets() {
     }
 
     // ── 3. Optimal cycle (LMSR signal speed) ─────────────────
-    if(!ps.userCycleSet) {
+    // [MARCHÉ RÉPARÉ · 30/09/2026] AA seulement : en EV / RE le cycle d'une paire est sa bougie close, cette cadence n'est que la fréquence à laquelle on
+    // regarde si elle est close — la régler sur le prix du marché (réparé : près de 50 % tant que les agents hésitent) retarderait chaque cycle jusqu'à
+    // 2 min (Home à l'écran, relecture indépendante). En EV / RE, 10f la règle déjà (conviction de la décision : 20 à 90 s)
+    if(!ps.userCycleSet && !((typeof _mktOn === 'function') && _mktOn())) {
       const prob       = lmsrP(ps);
       const conviction = Math.abs(prob - 0.5) * 2;
       const raw        = ps.raw || {};
@@ -6491,6 +6495,8 @@ function _dcConsensus(pair, voteOf, composite) {
     add(a.id, _dcMerit(a), v);
   });
   if (typeof composite === 'number' && isFinite(composite)) { let v = composite; if (Math.abs(v) < 0.03) v = 0; add('composite', _dcMerit(_dcVoice('composite')), v); }
+  // [MARCHÉ RÉPARÉ · 30/09/2026] EV / RE : le prix de la manche ouverte de la paire, une voix comme le composite (pesée par son bilan ; aucun bilan → 0)
+  if (typeof _mktOn === 'function' && _mktOn()) { let v = _mktVote(pair); if (Math.abs(v) < 0.03) v = 0; add('marche', _dcMerit(S.dcVoices && S.dcVoices.marche), v); }
   const fin = A => { A.top.sort((x, y) => Math.abs(y.c) - Math.abs(x.c)); return { C: A.den > 0 ? Math.max(-1, Math.min(1, A.num / A.den)) : 0, n: A.n, den: A.den, top: A.top.slice(0, 3) }; };
   const O = fin(P.o), H = fin(P.h), mode = _vjMode(), L = (mode === 'hz') ? H : O;
   try { const ps = S.pairStates && S.pairStates[pair]; if (ps) ps._dcVj = { t: Date.now(), v: snap, C1: O.C, Ch: H.C }; } catch (e) {}
@@ -6517,11 +6523,13 @@ function _dcForwardJudge(pair, ps) {
       try { learnFromOutcome('cycle', mv, pair); } finally { window.__voteOverride = null; }
     }
     _dcJudgeComposite(snap.comp, mv, 0.7);
+    if (typeof snap.mk === 'number' && typeof _dcJudgeMarket === 'function') _dcJudgeMarket(snap.mk, mv, 0.7);   // [MARCHÉ RÉPARÉ · 30/09/2026] le prix du marché, jugé comme le composite
     return 1;
   } catch (e) { try { window.__voteOverride = null; } catch (_e) {} return 0; }
 }
 function _dcSnapVotes(pair, ps, composite) {
   try { ps._voteSnap = { px: ps.price, t: Date.now(), votes: Object.assign({}, (ps.roster && ps.roster.votes) || {}), comp: (typeof composite === 'number' && isFinite(composite)) ? composite : null }; } catch (e) {}
+  try { if (typeof _mktOn === 'function' && _mktOn()) ps._voteSnap.mk = _mktVote(pair); } catch (e) {}   // [MARCHÉ RÉPARÉ · 30/09/2026] le prix de la manche de CE cycle (après les mises), jugé au prochain
 }
 // ═══ [SEUIL APPRIS · 27/09/2026] LE NIVEAU DE CONSENSUS QUI PAIE LES FRAIS — APPRIS, PLUS POSÉ À LA MAIN (go Rams 27/09 14:46) ═══
 // Avant : pour ouvrir, la décision commune devait passer des portes posées à la main par régime (conviction 0,35 / 0,25 / 0,18, sens
@@ -7154,6 +7162,178 @@ function _fitHzFirst() {
     return true;
   } catch (e) { try { window._decErr && window._decErr(e); } catch (_e) {} return false; }
 }
+// ═══ [MARCHÉ RÉPARÉ · 30/09/2026] LE MARCHÉ DES AGENTS, TEL QU'IL A ÉTÉ CONÇU (go Rams 30/09 04:05) ═══
+// La conception fondatrice (AURA8_REFERENCE_MASTER) : avant chaque cycle, les agents parient leurs T$ sur la hausse ou la baisse de CHAQUE paire ;
+// le prix LMSR (b = 100, q_yes = q_no = 100 → 50 %) est la conviction collective ; après résolution du cycle, les paris justes gagnent des T$, les
+// autres en perdent. Ce qui tournait avant ce commit (diagnostic du 29/09) : chaque agent misait la même chose sur toutes les paires (a.score, son
+// biais global, 08 toutes les 6 s), personne n'était jamais payé, le marché ne revenait à 50/50 qu'à la fermeture d'un trade (plus aucun depuis le
+// 27/09), le prix était un rapport qYes / (qYes + qNo) poussé en plus par le rendu (08) et par la décision elle-même (10f) : les 12 marchés
+// saturaient en bloc (29/09, EV : 78 à 98 % de hausse sur toutes les paires) et le Bot Scalper, qui vote par ce prix, était à la butée 96 % du temps.
+// Maintenant, en EV / RE (AA garde l'ancien marché : bac à sable, rien n'y est jugé) — une MANCHE par paire et par bougie close :
+//  · ouverture (10f, à chaque cycle de la paire, juste après le roster frais de LA paire) — seulement si le dernier prix réel a moins de 2 min et
+//    que la bougie close n'est pas un bouche-trou (mêmes conditions que le trade virtuel, _thNote) : q = 100 / 100 (50 %) ; chaque agent qui vote
+//    sur la paire (|vote| ≥ 0,03, comme dans la décision commune ; bots et méta n'y votent pas ici) mise, dans un ordre tiré au sort à chaque
+//    manche, pour amener le prix à SA croyance p = 0,5 + vote / 2 : il achète des parts OUI si le prix est sous p, des parts NON au-dessus, au vrai
+//    coût LMSR, avec au plus 8 % de ses T$ répartis sur les paires actives du mode (budget atteint avant p : il s'arrête au budget) ;
+//  · résolution, au cycle suivant de la paire : à la clôture de la bougie qui était EN COURS à l'ouverture — clôture au-dessus du prix réel
+//    d'ouverture : chaque part OUI paie 1 T$ ; en dessous : chaque part NON. Manche nulle, chaque mise rendue : clôture égale, bougie jamais
+//    reçue (4 bougies de retard) ou clôture pas sûre — bougie suivie d'un bouche-trou ou d'un trou (même règle que les trades virtuels : sa
+//    « clôture » serait le dernier prix avant la coupure). Puis le marché repart de 50/50 et la manche suivante s'ouvre. Une manche ouverte tard
+//    dans sa bougie (cycle en retard : reprise de l'app, fin de pause) a un horizon court — assumé, l'horizon de chaque manche est journalisé ;
+//  · les T$ restent au siège (a.mktWallet) : sa fitness au premier pari (la dotation d'origine : T$ = fitness), puis SEULEMENT ses mises et ses
+//    gains — plus de remise à la fitness. Qui voit juste a plus de T$, mise plus, donc pèse plus sur le prix. À la naissance d'un génome (07) : sa
+//    fitness de naissance, génération suivante (a.mktGen) ; une mise encore ouverte du génome retiré n'est ni payée ni rendue au nouveau-né ;
+//  · lmsrP (02) rend en EV / RE le prix de la manche ouverte, 1 / (1 + e^((qNo − qYes) / b)) — le vrai prix LMSR ; hors manche : 50 % ;
+//  · le prix devient une VOIX de la décision commune (« marche », vote = (prix − 0,5) × 2), pesée par son bilan et jugée comme le composite : à la
+//    bougie suivante (_dcForwardJudge) et aux 5 horizons (_vjNote, avec toutes les voix).
+// Constantes FONDATRICES, pas apprises (la simulation d'origine) : b = 100, q = 100 / 100, mise 8 % des T$ réparties sur les paires, manche d'une
+// bougie. Personne d'autre n'écrit plus le marché d'une paire en EV / RE : ni les ordres de 08, ni le rendu (08), ni la décision (10f : poussée vers
+// elle, décroissance, remise à 50/50 à la fermeture). Et la cadence à laquelle une paire EV / RE regarde si sa bougie est close ne se règle plus sur
+// ce prix (syncPairPresets : AA seulement ; 10f la règle sur la conviction de la décision).
+// Rejeu avant livraison (app réelle en accéléré, 81 h, 9 fenêtres de 9 h, 2 tirages, ce code ; chaque fenêtre part d'un backup d'avant, donc sans T$ : ils y repartent de la fitness) : tirage 1 : 0 trades, net 0 $ ; tirage 2 : 0 trades, net 0 $ ; 0 erreur. 7162 manches (6670 soldées, 492 nulles — mises rendues), 9 mises par manche (médiane ; 2 à 15), horizon médian 15 min ; prix de la manche de 0,419 à 0,590 (5e-95e centiles ; extrêmes 0,318-0,719), aucun au-delà de 10 / 90 % (avant, en EV : 78 à 98 % sur toutes les paires, en bloc). Ce que vaut le prix : erreur (Brier) 0,2566 contre 0,250 pour pile ou face (écart +0,0066 ± 0,0015, 26 créneaux de 4 h), bon sens 47 % — il ne prévoit pas mieux que les votes qu'il agrège (les agents : 45 à 54 % au rejeu du 27/09) ; son bilan le met à 0 dans la décision dans 12 fenêtres sur 18. Décision commune (pesée aux horizons), net %/trade à 15 min, 30 min, 1 h, 2 h, 4 h : −0,291 / −0,293 / −0,272 / −0,246 / −0,134 (20260928d, même rejeu : −0,297 / −0,298 / −0,271 / −0,213 / −0,066). Bot Scalper : 142 votes (20260928d : 3776, dont 58 % à la butée) ; Scalper (siège) : 164 votes (20260928d : 2762).
+// T$ gardés d'une fenêtre à l'autre, comme dans l'app (simulation sur les mêmes manches, mêmes votes, mêmes issues, fonctions réelles de ce code) : tirage 1 : erreur 0,2521 (T$ remis à chaque fenêtre, le rejeu : 0,2564 ; mise égale : 0,2537), 58 % des T$ aux trois plus riches ; tirage 2 : erreur 0,2525 (T$ remis à chaque fenêtre, le rejeu : 0,2567 ; mise égale : 0,2534), 58 % des T$ aux trois plus riches ; les T$ vont d'abord à volume_v1, security_v1, sentiment_v2, quittent swing_v2, corr_v1, onchain_v1 — le marché se corrige vers pile ou face, sans le battre (un prix constant au taux de hausse des 81 h ferait 0,2483).
+var MKT_B = 100, MKT_Q0 = 100, MKT_STAKE = 0.08;
+var MKT_LOG_MAX = 1000;   // mémoire (pas une limite de marché) : les dernières manches soldées (≈ 10 h à 12 paires dans les deux modes), pour le rejeu — les compteurs de l'écran, eux, sont cumulés (S.mktStats)
+function _mktOn() { return !!(typeof S !== 'undefined' && S && (S.tradingMode === 'paperReal' || S.tradingMode === 'real')); }
+// Prix et coût LMSR (stables : pas d'exponentielle qui déborde)
+function _mktPrice(qY, qN) { const d = (Number(qN) - Number(qY)) / MKT_B; return isFinite(d) ? 1 / (1 + Math.exp(d)) : 0.5; }
+function _mktCost(qY, qN) { const m = Math.max(qY, qN); return m + MKT_B * Math.log(Math.exp((qY - m) / MKT_B) + Math.exp((qN - m) / MKT_B)); }
+// Le prix lu par lmsrP en EV / RE : la manche ouverte de la paire, 50 % sinon
+function _mktP(ps) { return (ps && ps.mkt && ps.mkt.open) ? _mktPrice(ps.qYes, ps.qNo) : 0.5; }
+// Les T$ d'un siège : sa fitness au premier pari (dotation d'origine), puis seulement ses mises et ses gains
+function _mktWallet(a) { if (!a) return 0; if (typeof a.mktWallet !== 'number' || !isFinite(a.mktWallet)) a.mktWallet = Math.max(0, Number(a.fitness) || 0); return a.mktWallet; }
+function _mktNPairs() {
+  try {
+    const A = (S.tradingMode === 'real') ? S.realActivePairs : S.paperRealActivePairs;
+    const n = A ? Object.keys(A).filter(p => A[p]).length : 0;
+    return n > 0 ? n : Math.max(1, Object.keys((typeof PAIRS !== 'undefined' && PAIRS) || {}).length);
+  } catch (e) { return 1; }
+}
+// Une mise : amener le prix de la paire à la croyance p = 0,5 + vote / 2, sans dépasser le budget. Achète des parts OUI (prix < p) ou NON (prix > p).
+// Parts pour atteindre p : Δ = q_autre + b·ln(p / (1 − p)) − q_soi ; parts que paie le budget B : C(q + Δ) = C(q) + B, résolu exactement.
+function _mktBet(ps, v, budget) {
+  const x = Math.max(-1, Math.min(1, Number(v))), B = Number(budget);
+  if (!(Math.abs(x) > 0) || !(B > 0) || !ps) return null;
+  const p = 0.5 + x / 2, qY = Number(ps.qYes), qN = Number(ps.qNo);
+  if (!isFinite(qY) || !isFinite(qN)) return null;
+  const P = _mktPrice(qY, qN), C0 = _mktCost(qY, qN);
+  let yes = 0, no = 0;
+  if (p > P) {
+    const toP = (p >= 1) ? Infinity : qN + MKT_B * Math.log(p / (1 - p)) - qY;
+    const toB = C0 + B + MKT_B * Math.log1p(-Math.exp((qN - C0 - B) / MKT_B)) - qY;
+    yes = Math.max(0, Math.min(toP, toB));
+  } else if (p < P) {
+    const toP = (p <= 0) ? Infinity : qY + MKT_B * Math.log((1 - p) / p) - qN;
+    const toB = C0 + B + MKT_B * Math.log1p(-Math.exp((qY - C0 - B) / MKT_B)) - qN;
+    no = Math.max(0, Math.min(toP, toB));
+  }
+  if (!isFinite(yes) || !isFinite(no) || !(yes > 0 || no > 0)) return null;
+  const cost = _mktCost(qY + yes, qN + no) - C0;
+  if (!(cost > 0) || !isFinite(cost)) return null;
+  ps.qYes = qY + yes; ps.qNo = qN + no;
+  return { yes: yes, no: no, cost: cost };
+}
+function _mktStats(m) {
+  if (!S.mktStats || typeof S.mktStats !== 'object') S.mktStats = { since: Date.now() };
+  const k = (m === 'R') ? 'R' : 'E';
+  if (!S.mktStats[k] || typeof S.mktStats[k] !== 'object') S.mktStats[k] = { n: 0, v: 0, b: 0, br: 0, d: 0, ok: 0, up: 0, vol: 0, paid: 0 };
+  return S.mktStats[k];
+}
+// Ouverture d'une manche (ps = la paire DU MODE traité) : 50/50, puis chaque agent qui vote sur la paire mise SON vote, dans un ordre tiré au sort.
+function _mktOpen(pair, ps, now) {
+  if (ps.mkt && ps.mkt.open) return 0;   // une manche à la fois
+  const px = (typeof _rcLastPrice === 'function') ? Number(_rcLastPrice(pair)) : 0;
+  if (!(px > 0) || (typeof _rcPriceAge === 'function' && _rcPriceAge(pair) > 120000)) return 0;   // prix figé (> 2 min) : pas de manche
+  const k = S.realPairCycle && S.realPairCycle[pair]; if (!(k > 0)) return 0;
+  const tf = _thTf(), f = _thTfMs(tf);
+  const arr = (S.realCandles && S.realCandles[pair] && S.realCandles[pair][tf]) || [];
+  const ik = _thCandle(arr, k), last = arr[arr.length - 1];
+  if (ik < 0 || arr[ik]._gap || !last || last._gap) return 0;   // bougie close inconnue ou bouche-trou : pas de prix sûr
+  const x = Number(last.ts); if (!(x > k)) return 0;   // la manche se solde à la clôture de la bougie EN COURS
+  const prev = (ps.mkt && !ps.mkt.open && ps.mkt.t) ? { P: ps.mkt.P, out: ps.mkt.out, n: ps.mkt.n } : null;
+  const votes = (ps.roster && ps.roster.votes) || {};
+  ps.qYes = MKT_Q0; ps.qNo = MKT_Q0;
+  const R = { open: true, t: now, p0: px, tf: tf, f: f, x: x, m: (S.tradingMode === 'real') ? 'R' : 'E', pos: {}, n: 0, vol: 0, prev: prev };
+  ps.mkt = R;
+  const who = (S.agents || []).filter(a => a && !a.isBot && !a.isMeta && typeof a.id === 'string' && typeof votes[a.id] === 'number' && isFinite(votes[a.id]) && Math.abs(votes[a.id]) >= 0.03);
+  for (let i = who.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); const t = who[i]; who[i] = who[j]; who[j] = t; }
+  const nP = _mktNPairs();
+  who.forEach(a => {
+    const w = _mktWallet(a), qY = ps.qYes, qN = ps.qNo, r = _mktBet(ps, votes[a.id], w * MKT_STAKE / nP);
+    if (!r) return;
+    const c = Math.round(r.cost * 10000) / 10000;
+    if (!(c > 0)) { ps.qYes = qY; ps.qNo = qN; return; }   // mise trop petite pour compter (T$ presque épuisés) : rien acheté
+    a.mktWallet = w - c;
+    R.pos[a.id] = [Math.round(r.yes * 10000) / 10000, Math.round(r.no * 10000) / 10000, c, Number(a.mktGen) || 0];   // parts OUI, parts NON, mise, génération du siège
+    R.n++; R.vol = Math.round((R.vol + c) * 10000) / 10000;
+  });
+  return R.n;
+}
+// Résolution : la bougie de sortie (x) est close → les parts justes paient 1 T$ ; bouche-trou, jamais reçue ou clôture égale → mises rendues.
+// Rend 1 (hausse), −1 (baisse), 0 (nulle) ; null si la manche attend encore sa bougie (ou s'il n'y en a pas).
+function _mktSettle(pair, ps, now) {
+  const R = ps && ps.mkt; if (!R || !R.open) return null;
+  const arr = (S.realCandles && S.realCandles[pair] && S.realCandles[pair][R.tf]) || [];
+  const j = _thCandle(arr, R.x);
+  let out;
+  if (j >= 0 && j < arr.length - 1) {
+    // clôture sûre seulement si la bougie suivante est là, contiguë et pas un bouche-trou (même règle que _thWalk : une bougie suivie d'un
+    // bouche-trou ou d'un trou a pour « clôture » le dernier prix avant la coupure, pas sa vraie clôture) — sinon manche nulle
+    const c = Number(arr[j].c), nx = arr[j + 1], sure = !arr[j]._gap && c > 0 && nx && !nx._gap && Number(nx.ts) === R.x + R.f;
+    out = !sure ? 0 : (c > R.p0 ? 1 : (c < R.p0 ? -1 : 0));
+  }
+  else if (now > R.x + 4 * R.f) out = 0;
+  else return null;
+  const P = _mktPrice(ps.qYes, ps.qNo); let paid = 0;
+  (S.agents || []).forEach(a => {
+    const q = a && R.pos && R.pos[a.id]; if (!q) return;
+    if ((Number(a.mktGen) || 0) !== (Number(q[3]) || 0)) return;   // mise d'un génome retiré depuis (07 : génération suivante) : ni payée ni rendue au nouveau-né
+    const pay = (out === 0) ? q[2] : (out > 0 ? q[0] : q[1]);
+    a.mktWallet = _mktWallet(a) + pay; paid += pay;
+    if (out !== 0) { a.mktGain = Math.round(((Number(a.mktGain) || 0) + pay - q[2]) * 10000) / 10000; a.mktN = (Number(a.mktN) || 0) + 1; }
+  });
+  const st = _mktStats(R.m);
+  if (out === 0) st.v++;
+  else {
+    st.n++; if (out > 0) st.up++;
+    if (R.n > 0) { st.b++; st.br += Math.pow(P - (out > 0 ? 1 : 0), 2); st.vol += R.vol; st.paid += paid; if (Math.abs(P - 0.5) > 1e-9) { st.d++; if ((P > 0.5) === (out > 0)) st.ok++; } }
+  }
+  if (!Array.isArray(S.mktLog)) S.mktLog = [];
+  S.mktLog.push([Math.round(R.t / 1000), R.m, pair, Math.round(P * 1000), out, R.n, R.vol, Math.round((R.x + R.f - R.t) / 1000)]);   // …, horizon (s)
+  if (S.mktLog.length > MKT_LOG_MAX) S.mktLog.splice(0, S.mktLog.length - MKT_LOG_MAX);
+  ps.qYes = MKT_Q0; ps.qNo = MKT_Q0;
+  ps.mkt = { open: false, t: R.t, x: R.x, P: Math.round(P * 1000) / 1000, out: out, n: R.n, vol: R.vol };
+  return out;
+}
+// Le cycle d'une paire (10f, EV / RE) : la manche en cours se solde si sa bougie est close, puis la suivante s'ouvre.
+function _mktCycle(pair, ps) {
+  try {
+    if (!_mktOn() || !ps) return 0;
+    const now = Date.now();
+    _mktSettle(pair, ps, now);
+    return _mktOpen(pair, ps, now);
+  } catch (e) { try { window._decErr && window._decErr(e); } catch (_e) {} return 0; }
+}
+// La voix du marché dans la décision commune : (prix − 0,5) × 2 de la manche ouverte de la paire (0 sans manche ou sans mise).
+function _mktVote(pair) {
+  try {
+    const ps = S.pairStates && S.pairStates[pair], R = ps && ps.mkt;
+    if (!R || !R.open || !(R.n > 0)) return 0;
+    return (_mktPrice(ps.qYes, ps.qNo) - 0.5) * 2;
+  } catch (e) { return 0; }
+}
+// Jugée comme le composite : sens du prix au moment de la photo des votes contre le mouvement survenu ensuite (EV / RE seulement).
+function _dcJudgeMarket(mk, movePct, decay) {
+  try {
+    if (!_mktOn()) return false;
+    if (!(typeof mk === 'number' && Math.abs(mk) > 0.05) || !(Math.abs(Number(movePct)) > 0)) return false;
+    const modeW = (S.tradingMode === 'real') ? 5 : 3;
+    _fitJudge(_dcVoice('marche'), ((movePct > 0) === (mk > 0)) ? 1 : -1, Math.abs(mk) * Math.abs(movePct) * modeW * (decay || 0.7));
+    return true;
+  } catch (e) { return false; }
+}
+window._mktOn = _mktOn; window._mktPrice = _mktPrice; window._mktCost = _mktCost; window._mktP = _mktP; window._mktWallet = _mktWallet; window._mktBet = _mktBet;
+window._mktOpen = _mktOpen; window._mktSettle = _mktSettle; window._mktCycle = _mktCycle; window._mktVote = _mktVote; window._dcJudgeMarket = _dcJudgeMarket; window._mktStats = _mktStats;
 window._thNote = _thNote; window._thJudge = _thJudge; window._thEval = _thEval; window._thRefresh = _thRefresh; window._thLevel = _thLevel; window._thPick = _thPick; window._thHzLab = _thHzLab; window._thCrit = _thCrit; window._thRule = _thRule;
 window._vjNote = _vjNote; window._vjRefresh = _vjRefresh; window._dcMeritHz = _dcMeritHz; window._vjMode = _vjMode; window._vjReset = _vjReset;   // [BILAN AUX HORIZONS · 27/09/2026]
 window._vjE = _vjE; window._fitHz = _fitHz; window._fitCurrent = _fitCurrent; window._fjMode = _fjMode; window._fitPicks = _fitPicks; window._fitHzFirst = _fitHzFirst;   // [FITNESS AUX HORIZONS · 28/09/2026]
