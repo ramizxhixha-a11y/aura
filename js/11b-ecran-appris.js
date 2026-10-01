@@ -1,3 +1,4 @@
+// [HORLOGE PAR MODE · 01/10/2026] VERSION 20261001a · section « Marché des agents » : manches suivies (même pas de temps : l'autre mode avait déjà ouvert la manche de la bougie — même prix, sans mise ; les T$ se jouent une fois par bougie)
 // [MARCHÉ RÉPARÉ · 30/09/2026] VERSION 20260930a · section « Marché des agents » (manches soldées / nulles, erreur du prix contre pile ou face, bon sens, T$ misés / rendus, prix de chaque paire, qui pèse le plus sur le prix, poids de sa voix) ; « Poids des voix » nomme la voix du marché ; « Fitness des sièges » : colonne T$ du marché (l'ancienne colonne devient « marché AA »)
 // [OPÉRATEUR APPRIS · 28/09/2026] VERSION 20260928d · section « Évolution apprise » : les trois sources de naissance (évolutions, écart moyen, état : prouvée bénéfique, nuisible écartée jusqu'au …, à juger), politique en cours (« naissances : … ») ; colonne « source » des observations
 // [ÉVOLUTION APPRISE · 28/09/2026] VERSION 20260928c · section « Évolution apprise » : niveaux prouvés (gain / nuisance) ou repli posé à la main, observations (fitness à l'évolution, écart, déclencheur), queues jugées
@@ -135,7 +136,7 @@ function _learnedPanelHtml() {
     h += row([{ t: mkL + ' : ' + MSt.n + ' manches soldées · ' + MSt.v + ' nulles (mises rendues)', w: '1.2fr', s: 'font-weight:600;' },
       { t: brT === null ? 'aucune mise encore' : ('erreur du prix (Brier) ' + brT.toFixed(3) + ' — pile ou face : 0,250'), w: '1.4fr', s: 'color:' + (brT !== null && brT < 0.25 ? '#00e87a' : '#ffd166') + ';' },
       { t: MSt.d ? ('bon sens ' + pcT(MSt.ok / MSt.d) + ' des ' + MSt.d + ' manches où il penchait') : '—', w: '1.2fr', s: 'color:#889;' }]);
-    h += row([{ t: 'T$ misés ' + kT(MSt.vol) + ' · rendus aux agents ' + kT(MSt.paid) + ' (' + sgT((MSt.paid || 0) - (MSt.vol || 0)) + ')', w: '2fr', s: 'color:#889;' },
+    h += row([{ t: 'T$ misés ' + kT(MSt.vol) + ' · rendus aux agents ' + kT(MSt.paid) + ' (' + sgT((MSt.paid || 0) - (MSt.vol || 0)) + ')' + (MSt.fw ? ' · dont ' + MSt.fw + ' manches suivies (prix de l\'autre mode, sans mise)' : ''), w: '2fr', s: 'color:#889;' },   // [HORLOGE PAR MODE · 01/10/2026]
       { t: 'hausses ' + pcT((MSt.up || 0) / Math.max(1, MSt.n)) + ' des manches', w: '1fr', s: 'color:#889;' }]);
   }
   var mkPairs = (mkM === 'R') ? Object.keys(S.realActivePairs || {}).filter(function (p) { return S.realActivePairs[p]; }) : _lrnActivePairs();   // RE : ses paires
@@ -146,7 +147,7 @@ function _learnedPanelHtml() {
       var Pn = (R && R.open && typeof _mktPrice === 'function') ? _mktPrice(ps.qYes, ps.qNo) : null;
       var L = R ? (R.open ? R.prev : R) : null;
       h += row([{ t: p.replace('/USDT', ''), w: '1fr', s: 'color:' + col + ';font-weight:600;' },
-        { t: Pn === null ? '—' : (pcT(Pn) + ' hausse · ' + R.n + ' mise' + (R.n > 1 ? 's' : '') + ' (' + kT(R.vol) + ' T$)'), w: '1.5fr', s: 'color:' + (Pn === null ? '#556' : Pn > 0.5 ? '#00e87a' : Pn < 0.5 ? '#ff8fb1' : '#889') + ';' },
+        { t: Pn === null ? '—' : (pcT(Pn) + ' hausse · ' + (R.fw ? ('suivie : prix de l\'autre mode (' + R.n + ' mise' + (R.n > 1 ? 's' : '') + ')') : (R.n + ' mise' + (R.n > 1 ? 's' : '') + ' (' + kT(R.vol) + ' T$)'))), w: '1.5fr', s: 'color:' + (Pn === null ? '#556' : Pn > 0.5 ? '#00e87a' : Pn < 0.5 ? '#ff8fb1' : '#889') + ';' },
         { t: L ? (pcT(L.P) + ' → ' + (L.out > 0 ? 'hausse' : L.out < 0 ? 'baisse' : 'nulle')) : '—', w: '1.3fr', s: 'color:#889;' }]);
     });
   }

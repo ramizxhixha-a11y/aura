@@ -97,8 +97,8 @@ T('M3 · consensus (_dcConsensus) : Σ bilan × voix / Σ bilan de TOUTES les vo
 T('M4 · bilan SUR L\'AVENIR : _dcForwardJudge juge les votes du cycle PRÉCÉDENT (instantané) sur le mouvement survenu depuis — l\'agent est lu tel qu\'il votait alors (_agentPairVote), pas son vote d\'aujourd\'hui ; le composite est jugé pareil ; _dcSnapVotes garde les votes et le composite de maintenant', () => {
   const seen = [];
   const t = mk({ lfo: (src, mv, pair) => { seen.push([src, Math.round(mv * 1000) / 1000, pair, t.c._agentPairVote({ id: 'a1' }, pair, 9), t.c._agentPairVote({ id: 'a2' }, pair, 9), t.c._agentPairVote({ id: 'a1' }, 'ETH/USDT', 7)]); } });
-  const ps = { price: 101, roster: { votes: { a1: -0.4, a2: 0.2 } }, _voteSnap: { px: 100, t: 0, votes: { a1: 0.5 }, comp: 0.4 } };
-  t.S.pairStates['SOL/USDT'] = ps;
+  const ps = { price: 101, roster: { votes: { a1: -0.4, a2: 0.2 } }, _voteSnap: { px: 100, t: 0, votes: { a1: 0.5 }, comp: 0.4, k: 900000 * 2000, tf: '15m' } };   // [HORLOGE PAR MODE · 01/10/2026] la photo porte sa bougie ; jugée à la suivante
+  t.S.pairStates['SOL/USDT'] = ps; t.S.realPairCycle = { 'SOL/USDT': 900000 * 2001 };
   assert.strictEqual(t.run("_dcForwardJudge('SOL/USDT', S.pairStates['SOL/USDT'])"), 1);
   assert.deepStrictEqual(seen, [['cycle', 1, 'SOL/USDT', 0.5, 0, 7]], 'vote du cycle précédent (a1 0,5 ; a2 absent → 0) ; une autre paire garde sa lecture normale');
   assert.strictEqual(t.c.window.__voteOverride, null, 'remis à zéro');

@@ -1,3 +1,4 @@
+// [HORLOGE PAR MODE · 01/10/2026] VERSION 20261001a · la dernière bougie close vue par paire (S.realPairCycle) est rangée dans le portefeuille de CHAQUE mode (accesseur, comme pairStates) : EV et RE ont chacun leur cycle à chaque bougie close — avant, une seule horloge pour les deux, la première porte prenait la bougie ; remise à zéro de l'horloge d'un mode quand son pas de temps change (setPaperRealTimeframe / setRealTimeframe) et, pour EV et RE, au retour pré-réel
 // [MARCHÉ RÉPARÉ · 30/09/2026] VERSION 20260930a · lmsrP : en EV / RE, le vrai prix LMSR de la manche ouverte de la paire (03 _mktP : 1 / (1 + e^((qNo − qYes) / 100))), 50 % hors manche — AA garde l'ancien rapport qYes / (qYes + qNo)
 // [DÉCISION COMMUNE · 27/09/2026] VERSION 20260927g · à la fermeture, les agents (et le composite) sont jugés sur leurs votes À L'OUVERTURE (pos._votes, pos._comp), plus sur ceux de la fin qui avaient vu tout le trajet
 // [MISE AU MÉRITE · 27/09/2026] VERSION 20260927b · le trade d'un bot est jugé en % de résultat (même unité que ses affirmations) — la mise au mérite lit une seule unité
@@ -310,7 +311,7 @@ const S = {
   realTimeframe: '15m',         // intervalle décisions bot en mode real
   realActivePairs: {},          // { 'BTC/USDT': true, ... }  paires actives en mode real
   agentLessonsReal: [],         // mémoire d'apprentissage SÉPARÉE en mode real
-  realPairCycle: {},            // { 'BTC/USDT': lastTsClosed }  pour détecter nouvelles bougies
+  realPairCycle: {},            // { 'BTC/USDT': lastTsClosed }  pour détecter nouvelles bougies — [HORLOGE PAR MODE · 01/10/2026] devient un accesseur PAR MODE (_WALLET_ACCESSOR_FIELDS, plus bas) : cette valeur de départ est remplacée par celle du portefeuille du mode
   realKillSwitch: {},           // { 'BTC/USDT': { paused:false, lossStreak:0, reason:'' } }
   realModeStartedAt: 0,         // timestamp d'activation du mode real
   // v7.12 LIVRAISON 6 · STATS PAR PAIRE EN MODE REAL
@@ -2865,6 +2866,7 @@ function togglePaperRealPair(pair) {
 window.togglePaperRealPair = togglePaperRealPair;
 
 function setPaperRealTimeframe(tf) {
+  if (S.paperRealTimeframe !== tf) { try { _walletFor('paperReal').realPairCycle = {}; } catch (e) {} }   // [HORLOGE PAR MODE · 01/10/2026] l'horloge d'EV comptait les bougies de l'ancien pas de temps (sinon : pas de cycle jusqu'à ce qu'une bougie du nouveau la dépasse — jusqu'à 37 h en 1 jour)
   S.paperRealTimeframe = tf;
   if (typeof renderSettingsPanel === 'function') {
     try { renderSettingsPanel(); } catch(e) {}
@@ -2943,6 +2945,7 @@ window.confirmSwitchToPaperReal = confirmSwitchToPaperReal;
 
 // Choix du timeframe pour les décisions du bot en mode real
 function setRealTimeframe(tf) {
+  if (S.realTimeframe !== tf) { try { _walletFor('real').realPairCycle = {}; } catch (e) {} }   // [HORLOGE PAR MODE · 01/10/2026] idem pour RE
   S.realTimeframe = tf;
   if (typeof renderSettingsPanel === 'function') {
     try { renderSettingsPanel(); } catch(e) {}
@@ -3098,7 +3101,7 @@ function confirmRollbackPreReal() {
     S.realActivePairs = {};
     S.realStatsByPair = {};
     S.realKillSwitch = {};
-    S.realPairCycle = {};
+    ['paperReal', 'real'].forEach(function (_m) { try { _walletFor(_m).realPairCycle = {}; } catch (e) {} });   // [HORLOGE PAR MODE · 01/10/2026] les horloges EV et RE (avant : S.realPairCycle = {}, une seule pour les deux ; ici le mode est déjà AA)
     S.realModeStartedAt = 0;
     // Effacer aussi les états Réel (sauf la mémoire d'apprentissage)
     S.paperRealActivePairs = {};
@@ -6586,6 +6589,8 @@ function _freshWallet() {
     fees:{ totalTradingFees:0, totalFunding:0, totalSlippage:0, totalGross:0, totalTaxProvision:0, totalPnlGross:0, totalPnlNet:0, tradeCount:0, feeReserveAccount:0, feeLog:[], byPair:{} },
     // — SEPARATION COMPLETE : positions ouvertes PAR MODE —
     openPositions:[],
+    // — [HORLOGE PAR MODE · 01/10/2026] dernière bougie close vue, par paire ({ 'BTC/USDT': ts }) : chaque mode (EV, RE) a son cycle à chaque bougie close —
+    realPairCycle:{},
     // — SEPARATION COMPLETE : etat bunker PAR MODE (la config reste dans S.bunkerCfg) —
     bunker:{ active:false, capRef:0, startCapital:0, triggerTs:0, pausedByBunker:false },
     // — execution —
@@ -6686,7 +6691,11 @@ var _WALLET_ACCESSOR_FIELDS = [
   '_autoLevBase','_autoLevBorrowed','antiNegReserve','totalTrades','winTrades',
   'cashLog','fiscalReserveLog','ownFundsLog','antiNegReserveLog',
   'pairStates','fees','dreamJournal',
-  'openPositions','pnlHistory','pnl24h','pnlPeriod','bunker'
+  'openPositions','pnlHistory','pnl24h','pnlPeriod','bunker',
+  // [HORLOGE PAR MODE · 01/10/2026] la dernière bougie close vue par paire : PAR MODE (avant : une seule pour EV et RE — la première porte qui
+  // la voyait prenait la bougie, l'autre mode n'avait pas de cycle ; 03 en-tête de _dcFwdFirst). Les portes 10g (EV) et 08 (RE) et les
+  // lecteurs de 03 (_thNote, _vjNote, _mktOpen) lisent S.realPairCycle comme avant : c'est désormais celui du mode traité.
+  'realPairCycle'
 ];
 function _installWalletAccessors() {
   if (typeof S === 'undefined' || !S) return;

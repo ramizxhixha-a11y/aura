@@ -1,3 +1,4 @@
+// [HORLOGE PAR MODE · 01/10/2026] VERSION 20261001a · EV et RE ont chacun leur cycle à chaque bougie close (02) ; ce qui est appris d'une bougie l'est une fois, sur un seul pas de temps — même pas de temps : le premier mode qui arrive note (trade virtuel, votes aux horizons), juge les votes à la bougie suivante (_dcFwdFirst) et joue la manche du marché, l'autre suit son prix sans miser ; deux pas de temps : bilan des voix, jugement et marché suivent le plus court des modes en jeu (_thBrainF : en marche ou affiché), le seuil reste par pas de temps (_thNote : + le pas de temps) ; une photo des votes n'est jugée que sur les 4 bougies qui la suivent au plus
 // [MARCHÉ RÉPARÉ · 30/09/2026] VERSION 20260930a · le marché des agents tel qu'il a été conçu (EV / RE) : une manche par paire et par bougie close — chaque agent mise ses T$ sur SON vote de la paire (croyance 0,5 + vote / 2, au plus 8 % de ses T$ répartis sur les paires actives), vrai prix LMSR (b = 100, départ 50/50), solde à la clôture de la bougie en cours (part juste = 1 T$ ; manche nulle = mises rendues), puis 50/50 ; les T$ restent au siège (plus de remise à la fitness) ; le prix = voix « marche » de la décision commune, jugée comme le composite (_mktCycle, _mktOpen, _mktSettle, _mktBet, _mktVote, _dcJudgeMarket) ; clôture sûre seulement si la bougie suivante est là, contiguë, pas un bouche-trou (sinon nulle) ; syncPairPresets : la cadence de lecture d'une paire ne suit plus le prix en EV / RE
 // [OPÉRATEUR APPRIS · 28/09/2026] VERSION 20260928d · la source de chaque naissance (07) est choisie parmi trois — R recombinaison avec la meilleure version passée + mutation (l'opérateur d'avant, byte-identique), B retour à la meilleure version passée du siège telle quelle, M mutation seule — et jugée sur les mêmes essais que l'évolution apprise (_genomeEvolve(…, op), _evoOpStats, _evoOpPick) : source prouvée bénéfique → c'est elle (une naissance sur deux aux sources encore à juger) ; source prouvée nuisible écartée, la preuve tenue jusqu'à 5 jours après sa plus jeune observation (une naissance libre de la source la rend aux données) ; sinon rotation par siège (B seulement si le siège a une version passée complète où revenir). L'observation de la règle porte la source (index 7) ; écran 🧠 Appris
 // [ÉVOLUTION APPRISE · 28/09/2026] VERSION 20260928c · les déclencheurs de l'évolution (03 : plus faible sous 150 tout de suite, tous les 15 cycles, sous 300 tous les 8 cycles ; 08 : sous 300, stagnation sous 400) lisent une règle apprise sur ce que les évolutions ont rapporté (essai nouveau génome contre ancien, une observation par évolution jugée : fitness du siège à l'évolution, écart, créneau de 4 h, déclencheur) — gain prouvé sous un niveau F* : tout siège de fitness ≤ F* est recyclable tout de suite (le gain ÉTEND ; au-dessus de F*, rien n'est prouvé : les nombres posés à la main restent) ; nuisance prouvée sous H* : plus d'évolution automatique d'un siège ≤ H* tant que la preuve tient (elle meurt avec ses données : 5 jours au plus sans nouvelle observation) — le plus faible RECYCLABLE est recyclé ; rien de prouvé : les nombres posés à la main, tels quels (repli). Même preuve que le seuil (_thEval) ; observations gardées 5 jours (S.evoRule, persisté)
@@ -6512,12 +6513,69 @@ function _dcJudgeComposite(comp, movePct, decay) {
     return true;
   } catch (e) { return false; }
 }
+// ═══ [HORLOGE PAR MODE · 01/10/2026] CHAQUE MODE SON HORLOGE DES BOUGIES (go Rams 01/10 20:51) ═══
+// Avant : EV et RE partageaient la mémoire de la dernière bougie close vue par paire (S.realPairCycle, portes 10g et 08) : chaque bougie close
+// d'une paire ne faisait tourner le cycle que dans le PREMIER des deux modes à la regarder — en pratique presque toujours le même pour une paire
+// donnée (celui dont la cadence de lecture était la plus courte). Backup du 29/09 (EV et RE en marche, 15 min) : dernier cycle EV de BTC le
+// 28/09 à 21:00, dernier cycle RE d'ETH le 29/09 à 09:15. L'autre mode ne décidait plus rien sur la paire (ni ouverture, ni sortie du cycle) et
+// son marché n'y ouvrait aucune manche ; avec deux pas de temps (EV 15 min, RE 1 h), le plus long n'avait presque plus aucun cycle. Maintenant
+// (02) : l'horloge est rangée dans le portefeuille de chaque mode (accesseur, comme pairStates), remise à zéro quand le pas de temps du mode
+// change — chaque mode a son cycle à chaque bougie close de chacune de ses paires, et décide sur elle.
+// Le cerveau est commun aux deux modes : ce qui est APPRIS d'une bougie l'est une seule fois, sur un seul pas de temps.
+//  · Même pas de temps : le premier des deux modes qui arrive à la bougie la note et la juge — trade virtuel de la décision (_thNote) et votes
+//    aux horizons (_vjNote) une fois par (paire, bougie) comme avant ; jugement des votes à la bougie suivante (_dcForwardJudge : fitness,
+//    compétence par paire, essai de l'Évolueur, composite, marché) une fois par (paire, bougie de la photo) (_dcFwdFirst) ; la manche du
+//    marché est jouée par le premier, l'autre suit son prix sans miser (03 _mktOpen) : les T$ se jouent une fois par bougie.
+//  · Deux pas de temps : le bilan des voix aux horizons, le jugement à la bougie suivante et le marché se tiennent sur le plus COURT des modes réels
+//    en jeu — en marche, ou affiché (le battement traite toujours le mode affiché) : _thBrainF. Leurs cases sont comptées en bougies : 15 min et 1 h
+//    s'y mêleraient. Le mode au pas le plus long décide sur ses bougies avec ce que le cerveau sait, sans manche de marché (sa voix « marché » et
+//    celle du Bot Scalper s'abstiennent) ; ses votes notés avant que l'autre entre en jeu ne sont pas versés au bilan des voix (_vjJudge). Règle
+//    globale, pas par paire : une paire active dans le seul mode au pas le plus long n'est pas apprise (prudence : rien ne se mêle). Le seuil
+//    appris, lui, est tenu par pas de temps : chaque mode note ses décisions sur ses bougies (_thNote : le pas de temps entre dans le test, une
+//    note 1 h n'est plus refusée par la note 15 min de la même heure, qui attend ses horizons jusqu'à 4 h).
+//  · Une photo des votes n'est jugée que sur les 4 bougies qui la suivent au plus (1 h en 15 min ; la même limite que les trades virtuels et les
+//    manches) : une photo plus ancienne (app gelée des heures, mode qui n'avait plus de cycle) ou d'un autre pas de temps n'est plus jugée — avant,
+//    une photo de 11 à 24 h (backup du 29/09, paires privées de cycle) l'aurait été sur 11 à 24 h de mouvement, avec un poids proportionnel au
+//    mouvement. App en arrière-plan ralentie (battement de 15 à 80 s le 29/09) : ses cycles restent jugés tant qu'ils sont à moins de 4 bougies.
+//    Photo d'avant cette version (sans sa bougie) : pas jugée, une fois.
+// Rejeu avant livraison (app réelle en accéléré, 81 h, 9 fenêtres de 9 h, 2 tirages, EV et RE en marche ensemble en 15 min — la configuration de Rams le 29/09 ; code d'avant contre ce code, mêmes fenêtres) : avant : tirage 1 0 trades, net 0 $, tirage 2 0 trades, net 0 $ ; ce code : tirage 1 0 trades, net 0 $, tirage 2 0 trades, net 0 $ ; 0 erreur. Bougies closes eues par chaque mode : avant, EV 52 % et RE 51 % (par paire, sur les 18 fenêtres : EV LINK 32 %, ADA 37 %, XRP 49 %, DOT 49 %, DOGE 50 %, SOL 56 %, ETH 73 %, PEPE 75 %, BTC 78 %, AVAX 83 %, EUR 100 %, BNB 100 % ; RE PEPE 54 %, DOGE 56 %, AVAX 59 %, ETH 63 %, SOL 64 %, DOT 69 %, XRP 76 %, LINK 78 %, BTC 79 %, ADA 85 %) et sur 6500 bougies des paires des deux modes, 0 vues par les deux, 6320 par un seul, 180 par aucun ; avec ce code, EV 97 % et RE 97 %, 6320 vues par les deux sur 6500 (les 180 autres : la dernière bougie de chaque fenêtre, close à la fin du rejeu — avant comme après). Ce qui est appris : jugements à la bougie suivante 6 801 → 6 859 (même bougie jugée deux fois : 0 → 0), votes notés aux horizons 7 366 → 7 366, trades virtuels jugés 4 465 → 4 460 ; manches du marché EV / RE 3948 / 3339 → 7386 (3034) / 6537 (3503) (entre parenthèses : suivies, sans mise), T$ misés 209 514 → 217 971.
+function _thBrainF() {   // le pas de temps (ms) qui nourrit le cerveau : le plus court des modes réels en jeu
+  let best = Infinity;
+  try {
+    const disp = (typeof window !== 'undefined' && window.AuraChrono && typeof window.AuraChrono.getCurrentMode === 'function') ? window.AuraChrono.getCurrentMode() : null;
+    ['paperReal', 'real'].forEach(m => {
+      const inPlay = m === S.tradingMode || m === disp || (typeof _isModeRunning === 'function' && _isModeRunning(m));
+      if (!inPlay) return;
+      const f = _thTfMs(m === 'real' ? (S.realTimeframe || '15m') : (S.paperRealTimeframe || '15m'));
+      if (f < best) best = f;
+    });
+  } catch (e) {}
+  return best;
+}
+function _thBrainTf() {   // le mode traité nourrit-il le cerveau ?
+  try { return !_thRealLike() || _thTfMs(_thTf()) <= _thBrainF(); } catch (e) { return true; }
+}
+var DC_FWD_KEEP = 96;   // mémoire (pas une limite de marché) : les dernières bougies jugées par paire (≈ 24 h en 15 min)
+function _dcFwdFirst(pair, k) {
+  const T = _thState();
+  if (!T.fwdK || typeof T.fwdK !== 'object') T.fwdK = {};
+  const L = Array.isArray(T.fwdK[pair]) ? T.fwdK[pair] : (T.fwdK[pair] = []);
+  if (L.indexOf(k) >= 0) return false;   // déjà jugée (par l'autre mode)
+  L.push(k); if (L.length > DC_FWD_KEEP) L.splice(0, L.length - DC_FWD_KEEP);
+  return true;
+}
 function _dcForwardJudge(pair, ps) {
   try {
     const snap = ps && ps._voteSnap, px = ps && ps.price;
     if (!(snap && snap.px > 0 && px > 0)) return 0;
     const mv = (px - snap.px) / snap.px * 100;
     if (!(Math.abs(mv) > 0)) return 0;
+    if (_thRealLike()) {   // [HORLOGE PAR MODE · 01/10/2026] ce qui est appris d'une bougie l'est une fois, sur un seul pas de temps
+      if (!_thBrainTf()) return 0;   // l'autre mode, en marche sur un pas de temps plus court, nourrit le cerveau
+      const kNow = S.realPairCycle && S.realPairCycle[pair];
+      if (!(snap.k > 0) || snap.tf !== _thTf() || !(kNow > snap.k) || kNow - snap.k > 4 * _thTfMs(snap.tf)) return 0;   // photo d'avant cette version, d'un autre pas de temps, de cette bougie-ci ou de plus de 4 bougies : pas jugée
+      if (!_dcFwdFirst(pair, snap.k)) return 0;   // l'autre mode a déjà jugé les votes de cette bougie
+    }
     if (snap.votes && typeof learnFromOutcome === 'function') {
       window.__voteOverride = { pair: pair, votes: snap.votes };
       try { learnFromOutcome('cycle', mv, pair); } finally { window.__voteOverride = null; }
@@ -6530,6 +6588,7 @@ function _dcForwardJudge(pair, ps) {
 function _dcSnapVotes(pair, ps, composite) {
   try { ps._voteSnap = { px: ps.price, t: Date.now(), votes: Object.assign({}, (ps.roster && ps.roster.votes) || {}), comp: (typeof composite === 'number' && isFinite(composite)) ? composite : null }; } catch (e) {}
   try { if (typeof _mktOn === 'function' && _mktOn()) ps._voteSnap.mk = _mktVote(pair); } catch (e) {}   // [MARCHÉ RÉPARÉ · 30/09/2026] le prix de la manche de CE cycle (après les mises), jugé au prochain
+  try { if (_thRealLike()) { const k = S.realPairCycle && S.realPairCycle[pair]; if (k > 0) { ps._voteSnap.k = k; ps._voteSnap.tf = _thTf(); } } } catch (e) {}   // [HORLOGE PAR MODE · 01/10/2026] la bougie de la photo (jugée une fois, _dcFwdFirst)
 }
 // ═══ [SEUIL APPRIS · 27/09/2026] LE NIVEAU DE CONSENSUS QUI PAIE LES FRAIS — APPRIS, PLUS POSÉ À LA MAIN (go Rams 27/09 14:46) ═══
 // Avant : pour ouvrir, la décision commune devait passer des portes posées à la main par régime (conviction 0,35 / 0,25 / 0,18, sens
@@ -6671,7 +6730,7 @@ function _thNote(pair, signal, capPct, capPctC) {
     const ik = _thCandle(arr, k), last = arr[arr.length - 1];
     if (ik < 0 || arr[ik]._gap || !last || last._gap) return false;   // bougie close inconnue ou bouche-trou : pas de prix sûr
     const T = _thState();
-    if (T.pend.some(q => q.p === pair && q.k === k)) return false;
+    if (T.pend.some(q => q.p === pair && q.k === k && q.tf === tf)) return false;   // [HORLOGE PAR MODE · 01/10/2026] + le pas de temps : EV et RE notent chacun leur bougie
     if (T.pend.length >= TH_PEND_MAX) return false;   // garde mémoire : on refuse les nouveaux, jamais ceux qui arrivent à terme
     const tn = Date.now(), s0 = Math.floor(tn / f) * f, cap = Math.min(3, Math.max(1.5, Number(capPct) || 2));   // sans stop connu : 2 %, comme _lossCapSweep
     // l'entrée tombe dans la bougie en cours : ses extrêmes d'AVANT l'entrée sont gardés, seuls les nouveaux compteront pour la perte max
@@ -6888,6 +6947,7 @@ function _thPick(c) {
 function _vjNote(pair, capL, capS) {
   try {
     if (!_thRealLike()) return false;
+    if (!_thBrainTf()) return false;   // [HORLOGE PAR MODE · 01/10/2026] l'autre mode, en marche sur un pas de temps plus court, tient le bilan des voix (cases comptées en bougies)
     const ps = S.pairStates && S.pairStates[pair], sn = ps && ps._dcVj;
     if (!sn || !Array.isArray(sn.v) || !sn.v.length || !(Math.abs(Date.now() - sn.t) < 60000)) return false;   // les votes de CE cycle
     const px = (typeof _rcLastPrice === 'function') ? Number(_rcLastPrice(pair)) : 0;
@@ -6923,7 +6983,7 @@ function _vjJudge(T) {
   try {
   if (!T.pendV.length) return 0;
   const cost = (typeof _ownStakeCostPct === 'function') ? Number(_ownStakeCostPct()) || 0 : 0, now = Date.now();
-  const KEEP = (typeof FIT_KEEP !== 'undefined') ? FIT_KEEP : 240, keep = [], dm = {}, dmF = {}, touched = {}; let nJ = 0;   // gardés comme les jugements de la fitness (240) ; lus sur la fenêtre apprise (_dcMeritHz)
+  const KEEP = (typeof FIT_KEEP !== 'undefined') ? FIT_KEEP : 240, keep = [], dm = {}, dmF = {}, touched = {}, brainF = _thBrainF(); let nJ = 0;   // gardés comme les jugements de la fitness (240) ; lus sur la fenêtre apprise (_dcMeritHz)
   T.pendV.forEach(q => {
     try {   // une entrée abîmée (restauration) est signalée et retirée : la file continue
     if (!q || !q.L || !q.S || !Array.isArray(q.v) || !Array.isArray(q.a) || !Array.isArray(q.L.n) || !Array.isArray(q.S.n) || !Array.isArray(q.L.x) || !Array.isArray(q.S.x)) throw new Error('bilan aux horizons : entrée abîmée ' + (q && q.p));
@@ -6935,7 +6995,7 @@ function _vjJudge(T) {
       q.a[i] = 1;
       if (typeof a !== 'number' || typeof b !== 'number') return;   // abandonné d'un côté : ne juge personne
       const D = (a - b) / 2, Di = Math.round(D * 10000);
-      q.v.forEach(e => {
+      if (q.f === brainF) q.v.forEach(e => {   // [HORLOGE PAR MODE · 01/10/2026] versé au bilan des voix seulement au pas de temps du cerveau (une note d'un autre pas, faite avant que l'autre mode n'entre en jeu, ne se mêle pas)
         const id = T.vIds[e[0]]; if (typeof id !== 'string' || Math.abs(e[1]) < 30) return;
         const Jv = (Array.isArray(T.vHz[id]) && T.vHz[id].length === TH_HZ.length) ? T.vHz[id] : (T.vHz[id] = TH_HZ.map(() => []));
         if (!Array.isArray(Jv[i])) Jv[i] = [];   // record abîmé : régénéré, la passe continue
@@ -7236,7 +7296,7 @@ function _mktBet(ps, v, budget) {
 function _mktStats(m) {
   if (!S.mktStats || typeof S.mktStats !== 'object') S.mktStats = { since: Date.now() };
   const k = (m === 'R') ? 'R' : 'E';
-  if (!S.mktStats[k] || typeof S.mktStats[k] !== 'object') S.mktStats[k] = { n: 0, v: 0, b: 0, br: 0, d: 0, ok: 0, up: 0, vol: 0, paid: 0 };
+  if (!S.mktStats[k] || typeof S.mktStats[k] !== 'object') S.mktStats[k] = { n: 0, v: 0, b: 0, br: 0, d: 0, ok: 0, up: 0, vol: 0, paid: 0, fw: 0 };   // fw : manches suivies (prix de l'autre mode, sans mise)
   return S.mktStats[k];
 }
 // Ouverture d'une manche (ps = la paire DU MODE traité) : 50/50, puis chaque agent qui vote sur la paire mise SON vote, dans un ordre tiré au sort.
@@ -7251,6 +7311,15 @@ function _mktOpen(pair, ps, now) {
   if (ik < 0 || arr[ik]._gap || !last || last._gap) return 0;   // bougie close inconnue ou bouche-trou : pas de prix sûr
   const x = Number(last.ts); if (!(x > k)) return 0;   // la manche se solde à la clôture de la bougie EN COURS
   const prev = (ps.mkt && !ps.mkt.open && ps.mkt.t) ? { P: ps.mkt.P, out: ps.mkt.out, n: ps.mkt.n } : null;
+  // [HORLOGE PAR MODE · 01/10/2026] les T$ se jouent une fois par bougie : l'autre mode, en marche sur un pas de temps plus court, tient le marché ;
+  // sur le même pas de temps, s'il a déjà ouvert la manche de cette bougie (même bougie de sortie), on suit son prix — mêmes parts, même voix — sans miser
+  if (!_thBrainTf()) return 0;
+  const oth = (S.tradingMode === 'real') ? 'paperReal' : 'real', ows = S.walletStore && S.walletStore[oth], ops = ows && ows.pairStates && ows.pairStates[pair], L = ops && ops.mkt;
+  if (L && L.open && !L.fw && L.tf === tf && L.x === x && isFinite(ops.qYes) && isFinite(ops.qNo)) {
+    ps.qYes = ops.qYes; ps.qNo = ops.qNo;
+    ps.mkt = { open: true, fw: 1, t: now, p0: L.p0, tf: tf, f: f, x: x, m: (S.tradingMode === 'real') ? 'R' : 'E', pos: {}, n: L.n, vol: 0, prev: prev };
+    return 0;
+  }
   const votes = (ps.roster && ps.roster.votes) || {};
   ps.qYes = MKT_Q0; ps.qNo = MKT_Q0;
   const R = { open: true, t: now, p0: px, tf: tf, f: f, x: x, m: (S.tradingMode === 'real') ? 'R' : 'E', pos: {}, n: 0, vol: 0, prev: prev };
@@ -7295,11 +7364,11 @@ function _mktSettle(pair, ps, now) {
   const st = _mktStats(R.m);
   if (out === 0) st.v++;
   else {
-    st.n++; if (out > 0) st.up++;
+    st.n++; if (out > 0) st.up++; if (R.fw) st.fw = (Number(st.fw) || 0) + 1;
     if (R.n > 0) { st.b++; st.br += Math.pow(P - (out > 0 ? 1 : 0), 2); st.vol += R.vol; st.paid += paid; if (Math.abs(P - 0.5) > 1e-9) { st.d++; if ((P > 0.5) === (out > 0)) st.ok++; } }
   }
   if (!Array.isArray(S.mktLog)) S.mktLog = [];
-  S.mktLog.push([Math.round(R.t / 1000), R.m, pair, Math.round(P * 1000), out, R.n, R.vol, Math.round((R.x + R.f - R.t) / 1000)]);   // …, horizon (s)
+  S.mktLog.push([Math.round(R.t / 1000), R.m, pair, Math.round(P * 1000), out, R.n, R.vol, Math.round((R.x + R.f - R.t) / 1000), R.fw ? 1 : 0]);   // …, horizon (s), suivie (1 : prix de l'autre mode, sans mise)
   if (S.mktLog.length > MKT_LOG_MAX) S.mktLog.splice(0, S.mktLog.length - MKT_LOG_MAX);
   ps.qYes = MKT_Q0; ps.qNo = MKT_Q0;
   ps.mkt = { open: false, t: R.t, x: R.x, P: Math.round(P * 1000) / 1000, out: out, n: R.n, vol: R.vol };
@@ -7338,7 +7407,7 @@ window._thNote = _thNote; window._thJudge = _thJudge; window._thEval = _thEval; 
 window._vjNote = _vjNote; window._vjRefresh = _vjRefresh; window._dcMeritHz = _dcMeritHz; window._vjMode = _vjMode; window._vjReset = _vjReset;   // [BILAN AUX HORIZONS · 27/09/2026]
 window._vjE = _vjE; window._fitHz = _fitHz; window._fitCurrent = _fitCurrent; window._fjMode = _fjMode; window._fitPicks = _fitPicks; window._fitHzFirst = _fitHzFirst;   // [FITNESS AUX HORIZONS · 28/09/2026]
 window._botView = _botView; window._dcMerit = _dcMerit; window._dcConsensus = _dcConsensus; window._dcVoice = _dcVoice;
-window._dcForwardJudge = _dcForwardJudge; window._dcSnapVotes = _dcSnapVotes; window._dcJudgeComposite = _dcJudgeComposite;
+window._dcForwardJudge = _dcForwardJudge; window._dcSnapVotes = _dcSnapVotes; window._dcJudgeComposite = _dcJudgeComposite; window._dcFwdFirst = _dcFwdFirst; window._thBrainTf = _thBrainTf; window._thBrainF = _thBrainF;
 window._botPredict = _botPredict; window._botMeritAudit = _botMeritAudit; window._botJudgeMeasured = _botJudgeMeasured; window._botJudge = _botJudge;
 window._botAtrPct = _botAtrPct; window._botHasOpenClaim = _botHasOpenClaim; window._botAlreadyActing = _botAlreadyActing; window._botStakeMult = _botStakeMult;
 

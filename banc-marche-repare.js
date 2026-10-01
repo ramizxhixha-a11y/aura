@@ -142,7 +142,7 @@ T('M3 · résolution (réelle) : bougie de sortie close — hausse : chaque part
     near(a.mktWallet + second, x.before[id].w + q[0], 1e-9, id + ' : payé de ses parts OUI (1 T$ chacune)'); near(a.mktGain, q[0] - q[2], 1e-9, id + ' : gain = paiement − mise'); assert.strictEqual(a.mktN, 1); paid += q[0]; });
   const st = x.t.S.mktStats.E; assert.ok(st && x.t.S.mktStats.since > 0);
   assert.deepStrictEqual([st.n, st.v, st.b, st.up, st.d, st.ok], [1, 0, 1, 1, 1, x.P > 0.5 ? 1 : 0]); near(st.br, Math.pow(x.P - 1, 2), 1e-12, 'Brier'); near(st.vol, x.R.vol, 1e-9); near(st.paid, paid, 1e-9);
-  assert.deepStrictEqual(J(x.t.S.mktLog), [[Math.round((T0 + 60000) / 1000), 'E', PAIR, Math.round(x.P * 1000), 1, 3, x.R.vol, (F - 60000) / 1000]], 'journal : …, horizon 14 min');
+  assert.deepStrictEqual(J(x.t.S.mktLog), [[Math.round((T0 + 60000) / 1000), 'E', PAIR, Math.round(x.P * 1000), 1, 3, x.R.vol, (F - 60000) / 1000, 0]], 'journal : …, horizon 14 min, pas suivie');   // [HORLOGE PAR MODE · 01/10/2026] 9e champ : manche suivie (0)
   near(x.t.run('_mktCost(S.pairStates["' + PAIR + '"].qYes, S.pairStates["' + PAIR + '"].qNo)') - C0(x.t), x.ps.mkt.vol, 1e-3, 'nouvelle manche repartie de 50/50');
   // baisse
   x = settle(99.5);
@@ -208,7 +208,8 @@ T('M5 · décision commune (réelle) : le prix de la manche est une voix (« mar
   t.S.tradingMode = 'paperReal'; t.run('_dcSnapVotes("' + PAIR + '", S.pairStates["' + PAIR + '"], 0.3)'); near(ps._voteSnap.mk, 0.2, 1e-12); assert.strictEqual(ps._voteSnap.comp, 0.3);
   t.S.tradingMode = 'sim'; t.run('_dcSnapVotes("' + PAIR + '", S.pairStates["' + PAIR + '"], 0.3)'); assert.ok(!('mk' in ps._voteSnap), 'AA : pas de mk');
   // jugement à la bougie suivante
-  const judge = (mode, mk, mv) => { t.S.tradingMode = mode; t.S.dcVoices = {}; ps._voteSnap = { px: 100, t: 0, votes: {}, comp: null, mk: mk }; ps.price = 100 * (1 + mv / 100); t.run('_dcForwardJudge("' + PAIR + '", S.pairStates["' + PAIR + '"])'); return J((t.S.dcVoices.marche && t.S.dcVoices.marche._judgments) || []); };
+  let kk = T0;   // [HORLOGE PAR MODE · 01/10/2026] la photo porte sa bougie, jugée à la bougie suivante (sans elle, en EV / RE : pas jugée)
+  const judge = (mode, mk, mv) => { kk += F; t.S.realPairCycle[PAIR] = kk + F; t.S.tradingMode = mode; t.S.dcVoices = {}; ps._voteSnap = { px: 100, t: 0, votes: {}, comp: null, mk: mk, k: kk, tf: '15m' }; ps.price = 100 * (1 + mv / 100); t.run('_dcForwardJudge("' + PAIR + '", S.pairStates["' + PAIR + '"])'); return J((t.S.dcVoices.marche && t.S.dcVoices.marche._judgments) || []); };
   let js = judge('paperReal', 0.2, 1); assert.strictEqual(js.length, 1); assert.strictEqual(js[0].s, 1); near(js[0].w, 0.2 * 1 * 3 * 0.7, 1e-9, 'poids = |vote| × |mouvement| × 3 (EV) × 0,7');
   js = judge('paperReal', 0.2, -1); assert.strictEqual(js[0].s, -1, 'mauvais sens');
   js = judge('real', -0.3, -2); assert.strictEqual(js[0].s, 1); near(js[0].w, 0.3 * 2 * 5 * 0.7, 1e-9, 'RE : × 5');
@@ -276,7 +277,7 @@ T('M8 · écran 11b (réel, lecture seule) : « Marché des agents » — manche
   const P6 = 100 + 100 * Math.log(1.5);
   const S = { tradingMode: 'paperReal', paperRealActivePairs: { 'SOL/USDT': true, 'BTC/USDT': true, 'ETH/USDT': true }, tradeContextMemory: [], capRules: {}, _lossStreaks: {}, eventStats: {},
     pairStates: { 'SOL/USDT': { qYes: P6, qNo: 100, mkt: { open: true, n: 5, vol: 12.3456, prev: { P: 0.42, out: -1, n: 4 } } }, 'BTC/USDT': { qYes: 100, qNo: 100, mkt: { open: false, t: 1, P: 0.555, out: 0, n: 2, vol: 3 } }, 'ETH/USDT': { qYes: 100, qNo: 100 } },
-    mktStats: { since: 1, E: { n: 40, v: 3, b: 38, br: 38 * 0.2345, d: 30, ok: 18, up: 21, vol: 1520.4, paid: 1480.2 } },
+    mktStats: { since: 1, E: { n: 40, v: 3, b: 38, br: 38 * 0.2345, d: 30, ok: 18, up: 21, vol: 1520.4, paid: 1480.2, fw: 5 } },   // [HORLOGE PAR MODE · 01/10/2026] fw : manches suivies
     agents: [{ id: 'a1', name: 'Momentum Alpha', fitness: 1350, mktWallet: 2210.4, mktGain: 310.2, mktN: 38, _judgments: [] }, { id: 'a2', name: 'On-chain', fitness: 50, mktWallet: 40.4, mktGain: -12.6, mktN: 30, _judgments: [] },
       { id: 'a3', name: 'Trend', fitness: 400, _judgments: [] }, { id: 'b', name: 'Scalper', isBot: true, fitness: 500, mktWallet: 99999 }],
     dcVoices: { marche: { id: 'marche', _judgments: [] } },
@@ -288,7 +289,7 @@ T('M8 · écran 11b (réel, lecture seule) : « Marché des agents » — manche
   assert.strictEqual(JSON.stringify(S), before, 'lecture seule');
   const seg = h.slice(h.indexOf('MARCHÉ DES AGENTS'), h.indexOf('FITNESS DES SIÈGES')), txt = seg.replace(/<[^>]+>/g, '|');
   assert.ok(seg.length > 0 && h.indexOf('POIDS DES VOIX') < h.indexOf('MARCHÉ DES AGENTS'), 'section après « Poids des voix »');
-  ['40 manches soldées · 3 nulles (mises rendues)', 'erreur du prix (Brier) 0.234 — pile ou face : 0,250', 'bon sens 60 % des 30 manches où il penchait', 'T$ misés 1.5 k · rendus aux agents 1.5 k (−40)', 'hausses 53 % des manches',
+  ['40 manches soldées · 3 nulles (mises rendues)', 'erreur du prix (Brier) 0.234 — pile ou face : 0,250', 'bon sens 60 % des 30 manches où il penchait', 'T$ misés 1.5 k · rendus aux agents 1.5 k (−40) · dont 5 manches suivies (prix de l\'autre mode, sans mise)', 'hausses 53 % des manches',
     '60 % hausse · 5 mises (12 T$)', '42 % → baisse', '56 % → nulle', 'Momentum 2.2 k (+310)', 'On-chain 40 (−13)', 'bougie 0.37 · horizons 0.21'].forEach(k => assert.ok(txt.includes(k), 'absent : ' + k + '\n' + txt.slice(0, 1500)));
   assert.ok(!txt.includes('Scalper') && !txt.includes('100.0 k'), 'un bot n\'a pas de T$ de marché ici (il ne mise pas)');
   assert.ok(/\|SOL\|/.test(txt) && /\|ETH\|\|—\|\|—\|/.test(txt), 'paire sans manche : —');
@@ -305,15 +306,15 @@ T('M8 · écran 11b (réel, lecture seule) : « Marché des agents » — manche
 
 T('M9 · textes : en-têtes 02, 03, 07, 08, 09b1, 09b2, 10f, 11b (VERSION 20260930a) ; HTML : 81 × 20260930a, plus de 20260928d ; constantes fondatrices dites telles (b = 100, q0 = 100, 8 %) ; plus aucun écrivain du marché hors AA et les manches dans js/', () => {
   const H = '// [MARCHÉ RÉPARÉ · 30/09/2026] VERSION 20260930a';
-  [s02, s03, s07, s08, s9b1, s9b2, s10f, s11].forEach((s, i) => assert.ok(s.startsWith(H), 'en-tête ' + i));
-  assert.strictEqual(html.split('20260930a').length - 1, 81); assert.strictEqual(html.split('20260928d').length - 1, 0);
+  [s02, s03, s07, s08, s9b1, s9b2, s10f, s11].forEach((s, i) => assert.ok(s.split('\n').slice(0, 2).some(l => l.startsWith(H)), 'en-tête ' + i));   // [HORLOGE PAR MODE · 01/10/2026] 02 et 03 relivrés : en-tête MARCHÉ RÉPARÉ en 2e ligne
+  assert.strictEqual(html.split('20261001a').length - 1, 81); assert.strictEqual(html.split('20260930a').length - 1, 0); assert.strictEqual(html.split('20260928d').length - 1, 0);   // [HORLOGE PAR MODE · 01/10/2026] HTML relivré au jeton 20261001a
   assert.ok(MKT.startsWith('var MKT_B = 100, MKT_Q0 = 100, MKT_STAKE = 0.08;') && s03.includes('Constantes FONDATRICES, pas apprises (la simulation d\'origine) : b = 100, q = 100 / 100, mise 8 % des T$'));
   // tout js/ chargé : qui écrit qYes / qNo ? 02 (lmsrBuyYes / No : AA), 03 (manches), 08 (rendu : AA, gardé), 10f (gardés) — rien d'autre
   const files = html.match(/src="js\/[^"?]+/g).map(x => x.slice(5));
   const w = {}; files.forEach(f => codeStrict(rd(f)).split('\n').forEach(l => { if (/\.q(Yes|No)\s*(=(?!=)|\+=|-=)/.test(l)) (w[f] = w[f] || []).push(l.trim()); }));
   assert.deepStrictEqual(Object.keys(w).sort(), ['js/02-state-init.js', 'js/03-per-pair-position-buttons-controls-buid.js', 'js/08-learning-history-render.js', 'js/10f-resolveur-cycle.js'], JSON.stringify(Object.keys(w)));
   assert.ok(w['js/02-state-init.js'].every(l => /^ps\.q(Yes|No)\+=delta; return cost;$/.test(l)), '02 : lmsrBuyYes / No (AA) seulement');
-  assert.ok(w['js/03-per-pair-position-buttons-controls-buid.js'].every(l => /MKT_Q0|qY \+ yes|qN \+ no|ps\.qYes = qY; ps\.qNo = qN;/.test(l)), '03 : les manches seulement : ' + JSON.stringify(w['js/03-per-pair-position-buttons-controls-buid.js']));
+  assert.ok(w['js/03-per-pair-position-buttons-controls-buid.js'].every(l => /MKT_Q0|qY \+ yes|qN \+ no|ps\.qYes = qY; ps\.qNo = qN;|ps\.qYes = ops\.qYes; ps\.qNo = ops\.qNo;/.test(l)), '03 : les manches seulement : ' + JSON.stringify(w['js/03-per-pair-position-buttons-controls-buid.js']));
   const inj = codeStrict(between(s08, '  // ── Inject composite into LMSR + nudge agents for ALL pairs ──', '  // [S3 · 03/09/2026]', false));
   assert.strictEqual(w['js/08-learning-history-render.js'].length, 4); assert.ok(w['js/08-learning-history-render.js'].every(l => inj.includes(l)), '08 : l\'injection du rendu (gardée) seulement');
 });
