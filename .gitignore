@@ -1,0 +1,5 @@
+# [OUTILS · 02/10/2026] sorties et données du rejeu : jamais dans le dépôt (un backup contient l'état réel de l'app ; les sorties pèsent des centaines de Mo)
+rejeu/out/
+rejeu/backups/
+rejeu/code_*/
+rejeu/marche/

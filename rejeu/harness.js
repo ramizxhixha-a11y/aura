@@ -1,7 +1,6 @@
-// [DÉCISION COMMUNE · 27/09/2026] VERSION 20260927g · outil de REJEU avant livraison (principe de Rams : chaque organe de décision est rejoué sur la
-// mémoire du système avant d'être livré). Lancer : node rejeu/run_variant.js <nom> <dossier du code à rejouer> [graine] [fenêtres 1-9] — les
-// chemins des backups (run_variant.js : /mnt/user-data/uploads + le backup du 27/09) sont ceux de la session du 27/09 : à adapter. Sorties :
-// rejeu/out/*.json ; bilan : python3 rejeu/compare.py <nom>_s<graine> ; voix (avec OBSERVE=1) : python3 rejeu/analyse_voix.py <nom>_s<graine>.
+// [OUTILS · 02/10/2026] VERSION 20261002a · outil de REJEU avant livraison (principe de Rams : chaque organe de décision est rejoué sur la mémoire du système avant d'être
+// livré) — version à jour (EV + RE ensemble, journaux des voix, du seuil appris, du marché, de l'évolution), sauvée du bac à sable de la session :
+// la copie du dépôt datait du 27/09. Mode d'emploi : PASSATION-AURA8.md, « Démarrage de session », point 8.
 // harness.js — REJEU DU SYSTÈME RÉEL sur une fenêtre de bougies réelles, sous horloge simulée.
 // Le code servi (--root) est l'app telle quelle (AURA8_v118.html + js/). État de départ = backup k−1 (--prev), bougies = celles du
 // backup k (--cur) : aucune donnée du futur dans l'état de départ. L'horloge (Date) et les minuteries (setTimeout/setInterval) de
@@ -17,7 +16,9 @@ const args = {}; for (let i = 2; i < process.argv.length; i += 2) args[process.a
 const ROOT = args.root, PREV = args.prev, CUR = args.cur, OUT = args.out;
 const WARM = Number(args.warm || 20), PORT = Number(args.port || 8801), TAG = args.tag || path.basename(ROOT);
 const HOURS = args.hours ? Number(args.hours) : null;
-const SEED = Number(args.seed || 1), WUP = Number(args.wup || 4), OBS = args.observe === '1';   // graine du hasard de la page ; bougies de rodage (moteur en marche, non comptées)
+const SEED = Number(args.seed || 1), WUP = Number(args.wup || 4), OBS = args.observe === '1';
+const MODES = String(args.modes || 'ev');   // [HORLOGE PAR MODE] 'ev' (défaut, comme avant) ou 'evre' : EV + RE en marche ensemble, comme l'app de Rams
+const THF = (args.thforce !== undefined) ? Number(args.thforce) : -1;   // essai mécanique : horizon d'indice THF « prouvé » par des trades virtuels fabriqués (jamais pour mesurer)   // graine du hasard de la page ; bougies de rodage (moteur en marche, non comptées)
 const CANDLE = 900000;
 if (!ROOT || !PREV || !CUR || !OUT) { console.error('args'); process.exit(2); }
 
@@ -138,7 +139,7 @@ const FLAGS = ['aura_assainissement_v1', 'aura_delev_20260818_v2', 'aura_etage1_
   await page.evaluate(() => { try { S.pendingActions = []; S._botPredictions = []; ['sim', 'paperReal', 'real'].forEach(m => { if (S.walletStore && S.walletStore[m]) S.walletStore[m].openPositions = []; }); } catch (e) {} });
   for (let i = 0; i < 150; i++) { await page.evaluate(() => window.__advanceTo(window.__now() + 1000)); if (i % 10 === 0) await page.waitForTimeout(3); }
   // ── préparation de la fenêtre ──
-  const setup = await page.evaluate(({ pairs, hist, t0 }) => {
+  const setup = await page.evaluate(({ pairs, hist, t0, MODES }) => {
     const out = { dropped: 0 };
     window.__dropTimers(t => t.every && t.every < 1000);   // minuteries d'interface < 1 s (appui long…)
     try { S.tradingMode = 'paperReal'; } catch (e) {}
@@ -157,6 +158,14 @@ const FLAGS = ['aura_assainissement_v1', 'aura_delev_20260818_v2', 'aura_etage1_
       try { window._aggregateRealPrice(p, px, t0); } catch (e) {}
       if (W.pairStates[p]) W.pairStates[p].price = px;
     });
+    // [HORLOGE PAR MODE] RE en marche aussi (arrière-plan), mêmes paires, 15 min — la configuration réelle de Rams (backup 29/09)
+    if (MODES === 'evre') { try { _setModeRunning('real', true); S.realActivePairs = {}; pairs.forEach(p => { S.realActivePairs[p] = true; }); S.realTimeframe = '15m'; S.realKillSwitch = {};
+      const WR = S.walletStore.real; WR.openPositions = []; pairs.forEach(p => { const a = S.realCandles[p]['15m'], px = a[a.length - 1].c; if (WR.pairStates && WR.pairStates[p]) WR.pairStates[p].price = px; }); out.re = true; } catch (e) { out.reErr = String(e); } }
+    // [HORLOGE PAR MODE] chaque cycle de paire (mode, paire, bougie close de l'horloge lue à l'instant) et chaque jugement à la bougie suivante (learnFromOutcome 'cycle', mouvement non nul)
+    try { const _rc = window._resolvePairCycleCore; window._resolvePairCycleCore = function (pair, ps) { try { (window.__cyc = window.__cyc || []).push([S.tradingMode === 'real' ? 'R' : S.tradingMode === 'paperReal' ? 'E' : 'A', pair, (S.realPairCycle && S.realPairCycle[pair]) || 0, Date.now(), window.__thNoteOnly ? 1 : 0]); } catch (e) {} return _rc(pair, ps); }; } catch (e) { out.wrapErr = String(e); }
+    try { const _lf = window.learnFromOutcome; window.learnFromOutcome = function (src, pnl, pair) { try { if (src === 'cycle' && Math.abs(Number(pnl)) > 0) (window.__lfo = window.__lfo || []).push([S.tradingMode === 'real' ? 'R' : 'E', pair, Date.now(), Math.round(Number(pnl) * 10000) / 10000]); } catch (e) {} return _lf.apply(this, arguments); }; } catch (e) { out.wrapErr2 = String(e); }
+    // [HORLOGE PAR MODE] une sauvegarde de cette version porte l'horloge de chaque mode et la marque des bougies jugées : on rejoue de vieilles bougies → effacées
+    try { ['paperReal', 'real'].forEach(m => { if (S.walletStore && S.walletStore[m]) S.walletStore[m].realPairCycle = {}; }); if (S.dcThreshold) S.dcThreshold.fwdK = {}; } catch (e) { out.clrErr = String(e); }
     try { _projectRealCandles(); } catch (e) { out.projErr = String(e); }
     // pas d'écriture disque pendant le rejeu (lente, et hors sujet)
     ['saveState', 'saveStateNow', '_saveStateDebounced', 'scheduleSave'].forEach(n => { if (typeof window[n] === 'function') window[n] = function () {}; });
@@ -165,10 +174,18 @@ const FLAGS = ['aura_assainissement_v1', 'aura_delev_20260818_v2', 'aura_etage1_
     out.pairs = Object.keys(W.pairStates).filter(p => pairs.includes(p));
     out.timers = window.__timerCount();
     return out;
-  }, { pairs, hist, t0 });
-  await page.evaluate(({ t0 }) => {
+  }, { pairs, hist, t0, MODES });
+  await page.evaluate(({ t0, THF }) => {
     window.__advanceTo(t0);
     const W = S.walletStore.paperReal; W.openPositions = []; S.pendingActions = []; S._botPredictions = [];
+    if (THF >= 0) { try { const _cp = window.closePosition; window.closePosition = function (id, bc) { try { const p = (S.openPositions || []).find(x => x.id === id); if (p && p._thX) (window.__thCloses = window.__thCloses || []).push({ pair: p.pair, t: window.__now(), thX: p._thX, early: window.__now() < p._thX, stack: String(new Error().stack).split('\n').slice(2, 7).map(l => l.trim().slice(0, 140)).join(' | ') }); } catch (e) {} return _cp.apply(this, arguments); }; } catch (e) {} }
+    if (THF >= 0) { const rec = []; for (let i = 0; i < 480; i++) { const n = [false, false, false, false, false]; n[THF] = 1 + (i % 2 ? 0.05 : -0.05); rec.push([Math.round((i % 40) / 40 * 0.6 * 1000) / 1000, Math.round((t0 - 30 * 3600000 + i * 225000) / 1000), 15].concat(n)); } S.dcThreshold = { rec, pend: [], rules: {} }; }
+    // [BILAN AUX HORIZONS] journal des cycles des voix : chaque entrée poussée dans pendV par _vjNote (mutée ensuite par _vjJudge)
+    // [FITNESS AUX HORIZONS] l'évolution au moment même (avant _judgments = [] / _vjReset) : cible, plus faible par fitness vivante, sièges que chaque définition retirerait
+    try { if (typeof window.triggerEvolution === 'function') { const _te = window.triggerEvolution; window.triggerEvolution = function (weak, opts) { let snap = null; try { const before = S._lastEvolutionAt; const seats = (S.agents || []).filter(a => a && !a.isBot && !a.isMeta); const wk = seats.slice().sort((a, b) => a.fitness - b.fitness)[0]; snap = { t: Date.now(), before: before, src: (function () { try { return (new Error().stack.split('\n').slice(2, 4).map(l => l.trim().replace(/^at /, '').split(' ')[0]).join('<')); } catch (e) { return ''; } })(), id: weak && weak.id, name: weak && weak.name, fitness: weak && weak.fitness, fb: (weak && typeof _fitOf === 'function' && typeof _fitWindow === 'function') ? _fitOf(weak._judgments || [], _fitWindow()) : null, fh: (weak && typeof _fitHz === 'function') ? _fitHz(weak) : null, nj: weak ? (weak._judgments || []).length : null, score: weak && weak.score, weakest: wk ? { id: wk.id, fitness: wk.fitness } : null, picks: (typeof _fitPicks === 'function') ? _fitPicks() : null, manual: !!(opts && opts.manual), req: (typeof _evoOpPick === 'function' && weak) ? _evoOpPick(weak.id) : null }; } catch (e) {} const r = _te(weak, opts); try { if (snap && S._lastEvolutionAt !== snap.before) { const tr = (S.evoTrials && weak) ? S.evoTrials[weak.id] : null; snap.op = (tr && tr.t >= snap.t) ? (tr.op || 'R') : null; const gl = (S.chainLog || []).slice().reverse().find(c => c && typeof c.desc === 'string' && weak && c.desc.indexOf('G\u00e9nome ' + weak.id + ' :') === 0); snap.gline = gl ? gl.desc : null; (window.__evoHook = window.__evoHook || []).push(snap); } } catch (e) {} return r; }; } } catch (e) {}
+    try { if (typeof window._vjNote === 'function') { const _vn = window._vjNote; window._vjNote = function (pair, a, b) { const r = _vn(pair, a, b); try { if (r) { const T = S.dcThreshold, q = T.pendV[T.pendV.length - 1]; if (q && q.p === pair) (window.__vjLog = window.__vjLog || []).push(q); } } catch (e) {} return r; }; } } catch (e) {}
+    // [MARCHÉ RÉPARÉ] échantillons des T$ des sièges (toutes les 30 min simulées, au cycle d'une paire) et compte des cycles de marché
+    try { if (typeof window._mktCycle === 'function') { const _mc = window._mktCycle; let _lastS = 0; window._mktCycle = function (pair, ps) { const r = _mc(pair, ps); try { window.__mktCyc = (window.__mktCyc || 0) + 1; if (r > 0) window.__mktOpen = (window.__mktOpen || 0) + 1; const now = Date.now(); if (now - _lastS >= 1800000) { _lastS = now; (window.__mktSamples = window.__mktSamples || []).push({ t: now, w: (S.agents || []).filter(a => a && !a.isBot && !a.isMeta && typeof a.mktWallet === 'number').map(a => [a.id, Math.round(a.mktWallet * 100) / 100, Math.round((a.mktGain || 0) * 100) / 100, a.mktN || 0, Math.round(a.fitness || 0)]) }); } } catch (e) {} return r; }; } } catch (e) {}
     // battement réel du système, comme le bouton ▶ — à t0 exactement
     window._auraSimState = window._auraSimState || {};
     window._auraSimState.interval = setInterval(function () { try { simTick(); } catch (e) { const L = (window.__terr = window.__terr || []); if (L.length < 400) L.push('simTick: ' + String(e && e.message || e).slice(0, 150)); } }, 1000);
@@ -178,7 +195,7 @@ const FLAGS = ['aura_assainissement_v1', 'aura_delev_20260818_v2', 'aura_etage1_
     try { let _r = true; Object.defineProperty(window._auraSimState, 'running', { get() { return _r; }, set(v) { if (!v && _r) { const L = (window.__stopStacks = window.__stopStacks || []); if (L.length < 12) L.push(String(new Error().stack).split('\n').slice(2, 7).join(' | ').slice(0, 500)); } _r = v; }, configurable: true }); } catch (e) {}
     const f = W.fees || {};
     return { portfolio: W.portfolio, pnlNet: f.totalPnlNet || 0 };
-  }, { t0 });
+  }, { t0, THF });
   if (OBS) await page.evaluate(() => {
     // OBSERVATEUR (lecture seule) : chaque minute simulée, pour chaque paire, toutes les voix et leur bilan mesuré
     const AG = S.agents.filter(a => a && !a.isBot && !a.isMeta).map(a => a.id), BOTS = ['scalper_bot_v1', 'arb_bot_v1', 'dca_bot_v1'];
@@ -233,6 +250,7 @@ const FLAGS = ['aura_assainissement_v1', 'aura_delev_20260818_v2', 'aura_etage1_
         }
         if (S._netPaused) { window.__netPaused = (window.__netPaused || 0) + 1; }
         if (window.__dcObserve && (t - tA) % 60000 === 0 && j >= WUPc) { try { window.__dcObserve(t); } catch (e) { window.__obsErr = String(e).slice(0, 200); } }
+        if ((t - tA) % 30000 === 0) { try { const SE = (window.__chSeen = window.__chSeen || {}), K = (window.__chKeep = window.__chKeep || []); (S.chainLog || []).forEach(c => { if (c && c.hash && !SE[c.hash] && /🎚|🟢|🔴|⏳|⏱|🎯|🔄|⛔|🔌|🛑|🔒|🧬|⚖️|⚰/u.test(c.icon || '')) { SE[c.hash] = 1; if (K.length < 3000) K.push(new Date(window.__now()).toISOString().slice(11, 19) + ' ' + c.icon + ' ' + String(c.desc || '').slice(0, 220)); } }); } catch (e) {} }
         window.__advanceTo(t + 1000);
       }
       return { open: (W.openPositions || []).length };
@@ -242,7 +260,7 @@ const FLAGS = ['aura_assainissement_v1', 'aura_delev_20260818_v2', 'aura_etage1_
   }
 
   // ── bilan ──
-  const result = await page.evaluate(({ t0: _t0, tM, tEnd, series }) => { const t0 = tM;
+  const result = await page.evaluate(({ t0: _t0, tM, tEnd, series, MODES }) => { const t0 = tM;
     const W = S.walletStore.paperReal, f = W.fees || {};
     const trades = [];
     Object.entries(W.pairStates).forEach(([p, ps]) => (ps.trades || []).forEach(t => { if (t && typeof t.ts === 'number' && t.ts >= t0) trades.push(Object.assign({ pair: p }, t)); }));
@@ -254,8 +272,18 @@ const FLAGS = ['aura_assainissement_v1', 'aura_delev_20260818_v2', 'aura_etage1_
     const cl = (S.chainLog || []).slice(-40).map(c => (c.icon || '') + ' ' + (c.desc || ''));
     return { end: { portfolio: W.portfolio, trading: W.tradingAccount, cash: W.cashAccount, pnlNet: f.totalPnlNet || 0, pnlGross: f.totalPnlGross || 0, tradingFees: f.totalTradingFees || 0, slip: f.totalSlippage || 0, count: f.tradeCount || 0, totalTrades: W.totalTrades || 0 },
       trades, open, feeLog, bots, merit, chain: cl, lmsr: Object.fromEntries(Object.entries(W.pairStates).map(([p, ps]) => [p, ps.qYes && ps.qNo ? Math.round(ps.qYes / (ps.qYes + ps.qNo) * 100) / 100 : null])),
-      terr: (window.__terr || []).slice(0, 60), terrN: (window.__terr || []).length, simNow: window.__now(), obs: window.__obs || null, obsMerit: window.__obsMerit || null, obsAgents: window.__obsAgents || null, obsErr: window.__obsErr || null, engineStops: window.__engineStops || 0, netPausedSec: window.__netPaused || 0, stopStacks: window.__stopStacks || [] };
-  }, { t0, tM, tEnd, series });
+      terr: (window.__terr || []).slice(0, 60), terrN: (window.__terr || []).length, simNow: window.__now(), obs: window.__obs || null, obsMerit: window.__obsMerit || null, obsAgents: window.__obsAgents || null, obsErr: window.__obsErr || null, engineStops: window.__engineStops || 0, netPausedSec: window.__netPaused || 0, stopStacks: window.__stopStacks || [],
+      thr: S.dcThreshold ? { rule: S.dcThreshold.rule || null, obs: S.dcThreshold.obs || [], rec: S.dcThreshold.rec || [], pend: (S.dcThreshold.pend || []).map(q => ({ c: q.c, t: q.t, p: q.p, r: q.r, f: q.f, n: q.n })), rules: S.dcThreshold.rules || null, recC: S.dcThreshold.recC || [], pendC: (S.dcThreshold.pendC || []).map(q => ({ c: q.c, t: q.t, p: q.p, f: q.f, d: q.d, cap: q.cap, n: q.n })), rulesC: S.dcThreshold.rulesC || null, ctSince: S.dcThreshold.ctSince || null, vIds: S.dcThreshold.vIds || [], vHz: S.dcThreshold.vHz || null, vCmp: S.dcThreshold.vCmp || null, vRule: S.dcThreshold.vRule || null, vMode: S.dcThreshold.vMode || null, vRules: S.dcThreshold.vRules || null, vModes: S.dcThreshold.vModes || null, vDirtyF: S.dcThreshold.vDirtyF || null, fCmp: S.dcThreshold.fCmp || null, fRules: S.dcThreshold.fRules || null, fModes: S.dcThreshold.fModes || null, vSince: S.dcThreshold.vSince || null, pendVn: (S.dcThreshold.pendV || []).length } : null,
+      cycle: S.cycle || 0, seats: (S.agents || []).filter(a => a && !a.isBot && !a.isMeta).map(a => ({ id: a.id, name: a.name, fitness: a.fitness, lmsrSpent: a.lmsrSpent || 0, score: a.score, fb: (typeof _fitOf === 'function' && typeof _fitWindow === 'function') ? _fitOf(a._judgments || [], _fitWindow()) : null, fh: (typeof _fitHz === 'function') ? _fitHz(a) : null, born: a._bornCycle || 0, nj: (a._judgments || []).length })),
+      evo: { gen: S._genCount || 0, log: (S.evoLog || []).length, lastAt: S._lastEvolutionAt || 0 },
+      vjLog: (window.__vjLog || []).map(q => ({ p: q.p, t: q.t, f: q.f, v: q.v, dO: q.dO, dH: q.dH, a: q.a, wB: q.wB, wH: q.wH, qB: q.qB, qH: q.qH, L: { cap: q.L.cap, n: q.L.n, hit: q.L.hit }, S: { cap: q.S.cap, n: q.S.n, hit: q.S.hit } })),
+      pos: (W.openPositions || []).concat([]).map(q => ({ pair: q.pair, thL: q._thL, dcC: q._dcC, thH: q._thH, thX: q._thX, openedAt: q.openedAt })),
+      chainAll: (S.chainLog || []).map(c => (c.icon || '') + ' ' + (c.desc || '')), chainKeep: window.__chKeep || [], thCloses: window.__thCloses || [], evoHook: window.__evoHook || [], evoRule: S.evoRule || null, evoMerit: S.evoMerit || null, cyc: window.__cyc || [], lfo: window.__lfo || [], realJudgments: S._realJudgments || 0, modes: MODES,
+      rePos: ((S.walletStore.real || {}).openPositions || []).length, reTrades: Object.values((S.walletStore.real || {}).pairStates || {}).reduce((a, ps) => a + ((ps.trades || []).filter(t => t && t.ts >= t0).length), 0),
+      mkt: (function () { try { const WS = S.walletStore || {}, pairs = {}; ['paperReal', 'real'].forEach(m => { const P = (WS[m] && WS[m].pairStates) || {}; Object.keys(P).forEach(p => { const R = P[p] && P[p].mkt; if (R) pairs[m + '|' + p] = { open: !!R.open, n: R.n, P: R.open ? ((typeof _mktPrice === 'function') ? _mktPrice(P[p].qYes, P[p].qNo) : null) : R.P, out: R.out, t: R.t, vol: R.vol }; }); });
+        const v = S.dcVoices && S.dcVoices.marche; return { cyc: window.__mktCyc || 0, opened: window.__mktOpen || 0, log: S.mktLog || [], stats: S.mktStats || null, pairs: pairs, voice: v ? { nj: (v._judgments || []).length, js: (v._judgments || []).slice(-240), merit: (typeof _dcMerit === 'function') ? _dcMerit(v) : null, meritHz: (typeof _dcMeritHz === 'function') ? _dcMeritHz('marche') : null } : null,
+          wallets: (S.agents || []).filter(a => a && !a.isBot && !a.isMeta).map(a => ({ id: a.id, f: a.fitness, w: a.mktWallet, g: a.mktGain || 0, n: a.mktN || 0, born: a.mktBorn || 0 })), samples: window.__mktSamples || [] }; } catch (e) { return { err: String(e) }; } })() };
+  }, { t0, tM, tEnd, series, MODES });
   const out = { tag: TAG, seed: SEED, tM, prev: path.basename(PREV), cur: path.basename(CUR), t0, tEnd, hours: (tEnd - tM) / 3600000, pairs: setup.pairs, setup, result, pageErrors: perr, wallSec: Math.round((Date.now() - T0) / 1000) };
   fs.writeFileSync(OUT, JSON.stringify(out));
   const s = setup.start, e = result.end;
