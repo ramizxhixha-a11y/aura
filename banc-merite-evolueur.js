@@ -17,18 +17,19 @@ const COUNCIL = between(s03, 'function councilVote(councilId, pair, scoutResults
 const GUARD = between(s03, 'function guardianCheck(guardianId, verdict, pair, stake) {', '\n// ── ORCHESTRATOR ──', false);
 const JUDGE = between(s03, 'const FIT_WINDOW = 60, FIT_MIN_N = 5;', 'window._fitJudge = _fitJudge;', false);
 const EVO = between(s03, 'var EVO_TRIAL_N = 30', 'window._evoTrialStart = _evoTrialStart;', false);
+const DEGEL = between(s03, 'function _techRsi(tech) {', 'window._techRsi = _techRsi;', false);   // [DÉGEL DES VOIX · 02/10/2026] lecteurs des indicateurs, corrélation à BTC, taux de base du financement
 const J = v => JSON.parse(JSON.stringify(v));
 function mkCtx() {
   const candles = Array.from({ length: 60 }, (_, i) => { const o = 100 + Math.sin(i / 5) * 2, c = o + Math.cos(i / 3) * 0.8; return { o, h: Math.max(o, c) + 0.3, l: Math.min(o, c) - 0.3, c, v: 10 + (i % 7) }; });
   const S = { pairStates: { 'BTC/USDT': { candles, price: candles[59].c, qYes: 300, qNo: 200 } }, agents: [
       { id: 'breakout_v1', fitness: 400, _judgments: [] }, { id: 'trend_v2', fitness: 500, _judgments: [] }, { id: 'evolver_v1', isMeta: true, fitness: 350, streak: 0, _judgments: [] }],
     genome: {}, resonanceHistory: [{ ts: 1, pair: 'X', direction: 'bullish' }], mutedAgents: [], chainLog: [], _realJudgments: 10, openPositions: [], portfolio: 100 };
-  const tech = { atScore: 0.35, raw: { rsi: { rsi: 62 }, stddev: { cv: 0.012 }, adx: { adx: 28 }, macd: { hist: 0.4 }, boll: { position: 0.7 }, stoch: { k: 70 } } };
+  const tech = { atScore: 0.35, raw: { rsi: { rsi: 62, value: 62 }, stddev: { cv: 0.012 }, adx: { adx: 28 }, macd: { hist: 0.4 }, boll: { position: 0.7, pct: 0.7 }, stoch: { k: 70 } } };   // [DÉGEL DES VOIX · 02/10/2026] forme réelle + ancienne
   const c = { S, Math, Number, Object, Array, JSON, Date, isFinite, String, Set, window: {}, console,
     getTechSignals: () => tech, getFundamentalSignals: () => ({ fundScore: 0.1 }), lmsrP: ps => ps.qYes / (ps.qYes + ps.qNo),
     detectHarmonicResonance: () => { S.resonanceHistory.push({ ts: 2, pair: 'BTC/USDT', direction: 'bullish' }); return { direction: 'bullish', strength: 0.6, isResonance: true, bullCount: 4, bearCount: 1 }; } };
   vm.createContext(c);
-  vm.runInContext(GENOME + '\n' + TIERS + '\n' + SCOUT + '\n' + COUNCIL + '\n' + GUARD + '\n' + JUDGE + '\nwindow._fitJudge = _fitJudge;\n' + EVO, c);
+  vm.runInContext(GENOME + '\n' + DEGEL + '\n' + TIERS + '\n' + SCOUT + '\n' + COUNCIL + '\n' + GUARD + '\n' + JUDGE + '\nwindow._fitJudge = _fitJudge;\n' + EVO, c);
   return c;
 }
 console.log('▶ banc-merite-evolueur');

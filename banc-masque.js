@@ -75,7 +75,8 @@ T('D4 · invariant sur TOUT le code : la fitness ne s\'écrit que par le jugemen
   const ALLOW = [
     ['03', 'a.fitness = f;', 2], ['03', 'if (_fw !== null) a.fitness = _fw;', 1], ['03', 'if (_fa !== null) a.fitness = _fa;', 1], ['03', 'else if (before >= FIT_MIN_N) a.fitness = 350;', 1],
     ['03', 'a._judgments = []; a.fitness = 350; a.streak = 0;', 2], ['05', 'a.fitness = preset.agentFitness', 1], ['07', 'weak.fitness = Math.max(350,', 1],
-    ['09b2', 'a.fitness        = sa.fitness;', 1], ['09b2', 'a.fitness = r.f;', 1], ['09b2', 'a.fitness = 350; a.lmsrWallet = 350;', 1]];   // [MARCHÉ LMSR À PART · 28/09/2026] plus d'écriture additive du marché (08) ; résidu des sauvegardes d'avant remis à 350 une fois (09b2)
+    ['09b2', 'a.fitness        = sa.fitness;', 1], ['09b2', 'a.fitness = r.f;', 1], ['09b2', 'a.fitness = 350; a.lmsrWallet = 350;', 1],
+    ['03', 'sec._judgments = []; sec.fitness = 350; sec.streak = 0;', 1]];   // [DÉGEL DES VOIX · 02/10/2026] record de security_v1 gagné par le faux achat du feu vert, effacé une fois (migration)   // [MARCHÉ LMSR À PART · 28/09/2026] plus d'écriture additive du marché (08) ; résidu des sauvegardes d'avant remis à 350 une fois (09b2)
   const found = [];
   fs.readdirSync(path.join(ROOT, 'js')).filter(f => /\.js$/.test(f)).forEach(f => rd('js/' + f).split('\n').forEach((l, i) => {
     if (/^\s*\/\//.test(l)) return;

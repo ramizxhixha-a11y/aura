@@ -50,7 +50,8 @@ T('D3 · rejeu sur la mémoire réelle (backups 23 et 25/09, après la migration
   cases.forEach(([fn, nBroken, target]) => {
     const st = JSON.parse(fs.readFileSync(UP + fn, 'utf8')).aura;
     const agents = st.agents.map(a => Object.assign({}, a, { isBot: /_bot_v1$|^smart_sizer_v1$/.test(a.id), isMeta: a.id === 'evolver_v1' }));
-    const c = { S: { _botMeritMigrated: true, _metaMeritMigrated: true, chainLog: [], agents, fitWindowRule: st.fitWindowRule || null }, Math, Number, Array, Object, JSON, Date, console, window: { _stateReady: true } };
+    const c = { S: { _botMeritMigrated: true, _metaMeritMigrated: true, _degelMigrated: true, chainLog: [], agents, fitWindowRule: st.fitWindowRule || null },   // [DÉGEL DES VOIX · 02/10/2026] migration des abstentions seule (le dégel : banc-degel.js)
+      Math, Number, Array, Object, JSON, Date, console, window: { _stateReady: true } };
     c.setInterval = f => { c._t = f; return 1; }; c.clearInterval = () => {}; c.saveState = () => {}; c.nowStr = () => '';
     vm.createContext(c); vm.runInContext(JUDGE + MIGR, c); c._t();
     const L = agents.filter(a => !a.isBot && !a.isMeta), broken = L.filter(a => a.fitness <= 80);

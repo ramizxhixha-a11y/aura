@@ -1,3 +1,4 @@
+// [DÉGEL DES VOIX · 02/10/2026] VERSION 20261002a · porte RE : une série trouée (bouche-trou parmi les 60 bougies lues, 02) redemande les vraies bougies et attend ; la projection garde la marque _gap ; la projection garde la marque _r (bougie REST)
 // [MARCHÉ RÉPARÉ · 30/09/2026] VERSION 20260930a · en EV / RE, les ordres LMSR toutes les 6 s (biais global a.score, jamais payés) et l'injection du composite dans le marché (rendu) ne tournent plus : le marché d'une paire, ce sont ses manches (03 _mktCycle) — AA inchangé
 // [ÉVOLUTION APPRISE · 28/09/2026] VERSION 20260928c · déclencheurs d'évolution de la page Home (plus faible évoluable sous 300, stagnation sous 400) : niveau appris s'il est prouvé (_evoOk, 03), sinon les nombres posés à la main ; déclencheur transmis (D / E)
 // [MARCHÉ LMSR À PART · 28/09/2026] VERSION 20260928b · le marché LMSR (ordres des agents toutes les 6 s) ne débite plus a.fitness : il a son portefeuille par siège, a.lmsrWallet — rechargé à la fitness à chaque écriture du jugement (03, porte unique), débité par les ordres (_lmsrSpend), lu par la taille des ordres et les gardes à la place de a.fitness — et sa dépense a.lmsrSpent (celle du génome, remise à zéro à l'évolution). Le flux d'ordres, le marché (qYes / qNo, lmsrP) et tout ce qui le lit gardent la dynamique d'avant (le flux s'éteint entre deux jugements, repart au jugement — équivalence prouvée passe à passe contre l'ancien bloc, banc-marche-lmsr ; deux écarts voulus : un coût NaN n'est ni retiré ni compté, et pendant la démo 05 le marché tourne sur les portefeuilles réels) ; seule la fitness ne bouge plus entre deux jugements — avant, ≈ 0,14 × fitness × |score| × prix lui étaient retirés par passe (jusqu'à −30 à −50 % par minute) ; c'est cette valeur débitée que lisaient l'évolution de la page Home (ici, toutes les 8 s, sans recalcul), le compte des cassés (≤ 80) et la part de fitness du levier (_favConsensus, 02), et qu'un siège sans preuve (jamais réécrit par le jugement) gardait pour toujours
@@ -2869,7 +2870,7 @@ function _projectRealCandles() {
     const lastK = src[src.length - 1];
     const cur = ps.candles;
     if (cur && cur._real && cur._srcTs === lastK.ts && cur.length === src.length && cur[cur.length - 1].c === lastK.c) { ps._candlesStale = false; return; }
-    const out = src.map(k => ({ o: k.o, h: k.h, l: k.l, c: k.c, v: k.v, ts: k.ts }));
+    const out = src.map(k => { const o = { o: k.o, h: k.h, l: k.l, c: k.c, v: k.v, ts: k.ts }; if (k && k._gap === true) o._gap = true; if (k && k._r) o._r = 1; return o; });   // [DÉGEL DES VOIX · 02/10/2026] marques gardées : bouche-trou (une série trouée n'est plus projetée : 02 _realCandlesStale) et bougie REST (_r : source du volume, lue par volume_v1)
     out._srcTs = lastK.ts; out._real = true;
     ps.candles = out;
     ps._candlesStale = false;
@@ -3575,6 +3576,12 @@ function resolvePairCycle(pair, ps) {
   if (arr.length < 30 || dataAge > stalenessThreshold) {
     if (typeof _fetchAndBootstrapRealCandles === 'function') _fetchAndBootstrapRealCandles(pair, tf);
     return;  // Attendre les données fraîches — pas de kill switch
+  }
+  // [DÉGEL DES VOIX · 02/10/2026] série TROUÉE (bouche-trou de coupure parmi les 60 bougies que lisent les voix, 02 _realCandlesHoled) : les vraies
+  // bougies sont redemandées à Binance (REST, limité en 02) et on attend — aucune décision, aucun jugement sur un prix inventé. Pas de kill switch.
+  if (typeof _realCandlesHoled === 'function' && _realCandlesHoled(arr)) {
+    if (typeof _fetchAndBootstrapRealCandles === 'function') _fetchAndBootstrapRealCandles(pair, tf);
+    return;
   }
 
   // Dernière bougie (live) — on déclenche le cycle quand une bougie se FERME

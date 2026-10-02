@@ -206,7 +206,7 @@ T('S1 · textes : 07 remet le record du siège à zéro à l\'évolution (déjà
   const c03 = codeStrict(s03); assert.ok(c03.includes('_evoTrialJudge(a, pair, won, mag, decay, _vote)'), 'essai d\'évolution : inchangé (bougie)');
   assert.ok(!/_fitHz|_fitCurrent|_fjMode|fModes|fRules|fCmp/.test(codeStrict(rd('js/10f-resolveur-cycle.js'))));
   const s9b1 = rd('js/09b1-build-snapshot.js'), s9b2 = rd('js/09b2-save-load.js'); assert.ok(s9b1.includes('dcThreshold: S.dcThreshold || null,') && s9b2.includes("if (snap.dcThreshold && typeof snap.dcThreshold === 'object')"));
-  assert.ok(s03.split('\n').slice(0, 6).some(l => l.startsWith('// [FITNESS AUX HORIZONS · 28/09/2026] VERSION 20260928a')), 'en-tête FITNESS AUX HORIZONS dans les 6 premières lignes (03 relivré depuis)');
+  assert.ok(s03.split('\n').slice(0, 7).some(l => l.startsWith('// [FITNESS AUX HORIZONS · 28/09/2026] VERSION 20260928a')), 'en-tête FITNESS AUX HORIZONS dans les 7 premières lignes (03 relivré depuis)');   // [DÉGEL DES VOIX · 02/10/2026] une ligne d'en-tête de plus
   // écran
   const src = rd('js/11b-ecran-appris.js').replace(/setInterval\(function \(\) \{ try \{ _injectLearnedButton\(\); \} catch \(e\) \{\} \}, 2000\);/, '');
   const hz = HZ.map((h, i) => ({ h, n: 72, blocks: 24, mean: i === 0 ? -0.45 : null, se: i === 0 ? 0.05 : null, crit: i === 0 ? 3.5 : null, better: false, worse: i === 0 }));

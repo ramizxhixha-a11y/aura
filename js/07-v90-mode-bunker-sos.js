@@ -1,3 +1,4 @@
+// [DÉGEL DES VOIX · 02/10/2026] VERSION 20261002a · flux macro : chaque source a son heure (tFng, tCap) — une source muette ne passe plus pour fraîche parce que l'autre a répondu
 // [MARCHÉ RÉPARÉ · 30/09/2026] VERSION 20260930a · à la naissance d'un génome : T$ du marché = fitness de naissance, gain et manches à zéro, génération suivante (une mise encore ouverte du génome retiré n'est ni payée ni rendue au nouveau-né, 03 _mktSettle)
 // [OPÉRATEUR APPRIS · 28/09/2026] VERSION 20260928d · la naissance du génome prend la source choisie par la règle apprise pour CE siège (_evoOpPick, 03 : recombinaison + mutation / retour à la meilleure version passée / mutation seule) ; la source réellement appliquée est transmise à l'essai (et « forcée » : source nuisible appliquée faute d'autre choix sur ce siège) et écrite au journal
 // [ÉVOLUTION APPRISE · 28/09/2026] VERSION 20260928c · triggerEvolution transmet à l'essai la fitness du siège À l'évolution, le déclencheur (opts.trig : A B C D E M) et si l'évolution est manuelle — l'observation de la règle apprise (03)
@@ -1441,12 +1442,12 @@ async function _macroFeedRefresh() {
     const [fg, global] = await Promise.all([_fetchFearGreed(), _fetchGlobal()]);
     S._macroFeedFetching = false;
     const feed = Object.assign({}, S.macroFeed || {});
-    if (fg && fg[0] && isFinite(Number(fg[0].value))) { feed.fng = Number(fg[0].value); feed.fngPrev = (fg[1] && isFinite(Number(fg[1].value))) ? Number(fg[1].value) : feed.fngPrev; feed.fngLabel = fg[0].value_classification || ''; }
+    if (fg && fg[0] && isFinite(Number(fg[0].value))) { feed.fng = Number(fg[0].value); feed.fngPrev = (fg[1] && isFinite(Number(fg[1].value))) ? Number(fg[1].value) : feed.fngPrev; feed.fngLabel = fg[0].value_classification || ''; feed.tFng = Date.now(); }   // [DÉGEL DES VOIX · 02/10/2026] heure de CETTE source
     if (global) {
       const dom = global.market_cap_percentage && Number(global.market_cap_percentage.btc);
       const cap24 = Number(global.market_cap_change_percentage_24h_usd);
       if (isFinite(dom)) feed.btcDominance = dom;
-      if (isFinite(cap24)) feed.cap24h = cap24;
+      if (isFinite(cap24)) { feed.cap24h = cap24; feed.tCap = Date.now(); }   // [DÉGEL DES VOIX · 02/10/2026] heure de CETTE source (macro_v1 ne prend que ce qui a moins de 30 min)
     }
     if (fg || global) { feed.t = Date.now(); S.macroFeed = feed; }
     return feed;

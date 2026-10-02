@@ -24,6 +24,7 @@ const NEW = {
   guardianCheck: between(s03, 'function guardianCheck(guardianId, verdict, pair, stake) {', '\n// ── ORCHESTRATOR ──')
 };
 const ENGINE = between(s03, 'const GENOME_DEFAULTS = {', 'window.GENOME_DEFAULTS = GENOME_DEFAULTS;', false);
+const DEGEL = between(s03, 'function _techRsi(tech) {', 'window._techRsi = _techRsi;', false);   // [DÉGEL DES VOIX · 02/10/2026] lecteurs des indicateurs, corrélation à BTC, taux de base du financement
 const SCOUTS = ['macro_v1', 'fundamental_v1', 'nlp_v1', 'sentiment_v2', 'volume_v1', 'volatility_v1', 'corr_v1', 'geopolitic_v1', 'onchain_v1', 'whale_v1', 'breakout_v1', 'harmonic_v1', 'flow_v1'];
 const COUNCIL = ['scalper_v2', 'swing_v2', 'contrarian_v2', 'trend_v2', 'hedge_v2', 'momentum_v1', 'mean_rev_v1'];
 
@@ -38,7 +39,7 @@ function mkState(seed) {
     S.pairStates[p] = { candles, price: px * (1 + (r() - 0.5) * 0.01), qYes: 100 + r() * 300, qNo: 100 + r() * 300 };
   });
   const tech = {};
-  pairs.forEach(p => { tech[p] = { atScore: (r() - 0.5) * 2, raw: { rsi: { rsi: 10 + r() * 80 }, stddev: { cv: r() * 0.05 }, adx: { adx: 5 + r() * 45 }, macd: { hist: (r() - 0.5) * 2 }, boll: { position: r() } } }; });
+  pairs.forEach(p => { tech[p] = { atScore: (r() - 0.5) * 2, raw: { rsi: (x => ({ rsi: x, value: x }))(10 + r() * 80), stddev: { cv: r() * 0.05 }, adx: { adx: 5 + r() * 45 }, macd: { hist: (r() - 0.5) * 2 }, boll: (x => ({ position: x, pct: x }))(r()) } }; });   // [DÉGEL DES VOIX · 02/10/2026] forme réelle (value, pct) + ancienne (lue par l'oracle), mêmes nombres
   const fund = {}; pairs.forEach(p => { fund[p] = { fundScore: (r() - 0.5) * 2 }; });
   const harm = {}; pairs.forEach(p => { harm[p] = r() < 0.3 ? null : { direction: r() < 0.5 ? 'bullish' : 'bearish', strength: r(), isResonance: r() < 0.5, bullCount: 3, bearCount: 2 }; });
   return { S, tech, fund, harm, pairs };
@@ -46,9 +47,9 @@ function mkState(seed) {
 function mkCtx(src, st, genomeOverride) {
   const ctx = { S: st.S, Math, Number, Object, Array, JSON, Date, isFinite, String, window: {},
     getTechSignals: p => st.tech[p], getFundamentalSignals: p => st.fund[p], detectHarmonicResonance: p => st.harm[p],
-    lmsrP: ps => ps.qYes / (ps.qYes + ps.qNo), COUNCIL_ADVISORS: { scalper_v2: ['volume_v1', 'flow_v1'], swing_v2: ['breakout_v1', 'volatility_v1'], contrarian_v2: ['sentiment_v2', 'whale_v1'], trend_v2: ['volatility_v1', 'corr_v1'], hedge_v2: ['geopolitic_v1', 'onchain_v1'], momentum_v1: ['flow_v1', 'breakout_v1'], mean_rev_v1: ['sentiment_v2', 'volume_v1'] } };
+    lmsrP: ps => ps.qYes / (ps.qYes + ps.qNo), _getPairCorrelation: () => 1 /* [DÉGEL DES VOIX · 02/10/2026] corr_v1 × 1 : son score reste celui de l'oracle */, COUNCIL_ADVISORS: { scalper_v2: ['volume_v1', 'flow_v1'], swing_v2: ['breakout_v1', 'volatility_v1'], contrarian_v2: ['sentiment_v2', 'whale_v1'], trend_v2: ['volatility_v1', 'corr_v1'], hedge_v2: ['geopolitic_v1', 'onchain_v1'], momentum_v1: ['flow_v1', 'breakout_v1'], mean_rev_v1: ['sentiment_v2', 'volume_v1'] } };
   vm.createContext(ctx);
-  vm.runInContext(ENGINE, ctx);
+  vm.runInContext(ENGINE + '\n' + DEGEL, ctx);   // [DÉGEL DES VOIX · 02/10/2026]
   if (genomeOverride) ctx.S.genome = genomeOverride;
   vm.runInContext(src.scoutAnalysis + '\n' + src.councilVote + '\n' + src.guardianCheck, ctx);
   return ctx;
@@ -64,14 +65,14 @@ function runAll(ctx, st) {
   return JSON.parse(JSON.stringify(out));
 }
 console.log('▶ banc-genome');
-T('1 · NON-RÉGRESSION : génome par défaut = sorties byte-identiques à l\'oracle (7 scouts + 2 conseils + sécurité ; whale/flow/volume/macro/fundamental/geopolitic et leurs conseils exclus, réécrits sur des sources réelles 17→26/09), 3 paires, 40 états', () => {
+T('1 · NON-RÉGRESSION : génome par défaut = sorties byte-identiques à l\'oracle (6 scouts + 2 conseils + sécurité ; corr_v1 exclu (DÉGEL DES VOIX : son motif dit la corrélation) mais trend_v2, qu\'il conseille, comparé (corrélation 1) ; whale/flow/volume/macro/fundamental/geopolitic et leurs conseils exclus, réécrits sur des sources réelles 17→26/09), 3 paires, 40 états', () => {
   let n = 0;
   for (let seed = 1; seed <= 40; seed++) {
     const a = mkState(seed * 7919), b = mkState(seed * 7919);
     const oldOut = runAll(mkCtx(oracle, a), a), newOut = runAll(mkCtx(NEW, b), b);
     // [FLUX BINANCE 17/09] whale_v1 / flow_v1 / volume_v1 lisent désormais le flux et le carnet Binance (comportement
     // volontairement différent de l'oracle) ; les conseils qu'ils conseillent (scalper, contrarian, momentum, mean_rev) suivent.
-    const CHANGED_SCOUTS = ['whale_v1', 'flow_v1', 'volume_v1', 'macro_v1', 'fundamental_v1', 'geopolitic_v1' /* [26/09] macro lit le flux réel ; fundamental : positionnement ; geopolitic : contexte 1 h / 4 h */], CHANGED_COUNCIL = ['scalper_v2', 'contrarian_v2', 'momentum_v1', 'mean_rev_v1', 'hedge_v2' /* [26/09] consulte geopolitic_v1 dans ce banc */];
+    const CHANGED_SCOUTS = ['whale_v1', 'flow_v1', 'volume_v1', 'macro_v1', 'fundamental_v1', 'geopolitic_v1' /* [26/09] macro lit le flux réel ; fundamental : positionnement ; geopolitic : contexte 1 h / 4 h */, 'corr_v1' /* [DÉGEL DES VOIX · 02/10/2026] même score à corrélation 1, motif changé */], CHANGED_COUNCIL = ['scalper_v2', 'contrarian_v2', 'momentum_v1', 'mean_rev_v1', 'hedge_v2' /* [26/09] consulte geopolitic_v1 dans ce banc */];
     [oldOut, newOut].forEach(o => Object.values(o).forEach(p => { CHANGED_SCOUTS.forEach(id => delete p.scouts[id]); CHANGED_COUNCIL.forEach(id => delete p.council[id]); }));
     assert.deepStrictEqual(newOut, oldOut, 'état ' + seed); n++;
   }

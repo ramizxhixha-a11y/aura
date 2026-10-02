@@ -11,13 +11,16 @@ const s03 = rd('js/03-per-pair-position-buttons-controls-buid.js');
 const ORACLE = require('./banc-fixtures/harmonic-avant-genome-20260923c.js');
 const NEW = (() => { const i = s03.indexOf('function detectHarmonicResonance(pair) {'); const j = s03.indexOf('\n}\n', i); return s03.slice(i, j + 3); })();
 const ENGINE = between(s03, 'const GENOME_DEFAULTS = {', 'window.GENOME_DEFAULTS = GENOME_DEFAULTS;', false);
+const DEGEL = between(s03, 'function _techRsi(tech) {', 'window._techRsi = _techRsi;', false);   // [DÉGEL DES VOIX · 02/10/2026] lecteurs des indicateurs, corrélation à BTC, taux de base du financement
 const J = v => JSON.parse(JSON.stringify(v));
 function rng(seed) { let x = seed >>> 0 || 1; return () => { x ^= x << 13; x >>>= 0; x ^= x >> 17; x ^= x << 5; x >>>= 0; return x / 4294967296; }; }
 function ctx(fnSrc, tech, genome) {
   const c = { S: { pairStates: { 'BTC/USDT': {} }, resonanceHistory: [], genome: genome || null }, Math, Number, Object, JSON, Date, isFinite, String, window: {}, getTechSignals: () => tech };
-  vm.createContext(c); vm.runInContext(ENGINE + '\n' + fnSrc, c); return c;
+  vm.createContext(c); vm.runInContext(ENGINE + '\n' + DEGEL + '\n' + fnSrc, c); return c;
 }
-const mkTech = r => ({ raw: { rsi: { rsi: 10 + r() * 80 }, macd: { hist: (r() - 0.5) * 0.02 }, stoch: { k: r() * 100 }, adx: { adx: 5 + r() * 45 }, boll: { position: r() } } });
+// [DÉGEL DES VOIX · 02/10/2026] la forme RÉELLE (08 : raw.rsi.value, raw.boll.pct) porte les mêmes nombres que l'ancienne (raw.rsi.rsi, raw.boll.position, lue par l'oracle) :
+// même entrée pour les deux codes ; la lecture de la forme réelle elle-même est éprouvée par banc-degel.js (calcRSI / calcBollinger RÉELS)
+const mkTech = r => ({ raw: { rsi: (x => ({ rsi: x, value: x }))(10 + r() * 80), macd: { hist: (r() - 0.5) * 0.02 }, stoch: { k: r() * 100 }, adx: { adx: 5 + r() * 45 }, boll: (x => ({ position: x, pct: x }))(r()) } });
 console.log('▶ banc-harmonic-genome');
 T('D1 · NON-RÉGRESSION : génome par défaut → sorties byte-identiques à l\'oracle sur 200 états', () => {
   for (let seed = 1; seed <= 200; seed++) {
@@ -27,7 +30,7 @@ T('D1 · NON-RÉGRESSION : génome par défaut → sorties byte-identiques à l\
   }
 });
 T('D2 · un génome muté CHANGE la lecture : RSI à 55/45, résonance à 3 → plus d\'alignements et de résonances', () => {
-  const tech = { raw: { rsi: { rsi: 60 }, macd: { hist: 0.001 }, stoch: { k: 70 }, adx: { adx: 25 }, boll: { position: 0.8 } } };
+  const tech = { raw: { rsi: { rsi: 60, value: 60 }, macd: { hist: 0.001 }, stoch: { k: 70 }, adx: { adx: 25 }, boll: { position: 0.8, pct: 0.8 } } };   // [DÉGEL DES VOIX · 02/10/2026] forme réelle + ancienne
   const d = J(vm.runInContext("detectHarmonicResonance('BTC/USDT')", ctx(NEW, tech)));
   assert.strictEqual(d.bullCount, 0); assert.strictEqual(d.isResonance, false);
   const m = J(vm.runInContext("detectHarmonicResonance('BTC/USDT')", ctx(NEW, tech, { harmonic_v1: { rsiHigh: 55, rsiLow: 45, macdThr: 0.0005, stochHigh: 65, stochLow: 35, adxMin: 20, bbHigh: 0.75, bbLow: 0.25, resonanceMin: 3 } })));

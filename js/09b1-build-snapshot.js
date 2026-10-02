@@ -1,3 +1,4 @@
+// [DÉGEL DES VOIX · 02/10/2026] VERSION 20261002a · _degelMigrated dans le snapshot (migration unique du dégel faite)
 // [MARCHÉ RÉPARÉ · 30/09/2026] VERSION 20260930a · T$ du marché des sièges (mktWallet, mktGain, mktN, mktGen), mktLog (dernières manches soldées) et mktStats (compteurs) dans le snapshot ; les manches ouvertes vivent dans walletStore (ps.mkt)
 // [ÉVOLUTION APPRISE · 28/09/2026] VERSION 20260928c · evoRule (observations et règle apprise de l'évolution, 03) dans le snapshot
 // [MARCHÉ LMSR À PART · 28/09/2026] VERSION 20260928b · lmsrWallet (portefeuille de marché du siège) et lmsrSpent (dépense du génome) dans le snapshot des agents — le marché LMSR ne débite plus la fitness (08)
@@ -129,6 +130,7 @@ function buildSnapshot() {
       _lastEvolutionAt: S._lastEvolutionAt || 0,      // [REDÉMARRAGE · 26/09/2026] sans eux, chaque rechargement déclenchait une évolution et un rêve
       _lastDreamAt: S._lastDreamAt || 0,
       _abstMigrated: !!S._abstMigrated,              // [ABSTENTION · 26/09/2026]
+      _degelMigrated: !!S._degelMigrated,            // [DÉGEL DES VOIX · 02/10/2026] migration unique faite (record de security_v1, gènes jamais exercés)
       _gbpToBnbDone: !!S._gbpToBnbDone,
       _realJudgments: S._realJudgments || 0,          // [COMPTEURS RÉGLAGES · 24/09/2026]
       botDisciples:   S.botDisciples   || {},   // [15/08] sièges des disciples par bot

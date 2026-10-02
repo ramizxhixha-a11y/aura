@@ -163,6 +163,9 @@ T('M7 · jamais inventé : prix réel absent ou figé, bougie close ou en cours 
   // chemin : k+2Q, k+3Q réelles, k+4Q bouche-trou, puis reprise — 15 min (sortie k+2Q) jugé ; 30 min (sortie k+3Q = juste avant la coupure) et plus : abandonnés
   ser.push({ ts: k + 2 * Q, c: 50.5, h: 50.5, l: 50 }, { ts: k + 3 * Q, c: 50.6, h: 50.6, l: 50.4 }, { ts: k + 4 * Q, c: 50.6, h: 50.6, l: 50.6, _gap: true }, { ts: k + 5 * Q, c: 52, h: 52, l: 51 }, { ts: k + 6 * Q, c: 52 });
   t.c.__now = k + 6 * Q + 1000; t.c._thJudge();
+  // [DÉGEL DES VOIX · 02/10/2026] un bouche-trou sur le chemin n'abandonne plus sur-le-champ : 15 min jugé, les autres attendent la réparation (02 redemande les vraies bougies)
+  assert.deepStrictEqual([t.S.dcThreshold.rec.length, t.S.dcThreshold.pend.length], [0, 1], 'en attente de la réparation');
+  t.c.__now = k + 21 * Q + 1000; t.c._thJudge();   // jamais réparé : chaque horizon abandonné 4 bougies après sa sortie
   const r = t.S.dcThreshold.rec[0]; assert.ok(r, 'tranché');
   assert.ok(Math.abs(r[3] - (Math.round((0.5 / 50 * 100 * 1 - 0.275) * 10000) / 10000)) < 1e-12); assert.deepStrictEqual(JSON.parse(JSON.stringify(r.slice(4))), [false, false, false, false]);
   const rc = t.S.dcThreshold.recC[0]; assert.strictEqual(rc[3] / 10000, Math.round((-1 * (0.5 / 50 * 100) - 0.275) * 10000) / 10000); assert.deepStrictEqual(JSON.parse(JSON.stringify(rc.slice(4))), [false, false, false, false], '[SENS CONTRAIRE] mêmes abandons');
@@ -290,7 +293,7 @@ T('S1 · 10f : trade virtuel noté avec la perte max du vrai trade ; position ma
   const rv = between(c10d, 'function _checkReversalsAndClose() {', 'const reversal = _detectReversal(pos.pair, pos.side);', false); assert.ok(rv.includes('if (pos._thX) return;'), '10d : pas de fermeture préventive avant l\'horizon');
   const s10g = rd('js/10g-resolveur-ev-csv.js');
   assert.ok(codeStrict(s10g).includes('if (openPositions.length >= maxConcurrent) { window.__thNoteOnly = true; try { return _resolvePairCycleCore(pair, ps); } finally { window.__thNoteOnly = false; } }'), '10g : places prises → cycle « noter seulement »');
-  assert.ok(s10g.startsWith('// [HORIZONS APPRIS · 27/09/2026] VERSION 20260927i'));
+  assert.ok(s10g.split('\n').slice(0, 2).some(l => l.startsWith('// [HORIZONS APPRIS · 27/09/2026] VERSION 20260927i')));   // [DÉGEL DES VOIX · 02/10/2026] 10g relivré : en-tête HORIZONS APPRIS en 2e ligne
   assert.ok(s10f.startsWith('// [MARCHÉ RÉPARÉ · 30/09/2026] VERSION 20260930a') && s10f.split('\n')[1].startsWith('// [BILAN AUX HORIZONS · 27/09/2026] VERSION 20260927k') && s10f.split('\n')[2].startsWith('// [SENS CONTRAIRE · 27/09/2026] VERSION 20260927j'));   // [BILAN AUX HORIZONS · 27/09] 10f relivré
 });
 

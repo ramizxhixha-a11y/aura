@@ -1,3 +1,4 @@
+// [DÉGEL DES VOIX · 02/10/2026] VERSION 20261002a · commentaire : un gardien vote 0 (statut, pas un sens) — aucun code changé
 // [MÉRITE DES BOTS · 26/09/2026] VERSION 20260926j · _fitWindowRefresh rejoue la fenêtre sur les agents qui VOTENT (bots et méta exclus : leurs jugements ne sont pas des votes)
 // [FENÊTRE APPRENANTE · 26/09/2026] VERSION 20260926f · règle apprise de la fenêtre de jugement : _fitWindowEval (rejeu exact des jugements, 6 fenêtres candidates, preuve exigée) → S.fitWindowRule ; _fitWindowRefresh après chaque jugement et au boot
 // [CONTEXTE 1 H / 4 H · 26/09/2026] VERSION 20260926e · source d'attribution « contexte » (geopolitic_v1 sorti de « prix ») ; _pathRecord lit le dernier prix réel ACCEPTÉ en EV/RE (celui dont il juge l'âge)
@@ -56,7 +57,7 @@ function _intelPublish(pair, votes, weights, atScore) {
       ids.forEach(function (id) {
         if (id === '__tech') { if (isFinite(atScore)) { sum += Number(atScore); wsum += 1; } return; }
         // [CORRECTIF · 19/09/2026] ps.roster.votes[id] est un NOMBRE (03 : scouts → res.score, conseil → ±|score|
-        // selon le vote, gardiens → −0,5 / −0,2 / +0,05), pas un objet. La version du 17/09 lisait v.score sur un
+        // selon le vote, gardiens → 0 depuis le DÉGEL DES VOIX · 02/10/2026, −0,5 / −0,2 / +0,05 avant), pas un objet. La version du 17/09 lisait v.score sur un
         // nombre : undefined → toutes les sources sauf le composite technique étaient ignorées (backup 19/09 : seule
         // « technique » avait des enregistrements, n = 8). L'objet reste accepté par sécurité si la forme change.
         var v = votes ? votes[id] : null;

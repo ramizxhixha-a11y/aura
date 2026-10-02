@@ -76,11 +76,11 @@ T('D4 · _attributionSummary : trié par P&L moyen, taux de réussite, par mode 
   assert.deepStrictEqual(sum, [ { src: 'flux', n: 1, winRate: 100, avgPnl: 4, sumPnl: 4 }, { src: 'news', n: 1, winRate: 0, avgPnl: -4, sumPnl: -4 } ]);
   assert.deepStrictEqual(J(vm.runInContext("_attributionSummary('real')", c)), [], 'autre mode : vide');
 });
-T('S2 · FORME DES VOTES épinglée sur 03 : ps.roster.votes[id] est un nombre (scouts res.score, conseil ±|score|, gardiens −0,5/−0,2/+0,05) — le correctif du 19/09 tient tant que cette forme tient', () => {
+T('S2 · FORME DES VOTES épinglée sur 03 : ps.roster.votes[id] est un nombre (scouts res.score, conseil ±|score|, gardiens 0 quel que soit leur statut depuis le DÉGEL DES VOIX · 02/10/2026) — le correctif du 19/09 tient tant que cette forme tient', () => {
   const c = codeStrict(s03);
   assert.ok(c.includes("if (res && typeof res.score === 'number') _votes[id] = _muted.has(id) ? 0 : res.score;"), 'scouts : nombre');
   assert.ok(c.includes("_votes[id] = _muted.has(id) ? 0 : (res.vote === 'long' ? magnitude : res.vote === 'short' ? -magnitude : 0);"), 'conseil : nombre');
-  assert.ok(c.includes("_votes[id] = _muted.has(id) ? 0.05 : (res.status === 'veto' ? -0.5 : res.status === 'warn' ? -0.2 : 0.05);"), 'gardiens : nombre');
+  assert.ok(c.includes("Object.entries(guardianResults).forEach(([id, res]) => {") && c.includes("        _votes[id] = 0;"), 'gardiens : nombre (0)');   // [DÉGEL DES VOIX · 02/10/2026]
   assert.ok(codeStrict(s10i).includes("var sc = (typeof v === 'number') ? v : Number(v.score);"), '10i lit le nombre en premier');
 });
 T('S1 · LECTURE SEULE et branchements : 03 publie après le roster, 02 enregistre à la clôture (entonnoir unique), aucune décision ne lit S.attribution / ps.intel, persistance + manifest, script chargé', () => {

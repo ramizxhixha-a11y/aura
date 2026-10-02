@@ -43,7 +43,7 @@ T('S1 · textes : 07 bandeau (label 🧮 MÉMOIRE RÉELLE, compteur jug., texte,
   const c7 = codeStrict(s07);
   assert.ok(c7.includes("if(elMstrip && (a.isBot || a.isMeta) && !(a.memory && a.memory.length > 0) && typeof _botMemorySummary === 'function') {"));
   ["lab.textContent = '🧮 MÉMOIRE RÉELLE';", "elMemCnt.textContent  = bm.n + ' jug.';", "' jugements favorables sur ' + bm.n + ' (' + bm.pct + ' %) · fenêtre ' + bm.window + ' · bilan pondéré '", "bm.interventions === null ? 'hors flotte' :", "elMemPair.textContent = 'fitness glissante';", "elMemLegacy.textContent = '🧮 ' + bm.n + ' jug. · ' + bm.fav + '✓';"].forEach(t => assert.ok(c7.includes(t), t));
-  assert.ok(s03.split('\n').slice(0, 21).some(l => l.startsWith('// [MÉMOIRE DES BOTS · 26/09/2026] VERSION 20260926h')));   // [HORLOGE PAR MODE · 01/10/2026] 03 relivré : une ligne d'en-tête de plus
+  assert.ok(s03.split('\n').slice(0, 22).some(l => l.startsWith('// [MÉMOIRE DES BOTS · 26/09/2026] VERSION 20260926h')));   // [DÉGEL DES VOIX · 02/10/2026] une ligne d'en-tête de plus   // [HORLOGE PAR MODE · 01/10/2026] 03 relivré : une ligne d'en-tête de plus
 });
 console.log('\n' + (fail ? '❌ ' : '✅ ') + pass + '/' + (pass + fail) + ' tests passés' + (fail ? ' — ' + fail + ' ÉCHEC(S)' : ''));
 process.exit(fail ? 1 : 0);

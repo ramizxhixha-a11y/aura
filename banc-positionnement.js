@@ -12,9 +12,10 @@ const s02 = rd('js/02-state-init.js'), s03 = rd('js/03-per-pair-position-buttons
 const FEED = between(s02, 'var _posCursor = 0;', 'async function _positioningRefresh() {', false);
 const ENGINE = between(s03, 'const GENOME_DEFAULTS = {', 'window.GENOME_DEFAULTS = GENOME_DEFAULTS;', false);
 const SCOUT = between(s03, 'function scoutAnalysis(agentId, pair) {', '\n// ── COUNCIL ANALYZERS', false);
+const DEGEL = between(s03, 'function _techRsi(tech) {', 'window._techRsi = _techRsi;', false);   // [DÉGEL DES VOIX · 02/10/2026] lecteurs des indicateurs, corrélation à BTC, taux de base du financement
 const J = v => JSON.parse(JSON.stringify(v));
 function feedCtx() { const c = { Math, Number, Array, Date, isFinite, String, window: {} }; vm.createContext(c); vm.runInContext(FEED, c); return c; }
-function scoutCtx(pos, candles) { const c = { S: { pairStates: { 'BTC/USDT': { candles: candles || [], price: 1 } }, positioning: pos, agents: [] }, Math, Number, Object, Date, isFinite, String, window: {}, getTechSignals: () => ({ atScore: 0, raw: {} }), getFundamentalSignals: () => ({ fundScore: 0 }), detectHarmonicResonance: () => null, lmsrP: () => 0.5 }; vm.createContext(c); vm.runInContext(ENGINE + '\n' + SCOUT, c); return c; }
+function scoutCtx(pos, candles) { const c = { S: { pairStates: { 'BTC/USDT': { candles: candles || [], price: 1 } }, positioning: pos, agents: [] }, Math, Number, Object, Date, isFinite, String, window: {}, getTechSignals: () => ({ atScore: 0, raw: {} }), getFundamentalSignals: () => ({ fundScore: 0 }), detectHarmonicResonance: () => null, lmsrP: () => 0.5 }; vm.createContext(c); vm.runInContext(ENGINE + '\n' + DEGEL + '\n' + SCOUT, c); return c; }
 const sc = (pos, candles) => J(vm.runInContext("scoutAnalysis('fundamental_v1', 'BTC/USDT')", scoutCtx(pos, candles)));
 const up = Array.from({ length: 12 }, (_, i) => ({ o: 100, h: 101, l: 99, c: 100 + i * 0.2, v: 1 })), down = Array.from({ length: 12 }, (_, i) => ({ o: 100, h: 101, l: 99, c: 100 - i * 0.2, v: 1 }));
 console.log('▶ banc-positionnement');
@@ -39,7 +40,8 @@ T('D3 · scout RÉEL : sans flux → 0 ; périmé → 0 ; longs surpeuplés (fin
   assert.ok(crowded.score < -0.5, 'longs surpeuplés → vendeur : ' + crowded.score); assert.ok(crowded.reasoning.includes('financement +0.050 %') && crowded.reasoning.includes('long/short 3.00'), crowded.reasoning);
   const squeeze = sc({ 'BTC/USDT': { funding: -0.05, oiChg2h: 0, lsRatio: 0.3, t: Date.now() } }, up);
   assert.ok(squeeze.score > 0.5, 'shorts surpeuplés → acheteur : ' + squeeze.score);
-  const confirmUp = sc({ 'BTC/USDT': { funding: 0, oiChg2h: 5, lsRatio: 1, t: Date.now() } }, up), confirmDown = sc({ 'BTC/USDT': { funding: 0, oiChg2h: 5, lsRatio: 1, t: Date.now() } }, down);
+  // [DÉGEL DES VOIX · 02/10/2026] financement au taux de base de Binance (+0,01 %/8 h) = neutre : le terme OI est isolé (à 0 % de financement, le scout penche maintenant à l'achat : banc-degel.js)
+  const confirmUp = sc({ 'BTC/USDT': { funding: 0.01, oiChg2h: 5, lsRatio: 1, t: Date.now() } }, up), confirmDown = sc({ 'BTC/USDT': { funding: 0.01, oiChg2h: 5, lsRatio: 1, t: Date.now() } }, down);
   assert.ok(Math.abs(confirmUp.score - 0.35) < 1e-9 && Math.abs(confirmDown.score + 0.35) < 1e-9, 'OI +5 % × sens du prix × 0,35 : ' + confirmUp.score + ' / ' + confirmDown.score);
   const partial = sc({ 'BTC/USDT': { funding: null, oiChg2h: null, lsRatio: 1, t: Date.now() } }, up); assert.strictEqual(partial.score, 0); assert.strictEqual(partial.reasoning, 'long/short 1.00');
 });

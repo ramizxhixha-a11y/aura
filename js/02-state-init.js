@@ -1,3 +1,4 @@
+// [DÉGEL DES VOIX · 02/10/2026] VERSION 20261002a · série trouée = périmée : un bouche-trou de coupure (_gap) parmi les 60 bougies que lisent les voix → _realCandlesStale vrai (_realCandlesHoled) : vraies bougies redemandées à Binance, projection gelée sur les dernières vraies, portes en attente ; bougies REST marquées _r (volume en monnaie de base), marque retirée quand le flux retouche la bougie
 // [HORLOGE PAR MODE · 01/10/2026] VERSION 20261001a · la dernière bougie close vue par paire (S.realPairCycle) est rangée dans le portefeuille de CHAQUE mode (accesseur, comme pairStates) : EV et RE ont chacun leur cycle à chaque bougie close — avant, une seule horloge pour les deux, la première porte prenait la bougie ; remise à zéro de l'horloge d'un mode quand son pas de temps change (setPaperRealTimeframe / setRealTimeframe) et, pour EV et RE, au retour pré-réel
 // [MARCHÉ RÉPARÉ · 30/09/2026] VERSION 20260930a · lmsrP : en EV / RE, le vrai prix LMSR de la manche ouverte de la paire (03 _mktP : 1 / (1 + e^((qNo − qYes) / 100))), 50 % hors manche — AA garde l'ancien rapport qYes / (qYes + qNo)
 // [DÉCISION COMMUNE · 27/09/2026] VERSION 20260927g · à la fermeture, les agents (et le composite) sont jugés sur leurs votes À L'OUVERTURE (pos._votes, pos._comp), plus sur ceux de la fin qui avaient vu tout le trajet
@@ -3791,6 +3792,7 @@ function _aggregateRealPrice(pair, price, ts) {
       if (price > lastCandle.h) lastCandle.h = price;
       if (price < lastCandle.l) lastCandle.l = price;
       lastCandle.c = price;
+      if (lastCandle._r) delete lastCandle._r;   // [DÉGEL DES VOIX · 02/10/2026] retouchée par le flux : plus une bougie REST (v devient un compte de messages, plus bas) — _aggregateRealPriceOtherIntervals, qui ne touche pas v, garde la marque
       lastCandle.n = (lastCandle.n || 0) + 1;
       // v7.12 LIVRAISON 5 · accumulation du volume estimé
       // Sur le stream "trade" Binance on n'a pas la qty trade par trade
@@ -5124,12 +5126,28 @@ function _stopBgCollector() {
 // Fetch les 60 dernières bougies et réveille la paire si elle était pausée pour données périmées.
 // [1b-a · 14/09/2026] série absente, courte (< 30) ou dont la bougie en cours a plus de max(2,5 tf, 2 min) —
 // le MÊME critère que les portes EV (10g) et RE (08) ; source unique pour le boot (02) et les portes.
+// [DÉGEL DES VOIX · 02/10/2026] SÉRIE TROUÉE. Après une coupure (écran éteint, réseau), l'agrégation du flux (_aggregateRealPrice) bouche chaque
+// bougie manquante par une bougie plate (o = h = l = c = dernier prix, _gap). Les séries 1 h / 4 h étaient redemandées à Binance dès le premier
+// bouche-trou (_ctxSeriesNeedsRest) ; celle du pas de temps du mode, seulement quand elle était périmée — or le flux qui repart la remet à jour
+// tout de suite : les bouche-trous restaient jusqu'à 15 h dans les 60 bougies que lisent les voix (29/09 13:15 : 35 sur 60 pour 7 paires ;
+// cassure +0,85 partout pour breakout_v1 ; %B de 1,07 à 1,34 sur les paires trouées, que l'harmonique et mean_rev_v1 auraient lu une fois leur
+// lecture du Bollinger corrigée, 03). Désormais un bouche-trou parmi ces 60 bougies rend la série
+// « périmée » : les portes EV (10g) et RE (08) redemandent les vraies bougies (REST, 1 appel / 90 s / paire) et attendent, la projection (08)
+// garde les dernières vraies, le collecteur (_startBgCollector) les redemande aussi. Aucune décision, aucun jugement sur un prix inventé.
+var RC_HOLE_WIN = 60;   // les bougies que lisent les voix (08 _projectRealCandles en projette 60) — une fenêtre de lecture, pas une limite de marché
+function _realCandlesHoled(arr) {
+  if (!Array.isArray(arr)) return false;
+  for (var i = Math.max(0, arr.length - RC_HOLE_WIN); i < arr.length; i++) if (arr[i] && arr[i]._gap === true) return true;
+  return false;
+}
+window._realCandlesHoled = _realCandlesHoled;
 function _realCandlesStale(pair, tf) {
   tf = tf || '15m';
   const arr = (S.realCandles && S.realCandles[pair] && S.realCandles[pair][tf]) || [];
   if (arr.length < 30) return true;
   const tfMs = REAL_CANDLE_INTERVALS[tf] || 900000;
-  return (Date.now() - (arr[arr.length - 1].ts || 0)) > Math.max(tfMs * 2.5, 120000);
+  if ((Date.now() - (arr[arr.length - 1].ts || 0)) > Math.max(tfMs * 2.5, 120000)) return true;
+  return _realCandlesHoled(arr);   // [DÉGEL DES VOIX · 02/10/2026] série trouée : on attend les vraies bougies
 }
 window._realCandlesStale = _realCandlesStale;
 var _rcBootstrapAt = {};   // { 'BTC/USDT_15m': ms } — [1b-a] 1 appel REST / 90 s / paire·tf, tous appelants confondus
@@ -5160,7 +5178,7 @@ async function _fetchAndBootstrapRealCandles(pair, tf, quiet) {
     S.realCandles[pair][tf || '15m'] = data.map(k => ({
       ts: k[0], o: parseFloat(k[1]), h: parseFloat(k[2]),
       l: parseFloat(k[3]), c: parseFloat(k[4]),
-      v: parseFloat(k[5]), n: parseInt(k[8]) || 0
+      v: parseFloat(k[5]), n: parseInt(k[8]) || 0, _r: 1   // [DÉGEL DES VOIX · 02/10/2026] bougie REST : v = volume en monnaie de base (le flux, lui, compte des messages)
     }));
     // [1b-a] le dernier close REST devient la référence fraîche du filtre outlier (le flux WS repart sur du vrai)
     try { const _lc = S.realCandles[pair][tf || '15m']; const _lk = _lc[_lc.length - 1]; if (_lk && isFinite(_lk.c) && _lk.c > 0) _rcLastPx[pair] = { px: _lk.c, ts: Date.now() }; } catch(e) {}

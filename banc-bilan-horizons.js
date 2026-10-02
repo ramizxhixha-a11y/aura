@@ -69,10 +69,12 @@ T('M2 · _vjJudge : les deux trades marchent avec _thWalk ; à chaque horizon ju
   Object.assign(ser[ser.length - 1], { c: 99.5, l: 97.9, h: 100.5 }); add(4, 99.5); t.c.__now = k + 4 * Q + 1000; t.c._thJudge();
   assert.strictEqual(q.L.n[1], R4(-2 - 0.275)); assert.strictEqual(q.S.n[1], R4(0.5 - 0.275));
   const D1 = (q.L.n[1] - q.S.n[1]) / 2; assert.deepStrictEqual(J(T3.vHz.a1[1]), [500, Math.round(D1 * 10000)]); assert.ok(D1 < 0);
-  // 1 h : bouche-trou sur le chemin → le short est abandonné (le long, lui, a déjà touché sa perte max : issue connue) → personne n'est jugé, l'horizon est clos
+  // 1 h : bouche-trou sur le chemin → le short ATTEND la réparation ([DÉGEL DES VOIX · 02/10/2026] ; avant : abandonné sur-le-champ) ; le long a déjà touché sa perte max : issue connue
   ser[ser.length - 1]._gap = true; add(5, 99.4); add(6, 99.4); add(7, 99.4); t.c.__now = k + 7 * Q + 1000; t.c._thJudge();
-  assert.strictEqual(q.L.n[2], -2.275); assert.strictEqual(q.S.n[2], false); assert.strictEqual(q.a[2], 1); assert.deepStrictEqual(J(T3.vHz.a1[2]), []);
-  for (let i = 8; i <= 21; i++) add(i, 99.4);
+  assert.strictEqual(q.L.n[2], -2.275); assert.strictEqual(q.S.n[2], null); assert.strictEqual(q.a[2], 0); assert.deepStrictEqual(J(T3.vHz.a1[2]), []);
+  add(8, 99.4); add(9, 99.4); add(10, 99.4); t.c.__now = k + 10 * Q + 1000; t.c._thJudge();   // jamais réparé : abandonné 4 bougies après sa sortie (k+5Q) → personne n'est jugé, l'horizon est clos
+  assert.strictEqual(q.S.n[2], false); assert.strictEqual(q.a[2], 1); assert.deepStrictEqual(J(T3.vHz.a1[2]), []);
+  for (let i = 11; i <= 21; i++) add(i, 99.4);
   t.c.__now = k + 21 * Q + 1000; t.c._thJudge(); assert.strictEqual(T3.pendV.length, 0, 'tout tranché : sorti de l\'attente');
   assert.deepStrictEqual(J(q.a), [1, 1, 1, 1, 1]); assert.strictEqual(T3.vHz.a1.filter(L => L.length).length, 2, '2 h et 4 h : short abandonné aussi (coupure avant la sortie) → personne'); assert.deepStrictEqual(J(q.S.n), [R4(-0.5 - 0.275), R4(0.5 - 0.275), false, false, false]);
   // le sens décidé n'a rien vu de tout ça

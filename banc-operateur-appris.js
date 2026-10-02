@@ -233,7 +233,7 @@ T('T4 · triggerEvolution RÉEL (07) : la source vient de _evoOpPick(siège), pa
 });
 
 T('S1 · textes / écran : en-têtes 03, 07, 11b ; 11b « Évolution apprise » : les trois sources (évolutions, écart, état : prouvée / nuisible écartée jusqu\'à / à juger / pas prouvé), la politique en cours (pas de « prochaine ») et la colonne source des observations ; lecture seule', () => {
-  [s03, s07, s11].forEach((s, i) => assert.ok(s.split('\n').slice(0, 3).some(l => l.startsWith('// [OPÉRATEUR APPRIS · 28/09/2026] VERSION 20260928d')), 'en-tête ' + i + ' (dans les 3 premières lignes : relivré depuis, MARCHÉ RÉPARÉ 20260930a, HORLOGE PAR MODE 20261001a pour 03)'));
+  [s03, s07, s11].forEach((s, i) => assert.ok(s.split('\n').slice(0, 4).some(l => l.startsWith('// [OPÉRATEUR APPRIS · 28/09/2026] VERSION 20260928d')), 'en-tête ' + i + ' (dans les 4 premières lignes : relivré depuis, MARCHÉ RÉPARÉ 20260930a, HORLOGE PAR MODE 20261001a pour 03, DÉGEL DES VOIX 20261002a pour 03 et 07)'));
   const src = s11.replace(/setInterval\(function \(\) \{ try \{ _injectLearnedButton\(\); \} catch \(e\) \{\} \}, 2000\);/, '');
   const obs = gen(12, 'R', 0.01).concat(gen(3, 'B', 0.2, H4, NOW - 3 * H4), gen(5, 'M', -0.05, H4, NOW - 5 * H4)); obs[obs.length - 1][6] = 'corr_v1';
   const REAL = Date.now(), until = REAL + 2 * 86400000, dt = new Date(until).toLocaleString('fr-BE', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });

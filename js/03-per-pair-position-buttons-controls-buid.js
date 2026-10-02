@@ -1,3 +1,4 @@
+// [DÉGEL DES VOIX · 02/10/2026] VERSION 20261002a · les voix lisent ce qu'elles croient lire : RSI / Bollinger (raw.rsi.value, raw.boll.pct — toujours 50 / 0,5 avant), un statut de gardien n'est plus un sens (feu vert, alerte, veto = 0 ; avant +0,05 / −0,2 / −0,5 ; record de security_v1 effacé une fois), Évolueur sur les 5 derniers trades du système, corr_v1 et macro_v1 × corrélation de la paire à BTC, nlp_v1 relatif au ton de toutes les news, fundamental_v1 depuis le taux de base de Binance ; gènes jamais exercés remis au départ, historique compris (une fois) ; un bouche-trou ne fait plus abandonner un trade virtuel (_thWalk attend la réparation) ; volume_v1 ne compare plus deux sources de volume
 // [HORLOGE PAR MODE · 01/10/2026] VERSION 20261001a · EV et RE ont chacun leur cycle à chaque bougie close (02) ; ce qui est appris d'une bougie l'est une fois, sur un seul pas de temps — même pas de temps : le premier mode qui arrive note (trade virtuel, votes aux horizons), juge les votes à la bougie suivante (_dcFwdFirst) et joue la manche du marché, l'autre suit son prix sans miser ; deux pas de temps : bilan des voix, jugement et marché suivent le plus court des modes en jeu (_thBrainF : en marche ou affiché), le seuil reste par pas de temps (_thNote : + le pas de temps) ; une photo des votes n'est jugée que sur les 4 bougies qui la suivent au plus
 // [MARCHÉ RÉPARÉ · 30/09/2026] VERSION 20260930a · le marché des agents tel qu'il a été conçu (EV / RE) : une manche par paire et par bougie close — chaque agent mise ses T$ sur SON vote de la paire (croyance 0,5 + vote / 2, au plus 8 % de ses T$ répartis sur les paires actives), vrai prix LMSR (b = 100, départ 50/50), solde à la clôture de la bougie en cours (part juste = 1 T$ ; manche nulle = mises rendues), puis 50/50 ; les T$ restent au siège (plus de remise à la fitness) ; le prix = voix « marche » de la décision commune, jugée comme le composite (_mktCycle, _mktOpen, _mktSettle, _mktBet, _mktVote, _dcJudgeMarket) ; clôture sûre seulement si la bougie suivante est là, contiguë, pas un bouche-trou (sinon nulle) ; syncPairPresets : la cadence de lecture d'une paire ne suit plus le prix en EV / RE
 // [OPÉRATEUR APPRIS · 28/09/2026] VERSION 20260928d · la source de chaque naissance (07) est choisie parmi trois — R recombinaison avec la meilleure version passée + mutation (l'opérateur d'avant, byte-identique), B retour à la meilleure version passée du siège telle quelle, M mutation seule — et jugée sur les mêmes essais que l'évolution apprise (_genomeEvolve(…, op), _evoOpStats, _evoOpPick) : source prouvée bénéfique → c'est elle (une naissance sur deux aux sources encore à juger) ; source prouvée nuisible écartée, la preuve tenue jusqu'à 5 jours après sa plus jeune observation (une naissance libre de la source la rend aux données) ; sinon rotation par siège (B seulement si le siège a une version passée complète où revenir). L'observation de la règle porte la source (index 7) ; écran 🧠 Appris
@@ -3052,6 +3053,61 @@ if(typeof S !== 'undefined') {
 // ════════════════════════════════════════════════════════════
 // 1. INNER DIALOGUE — 5 Personas Debate Panel
 // ════════════════════════════════════════════════════════════
+// ═══ [DÉGEL DES VOIX · 02/10/2026] LES VOIX LISENT CE QU'ELLES CROIENT LIRE (go Rams 01/10 20:51 : « l'horloge par mode en premier … Ensuite le dégel ») ═══
+// Rams (30/09) : « les bots, je trouve qu'ils sont figés la plupart ». Backup du 29/09, 240 derniers votes par voix : security_v1 achète 100 % du
+// temps, fundamental_v1 vend 98 %, nlp_v1 achète 92 %, corr_v1 et macro_v1 donnent la même valeur sur les 12 paires, l'harmonique n'a que 6 valeurs,
+// mean_rev_v1 n'a jamais voté. Ce qui les figeait, vérifié dans le code :
+//  1. Noms de champs : les voix lisaient tech.raw.rsi.rsi et tech.raw.boll.position ; 08 getTechSignals donne raw.rsi = { value, divergence }
+//     (calcRSI) et raw.boll = { pct, … } (calcBollinger) → RSI toujours 50, Bollinger toujours au milieu, depuis toujours (les bancs donnaient la
+//     même fausse forme). Lecture corrigée (_techRsi, _techBollPct) : harmonic_v1 (notes RSI et Bollinger), sentiment_v2 (terme RSI),
+//     contrarian_v2 (RSI), mean_rev_v1 (Bollinger), le débat des personas (non appelé). Les gènes qui n'ont jamais vu leur entrée (harmonic_v1 :
+//     rsiHigh, rsiLow, bbHigh, bbLow ; sentiment_v2 : rsiHigh, rsiLow, rsiW ; contrarian_v2 : rsiHigh, rsiLow ; mean_rev_v1 : bbHigh, bbLow — ils
+//     ont dérivé sans aucune sélection possible) repartent de leur valeur de départ (GENOME_DEFAULTS), une fois (_degelMigrated, migration plus
+//     bas) — dans le génome courant, l'ancien génome d'un essai en cours ET les versions archivées (genomeHistory : sinon l'évolution, qui reprend
+//     la meilleure version passée, les ramènerait ; leur pointe de fitness ne devait rien à ces gènes, leur entrée étant constante).
+//  2. Bouche-trous de coupure lus comme de vrais prix plats : voir 02 (_realCandlesHoled) — une série trouée attend désormais les vraies bougies ;
+//     un trade virtuel dont le chemin croise un bouche-trou attend aussi la réparation au lieu d'être abandonné (_thWalk, au plus 4 bougies après
+//     sa sortie, la règle d'avant pour une série coupée).
+//  3. Gardiens : un STATUT n'est pas un sens. Un feu vert valait +0,05, compté comme un ACHAT par la décision commune (|v| ≥ 0,03), le bilan aux
+//     horizons et le marché — security_v1 votait +0,05 sur toutes les paires à chaque cycle (ses seuils de volatilité, 3,6 % / 4,5 %, sont
+//     au-dessus de tout ce que le 15 min produit : médiane 0,28 %) ; jugé sur ce vote constant, il suivait la dérive du marché : poids 0,485 (16 %
+//     de la décision), fitness 835. Un gardien muet valait aussi +0,05 ; une alerte −0,2 et un veto −0,5 étaient des VENTES (l'alerte permanente
+//     de l'Évolueur comptait contre chaque long dans la sortie « signal inversé », 10f). Désormais tout statut de gardien vaut 0 dans les votes ;
+//     le veto bloque toujours l'ouverture (09c, anyVeto), le statut reste affiché. Le record de security_v1, gagné par ce faux achat, est effacé
+//     une fois (fitness neutre 350, T$ du marché comme à une naissance). Les disciples gardiens ne répondent plus « direction » ni « timing » et
+//     l'élection ne leur donne que « conditions » (12). L'Évolueur comptait « 4 perdants sur 5 » sur les 5 derniers trades de CHAQUE paire
+//     (jusqu'à 60) : alerte permanente — désormais les 5 derniers trades du système.
+//  4. Voix de marché recentrées sur la paire : corr_v1 (lecture de BTC) et macro_v1 (Fear & Greed, capitalisation) valent pour la paire à
+//     proportion de sa corrélation à BTC (10e, 30 bougies du mode ; inconnue, nulle ou négative → abstention) ; nlp_v1 compare le ton des news de
+//     la paire à celui de toutes les news (la liste de mots juge la plupart des titres haussiers) ; fundamental_v1 mesure le financement à partir
+//     du taux de base de Binance (+0,01 % par 8 h, l'intérêt de sa formule) et non de 0 (−0,066 constant sur toutes les paires) ; macro_v1 : chaque
+//     source a son heure (07). En EV / RE, une corrélation calculée sur une série périmée ou trouée (la paire ou BTC) est sans objet : abstention.
+//  5. Volume : une bougie redemandée à Binance (REST) porte le volume en monnaie de base, une bougie agrégée du flux porte un NOMBRE DE MESSAGES
+//     (au plus 4 par seconde) — deux unités. Après chaque réparation de série, volume_v1 comparait l'un à l'autre (BTC : « pic de volume × 27 »
+//     pendant 5 h). Les bougies REST sont marquées (_r, 02), une bougie retouchée par le flux perd la marque ; volume_v1 s'abstient quand sa fenêtre
+//     mêle les deux sources. Essayé puis retiré : ne lire que les bougies closes (la bougie en cours, à peine ouverte au cycle, compte presque vide —
+//     le rapport récent / ancien tombe sous 1 et la voix vote alors à l'inverse du prix des 5 dernières bougies) : au rejeu, la voix ne parlait plus
+//     que 10 % des cycles au lieu de 66 % et sa justesse à 15 min tombait de +0,18 à +0,05 — ce biais est un retour à la moyenne qui a fait ses
+//     preuves (backup du 29/09 : +0,34 / +0,57 / +0,47 de 15 min à 1 h sur ses 60 derniers jugements) ; la voix le garde, dit tel quel.
+// Pas changé : geopolitic_v1 (vraie tendance 1 h / 4 h), hedge_v2 (suit ses conseillers, dont macro), arb / dca (un seul sens par construction),
+// le bilan aux horizons (une voix de marché reste jugée sur le marché), les seuils de volatilité de security_v1 (hors d'échelle en 15 min), le
+// volume du flux (un compte de messages plafonné : presque constant sur les paires liquides — le volume réel demande le flux @kline ou les
+// bougies REST à chaque clôture), le taux de base du financement pour un contrat à 4 h (0,005 % ; non vérifiable d'ici : API futures bloquée).
+// Rejeu avant livraison (app réelle en accéléré, 81 h, 9 fenêtres de 9 h, 2 tirages, EV et RE en marche en 15 min ; code d'avant (20261001a) contre ce code, mêmes fenêtres ; les flux macro, news et positionnement ne sont pas dans les sauvegardes : macro_v1, nlp_v1 et fundamental_v1 se taisent dans les deux rejeux — leurs changements ne sont éprouvés que par banc-degel.js, comme la réparation des séries trouées : le rejeu n'a pas les vraies bougies des coupures) : avant : tirage 1 0 trades, net 0 $, tirage 2 0 trades, net 0 $ ; ce code : tirage 1 0 trades, net 0 $, tirage 2 0 trades, net 0 $ ; 0 erreur. Voix (part des cycles où elle parle, valeurs distinctes, même valeur sur toutes les paires au même instant, justesse E = Σ v·D / Σ |v·D|) : security_v1 : parle 88,5 %, 3 valeurs, même valeur sur toutes les paires 96,5 %, justesse 15 min / 4 h +0,06 / +0,26 → muette ; harmonic_v1 : parle 75,1 %, 6 valeurs, même valeur sur toutes les paires 0,6 %, justesse 15 min / 4 h +0,01 / +0,02 → parle 78,6 %, 10 valeurs, même valeur sur toutes les paires 0,6 %, justesse 15 min / 4 h −0,01 / −0,03 ; contrarian_v2 : parle 0,3 %, 11 valeurs, même valeur sur toutes les paires 0 %, justesse 15 min / 4 h +0,25 / +0,76 → parle 7 %, 244 valeurs, même valeur sur toutes les paires 0 %, justesse 15 min / 4 h +0,21 / +0,57 ; mean_rev_v1 : parle 0,3 %, 19 valeurs, même valeur sur toutes les paires 0 %, justesse 15 min / 4 h −0,35 / −1,00 → parle 13,9 %, 289 valeurs, même valeur sur toutes les paires 0,9 %, justesse 15 min / 4 h +0,06 / +0,50 ; sentiment_v2 : parle 38,7 %, 637 valeurs, même valeur sur toutes les paires 0 %, justesse 15 min / 4 h +0,28 / +0,66 → parle 46,4 %, 788 valeurs, même valeur sur toutes les paires 0 %, justesse 15 min / 4 h +0,24 / +0,54 ; corr_v1 : parle 35 %, 65 valeurs, même valeur sur toutes les paires 75,6 %, justesse 15 min / 4 h −0,13 / −0,17 → parle 30,6 %, 663 valeurs, même valeur sur toutes les paires 0 %, justesse 15 min / 4 h −0,19 / +0,05 ; volume_v1 : parle 65,6 %, 333 valeurs, même valeur sur toutes les paires 0,5 %, justesse 15 min / 4 h +0,18 / +0,06 → parle 63,9 %, 354 valeurs, même valeur sur toutes les paires 0,7 %, justesse 15 min / 4 h +0,20 / +0,07. Décision (sens de la pesée vivante contre le mouvement, 15 min → 4 h ; marché haussier sur ces fenêtres : dérive +0,04 % / +0,07 % / +0,12 % / +0,21 % / +0,37 %) : sens juste 45,2 % / 45,1 % / 45,5 % / 44,9 % / 45,2 % → 45,1 % / 44,3 % / 44,3 % / 43,5 % / 43,5 % ; justesse équilibrée (moyenne des hausses et des baisses) 48,1 % / 47,6 % / 47,4 % / 45 % / 44,5 % → 48,1 % / 46,8 % / 46,2 % / 43,7 % / 42,4 % — l'écart tient à la première moitié de chaque fenêtre, quand les poids des voix décrivent encore leur ancien comportement (1re moitié 48,2 % / 46 % / 44,7 % / 45,9 % / 45 % → 48,6 % / 44,8 % / 42,3 % / 43,1 % / 42,7 % ; 2e moitié 48 % / 49,2 % / 50,8 % / 43,4 % / 37,1 % → 47,6 % / 48,8 % / 50,9 % / 44,5 % / 39 %) ; aucune des deux ne prévoit mieux que le hasard ; trades virtuels de la décision, net moyen −0,36 % / −0,37 % / −0,39 % / −0,40 % / −0,40 % → −0,35 % / −0,38 % / −0,42 % / −0,44 % / −0,43 % (4 460 → 4 457 trades virtuels jugés). Apprentissage : jugements à la bougie suivante 6 859 → 6 854, votes notés aux horizons 7 366 → 7 366, manches du marché 13 923 → 13 923, T$ misés 217 971 → 193 203. Essai retiré avant livraison : volume_v1 sur les bougies closes seulement — la voix ne parlait plus que 9,9 % des cycles (au lieu de 65,6 %), justesse 15 min +0,04 au lieu de +0,18, et le sens juste de la décision tombait à 43 % / 41,8 % / 42,1 % / 42,4 % / 43,9 %.
+function _techRsi(tech) { const r = tech && tech.raw && tech.raw.rsi; return (r && typeof r.value === 'number' && isFinite(r.value)) ? r.value : 50; }
+function _techBollPct(tech) { const b = tech && tech.raw && tech.raw.boll; return (b && typeof b.pct === 'number' && isFinite(b.pct)) ? b.pct : 0.5; }
+function _btcRho(pair) {   // corrélation de LA paire à BTC (10e _getPairCorrelation : 30 bougies du pas de temps du mode) ; BTC lui-même 1 ; null si inconnue
+  if (pair === 'BTC/USDT') return 1;
+  try {
+    if ((S.tradingMode === 'paperReal' || S.tradingMode === 'real') && typeof _realCandlesStale === 'function') {   // EV / RE : série périmée ou trouée (la paire ou BTC) → sans objet
+      const tf = (typeof _getActiveRealTimeframe === 'function') ? _getActiveRealTimeframe() : '15m';
+      if (_realCandlesStale(pair, tf) || _realCandlesStale('BTC/USDT', tf)) return null;
+    }
+    const r = (typeof _getPairCorrelation === 'function') ? _getPairCorrelation(pair, 'BTC/USDT') : null; return (typeof r === 'number' && isFinite(r)) ? r : null;
+  } catch (e) { return null; }
+}
+var FUND_BASE_PCT = 0.01;   // financement « neutre » de Binance : l'intérêt de sa formule, 0,03 %/jour soit 0,01 % par période de 8 h — un fait de la bourse, pas une limite
+window._techRsi = _techRsi; window._techBollPct = _techBollPct; window._btcRho = _btcRho;
 const PERSONAS = [
   { id:'scalper',    emoji:'⚡', name:'Scalper',    style:'momentum court terme' },
   { id:'swing',      emoji:'🌊', name:'Swing',      style:'cycles 1h-4h MACD' },
@@ -3070,7 +3126,7 @@ function generateDebate(pair) {
   const at    = tech.atScore || 0;
   const af    = fund.fundScore || 0;
   const lmsr  = typeof lmsrP === 'function' ? lmsrP(ps) : 0.5;
-  const rsi   = tech.raw?.rsi?.rsi || 50;
+  const rsi   = _techRsi(tech);   // [DÉGEL DES VOIX · 02/10/2026] raw.rsi.value (avant raw.rsi.rsi : toujours 50)
   const macd  = tech.raw?.macd?.hist || 0;
   const adx   = tech.raw?.adx?.adx || 20;
   const cv    = tech.raw?.stddev?.cv || 0.015;
@@ -3226,11 +3282,11 @@ function detectHarmonicResonance(pair) {
   const tech = typeof getTechSignals === 'function' ? getTechSignals(pair) : null;
   if(!tech) return null;
 
-  const rsi   = tech.raw?.rsi?.rsi || 50;
+  const rsi   = _techRsi(tech);   // [DÉGEL DES VOIX · 02/10/2026] raw.rsi.value (avant raw.rsi.rsi : toujours 50)
   const macd  = tech.raw?.macd?.hist || 0;
   const stoch = tech.raw?.stoch?.k || 50;
   const adx   = tech.raw?.adx?.adx || 20;
-  const bb    = tech.raw?.boll?.position || 0.5;
+  const bb    = _techBollPct(tech);   // [DÉGEL DES VOIX · 02/10/2026] raw.boll.pct (avant raw.boll.position : toujours 0,5)
 
   // Direction: +1 bullish, -1 bearish, 0 neutral
   const notes = [
@@ -3834,12 +3890,19 @@ function scoutAnalysis(agentId, pair) {
     // Lecture classique, génomée : peur extrême (< fngLow) → biais acheteur, avidité extrême (> fngHigh) → biais vendeur
     // (contrarien), pondéré par la variation de la capitalisation globale sur 24 h (élan). Plus vieux que 30 min → 0.
     case 'macro_v1': {
-      const mf = S.macroFeed;
-      if (!mf || !isFinite(mf.fng) || !isFinite(mf.t) || (Date.now() - mf.t) > 1800000) return { score: 0, conf: 0.3, reasoning: 'En attente du flux macro (Fear & Greed, dominance)' };
-      const fngS = mf.fng < G.fngLow ? (G.fngLow - mf.fng) / G.fngLow : mf.fng > G.fngHigh ? -(mf.fng - G.fngHigh) / (100 - G.fngHigh) : 0;
-      const capS = isFinite(mf.cap24h) ? Math.max(-1, Math.min(1, mf.cap24h / G.capScale)) : 0;
-      const sc = Math.max(-1, Math.min(1, fngS * G.wFng + capS * G.wCap));
-      return { score: sc, conf: 0.6, reasoning: `Fear & Greed ${Math.round(mf.fng)} (${mf.fngLabel || ''})` + (isFinite(mf.cap24h) ? ` · cap globale ${mf.cap24h >= 0 ? '+' : ''}${mf.cap24h.toFixed(1)} % 24 h` : '') + (isFinite(mf.btcDominance) ? ` · dominance BTC ${mf.btcDominance.toFixed(1)} %` : '') };
+      const mf = S.macroFeed, mNow = Date.now();
+      if (!mf || !isFinite(mf.fng) || !isFinite(mf.t) || (mNow - mf.t) > 1800000) return { score: 0, conf: 0.3, reasoning: 'En attente du flux macro (Fear & Greed, dominance)' };
+      // [DÉGEL DES VOIX · 02/10/2026] chaque source a son heure (07 : tFng, tCap) — avant, feed.t était rafraîchi si l'une OU l'autre répondait ;
+      // flux d'avant cette version (sans tFng / tCap) : t. Puis le climat du marché crypto vaut pour LA paire à proportion de sa corrélation à BTC
+      // (avant : la même valeur sur les 12 paires, EUR/USDT comprise) ; corrélation inconnue → abstention.
+      const fngOk = (mNow - (isFinite(mf.tFng) ? mf.tFng : mf.t)) <= 1800000, capOk = isFinite(mf.cap24h) && (mNow - (isFinite(mf.tCap) ? mf.tCap : mf.t)) <= 1800000;
+      if (!fngOk && !capOk) return { score: 0, conf: 0.3, reasoning: 'En attente du flux macro (Fear & Greed, dominance)' };
+      const rho = _btcRho(pair);
+      if (rho === null) return { score: 0, conf: 0.3, reasoning: 'Macro : corrélation à BTC inconnue' };
+      const fngS = !fngOk ? 0 : mf.fng < G.fngLow ? (G.fngLow - mf.fng) / G.fngLow : mf.fng > G.fngHigh ? -(mf.fng - G.fngHigh) / (100 - G.fngHigh) : 0;
+      const capS = capOk ? Math.max(-1, Math.min(1, mf.cap24h / G.capScale)) : 0;
+      const sc = Math.max(-1, Math.min(1, fngS * G.wFng + capS * G.wCap)) * Math.max(0, Math.min(1, rho));
+      return { score: sc, conf: 0.6, reasoning: (fngOk ? `Fear & Greed ${Math.round(mf.fng)} (${mf.fngLabel || ''})` : 'Fear & Greed en attente') + (capOk ? ` · cap globale ${mf.cap24h >= 0 ? '+' : ''}${mf.cap24h.toFixed(1)} % 24 h` : '') + (isFinite(mf.btcDominance) ? ` · dominance BTC ${mf.btcDominance.toFixed(1)} %` : '') + ` · corrélation à BTC ${rho.toFixed(2)}` };
     }
     // [POSITIONNEMENT · 26/09/2026] fundamental_v1 lit S.positioning (02) : financement (longs surpeuplés → biais vendeur, contrarien),
     // open interest sur 2 h dans le sens du prix (des positions s'ouvrent avec le mouvement → confirmation), ratio long/short des
@@ -3849,7 +3912,7 @@ function scoutAnalysis(agentId, pair) {
       if (!pf || !isFinite(pf.t) || (Date.now() - pf.t) > 1800000) return { score: 0, conf: 0.3, reasoning: 'En attente du flux positionnement (financement, open interest)' };
       let sc = 0, parts = [];
       const num = v => typeof v === 'number' && isFinite(v);   // isFinite(null) vaut TRUE en JS : le flux met null quand une réponse manque
-      if (num(pf.funding)) { const f = Math.max(-1, Math.min(1, -pf.funding / G.fundScale)); sc += f * G.wF; parts.push(`financement ${pf.funding >= 0 ? '+' : ''}${pf.funding.toFixed(3)} %`); }
+      if (num(pf.funding)) { const f = Math.max(-1, Math.min(1, -(pf.funding - FUND_BASE_PCT) / G.fundScale)); sc += f * G.wF; parts.push(`financement ${pf.funding >= 0 ? '+' : ''}${pf.funding.toFixed(3)} %`); }   // [DÉGEL DES VOIX · 02/10/2026] mesuré à partir du taux de base de Binance (+0,01 %/8 h), plus de 0 (−0,066 constant partout)
       if (num(pf.oiChg2h)) {
         const c2 = candles.length >= 9 ? Math.sign(candles[candles.length - 1].c - candles[candles.length - 9].c) : 0;
         const o = Math.max(-1, Math.min(1, pf.oiChg2h / G.oiScale)) * c2; sc += o * G.wOi; parts.push(`OI ${pf.oiChg2h >= 0 ? '+' : ''}${pf.oiChg2h.toFixed(1)} % 2 h`);
@@ -3865,8 +3928,13 @@ function scoutAnalysis(agentId, pair) {
         const alive = (typeof _newsSourceAlive === 'function') && _newsSourceAlive();
         return { score: 0, conf: 0, reasoning: alive ? 'News : moins de 5 articles scorés sur 24 h — neutre' : 'News : source inactive (clé CoinStats absente ou flux hors service)' };
       }
-      const sc = Math.max(-1, Math.min(1, (ns.score - 50) / 50));
-      return { score: sc, conf: Math.min(0.7, 0.3 + ns.nScored * 0.04), reasoning: `News 24 h ${ns.label} (${ns.score}/100, ${ns.nScored} art. scorés)` };
+      // [DÉGEL DES VOIX · 02/10/2026] le ton des news de LA paire comparé à celui de TOUTES les news (10e7 _newsGlobal) : la liste de mots juge la
+      // plupart des titres haussiers (92 % d'achats du 27 au 29/09) — l'écart retire ce biais commun et le ton général du marché (lu par macro_v1).
+      // Ton global non mesurable → abstention (défensif : le ton global contient les articles de la paire, il est mesurable dès que celui de la paire l'est).
+      const ng = (typeof _newsGlobal === 'function') ? _newsGlobal() : null;
+      if (!ng || typeof ng.score !== 'number' || !isFinite(ng.score)) return { score: 0, conf: 0, reasoning: 'News : ton global non mesurable — neutre' };
+      const sc = Math.max(-1, Math.min(1, (ns.score - ng.score) / 50));
+      return { score: sc, conf: Math.min(0.7, 0.3 + ns.nScored * 0.04), reasoning: `News 24 h ${ns.label} (${ns.score}/100 contre ${ng.score}/100 toutes paires, ${ns.nScored} art. scorés)` };
     }
     case 'sentiment_v2': {
       // v6.7: Real sentiment — price momentum + RSI bias as social proxy
@@ -3874,7 +3942,7 @@ function scoutAnalysis(agentId, pair) {
       if(candles2.length < 5) return { score:0, conf:0.4, reasoning:'Données insuffisantes' };
       const closes = candles2.slice(-G.win).map(x=>x.c);
       const momentum = closes.length > 1 ? (closes[closes.length-1] - closes[0]) / closes[0] : 0;
-      const rsi = tech?.raw?.rsi?.rsi || 50;
+      const rsi = _techRsi(tech);   // [DÉGEL DES VOIX · 02/10/2026] raw.rsi.value (avant : toujours 50)
       // RSI>65 = euphorie, RSI<35 = panique
       const rsiSent = rsi > G.rsiHigh ? (rsi-G.rsiHigh)/35 : rsi < G.rsiLow ? -(G.rsiLow-rsi)/35 : 0;
       const rawScore = Math.max(-1, Math.min(1, momentum*G.momGain + rsiSent*G.rsiW + (tech?.atScore||0)*G.atW));
@@ -3888,6 +3956,11 @@ function scoutAnalysis(agentId, pair) {
       // [FLUX BINANCE · 17/09/2026] VOLUME RÉEL des klines (v, depuis 1b-b) : G.recentN dernières bougies vs les G.histN
       // précédentes — plus les amplitudes h−l comme proxy. Direction : le prix sur G.lookback bougies.
       if(candles.length < Math.max(10, G.recentN + G.histN)) return { score:0, conf:0.3, reasoning:'En observation' };
+      // [DÉGEL DES VOIX · 02/10/2026] une bougie redemandée à Binance (REST, _r : volume en monnaie de base) et une bougie du flux (nombre de messages,
+      // au plus 4 par seconde) ne se comparent pas : fenêtre mêlée → abstention (5 h en 15 min après une réparation de série). La bougie en cours reste
+      // comptée, comme avant : la retirer coupait une voix dont le bilan mesuré est positif (rejeu et backup du 29/09, voir la section DÉGEL DES VOIX).
+      const vwin = candles.slice(-(G.recentN + G.histN));
+      if (vwin.some(cd => cd && cd._r) && vwin.some(cd => !(cd && cd._r))) return { score: 0, conf: 0.3, reasoning: 'Volume : deux sources dans la fenêtre (bougies redemandées à Binance et bougies du flux) — en attente' };
       const vol = candles.map(cd => Number(cd.v) || 0);
       if (!vol.some(v => v > 0)) return { score:0, conf:0.3, reasoning:'En attente du volume Binance' };
       const recentVol = vol.slice(-G.recentN).reduce((a,b)=>a+b,0) / G.recentN;
@@ -3923,10 +3996,16 @@ function scoutAnalysis(agentId, pair) {
     case 'corr_v1': {
       // Detect divergence from market leaders
       const leaderScore = (S.pairStates['BTC/USDT']?.candles?.slice(-G.win).reduce((s,c,i,a)=>i>0?s+Math.sign(c.c-a[i-1].c):s,0)) || 0;
+      // [DÉGEL DES VOIX · 02/10/2026] la lecture de BTC vaut pour LA paire à proportion de sa corrélation à BTC — avant, le même vote sur toutes les
+      // paires, EUR/USDT comprise. Corrélation inconnue, nulle ou négative → abstention ; en EV / RE, série de BTC périmée ou trouée → abstention
+      // (ses bougies projetées ne sont plus à jour).
+      try { if (pair !== 'BTC/USDT' && (S.tradingMode === 'paperReal' || S.tradingMode === 'real') && typeof _realCandlesStale === 'function' && _realCandlesStale('BTC/USDT', (typeof _getActiveRealTimeframe === 'function') ? _getActiveRealTimeframe() : '15m')) return { score: 0, conf: 0.3, reasoning: 'Bougies de BTC en attente' }; } catch (e) {}
+      const rho = _btcRho(pair);
+      if (rho === null) return { score: 0, conf: 0.3, reasoning: 'Corrélation à BTC inconnue' };
       return {
-        score: Math.max(-1, Math.min(1, leaderScore * G.gain)),
+        score: Math.max(-1, Math.min(1, leaderScore * G.gain)) * Math.max(0, Math.min(1, rho)),
         conf: 0.6,
-        reasoning: leaderScore > 2 ? 'BTC mène la hausse (corrélation +)' : leaderScore < -2 ? 'BTC mène la baisse' : 'Découplage en cours'
+        reasoning: (leaderScore > 2 ? 'BTC mène la hausse' : leaderScore < -2 ? 'BTC mène la baisse' : 'BTC sans direction nette') + ' · corrélation à BTC ' + rho.toFixed(2)
       };
     }
     case 'geopolitic_v1': {
@@ -4048,7 +4127,7 @@ function councilVote(councilId, pair, scoutResults) {
   const tech = typeof getTechSignals === 'function' ? getTechSignals(pair) : null;
   const lmsr = ps && typeof lmsrP === 'function' ? lmsrP(ps) : 0.5;
   const at   = tech?.atScore || 0;
-  const rsi  = tech?.raw?.rsi?.rsi || 50;
+  const rsi  = _techRsi(tech);   // [DÉGEL DES VOIX · 02/10/2026] raw.rsi.value (avant : toujours 50 — contrarian_v2 ne parlait jamais)
   const macd = tech?.raw?.macd?.hist || 0;
   const adx  = tech?.raw?.adx?.adx || 20;
 
@@ -4086,7 +4165,7 @@ function councilVote(councilId, pair, scoutResults) {
       ownQuote = at > 0.2 ? `Momentum positif fort (AT ${at.toFixed(2)}).` : at < -0.2 ? `Momentum négatif (AT ${at.toFixed(2)}).` : `Momentum faible.`;
       break;
     case 'mean_rev_v1':
-      const bb = tech?.raw?.boll?.position || 0.5;
+      const bb = _techBollPct(tech);   // [DÉGEL DES VOIX · 02/10/2026] raw.boll.pct (avant : toujours 0,5 — mean_rev_v1 ne parlait jamais)
       if(bb > G.bbHigh)      { ownScore = -G.score; ownQuote = `Sur la borne haute Boll, retour à la moyenne.`; }
       else if(bb < G.bbLow) { ownScore = +G.score; ownQuote = `Sur la borne basse, rebond probable.`; }
       else              { ownScore = 0;    ownQuote = `Proche de la moyenne, pas d'edge.`; }
@@ -4151,8 +4230,12 @@ function guardianCheck(guardianId, verdict, pair, stake) {
     case 'evolver_v1': {
       // v5.9 — Learning from archives + groupthink detection
       const archiveCount = (S.archives?.snapshots || []).length;
+      // [DÉGEL DES VOIX · 02/10/2026] les 5 derniers trades DU SYSTÈME (heure de clôture) — avant : les 5 derniers de CHAQUE paire (jusqu'à 60) ;
+      // « 4 perdants » était presque toujours vrai : alerte permanente, −0,2 sur toutes les paires (lu par la sortie « signal inversé », 10f)
       const recentTradesPnl = Object.values(S.pairStates || {})
-        .flatMap(p => (p.trades || []).slice(-5).filter(t => t.type === 'position' && t.pnlUsdt != null))
+        .flatMap(p => (p.trades || []).filter(t => t && t.type === 'position' && t.pnlUsdt != null))
+        .sort((a, b) => (Number(a.ts) || 0) - (Number(b.ts) || 0))
+        .slice(-5)
         .map(t => t.pnlUsdt);
       const recentLosses = recentTradesPnl.filter(p => p < 0).length;
       if(recentLosses >= 4 && recentTradesPnl.length >= 5) {
@@ -4254,7 +4337,7 @@ function runRosterAnalysis(pair) {
   // « consensus sur LA paire résolue » (50 % du signal final) → bruit corrélé, pas un vote.
   // Le vote de chaque agent est publié dans ps.roster.votes de LA paire (RAM seulement : 09b1
   // liste les champs de ps sauvegardés, roster n'en est pas), avec les MÊMES valeurs qu'avant :
-  // scout = score, conseil = ±magnitude (hold = 0), gardien = −0.5 veto / −0.2 warn / +0.05 ok ;
+  // scout = score, conseil = ±magnitude (hold = 0), gardien = 0 — un statut, pas un sens (avant le DÉGEL DES VOIX · 02/10/2026 : −0.5 veto / −0.2 warn / +0.05 ok) ;
   // agent muet (S.mutedAgents) = 0. Lecteurs : 10f (consensus, mémoire), learnFromOutcome
   // (aligné/force), enrichMemory, 12 (angles disciples) — via _agentPairVote(a, pair).
   // a.score / a.conf ne bougent plus que par learnFromOutcome, la redistribution (02) et le
@@ -4274,7 +4357,9 @@ function runRosterAnalysis(pair) {
       });
       Object.entries(guardianResults).forEach(([id, res]) => {
         if (!res) return;
-        _votes[id] = _muted.has(id) ? 0.05 : (res.status === 'veto' ? -0.5 : res.status === 'warn' ? -0.2 : 0.05);
+        // [DÉGEL DES VOIX · 02/10/2026] un gardien rend un STATUT (feu vert, alerte, veto), pas un sens : 0 (avant : feu vert et gardien muet +0,05 = un
+        // achat ; alerte −0,2 et veto −0,5 = des ventes). Le veto bloque toujours l'ouverture (09c, anyVeto) ; le statut reste affiché.
+        _votes[id] = 0;
       });
       _ps.roster = { ts: Date.now(), cycle: S.cycle || 0, votes: _votes, weights: _weights, regime: _regimeNow };   // [POIDS PAR ATTRIBUTION] décomposition lisible
       try { const _sh = _evoShadowVotes(pair, scoutResults, verdict, (S.tradingAccount || 100) * 0.1); if (_sh) _ps.roster.shadow = _sh; } catch(e) {}   // [MÉRITE DE L'ÉVOLUEUR · 26/09/2026] votes de l'ancien génome des sièges en essai
@@ -6383,6 +6468,37 @@ function _botMeritAudit() {
           if (S.chainLog.length > 100) S.chainLog.splice(0, S.chainLog.length - 100);
         } catch(e) {}
       }
+      if (!S._degelMigrated) try {   // [DÉGEL DES VOIX · 02/10/2026] une fois, après la restauration (section DÉGEL DES VOIX, plus haut) ; une erreur ici
+        // n'empêche pas la sauvegarde des autres migrations (le drapeau n'est posé qu'en fin de bloc : refaite au prochain démarrage)
+        const lines = [], GD = (typeof GENOME_DEFAULTS !== 'undefined') ? GENOME_DEFAULTS : null;
+        const sec = S.agents.find(a => a && a.id === 'security_v1');
+        if (sec) {   // son record (bilan aux horizons, jugements, fitness) a été gagné par le faux achat du feu vert (+0,05 à chaque cycle)
+          const f0 = Math.round(Number(sec.fitness) || 0), nj = Array.isArray(sec._judgments) ? sec._judgments.length : 0;
+          if (typeof _vjReset === 'function') _vjReset('security_v1');   // bilan aux horizons et votes encore en attente
+          if (S.dcThreshold && S.dcThreshold.vHz && S.dcThreshold.vHz.security_v1) throw new Error('dégel : bilan aux horizons de security_v1 non effacé');   // sinon son poids resterait : rien n'est touché, refait au prochain démarrage
+          sec._judgments = []; sec.fitness = 350; sec.streak = 0;
+          const w0 = Math.round(Number(sec.mktWallet) || 0);
+          sec.mktWallet = 350; sec.mktGain = 0; sec.mktN = 0; sec.mktGen = (Number(sec.mktGen) || 0) + 1;   // T$ du marché gagnés par les mêmes faux achats : comme à une naissance (07) ; ses mises encore ouvertes ne lui sont ni payées ni rendues
+          lines.push('Gardien Sécurité : son statut ne compte plus comme un sens (feu vert = achat, alerte / veto = vente) · record effacé (gagné par ce faux achat : fitness ' + f0 + ', bilan aux horizons, ' + nj + ' jugement(s) à la bougie, ' + w0 + ' T$ au marché) · fitness neutre 350, 350 T$');
+        }
+        const DEAD = { harmonic_v1: ['rsiHigh', 'rsiLow', 'bbHigh', 'bbLow'], sentiment_v2: ['rsiHigh', 'rsiLow', 'rsiW'], contrarian_v2: ['rsiHigh', 'rsiLow'], mean_rev_v1: ['bbHigh', 'bbLow'] };   // gènes qui n'ont jamais vu leur entrée (RSI / Bollinger lus à vide)
+        Object.keys(DEAD).forEach(id => {
+          const def = GD && GD[id]; if (!def) return;
+          const reset = g => { let n = 0; if (g && typeof g === 'object') DEAD[id].forEach(k => { if ((k in def) && Number(g[k]) !== def[k]) { g[k] = def[k]; n++; } }); return n; };
+          const g = S.genome && S.genome[id], ch = [];
+          if (g && typeof g === 'object') DEAD[id].forEach(k => { if (!(k in def)) return; const v = Number(g[k]); if (v !== def[k]) { ch.push(k + ' ' + (isFinite(v) ? Math.round(v * 1000) / 1000 : '—') + ' → ' + def[k]); g[k] = def[k]; } });
+          const tr = S.evoTrials && S.evoTrials[id];   // essai d'évolution en cours : l'ancien génome reçoit les mêmes valeurs (l'essai juge les autres gènes)
+          if (tr && tr.oldG && typeof tr.oldG === 'object') reset(tr.oldG);
+          let nH = 0; (S.genomeHistory && Array.isArray(S.genomeHistory[id]) ? S.genomeHistory[id] : []).forEach(h => { if (h && reset(h.g)) nH++; });   // versions archivées : l'évolution (retour à la meilleure version, recombinaison) ne les ramènera pas
+          if (ch.length || nH) lines.push('Génome ' + id + ' : gènes jamais exercés (RSI / Bollinger lus à vide) remis à leur valeur de départ' + (ch.length ? ' — ' + ch.join(', ') : '') + (nH ? ' · ' + nH + ' version(s) archivée(s) aussi' : ''));
+        });
+        S._degelMigrated = true; changed = true;
+        try {
+          if (!S.chainLog) S.chainLog = [];
+          lines.forEach(d => S.chainLog.push({ icon: '\uD83E\uDDCA', desc: d, hash: Math.random().toString(36).slice(2, 8), time: (typeof nowStr === 'function') ? nowStr() : '' }));
+          if (S.chainLog.length > 100) S.chainLog.splice(0, S.chainLog.length - 100);
+        } catch(e) {}
+      } catch(e) { try { window._decErr && window._decErr(e); } catch(_e) {} }
       if (changed) { try { if (typeof saveState === 'function') saveState(true); } catch(e) {} }
     } catch(e) {}
   }, 500);
@@ -6755,7 +6871,8 @@ function _thWalk(q, cost, now) {
   let cut = 0, n = 0;
   for (let i = 0; i < arr.length - 1; i++) {   // la dernière bougie est en cours : jamais lue
     const b = arr[i]; if (!b || !(b.ts > q.s)) continue;
-    if (b._gap || b.ts > q.s + f) { cut = (b.ts > q.s + f) ? q.s + f : b.ts; break; }   // bouche-trou ou bougie manquante : chemin inconnu
+    if (b.ts > q.s + f) { cut = q.s + f; break; }   // bougie manquante : chemin inconnu
+    if (b._gap) break;   // [DÉGEL DES VOIX · 02/10/2026] bouche-trou : chemin PAS ENCORE connu — on attend la réparation (02 : une série trouée est redemandée à Binance) ; jamais réparée → abandon 4 bougies après la sortie (plus bas), comme avant pour une série coupée — avant : abandon sur-le-champ, la réparation arrivait trop tard
     let lo = Number(b.l), hi = Number(b.h);
     if (b.ts === q.s0) { lo = lo < q.el ? lo : Infinity; hi = hi > q.eh ? hi : -Infinity; }   // bougie d'entrée : seuls ses extrêmes nouveaux sont d'après l'entrée
     const adv = q.d > 0 ? (q.px - lo) / q.px * 100 : (hi - q.px) / q.px * 100;
@@ -7456,7 +7573,7 @@ function _evoShadowVotes(pair, scoutResults, verdict, stake) {
       var v = null;
       if (ROSTER_TIERS.scouts.indexOf(id) >= 0) { var r = scoutAnalysis(id, pair); v = (r && typeof r.score === 'number') ? r.score : 0; }
       else if (ROSTER_TIERS.council.indexOf(id) >= 0) { var c = councilVote(id, pair, scoutResults); if (c) { var m = Math.abs(c.score || 0.3); v = c.vote === 'long' ? m : c.vote === 'short' ? -m : 0; } }
-      else if (ROSTER_TIERS.guardians.indexOf(id) >= 0) { var g = guardianCheck(id, verdict, pair, stake); if (g) v = g.status === 'veto' ? -0.5 : g.status === 'warn' ? -0.2 : 0.05; }
+      else if (ROSTER_TIERS.guardians.indexOf(id) >= 0) v = 0;   // [DÉGEL DES VOIX · 02/10/2026] un statut de gardien n'est pas un sens : 0, comme au roster
       if (v !== null) { out[id] = muted.has(id) ? 0 : v; n++; }
     } catch (e) {}
     finally { if (had) S.genome[id] = cur; else delete S.genome[id]; if (rh) S.resonanceHistory = rh; }

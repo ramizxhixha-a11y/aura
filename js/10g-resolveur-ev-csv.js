@@ -1,3 +1,4 @@
+// [DÉGEL DES VOIX · 02/10/2026] VERSION 20261002a · porte EV : une série trouée (bouche-trou parmi les 60 bougies lues, 02) redemande les vraies bougies et attend
 // [HORIZONS APPRIS · 27/09/2026] VERSION 20260927i · places prises : le cycle de la paire tourne quand même en mode « noter seulement » (trade virtuel, voix jugées) — aucune ouverture ni fermeture (10f)
 // [1b-a · 14/09/2026] VERSION 20260914a · porte EV : test de fraîcheur AVANT `closedTs <= lastSeenTs` (le refetch « données obsolètes » était inatteignable sur une série figée)
 // ▓▓▓ VERSION 20260905a ▓▓▓ · [P0 RÉGIME UNIFIÉ · 05/09/2026] écriture de S._paperRealCurrentRegime supprimée (photo périmée) — le régime se lit partout en direct via detectMarketRegime()
@@ -40,6 +41,12 @@ function _resolvePaperRealCycle(pair, ps) {
   const stalenessThreshold = Math.max(tfMs * 2.5, 120000);
   const dataAge = arr.length ? (now - arr[arr.length - 1].ts) : Infinity;
   if (arr.length < 30 || dataAge > stalenessThreshold) {
+    if (typeof _fetchAndBootstrapRealCandles === 'function') _fetchAndBootstrapRealCandles(pair, tf);
+    return;
+  }
+  // [DÉGEL DES VOIX · 02/10/2026] série TROUÉE (bouche-trou de coupure parmi les 60 bougies que lisent les voix, 02 _realCandlesHoled) : les vraies
+  // bougies sont redemandées à Binance (REST, limité en 02) et on attend — aucune décision, aucun jugement sur un prix inventé.
+  if (typeof _realCandlesHoled === 'function' && _realCandlesHoled(arr)) {
     if (typeof _fetchAndBootstrapRealCandles === 'function') _fetchAndBootstrapRealCandles(pair, tf);
     return;
   }

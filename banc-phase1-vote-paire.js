@@ -6,7 +6,7 @@
 //      sur le vote ; en-têtes et HTML au token.
 //  B · dynamique — runRosterAnalysis RÉEL (scouts/conseil/gardiens stubbés PAR PAIRE) + tranche consensus RÉELLE de 10f :
 //      consensus(ETH) ≠ consensus(BTC) sur les MÊMES agents (signes opposés), a.score / a.conf STABLES sans clôture, muet = 0,
-//      sans roster = 0 (pas de décision sur du faux), multiplexage par mode, veto gardien = −0.5 ; learnFromOutcome RÉEL juge
+//      sans roster = 0 (pas de décision sur du faux), multiplexage par mode, gardien = 0 quel que soit son statut (DÉGEL DES VOIX · 02/10/2026 ; veto −0.5 avant), son veto bloque toujours ; learnFromOutcome RÉEL juge
 //      sur le vote de la paire (repli a.score sans roster) ; _angleAnswer RÉEL (12) lit le vote ; sortie « Signal inversé »
 //      atteignable (dénominateur = agents qui votent).
 'use strict';
@@ -35,10 +35,10 @@ console.log('▶ banc-phase1-vote-paire · token ' + TOK + ' · ' + scripts.leng
 /* ═══════════════════════════ A · STATIQUE ═══════════════════════════ */
 console.log('\n── A · statique : ce qui est retiré, ce qui est publié ──');
 T('en-têtes : 03/12 « [PHASE 1 · 12/09/2026] VERSION 20260912c », 02/08 relivrés par 1b-a « [1b-a · 14/09/2026] VERSION 20260914a », 10f « ▓▓▓ VERSION 20260917b ▓▓▓ »', () => {
-  assert.ok(s12.startsWith('// [ÉCOLE · 17/09/2026] VERSION 20260917a') && s12.split('\n').slice(0, 5).some(l => l.startsWith('// [PHASE 1 · 12/09/2026] VERSION 20260912c')), F12);   // [1c-FULL] 12 relivré, en-tête PHASE 1 en 2e ligne
-  assert.ok(s03.startsWith('// [HORLOGE PAR MODE · 01/10/2026] VERSION 20261001a') && s03.split('\n').slice(0, 40).some(l => l.startsWith('// [PHASE 1 · 12/09/2026] VERSION 20260912c')), F03);   // [FITNESS GLISSANTE] 03 relivré, en-tête PHASE 1 conservé dans les 5 premières lignes
-  assert.ok(s08.startsWith('// [MARCHÉ RÉPARÉ · 30/09/2026] VERSION 20260930a') && s08.split('\n').slice(0, 13).some(l => l.startsWith('// [1b-a · 14/09/2026] VERSION 20260914a')), F08);   // [1b-b] 08 relivré, en-tête 1b-a en 2e ligne
-  assert.ok(s02.startsWith('// [HORLOGE PAR MODE · 01/10/2026] VERSION 20261001a') && s02.split('\n').slice(0, 25).some(l => l.startsWith('// [1b-a · 14/09/2026] VERSION 20260914a')), F02);   // [SONDE RÉSEAU] 02 relivré, en-tête 1b-a en 2e ligne
+  assert.ok(s12.split('\n').slice(0, 2).some(l => l.startsWith('// [ÉCOLE · 17/09/2026] VERSION 20260917a')) && s12.split('\n').slice(0, 6).some(l => l.startsWith('// [PHASE 1 · 12/09/2026] VERSION 20260912c')), F12);   // [DÉGEL DES VOIX · 02/10/2026] 12 relivré   // [1c-FULL] 12 relivré, en-tête PHASE 1 en 2e ligne
+  assert.ok(s03.startsWith('// [DÉGEL DES VOIX · 02/10/2026] VERSION 20261002a') && s03.split('\n').slice(0, 41).some(l => l.startsWith('// [PHASE 1 · 12/09/2026] VERSION 20260912c')), F03);   // [DÉGEL DES VOIX · 02/10/2026] 03 relivré   // [FITNESS GLISSANTE] 03 relivré, en-tête PHASE 1 conservé dans les 5 premières lignes
+  assert.ok(s08.startsWith('// [DÉGEL DES VOIX · 02/10/2026] VERSION 20261002a') && s08.split('\n').slice(0, 14).some(l => l.startsWith('// [1b-a · 14/09/2026] VERSION 20260914a')), F08);   // [DÉGEL DES VOIX · 02/10/2026] 08 relivré   // [1b-b] 08 relivré, en-tête 1b-a en 2e ligne
+  assert.ok(s02.startsWith('// [DÉGEL DES VOIX · 02/10/2026] VERSION 20261002a') && s02.split('\n').slice(0, 26).some(l => l.startsWith('// [1b-a · 14/09/2026] VERSION 20260914a')), F02);   // [DÉGEL DES VOIX · 02/10/2026] 02 relivré   // [SONDE RÉSEAU] 02 relivré, en-tête 1b-a en 2e ligne
   assert.ok(s10f.startsWith('// [MARCHÉ RÉPARÉ · 30/09/2026] VERSION 20260930a') && s10f.split('\n').slice(0, 7).some(l => l.startsWith('// ▓▓▓ VERSION 20260926g ▓▓▓')));   // [BILAN AUX HORIZONS · 27/09] 10f relivré, en-tête ▓▓▓ en 6e ligne   // [SENS CONTRAIRE · 27/09] 10f relivré, en-tête ▓▓▓ en 5e ligne   // [HORIZONS APPRIS · 27/09] 10f relivré, en-tête ▓▓▓ en 4e ligne   // [DÉCISION COMMUNE · 27/09/2026] 10f relivré
 });
 T('HTML : DOC_V + 80 ?v= au token ' + TOK + ' (81 occurrences, 10i le 17/09, 11b le 23/09), aucun autre token, archive/ non chargé', () => {
@@ -149,13 +149,13 @@ function mkCtx() {
 const J = x => JSON.parse(JSON.stringify(x));   // objets du vm : comparaison par valeur
 const snapSig = (S) => JSON.stringify(S.agents.filter(a => !a.isBot && !a.isMeta).map(a => [a.id, a.score, a.conf]));
 
-T('roster BTC : ps.roster.votes publiés (scout = score, conseil = ±magnitude, gardien ok = +0.05) ; résultat retourné = même API (09c/04/03) ; aucun a.score / a.conf d\'agent de signal modifié', () => {
+T('roster BTC : ps.roster.votes publiés (scout = score, conseil = ±magnitude, gardien ok = 0 — +0.05 avant le DÉGEL DES VOIX · 02/10/2026) ; résultat retourné = même API (09c/04/03) ; aucun a.score / a.conf d\'agent de signal modifié', () => {
   const c = mkCtx(); const before = snapSig(c.S);
   const r = vm.runInContext("runRosterAnalysis('BTC/USDT')", c);
   const ps = c.S.pairStates['BTC/USDT'];
   assert.ok(ps.roster && ps.roster.votes && ps.roster.ts > 0 && ps.roster.cycle === 7);
   assert.strictEqual(ps.roster.votes.macro_v1, 0.6); assert.strictEqual(ps.roster.votes.volume_v1, 0.3);
-  assert.strictEqual(ps.roster.votes.scalper_v2, 0.5); assert.strictEqual(ps.roster.votes.security_v1, 0.05);
+  assert.strictEqual(ps.roster.votes.scalper_v2, 0.5); assert.strictEqual(ps.roster.votes.security_v1, 0);   // [DÉGEL DES VOIX · 02/10/2026] feu vert : 0
   assert.strictEqual(Object.keys(ps.roster.votes).length, 23);
   assert.deepStrictEqual(Object.keys(JSON.parse(JSON.stringify(r))).sort(), ['anyVeto', 'coalition', 'consensus', 'councilResults', 'finalDecision', 'guardianResults', 'pair', 'scoutResults', 'skillWeighted', 'verdict', 'votes'].sort());
   assert.strictEqual(r.verdict, 'LONG'); assert.strictEqual(r.anyVeto, false);
@@ -187,19 +187,19 @@ T('bots / méta : jamais de vote (0) → hors consensus ; le miroir « statut de
   const exec = c.S.agents.find(a => a.id === 'exec_bot_v1'), dca = c.S.agents.find(a => a.id === 'dca_bot_v1'), evo = c.S.agents.find(a => a.id === 'evolver_v1');
   assert.strictEqual(exec.score, 0.3); assert.strictEqual(dca.score, -0.4);
   assert.strictEqual(b._voteOf(exec), 0); assert.strictEqual(b._voteOf(dca), 0);
-  assert.strictEqual(b._voteOf(evo), 0.05);   // gardien méta : vote publié mais exclu du consensus (isMeta) — _signalAgents ne le contient pas
+  assert.strictEqual(b._voteOf(evo), 0);   // gardien méta : vote publié (feu vert = 0 depuis le DÉGEL DES VOIX · 02/10/2026, +0,05 avant) mais exclu du consensus (isMeta) — _signalAgents ne le contient pas
   assert.ok(!b._signalAgents.some(a => a.isBot || a.isMeta));
 });
-T('agent muet (S.mutedAgents) : vote 0 dans ps.roster (scout, conseil), gardien muet = +0.05 ; consensus BTC reste > 0 ; démuté → vote rétabli', () => {
+T('agent muet (S.mutedAgents) : vote 0 dans ps.roster (scout, conseil), gardien muet = 0 (+0.05 avant le DÉGEL DES VOIX · 02/10/2026) ; consensus BTC reste > 0 ; démuté → vote rétabli', () => {
   const c = mkCtx(); c.S.mutedAgents = ['volume_v1', 'scalper_v2', 'security_v1'];
   const b = vm.runInContext("_consensus('SOL/USDT', S.pairStates['SOL/USDT'])", c);
   const v = c.S.pairStates['SOL/USDT'].roster.votes;
-  assert.strictEqual(v.volume_v1, 0); assert.strictEqual(v.scalper_v2, 0); assert.strictEqual(v.security_v1, 0.05);
+  assert.strictEqual(v.volume_v1, 0); assert.strictEqual(v.scalper_v2, 0); assert.strictEqual(v.security_v1, 0);   // [DÉGEL DES VOIX · 02/10/2026] gardien muet : 0
   assert.ok(b.agentConsensus > 0.3);
   c.S.mutedAgents = [];
   vm.runInContext("runRosterAnalysis('SOL/USDT')", c);
   assert.strictEqual(c.S.pairStates['SOL/USDT'].roster.votes.volume_v1, 0.3);
-  assert.strictEqual(c.S.pairStates['SOL/USDT'].roster.votes.security_v1, -0.5);   // veto gardien (stub) = −0.5, comme avant dans a.score
+  assert.strictEqual(c.S.pairStates['SOL/USDT'].roster.votes.security_v1, 0);   // [DÉGEL DES VOIX · 02/10/2026] veto gardien (stub) = 0 : un statut n'est pas un sens (−0.5 avant) — le veto bloque toujours (anyVeto, 09c)
 });
 T('sans roster (runRosterAnalysis en erreur) : consensus = 0 — pas de décision sur du faux ; _agentPairVote rend le repli', () => {
   const c = mkCtx();
@@ -225,7 +225,7 @@ T('sortie « Signal inversé » : position LONG sur ETH (20 votants contre sur 2
   const c = mkCtx();
   const opp = (pair, posDir) => vm.runInContext("(function(){ const r = _consensus('" + pair + "', S.pairStates['" + pair + "']); return [_opp(" + posDir + ", r._voteOf, r.totalFitness), r.totalFitness]; })()", c);
   const [oE, tf] = opp('ETH/USDT', 1);
-  assert.ok(Math.abs(oE - 20 / 21) < 1e-9 && oE > 0.75, 'ETH long : ' + oE);   // 20 votants contre / 21 de signal (security_v1 approuve à +0.05 : neutre)
+  assert.ok(Math.abs(oE - 20 / 21) < 1e-9 && oE > 0.75, 'ETH long : ' + oE);   // 20 votants contre / 21 de signal (security_v1 approuve : 0 depuis le DÉGEL DES VOIX · 02/10/2026 — +0.05 avant, neutre ici aussi)
   assert.strictEqual(tf, 21 * 800);
   assert.strictEqual(opp('BTC/USDT', 1)[0], 0);
   assert.ok(opp('BTC/USDT', -1)[0] > 0.75);   // position SHORT sur BTC : les votants sont contre

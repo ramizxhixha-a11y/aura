@@ -36,13 +36,13 @@ function mkAgents(fit) {
   BOT_IDS.forEach(id => A.push(base(id, 0, { isBot: true })));
   return A;
 }
-const MUTE_SCOUT = 'flow_v1', HOLD_COUNCIL = 'hedge_v2';   // un scout qui attend sa donnée, un conseiller qui dit « hold »
+const MUTE_SCOUT = 'flow_v1', HOLD_COUNCIL = 'hedge_v2', EDGE_SCOUT = 'onchain_v1';   // un scout qui attend sa donnée, un conseiller qui dit « hold », un scout pile au seuil (0,05 : le feu vert d'un gardien avant le DÉGEL DES VOIX · 02/10/2026)
 function mkLearnCtx() {
   const calls = { regime: [], memory: [] };
   const c = { console, Math, Date, Object, Array, Number, String, JSON, Set, Map, isFinite, calls };
   c.window = { _perfOp: () => {} };
   c.S = { agents: mkAgents(800), pairStates: { 'BTC/USDT': { price: 1 } }, mutedAgents: [], tradingAccount: 500, cycle: 7, tradingMode: 'paperReal', chainLog: [], learningHistory: [] };
-  c.scoutAnalysis = id => ({ score: id === MUTE_SCOUT ? 0 : 0.6, conf: 0.7, reasoning: 'stub' });
+  c.scoutAnalysis = id => ({ score: id === MUTE_SCOUT ? 0 : id === EDGE_SCOUT ? 0.05 : 0.6, conf: 0.7, reasoning: 'stub' });
   c.councilVote = id => (id === HOLD_COUNCIL ? { vote: 'hold', score: 0, quote: 'stub' } : { vote: 'long', score: 0.5, quote: 'stub' });
   c.guardianCheck = () => ({ status: 'approve', reasoning: 'stub' });
   c.detectMarketRegime = () => 'calm'; c.getContextualWeight = a => a.fitness || 1;
@@ -57,12 +57,13 @@ const ag = (c, id) => c.S.agents.find(a => a.id === id);
 const lose = (c, n) => { for (let i = 0; i < (n || 1); i++) vm.runInContext("runRosterAnalysis('BTC/USDT'); learnFromOutcome('position', -1.2, 'BTC/USDT')", c); };
 
 console.log('▶ banc-abstention');
-T('D1 · learnFromOutcome RÉEL : le scout sans donnée (vote 0), le conseiller « hold » (0) et le gardien qui approuve (+0,05) ne sont PLUS jugés — ni jugement, ni erreur, ni souvenir, ni compétence, ni ligne d\'historique ; le votant (+0,6, perdu) est jugé −1', () => {
+T('D1 · learnFromOutcome RÉEL : le scout sans donnée (vote 0), le conseiller « hold » (0) et le gardien qui approuve (0 depuis le DÉGEL DES VOIX · 02/10/2026, +0,05 avant) ne sont PLUS jugés — ni jugement, ni erreur, ni souvenir, ni compétence, ni ligne d\'historique ; le votant (+0,6, perdu) est jugé −1', () => {
   const c = mkLearnCtx(); lose(c);
   const v = c.S.pairStates['BTC/USDT'].roster.votes;
-  assert.deepStrictEqual([v[MUTE_SCOUT], v[HOLD_COUNCIL], v.security_v1, v.macro_v1], [0, 0, 0.05, 0.6], 'votes publiés par le roster RÉEL');
+  assert.deepStrictEqual([v[MUTE_SCOUT], v[HOLD_COUNCIL], v.security_v1, v.macro_v1], [0, 0, 0, 0.6], 'votes publiés par le roster RÉEL');   // [DÉGEL DES VOIX · 02/10/2026] feu vert : 0 (avant +0,05)
   const macro = ag(c, 'macro_v1'); assert.strictEqual(macro._judgments.length, 1); assert.strictEqual(macro._judgments[0].s, -1); assert.strictEqual(macro.errors, 1);
-  [MUTE_SCOUT, HOLD_COUNCIL, 'security_v1'].forEach(id => {
+  assert.strictEqual(v[EDGE_SCOUT], 0.05, 'vote pile au seuil');
+  [MUTE_SCOUT, HOLD_COUNCIL, 'security_v1', EDGE_SCOUT].forEach(id => {
     const a = ag(c, id);
     assert.ok(!a._judgments || a._judgments.length === 0, id + ' : aucun jugement'); assert.strictEqual(a.errors, 0, id + ' : aucune erreur');
     assert.ok(!c.calls.memory.some(m => m[0] === id), id + ' : aucun souvenir'); assert.ok(!(c.S.agentPairSkill || {})[id], id + ' : aucune compétence');
@@ -104,7 +105,7 @@ function runMigr(S) {
 }
 const jj = (n, s, w) => Array.from({ length: n }, () => ({ s, w, k: 0 }));
 T('D5 · migration RÉELLE (une fois) : poids plancher retirés des fenêtres des APPRENANTS (les deux signes) ; fitness recalculée, neutre 350 si la fenêtre n\'était qu\'abstentions, naissance gardée sous 5 jugements ; « erreurs » d\'abstention retirées ; bots et Évolueur intacts ; journal + sauvegarde', () => {
-  const S = { _botMeritMigrated: true, _metaMeritMigrated: true, chainLog: [], agents: [
+  const S = { _botMeritMigrated: true, _metaMeritMigrated: true, _degelMigrated: true, chainLog: [], agents: [   // [DÉGEL DES VOIX · 02/10/2026] la migration du dégel a son banc (banc-degel.js)
     { id: 'macro_v1', fitness: 50, errors: 14, _judgments: jj(14, -1, 0.01) },
     { id: 'security_v1', fitness: 632, errors: 25, _judgments: [].concat(jj(20, 1, 0.01), jj(20, -1, 0.01), jj(20, 1, 0.4), jj(10, -1, 0.4)) },
     { id: 'trend_v2', fitness: 520, errors: 3, _judgments: jj(3, -1, 0.01) },
@@ -129,7 +130,7 @@ T('D6 · rejeu sur la mémoire réelle (backups 23/09 et 25/09, migration RÉELL
     const agents = st.agents.map(a => Object.assign({}, a, { isBot: /_bot_v1$|^smart_sizer_v1$/.test(a.id), isMeta: a.id === 'evolver_v1' }));
     const broken = () => agents.filter(a => !a.isBot && !a.isMeta && a.fitness <= 80).length;
     assert.strictEqual(broken(), before, fn + ' avant');
-    runMigr({ _botMeritMigrated: true, _metaMeritMigrated: true, chainLog: [], agents, fitWindowRule: st.fitWindowRule || null });
+    runMigr({ _botMeritMigrated: true, _metaMeritMigrated: true, _degelMigrated: true, chainLog: [], agents, fitWindowRule: st.fitWindowRule || null });   // [DÉGEL DES VOIX · 02/10/2026] migration des abstentions seule
     assert.strictEqual(broken(), after, fn + ' après');
   });
 });

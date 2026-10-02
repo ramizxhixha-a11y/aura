@@ -11,7 +11,8 @@ const codeStrict = s => s.split('\n').filter(l => !/^\s*\/\//.test(l)).join('\n'
 const s03 = rd('js/03-per-pair-position-buttons-controls-buid.js');
 const ENGINE = between(s03, 'const GENOME_DEFAULTS = {', 'window.GENOME_DEFAULTS = GENOME_DEFAULTS;', false);
 const SCOUT = between(s03, 'function scoutAnalysis(agentId, pair) {', '\n// ── COUNCIL ANALYZERS', false);
-function ctx(feed) { const c = { S: { pairStates: { 'BTC/USDT': { candles: [], price: 1 } }, macroFeed: feed, agents: [] }, Math, Number, Object, Date, isFinite, String, window: {}, getTechSignals: () => ({ atScore: 0, raw: {} }), getFundamentalSignals: () => ({ fundScore: 0 }), detectHarmonicResonance: () => null, lmsrP: () => 0.5 }; vm.createContext(c); vm.runInContext(ENGINE + '\n' + SCOUT, c); return c; }
+const DEGEL = between(s03, 'function _techRsi(tech) {', 'window._techRsi = _techRsi;', false);   // [DÉGEL DES VOIX · 02/10/2026] lecteurs des indicateurs, corrélation à BTC, taux de base du financement
+function ctx(feed) { const c = { S: { pairStates: { 'BTC/USDT': { candles: [], price: 1 } }, macroFeed: feed, agents: [] }, Math, Number, Object, Date, isFinite, String, window: {}, getTechSignals: () => ({ atScore: 0, raw: {} }), getFundamentalSignals: () => ({ fundScore: 0 }), detectHarmonicResonance: () => null, lmsrP: () => 0.5 }; vm.createContext(c); vm.runInContext(ENGINE + '\n' + DEGEL + '\n' + SCOUT, c); return c; }   // [DÉGEL DES VOIX · 02/10/2026] BTC/USDT : corrélation à lui-même 1, valeurs inchangées
 const sc = feed => JSON.parse(JSON.stringify(vm.runInContext("scoutAnalysis('macro_v1', 'BTC/USDT')", ctx(feed))));
 console.log('▶ banc-macro-reel');
 T('D1 · macro_v1 RÉEL : sans flux → 0 (« En attente ») ; flux vieux de plus de 30 min → 0 ; peur extrême → biais acheteur ; avidité extrême → biais vendeur ; zone neutre → seul l\'élan de la cap compte', () => {

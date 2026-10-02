@@ -1,3 +1,4 @@
+// [DÉGEL DES VOIX · 02/10/2026] VERSION 20261002a · un disciple gardien ne répond ni « direction » ni « timing » (son vote est un statut, pas un sens) ; l'élection ne lui donne que « conditions »
 // [ÉCOLE · 17/09/2026] VERSION 20260917a · jury des disciples : pas de notation en AA
 // [RETRAIT REDISTRIBUTION · 16/09/2026] VERSION 20260916e · hook _payBotSurplus retiré
 // [1c-FULL · 16/09/2026] VERSION 20260916a · succession sans transfert de savoir (affectation du siège seulement)
@@ -50,6 +51,10 @@ var _ANGLES = ['direction', 'timing', 'conditions'];
 //  conditions → sa MÉMOIRE DE RÉGIME (win-rate dans le régime de marché actuel)
 function _angleAnswer(a, angle, pair, side) {
   try {
+    // [DÉGEL DES VOIX · 02/10/2026] un gardien (03 ROSTER_TIERS.guardians) rend un statut, pas un sens ni une force de conviction : il ne répond ni
+    // « direction » ni « timing » (avant : son feu vert +0,05 répondait « d'accord » à tout long ; à 0 il aurait répondu « pas maintenant », dont le
+    // Smart Sizer, qui l'a pour seul disciple, aurait tiré ×1,1 sur les mises). « conditions » (sa mémoire de régime) reste.
+    if (angle !== 'conditions' && typeof ROSTER_TIERS !== 'undefined' && ROSTER_TIERS && Array.isArray(ROSTER_TIERS.guardians) && a && ROSTER_TIERS.guardians.indexOf(a.id) >= 0) return 0;
     if (angle === 'direction') {
       // [PHASE 1 · 12/09/2026] le SIGNE lu est le vote de l'agent sur LA paire (ps.roster, via 03), plus a.score (biais global)
       var _vd = (typeof _agentPairVote === 'function') ? _agentPairVote(a, pair, a.score || 0) : (a.score || 0);
@@ -104,6 +109,8 @@ function _electTasks() {
       var pairsScored = [];
       ds.forEach(function (a) {
         _ANGLES.forEach(function (angle, ai) {
+          // [DÉGEL DES VOIX · 02/10/2026] l'élection ne donne à un gardien que « conditions » (il ne répond ni « direction » ni « timing », _angleAnswer)
+          if (angle !== 'conditions' && typeof ROSTER_TIERS !== 'undefined' && ROSTER_TIERS && Array.isArray(ROSTER_TIERS.guardians) && ROSTER_TIERS.guardians.indexOf(a.id) >= 0) return;
           var tm = _taskMerit(a.id, angle);
           pairsScored.push({ a: a, ai: ai, score: (tm !== null ? tm : _discipleMerit(a) * 0.8) });
         });
