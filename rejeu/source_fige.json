@@ -1,0 +1,141 @@
+{
+ "date": "2026-10-03",
+ "mission": "go source",
+ "regles": "RÉPLIQUE PRÉ-ENREGISTRÉE (fixée le 03/10/2026 avant toute donnée de la période) : décisions du 01/10/2021 00:00 au 30/09/2024 23:00 UTC (jamais utilisées par la découverte), mêmes définitions (rejeu/source_prep.py), mêmes frais 0,26 %, lecture 1 et lecture 2. Chaque hypothèse garde son sens, son horizon et son seuil figés ici (aucun réapprentissage ; la combinaison garde ses poids et sa normalisation). Risque 5 % / 5 d'un seul côté par hypothèse ; seuil z appris sur 2 000 placebos de la période de réplique à ce risque, jamais sous 2,33 (quantile normal à 1 %). Une hypothèse est RÉPLIQUÉE si z ≥ seuil ET brut > 0 ET net > 0 avec ≥ 30 jours d'entrée distincts, dans les deux lectures. Répliquée → mission d'intégration comme voix de l'app (puis rejeu/talent.js) ; aucune répliquée → fin de la recherche de sources publiques à plusieurs jours.",
+ "hypotheses": [
+  {
+   "source": "stables",
+   "horizon_h": 72,
+   "sens": "+",
+   "seuil_abs": 0.6431641578674316,
+   "quantile_an1": 0.8,
+   "decouverte": {
+    "z": 1.5850276349415364,
+    "brut_an1": 61.33275887074533,
+    "brut_an2": 47.899559796257634,
+    "net_an2": 144.39469858379368,
+    "jours_an2": 45
+   }
+  },
+  {
+   "source": "stables",
+   "horizon_h": 168,
+   "sens": "+",
+   "seuil_abs": 0.367258757352829,
+   "quantile_an1": 0.5,
+   "decouverte": {
+    "z": 1.76911922942427,
+    "brut_an1": 123.31188530026489,
+    "brut_an2": 140.4668459453679,
+    "net_an2": 204.68365992692577,
+    "jours_an2": 38
+   }
+  },
+  {
+   "source": "cbprem",
+   "horizon_h": 168,
+   "sens": "+",
+   "seuil_abs": 0.3488611578941345,
+   "quantile_an1": 0.5,
+   "decouverte": {
+    "z": 1.027845030981272,
+    "brut_an1": 102.92219202160666,
+    "brut_an2": 48.736310560509516,
+    "net_an2": 133.97523494898033,
+    "jours_an2": 46
+   }
+  },
+  {
+   "source": "smart",
+   "horizon_h": 168,
+   "sens": "+",
+   "seuil_abs": 0.8007901549339296,
+   "quantile_an1": 0.8,
+   "decouverte": {
+    "z": 1.5394440384781978,
+    "brut_an1": 115.6751502047109,
+    "brut_an2": 56.33972171145999,
+    "net_an2": 36.947154816591976,
+    "jours_an2": 144
+   }
+  },
+  {
+   "source": "commune13",
+   "horizon_h": 72,
+   "sens": "+",
+   "sources": [
+    "basis7",
+    "oi7",
+    "smart",
+    "takerfut",
+    "futspot",
+    "dvol",
+    "cbprem",
+    "stables",
+    "spx5",
+    "vix",
+    "tsmom28",
+    "tsmom7",
+    "xsmom28"
+   ],
+   "fige": {
+    "mu": [
+     0.11638051783176313,
+     0.0028910917747401368,
+     0.11071482992889302,
+     -0.038799993641202984,
+     0.06761733535482677,
+     -0.03552823001238576,
+     -0.07874474531915547,
+     0.04084167562661213,
+     0.064077902318594,
+     -0.08355664141665525,
+     0.09903676971174208,
+     0.039678711067101594,
+     -0.004411615537893961
+    ],
+    "sd": [
+     0.5681970972293819,
+     0.49101339672155414,
+     0.5595638736692753,
+     0.5242313835924446,
+     0.5932829167194854,
+     0.5477823617583956,
+     0.4835926502203256,
+     0.4956266603884012,
+     0.4327187112698233,
+     0.5271656416932247,
+     0.45798373390610037,
+     0.4514844749124713,
+     0.4867776924760599
+    ],
+    "w": [
+     0.015395056893344788,
+     -0.0015920924833906492,
+     -0.0011572374889721882,
+     -0.001053909706703043,
+     0.0037753909591702376,
+     0.0034473764104051693,
+     0.001067540330559758,
+     0.011836575726168934,
+     0.000284428711869905,
+     0.004654287228489989,
+     -0.007931478332501362,
+     -0.0013917170097911898,
+     0.006693307362761711,
+     0.007950880610341651
+    ],
+    "pm": 0.007950880610341651,
+    "ps": 0.016198451083814985
+   },
+   "seuil_abs": 0.17146428304183398,
+   "quantile_an1": 0.9,
+   "decouverte": {
+    "z_an2": 1.0928269310720933,
+    "brut_an2": 38.17965001148139,
+    "net_an2": 63.33782145883977,
+    "jours_an2": 152
+   }
+  }
+ ]
+}
