@@ -46,6 +46,7 @@ function buildActionBricks() {
           <span class="ab-dot"></span>
         </div>
         <div class="ab-price" id="abpx_${pairKey}">—</div>
+        <div class="ab-pos" id="abpos_${pairKey}" style="display:none;"></div>
       </div>
       <div>
         <div class="ab-signal" id="absig_${pairKey}">HOLD</div>
@@ -66,10 +67,45 @@ window.buildActionBricks = buildActionBricks;
 
 
 // ──────────────────────────────────────────────────────────────────────
-// Rafraîchissement des briques "Action" à chaque tick
-// Met à jour prix, signal, LMSR, WR, RSI dot, sparkline, conviction.
+// Rafraîchissement des briques "Action" à chaque battement (1 s)
+// [CARTES · 05/10/2026] remarques de Rams (capture du 05/10 00:35) : les cartes « n'affichent pas le réel en pourcentages, du moins pas
+// assez vite en live », « n'affichent pas si trade auto ou manu » (DOT : une position MANUELLE montrée « 🔒 LONG », comme une carte bot),
+// « pas le prix misé non plus ». Ce qui était faux :
+//  · le % à côté du prix = ps.pnl24h, écrit par DEUX sources de sens différents : le 24 h de CoinGecko (~8 s) et, en EV / RE, la variation
+//    des 60 bougies du mode (08, 15 h en 15 min) à chaque passage → le chiffre sautait entre deux mesures ; désormais : le vrai 24 h, recalculé
+//    EN DIRECT sur ps.price à chaque battement (02 _ref24Pct : prix d'il y a 24 h, Binance ou CoinGecko) — AA garde son ps.pnl24h (prix simulés) ;
+//  · prix tronqués à l'entier (DOT « 1 », EUR « 1 », AVAX « 11 ») : un mouvement de 4 % ne se voyait pas → chiffres significatifs (_abFmtPx) ;
+//  · une position ouverte : ni MAN / AUTO lisible, ni mise, ni P&L → « 👤 MAN ↑ LONG » / « 🤖 AUTO ↑ LONG », ligne « mise », P&L % et $ en direct
+//    (même calcul que renderPositions 02 : exposition × variation, perte bornée à la mise comme closePosition) ;
+//  · sans position : « 🤖 BUY / SELL » sortaient du LMSR seul (> 0,6 / < 0,4, seuils à la main) alors que les bots décident sur la décision
+//    commune → la carte dit HOLD (aucune action en cours) et montre la force de la DÉCISION COMMUNE (10f ps._dc, comme la fiche MAN) ;
+//  · rafraîchie 1 battement sur 2 → à chaque battement (08) ; fond (courbe) et point RSI gardent leur rythme (1 sur 2).
 // ──────────────────────────────────────────────────────────────────────
+function _abFmtPx(pair, px) {
+  px = Number(px);
+  if (!isFinite(px) || px <= 0) return '—';
+  if (px >= 1000) return Math.round(px).toLocaleString();
+  if (px >= 10) return px.toFixed(2);
+  if (px >= 1) return px.toFixed(4);
+  return px.toFixed(Math.min(10, Math.max(4, 3 - Math.floor(Math.log10(px)))));
+}
+window._abFmtPx = _abFmtPx;
+// % de la carte : le vrai 24 h en direct (EV / RE) ; AA (prix simulés) : la variation simulée d'avant
+function _abChg24(pair, ps) {
+  if (S.tradingMode !== 'sim' && typeof _ref24Pct === 'function') { const v = _ref24Pct(pair, ps.price); if (v !== null && isFinite(v)) return { v: v, real: true }; }
+  return { v: Number(ps.pnl24h) || 0, real: false };
+}
+// P&L en direct d'une position (exposition × variation ; perte bornée à la mise propre, comme closePosition)
+function _abPosPnl(pos, px) {
+  const e = Number(pos.entryPrice); px = Number(px);
+  if (!(e > 0) || !(px > 0)) return { pct: 0, usd: 0 };
+  const pct = (pos.side === 'long' ? (px - e) / e : (e - px) / e) * 100;
+  const exp = Number(pos.totalExposure) || Number(pos.stakeUsdt) || 0;
+  return { pct: pct, usd: Math.max(-(Number(pos.stakeUsdt) || 0), exp * pct / 100) };
+}
+let _abSlowTurn = 0;
 function updateActionBricks() {
+  const slow = (_abSlowTurn++ % 2) === 0;   // courbe de fond + point RSI : 1 passage sur 2 (même coût qu'avant)
   Object.entries(PAIRS).forEach(([pair, cfg]) => {
     const pairKey = pair.replace('/', '_');
     const brick   = document.getElementById('actbrick_' + pairKey);
@@ -82,14 +118,14 @@ function updateActionBricks() {
     const lmsrEl = document.getElementById('ablmsr_' + pairKey);
     const wrEl   = document.getElementById('abwr_'   + pairKey);
     const trEl   = document.getElementById('abtr_'   + pairKey);
+    const posEl  = document.getElementById('abpos_'  + pairKey);
 
     // ── État PAUSED ──
     if (S._pausedPairs && S._pausedPairs[pair]) {
       brick.className = 'action-brick sig-hold paused';
-      if (pxEl) {
-        const priceStr = (cfg.dec >= 4) ? ps.price.toFixed(cfg.dec) : Math.floor(ps.price).toLocaleString();
-        pxEl.textContent = priceStr;
-      }
+      brick.removeAttribute('data-pos');
+      if (posEl) { posEl.textContent = ''; posEl.style.display = 'none'; }
+      if (pxEl)   pxEl.textContent   = _abFmtPx(pair, ps.price);
       if (sigEl)  sigEl.textContent  = '⏸ PAUSE';
       if (lmsrEl) lmsrEl.textContent = '—';
       if (wrEl)   { wrEl.textContent = '—'; wrEl.className = 'ab-wr'; }
@@ -97,78 +133,72 @@ function updateActionBricks() {
       return;
     }
 
-    // Prix + %24h
+    // Prix + vraie variation 24 h, en direct
     if (pxEl) {
-      const priceStr = (cfg.dec >= 4) ? ps.price.toFixed(cfg.dec) : Math.floor(ps.price).toLocaleString();
-      const pnl24    = ps.pnl24h || 0;
-      const pnl24Col = pnl24 >= 0 ? 'var(--up)' : 'var(--down)';
-      pxEl.innerHTML = `${priceStr} <span style="color:${pnl24Col};margin-left:3px;">${pnl24 >= 0 ? '+' : ''}${pnl24.toFixed(2)}%</span>`;
+      const ch  = _abChg24(pair, ps);
+      const col = ch.v >= 0 ? 'var(--up)' : 'var(--down)';
+      pxEl.innerHTML = `${_abFmtPx(pair, ps.price)} <span style="color:${col};margin-left:3px;">${ch.v >= 0 ? '+' : ''}${ch.v.toFixed(2)}%</span>`;
+      pxEl.title = ch.real ? 'Variation réelle sur 24 h, en direct' : 'Variation sur la fenêtre de bougies (prix simulés)';
     }
 
-    // Probabilité LMSR (conviction du marché de prédiction interne)
-    const prob = typeof lmsrP === 'function' ? lmsrP(ps) : 0.5;
-    const pct  = prob * 100;
+    // Décision commune de la paire (10f ps._dc) ; le LMSR seulement si elle n'a jamais été calculée (comme la fiche MAN)
+    const _dc = (ps._dc && typeof ps._dc.C === 'number' && isFinite(ps._dc.C)) ? ps._dc.C : null;
+    const C   = _dc !== null ? Math.max(-1, Math.min(1, _dc)) : (((typeof lmsrP === 'function' ? lmsrP(ps) : 0.5) - 0.5) * 2);
 
-    // Positions ouvertes sur cette paire (manuel ou bot)
-    const manualPos = (S.openPositions || []).find(p => p.pair === pair && p.auto !== true);
-    const botPos    = (S.openPositions || []).find(p => p.pair === pair && p.auto === true);
+    // Position ouverte sur cette paire (une par paire) : la tienne (👤 MAN) ou celle d'un bot (🤖 AUTO)
+    const pos = (S.openPositions || []).find(p => p && p.pair === pair) || null;
 
-    // Détermination du signal et de la classe visuelle
-    let sigText, brickCls;
-    if (manualPos) {
-      sigText  = (manualPos.side === 'long' ? '🔒 LONG' : '🔒 SHORT');
-      brickCls = manualPos.side === 'long' ? 'action-brick sig-buy has-pos-long' : 'action-brick sig-sell has-pos-short';
-    } else if (botPos) {
-      sigText  = (botPos.side === 'long' ? '🟢 LONG' : '🔴 SHORT');
-      brickCls = botPos.side === 'long' ? 'action-brick sig-buy has-pos-long' : 'action-brick sig-sell has-pos-short';
-    } else if (prob > 0.6) {
-      sigText  = '🤖 BUY';
-      brickCls = 'action-brick sig-buy';
-    } else if (prob < 0.4) {
-      sigText  = '🤖 SELL';
-      brickCls = 'action-brick sig-sell';
+    if (pos) {
+      const isMan = pos.auto !== true;
+      const long  = pos.side === 'long';
+      brick.className = long ? 'action-brick sig-buy has-pos-long' : 'action-brick sig-sell has-pos-short';
+      brick.setAttribute('data-pos', isMan ? 'man' : 'auto');
+      if (sigEl) sigEl.textContent = (isMan ? '👤 MAN ' : '🤖 AUTO ') + (long ? '↑ LONG' : '↓ SHORT');
+      const pl = _abPosPnl(pos, ps.price), up = pl.usd >= 0, stk = Number(pos.stakeUsdt) || 0, xp = Number(pos.totalExposure) || 0;
+      if (posEl) {
+        posEl.textContent = 'mise $' + stk.toFixed(2) + (xp > stk + 0.005 ? ' · levier ×' + (xp / stk).toFixed(1) : '');
+        posEl.title = 'Entrée ' + _abFmtPx(pair, pos.entryPrice) + (xp > stk + 0.005 ? ' · exposition $' + xp.toFixed(2) : '');
+        posEl.style.display = '';
+      }
+      if (lmsrEl) { lmsrEl.textContent = (pl.pct >= 0 ? '+' : '') + pl.pct.toFixed(2) + '%'; lmsrEl.style.color = up ? 'var(--up)' : 'var(--down)'; lmsrEl.title = 'P&L de la position, en direct'; }
+      if (wrEl)   { wrEl.textContent = (up ? '+' : '−') + '$' + Math.abs(pl.usd).toFixed(2); wrEl.className = 'ab-wr ' + (up ? 'good' : 'bad'); }
+      if (trEl)   { trEl.textContent = ''; }
     } else {
-      sigText  = 'HOLD';
-      brickCls = 'action-brick sig-hold';
-    }
-    brick.className = brickCls;
-
-    if (sigEl) sigEl.textContent = sigText;
-
-    // Affichage LMSR conviction
-    if (lmsrEl) {
-      const arrow = pct >= 50 ? '↑' : '↓';
-      lmsrEl.textContent = arrow + pct.toFixed(0) + '%';
-    }
-
-    // Win rate
-    if (wrEl) {
-      const pWin = ps.totalTrades > 0 ? Math.round(ps.winTrades / ps.totalTrades * 100) : null;
-      if (pWin !== null) {
-        wrEl.textContent = pWin + '% WR';
-        wrEl.className   = 'ab-wr ' + (pWin >= 60 ? 'good' : pWin >= 40 ? 'mid' : 'bad');
-      } else {
-        wrEl.textContent = '— WR';
-        wrEl.className   = 'ab-wr';
+      brick.className = 'action-brick sig-hold';
+      brick.removeAttribute('data-pos');
+      if (posEl) { posEl.textContent = ''; posEl.style.display = 'none'; }
+      if (sigEl) sigEl.textContent = 'HOLD';
+      if (lmsrEl) {
+        lmsrEl.style.color = '';
+        lmsrEl.textContent = (C > 0 ? '↑' : C < 0 ? '↓' : '·') + (Math.abs(C) * 100).toFixed(0) + '%';
+        lmsrEl.title = _dc !== null ? 'Force de la décision commune' : 'LMSR (décision commune pas encore calculée)';
+      }
+      // Win rate
+      if (wrEl) {
+        const pWin = ps.totalTrades > 0 ? Math.round(ps.winTrades / ps.totalTrades * 100) : null;
+        if (pWin !== null) {
+          wrEl.textContent = pWin + '% WR';
+          wrEl.className   = 'ab-wr ' + (pWin >= 60 ? 'good' : pWin >= 40 ? 'mid' : 'bad');
+        } else {
+          wrEl.textContent = '— WR';
+          wrEl.className   = 'ab-wr';
+        }
+      }
+      // Compteur de trades
+      if (trEl) {
+        trEl.textContent = (ps.totalTrades || 0) + ' tr';
+        trEl.style.color = 'var(--t3)';
       }
     }
 
-    // Compteur de trades
-    if (trEl) {
-      trEl.textContent = (ps.totalTrades || 0) + ' tr';
-      trEl.style.color = 'var(--t3)';
-    }
-
-    // ── Sparkline de fond ──
-    if (ps.candles && ps.candles.length >= 2) {
-      let sparkColor = cfg.color;
-      if      (prob > 0.6) sparkColor = '#00e87a';
-      else if (prob < 0.4) sparkColor = '#ff3d6b';
-      _drawSparkline('abspark_' + pairKey, ps.candles, sparkColor, prob >= 0.5);
+    // ── Sparkline de fond (couleur : sens de la position, sinon de la décision commune) ──
+    if (slow && ps.candles && ps.candles.length >= 2) {
+      const d = pos ? (pos.side === 'long' ? 1 : -1) : Math.sign(C);
+      _drawSparkline('abspark_' + pairKey, ps.candles, d > 0 ? '#00e87a' : d < 0 ? '#ff3d6b' : cfg.color, d >= 0);
     }
 
     // ── RSI dot adaptatif ──
-    const rsiDot = document.getElementById('abrsi_' + pairKey);
+    const rsiDot = slow ? document.getElementById('abrsi_' + pairKey) : null;
     if (rsiDot) {
       const rsi = _computeRSI14(ps.candles);
       if (rsi !== null) {
@@ -180,15 +210,11 @@ function updateActionBricks() {
       }
     }
 
-    // ── Intensité adaptative selon conviction ──
-    const convStrength = Math.abs(prob - 0.5) * 2;  // 0 à 1
-    if (convStrength > 0.6) {
-      brick.setAttribute('data-conv', 'strong');
-    } else {
-      brick.removeAttribute('data-conv');
-    }
+    // ── Intensité selon la force de la décision commune ──
+    if (Math.abs(C) > 0.6) brick.setAttribute('data-conv', 'strong');
+    else brick.removeAttribute('data-conv');
 
-    // ── Marqueur visuel mode manuel ──
+    // ── Marqueur visuel paire sous contrôle manuel ──
     if (_isPairManual(pair)) {
       brick.setAttribute('data-manual', '1');
       brick.style.setProperty('--accent', 'var(--ice)');

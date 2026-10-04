@@ -326,7 +326,7 @@ T('H9 · 02 réel : changer le pas de temps d\'un mode remet SON horloge à zér
 T('H10 · textes : en-têtes 02, 03, 11b (VERSION 20261001a) ; HTML : 81 × 20261001a, plus de 20260930a ; les portes 10g / 08 et les lecteurs de 03 lisent S.realPairCycle comme avant (c\'est l\'accesseur du mode) ; nulle part ailleurs', () => {
   const HD = '// [HORLOGE PAR MODE · 01/10/2026] VERSION 20261001a';
   assert.ok(s02.split('\n').slice(0, 2).some(l => l.startsWith(HD)) && s03.split('\n').slice(0, 2).some(l => l.startsWith(HD)) && rd('js/11b-ecran-appris.js').startsWith(HD));   // [DÉGEL DES VOIX · 02/10/2026] 02 et 03 relivrés : en-tête HORLOGE en 2e ligne
-  assert.strictEqual(html.split('20261005a').length - 1, 82); assert.strictEqual(html.split('20261004a').length - 1, 0);   // [MANU · 05/10/2026] HTML au jeton 20261005a
+  assert.strictEqual(html.split('20261005b').length - 1, 82); assert.strictEqual(html.split('20261005a').length - 1, 0); assert.strictEqual(html.split('20261004a').length - 1, 0);   // [CARTES · 05/10/2026] HTML au jeton 20261005b
    assert.strictEqual(html.split('20261002a').length - 1, 0); assert.strictEqual(html.split('20261001a').length - 1, 0); assert.strictEqual(html.split('20260930a').length - 1, 0);   // [DÉGEL DES VOIX · 02/10/2026] HTML au jeton 20261002a
   assert.ok(GATE_EV.includes('const lastSeenTs = (S.realPairCycle && S.realPairCycle[pair]) || 0;') && GATE_EV.includes('S.realPairCycle[pair] = closedTs;'));
   assert.ok(GATE_RE.includes('const lastSeenTs = (S.realPairCycle && S.realPairCycle[pair]) || 0;') && GATE_RE.includes('S.realPairCycle[pair] = closedTs;'));

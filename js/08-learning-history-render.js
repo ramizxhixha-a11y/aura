@@ -536,22 +536,24 @@ function renderOpenPnlBanner() {
     const ps  = S.pairStates[pos.pair];
     const cfg = PAIRS[pos.pair];
     if(!ps) return null;
-    const pnlPct = pos.side==='long'
-      ? ((ps.price - pos.entryPrice)/pos.entryPrice*100)
-      : ((pos.entryPrice - ps.price)/pos.entryPrice*100);
-    const pnlUsd = pos.stakeUsdt * (pnlPct/100);
-    const lev    = pos.stakeUsdt / (pos.amount * pos.entryPrice || pos.stakeUsdt || 1) || 1;
+    // [CARTES · 05/10/2026] « ↑ DOT/USDT @$1 » : le prix courant TRONQUÉ à l'entier, lu comme la mise (« pas le prix misé ») — la ligne dit
+    // maintenant ce que c'est : ta position (👤 MAN), sa mise, son entrée, son P&L en direct (même calcul que les cartes, 09f1 _abPosPnl)
+    const _pl = (typeof _abPosPnl === 'function') ? _abPosPnl(pos, ps.price)
+      : { pct: (pos.side === 'long' ? (ps.price - pos.entryPrice) : (pos.entryPrice - ps.price)) / pos.entryPrice * 100, usd: 0 };
+    const pnlPct = _pl.pct;
+    const pnlUsd = (typeof _abPosPnl === 'function') ? _pl.usd : (pos.stakeUsdt * (pnlPct / 100));
     totalUnreal   += pnlUsd;
     totalInvested += pos.stakeUsdt;
     const col   = pnlUsd >= 0 ? 'var(--up)' : 'var(--down)';
     const arrow = pos.side === 'long' ? '↑' : '↓';
-    const priceStr = cfg.dec>=4 ? ps.price.toFixed(cfg.dec) : '$'+Math.floor(ps.price).toLocaleString();
+    const fpx = (x) => (typeof _abFmtPx === 'function') ? _abFmtPx(pos.pair, x) : String(x);
     return `<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0;
                  border-bottom:1px solid var(--border);">
       <div style="display:flex;align-items:center;gap:6px;">
+        <span style="font-size:9px;font-weight:700;color:var(--ice);">👤 MAN</span>
         <span style="font-size:10px;color:${pos.side==='long'?'var(--up)':'var(--down)'};">${arrow}</span>
         <span style="font-size:10px;font-weight:600;color:var(--t1);">${pos.pair}</span>
-        <span style="font-size:8px;color:var(--t3);">@${priceStr}</span>
+        <span style="font-size:8px;color:var(--t3);">mise $${(Number(pos.stakeUsdt) || 0).toFixed(2)} · entrée ${fpx(pos.entryPrice)}</span>
       </div>
       <div style="text-align:right;">
         <span style="font-size:11px;font-weight:700;color:${col};">${pnlUsd>=0?'+':''}$${pnlUsd.toFixed(2)}</span>
@@ -3279,7 +3281,7 @@ function simTick() {
   if(tick % 3 === 0) {
   if(tick % 4 === 0 && typeof _fpEmergencyCheck === 'function') _fpEmergencyCheck();  // v7.12 P1: watchdog FP
   if(tick % 2 === 0 && typeof updatePairBricks === 'function' && S.currentPage === 0) updatePairBricks();  // v7.12 P2: briques
-  if(tick % 2 === 0 && typeof updateActionBricks === 'function' && S.currentPage === 0) updateActionBricks();  // v7.12 P2: briques actions
+  if(typeof updateActionBricks === 'function' && S.currentPage === 0) updateActionBricks();  // v7.12 P2: briques actions · [CARTES · 05/10/2026] à chaque battement (prix, 24 h et P&L en direct ; la courbe garde 1 sur 2)
   if(tick % 2 === 0 && typeof updateManBricks === 'function' && S.currentPage === 0) updateManBricks();  // v7.12 P2: briques man
   if(tick % 4 === 0 && typeof _manConsignesWatchdog === 'function') _manConsignesWatchdog();  // v7.12 P2: watchdog man
   if(tick % 2 === 0 && typeof _updateAutoBarCounters === 'function' && S.currentPage === 0) _updateAutoBarCounters();  // v7.12 auto-bar counters

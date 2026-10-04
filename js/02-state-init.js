@@ -878,6 +878,20 @@ function _bnSymbolMap() {
   return m;
 }
 
+// [CARTES · 05/10/2026] Référence 24 h RÉELLE par paire, en RAM et hors mode (le marché est le même pour AA, EV et RE) : le prix d'il y a
+// 24 h donné par le ticker Binance (openPrice) ou déduit de CoinGecko (prix ÷ (1 + variation 24 h)). Les cartes « Actions en cours »
+// calculent la variation EN DIRECT sur ps.price à chaque battement. ps.pnl24h reste tel quel : le régime le lit, et en EV / RE il vaut la
+// variation des 60 bougies de la tf du mode (08 _projectRealCandles : 15 h en 15 min), écrasée toutes les ~8 s par le 24 h de CoinGecko —
+// c'est ce chiffre qui sautait sur les cartes. Une référence de plus de 15 min n'est plus lue.
+const _ref24 = {};
+function _ref24Set(pair, open, src) { open = Number(open); if (pair && isFinite(open) && open > 0) _ref24[pair] = { open: open, t: Date.now(), src: src }; }
+function _ref24Pct(pair, px) {
+  const r = _ref24[pair]; px = Number(px);
+  if (!r || !(px > 0) || (Date.now() - r.t) > 900000) return null;
+  return (px / r.open - 1) * 100;
+}
+window._ref24Set = _ref24Set; window._ref24Pct = _ref24Pct;
+
 async function fetchBinancePrices() {
   try {
     const BINANCE_SYMBOLS = _bnSymbolMap();
@@ -906,6 +920,7 @@ async function fetchBinancePrices() {
       }
       ps._targetPrice = realPrice;
       ps.pnl24h = change24h;
+      if (typeof _ref24Set === 'function') _ref24Set(pair, parseFloat(item.openPrice), 'binance');   // [CARTES · 05/10/2026]
 
       // v7.12 LIVRAISON 1 · agrège dans les bougies temps réel (5m/15m/1h)
       try { _aggregateRealPrice(pair, realPrice); } catch(e) { /* silent */ }
@@ -3902,6 +3917,7 @@ async function fetchLivePrices(force = false) {
         ps._targetPrice   = realPrice;
       }
       ps.pnl24h         = change24h;
+      if (typeof _ref24Set === 'function' && isFinite(change24h) && change24h > -99 && realPrice > 0) _ref24Set(pair, realPrice / (1 + change24h / 100), 'coingecko');   // [CARTES · 05/10/2026]
 
       // v7.12 LIVRAISON 1 · agrège dans les bougies temps réel (5m/15m/1h) — [PRIX 12 PAIRES] seulement en secours de Binance
       if(!_bnOk) { _cgFallback++; try { _aggregateRealPrice(pair, realPrice); } catch(e) { /* silent */ } }

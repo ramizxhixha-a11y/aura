@@ -1247,6 +1247,8 @@
 .action-brick.sig-buy  { border-color: rgba(0,232,122,0.35); }
 .action-brick.sig-sell { border-color: rgba(255,61,107,0.35); }
 .action-brick.sig-hold { border-color: var(--border); }
+/* [CARTES · 05/10/2026] position MANUELLE (👤 MAN) : bord glace, comme le badge MAN ; position bot (🤖 AUTO) : bord du sens */
+.action-brick[data-pos="man"].has-pos-long, .action-brick[data-pos="man"].has-pos-short { border-color: rgba(56,212,245,0.6); }
 
 /* Header : symbole + dot statut (même que positions) */
 .action-brick .ab-head {
@@ -1432,6 +1434,9 @@
 .action-brick .ab-wr.bad  { color: var(--down); }
 .action-brick .ab-wr.mid  { color: var(--gold); }
 .action-brick .ab-stats .ab-sep { color: var(--t3); opacity: 0.5; }
+/* [CARTES · 05/10/2026] carte avec position : ligne « mise » sous le prix ; en bas P&L % · P&L $ (point RSI et 2e séparateur masqués) */
+.action-brick .ab-pos { font-family: var(--font-mono); font-size: var(--fs-7); color: var(--t2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 1px; }
+.action-brick[data-pos] .ab-rsi-dot, .action-brick[data-pos] .ab-stats > span:nth-child(5), .action-brick[data-pos] .ab-stats > span:nth-child(6) { display: none; }
 
 /* Lock icon si position manuelle */
 .action-brick .ab-lock {
