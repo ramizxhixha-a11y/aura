@@ -7,6 +7,34 @@
 # τ) ; les votes des décisions ≤ τ doivent être IDENTIQUES à ceux du calcul complet.
 # usage : python3 rejeu/source_prep.py <dossier données (source_get.sh)> <dossier sortie> [--controle] [--replique]
 # [RÉPLIQUE · 04/10/2026] --replique : grille 05/2021 → 10/2024 (données de « source_get.sh … replique ») ; définitions inchangées.
+# [FLUX · 04/10/2026 — RÈGLES FIGÉES AVANT TOUTE DONNÉE] « go flux » (Rams 04/10 22:04) : les deux dernières grosses sources publiques gratuites
+#   à la porte SOURCE, rejeu/source_ana.py INCHANGÉ (mêmes décisions 01/10/2024 → 30/09/2026, 11 cryptos, 24 h / 3 j / 7 j, frais 0,26 %, deux
+#   sens, deux lectures, mêmes 2 000 placebos et même graine → même seuil z appris, risque 5 %/39 : plus sévère que les 4 × 3 essais d'ici,
+#   on ne l'assouplit pas ; test 3 = combinaison des 4). Option --flux : SEULES ces 4 sources, toutes COMMUNES aux 11 paires, en « niveau »
+#   (zniv : z-score 2 160 bougies 1 h, vote = clip(z/2, −1, 1)), donnée trop vieille (> 4 jours) → vote 0 :
+#    F1 etfbtc5  somme des flux nets (M$) des ETF bitcoin comptant américains (colonne Total de Farside, « all data ») sur les 5 dernières séances
+#                publiées ; ligne de la séance US du jour J lue à J+1 14:00 UTC (10:00 New York, avant l'ouverture : tous les émetteurs ont publié)
+#    F2 etfeth5  idem ETF ether comptant américains (Farside, depuis le 23/07/2024), même lecture
+#    F3 exbtc7   flux net BTC vers les plateformes = FlowInExNtv − FlowOutExNtv (Coin Metrics, API community, en BTC), somme des 7 derniers jours
+#                (7 jours consécutifs présents, sinon muet) ; point du jour J (daté J 00:00 UTC) lu à J+1 06:00 UTC (statut « flash » publié
+#                vers 02:45 UTC J+1, mesuré le 04/10)
+#    F4 exeth7   idem ETH
+#   Données : Farside bloque le bac à sable (Cloudflare) → page lue par un service de lecture de pages, table copiée telle quelle dans
+#   rejeu/flux_etf_btc.csv et rejeu/flux_etf_eth.csv, recoupée sur ≥ 10 séances avec une 2e publication indépendante ; Coin Metrics : script.
+#   Biais connus AVANT les données, tous en faveur des sources : (a) Coin Metrics a recalculé tout son historique d'adresses de plateformes
+#   (04/2026) : le passé est « trop bien connu » ; (b) Farside corrige parfois une séance après coup ; aucune des deux n'a d'historique
+#   « tel que publié ». Un échec est donc net ; un succès reste suspect.
+#   Suite pré-enregistrée : F3/F4 qui entre → réplique sur 10/2021 → 09/2024, sens / seuil figés (règles de replique_ana.py), puis
+#   enregistrement en direct des valeurs « flash » avant toute décision ; F1/F2 qui entre → aucune période antérieure (ETF lancés le
+#   11/01/2024 et le 23/07/2024) : 6 mois d'enregistrement en direct puis la même porte avant toute décision. Aucune n'entre → fin de la
+#   recherche « signal » sur données publiques (proposition du 04/10 acceptée par « go flux »).
+# [FLUX · RELECTURE INDÉPENDANTE (agent séparé, 04/10, après le 1er passage — verdict du 1er passage : aucune source n'entre ; règles intactes)]
+#   (a) règle de validité ajoutée APRÈS le 1er passage : Farside a des lignes « jour férié » (tous les fonds « - », Total 0,0 : 16 BTC, 10 ETH,
+#       jusqu'au 19/06/2025, aucune ensuite) — ce ne sont pas des séances → retirées (2e passage ; les deux passages sont rapportés) ;
+#   (b) « 10:00 New York, avant l'ouverture » est inexact : 14:00 UTC = 10:00 l'été (après l'ouverture de 09:30), 09:00 l'hiver ; le calcul
+#       est en UTC, rien ne change ; « tous les émetteurs ont publié » est faux certains jours : Farside corrige après J+1 14:00 (vu sur des
+#       photos archivées : 15/11/2024 BTC −239,6 → −370,0 M$, 02/10/2024 −64,4 → −91,7, ETH 22/08/2025 337,7 → 341,2) = biais (b) ci-dessus,
+#       en faveur des sources ; Coin Metrics : 77 % des décisions BTC et 100 % des ETH lisent une valeur réécrite après coup = biais (a).
 import sys, os, glob, zipfile, io, csv, json, datetime
 import numpy as np, pandas as pd, warnings
 warnings.filterwarnings('ignore', category=RuntimeWarning)
@@ -14,10 +42,12 @@ warnings.filterwarnings('ignore', category=RuntimeWarning)
 SRC_DIR, OUT = sys.argv[1], sys.argv[2]
 CONTROLE = '--controle' in sys.argv
 REPLIQUE = '--replique' in sys.argv
+FLUX = '--flux' in sys.argv
 os.makedirs(OUT, exist_ok=True)
 PAIRS = ['BTC', 'ETH', 'XRP', 'SOL', 'DOGE', 'DOT', 'ADA', 'AVAX', 'LINK', 'BNB', 'PEPE']
 FSYM = {p: ('1000PEPE' if p == 'PEPE' else p) + 'USDT' for p in PAIRS}
 SOURCES = ['basis7', 'oi7', 'smart', 'takerfut', 'futspot', 'dvol', 'cbprem', 'stables', 'spx5', 'vix', 'tsmom28', 'tsmom7', 'xsmom28']
+if FLUX: SOURCES = ['etfbtc5', 'etfeth5', 'exbtc7', 'exeth7']
 HOUR, DAYMS = 3600000, 86400000
 T0 = 1714521600000                                   # 01/05/2024 00:00 UTC
 T1 = 1790985600000                                   # 03/10/2026 00:00 UTC (dernière ouverture : 02/10 23:00)
@@ -162,12 +192,68 @@ def build(raw):
     x = np.where(ok, np.log(vals[jj]), np.nan); z = zniv(x); RAW[:, :, 9] = x[:, None]; V[:, :, 9] = z[:, None]
     return close, np.nan_to_num(V), RAW
 
+# [FLUX · 04/10/2026] les 4 sources de « go flux » (règles figées en tête de ce fichier, lignes 10-30) — rien de ce qui précède n'est changé.
+ETF_PUB, CM_PUB = DAYMS + 14 * HOUR, DAYMS + 6 * HOUR     # séance US du jour J lue à J+1 14:00 UTC · jour J de Coin Metrics lu à J+1 06:00 UTC
+
+def load_raw_flux():
+    e = os.path.join(SRC_DIR, 'ext'); raw = {'spot': {p: klines('spot', p + 'USDT') for p in PAIRS}}
+    def num(x):
+        x = x.replace(',', '')
+        if x in ('-', ''): return None
+        neg = x.startswith('(') and x.endswith(')'); x = x.strip('()'); return -float(x) if neg else float(x)
+    for a in ('btc', 'eth'):
+        pts = []
+        for r in csv.DictReader(open(os.path.join(e, f'flux_etf_{a}.csv'))):
+            v = num(r['Total'])
+            if all(r[k] == '-' for k in r if k not in ('date', 'Total')): continue   # ligne « jour férié » (relecture (a))
+            if v is not None:
+                pts.append((int(datetime.datetime.strptime(r['date'], '%Y-%m-%d').replace(tzinfo=datetime.timezone.utc).timestamp() * 1000), v))
+        raw['etf_' + a] = sorted(pts)
+    cm = json.load(open(os.path.join(e, 'coinmetrics_flux.json')))
+    for a in ('btc', 'eth'):
+        raw['ex_' + a] = sorted((int(datetime.datetime.strptime(x['time'][:10], '%Y-%m-%d').replace(tzinfo=datetime.timezone.utc).timestamp() * 1000),
+                                 float(x['FlowInExNtv']) - float(x['FlowOutExNtv'])) for x in cm if x['asset'] == a
+                                and x.get('FlowInExNtv') is not None and x.get('FlowOutExNtv') is not None)
+    return raw
+
+def cut_raw_flux(raw, tau):
+    c = {'spot': {p: {t: v for t, v in raw['spot'][p].items() if t + HOUR <= tau} for p in PAIRS}}
+    for a in ('btc', 'eth'):
+        c['etf_' + a] = [(d, v) for d, v in raw['etf_' + a] if d + ETF_PUB <= tau]
+        c['ex_' + a] = [(d, v) for d, v in raw['ex_' + a] if d + CM_PUB <= tau]
+    return c
+
+def pub_on_grid(x_dates, x_vals, pub):
+    """valeur x[k] (datée x_dates[k]) visible à partir de x_dates[k] + pub ; à chaque décision, la dernière visible ; > 4 jours → NaN."""
+    out = np.full(N, np.nan)
+    if len(x_dates) == 0: return out
+    pt = np.asarray(x_dates, dtype=np.int64) + pub
+    j = np.searchsorted(pt, TD, side='right') - 1; ok = j >= 0; jj = np.where(ok, j, 0)
+    ok &= TD - pt[jj] <= STALE_D * DAYMS
+    xv = np.asarray(x_vals, dtype=np.float64)
+    out[ok] = xv[jj[ok]]; return out
+
+def build_flux(raw):
+    P = len(PAIRS); V = np.zeros((N, P, len(SOURCES)), dtype=np.float64); RAW = np.full((N, P, len(SOURCES)), np.nan)
+    close = np.stack([on_grid(raw['spot'][p], 0) for p in PAIRS], 1)
+    for k, a in enumerate(('btc', 'eth')):
+        # F1 etfbtc5 · F2 etfeth5 : somme des 5 dernières séances publiées
+        d = [t for t, _ in raw['etf_' + a]]; v = np.array([x for _, x in raw['etf_' + a]], dtype=np.float64)
+        s5 = np.array([v[i - 4:i + 1].sum() if i >= 4 else np.nan for i in range(len(v))])
+        x = pub_on_grid(d, s5, ETF_PUB); z = zniv(x); RAW[:, :, k] = x[:, None]; V[:, :, k] = z[:, None]
+        # F3 exbtc7 · F4 exeth7 : flux net vers les plateformes, somme de 7 jours consécutifs
+        d = np.array([t for t, _ in raw['ex_' + a]], dtype=np.int64); v = np.array([x for _, x in raw['ex_' + a]], dtype=np.float64)
+        s7 = np.array([v[i - 6:i + 1].sum() if i >= 6 and d[i] - d[i - 6] == 6 * DAYMS else np.nan for i in range(len(v))])
+        x = pub_on_grid(d, s7, CM_PUB); z = zniv(x); RAW[:, :, 2 + k] = x[:, None]; V[:, :, 2 + k] = z[:, None]
+    return close, np.nan_to_num(V), RAW
+
+if FLUX: load_raw, cut_raw, build = load_raw_flux, cut_raw_flux, build_flux
 raw = load_raw()
 close, V, RAW = build(raw)
 np.save(os.path.join(OUT, 'ts.npy'), TS); np.save(os.path.join(OUT, 'close.npy'), close)
 np.save(os.path.join(OUT, 'votes.npy'), V.astype(np.float32)); np.save(os.path.join(OUT, 'raw.npy'), RAW.astype(np.float32))
-json.dump(dict(pairs=[p + '/USDT' for p in PAIRS], sources=SOURCES, grille='1 h', t0=int(TS[0]), n=int(N), token='20261002a',
-               periode='replique' if REPLIQUE else 'decouverte'),
+json.dump(dict(pairs=[p + '/USDT' for p in PAIRS], sources=SOURCES, grille='1 h', t0=int(TS[0]), n=int(N), token='20261004a' if FLUX else '20261002a',
+               periode='replique' if REPLIQUE else 'flux' if FLUX else 'decouverte'),
           open(os.path.join(OUT, 'meta.json'), 'w'))
 D0, D1 = (1633046400000, 1727740800000) if REPLIQUE else (1727740800000, 1790812800000); sel = (TD >= D0) & (TD < D1)
 print(f"couverture des votes (part des décisions {'10/2021 → 09/2024' if REPLIQUE else '10/2024 → 09/2026'} où la source parle, |vote| ≥ 0,03) :")

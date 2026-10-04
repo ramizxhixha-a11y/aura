@@ -10,11 +10,16 @@
 # [RÉPLIQUE · 04/10/2026] 2e argument « replique » : même téléchargement pour la période de réplique pré-enregistrée (rejeu/source_fige.json) —
 # 05/2021 → 10/2024 (5 mois de chauffe avant le 01/10/2021, octobre 2024 pour les sorties des dernières décisions) ; sans argument :
 # même période qu'avant (le dernier passage ci-dessous s'applique aux deux).
+# [FLUX · 04/10/2026] 2e argument « flux » (« go flux ») : bougies spot 1 h seules (même période que la découverte) + flux BTC / ETH vers les
+# plateformes (Coin Metrics, API community, 01/2024 → 10/2026, valeur, statut et heure du statut) ; les ETF (Farside bloque le bac à sable)
+# sont lus depuis rejeu/flux_etf_btc.csv et rejeu/flux_etf_eth.csv, copiés dans ext/. Sources de la découverte non téléchargées.
 set -e
+R=$(cd "$(dirname "$0")" && pwd)
 D=${1:?dossier}; PER=${2:-decouverte}; export PER; mkdir -p "$D/spot" "$D/fut" "$D/prem" "$D/metrics" "$D/ext"; cd "$D"; rm -f urls.txt miss.txt miss2.txt absents.txt echecs.txt
 python3 - <<'EOF' > urls.txt
 import calendar, os
 REP = os.environ.get('PER') == 'replique'
+FLUX = os.environ.get('PER') == 'flux'
 pairs = "BTC ETH XRP SOL DOGE DOT ADA AVAX LINK BNB PEPE".split()
 B = "https://data.binance.vision/data"
 months = ([(y, m) for y in range(2021, 2025) for m in range(1, 13) if (2021, 5) <= (y, m) <= (2024, 10)] if REP else
@@ -24,6 +29,7 @@ for p in pairs:
     for y, m in months:
         mo = f"{y}-{m:02d}"
         print(f"{B}/spot/monthly/klines/{p}USDT/1h/{p}USDT-1h-{mo}.zip spot")
+        if FLUX: continue
         print(f"{B}/futures/um/monthly/klines/{fp}/1h/{fp}-1h-{mo}.zip fut")
         print(f"{B}/futures/um/monthly/premiumIndexKlines/{fp}/1h/{fp}-1h-{mo}.zip prem")
         for day in range(1, calendar.monthrange(y, m)[1] + 1):
@@ -69,6 +75,25 @@ open('absents.txt', 'w').write(''.join(u + '\n' for u, r in res.items() if r == 
 open('echecs.txt', 'w').write(''.join(u + '\n' for u, r in res.items() if r == 'echec'))
 print(f"dernier passage : {sum(r == 'ok' for r in res.values())} récupérés · {sum(r == 'absent' for r in res.values())} absents (404) · {sum(r == 'echec' for r in res.values())} encore en échec")
 EOF
+if [ "$PER" = flux ]; then
+python3 - <<'EOF'
+import json, time, urllib.request
+def get(u):
+    for k in range(5):
+        try: return json.load(urllib.request.urlopen(urllib.request.Request(u, headers={'User-Agent': 'aura-rejeu'}), timeout=60))
+        except Exception as e: err = e; time.sleep(2 + 3 * k)
+    raise err
+rows, u = [], ("https://community-api.coinmetrics.io/v4/timeseries/asset-metrics?assets=btc,eth&metrics=FlowInExNtv,FlowOutExNtv"
+               "&frequency=1d&start_time=2024-01-01&end_time=2026-10-03&page_size=10000")
+while u:
+    r = get(u); rows += r['data']; u = r.get('next_page_url'); time.sleep(0.3)
+json.dump(rows, open('ext/coinmetrics_flux.json', 'w'))
+print(f"coin metrics : {len(rows)} lignes (btc + eth)")
+EOF
+cp "$R/flux_etf_btc.csv" "$R/flux_etf_eth.csv" ext/
+echo "spot $(ls spot | wc -l) · quotidiens absents des archives (404) : $(cat absents.txt | wc -l) · encore en échec : $(cat echecs.txt | wc -l) · ETF : $(ls ext/flux_etf_*.csv | wc -l) fichiers"
+exit 0
+fi
 python3 - <<'EOF'
 import json, time, urllib.request, datetime, os
 def get(u):
