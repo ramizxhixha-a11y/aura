@@ -5,13 +5,15 @@
 #   T + 5 min, publiée 2 à 3 min plus tard : mesuré en direct par la relecture indépendante du 03/10) ; DefiLlama, S&P 500, VIX : point du jour J lu à J + 1 00:00 UTC.
 # Contrôle anti-fuite intégré (--controle) : votes recalculés avec toutes les données coupées à un instant τ (seules celles publiées avant
 # τ) ; les votes des décisions ≤ τ doivent être IDENTIQUES à ceux du calcul complet.
-# usage : python3 rejeu/source_prep.py <dossier données (source_get.sh)> <dossier sortie> [--controle]
+# usage : python3 rejeu/source_prep.py <dossier données (source_get.sh)> <dossier sortie> [--controle] [--replique]
+# [RÉPLIQUE · 04/10/2026] --replique : grille 05/2021 → 10/2024 (données de « source_get.sh … replique ») ; définitions inchangées.
 import sys, os, glob, zipfile, io, csv, json, datetime
 import numpy as np, pandas as pd, warnings
 warnings.filterwarnings('ignore', category=RuntimeWarning)
 
 SRC_DIR, OUT = sys.argv[1], sys.argv[2]
 CONTROLE = '--controle' in sys.argv
+REPLIQUE = '--replique' in sys.argv
 os.makedirs(OUT, exist_ok=True)
 PAIRS = ['BTC', 'ETH', 'XRP', 'SOL', 'DOGE', 'DOT', 'ADA', 'AVAX', 'LINK', 'BNB', 'PEPE']
 FSYM = {p: ('1000PEPE' if p == 'PEPE' else p) + 'USDT' for p in PAIRS}
@@ -19,6 +21,7 @@ SOURCES = ['basis7', 'oi7', 'smart', 'takerfut', 'futspot', 'dvol', 'cbprem', 's
 HOUR, DAYMS = 3600000, 86400000
 T0 = 1714521600000                                   # 01/05/2024 00:00 UTC
 T1 = 1790985600000                                   # 03/10/2026 00:00 UTC (dernière ouverture : 02/10 23:00)
+if REPLIQUE: T0, T1 = 1619827200000, 1730419200000  # 01/05/2021 → 01/11/2024 00:00 UTC (période de réplique, rejeu/source_fige.json)
 TS = np.arange(T0, T1, HOUR, dtype=np.int64); N = len(TS); TD = TS + HOUR   # TD = instant de décision (clôture)
 W90, STALE_H, STALE_D = 2160, 6, 4
 
@@ -163,14 +166,16 @@ raw = load_raw()
 close, V, RAW = build(raw)
 np.save(os.path.join(OUT, 'ts.npy'), TS); np.save(os.path.join(OUT, 'close.npy'), close)
 np.save(os.path.join(OUT, 'votes.npy'), V.astype(np.float32)); np.save(os.path.join(OUT, 'raw.npy'), RAW.astype(np.float32))
-json.dump(dict(pairs=[p + '/USDT' for p in PAIRS], sources=SOURCES, grille='1 h', t0=int(TS[0]), n=int(N), token='20261002a'),
+json.dump(dict(pairs=[p + '/USDT' for p in PAIRS], sources=SOURCES, grille='1 h', t0=int(TS[0]), n=int(N), token='20261002a',
+               periode='replique' if REPLIQUE else 'decouverte'),
           open(os.path.join(OUT, 'meta.json'), 'w'))
-D0 = 1727740800000; sel = (TD >= D0) & (TD < 1790812800000)
-print('couverture des votes (part des décisions 10/2024 → 09/2026 où la source parle, |vote| ≥ 0,03) :')
+D0, D1 = (1633046400000, 1727740800000) if REPLIQUE else (1727740800000, 1790812800000); sel = (TD >= D0) & (TD < D1)
+print(f"couverture des votes (part des décisions {'10/2021 → 09/2024' if REPLIQUE else '10/2024 → 09/2026'} où la source parle, |vote| ≥ 0,03) :")
 print('  ' + ' · '.join(f"{s} {(np.abs(V[sel][:, :, k]) >= 0.03).mean() * 100:.0f} %" for k, s in enumerate(SOURCES)))
 print(f"  clôtures spot manquantes : {np.isnan(close[sel]).mean() * 100:.2f} %")
 if CONTROLE:
-    for tau in (1736899200000, 1759276800000, 1780272000000):     # 15/01/2025 · 01/10/2025 · 01/06/2026 00:00 UTC
+    for tau in ((1642204800000, 1672531200000, 1709251200000) if REPLIQUE else   # 15/01/2022 · 01/01/2023 · 01/03/2024
+                (1736899200000, 1759276800000, 1780272000000)):     # 15/01/2025 · 01/10/2025 · 01/06/2026 00:00 UTC
         _, Vc, _ = build(cut_raw(raw, tau))
         k = TD <= tau
         diff = np.abs(Vc[k] - V[k]).max()
