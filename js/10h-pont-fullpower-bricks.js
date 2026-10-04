@@ -1,3 +1,4 @@
+// [MANU · 05/10/2026] VERSION 20261005a · fiche MAN : décision commune, seuil appris, règle de sortie et de mise des bots, TP / SL en % appliqués au sens cliqué, rafraîchie toutes les 2 s
 // ▓▓▓ VERSION 20260908a ▓▓▓
 // 10h-pont-fullpower-bricks.js — Pont Claude, Plein Régime (enable), loadAllTrades, détail MAN, briques d'action
 // [DÉCOUPE 10 · 09/08/2026] Tranche de 10-fin-bloc-restauration-v93.js (lignes 2317-2792 de l'original).
@@ -110,6 +111,156 @@ async function loadAllTrades() {
 }
 if(typeof loadAllTrades==='function') window.loadAllTrades = loadAllTrades;
 
+// ═══ [MANU · 05/10/2026] FICHE MAN : l'intelligence du système, des boutons qui font ce qu'ils disent ═══
+// Sonde du 05/10 (vraie app, backup du 04/10 21:04, clics réels dans Chromium) — la fiche d'avant :
+//  · « Suggestion bot » = le LMSR seul (une voix parmi 10), pas la décision commune ; « Force 6 % » mais « LONG » quand même ;
+//  · ATR 0,00 % : ps.atr n'existe nulle part (repli 0,01 $) → TP / SL toujours aux planchers posés à la main 0,8 % / 0,5 % ;
+//  · TP / SL en PRIX pour le sens suggéré, appliqués au sens cliqué (10e) → l'autre sens fermé au tick suivant ; « TP ($) » pour un prix ;
+//  · rien ne se rafraîchissait (« en temps réel ») ; ✕ et fond ne fermaient pas (03 closePairDetail).
+// Désormais : direction et force = la DÉCISION COMMUNE de la paire (10f ps._dc : toutes les voix pesées par leur bilan) ; seuil appris (03
+// _thLevel) et verdict « les bots ouvriraient » ; TP / SL en % = la règle de sortie des bots (10f : conviction + signaux techniques du sens +
+// volatilité du moment) ; mise = la part du capital libre de la paire (règle d'engagement des bots, 10f) ; les avis contraires (02
+// _manOpenWarnings) affichés AVANT le clic ; bloc système rafraîchi toutes les 2 s tant que la fiche est ouverte. Rien de tout cela ne
+// décide à ta place : en MANU, le bot ne fait que suggérer, surveiller et protéger (règles du 05/07).
+function _manFmtPx(pair, px) {
+  const cfg = (typeof PAIRS !== 'undefined' && PAIRS[pair]) || {};
+  px = Number(px);
+  if (!isFinite(px) || px <= 0) return '—';
+  if (px >= 1000) return '$' + Math.round(px).toLocaleString();
+  return px.toFixed(cfg.dec >= 4 ? cfg.dec : (px >= 1 ? 2 : 4));
+}
+window._manFmtPx = _manFmtPx;
+
+// Lecture du système pour une paire. light = sans indicateurs techniques ni seuil (briques MAN, 10 paires à chaque rendu).
+function _manPlan(pair, light) {
+  const ps = S.pairStates && S.pairStates[pair], cfg = (typeof PAIRS !== 'undefined') ? PAIRS[pair] : null;
+  if (!ps || !cfg) return null;
+  const now = Date.now();
+  // 1 · décision commune de la paire (10f, à chaque cycle) ; le LMSR seulement si elle n'a jamais été calculée
+  const dc = (ps._dc && typeof ps._dc.C === 'number' && isFinite(ps._dc.C)) ? ps._dc : null;
+  let C, src, n = 0, age = null;
+  if (dc) { C = dc.C; src = 'dc'; n = dc.n || 0; age = dc.ts ? Math.max(0, now - dc.ts) : null; }
+  else { const pr = (typeof lmsrP === 'function') ? lmsrP(ps) : 0.5; C = (pr - 0.5) * 2; src = 'lmsr'; }
+  C = Math.max(-1, Math.min(1, Number(C) || 0));
+  const dir = C > 0 ? 'long' : (C < 0 ? 'short' : null), conv = Math.abs(C);
+  // 2 · mise : la part du capital libre revenant à la paire (10f, engagement quasi-total), plafonnée au libre
+  const acc = S.tradingAccount || 0, capT = Math.max(0, acc - Math.max(1, acc * 0.02));
+  const eng = (S.openPositions || []).reduce((a, p) => a + (Number(p && p.stakeUsdt) || 0), 0);
+  const free = Math.max(0, capT - eng), held = {};
+  (S.openPositions || []).forEach(p => { if (p && p.pair) held[p.pair] = 1; });
+  const slots = Object.keys(S.pairStates || {}).filter(k => !held[k]).length;
+  const share = free / Math.max(2, slots), floor = (ps.stake && ps.stake > 0) ? ps.stake : 0;
+  const stake = Math.floor(Math.min(free, Math.max(floor, share)) * 10) / 10;
+  const plan = { pair, price: Number(ps.price) || 0, C, conv, dir, src, n, age, stake, free };
+  if (light) return plan;
+  // 3 · TP / SL : la règle de sortie des bots (10f tpPctE / slPctE), pour chaque sens avec le bonus des signaux techniques de CE sens
+  let tech = null; try { tech = (typeof getTechSignals === 'function') ? getTechSignals(pair) : null; } catch(e) {}
+  const volCV = (tech && tech.raw && tech.raw.stddev && tech.raw.stddev.cv) || 0.015;
+  const tb = (d) => { let b = 0; if (tech) Object.values(tech.signals || {}).forEach(s => { if (s && s.signal === d) b += 0.04; }); return Math.min(0.25, b); };
+  const lv = (side) => {
+    const ec = Math.min(1, conv + tb(side === 'long' ? 'bull' : 'bear'));
+    const tp = Math.max(0.6, ec * 3.2 * (1 + volCV * 9));
+    const sl = Math.max(0.45, Math.min((volCV * 100) * 1.4, tp / 1.4));
+    return { ec, tp, sl };
+  };
+  plan.volCV = volCV;
+  plan.lv = { long: lv('long'), short: lv('short') };
+  // 4 · seuil appris (03 : null hors EV / RE, Infinity = aucun niveau ne paie après frais) et horizon prouvé pour cette force
+  let th = null; try { th = (typeof _thLevel === 'function') ? _thLevel() : null; } catch(e) {}
+  plan.th = th;
+  plan.botsOpen = (dir && typeof th === 'number' && isFinite(th)) ? (plan.lv[dir].ec >= th) : null;
+  plan.hz = null;
+  try { if (dir && typeof _thPick === 'function') { const pk = _thPick(conv); if (pk && typeof _thHzLab === 'function') plan.hz = _thHzLab(pk.h, pk.f); } } catch(e) {}
+  // 5 · régime et volatilité réelle (ATR 20 bougies de la tf du mode, 10a)
+  plan.regime = 'calm'; try { plan.regime = (typeof detectMarketRegime === 'function' ? detectMarketRegime() : 'calm') || 'calm'; } catch(e) {}
+  plan.atrPct = null;
+  try { const vs = (typeof _computeVolatilityScore === 'function') ? _computeVolatilityScore(pair) : null; if (vs && vs.atrAbs > 0 && plan.price > 0) plan.atrPct = vs.atrAbs / plan.price * 100; } catch(e) {}
+  return plan;
+}
+window._manPlan = _manPlan;
+
+// % de TP / SL appliqués au sens cliqué : ceux des champs de la fiche (ce que tu vois est ce qui s'applique), sinon la règle des bots pour ce sens
+function _manSideLevels(pair, side) {
+  const k = pair.replace('/', '_');
+  const f = (id) => { const el = document.getElementById(id); const v = el ? parseFloat(el.value) : NaN; return (isFinite(v) && v > 0) ? v : null; };
+  let tp = f('manIn_tpp_' + k), sl = f('manIn_slp_' + k);
+  if (tp === null || sl === null) {
+    const pl = _manPlan(pair);
+    const L = pl && pl.lv ? pl.lv[side === 'short' ? 'short' : 'long'] : null;
+    if (tp === null) tp = L ? L.tp : null;
+    if (sl === null) sl = L ? L.sl : null;
+  }
+  return { tp, sl };
+}
+window._manSideLevels = _manSideLevels;
+
+const _MAN_REG = { bull: 'haussier', bear: 'baissier', calm: 'calme', volatile: 'volatil', volatile_bull: 'volatil haussier', volatile_bear: 'volatil baissier' };
+function _manSystemHtml(pair, pl) {
+  const r = (lab, val) => `<div><span style="color:var(--t3);">${lab}</span><br>${val}</div>`;
+  const mono = (t, col) => `<span style="color:${col || 'var(--t1)'};font-weight:700;font-family:var(--font-mono);">${t}</span>`;
+  const dirLab = pl.dir === 'long' ? '↑ LONG' : pl.dir === 'short' ? '↓ SHORT' : '— aucun avis';
+  const dirCol = pl.dir === 'long' ? 'var(--up)' : pl.dir === 'short' ? 'var(--down)' : 'var(--t3)';
+  const ageTxt = pl.age === null ? '' : (pl.age < 90000 ? ' · il y a ' + Math.round(pl.age / 1000) + ' s' : ' · il y a ' + Math.round(pl.age / 60000) + ' min');
+  const srcTxt = pl.src === 'dc' ? (pl.n + ' voix' + ageTxt) : 'LMSR seul — décision commune pas encore calculée';
+  let thTxt = '—', verdict = '';
+  if (pl.th === Infinity) { thTxt = 'marché fermé'; verdict = 'Aucun niveau de force ne paie après frais : les bots n\'ouvrent pas.'; }
+  else if (typeof pl.th === 'number' && isFinite(pl.th)) {
+    thTxt = (pl.th * 100).toFixed(0) + ' %';
+    if (pl.botsOpen === true) verdict = '✓ Au-dessus du seuil appris : les bots ouvriraient ' + (pl.dir === 'long' ? 'LONG' : 'SHORT') + ' (avant ajustements de contexte).';
+    else if (pl.botsOpen === false) verdict = '✗ Sous le seuil appris : les bots n\'ouvriraient pas.';
+  } else verdict = 'Seuil appris : seulement en EV / RE.';
+  const atr = pl.atrPct === null ? '—' : pl.atrPct.toFixed(2) + ' %';
+  return `
+      <div class="detail-section-title">🧠 Le système · décision commune</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px 10px;font-size:11px;">
+        ${r('Direction', `<span style="color:${dirCol};font-weight:800;font-size:13px;">${dirLab}</span>`)}
+        ${r('Force', mono((pl.conv * 100).toFixed(0) + ' %') + `<span style="font-size:9px;color:var(--t3);"> · ${srcTxt}</span>`)}
+        ${r('Seuil appris', mono(thTxt))}
+        ${r('Régime', mono(_MAN_REG[pl.regime] || pl.regime))}
+        ${r('ATR (20 bougies)', mono(atr))}
+        ${r('Horizon prouvé', mono(pl.hz || '—'))}
+      </div>
+      <div style="margin-top:6px;font-size:10px;color:${pl.botsOpen === true ? 'var(--up)' : 'var(--t3)'};line-height:1.4;">${verdict}</div>`;
+}
+function _manPreviewHtml(pair) {
+  const ps = S.pairStates && S.pairStates[pair]; const px = ps ? Number(ps.price) : 0;
+  const one = (side) => {
+    const L = _manSideLevels(pair, side), d = side === 'long' ? 1 : -1;
+    if (!(px > 0) || !L.tp || !L.sl) return '';
+    return `<span style="color:${side === 'long' ? 'var(--up)' : 'var(--down)'};">${side === 'long' ? '↑ LONG' : '↓ SHORT'}</span> TP ${_manFmtPx(pair, px * (1 + d * L.tp / 100))} · SL ${_manFmtPx(pair, px * (1 - d * L.sl / 100))}`;
+  };
+  return one('long') + '<br>' + one('short');
+}
+function _manWarnHtml(pair) {
+  if (typeof _manOpenWarnings !== 'function') return '';
+  const out = [];
+  ['long', 'short'].forEach(side => { const w = _manOpenWarnings(pair, side); if (w.length) out.push(`⚠ ${side === 'long' ? 'LONG' : 'SHORT'} : ${w.join(' · ')} — s'ouvre quand même, à ta demande.`); });
+  return out.join('<br>');
+}
+function _manPreview(pair) {
+  const k = pair.replace('/', '_'), el = document.getElementById('manPrev_' + k);
+  if (el) el.innerHTML = _manPreviewHtml(pair);
+}
+window._manPreview = _manPreview;
+
+let _manRefreshT = null;
+function _manRefreshTick(pair, hadManual) {
+  const o = document.getElementById('pairDetailOverlay'), k = pair.replace('/', '_');
+  const box = document.getElementById('manSys_' + k);
+  if (!o || !o.classList.contains('open') || _currentDetailPair !== pair || !box) { clearInterval(_manRefreshT); _manRefreshT = null; return; }
+  try {
+    const hasManual = !!(S.openPositions || []).find(p => p.pair === pair && p.auto !== true);
+    if (hasManual !== hadManual) { openManDetail(pair); return; }   // ouverte / fermée entre-temps : la fiche entière change
+    const pl = _manPlan(pair); if (!pl) return;
+    box.innerHTML = _manSystemHtml(pair, pl);
+    const L = pl.lv[pl.dir || 'long'];
+    [['manIn_tpp_' + k, L.tp], ['manIn_slp_' + k, L.sl]].forEach(([id, v]) => { const el = document.getElementById(id); if (el && el.dataset.edited !== '1' && document.activeElement !== el) el.value = v.toFixed(2); });
+    _manPreview(pair);
+    const w = document.getElementById('manWarn_' + k); if (w) w.innerHTML = _manWarnHtml(pair);
+    ['long', 'short'].forEach(sd => { const st = document.getElementById('manStar_' + sd + '_' + k); if (st) st.textContent = (pl.dir === sd) ? ' ★ système' : ''; });
+  } catch(e){ try{window._decErr&&window._decErr(e)}catch(_e){} }
+}
+
 function openManDetail(pair) {
   const overlay = document.getElementById('pairDetailOverlay');
   const title = document.getElementById('pairDetailTitle');
@@ -120,125 +271,119 @@ function openManDetail(pair) {
   const cfg = PAIRS[pair];
   const ps = S.pairStates[pair];
   if (!cfg || !ps) return;
-  
-  const prob = typeof lmsrP === 'function' ? lmsrP(ps) : 0.5;
-  const pct = prob * 100;
-  const conviction = Math.abs(prob - 0.5) * 2;
-  let suggSide = prob >= 0.5 ? 'long' : 'short';
-  const atr = ps.atr || 0.01;
-  const atrRel = atr > 0 ? (atr / ps.price) : 0.015;
-  
-  const suggStake = Math.max(10, Math.round((S.tradingAccount || 100) * (0.05 + conviction * 0.05)));
-  const suggLev = conviction > 0.5 ? Math.min(3, Math.max(1, Math.round(conviction * 3))) : 1;
-  const tpDist = Math.max(0.8, atrRel * 100 * 2);
-  const slDist = Math.max(0.5, atrRel * 100 * 1.5);
-  const tpPrice = suggSide === 'long' ? ps.price * (1 + tpDist/100) : ps.price * (1 - tpDist/100);
-  const slPrice = suggSide === 'long' ? ps.price * (1 - slDist/100) : ps.price * (1 + slDist/100);
-  const suggMaxLoss = 2.0;
-  const suggTimeout = 60;
+  const k = pair.replace('/', '_');
+  const pl = _manPlan(pair);
   
   if (!S._manConsignes) S._manConsignes = {};
-  if (!S._manConsignes[pair]) { S._manConsignes[pair] = { maxLossPct: suggMaxLoss, timeoutMin: suggTimeout }; }
-  const cons = S._manConsignes[pair];
-  
+  if (!S._manConsignes[pair]) { S._manConsignes[pair] = { maxLossPct: 2.0, timeoutMin: 60 }; }
   const manualPos = (S.openPositions || []).find(p => p.pair === pair && p.auto !== true);
+  // une position manuelle ouverte par la fiche porte SES consignes (09e les lit sur elle) : ce sont elles qu'on montre et qu'on modifie (10g)
+  const posCons = !!(manualPos && (manualPos._manMaxLossPct > 0 || manualPos._manTimeoutMin > 0));
+  const cons = posCons ? { maxLossPct: manualPos._manMaxLossPct || '', timeoutMin: manualPos._manTimeoutMin || '' } : S._manConsignes[pair];
+  const botPos = (S.openPositions || []).find(p => p.pair === pair && p.auto === true);
   
   const pnl24 = ps.pnl24h || 0;
   const pnl24Col = pnl24 >= 0 ? 'var(--up)' : 'var(--down)';
   title.innerHTML = `
     <span style="color:${cfg.color};font-size:15px;">${pair}</span>
     <span style="font-family:var(--font-mono);font-size:10px;color:var(--ice);background:rgba(56,212,245,0.1);padding:2px 6px;border-radius:4px;margin-left:6px;">MAN</span>
-    <span style="font-family:var(--font-mono);font-size:11px;color:var(--t2);margin-left:6px;">${cfg.dec >= 4 ? ps.price.toFixed(cfg.dec) : '$' + Math.floor(ps.price).toLocaleString()}</span>
+    <span style="font-family:var(--font-mono);font-size:11px;color:var(--t2);margin-left:6px;">${_manFmtPx(pair, ps.price)}</span>
     <span style="font-family:var(--font-mono);font-size:10px;color:${pnl24Col};margin-left:6px;">${pnl24 >= 0 ? '+' : ''}${pnl24.toFixed(2)}%</span>
   `;
   
   body.innerHTML = '';
-  
-  const headSection = document.createElement('div');
-  headSection.className = 'detail-section';
+  const inp = 'width:100%;background:var(--s2);border:1px solid var(--border);border-radius:6px;padding:6px 8px;font-family:var(--font-mono);font-weight:700;font-size:12px;';
+  const lab = 'color:var(--t3);font-size:9px;display:block;margin-bottom:3px;';
   
   if (manualPos) {
     const pnlUsd = manualPos.pnlUsdt || 0;
     const pnlPct = manualPos.pnl || 0;
-    const isWin = pnlUsd >= 0;
-    const pnlCol = isWin ? 'var(--up)' : 'var(--down)';
+    const pnlCol = pnlUsd >= 0 ? 'var(--up)' : 'var(--down)';
     const sign = pnlUsd >= 0 ? '+' : '';
     const sideLabel = manualPos.side === 'long' ? '↑ LONG' : '↓ SHORT';
     const sideCol = manualPos.side === 'long' ? 'var(--up)' : 'var(--down)';
-    headSection.innerHTML = `
+    const posSection = document.createElement('div');
+    posSection.className = 'detail-section';
+    posSection.innerHTML = `
       <div class="detail-section-title">🎛️ Position active</div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px 10px;font-size:11px;">
         <div><span style="color:var(--t3);">Side</span><br><span style="color:${sideCol};font-weight:800;font-size:13px;">${sideLabel}</span></div>
-        <div><span style="color:var(--t3);">Mise</span><br><span style="color:var(--t1);font-weight:700;font-family:var(--font-mono);">$${(manualPos.stakeUsdt || 0).toFixed(0)}</span></div>
-        <div><span style="color:var(--t3);">Entrée</span><br><span style="color:var(--t1);font-weight:700;font-family:var(--font-mono);font-size:10px;">${cfg.dec >= 4 ? manualPos.entryPrice.toFixed(cfg.dec) : '$' + Math.floor(manualPos.entryPrice)}</span></div>
+        <div><span style="color:var(--t3);">Mise</span><br><span style="color:var(--t1);font-weight:700;font-family:var(--font-mono);">$${(manualPos.stakeUsdt || 0).toFixed(2)}</span></div>
+        <div><span style="color:var(--t3);">Entrée</span><br><span style="color:var(--t1);font-weight:700;font-family:var(--font-mono);font-size:10px;">${_manFmtPx(pair, manualPos.entryPrice)}</span></div>
         <div><span style="color:var(--t3);">P&L</span><br><span style="color:${pnlCol};font-weight:800;font-family:var(--font-mono);">${sign}$${pnlUsd.toFixed(2)} <span style="font-size:9px;color:var(--t3);">(${sign}${pnlPct.toFixed(2)}%)</span></span></div>
+        <div><span style="color:var(--t3);">TP</span><br><span style="color:var(--up);font-weight:700;font-family:var(--font-mono);font-size:10px;">${_manFmtPx(pair, manualPos.tp)}</span></div>
+        <div><span style="color:var(--t3);">SL</span><br><span style="color:var(--down);font-weight:700;font-family:var(--font-mono);font-size:10px;">${_manFmtPx(pair, manualPos.sl)}</span></div>
       </div>`;
-  } else {
-    const sideLabel = suggSide === 'long' ? '↑ LONG' : '↓ SHORT';
-    const sideCol = suggSide === 'long' ? 'var(--up)' : 'var(--down)';
-    headSection.innerHTML = `
-      <div class="detail-section-title">🤖 Suggestion bot en temps réel</div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px 10px;font-size:11px;">
-        <div><span style="color:var(--t3);">Direction</span><br><span style="color:${sideCol};font-weight:800;font-size:13px;">${sideLabel}</span></div>
-        <div><span style="color:var(--t3);">Conviction LMSR</span><br><span style="color:var(--t1);font-weight:700;font-family:var(--font-mono);">${pct.toFixed(0)}%</span></div>
-        <div><span style="color:var(--t3);">ATR (volatilité)</span><br><span style="color:var(--t1);font-weight:700;font-family:var(--font-mono);">${(atrRel*100).toFixed(2)}%</span></div>
-        <div><span style="color:var(--t3);">Force signal</span><br><span style="color:var(--t1);font-weight:700;font-family:var(--font-mono);">${(conviction*100).toFixed(0)}%</span></div>
-      </div>`;
+    body.appendChild(posSection);
   }
-  body.appendChild(headSection);
   
-  if (!manualPos) {
+  // Le système : toujours affiché (aussi pendant une position : c'est lui qui dira s'il bascule)
+  const sysSection = document.createElement('div');
+  sysSection.className = 'detail-section';
+  sysSection.id = 'manSys_' + k;
+  sysSection.innerHTML = pl ? _manSystemHtml(pair, pl) : '<div class="detail-section-title">🧠 Le système</div><div style="font-size:10px;color:var(--t3);">Pas de données pour cette paire.</div>';
+  body.appendChild(sysSection);
+  
+  if (!manualPos && pl) {
+    const L = pl.lv[pl.dir || 'long'];
     const paramsSection = document.createElement('div');
     paramsSection.className = 'detail-section';
     paramsSection.innerHTML = `
-      <div class="detail-section-title">⚙️ Paramètres (pré-remplis · éditables)</div>
+      <div class="detail-section-title">⚙️ Ton trade (pré-rempli par le système · éditable)</div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;font-size:11px;">
         <div>
-          <label style="color:var(--t3);font-size:9px;display:block;margin-bottom:3px;">Mise ($)</label>
-          <input type="number" id="manIn_stake_${pair.replace('/','_')}" value="${suggStake}" min="10" step="5" style="width:100%;background:var(--s2);border:1px solid var(--border);border-radius:6px;padding:6px 8px;color:var(--t1);font-family:var(--font-mono);font-weight:700;font-size:12px;">
+          <label style="${lab}">Mise ($)</label>
+          <input type="number" id="manIn_stake_${k}" value="${pl.stake.toFixed(2)}" min="1" step="1" style="${inp}color:var(--t1);">
         </div>
         <div>
-          <label style="color:var(--t3);font-size:9px;display:block;margin-bottom:3px;">Levier ×</label>
-          <input type="number" id="manIn_lev_${pair.replace('/','_')}" value="${suggLev}" min="1" max="10" step="1" style="width:100%;background:var(--s2);border:1px solid var(--border);border-radius:6px;padding:6px 8px;color:var(--t1);font-family:var(--font-mono);font-weight:700;font-size:12px;">
+          <label style="${lab}">Levier ×</label>
+          <input type="number" id="manIn_lev_${k}" value="1" min="1" max="10" step="1" style="${inp}color:var(--t1);">
         </div>
         <div>
-          <label style="color:var(--t3);font-size:9px;display:block;margin-bottom:3px;">TP ${cfg.dec >= 4 ? '(prix)' : '($)'}</label>
-          <input type="number" id="manIn_tp_${pair.replace('/','_')}" value="${cfg.dec >= 4 ? tpPrice.toFixed(cfg.dec) : Math.round(tpPrice)}" step="${cfg.dec >= 4 ? '0.0001' : '1'}" style="width:100%;background:var(--s2);border:1px solid var(--border);border-radius:6px;padding:6px 8px;color:var(--up);font-family:var(--font-mono);font-weight:700;font-size:12px;">
+          <label style="${lab}">TP (% depuis l'entrée)</label>
+          <input type="number" id="manIn_tpp_${k}" value="${L.tp.toFixed(2)}" min="0.05" step="0.05" oninput="this.dataset.edited='1';_manPreview('${pair}')" style="${inp}color:var(--up);">
         </div>
         <div>
-          <label style="color:var(--t3);font-size:9px;display:block;margin-bottom:3px;">SL ${cfg.dec >= 4 ? '(prix)' : '($)'}</label>
-          <input type="number" id="manIn_sl_${pair.replace('/','_')}" value="${cfg.dec >= 4 ? slPrice.toFixed(cfg.dec) : Math.round(slPrice)}" step="${cfg.dec >= 4 ? '0.0001' : '1'}" style="width:100%;background:var(--s2);border:1px solid var(--border);border-radius:6px;padding:6px 8px;color:var(--down);font-family:var(--font-mono);font-weight:700;font-size:12px;">
+          <label style="${lab}">SL (% depuis l'entrée)</label>
+          <input type="number" id="manIn_slp_${k}" value="${L.sl.toFixed(2)}" min="0.05" step="0.05" oninput="this.dataset.edited='1';_manPreview('${pair}')" style="${inp}color:var(--down);">
         </div>
-      </div>`;
+      </div>
+      <div id="manPrev_${k}" style="margin-top:8px;font-size:10px;font-family:var(--font-mono);color:var(--t2);line-height:1.6;">${_manPreviewHtml(pair)}</div>
+      <div style="margin-top:4px;font-size:9px;color:var(--t3);line-height:1.4;">Mise : part du capital libre de la paire (règle des bots, $${pl.free.toFixed(2)} libres). TP / SL : règle de sortie des bots (force commune + signaux techniques + volatilité) ; ils s'appliquent au sens que tu cliques.</div>`;
     body.appendChild(paramsSection);
   }
   
   const consignesSection = document.createElement('div');
   consignesSection.className = 'detail-section';
   consignesSection.innerHTML = `
-    <div class="detail-section-title">🛡️ Consignes garde-fou (bot ferme si dépassé)</div>
-    <div style="font-size:10px;color:var(--t3);margin-bottom:8px;line-height:1.4;">Le bot respecte ton ouverture mais ferme automatiquement si ces seuils sont franchis.</div>
+    <div class="detail-section-title">🛡️ Consignes garde-fou (le système ferme si dépassé)</div>
+    <div style="font-size:10px;color:var(--t3);margin-bottom:8px;line-height:1.4;">Le bot respecte ton ouverture mais ferme automatiquement si ces seuils sont franchis.${manualPos && !posCons ? ' <span style="color:var(--gold);">Position ouverte hors fiche : aucune consigne ne la surveille encore — modifie une valeur pour l\'en équiper.</span>' : ''}</div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;font-size:11px;">
       <div>
-        <label style="color:var(--t3);font-size:9px;display:block;margin-bottom:3px;">Perte max (% du capital)</label>
-        <input type="number" id="manCon_loss_${pair.replace('/','_')}" value="${cons.maxLossPct}" min="0.5" max="10" step="0.5" onchange="_saveManConsigne('${pair}','maxLossPct',this.value)" style="width:100%;background:var(--s2);border:1px solid var(--border);border-radius:6px;padding:6px 8px;color:var(--gold);font-family:var(--font-mono);font-weight:700;font-size:12px;">
+        <label style="${lab}">Perte max (% du capital)</label>
+        <input type="number" id="manCon_loss_${k}" value="${cons.maxLossPct}" min="0.5" max="10" step="0.5" onchange="_saveManConsigne('${pair}','maxLossPct',this.value)" style="${inp}color:var(--gold);">
       </div>
       <div>
-        <label style="color:var(--t3);font-size:9px;display:block;margin-bottom:3px;">Timeout (min)</label>
-        <input type="number" id="manCon_tout_${pair.replace('/','_')}" value="${cons.timeoutMin}" min="5" max="1440" step="5" onchange="_saveManConsigne('${pair}','timeoutMin',this.value)" style="width:100%;background:var(--s2);border:1px solid var(--border);border-radius:6px;padding:6px 8px;color:var(--gold);font-family:var(--font-mono);font-weight:700;font-size:12px;">
+        <label style="${lab}">Timeout (min)</label>
+        <input type="number" id="manCon_tout_${k}" value="${cons.timeoutMin}" min="5" max="1440" step="5" onchange="_saveManConsigne('${pair}','timeoutMin',this.value)" style="${inp}color:var(--gold);">
       </div>
     </div>
-    <div style="margin-top:6px;font-size:9px;color:var(--t3);">ℹ️ Le bot fermera aussi si TP ou SL sont atteints.</div>`;
+    <div style="margin-top:6px;font-size:9px;color:var(--t3);line-height:1.4;">ℹ️ Fermée aussi : à ton TP ou ton SL, à la perte max du trade (2 × SL, 1,5–3 %), par le trailing, après 30 min à plat.</div>`;
   body.appendChild(consignesSection);
   
   const actionsSection = document.createElement('div');
-  actionsSection.style.cssText = 'margin:12px 0;display:flex;gap:8px;';
+  actionsSection.style.cssText = 'margin:12px 0;';
   if (manualPos) {
-    actionsSection.innerHTML = `<button class="force-close-btn" style="flex:1;" onclick="_showForceCloseConfirm('${pair}')">✕ Fermer ${manualPos.side === 'long' ? 'LONG' : 'SHORT'} ${pair}</button>`;
+    actionsSection.innerHTML = `<div style="display:flex;gap:8px;"><button class="force-close-btn" style="flex:1;" onclick="_showForceCloseConfirm('${pair}')">✕ Fermer ${manualPos.side === 'long' ? 'LONG' : 'SHORT'} ${pair}</button></div>`;
   } else {
+    const star = (side) => `<span id="manStar_${side}_${k}" style="font-size:10px;opacity:.8;">${(pl && pl.dir === side) ? ' ★ système' : ''}</span>`;
     actionsSection.innerHTML = `
-      <button style="flex:1;background:rgba(0,232,122,0.12);color:var(--up);border:1px solid rgba(0,232,122,0.4);padding:12px;border-radius:10px;font-size:13px;font-weight:800;cursor:pointer;" onclick="_openManTrade('${pair}','long')">↑ LONG</button>
-      <button style="flex:1;background:rgba(255,61,107,0.12);color:var(--down);border:1px solid rgba(255,61,107,0.4);padding:12px;border-radius:10px;font-size:13px;font-weight:800;cursor:pointer;" onclick="_openManTrade('${pair}','short')">↓ SHORT</button>`;
+      <div style="display:flex;gap:8px;">
+        <button style="flex:1;background:rgba(0,232,122,0.12);color:var(--up);border:1px solid rgba(0,232,122,0.4);padding:12px;border-radius:10px;font-size:13px;font-weight:800;cursor:pointer;" onclick="_openManTrade('${pair}','long')">↑ LONG${star('long')}</button>
+        <button style="flex:1;background:rgba(255,61,107,0.12);color:var(--down);border:1px solid rgba(255,61,107,0.4);padding:12px;border-radius:10px;font-size:13px;font-weight:800;cursor:pointer;" onclick="_openManTrade('${pair}','short')">↓ SHORT${star('short')}</button>
+      </div>
+      <div id="manWarn_${k}" style="margin-top:6px;font-size:9px;color:var(--gold);line-height:1.4;">${_manWarnHtml(pair)}</div>
+      ${botPos ? `<div style="margin-top:4px;font-size:9px;color:var(--t3);line-height:1.4;">🤖 Position bot ${botPos.side === 'long' ? 'LONG' : 'SHORT'} ouverte sur ${pair} (mise $${(botPos.stakeUsdt || 0).toFixed(2)}) : ouvrir ici la ferme d'abord (une position par paire).</div>` : ''}`;
   }
   body.appendChild(actionsSection);
   
@@ -260,6 +405,9 @@ function openManDetail(pair) {
   body.appendChild(statsSection);
   
   overlay.classList.add('open');
+  if (_manRefreshT) clearInterval(_manRefreshT);
+  const _had = !!manualPos;
+  _manRefreshT = setInterval(function(){ _manRefreshTick(pair, _had); }, 2000);
 }
 window.openManDetail = openManDetail;
 if(typeof openManDetail==='function') window.openManDetail = openManDetail;

@@ -287,7 +287,8 @@ T('V16 · persistance, en-têtes, jeton : _degelMigrated écrit (09b1), relu (09
   assert.ok(/'_abstMigrated','_degelMigrated',/.test((s9b2.match(/window\._APPLYSNAP_MANIFEST = \[([^\]]*)\]/) || [])[1] || ''), 'manifeste');
   const H = '// [DÉGEL DES VOIX · 02/10/2026] VERSION 20261002a';
   [s02, s03, s07, s08, s9b1, s9b2, s10g, rd('js/10i-intel-bus.js'), s12].forEach((s, i) => assert.ok(s.startsWith(H), 'en-tête ' + i));
-  assert.strictEqual(TOK, '20261004a'); assert.strictEqual(html.split('20261004a').length - 1, 82); assert.strictEqual(html.split('20261002a').length - 1, 0); assert.strictEqual(html.split('20261001a').length - 1, 0);
+  assert.strictEqual(TOK, '20261005a'); assert.strictEqual(html.split('20261005a').length - 1, 82); assert.strictEqual(html.split('20261004a').length - 1, 0);   // [MANU · 05/10/2026] HTML au jeton 20261005a
+   assert.strictEqual(html.split('20261002a').length - 1, 0); assert.strictEqual(html.split('20261001a').length - 1, 0);
   assert.ok(s03.includes("// ═══ [DÉGEL DES VOIX · 02/10/2026] LES VOIX LISENT CE QU'ELLES CROIENT LIRE (go Rams 01/10 20:51 : « l'horloge par mode en premier … Ensuite le dégel ») ═══"));
   assert.ok(fs.existsSync(path.join(ROOT, 'banc-fixtures/harmonic-avant-genome-20260923c.js')) && fs.existsSync(path.join(ROOT, 'banc-fixtures/analyse-avant-genome-20260916a.js')), 'oracles');
 });

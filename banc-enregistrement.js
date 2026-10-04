@@ -232,7 +232,8 @@ T('E12 · découpe : un jour de plus de 3 Mo part en plusieurs fichiers -p1, -p2
 T('E13 · HTML : js/14-enregistreur.js chargé juste après 13-veille-ecran, au token courant ; en-tête VERSION = DOC_V ; minuteries 2 s / 15 s / 60 s / 90 s / 10 min', () => {
   const tok = (HTML.match(/DOC_V = '(\d{8}[a-z])'/) || [])[1];
   assert.ok(HTML.includes('<script src="js/13-veille-ecran.js?v=' + tok + '"></script>\n<script src="js/14-enregistreur.js?v=' + tok + '"></script>'));
-  assert.ok(REC.split('\n')[0].includes('VERSION ' + tok));
+  const recV = (REC.match(/var REC_V = '(\d{8}[a-z])'/) || [])[1];   // [MANU · 05/10/2026] HTML relivré au jeton 20261005a, 14 inchangé : l'en-tête porte la version du FICHIER (REC_V), le src porte le jeton
+  assert.ok(recV && REC.split('\n')[0].includes('VERSION ' + recV));
   const X = makeCtx(true);
   assert.deepStrictEqual(X.timers.map(t => t[0] + t[1]).sort(), ['i15000', 'i2000', 'i60000', 'i600000', 't90000']);
 });

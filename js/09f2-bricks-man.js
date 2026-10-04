@@ -82,12 +82,14 @@ function updateManBricks() {
       _drawSparkline('mbspark_' + pairKey, ps.candles, cfg.color, true);
     }
 
-    // Suggestion du bot basée sur LMSR
-    const prob = typeof lmsrP === 'function' ? lmsrP(ps) : 0.5;
+    // [MANU · 05/10/2026] suggestion = la DÉCISION COMMUNE de la paire (10h _manPlan, comme la fiche) ; avant : le LMSR seul, seuils 0,55 / 0,45
+    // posés à la main, et une mise calculée autrement que dans la fiche (57 $ ici, 55 $ là pour la même paire)
+    const _pl = (typeof _manPlan === 'function') ? _manPlan(pair, true) : null;
+    const prob = _pl ? (0.5 + _pl.C / 2) : (typeof lmsrP === 'function' ? lmsrP(ps) : 0.5);
     let suggestedSide      = 'hold';
-    let suggestedSideLabel = 'HOLD';
-    if      (prob > 0.55) { suggestedSide = 'bull'; suggestedSideLabel = '↑ LONG'; }
-    else if (prob < 0.45) { suggestedSide = 'bear'; suggestedSideLabel = '↓ SHORT'; }
+    let suggestedSideLabel = '—';
+    if      (_pl ? _pl.dir === 'long'  : prob > 0.55) { suggestedSide = 'bull'; suggestedSideLabel = '↑ LONG'; }
+    else if (_pl ? _pl.dir === 'short' : prob < 0.45) { suggestedSide = 'bear'; suggestedSideLabel = '↓ SHORT'; }
 
     // Position manuelle sur cette paire ?
     const manualPos = (S.openPositions || []).find(p => p.pair === pair && p.auto !== true);
@@ -119,11 +121,9 @@ function updateManBricks() {
       brick.className = 'man-brick';
       if (badgeEl) badgeEl.textContent = 'PRÉT';
 
-      // Calcul de la mise suggérée selon conviction + ATR
-      const atr        = ps.atr || 0.01;
-      const conviction = Math.abs(prob - 0.5) * 2;
-      const baseStake  = Math.max(10, Math.round((S.tradingAccount || 100) * 0.05));   // 5% par défaut
-      const suggStake  = Math.min(baseStake * (1 + conviction), (S.tradingAccount || 100) * 0.15);
+      // [MANU · 05/10/2026] force et mise = celles de la fiche (décision commune ; part du capital libre de la paire, règle des bots)
+      const conviction = _pl ? _pl.conv : Math.abs(prob - 0.5) * 2;
+      const suggStake  = _pl ? _pl.stake : Math.max(10, Math.round((S.tradingAccount || 100) * 0.05));
 
       if (sugEl) {
         const sideClass = suggestedSide;
@@ -132,7 +132,7 @@ function updateManBricks() {
 
       if (pnlEl) {
         const convPct = (conviction * 100).toFixed(0);
-        pnlEl.innerHTML = `<span style="font-size:9px;color:var(--t3);">Conviction ${convPct}%</span>`;
+        pnlEl.innerHTML = `<span style="font-size:9px;color:var(--t3);">Force ${convPct}%${_pl && _pl.src === 'dc' ? ' · commune' : ''}</span>`;
       }
     }
   });

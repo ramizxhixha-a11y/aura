@@ -283,6 +283,10 @@ function closePairDetail() {
   const b = document.getElementById('pairDetailBackdrop');
   if(s) s.style.transform    = 'translateY(105%)';
   if(b) { b.style.opacity = '0'; b.style.pointerEvents = 'none'; }
+  // [MANU · 05/10/2026] la fiche MAN (#pairDetailOverlay, ouverte par 10h openManDetail) ne se fermait JAMAIS : son ✕, son fond et la fin
+  // d'un trade appelaient cette fonction, qui ne connaissait que le volet du bas (sonde du 05/10 : fiche toujours ouverte après ✕ et après clic sur le fond)
+  const o = document.getElementById('pairDetailOverlay');
+  if(o) o.classList.remove('open');
 }
 
 // ── Agent role filter ─────────────────────────────────────────

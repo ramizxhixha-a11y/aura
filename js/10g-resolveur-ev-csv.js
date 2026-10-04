@@ -83,7 +83,13 @@ function _saveManConsigne(pair, field, value) {
   if (!S._manConsignes) S._manConsignes = {};
   if (!S._manConsignes[pair]) S._manConsignes[pair] = { maxLossPct: 2.0, timeoutMin: 60 };
   const n = parseFloat(value);
-  if (!isNaN(n) && n > 0) { S._manConsignes[pair][field] = n; }
+  if (!isNaN(n) && n > 0) {
+    S._manConsignes[pair][field] = n;
+    // [MANU · 05/10/2026] la fiche d'une position manuelle ouverte montre SES consignes : les modifier s'applique à elle (09e les lit sur la position ;
+    // une manuelle ouverte hors fiche n'en a pas : modifier une valeur l'en équipe, c'est ton geste)
+    const pos = (S.openPositions || []).find(p => p && p.pair === pair && p.auto !== true);
+    if (pos) { if (field === 'maxLossPct') pos._manMaxLossPct = n; else if (field === 'timeoutMin') pos._manTimeoutMin = n; }
+  }
 }
 window._saveManConsigne = _saveManConsigne;
 if(typeof _saveManConsigne==='function') window._saveManConsigne = _saveManConsigne;

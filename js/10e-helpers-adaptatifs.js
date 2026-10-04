@@ -338,38 +338,52 @@ function _notifIfRare() { /* désactivé · Q3 */ }
 if(typeof _notifIfRare==='function') window._notifIfRare = _notifIfRare;
 
 function _openManTrade(pair, side) {
-  const pairKey = pair.replace('/','_');
-  const stake = parseFloat(document.getElementById('manIn_stake_' + pairKey)?.value) || 10;
-  const lev = parseInt(document.getElementById('manIn_lev_' + pairKey)?.value) || 1;
-  const tp = parseFloat(document.getElementById('manIn_tp_' + pairKey)?.value) || null;
-  const sl = parseFloat(document.getElementById('manIn_sl_' + pairKey)?.value) || null;
-  
-  const ps = S.pairStates[pair];
-  if (!ps) { if (typeof showToast === 'function') showToast('⚠ Paire invalide'); return; }
-  
+  // [MANU · 05/10/2026] sonde du 05/10 (vraie app, backup du 04/10 21:04, clics réels) : (1) TP / SL pré-remplis en PRIX pour le sens SUGGÉRÉ
+  // puis appliqués tels quels au sens CLIQUÉ → un LONG cliqué quand la fiche suggérait SHORT recevait un TP SOUS l'entrée et un SL au-dessus :
+  // fermé au passage suivant du moteur de sortie (07 « TP atteint » à +0,00 %) ; SOL : prix arrondis au dollar (TP 121 / SL 122) ; (2) ps.stake
+  // et ps.pairLeverage écrasés à vie par la mise manuelle (10f s'en sert comme plancher de la mise du bot) ; (3) toast « ouvert » et fiche jamais
+  // fermée, même quand rien ne s'ouvrait. Désormais : TP / SL en % de distance (10h _manSideLevels) convertis en prix pour LE sens cliqué ;
+  // mise et levier prêtés le temps de l'ouverture puis rendus ; la position est vérifiée et reçoit tout de suite ses niveaux et consignes ;
+  // la fiche se ferme ; le vrai résultat est dit.
+  const k  = pair.replace('/', '_');
+  const ps = S.pairStates && S.pairStates[pair];
+  if (!ps) { if (typeof showToast === 'function') showToast('⚠ Paire invalide'); return null; }
+  const num = (id) => { const el = document.getElementById(id); const v = el ? parseFloat(el.value) : NaN; return isFinite(v) ? v : NaN; };
+  const stake = num('manIn_stake_' + k);
+  const lev   = Math.max(1, Math.round(num('manIn_lev_' + k)) || 1);
+  if (!(stake > 0)) { if (typeof showToast === 'function') showToast('⚠ Mise invalide', 2500, 'warn'); return null; }
+  const lv = (typeof _manSideLevels === 'function') ? _manSideLevels(pair, side) : null;
+
+  const before = {};
+  (S.openPositions || []).forEach(p => { if (p) before[p.id] = 1; });
+  const prevStake = ps.stake, prevLev = ps.pairLeverage;
   ps.stake = stake;
   ps.pairLeverage = lev;
-  
-  if (typeof openPosition === 'function') {
-    try {
-      openPosition(pair, side);
-      setTimeout(() => {
-        const newPos = S.openPositions.find(p => p.pair === pair && p.auto !== true);
-        if (newPos) {
-          if (tp && tp > 0) newPos.tp = tp;
-          if (sl && sl > 0) newPos.sl = sl;
-          newPos._manOpenedAt = Date.now();
-          newPos._manMaxLossPct = S._manConsignes?.[pair]?.maxLossPct || 2.0;
-          newPos._manTimeoutMin = S._manConsignes?.[pair]?.timeoutMin || 60;
-        }
-      }, 50);
-      
-      S.chainLog.push({ icon: '🎛️', desc: `Trade MANUEL ${pair} ${side.toUpperCase()} · mise $${stake} · levier ×${lev}`, hash: rndHash(), time: nowStr() });
-      if (S.chainLog.length > 100) S.chainLog.splice(0, S.chainLog.length - 100);
-      if (typeof showToast === 'function') { showToast('🎛️ ' + pair + ' ' + side.toUpperCase() + ' ouvert · $' + stake, 2500); }
-      closePairDetail();
-    } catch(e) { console.warn('manual open:', e); }
+  try { if (typeof openPosition === 'function') openPosition(pair, side); }
+  catch(e) { console.warn('manual open:', e); try{window._decErr&&window._decErr(e)}catch(_e){} }
+  finally { ps.stake = prevStake; ps.pairLeverage = prevLev; }
+
+  const pos = (S.openPositions || []).find(p => p && p.pair === pair && p.auto !== true && !before[p.id]) || null;
+  if (!pos) {
+    if (typeof showToast === 'function') showToast('⚠ ' + pair + ' ' + side.toUpperCase() + ' non ouvert', 3000, 'warn');
+    return null;
   }
+  const e = Number(pos.entryPrice), d = side === 'long' ? 1 : -1;
+  if (lv && lv.tp > 0 && e > 0) pos.tp = e * (1 + d * lv.tp / 100);
+  if (lv && lv.sl > 0 && e > 0) pos.sl = e * (1 - d * lv.sl / 100);
+  const cons = (S._manConsignes && S._manConsignes[pair]) || {};
+  pos._manOpenedAt   = Date.now();
+  pos._manMaxLossPct = cons.maxLossPct > 0 ? cons.maxLossPct : 2.0;
+  pos._manTimeoutMin = cons.timeoutMin > 0 ? cons.timeoutMin : 60;
+
+  const fp = (x) => (typeof _manFmtPx === 'function') ? _manFmtPx(pair, x) : String(x);
+  const lvl = (pos.tp > 0 && pos.sl > 0) ? ` · TP ${fp(pos.tp)} · SL ${fp(pos.sl)}` : '';
+  S.chainLog.push({ icon: '🎛️', desc: `Trade MANUEL ${pair} ${side.toUpperCase()} · mise $${stake} · levier ×${lev}${lvl}`, hash: rndHash(), time: nowStr() });
+  if (S.chainLog.length > 100) S.chainLog.splice(0, S.chainLog.length - 100);
+  if (typeof showToast === 'function') { showToast('🎛️ ' + pair + ' ' + side.toUpperCase() + ' ouvert · $' + stake + lvl, 3000); }
+  try { closePairDetail(); } catch(e){ try{window._decErr&&window._decErr(e)}catch(_e){} }
+  try { if (typeof updateManBricks === 'function') updateManBricks(); } catch(e){ try{window._decErr&&window._decErr(e)}catch(_e){} }
+  return pos;
 }
 window._openManTrade = _openManTrade;
 if(typeof _openManTrade==='function') window._openManTrade = _openManTrade;

@@ -5967,52 +5967,43 @@ function _checkPaperRealStakeLimit(stakeUsdt, pair, side) {
 }
 window._checkPaperRealStakeLimit = _checkPaperRealStakeLimit;
 
-function openPosition(pair, side) {
-  // v7.12 LIVRAISON 13 · ANTI-CONTRE-TENDANCE en mode Réel
-  // Refuse LONG en BEAR, SHORT en BULL pour éviter les pertes en marché défavorable
-  if (S.tradingMode === 'paperReal') {
+// [MANU · 05/10/2026] Les trois refus EV qui ouvraient openPosition (sens contre le régime, contexte perdant, pic de volatilité prévu) étaient
+// MUETS : dans la fiche MAN, « SHORT » en régime haussier ne faisait rien, sans un mot (sonde du 05/10 : vraie app, backup du 04/10 21:04,
+// régime bull → ETH et XRP SHORT jamais ouverts). Tous les appelants de openPosition sont des ouvertures MANUELLES (fiche MAN, LONG/SHORT,
+// suggestion appliquée, inverser) et la règle est « les ouvertures manuelles de Rams ne sont jamais bloquées » : ces avis du système sont
+// désormais DITS (toast + journal) et le trade s'ouvre. La fiche MAN les affiche avant le clic. Mêmes règles qu'avant, EV seulement.
+function _manOpenWarnings(pair, side) {
+  const w = [];
+  if (S.tradingMode !== 'paperReal') return w;
+  try {
     const regime = detectMarketRegime(); // [P0] source unique, en direct
-    const isBear = regime === 'bear' || regime === 'volatile_bear';
-    const isBull = regime === 'bull' || regime === 'volatile_bull';
-    if (side === 'long' && isBear) {
-      return;
+    if (side === 'long'  && (regime === 'bear' || regime === 'volatile_bear')) w.push('contre le régime baissier');
+    if (side === 'short' && (regime === 'bull' || regime === 'volatile_bull')) w.push('contre le régime haussier');
+  } catch(e){ try{window._decErr&&window._decErr(e)}catch(_e){} }
+  try {
+    if (typeof _checkContextAllowance === 'function') {   // v8.0 PHASE 3 · 2.3 · contexte systématiquement perdant
+      const ck = _checkContextAllowance(pair, side);
+      if (ck && !ck.allow) w.push('contexte perdant' + (ck.signature ? ' (' + ck.signature + ')' : ''));
     }
-    if (side === 'short' && isBull) {
-      return;
-    }
-    // v8.0 PHASE 3 · 2.3 · Refus de contextes systématiquement perdants
-    if (typeof _checkContextAllowance === 'function') {
-      const check = _checkContextAllowance(pair, side);
-      if (!check.allow) {
-        // Refus silencieux. Le contexte sera ré-évalué à chaque tick.
-        return;
-      }
-    }
-
-    // v8.0 PHASE 5 · 4.1 · Refus si pic de volatilité prévu
-    const cfg5 = S.paperRealConfig || {};
+  } catch(e){ try{window._decErr&&window._decErr(e)}catch(_e){} }
+  try {
+    const cfg5 = S.paperRealConfig || {};   // v8.0 PHASE 5 · 4.1 · pic de volatilité prévu
     if (cfg5.volatilityForecastEnabled && cfg5.volatilityForecastBlockSpike && typeof _forecastVolatility === 'function') {
-      const forecast = _forecastVolatility(pair);
-      if (forecast && forecast.isSpike) {
-        // Mémoriser pour panneau diagnostic
-        if (!S.adaptiveState) S.adaptiveState = {};
-        S.adaptiveState.lastVolForecast = {
-          pair: pair,
-          currentVol: forecast.longTermVolPct,
-          forecastVol: forecast.forecastVolPct,
-          ratio: forecast.ratio,
-          blocked: true,
-          ts: Date.now()
-        };
-        S.adaptiveState.volForecastBlocks = (S.adaptiveState.volForecastBlocks || 0) + 1;
-        return; // refus silencieux
-      }
+      const fc = _forecastVolatility(pair);
+      if (fc && fc.isSpike) w.push('pic de volatilité prévu');
     }
-  }
+  } catch(e){ try{window._decErr&&window._decErr(e)}catch(_e){} }
+  return w;
+}
+window._manOpenWarnings = _manOpenWarnings;
+
+// Renvoie la position ouverte, ou null (rien ouvert : la raison est toujours affichée).
+function openPosition(pair, side) {
+  const _warn = _manOpenWarnings(pair, side);   // [MANU · 05/10/2026] dits, plus jamais un refus muet
 
   const ps  = S.pairStates[pair];
   const cfg = PAIRS[pair];
-  if(!ps) return;
+  if(!ps) { showToast('⚠ ' + pair + ' : paire inconnue'); return null; }
 
   // Max 1 position par paire — fermer l'existante d'abord
   const existing = S.openPositions.find(p => p.pair === pair);
@@ -6035,7 +6026,7 @@ function openPosition(pair, side) {
   if(!capCheck.ok && capCheck.available < stakeUsdt * 0.5) {
     showToast('⚠ Capital max atteint · ' + fmt$(Math.max(0,capCheck.available)) + ' libre', 2800, 'critical');
     if(levBorrowed > 0) repayLeverage(levBorrowed);
-    return;
+    return null;
   }
 
   // v7.2 Phase 14c-revised · Emprunt automatique JIT si levier ≥ 1 et trading insuffisant
@@ -6047,7 +6038,7 @@ function openPosition(pair, side) {
       if(!r.ok) {
         showToast('⚠ Trading insuffisant · levier ' + (r.reason==='leverage_off'?'désactivé':'réserve vide') + ' · '+fmt$2(r.shortfall)+' manquant', 3200, 'critical');
         if(levBorrowed > 0) repayLeverage(levBorrowed);
-        return;
+        return null;
       }
       if (r.borrowed > 0) _jitBorrowedManual = r.borrowed;
     }
@@ -6114,9 +6105,18 @@ function openPosition(pair, side) {
   if(!existing) showToast('📈 '+side.toUpperCase()+' '+pair+' — $'+totalExposure+' USDT'+levStr);
   // v19 · #38 Notification trade ouvert
   try { if(typeof notifTradeOpen === 'function') notifTradeOpen(pair, side, totalExposure); } catch(e) {}
+  // [MANU · 05/10/2026] l'avis du système est dit, le trade est le tien
+  if (_warn.length) {
+    try {
+      S.chainLog.push({ icon: '\u26A0', desc: `Ouverture manuelle ${pair} ${side.toUpperCase()} · ${_warn.join(' · ')} · ouverte à ta demande`, hash: rndHash(), time: nowStr() });
+      if (S.chainLog.length > 100) S.chainLog.splice(0, S.chainLog.length - 100);
+      showToast('\u26A0 ' + pair + ' ' + side.toUpperCase() + ' ouvert ' + _warn.join(' · '), 3500, 'warn');
+    } catch(e){ try{window._decErr&&window._decErr(e)}catch(_e){} }
+  }
   updatePairBtnStates();
   renderPositions();
   if(S.currentPage===4) renderChain();
+  return S.openPositions.find(p => p.id === id) || null;
 }
 
 // botClose=true means called from bot — MUST NOT close manual positions

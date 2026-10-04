@@ -290,18 +290,27 @@ function _confirmForceClose() {
   if (pos && typeof closePosition === 'function') {
     try {
       closePosition(pos.id, false);
-      S.chainLog.push({
-        icon: '✕',
-        desc: `Position ${pair} ${pos.side.toUpperCase()} fermée manuellement · forcée utilisateur`,
-        hash: rndHash(), time: nowStr()
-      });
-      if (S.chainLog.length > 100) S.chainLog.splice(0, S.chainLog.length - 100);
+      // [MANU · 05/10/2026] « fermée » n'est dit que si la position a vraiment disparu
+      const gone = !(S.openPositions || []).some(p => p && p.id === pos.id);
+      if (gone) {
+        S.chainLog.push({
+          icon: '✕',
+          desc: `Position ${pair} ${pos.side.toUpperCase()} fermée manuellement · forcée utilisateur`,
+          hash: rndHash(), time: nowStr()
+        });
+        if (S.chainLog.length > 100) S.chainLog.splice(0, S.chainLog.length - 100);
+      }
       if (typeof showToast === 'function') {
-        showToast('✕ ' + pair + ' ' + pos.side.toUpperCase() + ' fermée', 2500);
+        showToast(gone ? ('✕ ' + pair + ' ' + pos.side.toUpperCase() + ' fermée') : ('⚠ ' + pair + ' : fermeture non aboutie'), 2500, gone ? undefined : 'warn');
       }
     } catch(e) { console.warn('force close:', e); }
   }
   _cancelForceClose();
+  // [MANU · 05/10/2026] la fiche MAN ouverte sur cette paire est redessinée : elle montrait encore la position fermée
+  try {
+    const o = document.getElementById('pairDetailOverlay');
+    if (o && o.classList.contains('open') && _currentDetailPair === pair && typeof openManDetail === 'function') openManDetail(pair);
+  } catch(e){ try{window._decErr&&window._decErr(e)}catch(_e){} }
 }
 window._confirmForceClose = _confirmForceClose;
 if(typeof _confirmForceClose==='function') window._confirmForceClose = _confirmForceClose;

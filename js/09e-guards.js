@@ -83,43 +83,59 @@ window._fpEmergencyCheck = _fpEmergencyCheck;
 //  - OU la durée dépasse le timeout configuré (par défaut 60 min)
 // ──────────────────────────────────────────────────────────────────────
 function _manConsignesWatchdog() {
-  const positions = (S.openPositions || []).filter(p => p.auto !== true);
+  // [MANU · 05/10/2026] (1) Il fermait par closePosition(id, true) : la garde absolue de 02 refuse au BOT de fermer une manuelle → aucune
+  // fermeture, mais le journal et le toast annonçaient « fermé » tous les 4 ticks (sonde du 05/10 : manuelle à 120 min pour 60, toujours
+  // ouverte, ligne « Garde-fou MAN · fermé » écrite). Les consignes sont TA protection, comme ton TP / SL (07) : closePosition(id, false),
+  // et rien n'est annoncé sans fermeture vérifiée (1 essai / 60 s sinon, dit une fois). (2) Seules les positions qui PORTENT des consignes
+  // (ouvertes par la fiche MAN, qui les affiche) sont surveillées : on n'en invente pas à une manuelle ouverte ailleurs.
+  const positions = (S.openPositions || []).filter(p => p.auto !== true && (p._manMaxLossPct > 0 || p._manTimeoutMin > 0));
 
   positions.forEach(pos => {
     const pnlUsd     = pos.pnlUsdt || 0;
     const openedAt   = pos._manOpenedAt || pos.openedAt || pos.entryTs || Date.now();
     const elapsedMin = (Date.now() - openedAt) / 60000;
 
-    const maxLossPct = pos._manMaxLossPct || 2.0;
-    const timeoutMin = pos._manTimeoutMin || 60;
+    const maxLossPct = pos._manMaxLossPct > 0 ? pos._manMaxLossPct : null;
+    const timeoutMin = pos._manTimeoutMin > 0 ? pos._manTimeoutMin : null;
 
     // Perte exprimée en % du trading account
     const tradingCap     = S.tradingAccount || 1;
     const lossAsPctOfCap = Math.abs(Math.min(0, pnlUsd)) / tradingCap * 100;
 
     let reason = null;
-    if (lossAsPctOfCap >= maxLossPct) {
+    if (maxLossPct !== null && lossAsPctOfCap >= maxLossPct) {
       reason = `Perte max dépassée (${lossAsPctOfCap.toFixed(1)}% ≥ ${maxLossPct}%)`;
-    } else if (elapsedMin >= timeoutMin) {
+    } else if (timeoutMin !== null && elapsedMin >= timeoutMin) {
       reason = `Timeout atteint (${elapsedMin.toFixed(0)}min ≥ ${timeoutMin}min)`;
     }
+    if (!reason || typeof closePosition !== 'function') return;
+    if (pos._manWdFailAt && (Date.now() - pos._manWdFailAt) < 60000) return;
 
-    if (reason && typeof closePosition === 'function') {
-      try {
-        closePosition(pos.id, true);
+    let err = null;
+    try { closePosition(pos.id, false); } catch (e) { err = e; }
+    const gone = !(S.openPositions || []).some(p => p && p.id === pos.id);
+    if (gone) {
+      S.chainLog.push({
+        icon: '🛡️',
+        desc: `Garde-fou MAN · ${pos.pair} ${pos.side.toUpperCase()} fermé · ${reason}`,
+        hash: rndHash(), time: nowStr()
+      });
+      if (S.chainLog.length > 100) S.chainLog.splice(0, S.chainLog.length - 100);
+      if (typeof showToast === 'function') {
+        showToast('🛡️ ' + pos.pair + ' fermé · ' + reason, 3500, 'warn');
+      }
+    } else {
+      pos._manWdFailAt = Date.now();
+      pos._manWdFails = (pos._manWdFails || 0) + 1;
+      if (pos._manWdFails === 1 || pos._manWdFails % 10 === 0) {
         S.chainLog.push({
-          icon: '🛡️',
-          desc: `Garde-fou MAN · ${pos.pair} ${pos.side.toUpperCase()} fermé · ${reason}`,
+          icon: '⚠',
+          desc: `Garde-fou MAN · ${pos.pair} · ${reason} · fermeture NON aboutie (essai ${pos._manWdFails})` + (err ? ' · ' + String(err.message || err).slice(0, 80) : ''),
           hash: rndHash(), time: nowStr()
         });
         if (S.chainLog.length > 100) S.chainLog.splice(0, S.chainLog.length - 100);
-
-        if (typeof showToast === 'function') {
-          showToast('🛡️ ' + pos.pair + ' fermé · ' + reason, 3500, 'warn');
-        }
-      } catch (e) {
-        console.warn('man watchdog:', e);
       }
+      try { window._decErr && window._decErr(err || new Error('garde-fou MAN : fermeture non aboutie ' + pos.pair)); } catch (_e) {}
     }
   });
 }
