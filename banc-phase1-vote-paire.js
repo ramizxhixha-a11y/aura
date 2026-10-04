@@ -41,10 +41,10 @@ T('en-têtes : 03/12 « [PHASE 1 · 12/09/2026] VERSION 20260912c », 02/08 reli
   assert.ok(s02.startsWith('// [DÉGEL DES VOIX · 02/10/2026] VERSION 20261002a') && s02.split('\n').slice(0, 26).some(l => l.startsWith('// [1b-a · 14/09/2026] VERSION 20260914a')), F02);   // [DÉGEL DES VOIX · 02/10/2026] 02 relivré   // [SONDE RÉSEAU] 02 relivré, en-tête 1b-a en 2e ligne
   assert.ok(s10f.startsWith('// [MARCHÉ RÉPARÉ · 30/09/2026] VERSION 20260930a') && s10f.split('\n').slice(0, 7).some(l => l.startsWith('// ▓▓▓ VERSION 20260926g ▓▓▓')));   // [BILAN AUX HORIZONS · 27/09] 10f relivré, en-tête ▓▓▓ en 6e ligne   // [SENS CONTRAIRE · 27/09] 10f relivré, en-tête ▓▓▓ en 5e ligne   // [HORIZONS APPRIS · 27/09] 10f relivré, en-tête ▓▓▓ en 4e ligne   // [DÉCISION COMMUNE · 27/09/2026] 10f relivré
 });
-T('HTML : DOC_V + 80 ?v= au token ' + TOK + ' (81 occurrences, 10i le 17/09, 11b le 23/09), aucun autre token, archive/ non chargé', () => {
-  assert.strictEqual(count(html, TOK), 81);
-  assert.strictEqual(count(html, '?v=' + TOK), 80);
-  assert.strictEqual((html.match(/\?v=\d{8}[a-z]/g) || []).length, 80);
+T('HTML : DOC_V + 81 ?v= au token ' + TOK + ' (82 occurrences, 10i le 17/09, 11b le 23/09, 14 le 04/10), aucun autre token, archive/ non chargé', () => {
+  assert.strictEqual(count(html, TOK), 82);
+  assert.strictEqual(count(html, '?v=' + TOK), 81);
+  assert.strictEqual((html.match(/\?v=\d{8}[a-z]/g) || []).length, 81);
   assert.strictEqual(html.indexOf('archive/'), -1);
 });
 T('syntaxe : 02, 03, 08, 10f, 12 et l\'archive compilent (vm.Script)', () => {

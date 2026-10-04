@@ -282,12 +282,12 @@ T('V15 · 07 _macroFeedRefresh RÉEL : chaque source a son heure (tFng, tCap) �
   gl = { market_cap_percentage: { btc: 55 }, market_cap_change_percentage_24h_usd: 1.5 }; fg = null;
   await vm.runInContext('_macroFeedRefresh()', c); const f2 = J(c.S.macroFeed); assert.ok(f2.tCap > 0 && f2.cap24h === 1.5 && f2.tFng === f1.tFng, JSON.stringify(f2));
 });
-T('V16 · persistance, en-têtes, jeton : _degelMigrated écrit (09b1), relu (09b2), au manifeste ; 02, 03, 07, 08, 09b1, 09b2, 10g, 10i, 12 commencent par l\'en-tête DÉGEL DES VOIX ; HTML : 81 × ' + TOK + ', plus de 20261001a', () => {
+T('V16 · persistance, en-têtes, jeton : _degelMigrated écrit (09b1), relu (09b2), au manifeste ; 02, 03, 07, 08, 09b1, 09b2, 10g, 10i, 12 commencent par l\'en-tête DÉGEL DES VOIX ; HTML : 82 × ' + TOK + ', plus de 20261001a', () => {
   assert.ok(s9b1.includes('_degelMigrated: !!S._degelMigrated,')); assert.ok(s9b2.includes('if (snap._degelMigrated)                                                  S._degelMigrated = true;'));
   assert.ok(/'_abstMigrated','_degelMigrated',/.test((s9b2.match(/window\._APPLYSNAP_MANIFEST = \[([^\]]*)\]/) || [])[1] || ''), 'manifeste');
   const H = '// [DÉGEL DES VOIX · 02/10/2026] VERSION 20261002a';
   [s02, s03, s07, s08, s9b1, s9b2, s10g, rd('js/10i-intel-bus.js'), s12].forEach((s, i) => assert.ok(s.startsWith(H), 'en-tête ' + i));
-  assert.strictEqual(TOK, '20261002a'); assert.strictEqual(html.split('20261002a').length - 1, 81); assert.strictEqual(html.split('20261001a').length - 1, 0);
+  assert.strictEqual(TOK, '20261004a'); assert.strictEqual(html.split('20261004a').length - 1, 82); assert.strictEqual(html.split('20261002a').length - 1, 0); assert.strictEqual(html.split('20261001a').length - 1, 0);
   assert.ok(s03.includes("// ═══ [DÉGEL DES VOIX · 02/10/2026] LES VOIX LISENT CE QU'ELLES CROIENT LIRE (go Rams 01/10 20:51 : « l'horloge par mode en premier … Ensuite le dégel ») ═══"));
   assert.ok(fs.existsSync(path.join(ROOT, 'banc-fixtures/harmonic-avant-genome-20260923c.js')) && fs.existsSync(path.join(ROOT, 'banc-fixtures/analyse-avant-genome-20260916a.js')), 'oracles');
 });

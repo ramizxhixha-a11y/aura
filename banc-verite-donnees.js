@@ -126,8 +126,8 @@ T('S9 · en-têtes 02/08/10g/09b2 « ' + HDR + ' », 10f « ▓▓▓ VERSION 20
   assert.ok(s02.split('\n').slice(0, 2).some(l => l.startsWith('// [HORLOGE PAR MODE · 01/10/2026] VERSION 20261001a')) && s02.split('\n').slice(0, 26).some(l => l.startsWith(HDR)), F02);   // [DÉGEL DES VOIX · 02/10/2026] 02 relivré   // [SONDE RÉSEAU] 02 relivré, en-tête 1b-a en 2e ligne
   assert.ok(s9b2.split('\n').slice(0, 2).some(l => l.startsWith('// [MARCHÉ RÉPARÉ · 30/09/2026] VERSION 20260930a')) && s9b2.split('\n').slice(0, 27).some(l => l.startsWith(HDR)), F9B2);   // [DÉGEL DES VOIX · 02/10/2026] 09b2 relivré   // [FITNESS GLISSANTE] 09b2 relivré, en-tête 1b-a dans les 6 premières lignes
   assert.ok(s10f.startsWith('// [MARCHÉ RÉPARÉ · 30/09/2026] VERSION 20260930a') && s10f.split('\n').slice(0, 7).some(l => l.startsWith('// ▓▓▓ VERSION 20260926g ▓▓▓')));   // [BILAN AUX HORIZONS · 27/09] 10f relivré, en-tête ▓▓▓ en 6e ligne   // [SENS CONTRAIRE · 27/09] 10f relivré, en-tête ▓▓▓ en 5e ligne   // [HORIZONS APPRIS · 27/09] 10f relivré, en-tête ▓▓▓ en 4e ligne   // [DÉCISION COMMUNE · 27/09/2026] 10f relivré
-  assert.strictEqual(count(html, TOK), 81);   // [ÉCRAN APPRIS 23/09] 11b ajouté (10i le 17/09)
-  assert.strictEqual((html.match(/\?v=\d{8}[a-z]/g) || []).length, 80);
+  assert.strictEqual(count(html, TOK), 82);   // [ENREGISTREMENT 04/10] 14 ajouté (11b le 23/09, 10i le 17/09)
+  assert.strictEqual((html.match(/\?v=\d{8}[a-z]/g) || []).length, 81);
   assert.strictEqual((html.match(/\?v=\d{8}[a-z]/g) || []).filter(t => t !== '?v=' + TOK).length, 0);
 });
 
@@ -366,12 +366,13 @@ T('D7 · _projectRealCandles RÉEL : en EV ps.candles = 60 klines Binance avec t
 T('D8 · recordTradeForHeatmap RÉEL : une clôture AA n\'écrit rien ; la première clôture EV remet le compteur mélangé à zéro puis écrit ; 08 : générateur synthétique réservé à sim, projection appelée dans le battement', () => {
   const s03 = rd('js/03-per-pair-position-buttons-controls-buid.js');
   const src = between(s03, 'function recordTradeForHeatmap(pnlUsd, pair) {', "  if(pnlUsd>0) S.heatmap.byDayHour[dk].wins++;", 'heat', true) + '\n}';
-  const S = { tradingMode: 'sim', heatmap: { byHour: { 3: { count: 500, pnl: -9, wins: 200 } }, byWeekday: {}, byDayHour: {} } };
+  const hM = (new Date().getHours() + 12) % 24;   // [ENREGISTREMENT 04/10] heure « mélangée » ≠ heure courante : le banc échouait entre 03:00 et 03:59 (heure 3 codée en dur)
+  const S = { tradingMode: 'sim', heatmap: { byHour: { [hM]: { count: 500, pnl: -9, wins: 200 } }, byWeekday: {}, byDayHour: {} } };
   const ctx = { S, Date, Object, Math, window: {} }; vm.createContext(ctx); vm.runInContext(src, ctx);
   vm.runInContext("recordTradeForHeatmap(1.5, 'X/USDT')", ctx);
-  assert.strictEqual(S.heatmap.byHour[3].count, 500, 'AA : rien écrit'); assert.strictEqual(S.heatmap._realOnlySince, undefined);
+  assert.strictEqual(S.heatmap.byHour[hM].count, 500, 'AA : rien écrit'); assert.strictEqual(S.heatmap._realOnlySince, undefined);
   S.tradingMode = 'paperReal'; vm.runInContext("recordTradeForHeatmap(1.5, 'X/USDT')", ctx);
-  assert.ok(S.heatmap._realOnlySince > 0); assert.strictEqual(S.heatmap.byHour[3], undefined, 'compteur mélangé remis à zéro');
+  assert.ok(S.heatmap._realOnlySince > 0); assert.strictEqual(S.heatmap.byHour[hM], undefined, 'compteur mélangé remis à zéro');
   const h = new Date().getHours(); assert.deepStrictEqual(JSON.parse(JSON.stringify(S.heatmap.byHour[h])), { count: 1, pnl: 1.5, wins: 1 });   // objet né dans la vm : aller-retour JSON
   const c08 = codeStrict(s08);
   assert.ok(c08.includes("if (S.tradingMode === 'sim') Object.entries(S.pairStates).forEach(([pair, ps]) => {"), 'générateur réservé à sim');

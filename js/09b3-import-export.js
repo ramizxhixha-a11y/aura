@@ -1,3 +1,4 @@
+// [ENREGISTREMENT · 04/10/2026] VERSION 20261004a · restaurations (importState, recoverFromFiles) : enveloppe aura_guardian_full dépliée comme la bannière de 09b2 ; tout fichier sans cycle numérique (enregistrement aura_guardian_full_rec-*, autre JSON) refusé — avant, il était écrit tel quel comme état
 // [GEL BOOT · 11/09/2026] VERSION 20260911c · _buildFullBackup() (backup FULL fichier) renommé _buildFullBackupFile : il écrasait _buildFullBackup(label, type) de 03 (cause racine du store aura_backups sans meta et des 2 gels de boot)
 // ════════════════════════════════════════════════════════════════════════
 // ▓▓▓ AURA8 — 09b3-import-export.js · VERSION 132 · 28/06/2026 ▓▓▓
@@ -24,7 +25,13 @@ function importState() {
 
     try {
       const text = await file.text();
-      const snap = JSON.parse(text);
+      let snap = JSON.parse(text);
+      // [ENREGISTREMENT · 04/10/2026] backup FULL = enveloppe { _type:'aura_guardian_full', aura:{état} } ; sans cycle numérique : refusé
+      if (snap && snap._type === 'aura_guardian_full' && snap.aura) snap = snap.aura;
+      if (snap && typeof snap.cycle !== 'number') {
+        if (typeof showToast === 'function') showToast('❌ Pas une sauvegarde AURA' + (snap._type === 'aura_rec' ? ' (enregistrement du marché)' : ''), 5000, 'user');
+        return;
+      }
 
       if (!snap) {
         if (typeof showToast === 'function') showToast('❌ Fichier invalide', 4000, 'user');
@@ -525,12 +532,14 @@ function recoverFromFiles() {
       for (const f of files) {
         try {
           const txt = await f.text();
-          const snap = JSON.parse(txt);
-          const cyc = (snap && typeof snap.cycle === 'number') ? snap.cycle : -1;
+          let snap = JSON.parse(txt);
+          if (snap && snap._type === 'aura_guardian_full' && snap.aura) snap = snap.aura;   // [ENREGISTREMENT · 04/10/2026] enveloppe du backup FULL
+          if (!snap || typeof snap.cycle !== 'number') continue;                             // enregistrement ou JSON sans état : ignoré
+          const cyc = snap.cycle;
           if (!best || cyc > best.cycle) { best = snap; bestName = f.name; }
         } catch(e){}
       }
-      if (!best) { if (typeof showToast === 'function') showToast('❌ Fichier illisible', 4000, 'critical'); return; }
+      if (!best) { if (typeof showToast === 'function') showToast('❌ Aucune sauvegarde AURA dans ce choix', 4000, 'critical'); return; }
       const pf = typeof best.portfolio === 'number' ? Math.round(best.portfolio) : '?';
       const ok = confirm('Récupérer ce backup ?\n\nFichier : ' + bestName + '\nCycle : ' + best.cycle + '\nPortefeuille : ' + pf + '\n\nCela remplacera l\'état actuel.');
       if (!ok) return;
