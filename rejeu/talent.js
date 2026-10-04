@@ -13,7 +13,10 @@
 // Sortie : votes Float32 [bougie × paire × voix] (valeur publiée dans ps.roster.votes : score du scout ; conseil ±|score| ou 0 si « hold »).
 // --encours 1 : comme l'app vivante, la dernière bougie lue est celle qui vient de s'ouvrir (o = h = l = c = la clôture, volume 0) : 59 closes + elle ;
 //   même chose pour la bougie 1 h / 4 h qui s'ouvre à cet instant. Sans : 60 bougies closes (lecture « propre » de la logique de la voix).
-// usage : node rejeu/talent.js --data DIR --out FICHIER [--from i --to j] [--genome backup.json] [--encours 1]
+// --carnet DIR (porte CARNET, 04/10/2026) : S.flowStats = les VRAIS seaux d'une minute rejoués trade par trade (rejeu/carnet_prep.py, vue « v »,
+//   seaux complets avant la clôture) et S.orderBook = la dernière photo du carnet des futures avant la clôture (imb ±1 %, sans murs) — les
+//   conseils qui écoutent whale_v1 / flow_v1 (scalper_v2, trend_v2, momentum_v1) les entendent alors. Sans l'option : rien ne change.
+// usage : node rejeu/talent.js --data DIR --out FICHIER [--from i --to j] [--genome backup.json] [--encours 1] [--carnet DIR]
 'use strict';
 const fs = require('fs'), vm = require('vm'), path = require('path');
 const A = {}; for (let i = 2; i < process.argv.length; i += 2) A[process.argv[i].replace(/^--/, '')] = process.argv[i + 1];
@@ -87,6 +90,14 @@ function agg(K, i, tf) {   // 60 bougies tf finissant à la bougie 15 min i (la 
   }
   return out;
 }
+// ── porte CARNET : vrais seaux de trades et carnet (option --carnet), mêmes lectures que rejeu/carnet.js lecture 1 ──
+let CFL = null, COB = null; const cpf = PAIRS.map(() => 0), cpo = PAIRS.map(() => 0);
+if (A.carnet) {
+  const readBin = f => { const b = fs.readFileSync(f), ab = new ArrayBuffer(b.length); new Uint8Array(ab).set(b); const n = b.length / 64, t = new BigInt64Array(ab), T = new Float64Array(n); for (let i = 0; i < n; i++) T[i] = Number(t[i * 8]); return { n, T, d: new Float64Array(ab) }; };
+  const readNpy = f => { const b = fs.readFileSync(f), hl = b.readUInt16LE(8), hdr = b.toString('latin1', 10, 10 + hl); if (!/'descr': '<f8'/.test(hdr)) throw new Error('npy'); const sh = hdr.match(/'shape': \((\d+), (\d+)\)/).slice(1).map(Number); const ab = new ArrayBuffer(sh[0] * sh[1] * 8); new Uint8Array(ab).set(b.subarray(10 + hl, 10 + hl + ab.byteLength)); return { n: sh[0], w: sh[1], d: new Float64Array(ab) }; };
+  CFL = PAIRS.map(p => readBin(path.join(A.carnet, p.split('/')[0] + '.v.bin')));
+  COB = PAIRS.map(p => { const f = path.join(A.carnet, p.split('/')[0] + '.ob.npy'); return fs.existsSync(f) ? readNpy(f) : null; });
+}
 let fi = 0;
 const nV = VOICES.length, nP = PAIRS.length, rows = TO - FROM;
 const buf = new Float32Array(rows * nP * nV);
@@ -107,6 +118,12 @@ for (let i = FROM; i < TO; i++) {
     S.pairStates[p] = { candles: cs, price: K[i][4], qYes: 50, qNo: 50 };
     const fb = Math.floor(NOW / 60000) * 60000;
     S.flowStats[p] = (x.flow !== undefined) ? [1, 2, 3, 4].map(m => ({ t: fb - m * 60000, n: x.fn / 4, buyQ: (1 + x.flow) / 8, sellQ: (1 - x.flow) / 8, bigBuy: 0, bigSell: 0, bigBuyUsd: 0, bigSellUsd: 0 })) : [];   // 5 min en 4 seaux d'une minute : même déséquilibre, même nombre de trades
+    if (CFL) {                                             // porte CARNET : seaux réels complets avant la clôture, dernière photo du carnet avant la clôture
+      const F = CFL[j], arr = []; while (cpf[j] < F.n && F.T[cpf[j]] < tc) cpf[j]++;
+      for (let k = Math.max(0, cpf[j] - 10); k < cpf[j]; k++) { const o = k * 8; arr.push({ t: F.T[k], buyQ: F.d[o + 1], sellQ: F.d[o + 2], n: F.d[o + 3], bigBuy: F.d[o + 4], bigSell: F.d[o + 5], bigBuyUsd: F.d[o + 6], bigSellUsd: F.d[o + 7] }); }
+      S.flowStats[p] = arr; S.orderBook = S.orderBook || {}; delete S.orderBook[p];
+      const O = COB[j]; if (O) { while (cpo[j] < O.n && O.d[cpo[j] * O.w] < tc) cpo[j]++; if (cpo[j] > 0) { const o = (cpo[j] - 1) * O.w, bq1 = O.d[o + 1], aq1 = O.d[o + 2]; S.orderBook[p] = { t: O.d[o], imb: (bq1 + aq1) > 0 ? (bq1 - aq1) / (bq1 + aq1) : 0, bidQ: bq1, askQ: aq1, bidWall: null, askWall: null, spreadPct: null }; } }
+    }
     S.positioning[p] = (x.fund !== undefined || x.oi2h !== undefined || x.ls !== undefined) ? { funding: x.fund ?? null, oiChg2h: x.oi2h ?? null, lsRatio: x.ls ?? null, t: NOW } : undefined;
   });
   PAIRS.forEach((p, j) => {
@@ -122,5 +139,5 @@ for (let i = FROM; i < TO; i++) {
   if ((i - FROM) % 5000 === 0) process.stderr.write(`  ${new Date(NOW).toISOString().slice(0, 10)} · ${i - FROM}/${rows} · ${((Date.now() - t0) / 1000).toFixed(0)} s\n`);
 }
 fs.writeFileSync(A.out, Buffer.from(buf.buffer));
-fs.writeFileSync(A.out + '.json', JSON.stringify({ token: TOK, from: FROM, to: TO, pairs: PAIRS, voices: VOICES, ts0: P[0].k[FROM][0], genome: A.genome ? path.basename(A.genome) : 'départ', encours: ENC }));
+fs.writeFileSync(A.out + '.json', JSON.stringify({ token: TOK, from: FROM, to: TO, pairs: PAIRS, voices: VOICES, ts0: P[0].k[FROM][0], genome: A.genome ? path.basename(A.genome) : 'départ', encours: ENC, carnet: !!A.carnet }));
 console.log(`talent · ${TOK} · ${rows} bougies × ${nP} paires × ${nV} voix · ${((Date.now() - t0) / 1000).toFixed(0)} s`);
