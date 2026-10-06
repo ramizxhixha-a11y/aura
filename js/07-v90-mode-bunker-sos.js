@@ -3304,14 +3304,19 @@ function learnFromOpenPositions() {
       return;
     }
 
-    // ── C. TIMER ANTI-ZOMBIE ──
+    // ── C. TIMER ANTI-ZOMBIE ── (positions des bots seulement depuis le 06/10/2026)
     // Si position ouverte > 30 min ET P&L entre -0.3% et +0.3% (flat) → fermer
     const posAgeMs = Date.now() - (pos.openedAt || Date.now());
     // [PREUVE D'ACTION · 25/09/2026] backup 25/09 : DOT pic +0,89 → +0,01 à 30 min, ETH +0,40 → −0,18, SOL +0,32 → −0,08 — l'anti-zombie
     // fermait à plat des positions qui avaient respiré. Quand la paire a une règle de gain ARMÉE (prouvée sur ses chemins), c'est
     // elle qui décide de la sortie : l'anti-zombie s'efface. Sans règle armée, il garde son rôle.
     const _gainArmed = !!(S.gainRules && S.gainRules[pos.pair]);
-    if (!_gainArmed && posAgeMs > 30 * 60 * 1000 && Math.abs(_cExitPct) < 0.3) {
+    // [ZOMBIE · 06/10/2026] go Rams (« Go zombie ») : sur une position MANUELLE, ce sont SES consignes qui décident (TP / SL posés par la fiche,
+    // perte max et durée surveillées par 09e _manConsignesWatchdog — 60 min par défaut, éditables). Backup 06/10 19:46 : 15 de ses 28 trades
+    // manuels des 05/10 fermés ici à 30 min (|P&L| < 0,3 %, deux chiffres posés à la main), AVANT sa durée, entre −0,24 et +0,27 %, où les frais
+    // mangent tout ; sonde (vraie app, ce backup) : ETH LONG et DOGE SHORT ouverts par la fiche, consigne 60 min, fermés « 31min flat ». Le minuteur ne
+    // touche plus que les positions des bots (pos.auto === true), inchangé pour elles ; le trailing, le TP / SL, la perte max et le −90 % restent.
+    if (pos.auto === true && !_gainArmed && posAgeMs > 30 * 60 * 1000 && Math.abs(_cExitPct) < 0.3) {
       pos._ruleExit = { kind: 'zombie', at: Math.round(_cExitPct * 1000) / 1000, t: Date.now() };   // [VÉRITÉ DES RÈGLES] la sortie reste avec le trade
       closePosition(pos.id, pos.auto === true);
       S.chainLog.push({

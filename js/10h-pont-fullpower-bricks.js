@@ -1,3 +1,4 @@
+// [ZOMBIE · 06/10/2026] VERSION 20261006a · fiche MAN : la ligne « Fermée aussi » ne promet plus la sortie « 30 min à plat » (07 ne l'applique plus aux manuelles)
 // [MANU · 05/10/2026] VERSION 20261005a · fiche MAN : décision commune, seuil appris, règle de sortie et de mise des bots, TP / SL en % appliqués au sens cliqué, rafraîchie toutes les 2 s
 // ▓▓▓ VERSION 20260908a ▓▓▓
 // 10h-pont-fullpower-bricks.js — Pont Claude, Plein Régime (enable), loadAllTrades, détail MAN, briques d'action
@@ -368,7 +369,7 @@ function openManDetail(pair) {
         <input type="number" id="manCon_tout_${k}" value="${cons.timeoutMin}" min="5" max="1440" step="5" onchange="_saveManConsigne('${pair}','timeoutMin',this.value)" style="${inp}color:var(--gold);">
       </div>
     </div>
-    <div style="margin-top:6px;font-size:9px;color:var(--t3);line-height:1.4;">ℹ️ Fermée aussi : à ton TP ou ton SL, à la perte max du trade (2 × SL, 1,5–3 %), par le trailing, après 30 min à plat.</div>`;
+    <div style="margin-top:6px;font-size:9px;color:var(--t3);line-height:1.4;">ℹ️ Fermée aussi : à ton TP ou ton SL, à la perte max du trade (2 × SL, 1,5–3 %), par le trailing (armé à 60 % du chemin vers ton TP). Sinon elle reste ouverte jusqu'à ton timeout — plus de fermeture « 30 min à plat » sur tes trades.</div>`;
   body.appendChild(consignesSection);
   
   const actionsSection = document.createElement('div');

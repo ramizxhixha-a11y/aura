@@ -34,7 +34,7 @@ T('D2 · gain et stop : une règle qui n\'aurait agi que sur 3 chemins ne s\'arm
 });
 T('S1 · 07 : l\'anti-zombie ne s\'applique pas quand la paire a une règle de gain armée ; sa sortie est marquée « zombie » ; 02 expose _rcPriceAge', () => {
   const c7 = codeStrict(rd('js/07-v90-mode-bunker-sos.js')), c2 = codeStrict(rd('js/02-state-init.js'));
-  assert.ok(c7.includes('const _gainArmed = !!(S.gainRules && S.gainRules[pos.pair]);') && c7.includes('if (!_gainArmed && posAgeMs > 30 * 60 * 1000 && Math.abs(_cExitPct) < 0.3) {'));
+  assert.ok(c7.includes('const _gainArmed = !!(S.gainRules && S.gainRules[pos.pair]);') && c7.includes('if (pos.auto === true && !_gainArmed && posAgeMs > 30 * 60 * 1000 && Math.abs(_cExitPct) < 0.3) {'));   // [ZOMBIE · 06/10/2026] positions des bots seulement (banc-zombie.js)
   assert.ok(c7.includes("pos._ruleExit = { kind: 'zombie', at: Math.round(_cExitPct * 1000) / 1000, t: Date.now() };"));
   assert.ok(c2.includes('function _rcPriceAge(pair) { var ref = _rcLastPx[pair]; return ref ? (Date.now() - ref.ts) : Infinity; }'));
   assert.ok(codeStrict(s10i).includes('var GAIN_MIN_ACTED = 4;') && (codeStrict(s10i).match(/best\.acted < GAIN_MIN_ACTED/g) || []).length === 2);
