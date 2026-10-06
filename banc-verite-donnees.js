@@ -126,8 +126,8 @@ T('S9 · en-têtes 02/08/10g/09b2 « ' + HDR + ' », 10f « ▓▓▓ VERSION 20
   assert.ok(s02.split('\n').slice(0, 2).some(l => l.startsWith('// [HORLOGE PAR MODE · 01/10/2026] VERSION 20261001a')) && s02.split('\n').slice(0, 26).some(l => l.startsWith(HDR)), F02);   // [DÉGEL DES VOIX · 02/10/2026] 02 relivré   // [SONDE RÉSEAU] 02 relivré, en-tête 1b-a en 2e ligne
   assert.ok(s9b2.split('\n').slice(0, 2).some(l => l.startsWith('// [MARCHÉ RÉPARÉ · 30/09/2026] VERSION 20260930a')) && s9b2.split('\n').slice(0, 27).some(l => l.startsWith(HDR)), F9B2);   // [DÉGEL DES VOIX · 02/10/2026] 09b2 relivré   // [FITNESS GLISSANTE] 09b2 relivré, en-tête 1b-a dans les 6 premières lignes
   assert.ok(s10f.startsWith('// [MARCHÉ RÉPARÉ · 30/09/2026] VERSION 20260930a') && s10f.split('\n').slice(0, 7).some(l => l.startsWith('// ▓▓▓ VERSION 20260926g ▓▓▓')));   // [BILAN AUX HORIZONS · 27/09] 10f relivré, en-tête ▓▓▓ en 6e ligne   // [SENS CONTRAIRE · 27/09] 10f relivré, en-tête ▓▓▓ en 5e ligne   // [HORIZONS APPRIS · 27/09] 10f relivré, en-tête ▓▓▓ en 4e ligne   // [DÉCISION COMMUNE · 27/09/2026] 10f relivré
-  assert.strictEqual(count(html, TOK), 82);   // [ENREGISTREMENT 04/10] 14 ajouté (11b le 23/09, 10i le 17/09)
-  assert.strictEqual((html.match(/\?v=\d{8}[a-z]/g) || []).length, 81);
+  assert.strictEqual(count(html, TOK), 83);   // [VOIX TENDANCE LONGUE 07/10] 15 ajouté (14 le 04/10, 11b le 23/09, 10i le 17/09)
+  assert.strictEqual((html.match(/\?v=\d{8}[a-z]/g) || []).length, 82);
   assert.strictEqual((html.match(/\?v=\d{8}[a-z]/g) || []).filter(t => t !== '?v=' + TOK).length, 0);
 });
 

@@ -3269,6 +3269,9 @@ window._backfillRealCandles = _backfillRealCandles;
 // (anneau de 400, 250 sauvegardés) + des compteurs par jour et par nature dans S.eventStats (7 jours).
 // Le comportement de chainLog est inchangé : même contenu, même plafond, même affichage.
 const EVENT_KINDS = [
+  // [VOIX TENDANCE LONGUE · 07/10/2026] la poche à part (15) écrit « Tendance longue · … fermé / liquidation » : sa nature à elle, jamais comptée
+  // comme une fermeture des bots dans S.eventStats (écran « Ce que le système a appris », 11b)
+  ['tendance',         /^Tendance longue \u00b7 /],
   ['sortie_trailing',  /Trailing stop/i],
   ['sortie_zombie',    /anti-zombie/i],
   ['sortie_consensus', /Consensus switch/i],
