@@ -87,7 +87,8 @@ function _manConsignesWatchdog() {
   // fermeture, mais le journal et le toast annonçaient « fermé » tous les 4 ticks (sonde du 05/10 : manuelle à 120 min pour 60, toujours
   // ouverte, ligne « Garde-fou MAN · fermé » écrite). Les consignes sont TA protection, comme ton TP / SL (07) : closePosition(id, false),
   // et rien n'est annoncé sans fermeture vérifiée (1 essai / 60 s sinon, dit une fois). (2) Seules les positions qui PORTENT des consignes
-  // (ouvertes par la fiche MAN, qui les affiche) sont surveillées : on n'en invente pas à une manuelle ouverte ailleurs.
+  // sont surveillées. [CONSIGNES · 06/10/2026] Depuis go consignes, TOUTE ouverture manuelle en porte (02 openPosition : tes consignes de la
+  // paire, sinon 2 % / 60 min) ; seule une manuelle ouverte avant cette version peut encore n'en avoir aucune (la fiche le dit).
   const positions = (S.openPositions || []).filter(p => p.auto !== true && (p._manMaxLossPct > 0 || p._manTimeoutMin > 0));
 
   positions.forEach(pos => {

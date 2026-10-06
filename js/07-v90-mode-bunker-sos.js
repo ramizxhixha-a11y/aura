@@ -2357,10 +2357,23 @@ window.updateTrustScore = updateTrustScore;
 // ═══════════════════════════════════════════════════════════════
 
 // Calcule les propositions TP/SL du bot selon RSI/Régime/ATR
+// [CONSIGNES · 06/10/2026] La règle ci-dessous lit ps.atr, qui n'existe nulle part (go manu, 05/10) : elle donnait toujours la même
+// distance fixe (+1,05 % / −0,70 % en régime calme), pas la règle des bots que la fiche MAN affiche. Désormais : la règle de sortie des bots
+// pour CE sens (10h _manPlan, = 10f tpPctE / slPctE : force de la décision commune + signaux techniques du sens + volatilité), en prix sur le
+// prix courant, sans arrondi (comme la fiche MAN, 10e). L'ancienne règle ne sert plus qu'à défaut. Lu par 02 openPosition (toute ouverture manuelle) et « ↻ Réinitialiser propositions bot ».
 function _calcBotTpSl(pair, side) {
   const ps  = S.pairStates[pair];
   const cfg = PAIRS[pair];
   if(!ps || !cfg) return { tp: null, sl: null };
+
+  try {
+    const px = Number(ps.price), d = side === 'long' ? 1 : -1;
+    const pl = (typeof _manPlan === 'function' && px > 0) ? _manPlan(pair) : null;
+    const L  = pl && pl.lv ? pl.lv[side === 'short' ? 'short' : 'long'] : null;
+    if (L && L.tp > 0 && L.sl > 0 && L.tp < 100 && L.sl < 100) {
+      return { tp: px * (1 + d * L.tp / 100), sl: px * (1 - d * L.sl / 100), tpPct: L.tp, slPct: L.sl, src: 'bots' };
+    }
+  } catch(e) { try{window._decErr&&window._decErr(e)}catch(_e){} }
 
   const price  = ps.price;
   const atr    = ps.atr || (price * 0.005);   // fallback 0.5%
@@ -2416,15 +2429,34 @@ function manuReinforce(pair) {
 window.manuReinforce = manuReinforce;
 
 // Inverser position (fermer et ouvrir dans l'autre sens)
+// [CONSIGNES · 06/10/2026] Sonde du 06/10 (clic réel) : ETH LONG mise 80 $, TP 1,5 %, SL 0,7 %, consignes 3 % / 90 min → inversé en SHORT
+// mise 30 $ (la mise par défaut de la paire), TP 1,05 % (règle fixe), consignes perdues ; « inversé » dit même si rien ne rouvrait.
+// Désormais la nouvelle position garde ta mise, ton levier, les MÊMES distances de TP et de SL (posées du bon côté pour le nouveau sens) et
+// tes consignes (perte max, durée — la durée repart de zéro : c'est un nouveau trade). Résultat vérifié avant d'être dit.
 function manuInvert(pair) {
   const pos = S.openPositions.find(p => p.pair === pair);
   if(!pos) { showToast('⚠ Pas de position ouverte sur '+pair, 2000, 'warn'); return; }
   const newSide = pos.side === 'long' ? 'short' : 'long';
+  const e0 = Number(pos.entryPrice);
+  const dist = (x) => (Number(x) > 0 && e0 > 0) ? Math.abs(Number(x) / e0 - 1) * 100 : null;
+  const keep = { tpPct: dist(pos.tp), slPct: dist(pos.sl), maxLossPct: pos._manMaxLossPct, timeoutMin: pos._manTimeoutMin };
+  const stake = Number(pos.stakeUsdt) || 0;
+  const lev = stake > 0 ? Math.max(1, Math.round((Number(pos.totalExposure) || stake) / stake)) : 1;
   closePosition(pos.id);
-  setTimeout(() => {
-    openPosition(pair, newSide);
-    showToast('🔄 '+pair+' inversé → '+newSide.toUpperCase(), 2500, 'win');
-  }, 100);
+  if (S.openPositions.some(p => p && p.id === pos.id)) { showToast('⚠ '+pair+' : fermeture non aboutie · pas d\'inversion', 3000, 'warn'); return; }
+  const ps = S.pairStates[pair];
+  let np = null;
+  if (ps) {
+    const prevStake = ps.stake, prevLev = ps.pairLeverage;
+    if (stake > 0) ps.stake = stake;
+    ps.pairLeverage = lev;
+    try { np = openPosition(pair, newSide, keep); }
+    catch(e) { try{window._decErr&&window._decErr(e)}catch(_e){} }
+    finally { ps.stake = prevStake; ps.pairLeverage = prevLev; }
+  }
+  if (np) showToast('🔄 '+pair+' inversé → '+newSide.toUpperCase()+' · mise $'+stake, 2500, 'win');
+  else showToast('⚠ '+pair+' fermé, mais '+newSide.toUpperCase()+' non rouvert', 3000, 'warn');
+  if(typeof renderActionsGrid === 'function') try { renderActionsGrid(); } catch(e) {}
 }
 window.manuInvert = manuInvert;
 

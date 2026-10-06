@@ -6013,9 +6013,25 @@ function _manOpenWarnings(pair, side) {
 }
 window._manOpenWarnings = _manOpenWarnings;
 
+// [CONSIGNES · 06/10/2026] Tes consignes de la paire (perte max en % du compte trading, durée en min), réglées dans la fiche MAN ; à défaut
+// celles que la fiche propose depuis toujours (2 % / 60 min, éditables). Une seule source pour toutes les ouvertures manuelles.
+function _manConsigneOf(pair) {
+  const c = (S._manConsignes && S._manConsignes[pair]) || {};
+  return { maxLossPct: Number(c.maxLossPct) > 0 ? Number(c.maxLossPct) : 2.0, timeoutMin: Number(c.timeoutMin) > 0 ? Number(c.timeoutMin) : 60 };
+}
+window._manConsigneOf = _manConsigneOf;
+
 // Renvoie la position ouverte, ou null (rien ouvert : la raison est toujours affichée).
-function openPosition(pair, side) {
+// [CONSIGNES · 06/10/2026] Sonde du 06/10 (vraie app, backup du 06/10 19:46, MANU) : seule la fiche MAN (10e) équipait son trade de consignes ;
+// « ✓ Appliquer » (02), le panneau par paire (03) et « ↓ Inverser » (07) ouvraient sans perte max ni durée — 95 min plus tard, aucun fermé par
+// le garde-fou (09e) — avec un TP / SL d'une vieille règle fixe (+1,05 % / −0,70 %) au lieu de la règle des bots que la fiche affiche ; Inverser
+// perdait en plus la mise (80 $ → 30 $), le TP / SL et les consignes. Désormais TOUTE ouverture manuelle passe ici et reçoit : tes consignes de
+// la paire (ou opts), son heure d'ouverture, et un TP / SL du bon côté — opts.tpPct / opts.slPct (distances en %) sinon la règle des bots pour
+// CE sens (07 _calcBotTpSl → 10h _manPlan). La fiche MAN (10e) les remplace ensuite par ses champs, comme avant. Rien ne change pour les bots
+// (ils n'ouvrent jamais par openPosition).
+function openPosition(pair, side, opts) {
   const _warn = _manOpenWarnings(pair, side);   // [MANU · 05/10/2026] dits, plus jamais un refus muet
+  const _o = (opts && typeof opts === 'object') ? opts : {};
 
   const ps  = S.pairStates[pair];
   const cfg = PAIRS[pair];
@@ -6073,6 +6089,18 @@ function openPosition(pair, side) {
   const amount  = (totalExposure / Math.max(0.0001, ps.price)).toFixed(cfg.dec>=4?4:6);
   const priceTag= cfg.dec>=4 ? ps.price.toFixed(cfg.dec) : '$'+Math.floor(ps.price).toLocaleString();
 
+  // [CONSIGNES · 06/10/2026] niveaux du bon côté pour le sens ouvert, consignes de la paire
+  const _d = side === 'long' ? 1 : -1, _px = Number(ps.price);
+  const _okPct = (v) => isFinite(v) && v > 0 && v < 100;
+  let _tp = (_okPct(Number(_o.tpPct)) && _px > 0) ? _px * (1 + _d * Number(_o.tpPct) / 100) : null;
+  let _sl = (_okPct(Number(_o.slPct)) && _px > 0) ? _px * (1 - _d * Number(_o.slPct) / 100) : null;
+  if (_tp === null || _sl === null) {
+    let _b = null; try { _b = (typeof _calcBotTpSl === 'function') ? _calcBotTpSl(pair, side) : null; } catch(e){ try{window._decErr&&window._decErr(e)}catch(_e){} }
+    if (_tp === null && _b && _b.tp > 0) _tp = _b.tp;
+    if (_sl === null && _b && _b.sl > 0) _sl = _b.sl;
+  }
+  const _cons = _manConsigneOf(pair);
+
   S.openPositions.push({
     id, pair, side,
     entryPrice:   ps.price, openedAt:Date.now(),
@@ -6085,8 +6113,11 @@ function openPosition(pair, side) {
     pnl:          0, pnlUsdt: 0,
     currentVal:   totalExposure,
     auto:         false,
-    tp:           (typeof _calcBotTpSl === 'function' ? _calcBotTpSl(pair, side).tp : null),
-    sl:           (typeof _calcBotTpSl === 'function' ? _calcBotTpSl(pair, side).sl : null),
+    tp:           _tp,
+    sl:           _sl,
+    _manOpenedAt:   Date.now(),                                                           // [CONSIGNES · 06/10/2026] lu par 09e
+    _manMaxLossPct: Number(_o.maxLossPct) > 0 ? Number(_o.maxLossPct) : _cons.maxLossPct,
+    _manTimeoutMin: Number(_o.timeoutMin) > 0 ? Number(_o.timeoutMin) : _cons.timeoutMin,
     conviction:   lmsrP(ps),
     _peakPnl:     0,
     _openReason:  `Ouverture manuelle · LMSR ${(lmsrP(ps)*100).toFixed(0)}%`,
@@ -6586,8 +6617,9 @@ function applyBotSuggestion(pair, side, stake) {
   const _origStake = ps.stake;
   ps.stake = safeStake;
   try {
-    openPosition(pair, side);
-    showToast('✓ Suggestion appliquée · '+pair+' '+(side==='long'?'↑ LONG':'↓ SHORT')+' · $'+safeStake, 2800, 'user');
+    // [CONSIGNES · 06/10/2026] « appliquée » seulement si la position existe (openPosition dit déjà pourquoi sinon) ; consignes et TP / SL posés par openPosition
+    const _np = openPosition(pair, side);
+    if (_np) showToast('✓ Suggestion appliquée · '+pair+' '+(side==='long'?'↑ LONG':'↓ SHORT')+' · $'+safeStake, 2800, 'user');
   } finally {
     ps.stake = _origStake;   // restore user's stake setting
   }

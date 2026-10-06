@@ -133,6 +133,7 @@ function buildSnapshot() {
       _degelMigrated: !!S._degelMigrated,            // [DÉGEL DES VOIX · 02/10/2026] migration unique faite (record de security_v1, gènes jamais exercés)
       _gbpToBnbDone: !!S._gbpToBnbDone,
       _realJudgments: S._realJudgments || 0,          // [COMPTEURS RÉGLAGES · 24/09/2026]
+      _manConsignes: S._manConsignes || {},           // [CONSIGNES · 06/10/2026] tes consignes par paire (perte max %, durée min) : perdues à chaque relance avant
       botDisciples:   S.botDisciples   || {},   // [15/08] sièges des disciples par bot
       discipleTasks:  S.discipleTasks  || {},   // [15/08] tâche élue de chaque disciple
       discipleAngles: S.discipleAngles || {},   // [15/08] angle mesurable de chaque disciple

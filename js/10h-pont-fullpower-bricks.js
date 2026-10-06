@@ -358,7 +358,7 @@ function openManDetail(pair) {
   consignesSection.className = 'detail-section';
   consignesSection.innerHTML = `
     <div class="detail-section-title">🛡️ Consignes garde-fou (le système ferme si dépassé)</div>
-    <div style="font-size:10px;color:var(--t3);margin-bottom:8px;line-height:1.4;">Le bot respecte ton ouverture mais ferme automatiquement si ces seuils sont franchis.${manualPos && !posCons ? ' <span style="color:var(--gold);">Position ouverte hors fiche : aucune consigne ne la surveille encore — modifie une valeur pour l\'en équiper.</span>' : ''}</div>
+    <div style="font-size:10px;color:var(--t3);margin-bottom:8px;line-height:1.4;">Le bot respecte ton ouverture mais ferme automatiquement si ces seuils sont franchis.${manualPos && !posCons ? ' <span style="color:var(--gold);">Position ouverte avant la mise à jour des consignes : aucune consigne ne la surveille encore — modifie une valeur pour l\'en équiper.</span>' : ''}</div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;font-size:11px;">
       <div>
         <label style="${lab}">Perte max (% du capital)</label>

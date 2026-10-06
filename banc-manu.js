@@ -84,7 +84,8 @@ function mkCtx(opts) {
   ctx.window = ctx; ctx.calls = calls;
   vm.createContext(ctx);
   vm.runInContext('let _currentDetailPair = null; let _pendingClosePair = null;', ctx);
-  const src = [fnSrc(s02, '_manOpenWarnings'), fnSrc(s02, 'openPosition'), fnSrc(s03, 'closePairDetail'), fnSrc(s10e, '_openManTrade'),
+  const src = [fnSrc(s02, '_manOpenWarnings'), fnSrc(s02, '_manConsigneOf'), fnSrc(s02, 'openPosition'),   // [CONSIGNES · 06/10/2026] openPosition lit _manConsigneOf
+    fnSrc(s03, 'closePairDetail'), fnSrc(s10e, '_openManTrade'),
     fnSrc(s10g, '_saveManConsigne'), fnSrc(s09e, '_manConsignesWatchdog'), fnSrc(s10d, '_confirmForceClose'),
     fnSrc(s10h, '_manFmtPx'), fnSrc(s10h, '_manPlan'), fnSrc(s10h, '_manSideLevels'), fnSrc(s10h, '_manSystemHtml'), fnSrc(s10h, '_manPreviewHtml'),
     fnSrc(s10h, '_manWarnHtml'), fnSrc(s10h, '_manPreview'), fnSrc(s10h, '_manRefreshTick'), fnSrc(s10h, 'openManDetail'), fnSrc(s09f2, 'updateManBricks')].join('\n');
@@ -253,10 +254,10 @@ T('W2 · consignes de la fiche d\'une position : ce sont les siennes, les modifi
   assert.ok(body.includes('Position active') && body.includes('$2,720') && body.includes('$2,690'), 'TP / SL de la position affichés');
   run(ctx, '_saveManConsigne("ETH/USDT","timeoutMin","240")');
   assert.strictEqual(ctx.S.openPositions[0]._manTimeoutMin, 240);
-  // position manuelle ouverte hors fiche : dit, et un geste l'équipe
+  // position manuelle sans consignes (ouverte avant go consignes, 06/10 — depuis, toute ouverture en porte) : dit, et un geste l'équipe
   ctx.S.openPositions = [{ id: 'm2', pair: 'BTC/USDT', side: 'long', auto: false, entryPrice: 85000, stakeUsdt: 50 }];
   run(ctx, 'openManDetail("BTC/USDT")');
-  assert.ok(DOM.els.pairDetailBody.children.map(c => c.innerHTML).join('\n').includes('Position ouverte hors fiche : aucune consigne ne la surveille encore'));
+  assert.ok(DOM.els.pairDetailBody.children.map(c => c.innerHTML).join('\n').includes('Position ouverte avant la mise à jour des consignes : aucune consigne ne la surveille encore'));
   run(ctx, '_saveManConsigne("BTC/USDT","maxLossPct","1.5")'); assert.strictEqual(ctx.S.openPositions[0]._manMaxLossPct, 1.5);
 });
 

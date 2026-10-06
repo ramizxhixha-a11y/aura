@@ -462,21 +462,17 @@ function _openProposedPosition(pair, side) {
   ps.pairLeverage = lev;
   ps.stake        = stake;
 
-  openPosition(pair, side);
-
-  // Restore
-  ps.pairLeverage = prevLev;
-  ps.stake        = prevStake;
-
-  // Apply TP/SL to the newly opened position
-  if(tp || sl) {
-    setTimeout(() => {
-      const newPos = S.openPositions.find(p => p.pair===pair && p.auto!==true);
-      if(newPos) {
-        if(tp && tp > 0) newPos.tp = tp;
-        if(sl && sl > 0) newPos.sl = sl;
-      }
-    }, 50);
+  // [CONSIGNES · 06/10/2026] Les prix TP / SL de la proposition sont calculés pour le sens SUGGÉRÉ (getCompositeSignal) puis étaient appliqués
+  // tels quels au sens cliqué (50 ms plus tard) : SHORT cliqué sur une proposition LONG → TP au-dessus de l'entrée, SL en dessous : fermé au
+  // passage suivant du moteur de sortie (même défaut que la fiche MAN, corrigé le 05/10). Désormais ce sont leurs DISTANCES qui s'appliquent, du bon côté pour le sens
+  // cliqué, posées par openPosition avec tes consignes de la paire. (Panneau masqué dans l'app : #pairPosButtons display:none.)
+  const _px = Number(ps.price);
+  const _pct = (x) => (Number(x) > 0 && _px > 0) ? Math.abs(Number(x) / _px - 1) * 100 : null;
+  try { openPosition(pair, side, { tpPct: _pct(tp), slPct: _pct(sl) }); }
+  finally {
+    // Restore
+    ps.pairLeverage = prevLev;
+    ps.stake        = prevStake;
   }
 }
 
