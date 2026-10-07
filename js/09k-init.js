@@ -30,7 +30,10 @@ function _renderWalletCards() {
     // Réserve fiscale
     setEl('fiscalResVal', fmt2(S.fiscalReserveAccount || 0));
     const fiscalSub = document.getElementById('fiscalResSub');
-    if (fiscalSub) fiscalSub.textContent = (S.fiscalReserveLog||[]).length + ' dépôts';
+    if (fiscalSub) {
+      // [GO FISCAL · 07/10/2026] ce que le dépôt doit couvrir : l'impôt dû de l'année à ce jour (registre légal, 16)
+      fiscalSub.textContent = (typeof _fiscResSub === 'function') ? _fiscResSub() : ((S.fiscalReserveLog||[]).length + ' dépôts');
+    }
 
     // Fonds propres
     const ownEUR = (typeof window.ownFundsEUR === 'function' ? window.ownFundsEUR() : (S.ownFundsInjected||0) * (S.usdEurRate||0.92));
@@ -46,17 +49,15 @@ function _renderWalletCards() {
       anSub.textContent = _cov + ' trade' + (_cov > 1 ? 's' : '') + ' couvert' + (_cov > 1 ? 's' : '');
     }
 
-    // Régime fiscal appliqué (carte home) — taux réel via detectFiscalRegime
-    if (typeof detectFiscalRegime === 'function') {
-      const _fr = detectFiscalRegime();
+    // Régime fiscal EN COURS (carte home) — [GO FISCAL · 07/10/2026] la règle du registre légal (16) : AUTO → spéculatif 33 %,
+    // MANU → normal 10 % pour un LONG sans levier (exonération restante dite). Avant : le régime deviné par detectFiscalRegime
+    // (moyenne des durées, fréquence…), qui reste l'estimation de la DÉCISION seulement (10f / 10, inchangée).
+    if (typeof _fiscHomeCard === 'function' && S.taxConfig && S.taxConfig.region === 'BE') {
+      const _hc = _fiscHomeCard();
       const frVal = document.getElementById('fiscalRegimeVal');
       const frSub = document.getElementById('fiscalRegimeSub');
-      const _pct = (_fr.rate * 100).toFixed(_fr.rate*100 % 1 === 0 ? 0 : 1) + '%';
-      if (frVal) {
-        frVal.textContent = _pct;
-        frVal.style.color = _fr.isSpec ? 'var(--down)' : 'var(--up)';
-      }
-      if (frSub) frSub.textContent = (_fr.isSpec ? '⚠ Spéculatif · ' : '✓ Normal · ') + _fr.reason;
+      if (frVal) { frVal.textContent = _hc.val; frVal.style.color = _hc.col; }
+      if (frSub) frSub.textContent = _hc.sub;
     }
 
     // Portefeuille total

@@ -913,6 +913,7 @@ function autoOpenPosition(pair, side, stakeOverride) {
     totalExposure: stakeUsdt,                       // exposition totale (stake + levier)
     entryTime:     nowStr(),
     entryTs:       Date.now(),
+    _fxIn:         ((Number(S._usdEurLastFetch) > 0 && Number(S.usdEurRate) > 0) ? Number(S.usdEurRate) : null),   // [GO FISCAL · 07/10/2026] cours USD→EUR reçu, à l'achat (16)
     pnl:           0,
     pnlUsdt:       0,
     currentVal:    stakeUsdt,

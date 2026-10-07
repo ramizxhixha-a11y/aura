@@ -514,7 +514,8 @@ function switchFiscalTab(tab, el) {
 }
 
 function renderFiscal(tab) {
-  tab = tab || 'global';
+  // [GO FISCAL · 07/10/2026] sans onglet demandé : celui qui est affiché (⚖ Impôt par défaut)
+  tab = tab || ((document.querySelector('[id^="ftab-"].active') || {}).id || 'ftab-tax').replace('ftab-','');
   if(tab==='global')   renderFiscalGlobal();
   else if(tab==='pairs')    renderFiscalPairs();
   else if(tab==='tax')      renderFiscalTax();
@@ -648,28 +649,15 @@ function renderFiscalGlobal() {
       }).join('');
 
   sumEl.innerHTML = `
-    <!-- RÉGIME FISCAL APPLIQUÉ (réveil bot fiscal · juin 2026) -->
+    <!-- RÉGIME FISCAL EN COURS · [GO FISCAL · 07/10/2026] la règle du registre (16), plus le régime deviné par detectFiscalRegime -->
     ${(function(){
-      if (typeof detectFiscalRegime !== 'function') return '';
-      const _fr = detectFiscalRegime();
-      const _col = _fr.isSpec ? 'var(--down)' : 'var(--up)';
-      const _bg  = _fr.isSpec ? 'rgba(255,61,107,.08)' : 'rgba(0,232,122,.06)';
-      const _annual = (typeof getAnnualNetRealised==='function') ? getAnnualNetRealised() : 0;
-      const _frTxt = _fr.franchise > 0
-        ? `Franchise ${_fr.franchise.toLocaleString('fr-FR')}€ · cumul annuel net $${_annual.toFixed(0)}`
-        : 'Pas de franchise dans ce pays';
-      const _ltTxt = _fr.longTermMonths > 0
-        ? `<div style="font-size:9px;color:var(--ice);margin-top:3px;">⏳ Détention >${_fr.longTermMonths} mois = régime allégé/exonéré ici</div>` : '';
-      return `<div style="background:${_bg};border:1px solid ${_col}33;border-radius:14px;padding:12px 14px;margin-bottom:10px;">
-        <div style="display:flex;justify-content:space-between;align-items:center;">
-          <div>
-            <div style="font-size:10px;font-weight:700;color:${_col};text-transform:uppercase;letter-spacing:.06em;">${_fr.isSpec ? '⚠ Régime spéculatif' : '✅ Gestion normale'}</div>
-            <div style="font-size:9px;color:var(--t3);margin-top:2px;">${_fr.reason} · taux appliqué <b style="color:${_col};">${(_fr.rate*100).toFixed(_fr.rate*100%1===0?0:1)}%</b></div>
-          </div>
-          <div style="text-align:right;font-size:9px;color:var(--t3);">${_frTxt}</div>
-        </div>
-        ${_ltTxt}
-      </div>` ;
+      if (typeof _fiscRegimeNow !== 'function' || !S.taxConfig || S.taxConfig.region !== 'BE') return '';
+      const _r = _fiscRegimeNow();
+      const _bg = _r.auto ? 'rgba(255,61,107,.08)' : 'rgba(0,232,122,.06)';
+      return `<div style="background:${_bg};border:1px solid ${_r.col}33;border-radius:14px;padding:12px 14px;margin-bottom:10px;" onclick="switchFiscalTab('tax',document.getElementById('ftab-tax'))">
+        <div style="font-size:10px;font-weight:700;color:${_r.col};text-transform:uppercase;letter-spacing:.06em;">${_r.auto ? '⚠ ' : '✓ '}${_r.label} · ${_r.pct}</div>
+        <div style="font-size:9px;color:var(--t3);margin-top:3px;">${_r.sub} · impôt dû ${(_r.d.due).toFixed(2)} € — détail ⚖ Impôt</div>
+      </div>`;
     })()}
 
     <!-- COMPTE RÉSERVE SÉPARÉ -->
@@ -850,7 +838,8 @@ function renderFiscalGlobal() {
       const netUp = parseFloat(e.pnlNet)   >= 0;
       const tf    = parseFloat(e.tradingFee).toFixed(2);
       const sf    = parseFloat(e.slipFee).toFixed(2);
-      const tx    = parseFloat(e.taxAmount).toFixed(2);
+      const _txN  = parseFloat(e.taxAmount) || 0;   // [GO FISCAL · 07/10/2026] signé : + versé au dépôt, − rendu (perte du même régime)
+      const tx    = Math.abs(_txN).toFixed(2);
       const tot   = parseFloat(e.totalFee).toFixed(2);
       const pnlN  = parseFloat(e.pnlNet).toFixed(2);
       return `<div class="fee-log-item">
@@ -863,7 +852,7 @@ function renderFiscalGlobal() {
           <div class="fee-log-detail">
             <span style="color:var(--down);">Exch: −$${tf}</span>
             <span style="color:var(--pur);"> · Slip: −$${sf}</span>
-            <span style="color:var(--gold);"> · Impôt: −$${tx}</span>
+            <span style="color:${_txN < 0 ? 'var(--ice)' : 'var(--gold)'};"> · Impôt: ${_txN < 0 ? '+' : '−'}$${tx}${e.regime ? ' (' + (e.regime === 'normal' ? '10 %' : '33 %') + ')' : ''}</span>
           </div>
           <div style="font-size:8px;color:var(--t3);margin-top:1px;">${e.time} · ${e.region||'—'}</div>
         </div>
@@ -976,95 +965,13 @@ function renderFiscalPairs() {
   }).join('');
 }
 
+// [GO FISCAL · 07/10/2026] l'onglet ⚖ Impôt = le registre légal belge du mode affiché (16 _fiscRenderPage) : dépôt, dû par
+// régime, exonération, bot fiscal, par crypto, historique de chaque trade, années, réglages, la loi et ses sources.
+// Avant : 10 % ou 33 % (régime deviné) × (P&L cumulé − frais), et des conseils écrits à la main.
 function renderFiscalTax() {
-  const el  = document.getElementById('taxPanel');
-  const reg = S.taxConfig.regions[S.taxConfig.region];
-  const f   = S.fees;
+  const el = document.getElementById('taxPanel');
   if(!el) return;
-
-  const taxLive     = calcTaxProvision();
-  const netGain     = Math.max(0, f.totalPnlGross - f.totalGross);
-  const taxBase     = netGain * reg.inclusion;
-  const netAfterTax = netGain - taxLive;
-  const isZero      = reg.rate === 0;
-
-  const badge = document.getElementById('fRegionBadge');
-  if(badge) badge.textContent = reg.label;
-
-  el.innerHTML = `
-    <div class="tax-region-card">
-      <div class="tax-region-header">
-        <div>
-          <div style="font-size:10px;color:var(--t3);text-transform:uppercase;letter-spacing:.07em;">Provision fiscale estimée</div>
-          <div class="tax-big ${isZero?'zero':''}">${isZero ? '✓ $0.00' : '−$'+taxLive.toFixed(2)}</div>
-        </div>
-        <div style="text-align:right;">
-          <div style="font-size:24px;font-weight:700;color:${isZero?'var(--up)':'var(--gold)'};">${(reg.rate*100*reg.inclusion).toFixed(1)}%</div>
-          <div style="font-size:9px;color:var(--t3);">taux effectif</div>
-        </div>
-      </div>
-      <div class="tax-note">${reg.note}</div>
-      ${(function(){
-        if (typeof detectFiscalRegime !== 'function') return '';
-        const _fr = detectFiscalRegime();
-        const _col = _fr.isSpec ? 'var(--down)' : 'var(--up)';
-        const _bg  = _fr.isSpec ? 'rgba(255,61,107,.08)' : 'rgba(0,232,122,.06)';
-        const _ltNote = _fr.longTermMonths > 0
-          ? ` · Détention >${_fr.longTermMonths} mois = régime allégé/exonéré dans ce pays`
-          : '';
-        const _frNote = _fr.franchise > 0
-          ? ` · Franchise annuelle ${_fr.franchise.toLocaleString('fr-FR')}€`
-          : '';
-        return `<div style="margin-top:6px;padding:6px 10px;background:${_bg};border-radius:8px;font-size:9px;color:${_col};">
-          ${_fr.isSpec ? '⚠ Régime SPÉCULATIF détecté' : '✅ Gestion normale'} (${_fr.reason}) · taux appliqué ${(_fr.rate*100).toFixed(_fr.rate*100%1===0?0:1)}%${_frNote}${_ltNote}</div>`;
-      })()}
-    </div>
-
-    <div style="background:var(--s1);border:1px solid var(--border);border-radius:14px;overflow:hidden;margin-bottom:10px;">
-      <div class="tax-breakdown-row">
-        <span style="color:var(--t3);">P&L brut total</span>
-        <span style="font-weight:600;color:${f.totalPnlGross>=0?'var(--up)':'var(--down)'};">
-          ${f.totalPnlGross>=0?'+':''}$${f.totalPnlGross.toFixed(2)}
-        </span>
-      </div>
-      <div class="tax-breakdown-row">
-        <span style="color:var(--t3);">− Frais &amp; slippage</span>
-        <span style="font-weight:600;color:var(--down);">−$${f.totalGross.toFixed(2)}</span>
-      </div>
-      <div class="tax-breakdown-row">
-        <span style="color:var(--t3);">= Gain imposable</span>
-        <span style="font-weight:600;color:var(--t1);">$${netGain.toFixed(2)}</span>
-      </div>
-      <div class="tax-breakdown-row">
-        <span style="color:var(--t3);">× Inclusion (${(reg.inclusion*100).toFixed(0)}%)</span>
-        <span style="font-weight:600;color:var(--t1);">$${taxBase.toFixed(2)}</span>
-      </div>
-      <div class="tax-breakdown-row">
-        <span style="color:var(--t3);">× Taux (${(reg.rate*100).toFixed(1)}%)</span>
-        <span style="font-weight:600;color:${isZero?'var(--up)':'var(--gold)'};">${isZero?'$0.00':'−$'+taxLive.toFixed(2)}</span>
-      </div>
-      <div class="tax-breakdown-row" style="background:var(--s2);">
-        <span style="color:var(--t1);font-weight:700;">P&L Net après impôt</span>
-        <span style="font-weight:700;font-size:13px;color:${netAfterTax>=0?'var(--up)':'var(--down)'};">
-          ${netAfterTax>=0?'+':''}$${netAfterTax.toFixed(2)}
-        </span>
-      </div>
-    </div>
-
-    <div style="background:rgba(0,232,122,.06);border:1px solid rgba(0,232,122,.2);border-radius:14px;padding:14px;">
-      <div style="font-size:10px;font-weight:700;color:var(--up);text-transform:uppercase;letter-spacing:.07em;margin-bottom:8px;">💡 Optimisation fiscale</div>
-      ${netGain > 0 ? `
-        <div style="font-size:11px;color:var(--t2);line-height:1.7;">
-          • Différer les trades rentables en fin d'année si possible<br>
-          • Compenser avec des pertes latentes d'autres paires<br>
-          • Méthode FIFO ou coût moyen selon avantage régional<br>
-          ${S.taxConfig.region==='BE' ? '• Rester sous la franchise de 10 000€/an de plus-values nettes maintient l’exonération<br>• Éviter le levier et la haute fréquence pour rester en régime normal (10% au lieu de 33%)' : ''}
-          ${(S.taxConfig.region==='DE'||S.taxConfig.region==='PT') ? '• Conserver >1 an exonère totalement la plus-value dans ce pays' : ''}
-          ${S.taxConfig.region==='CA' ? '• Utiliser le CELI/REER pour abri fiscal' : ''}
-          • Seuil de déclaration approx.: <span style="color:var(--gold);">${S.taxConfig.region==='CA'?'pas de seuil min.':S.taxConfig.region==='US'?'>$600':'vérifier localement'}</span>
-        </div>
-      ` : `<div style="font-size:11px;color:var(--t3);">Pas de gains nets à provisionner pour l'instant.</div>`}
-    </div>`;
+  if (typeof _fiscRenderPage === 'function') { try { _fiscRenderPage(el); } catch(e) { try{window._decErr&&window._decErr(e)}catch(_e){} } }
 }
 
 function renderFiscalExport() {
@@ -1202,9 +1109,10 @@ function renderFiscalSettings() {
 
     <div style="font-size:10px;color:var(--t3);margin-top:12px;line-height:1.7;padding:12px 14px;
          background:var(--s1);border-radius:12px;border:1px solid var(--border);">
-      ⚠️ <strong style="color:var(--t2);">Belgique (BE)</strong> : exonération si gestion normale.
-      33% si spéculation jugée professionnelle. NEXUS estime 0% par défaut.<br><br>
-      Ces estimations sont indicatives. Consultez un comptable agréé.
+      ⚠️ <strong style="color:var(--t2);">Belgique (BE)</strong> : loi du 03/04/2026 — 10 % au-delà de 10 000 €/an en gestion normale,
+      33 % + additionnels communaux sans exonération en spéculatif. Le registre ⚖ Impôt l'applique trade par trade
+      (MANU LONG sans levier = normal ; AUTO, SHORT ou levier = spéculatif). Autre région : aucun impôt provisionné.<br><br>
+      Le fisc qualifie en dernier ressort. En cas de doute : un comptable ou une décision anticipée du SPF Finances.
     </div>`;
 }
 

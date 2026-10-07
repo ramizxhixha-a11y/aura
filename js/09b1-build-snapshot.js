@@ -135,6 +135,7 @@ function buildSnapshot() {
       _realJudgments: S._realJudgments || 0,          // [COMPTEURS RÉGLAGES · 24/09/2026]
       _manConsignes: S._manConsignes || {},           // [CONSIGNES · 06/10/2026] tes consignes par paire (perte max %, durée min) : perdues à chaque relance avant
       tendance: S.tendance || null,                   // [VOIX TENDANCE LONGUE · 07/10/2026] poche de la voix (15) : positions tenues des semaines, décisions du lundi, trades fermés, cumul
+      fiscalCfg: S.fiscalCfg || null,                 // [GO FISCAL · 07/10/2026] réglages du registre fiscal (16) : additionnels communaux %, plus-values hors AURA par année (€) — les registres eux-mêmes sont dans walletStore[mode].fiscal
       botDisciples:   S.botDisciples   || {},   // [15/08] sièges des disciples par bot
       discipleTasks:  S.discipleTasks  || {},   // [15/08] tâche élue de chaque disciple
       discipleAngles: S.discipleAngles || {},   // [15/08] angle mesurable de chaque disciple

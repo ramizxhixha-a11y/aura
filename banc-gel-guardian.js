@@ -136,7 +136,7 @@ function oracle(CFG, html, perFileDeclared, exists){
   await T('HTML : DOC_V = ' + TOK + ' et tous les ?v= au même token (83 avec DOC_V)', () => {
     const h = fs.readFileSync(path.join(ROOT,'AURA8_v118.html'),'utf8');
     assert.ok(h.includes("DOC_V = '" + TOK + "'"));
-    assert.strictEqual((h.match(/\?v=[0-9a-z]+/g)||[]).length, 82);   // [VOIX TENDANCE LONGUE 07/10] +1 : js/15-voix-tendance.js (14 le 04/10, 11b le 23/09)
+    assert.strictEqual((h.match(/\?v=[0-9a-z]+/g)||[]).length, 84);   // [GO FISCAL 07/10] +2 : js/16-fiscal.js, js/16b-fiscal-ecran.js · [VOIX TENDANCE LONGUE 07/10] +1 : js/15-voix-tendance.js (14 le 04/10, 11b le 23/09)
     assert.deepStrictEqual((h.match(/\?v=[0-9a-z]+/g)||[]).filter(t => t !== '?v=' + TOK), []);
     assert.ok(!h.includes('20260908b') && !h.includes('20260909a') && !h.includes('20260911a') && !h.includes('?v=20260911b') && !h.includes("DOC_V = '20260911b'"));
   });

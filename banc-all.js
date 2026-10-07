@@ -4,7 +4,7 @@
 //   node banc-all.js --statique   statique seul (≈ 1 s)
 //
 // STATIQUE (tout est lu dans le dépôt, rien n'est figé ici) :
-//   1. HTML : DOC_V présent, les 82 ?v= identiques à DOC_V, chaque script/css déclaré existe sur le disque.
+//   1. HTML : DOC_V présent, les 84 ?v= identiques à DOC_V, chaque script/css déclaré existe sur le disque.
 //   1b. PASSATION : PASSATION-AURA8.md présente à la racine et 1re ligne portant `DOC_V` — la passation est versionnée et
 //       réécrite dans CHAQUE commit de livraison (push direct depuis le 12/09) ; l'oublier ou la laisser à l'ancien token BLOQUE.
 //   2. Syntaxe : chaque .js du dépôt (js/, racine, bancs) compile (vm.Script).
@@ -39,7 +39,7 @@ const TOK = mDoc ? mDoc[1] : null;
 if (!TOK) ko('DOC_V introuvable dans ' + HTML); else ok('DOC_V = ' + TOK);
 const toks = html.match(/\?v=[0-9a-z]+/g) || [];
 const bad = toks.filter(t => t !== '?v=' + TOK);
-if (toks.length === 82 && !bad.length) ok('82 ?v= tous à ' + TOK);   // [VOIX TENDANCE LONGUE 07/10] +1 : js/15-voix-tendance.js (14 le 04/10, 11b le 23/09, 10i le 17/09)
+if (toks.length === 84 && !bad.length) ok('84 ?v= tous à ' + TOK);   // [GO FISCAL 07/10] +2 : js/16-fiscal.js, js/16b-fiscal-ecran.js · [VOIX TENDANCE LONGUE 07/10] +1 : js/15-voix-tendance.js (14 le 04/10, 11b le 23/09, 10i le 17/09)
 else ko(toks.length + ' ?v= (attendu 82) · divergents : ' + (bad.slice(0, 5).join(' ') || 'aucun'));
 const scripts = [...html.matchAll(/<script[^>]*\bsrc="([^"?]+)(?:\?[^"]*)?"/g)].map(m => m[1]);
 const csss = [...html.matchAll(/<link[^>]*\bhref="([^"?]+\.css)(?:\?[^"]*)?"/g)].map(m => m[1]);

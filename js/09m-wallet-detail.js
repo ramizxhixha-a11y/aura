@@ -65,10 +65,10 @@
             ['Intérêts cumulés','$'+fmt(s.leverageTotalFees)], ['Formule','Trading × 10 × index']]};
 
       case 'fiscale': return {icn:'🏛️', title:'Réserve Fiscale', big:txt('fiscalResVal'), color:'var(--gold)',
-        desc:'Reçoit automatiquement les taxes sur gains et les intérêts de levier. <b>Ne diminue jamais</b> (sauf retrait explicite).',
-        kv:[['Dépôts', txt('fiscalResSub')], ['Région', reg.label||tax.region||'—']],
+        desc:'Reçoit, à chaque fermeture, l\'impôt belge de l\'année calculé trade par trade (onglet ⚖ Impôt de la page Fiscal) — il en <b>rend</b> quand une perte du même régime le réduit — et les intérêts de levier.',
+        kv:[['Impôt', txt('fiscalResSub')], ['Région', reg.label||tax.region||'—']],
         hist:(Array.isArray(s.fiscalReserveLog)?s.fiscalReserveLog:[]).slice(0,6).map(e=>
-          [e.desc||e.label||'Dépôt', e.time||'', (e.amount!=null?('+$'+fmt(e.amount)):''), 'var(--gold)']),
+          [e.desc||e.label||({tax_trade_close:'Impôt · trade',tax_release:'Rendu · perte',tax_adjust:'Réajustement',tax_paid:'Impôt payé',leverage_interest:'Intérêt levier',margin_call:'Appel de marge'}[e.source])||'Dépôt', e.time||'', (e.amount!=null?((e.amount<0?'−$':'+$')+fmt(Math.abs(e.amount))):''), (e.amount<0?'var(--ice)':'var(--gold)')]),   // [GO FISCAL · 07/10/2026] signé
         empty:(s.fiscalReserveLog&&s.fiscalReserveLog.length)?null:'Aucun dépôt journalisé (cumul automatique).'};
 
       case 'fonds': return {icn:'💎', title:'Fonds Propres', big:txt('ownFundsVal'), color:'var(--up)',

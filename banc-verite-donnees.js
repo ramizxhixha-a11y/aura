@@ -78,7 +78,7 @@ T('S4 · 10f : aucune vérification TP/SL dans _resolvePairCycleCore (écrit _tp
 T('S5 · 09b2 : les 6 historiques rotatifs de _auraRotatePurge gardent le plus RÉCENT (cutEnd), plus aucun cut( (tête)', () => {
   const c = codeStrict(s9b2);
   assert.strictEqual(count(c, ' cut('), 0, 'cut( = tête, interdit');
-  for (const k of ['S.learningHistory  = cutEnd(S.learningHistory, 80);', 'S.globalMemoryPool = cutEnd(S.globalMemoryPool, 30);', 'S.fiscalReserveLog = cutEnd(S.fiscalReserveLog, 50);', 'S.dreamJournal     = cutEnd(S.dreamJournal, 30);', 'w.dreamJournal      = cutEnd(w.dreamJournal, 40);', 'w.antiNegReserveLog = cutEnd(w.antiNegReserveLog, 50);']) assert.ok(c.includes(k), k);
+  for (const k of ['S.learningHistory  = cutEnd(S.learningHistory, 80);', 'S.globalMemoryPool = cutEnd(S.globalMemoryPool, 30);', 'S.dreamJournal     = cutEnd(S.dreamJournal, 30);', 'w.dreamJournal      = cutEnd(w.dreamJournal, 40);', 'w.antiNegReserveLog = cutEnd(w.antiNegReserveLog, 50);']) assert.ok(c.includes(k), k);
 });
 T('S6 · 07 : évolution ≥ 1 h (_EVO_COOLDOWN_MS 3 600 000), rêve ≥ 24 h (86 400 000), type/source du siège via _SEAT_DEF (21 sièges), regimeFitness du siège conservée', () => {
   const s07 = rd('js/07-v90-mode-bunker-sos.js'), c = codeStrict(s07);
@@ -126,8 +126,8 @@ T('S9 · en-têtes 02/08/10g/09b2 « ' + HDR + ' », 10f « ▓▓▓ VERSION 20
   assert.ok(s02.split('\n').slice(0, 2).some(l => l.startsWith('// [HORLOGE PAR MODE · 01/10/2026] VERSION 20261001a')) && s02.split('\n').slice(0, 26).some(l => l.startsWith(HDR)), F02);   // [DÉGEL DES VOIX · 02/10/2026] 02 relivré   // [SONDE RÉSEAU] 02 relivré, en-tête 1b-a en 2e ligne
   assert.ok(s9b2.split('\n').slice(0, 2).some(l => l.startsWith('// [MARCHÉ RÉPARÉ · 30/09/2026] VERSION 20260930a')) && s9b2.split('\n').slice(0, 27).some(l => l.startsWith(HDR)), F9B2);   // [DÉGEL DES VOIX · 02/10/2026] 09b2 relivré   // [FITNESS GLISSANTE] 09b2 relivré, en-tête 1b-a dans les 6 premières lignes
   assert.ok(s10f.startsWith('// [MARCHÉ RÉPARÉ · 30/09/2026] VERSION 20260930a') && s10f.split('\n').slice(0, 7).some(l => l.startsWith('// ▓▓▓ VERSION 20260926g ▓▓▓')));   // [BILAN AUX HORIZONS · 27/09] 10f relivré, en-tête ▓▓▓ en 6e ligne   // [SENS CONTRAIRE · 27/09] 10f relivré, en-tête ▓▓▓ en 5e ligne   // [HORIZONS APPRIS · 27/09] 10f relivré, en-tête ▓▓▓ en 4e ligne   // [DÉCISION COMMUNE · 27/09/2026] 10f relivré
-  assert.strictEqual(count(html, TOK), 83);   // [VOIX TENDANCE LONGUE 07/10] 15 ajouté (14 le 04/10, 11b le 23/09, 10i le 17/09)
-  assert.strictEqual((html.match(/\?v=\d{8}[a-z]/g) || []).length, 82);
+  assert.strictEqual(count(html, TOK), 85);   // [GO FISCAL 07/10] 16 et 16b ajoutés · [VOIX TENDANCE LONGUE 07/10] 15 ajouté (14 le 04/10, 11b le 23/09, 10i le 17/09)
+  assert.strictEqual((html.match(/\?v=\d{8}[a-z]/g) || []).length, 84);   // [GO FISCAL 07/10] +2 : js/16-fiscal.js, js/16b-fiscal-ecran.js
   assert.strictEqual((html.match(/\?v=\d{8}[a-z]/g) || []).filter(t => t !== '?v=' + TOK).length, 0);
 });
 

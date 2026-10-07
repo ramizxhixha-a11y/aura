@@ -264,3 +264,50 @@
 .fiscal-mini-arrow { font-size: 11px; color: var(--t3); flex-shrink: 0; }
 
 /* ACTION CARD live P&L block */
+
+/* ── [GO FISCAL · 07/10/2026] Registre fiscal belge (js/16-fiscal.js) · onglet ⚖ Impôt + fiche MAN ── */
+.fx-head { display:flex; flex-wrap:wrap; align-items:baseline; gap:6px 8px; margin:2px 0 10px; }
+.fx-mode { font-family:var(--font-mono); font-size:10px; font-weight:700; padding:2px 7px; border:1px solid; border-radius:6px; }
+.fx-head-t { font-size:12px; font-weight:700; color:var(--t1); }
+.fx-head-s { font-size:9px; color:var(--t3); }
+.fx-note { font-size:10px; color:var(--t2); line-height:1.5; background:rgba(56,212,245,.06); border:1px solid rgba(56,212,245,.18); border-radius:12px; padding:9px 11px; margin-bottom:10px; }
+.fx-card { background:var(--s1); border:1px solid var(--border); border-radius:14px; padding:12px 13px; margin-bottom:10px; min-width:0; }
+.fx-hero { display:flex; justify-content:space-between; align-items:flex-start; gap:10px; }
+.fx-lbl { display:block; font-size:8.5px; color:var(--t3); text-transform:uppercase; letter-spacing:.07em; margin-bottom:3px; line-height:1.35; }
+.fx-big { font-family:var(--font-mono); font-size:20px; font-weight:800; color:var(--t1); }
+.fx-sub { font-size:9px; color:var(--t3); margin-top:3px; line-height:1.45; }
+.fx-regime-v { font-size:15px; font-weight:800; margin:2px 0 2px; }
+.fx-grid { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:0; }
+.fx-grid .fx-card { padding:10px; }
+.fx-card-t { font-size:10.5px; font-weight:800; }
+.fx-n { font-weight:500; font-size:8.5px; color:var(--t3); margin:2px 0 6px; line-height:1.35; }
+.fx-row { display:flex; justify-content:space-between; align-items:baseline; gap:8px; font-size:10px; padding:3px 0; border-bottom:1px solid rgba(255,255,255,.035); color:var(--t3); }
+.fx-row > span:last-child { font-family:var(--font-mono); text-align:right; white-space:nowrap; }
+.fx-row-strong { font-weight:800; color:var(--t1); border-bottom:none; padding-top:5px; }
+.fx-dim { color:var(--t3); font-weight:400; }
+.fx-tiny { font-size:8.5px; margin-top:5px; line-height:1.4; }
+.fx-sec { font-size:11px; font-weight:700; color:var(--t2); margin:14px 2px 6px; }
+.fx-ins { display:flex; gap:8px; font-size:10px; color:var(--t2); line-height:1.5; padding:5px 0; border-bottom:1px solid rgba(255,255,255,.035); }
+.fx-ins:last-child { border-bottom:none; }
+.fx-ins > span:first-child { flex-shrink:0; width:16px; text-align:center; }
+.fx-tab { display:grid; grid-template-columns:1.25fr .8fr 1fr 1fr .8fr .85fr; gap:4px; font-size:9px; font-family:var(--font-mono); padding:4px 0; border-bottom:1px solid rgba(255,255,255,.035); color:var(--t2); }
+.fx-tab > span { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.fx-tab > span:not(:first-child) { text-align:right; }
+.fx-tab-h { font-family:inherit; font-size:8px; color:var(--t3); text-transform:uppercase; letter-spacing:.05em; }
+.fx-h { padding:7px 0; border-bottom:1px solid rgba(255,255,255,.04); }
+.fx-h1, .fx-h2 { display:flex; flex-wrap:wrap; align-items:center; gap:4px 8px; font-size:10px; color:var(--t1); }
+.fx-h2 { font-family:var(--font-mono); margin-top:2px; }
+.fx-h3 { font-size:8.5px; color:var(--t3); margin-top:2px; line-height:1.4; }
+.fx-chip { font-size:8.5px; padding:1px 5px; border:1px solid var(--border2); border-radius:5px; color:var(--t2); white-space:nowrap; }
+.fx-btn { width:100%; margin-top:8px; background:var(--s2); border:1px solid var(--border2); color:var(--t1); border-radius:10px; padding:9px; font-size:11px; font-weight:700; cursor:pointer; }
+.fx-btn:active { background:var(--s3); }
+.fx-yr { padding:6px 0; border-bottom:1px solid rgba(255,255,255,.04); font-size:10px; color:var(--t2); }
+.fx-log { font-size:9.5px; }
+.fx-in { width:100%; box-sizing:border-box; background:var(--s2); border:1px solid var(--border); border-radius:8px; padding:8px 9px; color:var(--gold); font-family:var(--font-mono); font-size:12px; margin:0 0 10px; -webkit-appearance:none; }
+.fx-law summary { font-size:11px; font-weight:700; color:var(--t2); cursor:pointer; }
+.fx-law-b { font-size:9.5px; color:var(--t3); line-height:1.6; margin-top:8px; }
+.fx-law-s { font-size:9px; margin-top:8px; line-height:1.7; }
+.fx-law-s a { color:var(--ice); }
+.fx-man { font-size:10px; color:var(--t2); line-height:1.55; }
+.fx-man-sub { font-size:9px; color:var(--t3); margin-top:4px; }
+@media (max-width: 360px) { .fx-grid { grid-template-columns:1fr; } .fx-big { font-size:17px; } }

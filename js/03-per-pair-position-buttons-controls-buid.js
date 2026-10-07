@@ -4858,52 +4858,28 @@ function botScalper() {
 // [NUTRITION · 09/08/2026] l'ancien bot était nourri de constantes : seuil 40 $ codé en
 // dur (jamais atteint sur un compte de ~50 $) et « économie ~30% » forfaitaire — il
 // aurait proposé des harvests à valeur fiscale RÉELLE nulle (perte annuelle nette =
-// impôt dû 0, franchise ignorée). Branché sur la formule d'impôt UNIQUE du système
-// (_computeMarginalTax) : l'économie affichée = la baisse RÉELLE d'impôt marginal si la
-// perte est réalisée. Pas d'économie réelle positive = pas de proposition.
+// impôt dû 0, franchise ignorée).
+// [GO FISCAL · 07/10/2026] branché sur le REGISTRE LÉGAL du mode (16) : il ANALYSE et le DIT (statut du bot, page ⚖ Impôt) —
+// perte latente qui baisserait vraiment l'impôt de l'année si elle était réalisée maintenant (même régime seulement, frais
+// compris), impôt dû, exonération restante. Il ne publie plus de proposition « harvest » ni de pari de mérite (_botPredict) :
+// avec l'ancien calcul il n'en publiait jamais (impôt marginal toujours 0 sous la franchise, 0 jugement dans le backup 07/10) ;
+// en publier changerait la flotte (mérite → ordre des disciples → votes) et la file des propositions (10 places partagées
+// avec les ouvertures des bots) — c'est une décision : porte TALENT d'abord. La fermeture reste ton geste. Statut toujours « idle »,
+// comme avant (le statut fait le a.score de la carte du bot).
 function botFiscal() {
-  const realizedGain = S.fees?.totalPnlGross || 0;
-  const openLosers = (S.openPositions || []).filter(p => (p.pnlUsdt || 0) < -3);
-  if(openLosers.length > 0 && typeof _computeMarginalTax === 'function') {
-    const worst = openLosers.sort((a,b) => (a.pnlUsdt || 0) - (b.pnlUsdt || 0))[0];
-    // Économie réelle : impôt marginal évité en réalisant cette perte maintenant.
-    // _computeMarginalTax(x) donne l'impôt marginal d'un gain x ; pour une perte, la
-    // baisse d'impôt = impôt(0) − impôt(perte) sur le cumul = tax(−perte) symétrique :
-    // on la mesure comme l'impôt que paierait un gain équivalent au-dessus du cumul.
-    const harvestSavings = _computeMarginalTax(Math.abs(worst.pnlUsdt || 0));
-    if(!(harvestSavings > 0.01)) {
-      _setBot('fiscal_bot_v1', 'idle', `Perte dispo ${worst.pnlUsdt.toFixed(2)}$ · aucun impôt marginal à économiser (franchise/cumul)`);
-      if(S.pendingActions) S.pendingActions = S.pendingActions.filter(a => a.type !== 'harvest');
-      return null;
+  if(S.pendingActions) S.pendingActions = S.pendingActions.filter(a => a.type !== 'harvest');
+  const _mode = (typeof _walletKey === 'function') ? _walletKey() : 'sim';
+  let _st = 'Registre fiscal en attente du premier trade fermé';
+  try {
+    const h = (typeof _fiscHarvest === 'function' && S.taxConfig && S.taxConfig.region === 'BE') ? _fiscHarvest(_mode) : null;
+    if (h) {
+      _setBot('fiscal_bot_v1', 'idle', `Perte latente ${h.pair} : la réaliser avant le 31/12 baisserait l'impôt de l'année de ${h.savingEur.toFixed(2)} € (régime ${h.regime === 'normal' ? 'normal' : 'spéculatif'})`);
+      return { pos: h.pos, savings: h.savingUsd };
     }
-    // v6.0 · Publie une proposition actionnable
-    if(!S.pendingActions) S.pendingActions = [];
-    const already = S.pendingActions.find(a => a.type === 'harvest' && a.posId === worst.id);
-    if(!already) {
-      S.pendingActions.unshift({
-        id: 'fh' + Date.now().toString(36),
-        type: 'harvest',
-        pair: worst.pair,
-        posId: worst.id,
-        ts: Date.now(),
-        source: 'fiscal_bot_v1',
-        title: `Harvest ${worst.pair}`,
-        detail: `Perte $${worst.pnlUsdt.toFixed(2)} · économie ~$${harvestSavings.toFixed(2)}`,
-        action: 'close_position',
-        payload: { posId: worst.id }
-      });
-      if(S.pendingActions.length > 10) S.pendingActions.length = 10;
-      S.botFleet.fiscal_bot_v1.contributions++;   // [audit 09/08] proposition publiée = intervention réelle
-      try { _botPredict('fiscal_bot_v1', worst.pair, worst.side === 'long' ? 'short' : 'long', 'harvest'); } catch(e) {}   // [MÉRITE DES BOTS · 26/09/2026] fermer maintenant est juste si la perte continue
-    }
-    _setBot('fiscal_bot_v1', 'active', `Proposition harvest ${worst.pair} · économie estimée ~${harvestSavings.toFixed(2)}$`);
-    return { pos: worst, savings: harvestSavings };
-  }
-  _setBot('fiscal_bot_v1', 'idle', `Aucune perte ouverte à récolter · cumul réalisé ${realizedGain>=0?'+':''}${realizedGain.toFixed(0)}$`);
-  // Clear stale proposals
-  if(S.pendingActions) {
-    S.pendingActions = S.pendingActions.filter(a => a.type !== 'harvest' || (a.posId && S.openPositions.find(p => p.id === a.posId)));
-  }
+    const r = (typeof _fiscRegimeNow === 'function' && S.taxConfig && S.taxConfig.region === 'BE') ? _fiscRegimeNow() : null;
+    if (r) _st = `Régime en cours ${r.pct} (${r.auto ? 'AUTO' : 'MANU'}) · impôt dû ${r.d.due.toFixed(2)} € · exonération restante ${Math.round(r.left)} €`;
+  } catch(e) { try{window._decErr&&window._decErr(e)}catch(_e){} }
+  _setBot('fiscal_bot_v1', 'idle', _st);
   return null;
 }
 

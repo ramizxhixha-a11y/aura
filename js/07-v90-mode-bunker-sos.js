@@ -4718,7 +4718,9 @@ function _computeNetUsdParts() {
     closeFees += (stake + Math.max(0,pnl$)) * taker;
   });
   let taxAnt = 0;
-  try { taxAnt = (latentPos>0 && typeof _computeMarginalTax==='function') ? _computeMarginalTax(latentPos) : 0; } catch(e){}
+  // [GO FISCAL · 07/10/2026] registre légal (16) : l'impôt de l'année qui bougerait si tout fermait maintenant, par régime
+  // (une perte peut en rendre) — avant : taux marginal d'un régime deviné, sur le seul latent positif
+  try { taxAnt = (typeof _fiscLatentTaxUsd === 'function' && S.taxConfig && S.taxConfig.region === 'BE') ? _fiscLatentTaxUsd((typeof _walletKey === 'function') ? _walletKey() : 'sim') : 0; } catch(e){ try{window._decErr&&window._decErr(e)}catch(_e){} }
   // [S1 25/08] fundDue retiré : le circuit préexistant prélève funding+intérêts toutes
   // les 30 s directement du trading — le résidu couru est ≤30 s ≈ 0, le déduire encore
   // aurait été un double comptage. fundCum = compteur cumulé réel (informatif).
@@ -4763,7 +4765,7 @@ window._toggleHeroBk = function(which){
        +_tile('\ud83d\udee1\ufe0f','Anti-négatif',fmt$2(p.antiNeg),'','cy')
        +_tile('\ud83d\udfe1','Positions (mise+latent)',fmt$2(p.posVal),'latent +'+p.latentPos.toFixed(2)+'$','cy')
        +_tile('\u2702\ufe0f','Frais de clôture est.','\u2212'+fmt$2(p.closeFees),'','neg')
-       +_tile('\ud83c\udfdb\ufe0f','Impôt anticipé','\u2212'+fmt$2(p.taxAnt),'sur latent positif','neg')
+       +_tile('\ud83c\udfdb\ufe0f','Impôt anticipé',(p.taxAnt>=0?'\u2212':'+')+fmt$2(Math.abs(p.taxAnt)),'si tout fermait maintenant · registre fiscal',p.taxAnt>=0?'neg':'')
        +_tile('\u23f3','Funding payé (cumul)',fmt$2(p.fundCum),'prélevé en continu du trading','cy')
        +_tile('\u03a3','En $',fmt$2(p.net),'','sum');
     }
@@ -5073,7 +5075,15 @@ function renderHome() {
   // v7.2 PHASE 11 · Wallet 2ème ligne · Réserve fiscale + Fonds propres exonérés
   setEl('fiscalResVal', fmt$2(S.fiscalReserveAccount || 0));
   const _fiscalCount = (S.fiscalReserveLog || []).length;
-  setEl('fiscalResSub', _fiscalCount + (_fiscalCount > 1 ? ' dépôts' : ' dépôt'));
+  setEl('fiscalResSub', (typeof _fiscResSub === 'function') ? _fiscResSub() : (_fiscalCount + (_fiscalCount > 1 ? ' dépôts' : ' dépôt')));   // [GO FISCAL · 07/10/2026] impôt dû de l'année (16)
+  // [GO FISCAL · 07/10/2026] carte « Régime fiscal » : le régime EN COURS suit le bouton AUTO / MAN (09k ne la peignait qu'au boot)
+  try {
+    if (typeof _fiscHomeCard === 'function' && S.taxConfig && S.taxConfig.region === 'BE') {
+      const _hc = _fiscHomeCard(), _rv = document.getElementById('fiscalRegimeVal');
+      if (_rv) { if (_rv.textContent !== _hc.val) _rv.textContent = _hc.val; _rv.style.color = _hc.col; }
+      setEl('fiscalRegimeSub', _hc.sub);
+    }
+  } catch(e){ try{window._decErr&&window._decErr(e)}catch(_e){} }
   setEl('ownFundsVal', fmtEUR(typeof window.ownFundsEUR === 'function' ? window.ownFundsEUR() : (S.ownFundsInjected || 0) * (S.usdEurRate || 0.92)));  // v8 · € réel injecté (figé)
   const _ownCount = (S.ownFundsLog || []).length;
   setEl('ownFundsSub', _ownCount === 0 ? 'Capital initial'

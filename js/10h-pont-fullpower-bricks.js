@@ -371,6 +371,15 @@ function openManDetail(pair) {
     </div>
     <div style="margin-top:6px;font-size:9px;color:var(--t3);line-height:1.4;">ℹ️ Fermée aussi : à ton TP ou ton SL, à la perte max du trade (2 × SL, 1,5–3 %), par le trailing (armé à 60 % du chemin vers ton TP). Sinon elle reste ouverte jusqu'à ton timeout — plus de fermeture « 30 min à plat » sur tes trades.</div>`;
   body.appendChild(consignesSection);
+  // [GO FISCAL · 07/10/2026] le régime fiscal de CE trade (registre 16) : LONG ×1 → normal 10 %, SHORT ou levier → 33 %
+  if (typeof _fiscManNote === 'function' && S.taxConfig && S.taxConfig.region === 'BE') {
+    try {
+      const fiscSection = document.createElement('div');
+      fiscSection.className = 'detail-section';
+      fiscSection.innerHTML = _fiscManNote(pair, manualPos);
+      body.appendChild(fiscSection);
+    } catch(e) { try{window._decErr&&window._decErr(e)}catch(_e){} }
+  }
   
   const actionsSection = document.createElement('div');
   actionsSection.style.cssText = 'margin:12px 0;';

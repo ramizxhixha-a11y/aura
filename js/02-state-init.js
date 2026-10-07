@@ -532,9 +532,9 @@ const S = {
     // longTermMonths : durée de détention au-delà de laquelle le gain est exonéré (0 = sans effet)
     // inclusion   : part du gain incluse dans la base imposable
     // rate / inclusion restent exposés (compat lecteurs existants) = régime applicable courant
-    lastReviewed: '2026-06',
+    lastReviewed: '2026-10',   // [GO FISCAL · 07/10/2026] BE relue : loi 03/04/2026, circulaire 2026/C/74 — le calcul légal vit dans js/16-fiscal.js
     regions: {
-      BE: { label:'🇧🇪 Belgique',    rate:0.10, inclusion:1.0, rateNormal:0.10, rateSpec:0.33, franchise:10000, longTermMonths:0, method:'Solidarité 10% / Spéc. 33%', note:'Depuis 01/01/2026 : 10% sur plus-values (gestion normale) après franchise 10 000€. Régime spéculatif (levier, haute fréquence) : 33%.' },
+      BE: { label:'🇧🇪 Belgique',    rate:0.10, inclusion:1.0, rateNormal:0.10, rateSpec:0.33, franchise:10000, longTermMonths:0, method:'Normal 10% / Spéc. 33%', note:'Loi du 03/04/2026 (plus-values depuis le 01/01/2026, crypto comprises) : gestion normale 10% au-delà de 10 000 €/an (+ report de la part non utilisée, ≤ 1 000 €/an) ; spéculatif (CIR art. 90 1°) 33% + additionnels communaux, sans exonération. AURA : MANU LONG sans levier = normal ; AUTO, SHORT ou levier = spéculatif (registre js/16-fiscal.js).' },
       FR: { label:'🇫🇷 France',      rate:0.314, inclusion:1.0, rateNormal:0.314, rateSpec:0.314, franchise:0, longTermMonths:0, method:'PFU ~31.4%', note:'PFU 30% + charges sociales ≈ 31.4% effectif (2026) sur gains nets. Traders pro : barème progressif.' },
       US: { label:'🇺🇸 États-Unis',  rate:0.20, inclusion:1.0, rateNormal:0.20, rateSpec:0.37, franchise:0, longTermMonths:12, method:'CGT 20% LT / 37% CT', note:'Long terme (>12 mois) ~20%, court terme jusqu’à 37%. Combiné fédéral+État peut dépasser 50%.' },
       CA: { label:'🇨🇦 Canada',      rate:0.53, inclusion:1.0, rateNormal:0.267, rateSpec:0.53, franchise:0, longTermMonths:0, method:'Capital 50% incl. / Business ~53%', note:'Trading occasionnel : 50% du gain imposable (~26.7%). Trading actif = revenu d’entreprise, jusqu’à ~53%.' },
@@ -645,7 +645,7 @@ Object.keys(PAIRS).forEach(k=>{ S.pairStates[k]=makePairState(PAIRS[k]); });
 // la table de référence sur S.taxConfig.regions (le choix de région de
 // l'utilisateur, S.taxConfig.region, est préservé). Idempotent.
 const TAX_REGIONS_REF = {
-  BE: { label:'🇧🇪 Belgique',    rate:0.10, inclusion:1.0, rateNormal:0.10, rateSpec:0.33, franchise:10000, longTermMonths:0, method:'Solidarité 10% / Spéc. 33%', note:'Depuis 01/01/2026 : 10% sur plus-values (gestion normale) après franchise 10 000€. Régime spéculatif (levier, haute fréquence) : 33%.' },
+  BE: { label:'🇧🇪 Belgique',    rate:0.10, inclusion:1.0, rateNormal:0.10, rateSpec:0.33, franchise:10000, longTermMonths:0, method:'Normal 10% / Spéc. 33%', note:'Loi du 03/04/2026 (plus-values depuis le 01/01/2026, crypto comprises) : gestion normale 10% au-delà de 10 000 €/an (+ report de la part non utilisée, ≤ 1 000 €/an) ; spéculatif (CIR art. 90 1°) 33% + additionnels communaux, sans exonération. AURA : MANU LONG sans levier = normal ; AUTO, SHORT ou levier = spéculatif (registre js/16-fiscal.js).' },
   FR: { label:'🇫🇷 France',      rate:0.314, inclusion:1.0, rateNormal:0.314, rateSpec:0.314, franchise:0, longTermMonths:0, method:'PFU ~31.4%', note:'PFU 30% + charges sociales ≈ 31.4% effectif (2026) sur gains nets. Traders pro : barème progressif.' },
   US: { label:'🇺🇸 États-Unis',  rate:0.20, inclusion:1.0, rateNormal:0.20, rateSpec:0.37, franchise:0, longTermMonths:12, method:'CGT 20% LT / 37% CT', note:'Long terme (>12 mois) ~20%, court terme jusqu’à 37%. Combiné fédéral+État peut dépasser 50%.' },
   CA: { label:'🇨🇦 Canada',      rate:0.53, inclusion:1.0, rateNormal:0.267, rateSpec:0.53, franchise:0, longTermMonths:0, method:'Capital 50% incl. / Business ~53%', note:'Trading occasionnel : 50% du gain imposable (~26.7%). Trading actif = revenu d’entreprise, jusqu’à ~53%.' },
@@ -659,7 +659,7 @@ const TAX_REGIONS_REF = {
 function _ensureTaxRegions() {
   if (!S.taxConfig) S.taxConfig = { region:'BE', regions:{} };
   S.taxConfig.regions = JSON.parse(JSON.stringify(TAX_REGIONS_REF));
-  S.taxConfig.lastReviewed = '2026-06';
+  S.taxConfig.lastReviewed = '2026-10';
   if (!S.taxConfig.regions[S.taxConfig.region]) S.taxConfig.region = 'BE';
 }
 window._ensureTaxRegions = _ensureTaxRegions;
@@ -4503,32 +4503,20 @@ function applyLeverageBorrowFees() {
 // MOTEUR DE FRAIS & TAXES
 // ============================================================
 
-// [AUDIT FISCAL · 09/08/2026] LA formule d'impôt unique : taxe la part MARGINALE du
-// cumul annuel net au-dessus de la franchise (régime détecté, compensation des pertes
-// intégrée au cumul). Ne mute RIEN — le cumul annuel est mis à jour par recordFees seul.
-function _computeMarginalTax(netGain) {
-  try {
-    const reg = S.taxConfig.regions[S.taxConfig.region];
-    const _fr = (typeof detectFiscalRegime === 'function')
-      ? detectFiscalRegime()
-      : { rate: reg.rate, inclusion: reg.inclusion, franchise: 0 };
-    const _annualBefore = (typeof getAnnualNetRealised === 'function') ? getAnnualNetRealised() : 0;
-    const _annualAfter  = _annualBefore + netGain;
-    const _franchise    = _fr.franchise || 0;
-    const _taxableBefore = Math.max(0, _annualBefore - _franchise);
-    const _taxableAfter  = Math.max(0, _annualAfter  - _franchise);
-    const _marginal      = Math.max(0, _taxableAfter - _taxableBefore);
-    const _base = _marginal * (_fr.inclusion != null ? _fr.inclusion : reg.inclusion);
-    return _base * (_fr.rate != null ? _fr.rate : reg.rate);
-  } catch(e) { try{window._decErr&&window._decErr(e)}catch(_e){} return 0; }
-}
-if(typeof _computeMarginalTax==='function') window._computeMarginalTax = _computeMarginalTax;
+// [GO FISCAL · 07/10/2026] _computeMarginalTax (09/08) RETIRÉE : elle taxait au taux d'un régime DEVINÉ par
+// detectFiscalRegime, avec une franchise appliquée aussi au 33 % (la loi l'interdit), en dollars contre une franchise en
+// euros, sur un cumul annuel jamais sauvegardé (remis à zéro à chaque relance) et commun aux trois modes. L'impôt vient
+// maintenant du registre légal par mode (js/16-fiscal.js _fiscOnClose) ; ses lecteurs (03 botFiscal, 07 taxe anticipée)
+// lisent ce registre.
 
 // Appelé à chaque fermeture de position/trade. Calcule frais + provision fiscale.
-function recordFees(pair, notionalUsdt, pnlUsd, tradeType, reservedAmount) {
+// [GO FISCAL · 07/10/2026] pos et exitPx : le registre légal classe le trade (MANU + LONG + sans levier = normal 10 %,
+// sinon spéculatif 33 %) et remet le dépôt fiscal au dû de l'année. Ordre : frais réglés d'abord (réserve puis manque),
+// impôt ensuite, sur le compte trading tel qu'il est vraiment — le mouvement est fait par le registre (trading ↔ dépôt),
+// rien n'est débité deux fois. Retourne aussi feeShortfall : ce que les frais ont pris au trading (lu par closePosition).
+function recordFees(pair, notionalUsdt, pnlUsd, tradeType, reservedAmount, pos, exitPx) {
   const fc  = S.feeConfig;
   const tc  = S.taxConfig;
-  const reg = tc.regions[tc.region];
 
   // ── Frais de trading · ALLER-RETOUR COMPLET ──────────────────────────
   // recordFees est le SEUL point de debit reel (appele une fois, a la
@@ -4547,17 +4535,27 @@ function recordFees(pair, notionalUsdt, pnlUsd, tradeType, reservedAmount) {
   // Total frais du trade
   const totalFee   = tradingFee + slipFee;
 
-  // ── Provision fiscale · régime détecté + franchise annuelle + compensation nette ──
-  // Gain net de ce trade (après frais) :
+  // ── Frais réglés : d'abord la réserve anti-négatif mise de côté à l'ouverture, le manque sur le trading ──
+  const _reservedForThis = (typeof reservedAmount === 'number' && reservedAmount >= 0) ? reservedAmount : totalFee;
+  let _feeShortfall = totalFee;
+  if (typeof releaseTradeReserve === 'function') {
+    const _rel = releaseTradeReserve(_reservedForThis, totalFee, pair);
+    _feeShortfall = _rel.shortfall;  // part des frais non couverte par la réserve
+  }
+  S.tradingAccount = Math.max(0, (S.tradingAccount || 0) - _feeShortfall);
+
+  // ── Impôt : registre légal belge (16). Mouvement signé : + versé au dépôt fiscal, − rendu (perte du même régime) ──
   const netGain    = pnlUsd - totalFee;
-  // [AUDIT FISCAL · 09/08/2026] calcul marginal extrait dans _computeMarginalTax :
-  // SEULE formule d'impôt du système (franchise + compensation des pertes). Le bloc
-  // split de closePosition l'utilise en ESTIMATION ; recordFees reste le seul comptable.
-  const taxAmount  = _computeMarginalTax(netGain);
-  // Mémoriser le cumul annuel mis à jour (gains ET pertes → compensation automatique) :
+  let taxAmount = 0, fisc = null;
+  if (tc && tc.region === 'BE' && pos && typeof _fiscOnClose === 'function') {
+    try { fisc = _fiscOnClose(pos, pnlUsd, { tradingFee, slipFee }, exitPx); taxAmount = (fisc && fisc.movedUsd) || 0; }
+    catch(e) { try{window._decErr&&window._decErr(e)}catch(_e){} }
+  }
+  // Cumul de l'ESTIMATEUR de la décision (10f / 10 : detectFiscalRegime + fiscalBotAdvicePerPair, lu avant ouverture) :
+  // gardé tel quel — le brancher sur le registre changerait les ouvertures (porte TALENT d'abord).
   if (typeof addAnnualNetRealised === 'function') addAnnualNetRealised(netGain);
 
-  // P&L net final (après frais + impôt estimé)
+  // P&L net final (après frais + impôt provisionné)
   const pnlNet = pnlUsd - totalFee - taxAmount;
 
   // Init par paire si nécessaire
@@ -4576,20 +4574,6 @@ function recordFees(pair, notionalUsdt, pnlUsd, tradeType, reservedAmount) {
   S.fees.tradeCount++;
   // ── v7.1 P2: feeReserveAccount = FRAIS D'ÉCHANGE uniquement (taker/maker + slippage) ──
   S.fees.feeReserveAccount += totalFee;
-  // ── v7.1 P2: taxes dû au fisc → fiscalReserveAccount (compte séparé avec historique) ──
-  if(taxAmount > 0) {
-    // ★ POLITIQUE CAPITAL volet B (Rams 06/07) · les taxes des gains sont
-    // provisionnees AU FIL DE LA SESSION dans la reserve ANTI-NEGATIF (elles
-    // renforcent la couverture pendant qu'on trade), puis dispatchees vers la
-    // reserve FISCALE en fin de session (rollover quotidien, voir
-    // _dispatchSessionTaxes). S.antiNegTaxPart trace la part "taxes" de la
-    // reserve pour ne dispatcher QUE ce qui est du au fisc, pas les couvertures.
-    S.antiNegReserve  = (S.antiNegReserve  || 0) + taxAmount;
-    S.antiNegTaxPart  = (S.antiNegTaxPart  || 0) + taxAmount;
-    if(!S.antiNegReserveLog) S.antiNegReserveLog = [];
-    S.antiNegReserveLog.unshift({ amount: taxAmount, source: 'tax_provision_session', pair: pair, ts: Date.now() });
-    if(S.antiNegReserveLog.length > 50) S.antiNegReserveLog.length = 50;
-  }
 
   // Accumulation par paire
   const bp  = S.fees.byPair[pair];
@@ -4613,30 +4597,22 @@ function recordFees(pair, notionalUsdt, pnlUsd, tradeType, reservedAmount) {
     pnlGross:   pnlUsd,
     pnlNet,
     region:     tc.region,
+    regime:     fisc ? fisc.regime : null,
     holdMs:     (typeof S._lastTradeHoldMs === 'number') ? S._lastTradeHoldMs : 0,
     ts:         Date.now(),
     time:       nowStr()
   });
   if(S.fees.feeLog.length > 50) S.fees.feeLog.pop();
 
-  // ── Déduction frais + taxes · RÉSERVE ANTI-NÉGATIF ──
-  // Les frais d'échange (totalFee) ont été pré-provisionnés à l'ouverture dans
-  // S.antiNegReserve. On puise d'abord dans cette réserve ; seul le manque éventuel
-  // (et la taxe, non pré-réservée) touche le tradingAccount — toujours borné à 0.
-  const _reservedForThis = (typeof reservedAmount === 'number' && reservedAmount >= 0) ? reservedAmount : totalFee;
-  let _feeShortfall = totalFee;
-  if (typeof releaseTradeReserve === 'function') {
-    const _rel = releaseTradeReserve(_reservedForThis, totalFee, pair);
-    _feeShortfall = _rel.shortfall;  // part des frais non couverte par la réserve
-  }
-  // Le portfolio reflète la réalité comptable (frais + taxe réellement payés) :
-  S.portfolio      = Math.max(0, (S.portfolio || 0)      - (_feeShortfall + taxAmount));
-  S.tradingAccount = Math.max(0, (S.tradingAccount || 0) - (_feeShortfall + taxAmount));
+  // Le portfolio reflète la réalité comptable (frais payés, impôt mis de côté au dépôt fiscal) :
+  S.portfolio = _computePortfolio();
 
   // Auto-persist to IndexedDB
+  // [GO FISCAL · 07/10/2026] + mode, régime, gain légal en € : la base IndexedDB garde CHAQUE fermeture sans limite (le registre en garde 1 500 en RE)
   saveFeeRecord({ pair, notional: notionalUsdt, pnlGross: pnlUsd,
-    tradingFee, slipFee, totalFee, taxAmount, pnlNet, time: nowStr(), cycle: S.cycle });
-  return { tradingFee, slipFee, totalFee, taxAmount, pnlNet };
+    tradingFee, slipFee, totalFee, taxAmount, pnlNet, time: nowStr(), cycle: S.cycle,
+    mode: S.tradingMode, regime: fisc ? fisc.regime : null, gainEur: fisc ? fisc.gainEur : null, ts: Date.now() });
+  return { tradingFee, slipFee, totalFee, taxAmount, pnlNet, feeShortfall: _feeShortfall, fisc };
 }
 
 // Frais de financement sur positions ouvertes (appelé chaque cycle)
@@ -4662,16 +4638,14 @@ function applyFundingFees() {
 }
 
 // Recalcul live de la provision fiscale totale (pour affichage)
+// [GO FISCAL · 07/10/2026] = l'impôt dû de l'ANNÉE EN COURS à ce jour, registre légal du mode actif (16), en $ au cours
+// du moment. Avant : 10 % ou 33 % (régime deviné) sur tout le P&L cumulé depuis l'origine du mode, moins 10 000 « € »
+// comptés en dollars. Hors Belgique : 0 (le registre n'applique que la loi belge, la page le dit).
 function calcTaxProvision() {
   if (typeof _ensureTaxRegions === 'function') _ensureTaxRegions();
-  const reg     = S.taxConfig.regions[S.taxConfig.region];
-  const netGain = Math.max(0, S.fees.totalPnlGross - S.fees.totalGross);
-  // Cohérence avec recordFees : régime détecté (normal/spéculatif) + franchise annuelle.
-  const _fr = (typeof detectFiscalRegime === 'function') ? detectFiscalRegime()
-            : { rate: reg.rate, inclusion: reg.inclusion, franchise: 0 };
-  const _franchise = _fr.franchise || 0;
-  const _taxable = Math.max(0, netGain - _franchise);
-  return _taxable * (_fr.inclusion != null ? _fr.inclusion : reg.inclusion) * (_fr.rate != null ? _fr.rate : reg.rate);
+  if (!S.taxConfig || S.taxConfig.region !== 'BE' || typeof _fiscDueNowUsd !== 'function') return 0;
+  try { return _fiscDueNowUsd((typeof _walletKey === 'function') ? _walletKey() : 'sim'); }
+  catch(e) { try{window._decErr&&window._decErr(e)}catch(_e){} return 0; }
 }
 
 // ════════════════════════════════════════════════════════════════════════
@@ -4965,7 +4939,7 @@ function goPage(idx, tabEl, navEl) {
     // v6.5 FIX: always rebuild DAO page on navigate so T$ ranking + proposals show
     try { buildGovCards(); renderDAO(); } catch(e) {}
   }, 50); }
-  if(idx === 5) { setTimeout(()=>{ renderFiscal('global'); }, 30); }
+  if(idx === 5) { setTimeout(()=>{ renderFiscal(); }, 30); }   // [GO FISCAL · 07/10/2026] l'onglet affiché (⚖ Impôt par défaut)
   if(idx === 0) { setTimeout(()=>{
     try {
       buildPairPosButtons(); buildPairBricks(); buildActionBricks(); buildManBricks();
@@ -5594,9 +5568,11 @@ function computeTradingHealth() {
 
   let taxDue = 0;
   try {
-    // calcTaxProvision donne la provision fiscale courante (impôt dû sur P&L brut cumulé).
-    // On soustrait ce qui est déjà en réserve pour obtenir le manque.
-    if(typeof calcTaxProvision === 'function') {
+    // [GO FISCAL · 07/10/2026] en Belgique, l'impôt de l'année EST au dépôt fiscal (registre 16, remis au dû à chaque fermeture) :
+    // ce n'est pas une dette du trading. Le compter ici déclenchait l'appel de marge sur un simple écart de cours € entre deux
+    // réajustements (ferme les positions des bots, levier à 0) — chemin qui ne s'ouvrait jamais avant (impôt toujours 0).
+    if (S.taxConfig && S.taxConfig.region === 'BE') { /* taxDue reste 0 */ }
+    else if(typeof calcTaxProvision === 'function') {
       const taxLive = calcTaxProvision();
       const taxAlreadyReserved = S.fiscalReserveAccount || 0;
       taxDue = Math.max(0, taxLive - taxAlreadyReserved);
@@ -6113,6 +6089,7 @@ function openPosition(pair, side, opts) {
     totalExposure,
     entryTime:    nowStr(),
     entryTs:      Date.now(),
+    _fxIn:        ((Number(S._usdEurLastFetch) > 0 && Number(S.usdEurRate) > 0) ? Number(S.usdEurRate) : null),   // [GO FISCAL · 07/10/2026] cours USD→EUR reçu, à l'achat (16)
     pnl:          0, pnlUsdt: 0,
     currentVal:   totalExposure,
     auto:         false,
@@ -6447,44 +6424,45 @@ function closePosition(id, botClose = false) {
     S.tradingAccount = Math.max(0, S.tradingAccount + pos.stakeUsdt);
 
     // ═══ v7.12 · PRIORITÉ 1 · SPLIT BÉNÉFICES (Option B — net d'impôts/taxes) ═══
-    // Si trade gagnant : split du net (après frais + taxes)
-    // Si trade perdant : perte absorbée par tradingAccount (comportement normal)
+    // [GO FISCAL · 07/10/2026] ORDRE RÉEL : le résultat entre au trading, recordFees règle les frais (réserve puis manque)
+    // et l'impôt (registre légal 16 : trading ↔ dépôt fiscal), PUIS la caisse reçoit sa part de ce qui reste vraiment.
+    // Avant : le gain était crédité amputé d'une ESTIMATION de frais de sortie et d'impôt, puis recordFees débitait encore
+    // les frais réels — un trade gagnant payait deux fois sa sortie (et l'impôt l'aurait été deux fois).
+    // Si trade perdant : perte absorbée par tradingAccount (comportement normal), l'impôt peut en revenir (même régime).
+    S.tradingAccount = Math.max(0, S.tradingAccount + netPnl);
+    // ── Frais de sortie uniquement (l'entrée a déjà été facturée à l'ouverture) ──
+    // Maker si la position a été ouverte avec forte conviction, sinon taker
+    const exitType = (pos.auto && realisedPct > 0.3) ? 'maker' : 'taker';
+    // Durée de détention réelle (pour le score fiscal composite — indice de spéculation)
+    S._lastTradeHoldMs = (pos.entryTs && Date.now() > pos.entryTs) ? (Date.now() - pos.entryTs) : 0;
+    const _rf = recordFees(pos.pair, pos.stakeUsdt, realisedUsd, exitType, pos._reservedAmount, pos, cur) || {};
     if (netPnl > 0) {
-      // Calcul frais + taxes pour déterminer le "vraiment net"
-      const _feeConf = S.feeConfig || {};
-      const _exitFee = pos.stakeUsdt * (_feeConf.takerRate || 0.001) + pos.stakeUsdt * (_feeConf.slippage || 0.0005);
-      // [AUDIT FISCAL · 09/08/2026] l'ancienne taxe PLATE (netPnl × inclusion × taux,
-      // sans franchise ni compensation des pertes) prélevait de l'impôt sur chaque trade
-      // gagnant isolé même en perte annuelle nette (~1.87 $ prélevés à tort), et créditait
-      // fiscalReserve en DOUBLE du circuit volet B — double imposition garantie dès le
-      // dépassement de la franchise. Ici : ESTIMATION marginale (même formule que le
-      // comptable) pour dimensionner le split ; AUCUN crédit — recordFees, appelé juste
-      // après, provisionne l'impôt réel en antiNegReserve (volet B, dispatch au rollover).
-      const _taxAmount = (typeof _computeMarginalTax === 'function') ? _computeMarginalTax(netPnl - _exitFee) : 0;
-      const _trulyNet = Math.max(0, netPnl - _exitFee - _taxAmount);
+      const _taxAmount = Number(_rf.taxAmount) || 0;
+      const _trulyNet = Math.max(0, netPnl - (Number(_rf.totalFee) || 0) - _taxAmount);
 
       // Split du net restant
       const _splitPct = (typeof S.profitSplitCaissePct === 'number' ? S.profitSplitCaissePct : 30) / 100;
-      const _toCaisse = _trulyNet * _splitPct;
+      const _toCaisse = Math.min(_trulyNet * _splitPct, Math.max(0, S.tradingAccount || 0));
       const _toTrading = _trulyNet - _toCaisse;
 
-      // Appliquer les mouvements
+      // Appliquer les mouvements (le net est déjà au trading : la part caisse en sort)
       S.cashAccount = (S.cashAccount || 0) + _toCaisse;
-      S.tradingAccount += _toTrading;
+      S.tradingAccount = Math.max(0, (S.tradingAccount || 0) - _toCaisse);
       if(!S.cashLog) S.cashLog = [];
       S.cashLog.unshift({ amount:_toCaisse, source:'profit_split', ts:Date.now(), time:nowStr() });
       if(S.cashLog.length > 200) S.cashLog.pop();
 
       // Log discret dans chainLog
+      const _fz = _rf.fisc;
       S.chainLog.push({
         icon: '💰',
-        desc: `Bénéfice ${pos.pair} · Net +$${_trulyNet.toFixed(2)} · Caisse +$${_toCaisse.toFixed(2)} (${(_splitPct*100).toFixed(0)}%) · Trading +$${_toTrading.toFixed(2)}${_taxAmount > 0 ? ' · Taxes $'+_taxAmount.toFixed(2)+' → fiscal' : ''}`,
+        desc: `Bénéfice ${pos.pair} · Net +$${_trulyNet.toFixed(2)} · Caisse +$${_toCaisse.toFixed(2)} (${(_splitPct*100).toFixed(0)}%) · Trading +$${_toTrading.toFixed(2)}${_taxAmount > 0.005 ? ' · Impôt $'+_taxAmount.toFixed(2)+' → dépôt fiscal' : ''}${_fz ? ' · ' + (_fz.regime === 'normal' ? 'régime normal 10 %' : 'régime spéculatif 33 %') : ''}`,
         hash: rndHash(), time: nowStr()
       });
       if (S.chainLog.length > 100) S.chainLog.splice(0, S.chainLog.length - 100);
-    } else {
-      // Trade perdant : tout reste dans tradingAccount (déjà fait via stakeUsdt, on ajoute le netPnl négatif)
-      S.tradingAccount = Math.max(0, S.tradingAccount + netPnl);
+    } else if ((Number(_rf.taxAmount) || 0) < -0.005) {
+      S.chainLog.push({ icon: '🏦', desc: `Perte ${pos.pair} · impôt de l'année rendu au trading +$${(-_rf.taxAmount).toFixed(2)} (même régime, même année)`, hash: rndHash(), time: nowStr() });
+      if (S.chainLog.length > 100) S.chainLog.splice(0, S.chainLog.length - 100);
     }
 
     S.portfolio      = _computePortfolio();   // [23/08] canonique
@@ -6519,12 +6497,7 @@ function closePosition(id, botClose = false) {
     // Update pnlHistory on every significant close
     S.pnlHistory.push(S.portfolio);
     if(S.pnlHistory.length > 80) S.pnlHistory.shift();
-    // ── Frais de sortie uniquement (l'entrée a déjà été facturée à l'ouverture) ──
-    // Maker si la position a été ouverte avec forte conviction, sinon taker
-    const exitType = (pos.auto && realisedPct > 0.3) ? 'maker' : 'taker';
-    // Durée de détention réelle (pour le score fiscal composite — indice de spéculation)
-    S._lastTradeHoldMs = (pos.entryTs && Date.now() > pos.entryTs) ? (Date.now() - pos.entryTs) : 0;
-    recordFees(pos.pair, pos.stakeUsdt, realisedUsd, exitType, pos._reservedAmount);
+    // [GO FISCAL · 07/10/2026] recordFees est appelé plus haut, avant le partage caisse / trading
     S.totalTrades = Object.values(S.pairStates).reduce((s,p)=>s+p.totalTrades,0);
     // v7.12 · PACK RÉSILIENCE · notifier export auto + snapshot silencieux
     try { if (typeof _notifyTradeForExport === 'function') _notifyTradeForExport(); } catch(e) {}

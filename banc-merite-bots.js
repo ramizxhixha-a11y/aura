@@ -106,11 +106,11 @@ T('S1 · textes : learnFromOutcome ne juge plus les bots ; propositions / flatte
   const lfoStart = s03.indexOf('function learnFromOutcome('), lfo = codeStrict(s03.slice(lfoStart, s03.indexOf('\n}\n', lfoStart)));
   assert.ok(!lfo.includes('botReward') && !lfo.includes('_lastPnlContrib'));
   const c3 = codeStrict(s03);
-  ["_botPredict('fiscal_bot_v1', worst.pair, worst.side === 'long' ? 'short' : 'long', 'harvest')",
+  [   // [GO FISCAL · 07/10/2026] fiscal_bot_v1 : n'émet plus de proposition harvest ni de pari (il n'en émettait jamais : impôt marginal 0 sous la franchise) — analyse seule, vue ci-dessous
    "_botPredict('rebalance_bot_v1', skewed.pair, _rbp.side === 'long' ? 'short' : 'long', 'rééquilibrage')", "_botPredict('rescue_bot_v1', p.pair, p.side === 'long' ? 'short' : 'long', 'flatten')",
    "_botJudgeMeasured('smart_sizer_v1', marginal, 'taille')"].forEach(t => assert.ok(c3.includes(t), t));
   // [SURVEILLANCE PERMANENTE 27/09] propositions d'ouverture : jugées au trade réel (02) ou, refusées, comme affirmation (04) ; audit au battement (08)
-  ["_botPredict('arb_bot_v1'", "_botPredict('scalper_bot_v1'", "_botPredict('dca_bot_v1'", 'setInterval(_botMeritAudit'].forEach(t => assert.ok(!c3.includes(t), 'retiré : ' + t));
+  ["_botPredict('arb_bot_v1'", "_botPredict('scalper_bot_v1'", "_botPredict('dca_bot_v1'", "_botPredict('fiscal_bot_v1'", 'setInterval(_botMeritAudit'].forEach(t => assert.ok(!c3.includes(t), 'retiré : ' + t));
   assert.ok(codeStrict(rd('js/04-v8-0-livraison-35-mode-max-permissif-v.js')).includes("try { if (typeof _botPredict === 'function') _botPredict(_bot, _pr, _sd, action.type || ''); } catch(e) {}"));
   assert.ok(codeStrict(rd('js/08-learning-history-render.js')).includes('try { if (window._botMeritAudit) window._botMeritAudit(); } catch(e) {}'));
   assert.ok(!c3.includes('_riskVetoAudit') && !c3.includes('S._riskVetoes.push'), 'ancien audit retiré');
