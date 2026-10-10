@@ -10,7 +10,8 @@ const between = (s, a, b, incl) => { const i = s.indexOf(a); assert.ok(i >= 0, '
 const codeStrict = s => s.split('\n').filter(l => !/^\s*\/\//.test(l)).join('\n');
 const s03 = rd('js/03-per-pair-position-buttons-controls-buid.js'), s08 = rd('js/08-learning-history-render.js');
 const ENGINE = between(s03, 'const PAIR_GENOME_DEFAULTS = {', 'window.PAIR_GENOME_DEFAULTS = PAIR_GENOME_DEFAULTS;', false);
-const ROLL = between(s08, 'function _pairGenomeRollover() {', 'window._pairGenomeRollover = _pairGenomeRollover;', false);
+// [PAIRES VIVANTES · 10/10/2026] le tour quotidien ne passe que par les paires vivantes (02 _livePairs, la fonction réelle précède le fragment)
+const ROLL = between(rd('js/02-state-init.js'), 'function _livePairs() {', 'window._livePairs = _livePairs;', false) + '\n' + between(s08, 'function _pairGenomeRollover() {', 'window._pairGenomeRollover = _pairGenomeRollover;', false);
 const J = v => JSON.parse(JSON.stringify(v));
 function ctx(S) { const c = { S, Math, Number, Object, Array, JSON, Date, isFinite, String, window: {} }; vm.createContext(c); vm.runInContext(ENGINE, c); return c; }
 console.log('▶ banc-genome-paire');
@@ -56,15 +57,16 @@ T('D2 · _pairGenomeEvolve : archive la version courante avec sa fitness, jamais
   for (let i = 1; i < hh.length; i++) assert.ok(hh[i - 1].f >= hh[i].f, 'triée');
 });
 T('D3 · _pairGenomeRollover RÉEL : rien en AA ; en EV une seule paire par passage, seulement ≥ 5 trades, une fois par jour, journal 🧬', () => {
-  const S = { tradingMode: 'sim', pairStates: { 'A/USDT': { totalTrades: 9, totalPnlUsd: 1.5 }, 'B/USDT': { totalTrades: 3, totalPnlUsd: 0 }, 'C/USDT': { totalTrades: 40, totalPnlUsd: -2 } }, chainLog: [] };
-  const c = ctx(S); vm.runInContext(ROLL, c);
+  // [PAIRES VIVANTES · 10/10/2026] + Z/USDT : paire RETIRÉE (hors PAIRS) avec 50 trades — elle ne prend jamais le tour, aucun génome ne lui est fait
+  const S = { tradingMode: 'sim', pairStates: { 'Z/USDT': { totalTrades: 50, totalPnlUsd: 9 }, 'A/USDT': { totalTrades: 9, totalPnlUsd: 1.5 }, 'B/USDT': { totalTrades: 3, totalPnlUsd: 0 }, 'C/USDT': { totalTrades: 40, totalPnlUsd: -2 } }, chainLog: [] };
+  const c = ctx(S); c.PAIRS = { 'A/USDT': {}, 'B/USDT': {}, 'C/USDT': {} }; vm.runInContext(ROLL, c);
   assert.strictEqual(vm.runInContext('_pairGenomeRollover()', c), 0, 'AA : rien');
   S.tradingMode = 'paperReal';
   assert.strictEqual(vm.runInContext('_pairGenomeRollover()', c), 1);
   assert.strictEqual(vm.runInContext('_pairGenomeRollover()', c), 1, '2e passage : la paire suivante');
   assert.strictEqual(vm.runInContext('_pairGenomeRollover()', c), 0, '3e : B a moins de 5 trades, A et C déjà faits aujourd\'hui');
   assert.deepStrictEqual(Object.keys(S.pairGenome).sort(), ['A/USDT', 'C/USDT']);
-  assert.strictEqual(S.pairGenome['B/USDT'], undefined);
+  assert.strictEqual(S.pairGenome['B/USDT'], undefined); assert.strictEqual(S.pairGenome['Z/USDT'], undefined, 'paire retirée : pas de génome');
   assert.strictEqual(S.chainLog.length, 2); assert.ok(S.chainLog[0].desc.startsWith('Génome de paire A/USDT :') && S.chainLog[0].desc.includes('1.50 $'), S.chainLog[0].desc);
   S._pairGenomeDay = {}; assert.strictEqual(vm.runInContext('_pairGenomeRollover()', c), 1, 'jour suivant : ça repart');
 });
@@ -74,7 +76,8 @@ T('S1 · 08 : getTechSignals lit GP (périodes + poids par famille), la clé de 
   ['calcSMA(closes, Math.min(GP.smaFast', 'calcSMA(closes, Math.min(GP.smaSlow', 'calcSMA(closes, Math.min(GP.smaLong', 'calcEMA(closes, Math.min(GP.emaFast', 'calcEMA(closes, Math.min(GP.emaSlow', 'calcEMA(closes, Math.min(GP.emaLong', 'calcStochastic(candles, Math.min(GP.stoch', 'calcRSI(candles, Math.min(GP.rsi', 'calcADX(candles, Math.min(GP.adx'].forEach(k => assert.ok(c.includes(k), k));
   assert.strictEqual(/Math\.min\((10|20|50|9|21|14),/.test(c), false, 'période en dur restante');
   assert.strictEqual((c.match(/weight: GP\.wTrend/g) || []).length, 3); assert.strictEqual((c.match(/weight: GP\.wMomentum/g) || []).length, 3); assert.strictEqual((c.match(/weight: GP\.wVolatility/g) || []).length, 1);
-  assert.ok(c.includes("GP.rsi + '.' + GP.emaFast"), 'cache invalidé par le génome');
+  // [MODES SÉPARÉS · 10/10/2026] le cache _techCache est retiré (il ne servait jamais : la clé lue portait le génome, la clé écrite non) — chaque appel recalcule avec le génome du moment
+  assert.ok(!c.includes('_techCache') && !c.includes('ckey'), 'plus de cache des signaux techniques');
   assert.ok(codeStrict(s08).includes('_pairGenomeRollover();'), 'rollover appelé dans le battement');
   const c1 = codeStrict(rd('js/09b1-build-snapshot.js')), c2 = codeStrict(rd('js/09b2-save-load.js'));
   assert.ok(c1.includes('pairGenome: S.pairGenome || {},') && c1.includes('pairGenomeHistory: S.pairGenomeHistory || {},') && c1.includes('_pairGenomeDay: S._pairGenomeDay || {},'));

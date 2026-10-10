@@ -150,7 +150,7 @@ T('D10 · [DÉCISION COMMUNE · 27/09/2026] en automatique, un bot ne trade seul
 });
 T('S1 · textes : le battement (08) fait tourner la flotte de chaque mode et juge les affirmations à chaque tick ; l\'écran ne la fait plus tourner (accueil, onglet flotte) ; le bot d\'une position est jugé à la clôture sur son résultat réel ; plus de 30 min ni de 0,3 % dans le moteur', () => {
   const c08 = codeStrict(s08);
-  const iExit = c08.indexOf('try { if (window._botExitSweep) window._botExitSweep(); } catch(e) {}'), iHb = c08.indexOf('try { if (window._fleetHeartbeat) window._fleetHeartbeat(); }'), iCyc = c08.indexOf('Object.entries(S.pairStates).forEach(([pair, ps]) => {', iHb);
+  const iExit = c08.indexOf('try { if (window._botExitSweep) window._botExitSweep(); } catch(e) {}'), iHb = c08.indexOf('try { if (window._fleetHeartbeat) window._fleetHeartbeat(); }'), iCyc = c08.indexOf('_livePairEntries().forEach(([pair, ps]) => {', iHb);   // [PAIRES VIVANTES · 10/10/2026] la boucle des cycles ne passe plus que par les paires vivantes
   assert.ok(iExit > 0 && iHb > iExit && iCyc > iHb, 'dans la boucle des modes, après les sorties, avant les cycles');
   assert.ok(/try \{ if \(window\._botMeritAudit\) window\._botMeritAudit\(\); \} catch\(e\) \{\}[^\n]*\n  _phEnd\('cycles paires \+ protection'\);/.test(c08), 'audit à chaque tick, après la boucle des modes');
   assert.ok(!codeStrict(s02).includes("runBotFleet('tick')"), 'accueil : plus de tick');

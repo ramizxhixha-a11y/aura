@@ -149,7 +149,7 @@ function _manPlan(pair, light) {
   const eng = (S.openPositions || []).reduce((a, p) => a + (Number(p && p.stakeUsdt) || 0), 0);
   const free = Math.max(0, capT - eng), held = {};
   (S.openPositions || []).forEach(p => { if (p && p.pair) held[p.pair] = 1; });
-  const slots = Object.keys(S.pairStates || {}).filter(k => !held[k]).length;
+  const slots = _livePairs().filter(k => !held[k]).length;   // [PAIRES VIVANTES · 10/10/2026] comme 10f : la paire retirée n'est plus un emplacement
   const share = free / Math.max(2, slots), floor = (ps.stake && ps.stake > 0) ? ps.stake : 0;
   const stake = Math.floor(Math.min(free, Math.max(floor, share)) * 10) / 10;
   const plan = { pair, price: Number(ps.price) || 0, C, conv, dir, src, n, age, stake, free };

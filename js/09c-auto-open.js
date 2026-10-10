@@ -987,10 +987,14 @@ function autoOpenPosition(pair, side, stakeOverride) {
   });
   if (ps.trades.length > 100) ps.trades.splice(0, ps.trades.length - 100);
 
-  updatePairBtnStates();
-  // Rafraîchir le badge "tout fermer" : sans ça, le compteur restait figé pendant
-  // que le bot ouvrait des positions (S.openPositions grossit mais l'UI affiche l'ancien).
-  if (typeof _updateCloseAllBadge === 'function') _updateCloseAllBadge();
+  // [MODES SÉPARÉS · 10/10/2026] comme à la fermeture (02 closePosition) : les rendus immédiats lisent les positions du mode EN COURS — un bot qui ouvre derrière
+  // l'écran (multiplexeur de 08, 04 executePending) peignait un instant « ↑ LONG » et son compteur sur l'écran d'un autre mode. Le battement repeint l'écran affiché.
+  if (!((typeof _modeBehind === 'function') && _modeBehind())) {
+    updatePairBtnStates();
+    // Rafraîchir le badge "tout fermer" : sans ça, le compteur restait figé pendant
+    // que le bot ouvrait des positions (S.openPositions grossit mais l'UI affiche l'ancien).
+    if (typeof _updateCloseAllBadge === 'function') _updateCloseAllBadge();
+  }
 }
 window.autoOpenPosition = autoOpenPosition;
 

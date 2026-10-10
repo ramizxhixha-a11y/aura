@@ -345,13 +345,16 @@ T('D7 · _projectRealCandles RÉEL : en EV ps.candles = 60 klines Binance avec t
   const now = Date.now(), last15 = Math.floor(now / 900000) * 900000;
   const real = mkCandles(60, '15m', last15, 100); real[59].c = 101; real[0].c = 95;
   const synth = Array.from({ length: 60 }, () => ({ o: 1, h: 1, l: 1, c: 1, v: 1 }));
-  const S = { tradingMode: 'paperReal', paperRealTimeframe: '15m', realCandles: { 'ETH/USDT': { '15m': real }, 'DOT/USDT': { '15m': mkCandles(60, '15m', now - 17 * 3600000, 1) } },
-    pairStates: { 'ETH/USDT': { candles: synth, price: 101 }, 'DOT/USDT': { candles: synth.slice(), price: 1 } } };
-  const ctx = { S, Object, Math, Array, Date, window: {}, REAL_CANDLE_INTERVALS: TF_MS,
+  // [PAIRES VIVANTES · 10/10/2026] + une paire RETIRÉE (GBP : dans le portefeuille, plus dans PAIRS) avec une série réelle fraîche : jamais projetée, jamais touchée
+  const gbpC = synth.slice();
+  const S = { tradingMode: 'paperReal', paperRealTimeframe: '15m', realCandles: { 'ETH/USDT': { '15m': real }, 'DOT/USDT': { '15m': mkCandles(60, '15m', now - 17 * 3600000, 1) }, 'GBP/USDT': { '15m': mkCandles(60, '15m', last15, 1.3) } },
+    pairStates: { 'ETH/USDT': { candles: synth, price: 101 }, 'DOT/USDT': { candles: synth.slice(), price: 1 }, 'GBP/USDT': { candles: gbpC, price: 1.3, pnl24h: 21.53 } } };
+  const ctx = { S, PAIRS: { 'ETH/USDT': {}, 'DOT/USDT': {} }, Object, Math, Array, Date, window: {}, REAL_CANDLE_INTERVALS: TF_MS,
     _getActiveRealTimeframe: () => S.tradingMode === 'real' ? (S.realTimeframe || '15m') : (S.paperRealTimeframe || '15m') };
   vm.createContext(ctx);
-  vm.runInContext(between(s02, 'var RC_HOLE_WIN = 60;', 'window._realCandlesStale = _realCandlesStale;', 'stale', true) /* [DÉGEL DES VOIX · 02/10/2026] + série trouée */ + '\n' + src, ctx);
+  vm.runInContext(between(s02, 'function _livePairs() {', 'window._livePairs = _livePairs;', 'vivantes', false) + '\n' + between(s02, 'var RC_HOLE_WIN = 60;', 'window._realCandlesStale = _realCandlesStale;', 'stale', true) /* [DÉGEL DES VOIX · 02/10/2026] + série trouée */ + '\n' + src, ctx);
   assert.strictEqual(vm.runInContext('_projectRealCandles()', ctx), 1, 'ETH projetée, DOT (périmée) non');
+  assert.strictEqual(S.pairStates['GBP/USDT'].candles, gbpC, 'paire retirée : bougies non projetées'); assert.strictEqual(S.pairStates['GBP/USDT']._candlesStale, undefined, 'paire retirée : pas même marquée'); assert.strictEqual(S.pairStates['GBP/USDT'].pnl24h, 21.53);
   const eth = S.pairStates['ETH/USDT'];
   assert.strictEqual(eth.candles.length, 60); assert.strictEqual(eth.candles[59].c, 101); assert.strictEqual(eth.candles[59].ts, last15); assert.strictEqual(eth.candles[0].ts, last15 - 59 * 900000);
   assert.strictEqual(eth._candlesStale, false); assert.ok(Math.abs(eth.pnl24h - (101 - 95) / 95 * 100) < 1e-9, 'pnl24h = variation de la fenêtre');

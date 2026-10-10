@@ -159,6 +159,17 @@ function _computePortfolio(w) {
   return (o.cashAccount || 0) + (o.tradingAccount || 0) + eng;
 }
 window._computePortfolio = _computePortfolio;
+// [PORTEFEUILLE JUSTE · 10/10/2026] Le même, SANS une position en cours de fermeture. closePosition rend la mise au trading, règle les frais, partage le gain,
+// et ne retire la position de S.openPositions qu'à la toute fin (les juges ont besoin d'elle entre-temps) : pendant ce temps _computePortfolio() comptait sa
+// mise DEUX fois — rendue au trading ET encore « engagée ». Ce portefeuille gonflé d'une mise était écrit dans S.portfolio, poussé sur la courbe, lu par les
+// alertes (« 🎯 Objectif session atteint ! +$50 » pour un trade à −0,7 %, sonde du 10/10 : 4 fermetures sur 4) et laissé tel quel dans le portefeuille d'un mode
+// qui n'est pas à l'écran (AA au backup du 10/10 15:38 : 1 113,19 $ écrits pour 1 062,40 $ réels). La position est reconnue par IDENTITÉ (l'objet lui-même).
+function _computePortfolioSans(pos, w) {
+  const o = w || S;
+  const eng = (o.openPositions || []).reduce((a, p) => a + (p === pos ? 0 : (Number(p && p.stakeUsdt) || 0)), 0);
+  return (o.cashAccount || 0) + (o.tradingAccount || 0) + eng;
+}
+window._computePortfolioSans = _computePortfolioSans;
 
 function _tradingCapitalBase() {
   try {
@@ -666,6 +677,27 @@ window._ensureTaxRegions = _ensureTaxRegions;
 
 function AP()   { return S.pairStates[S.activePair]; }
 function ACFG() { return PAIRS[S.activePair]; }
+// ═══ [PAIRES VIVANTES · 10/10/2026] UNE PAIRE RETIRÉE NE COMPTE PLUS DANS LE MARCHÉ NI DANS LA DÉCISION (go Rams 10/10 20:01 : « Go pour tout ») ═══
+// Retirer une paire (11 removePair) la sort de PAIRS mais GARDE son pairState dans chaque portefeuille — sa mémoire : trades, P&L, marché LMSR ; la ré-ajouter
+// la retrouve. La règle écrite le 11/08 (« toutes les boucles Object.keys(PAIRS) l'ignorent naturellement ») oubliait les boucles sur S.pairStates : 128 dans le
+// code. Backup du 10/10 18:38 : GBP/USDT, retirée le 22/09, garde en EV une variation figée à +21,53 ; elle entrait dans la moyenne du régime de marché (3,38
+// avec elle : « bull » ; 1,87 sans elle : « calm »), comptait pour un emplacement dans le partage de la mise (13 au lieu de 12), et ses cycles tournaient encore
+// (sonde navigateur, 1 h : 50 passages en AA avec l'analyse complète des voix, 30 en EV).
+// Deux lectures, à ne plus confondre :
+//  · le MARCHÉ et la DÉCISION — régime, cycles, emplacements, mises, humeur, chiffres du moment — lisent les paires VIVANTES : _livePairs / _livePairEntries /
+//    _livePairStates ;
+//  · l'HISTOIRE du portefeuille — totaux de trades, P&L réalisé, rapports, exports, sauvegarde, remises à zéro — lit S.pairStates en entier : une paire
+//    retirée a existé, ses trades comptent.
+// Vivante = présente dans PAIRS (elle a un réglage) ET dans le portefeuille du mode en cours de traitement. L'ordre est celui de S.pairStates, comme avant.
+// banc-paires-vivantes.js tient l'inventaire de TOUTES les boucles sur pairStates du code : une boucle nouvelle doit y être classée, sinon le banc bloque.
+function _livePairs() {
+  const ps = (typeof S !== 'undefined' && S && S.pairStates) || {};
+  return Object.keys(ps).filter(p => !!PAIRS[p] && !!ps[p]);
+}
+function _livePairEntries() { const ps = (typeof S !== 'undefined' && S && S.pairStates) || {}; return _livePairs().map(p => [p, ps[p]]); }
+function _livePairStates()  { const ps = (typeof S !== 'undefined' && S && S.pairStates) || {}; return _livePairs().map(p => ps[p]); }
+window._livePairs = _livePairs; window._livePairEntries = _livePairEntries; window._livePairStates = _livePairStates;
+
 // v7.0: MARKET REGIME DETECTION — détecte le contexte actuel du marché
 // Classifie en: 'bull' (hausse forte), 'bear' (baisse forte), 'volatile' (agité), 'calm' (stable)
 function detectMarketRegime() {
@@ -673,7 +705,7 @@ function detectMarketRegime() {
   // Mode Démo (v51, fichier 05) : posé par enterDemoMode, retiré par exitDemoMode.
   if (S._regimeOverride) return S._regimeOverride;
   if(!S.pairStates) return 'calm';
-  const pairs = Object.values(S.pairStates);
+  const pairs = _livePairStates();   // [PAIRES VIVANTES · 10/10/2026] avant : Object.values(S.pairStates), paire retirée comprise (sa variation figée entrait dans la moyenne)
   if(pairs.length === 0) return 'calm';
 
   // Agrégats cross-paires
@@ -929,7 +961,7 @@ async function fetchBinancePrices() {
       cfg.minP = realPrice * 0.65;
       cfg.maxP = realPrice * 1.55;
       const dailyRange = realPrice * Math.abs(change24h) / 100;
-      cfg.vol = Math.max(cfg.vol * 0.3, dailyRange / 9.8);
+      if (dailyRange > 0) cfg.vol = Math.max(((cfg.vol > 0 && isFinite(cfg.vol)) ? cfg.vol : 0) * 0.3, dailyRange / 9.8);   // [MODES SÉPARÉS · 10/10/2026] même garde que pour CoinGecko (plus bas) : ici une variation illisible (NaN) rendait cfg.vol NaN
       updated++;
     });
 
@@ -1032,7 +1064,7 @@ function openRealCandlesModal() {
   // normalement quand un nouveau prix réel arrive.
   try {
     if (S && S.pairStates) {
-      Object.keys(S.pairStates).forEach(pair => {
+      _livePairs().forEach(pair => {   // [PAIRES VIVANTES · 10/10/2026] pas de bougie « réelle » fabriquée avec le prix figé d'une paire retirée
         const ps = S.pairStates[pair];
         if (ps && isFinite(ps.price) && ps.price > 0) {
           _aggregateRealPrice(pair, ps.price);
@@ -3289,6 +3321,16 @@ const EVENT_KINDS = [
   ['bunker',           /Bunker|SOS|Mode d\u00e9mo|sauvegarde suspendue/i]
 ];
 const EVENT_KEEP = 400, EVENT_SAVE = 250, EVENT_DAYS = 7;
+// [MODES SÉPARÉS · 10/10/2026] La ligne du journal porte le mode qui l'a écrite (m : 'sim' / 'paperReal' / 'real') quand ce mode n'est pas à l'écran, ou quand
+// elle parle d'un trade (ouverture, fermeture, sortie, refus, argent, bunker) : 08 renderChain l'affiche avec son nom (AA / EV / RE) dès que ce mode n'est pas
+// celui de l'écran. Avant, rien ne distinguait « Fermé PEPE/USDT … » de l'école de la même ligne de l'EV (sonde du 10/10 : 17 lignes de l'AA en une heure sous
+// l'écran EV, aucune marquée). desc n'est PAS retouché : les natures ci-dessus se lisent sur son début. La poche « tendance longue » (15) n'est pas marquée
+// par sa nature : elle dit son nom et bat sur sa propre minuterie, hors de tout mode. Ni « bunker » (SOS, mode démo, sauvegarde suspendue : l'app entière).
+const EVENT_MODE_KINDS = { sortie_trailing: 1, sortie_zombie: 1, sortie_consensus: 1, sortie_tp: 1, sortie_sl: 1, fermeture: 1, veto: 1, ouverture: 1, argent: 1 };
+function _chainStamp(entry) {
+  if (!entry || typeof entry !== 'object' || entry.m) return;
+  if (_modeBehind() || EVENT_MODE_KINDS[_eventKind(entry)]) entry.m = _walletKey(S.tradingMode);
+}
 function _eventKind(entry) {
   const d = String((entry && entry.desc) || '');
   for (let i = 0; i < EVENT_KINDS.length; i++) if (EVENT_KINDS[i][1].test(d)) return EVENT_KINDS[i][0];
@@ -3302,13 +3344,18 @@ function _eventNote(entry) {
   if (!S.eventStats) S.eventStats = {};
   const st = S.eventStats[day] || (S.eventStats[day] = {});
   st[kind] = (st[kind] || 0) + 1;
+  // [MODES SÉPARÉS · 10/10/2026] le même compte, PAR MODE, pour les lignes marquées (st._m[mode][nature]) : l'écran « Ce que le système a appris » (11b) montre
+  // les ouvertures et les sorties du mode AFFICHÉ — depuis que l'école trade derrière l'EV (10/10), le total seul mêlait ses trades à ceux de l'EV.
+  if (entry && entry.m) { const bm = st._m || (st._m = {}); const sm = bm[entry.m] || (bm[entry.m] = {}); sm[kind] = (sm[kind] || 0) + 1; }
   const days = Object.keys(S.eventStats).sort();
   while (days.length > EVENT_DAYS) delete S.eventStats[days.shift()];
   // [21/09/2026] les vetos sont COMPTÉS mais pas gardés dans l'anneau : backup 21/09, 226 des 250 lignes gardées
   // étaient le même veto (SOL long à RSI 99, répété à chaque cycle) — ils chassaient les vrais événements.
   if (kind === 'veto') return kind;
   if (!Array.isArray(S.eventLog)) S.eventLog = [];
-  S.eventLog.push({ t: Date.now(), k: kind, i: (entry && entry.icon) || '', d: String((entry && entry.desc) || '').slice(0, 160) });
+  const _ev = { t: Date.now(), k: kind, i: (entry && entry.icon) || '', d: String((entry && entry.desc) || '').slice(0, 160) };
+  if (entry && entry.m) _ev.m = entry.m;   // [MODES SÉPARÉS · 10/10/2026] le mode de la ligne, gardé dans le journal durable (lecture d'un backup : quel mode a fait quoi)
+  S.eventLog.push(_ev);
   if (S.eventLog.length > EVENT_KEEP) S.eventLog.splice(0, S.eventLog.length - EVENT_KEEP);
   return kind;
 }
@@ -3321,6 +3368,7 @@ function _installChainTap() {
     Object.defineProperty(arr, '_tapped', { value: true, enumerable: false, writable: true, configurable: true });
     Object.defineProperty(arr, 'push', {
       value: function () {
+        for (let i = 0; i < arguments.length; i++) { try { _chainStamp(arguments[i]); } catch (e) {} }   // [MODES SÉPARÉS · 10/10/2026] avant le rangement : la ligne gardée porte son mode
         const n = Array.prototype.push.apply(this, arguments);
         for (let i = 0; i < arguments.length; i++) { try { _eventNote(arguments[i]); } catch (e) {} }
         return n;
@@ -3332,11 +3380,11 @@ function _installChainTap() {
 // Lecture : { jours: {…}, total: {…}, dernier: [n dernières lignes gardées] }
 function _eventSummary(n) {
   const out = { jours: (S && S.eventStats) || {}, total: {}, dernier: [] };
-  Object.keys(out.jours).forEach(d => Object.keys(out.jours[d]).forEach(k => { out.total[k] = (out.total[k] || 0) + out.jours[d][k]; }));
+  Object.keys(out.jours).forEach(d => Object.keys(out.jours[d]).forEach(k => { if (k === '_m') return; out.total[k] = (out.total[k] || 0) + out.jours[d][k]; }));   // [MODES SÉPARÉS · 10/10/2026] _m = le détail par mode, pas une nature
   out.dernier = ((S && S.eventLog) || []).slice(-(n || 20));
   return out;
 }
-window._eventKind = _eventKind; window._eventNote = _eventNote; window._installChainTap = _installChainTap; window._eventSummary = _eventSummary;
+window._eventKind = _eventKind; window._eventNote = _eventNote; window._installChainTap = _installChainTap; window._eventSummary = _eventSummary; window._chainStamp = _chainStamp;
 
 // ═══ [FLUX BINANCE · 17/09/2026] DONNÉES RÉELLES POUR WHALE / FLOW / VOLUME (A14, « go whale et binance » Rams) ═══
 // Jusqu'ici les scouts whale_v1 et flow_v1 lisaient des « gros corps » et des « bougies vertes » — des proxys de prix,
@@ -3935,7 +3983,11 @@ async function fetchLivePrices(force = false) {
 
       // vol = typical tick-move ≈ daily_range / sqrt(96) tick_periods
       const dailyRange  = realPrice * Math.abs(change24h) / 100;
-      cfg.vol           = Math.max(cfg.vol * 0.3, dailyRange / 9.8);
+      // [MODES SÉPARÉS · 10/10/2026] variation 24 h exactement nulle ou absente (02 _cgQuote rend alors 0) : l'amplitude d'avant est GARDÉE. Avant, chaque
+      // réception la multipliait par 0,3 (toutes les 15 s) : le hasard de la paire s'éteignait en quelques minutes dans l'école, puis son volume devenait
+      // « x / 0 » (piège de la première sonde du 10/10). Dès qu'une vraie variation revient, la formule reprend, inchangée — et une amplitude déjà éteinte ou
+      // illisible en mémoire (0, NaN : état hérité d'avant) est réparée par cette même réception (relecture adverse du 10/10 soir).
+      if (dailyRange > 0) cfg.vol = Math.max(((cfg.vol > 0 && isFinite(cfg.vol)) ? cfg.vol : 0) * 0.3, dailyRange / 9.8);
 
       updated++;
     });
@@ -4058,6 +4110,22 @@ function _schoolBehind() {
   } catch (e) { return false; }
 }
 window._schoolBgPs = _schoolBgPs; window._schoolBgAnchor = _schoolBgAnchor; window._schoolBehind = _schoolBehind;
+
+// ═══ [MODES SÉPARÉS · 10/10/2026] QUEL MODE AGIT, QUEL MODE EST À L'ÉCRAN (go Rams 10/10 20:01 : « Go pour tout ») ═══
+// S.tradingMode dit quel portefeuille les accesseurs servent : le mode à l'écran — sauf pendant une BASCULE DE CONTEXTE, où l'on traite un mode en play derrière
+// l'écran. Trois bascules, toutes synchrones (rien n'attend au milieu) : le multiplexeur du battement (08 simTick), le garde-fou de perte max (10f
+// _lossCapSweep) et l'exécution d'une proposition de bot dans son mode (04 executePending). Chacune pose window._bgResolve = true et garde le mode de l'écran
+// dans window._bgFrom le temps de la bascule.
+//  · _modeBehind()  : ce qui se passe maintenant est-il fait par un mode qui n'est PAS à l'écran ?
+//  · _screenMode()  : le mode à l'écran, d'où que l'on soit
+//  · _modeLab(mode) : AA / EV / RE
+// Sert à trois choses : (1) ce qu'un mode fait derrière l'écran est DIT avec son nom (journal : marque m sur la ligne, 02 _chainStamp, affichée par 08
+// renderChain ; toasts : 08 showToast) ; (2) les effets d'écran d'une fermeture (alertes, badges, jalons, rendus) ne partent que pour le mode affiché (02
+// closePosition) ; (3) l'anti-revenge tient un état par mode (06) et ne pose son refroidissement à l'écran que pour le mode affiché.
+function _modeBehind() { try { return window._bgResolve === true; } catch (e) { return false; } }
+function _screenMode() { try { const f = window._bgFrom; return (window._bgResolve === true && (f === 'sim' || f === 'paperReal' || f === 'real')) ? f : _walletKey(S.tradingMode); } catch (e) { return 'sim'; } }
+function _modeLab(mode) { const k = _walletKey(mode); return k === 'paperReal' ? 'EV' : (k === 'real' ? 'RE' : 'AA'); }
+window._modeBehind = _modeBehind; window._screenMode = _screenMode; window._modeLab = _modeLab;
 
 // v7.0: Watchdog — si pas de fetch réussi depuis 45s, force un retry
 function _priceWatchdog() {
@@ -4362,7 +4430,7 @@ function ensureLeverageCoverForTrade(neededStake, pair) {
 // + Levier conditionnel selon conviction
 // ============================================================
 function estimateStakes() {
-  const pairs   = Object.keys(S.pairStates);
+  const pairs   = _livePairs();   // [PAIRES VIVANTES · 10/10/2026] avant : Object.keys(S.pairStates) — la conviction LMSR d'une paire retirée entrait dans le total qui partage le budget
   const trading = Math.max(10, S.tradingAccount);  // v6.8: min $10 pour démarrer
   // REGLE ABSOLUE : le bot n\'utilise JAMAIS cashAccount
 
@@ -4652,7 +4720,9 @@ function recordFees(pair, notionalUsdt, pnlUsd, tradeType, reservedAmount, pos, 
   if(S.fees.feeLog.length > 50) S.fees.feeLog.pop();
 
   // Le portfolio reflète la réalité comptable (frais payés, impôt mis de côté au dépôt fiscal) :
-  S.portfolio = _computePortfolio();
+  // [PORTEFEUILLE JUSTE · 10/10/2026] recordFees est appelé par closePosition APRÈS la restitution de la mise, la position encore dans S.openPositions :
+  // elle n'est plus comptée une seconde fois.
+  S.portfolio = pos ? _computePortfolioSans(pos) : _computePortfolio();
 
   // Auto-persist to IndexedDB
   // [GO FISCAL · 07/10/2026] + mode, régime, gain légal en € : la base IndexedDB garde CHAQUE fermeture sans limite (le registre en garde 1 500 en RE)
@@ -4789,21 +4859,26 @@ function detectFiscalRegime() {
 // Cumul annuel des plus-values nettes réalisées (pour appliquer la franchise).
 // Stocké dans S.fiscalYear = { year, netRealisedEur }.
 function _fiscalYearKey() { return new Date().getFullYear(); }
-function getAnnualNetRealised() {
+// [MODES SÉPARÉS · 10/10/2026] Le cumul lu par l'estimateur est celui DU MODE en cours de traitement (S.fiscalYear.byMode). Avant : un seul cumul, nourri par
+// les fermetures des trois modes — l'école comprise (sonde du 10/10 : +0,34 puis −0,89 après des fermetures de l'AA seule) — et lu par la décision de l'EV.
+// Aujourd'hui sans effet sur une ouverture : l'estimateur ne compte l'impôt qu'au-dessus de la franchise (10 000), très loin des deux lectures. netRealisedEur
+// reste le total des modes (aucun lecteur). Toujours non sauvegardé, comme avant : il repart de zéro à chaque relance (le registre légal, lui, est dans 16).
+function _fiscalYearBox() {
   const y = _fiscalYearKey();
-  if (!S.fiscalYear || S.fiscalYear.year !== y) {
-    S.fiscalYear = { year: y, netRealisedEur: 0 };
-  }
-  return S.fiscalYear.netRealisedEur || 0;
+  if (!S.fiscalYear || S.fiscalYear.year !== y) S.fiscalYear = { year: y, netRealisedEur: 0, byMode: {} };
+  if (!S.fiscalYear.byMode || typeof S.fiscalYear.byMode !== 'object') S.fiscalYear.byMode = {};
+  return S.fiscalYear;
+}
+function getAnnualNetRealised() {
+  const fy = _fiscalYearBox();
+  return Number(fy.byMode[_walletKey(S.tradingMode)]) || 0;
 }
 // Ajoute un gain/perte net réalisé au cumul annuel (en USDT ≈ base de calcul).
 function addAnnualNetRealised(pnlNetUsd) {
-  const y = _fiscalYearKey();
-  if (!S.fiscalYear || S.fiscalYear.year !== y) {
-    S.fiscalYear = { year: y, netRealisedEur: 0 };
-  }
-  S.fiscalYear.netRealisedEur += (pnlNetUsd || 0);
-  return S.fiscalYear.netRealisedEur;
+  const fy = _fiscalYearBox(), k = _walletKey(S.tradingMode), v = (pnlNetUsd || 0);
+  fy.netRealisedEur += v;
+  fy.byMode[k] = (Number(fy.byMode[k]) || 0) + v;
+  return fy.byMode[k];
 }
 
 // Estime le COÛT GARANTI d'un aller-retour pour un stake donné (hors taxe).
@@ -6187,9 +6262,13 @@ function openPosition(pair, side, opts) {
       showToast('\u26A0 ' + pair + ' ' + side.toUpperCase() + ' ouvert ' + _warn.join(' · '), 3500, 'warn');
     } catch(e){ try{window._decErr&&window._decErr(e)}catch(_e){} }
   }
-  updatePairBtnStates();
-  renderPositions();
-  if(S.currentPage===4) renderChain();
+  // [MODES SÉPARÉS · 10/10/2026] rendus immédiats pour le mode affiché seulement (voir closePosition, plus bas) : une ouverture faite derrière l'écran
+  // (04 executePending dans son mode, bot du multiplexeur) ne peint plus ses positions sur l'écran d'un autre mode.
+  if (!((typeof _modeBehind === 'function') && _modeBehind())) {
+    updatePairBtnStates();
+    renderPositions();
+    if(S.currentPage===4) renderChain();
+  }
   return S.openPositions.find(p => p.id === id) || null;
 }
 
@@ -6241,12 +6320,16 @@ function closePosition(id, botClose = false) {
   // ANTI-REVENGE : à chaque fermeture, on signale le résultat au système qui décide
   // de bloquer le bot après une grosse perte ou une série de pertes (cooldown).
   // Branché ici pour que la protection s'active réellement (avant, jamais appelée).
-  // [ÉCOLE VIVANTE · 10/10/2026] SAUF une fermeture de l'AA quand elle tourne derrière un autre écran (_aaBehind). L'anti-revenge est UN SEUL état pour les trois
-  // modes (06 _rvActive) : armé, il refuse 15 min toute ouverture des bots en EV et en RE (09c) et pose son écran de refroidissement, son alerte sonore et le
-  // blocage des boutons devant l'utilisateur. Tant que le marché de l'AA était figé derrière l'EV, ses fermetures valaient 0 et ne l'armaient jamais ; vivant, une
-  // perte d'école de 1 % l'aurait armé contre l'EV (relecture adverse du 10/10 : 2 déclenchements en 6 h, 15 min de blocage chacun). L'AA à l'écran : inchangé.
-  const _aaBehind = (typeof _schoolBehind === 'function') && _schoolBehind();
-  if (!_aaBehind && typeof checkAntiRevenge === 'function') {
+  // [ÉCOLE VIVANTE · 10/10/2026, matin] l'anti-revenge était UN SEUL état pour les trois modes : armé, il refusait 15 min toute ouverture des bots en EV et en
+  // RE (09c). Une fermeture de l'AA derrière un autre écran ne lui était donc plus signalée (une perte d'école de 1 % l'aurait armé contre l'EV : relecture
+  // adverse, 2 déclenchements en 6 h) — mais l'AA À L'ÉCRAN l'armait toujours contre l'EV.
+  // [MODES SÉPARÉS · 10/10/2026] L'anti-revenge tient maintenant UN ÉTAT PAR MODE (06) : chaque fermeture le signale au sien, que le mode soit à l'écran ou
+  // derrière — une perte de l'école n'arrête plus que l'école (sonde du 10/10, AA à l'écran : sa perte de 2,7 % refusait 15 min toute ouverture en EV et en RE).
+  // L'exception du matin (pas de signal pour l'AA derrière l'écran) n'a donc plus lieu d'être : derrière ou à l'écran, un mode suit la même règle.
+  // Les effets d'ÉCRAN, eux (alertes, badges, jalons, rendus — plus bas), ne partent que pour le mode affiché : _behind est vrai pour TOUT mode traité derrière
+  // l'écran (avant : seulement l'AA).
+  const _behind = ((typeof _modeBehind === 'function') && _modeBehind()) || ((typeof _schoolBehind === 'function') && _schoolBehind());
+  if (typeof checkAntiRevenge === 'function') {
     try { checkAntiRevenge(realisedUsd, realisedPct, pos.pair); } catch(e) {}
   }
 
@@ -6517,7 +6600,7 @@ function closePosition(id, botClose = false) {
       if (S.chainLog.length > 100) S.chainLog.splice(0, S.chainLog.length - 100);
     }
 
-    S.portfolio      = _computePortfolio();   // [23/08] canonique
+    S.portfolio      = _computePortfolioSans(pos);   // [23/08] canonique · [PORTEFEUILLE JUSTE · 10/10/2026] sans la position qu'on ferme (mise déjà rendue, 02 _computePortfolioSans)
 
     // ═══ v7.12 · PROTECTION P2 · Appliquer le remboursement dette orpheline ═══
     if (pos._p2RepayPending && pos._p2RepayPending > 0) {
@@ -6526,7 +6609,7 @@ function closePosition(id, botClose = false) {
         S.tradingAccount   = Math.max(0, (S.tradingAccount || 0) - repay);
         S.leverageBorrowed = Math.max(0, (S.leverageBorrowed || 0) - repay);
         S._autoLevBorrowed = Math.max(0, (S._autoLevBorrowed || 0) - repay);
-        S.portfolio        = _computePortfolio();   // [23/08] canonique
+        S.portfolio        = _computePortfolioSans(pos);   // [23/08] canonique · [PORTEFEUILLE JUSTE · 10/10/2026]
         S.chainLog.push({
           icon: '↩',
           desc: `Auto-remboursement dette orpheline · $${repay.toFixed(2)} (reste $${(S._autoLevBorrowed||0).toFixed(2)})`,
@@ -6564,8 +6647,8 @@ function closePosition(id, botClose = false) {
       // v23 · #5 Vérifier alertes après chaque trade
       // [ÉCOLE VIVANTE · 10/10/2026] pas pour l'AA derrière un autre écran : ces alertes et ces badges s'affichent devant l'utilisateur et leurs drapeaux
       // (S.pnlAlerts, une fois par session) sont communs aux modes — l'écran les vérifie lui-même pour le mode affiché (renderHome)
-      try { if(!_aaBehind && typeof checkPnlAlerts === 'function') checkPnlAlerts(); } catch(e) {}
-      try { if(!_aaBehind && typeof checkBadges === 'function') checkBadges(); } catch(e) {}
+      try { if(!_behind && typeof checkPnlAlerts === 'function') checkPnlAlerts(); } catch(e) {}   // [MODES SÉPARÉS · 10/10/2026] tout mode derrière l'écran, plus seulement l'AA
+      try { if(!_behind && typeof checkBadges === 'function') checkBadges(); } catch(e) {}
       if(typeof closeDecisionCascade  === 'function') closeDecisionCascade(pos.pair, pos.side, pos.currentPrice || pos.entryPrice, realisedUsd, realisedPct);
       if(typeof runBotFleet           === 'function') runBotFleet('post_trade', { pnlUsd: realisedUsd, sizerMult: pos._sizerMult });
       // [SPÉCIALISATION · 15/08/2026] les trois juges notent les réponses du jury
@@ -6592,7 +6675,7 @@ function closePosition(id, botClose = false) {
   try { if (typeof _attributionRecord === 'function') _attributionRecord(pos, realisedPct); } catch(e) {}
 
   S.openPositions = S.openPositions.filter(p=>p.id!==id);
-  if (typeof _updateCloseAllBadge === 'function') _updateCloseAllBadge();
+  if (!_behind && typeof _updateCloseAllBadge === 'function') _updateCloseAllBadge();   // [MODES SÉPARÉS · 10/10/2026] le badge ⊗ compte les positions du mode AFFICHÉ
   const pnlStr  = (realisedPct>=0?'+':'')+realisedPct.toFixed(2)+'%';
   const usdtStr = (realisedUsd>=0?'+':'−')+'$'+Math.abs(realisedUsd).toFixed(1);
   if(S.chainLog.length > 100) S.chainLog.splice(0, S.chainLog.length - 100);
@@ -6607,7 +6690,7 @@ function closePosition(id, botClose = false) {
   // ═══ v5.1 — Milestones & Particles ═══
   // [ÉCOLE VIVANTE · 10/10/2026] rien de tout cela pour une fermeture de l'AA derrière un autre écran : un jalon « VICTOIRE » ou « Perte » en plein écran EV
   // pour un trade d'école serait faux. Le toast « Fermé … » ci-dessus et la ligne du journal restent, comme avant.
-  if (_aaBehind) { /* l'AA derrière un autre écran : ni jalon ni particules */ }
+  if (_behind) { /* un mode derrière l'écran : ni jalon ni particules ([MODES SÉPARÉS · 10/10/2026] l'EV derrière l'AA comme l'AA derrière l'EV) */ }
   else if(realisedPct >= 5.0) {
     // Big win: 🎉 celebration
     emitVictoryParticles(55);
@@ -6621,9 +6704,13 @@ function closePosition(id, botClose = false) {
     emitLossParticles(15);
     showMilestone('⚠️', 'Perte '+pos.pair+' '+pnlStr+' · '+usdtStr, true, 3000);
   }
-  updatePairBtnStates();
-  renderPositions();
-  if(S.currentPage===4) renderChain();
+  // [MODES SÉPARÉS · 10/10/2026] les rendus immédiats lisent S.openPositions et S.pairStates : pendant une bascule de contexte ce sont ceux du mode derrière
+  // l'écran — ils peignaient un instant SES positions sur l'écran d'un autre. Le battement repeint l'écran du mode affiché (2 s au plus).
+  if (!_behind) {
+    updatePairBtnStates();
+    renderPositions();
+    if(S.currentPage===4) renderChain();
+  }
 }
 
 function quickOpen(side) {

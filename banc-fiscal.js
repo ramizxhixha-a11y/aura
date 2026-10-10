@@ -153,6 +153,7 @@ const run = (sb, code) => vm.runInContext(code, sb);
     const sb = makeCtx('paperReal');
     run(sb, 'var PAIRS = { "BTC/USDT": { sym: "BTC" } }; var __saved = []; function saveFeeRecord(r) { __saved.push(r); }' +
             'function _computePortfolio() { return (S.walletStore.paperReal.cashAccount || 0) + S.walletStore.paperReal.tradingAccount; }' +
+            'function _computePortfolioSans(pos) { return _computePortfolio(); }' +   // [PORTEFEUILLE JUSTE · 10/10/2026] recordFees écrit le portefeuille sans la position qu'on ferme (02) ; ici aucune position ouverte dans le portefeuille d'essai : même valeur
             'var __addNet = []; function addAnnualNetRealised(x) { __addNet.push(x); }' +
             'S.fees = { totalTradingFees: 0, totalSlippage: 0, totalGross: 0, totalTaxProvision: 0, totalPnlGross: 0, totalPnlNet: 0, tradeCount: 0, feeReserveAccount: 0, feeLog: [], byPair: {} };' +
             'S.antiNegReserve = 0; S.antiNegReserveLog = [];');
@@ -197,10 +198,13 @@ const run = (sb, code) => vm.runInContext(code, sb);
     t('_computeMarginalTax retirée de tout le code (plus aucun lecteur)', !fs.readdirSync(path.join(ROOT, 'js')).some(f => /\.js$/.test(f) && fs.readFileSync(path.join(ROOT, 'js', f), 'utf8').split('\n').some(l => !/^\s*\/\//.test(l) && /_computeMarginalTax\s*\(/.test(l))));
   }
 
-  console.log('▶ D. La décision n\'est pas touchée (texte identique au commit 97d1095)');
+  console.log('▶ D. La décision n\'est pas touchée (texte identique au commit 97d1095 ; cumul par mode du 10/10 : empreintes du 10/10)');
   {
-    const H = { detectFiscalRegime: '5fc1bef8068f4ba1', fiscalBotAdvicePerPair: '65e61f058d61bb1e', getAnnualNetRealised: '39e449646ee35923',
-                addAnnualNetRealised: 'f3a62e03c4119cee', _fiscalYearKey: '97c485441b02837d', estimateTradeReserve: '401d7c60b6941022',
+    // [MODES SÉPARÉS · 10/10/2026] getAnnualNetRealised / addAnnualNetRealised / _fiscalYearKey (+ _fiscalYearBox, prise avec elle par grab) : cumul de l'estimateur
+    // tenu PAR MODE (S.fiscalYear.byMode) — changement voulu, éprouvé par banc-modes-separes S6 ; empreintes reprises sur le texte du 10/10. La décision
+    // (detectFiscalRegime, fiscalBotAdvicePerPair) et les réserves restent au texte du commit 97d1095.
+    const H = { detectFiscalRegime: '5fc1bef8068f4ba1', fiscalBotAdvicePerPair: '65e61f058d61bb1e', getAnnualNetRealised: '10023f96e8e75ea8',
+                addAnnualNetRealised: 'e3c4d436f976a474', _fiscalYearKey: 'df0bf516145a1121', estimateTradeReserve: '401d7c60b6941022',
                 releaseTradeReserve: '5b861a59ead70c85', holdTradeReserve: '44b0edc14fe506b3', validateAntiNegative: '2aa7c47155f4d4e3' };
     const grab = (name) => { const i = S02.indexOf('function ' + name + '('); const j = S02.indexOf('\n}\n', i); return S02.slice(i, j + 2); };
     Object.keys(H).forEach(n => t(n + ' (02) inchangée', crypto.createHash('sha256').update(grab(n)).digest('hex').slice(0, 16) === H[n]));

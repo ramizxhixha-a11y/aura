@@ -479,6 +479,12 @@ function renderChain() {
     '⛓':'var(--t3)','🏛':'var(--t2)','🔑':'var(--t2)',
   };
 
+  // [MODES SÉPARÉS · 10/10/2026] une ligne écrite par un AUTRE mode que celui de l'écran dit son nom (marque m posée par 02 _chainStamp) : AA / EV / RE, à la
+  // couleur du mode. Les lignes du mode affiché et celles qui ne sont d'aucun mode restent comme avant.
+  const _scrM = (typeof _walletKey === 'function') ? _walletKey(S.tradingMode) : S.tradingMode;
+  const _mCol = { sim: 'var(--ice)', paperReal: 'var(--up)', real: 'var(--down)' };
+  const _mChip = tx => (tx.m && tx.m !== _scrM && typeof _modeLab === 'function')
+    ? `<span class="chain-mode" style="display:inline-block;font-size:9px;font-weight:700;letter-spacing:.04em;line-height:14px;padding:0 5px;margin-right:6px;border-radius:5px;border:1px solid ${_mCol[tx.m] || 'var(--t3)'};color:${_mCol[tx.m] || 'var(--t3)'};">${_modeLab(tx.m)}</span>` : '';
   cl.innerHTML = visible.map(tx => {
     const col = iconColor[tx.icon] || 'var(--t2)';
     const shortHash = tx.hash ? tx.hash.slice(0,8)+'…'+tx.hash.slice(-4) : '';
@@ -486,7 +492,7 @@ function renderChain() {
     <div class="chain-row" style="border-left:2px solid ${col}22;">
       <div class="chain-icon-wrap" style="color:${col}">${tx.icon}</div>
       <div class="chain-content">
-        <div class="chain-desc" style="color:var(--t1);">${tx.desc}</div>
+        <div class="chain-desc" style="color:var(--t1);">${_mChip(tx)}${tx.desc}</div>
         <div style="display:flex;justify-content:space-between;margin-top:3px;">
           <div class="chain-hash" style="color:${col}88;">${shortHash}</div>
           <div class="chain-time">${tx.time}</div>
@@ -1147,8 +1153,8 @@ function updateIntelBanner() {
   const badgeEl = document.getElementById('intelBadge');
   if(!iconEl || !textEl || !badgeEl) return;
 
-  const pairs   = Object.keys(S.pairStates);
-  const avgProb = pairs.reduce((s,k) => s + lmsrP(S.pairStates[k]), 0) / pairs.length;
+  const pairs   = _livePairs();   // [PAIRES VIVANTES · 10/10/2026] (avant : paire retirée comprise)
+  const avgProb = pairs.reduce((s,k) => s + lmsrP(S.pairStates[k]), 0) / Math.max(1, pairs.length);
   const topAgent= [...S.agents].filter(a=>!a.isBot&&!a.isMeta).sort((a,b)=>b.fitness-a.fitness)[0];
   const totalMem= S.agents.reduce((s,a)=>s+(a.memory?a.memory.length:0),0);
   const openPos = S.openPositions.length;
@@ -1874,16 +1880,18 @@ function calcADX(candles, period=14) {
 }
 
 // ── Agrégation complète des signaux techniques ───────────────
-// Memoization cache: recompute AT signals at most every 5 ticks
-const _techCache = {};
+// [MODES SÉPARÉS · 10/10/2026] Le cache « _techCache » est RETIRÉ : il ne servait jamais. Depuis le génome de paire (17/09) la clé LUE portait l'empreinte du
+// génome et la clé ÉCRITE ne la portait pas : elles ne pouvaient pas être égales (sonde du 10/10, vraie app, 1 h : 171 738 appels, 0 relu du cache). Le
+// comportement est donc inchangé : comme avant, chaque appel recalcule. Le réparer n'était pas un détail : sa clé (nombre de bougies + prix à 2 décimales) ne
+// dit pas le contenu des bougies — PEPE vaut « 0.00 » à toute heure — et ne dit pas le mode : réparé tel quel, il aurait servi à l'EV des signaux calculés sur
+// les bougies fabriquées de l'école (la leçon de _fundCache, plus bas). Un vrai cache demande sa propre preuve (mêmes signaux, bit pour bit) : mission à part.
+// Mesure laissée pour elle : ces appels pèsent près de la moitié du calcul du battement dans la sonde (34,6 s sur 75,2 s, ≈ 48 appels par battement).
 function getTechSignals(pair) {
   const ps = S.pairStates[pair];
   if(!ps || !ps.candles || ps.candles.length < 5) return null;
   // [GÉNOME DE PAIRE · 17/09/2026] les périodes et les poids viennent du génome DE LA PAIRE (03) — plus des constantes
-  // identiques pour BTC et PEPE. Le cache est invalidé quand le génome change (son empreinte entre dans la clé).
+  // identiques pour BTC et PEPE.
   const GP = (typeof _pairGenomeOf === 'function') ? _pairGenomeOf(pair) : { rsi:14, stoch:14, adx:14, emaFast:9, emaSlow:21, emaLong:50, smaFast:10, smaSlow:20, smaLong:50, wTrend:1.2, wMomentum:1.3, wVolatility:1 };
-  const ckey = pair + '_' + ps.candles.length + '_' + ps.price.toFixed(2) + '_' + GP.rsi + '.' + GP.emaFast + '.' + GP.emaSlow + '.' + GP.smaFast + '.' + GP.smaSlow + '.' + GP.adx + '.' + GP.stoch + '.' + GP.wTrend + '.' + GP.wMomentum + '.' + GP.wVolatility;
-  if(_techCache[pair] && _techCache[pair].key === ckey) return _techCache[pair].val;
   const candles = ps.candles;
   const closes  = _closes(candles);
   const highs   = _highs(candles);
@@ -2048,7 +2056,6 @@ function getTechSignals(pair) {
                 rsi:rsiData, fib, ichi, stddev, adx };
 
   const result = { signals, atScore, raw };
-  _techCache[pair] = { key: pair + '_' + ps.candles.length + '_' + ps.price.toFixed(2), val: result };
   return result;
 }
 
@@ -2488,6 +2495,14 @@ function showToast(msg, duration = 2800, level = 'info') {
     S._silencedCount = (S._silencedCount || 0) + 1;
     return;
   }
+  // [MODES SÉPARÉS · 10/10/2026] un message produit par un mode qui n'est PAS à l'écran (02 _modeBehind) dit son nom, après son icône : « ⛔ [AA] Perte max · … ».
+  // Avant, rien ne le distinguait d'un message du mode affiché (sonde du 10/10 : « ⚠ ETH/USDT SHORT ouvert … » de l'EV sur l'écran de l'AA).
+  // L'ÉCOLE derrière un autre écran ne montre que le critique : ses sorties de routine (trailing, anti-zombie, perte max d'un trade d'argent fictif) restent au
+  // journal, marquées AA, sans passer devant l'écran de l'EV ou du RE. EV et RE derrière l'écran : tout ce qui se serait affiché s'affiche, étiqueté.
+  if (typeof _modeBehind === 'function' && _modeBehind()) {
+    if (S.tradingMode === 'sim' && level !== 'critical') { S._silencedCount = (S._silencedCount || 0) + 1; return; }
+    msg = _toastModeTag(msg, S.tradingMode);
+  }
   // Dedupe: skip if same message shown in last 1.5s
   const now = Date.now();
   if(window._lastToastMsg === msg && (now - (window._lastToastTs||0)) < 1500) return;
@@ -2495,6 +2510,13 @@ function showToast(msg, duration = 2800, level = 'info') {
   window._lastToastTs  = now;
   _showToast_orig(msg, duration);
 }
+// « ⛔ Perte max · … » → « ⛔ [AA] Perte max · … » : le nom du mode après l'icône de tête (celle que _showToast_orig détache), sinon en tête
+function _toastModeTag(msg, mode) {
+  const s = String(msg), lab = '[' + ((typeof _modeLab === 'function') ? _modeLab(mode) : mode) + '] ';
+  const m = s.match(/^(\p{Emoji_Presentation}|\p{Extended_Pictographic})\uFE0F?\s*/u);
+  return m ? (m[0].trimEnd() + ' ' + lab + s.slice(m[0].length)) : (lab + s);
+}
+window._toastModeTag = _toastModeTag;
 function _showToast_orig(msg, duration = 2800) {
   const stack = document.getElementById('toastStack');
   if(!stack) return;
@@ -2754,7 +2776,7 @@ function _pairGenomeRollover() {
   const d = new Date(), day = d.getFullYear() + '-' + (d.getMonth() + 1) + '-' + d.getDate();
   if (!S._pairGenomeDay) S._pairGenomeDay = {};
   let n = 0;
-  Object.keys(S.pairStates || {}).some(pair => {
+  _livePairs().some(pair => {   // [PAIRES VIVANTES · 10/10/2026] une paire retirée ne prend plus le tour du jour
     const ps = S.pairStates[pair];
     if (!ps || (ps.totalTrades || 0) < 5) return false;
     if (S._pairGenomeDay[pair] === day) return false;
@@ -2774,7 +2796,7 @@ function _projectRealCandles() {
   if (!(S.tradingMode === 'paperReal' || S.tradingMode === 'real')) return 0;
   const tf = (typeof _getActiveRealTimeframe === 'function') ? _getActiveRealTimeframe() : '15m';
   let n = 0;
-  Object.entries(S.pairStates).forEach(([pair, ps]) => {
+  _livePairEntries().forEach(([pair, ps]) => {   // [PAIRES VIVANTES · 10/10/2026]
     if (!ps) return;
     const arr = (S.realCandles && S.realCandles[pair] && S.realCandles[pair][tf]) || [];
     const stale = (typeof _realCandlesStale === 'function') ? _realCandlesStale(pair, tf) : (arr.length < 30);
@@ -2824,6 +2846,9 @@ function _simCandleStep() {
     // chaque passage — GBP/USDT depuis le 22/09 : le battement s'arrêtait net un tick sur trois quand l'AA était à l'écran (exception avalée par le minuteur de 01,
     // invisible au Guardian), et la paire suivante (BNB/USDT) n'a jamais eu une seule bougie d'école.
     if (!cfg || !ps || !Array.isArray(ps.candles)) return;
+    // [MODES SÉPARÉS · 10/10/2026] amplitude nulle ou illisible (cfg.vol : 0, NaN) : pas de bougie — son volume serait « x / 0 » (Infinity ou NaN) et son prix NaN.
+    // Ne change rien pour une paire réglée (banc G1 : générateur identique au bit près).
+    if (!(cfg.vol > 0) || !isFinite(cfg.vol)) return;
     const last = ps.candles[ps.candles.length - 1] || { c: ps.price };
 
     // ── Prix simule SANS retroaction des agents (30/07/2026) ──────────
@@ -2871,6 +2896,44 @@ function _simCandleStep() {
   });
 }
 window._simCandleStep = _simCandleStep;
+
+// ═══ [MODES SÉPARÉS · 10/10/2026] LA SURVEILLANCE D'UN MODE EN PLAY DERRIÈRE L'ÉCRAN (go Rams 10/10 20:01 : « Go pour tout ») ═══
+// Le multiplexeur donnait à un mode d'arrière-plan ses cycles, les sorties de ses bots sur TP / SL (10f _botExitSweep) et le garde-fou de perte max (10f
+// _lossCapSweep). Tout le reste vivait APRÈS lui dans simTick, donc pour le seul mode à l'écran :
+//  · 07 learnFromOpenPositions — malgré son nom, les sorties : trailing stop, anti-zombie, bascule de la décision commune et, pour une position MANUELLE,
+//    son TP, son SL et la liquidation à −90 % ;
+//  · 09e _manConsignesWatchdog — tes consignes (perte max, durée) sur une position manuelle ;
+//  · 02 estimateStakes — la mise réglée par paire (plancher de la mise des bots, mise d'une ouverture manuelle) ;
+//  · 02 applyFundingFees / applyLeverageBorrowFees — financement et intérêts du levier, toutes les 30 s ;
+//  · le recalcul du portefeuille.
+// Sonde du 10/10 (vraie app, backup 18:38, AA à l'écran, EV en play derrière) : position manuelle EV, SHORT ETH, TP à −1 % — le marché baisse de 3 %, le TP
+// est dépassé, la position reste ouverte 28 min (fin de la sonde) ; position manuelle EV avec une durée de 5 min : jamais fermée. Dans l'autre sens (EV à
+// l'écran, AA derrière), l'école n'avait ni trailing, ni anti-zombie, ni bascule, ni financement, et son portefeuille n'était recalculé qu'à son retour.
+// Ici : les MÊMES fonctions, aux MÊMES cadences que pour le mode affiché (sorties et mises un tick sur trois — la cadence d'un mode d'arrière-plan —,
+// consignes un tick sur douze, financement un tick sur trente), dans le contexte du mode traité (S.tradingMode : ses positions, ses prix, ses comptes). Rien
+// ici pour le mode à l'écran : il garde ses appels plus bas dans simTick, inchangés. Chaque appel a sa garde.
+// PAS repris pour un mode derrière l'écran (dit) : les ordres LMSR des agents en AA (son marché LMSR reste figé derrière l'écran : ils dépensent le
+// portefeuille de marché des sièges, commun aux modes) ; le déclencheur de rêve, les propositions de paires, le coup de pouce anti-stagnation, la courbe du
+// portefeuille et le P&L de session (calculés pour le mode affiché).
+function _bgModeWatch(tk) {
+  const g = (fn) => { try { fn(); } catch (e) { try { window._decErr && window._decErr(e); } catch (_e) {} } };
+  // le P&L latent de chaque position (pos.pnl, pos.pnlUsdt, pos.currentVal) : pour le mode à l'écran c'est le rendu des positions qui le tient à jour (02
+  // renderPositions, même formule, sur l'exposition totale) ; le garde-fou des consignes lit pos.pnlUsdt pour ta perte max
+  g(() => { (S.openPositions || []).forEach(pos => {
+    const ps = pos && S.pairStates[pos.pair];
+    if (!ps || !(Number(ps.price) > 0) || !(Number(pos.entryPrice) > 0)) return;
+    const exp = pos.totalExposure || pos.stakeUsdt;
+    pos.pnl = pos.side === 'long' ? ((ps.price - pos.entryPrice) / pos.entryPrice) * 100 : ((pos.entryPrice - ps.price) / pos.entryPrice) * 100;
+    pos.pnlUsdt = exp * (pos.pnl / 100);
+    pos.currentVal = exp + pos.pnlUsdt;
+  }); });
+  g(() => { if (typeof learnFromOpenPositions === 'function') learnFromOpenPositions(); });
+  g(() => { if (typeof estimateStakes === 'function') estimateStakes(); });
+  if (tk % 4 === 0) g(() => { if (typeof _manConsignesWatchdog === 'function') _manConsignesWatchdog(); });
+  if (tk % 30 === 0) g(() => { if (typeof applyFundingFees === 'function') applyFundingFees(); if (typeof applyLeverageBorrowFees === 'function') applyLeverageBorrowFees(); });
+  g(() => { if (typeof _computePortfolio === 'function') S.portfolio = _computePortfolio(); });
+}
+window._bgModeWatch = _bgModeWatch;
 
 function simTick() {
   // v7.2 Phase 18 · Perf monitoring (rolling window, sans impact perceptible)
@@ -3030,12 +3093,12 @@ function simTick() {
     // Le mode AFFICHE, lui, garde sa precision a la seconde.
     if (_isBg && (tick % 3 !== 0)) return;
     var _step = _isBg ? 3 : 1;
-    if (_isBg) { S.tradingMode = _m; window._bgResolve = true; }
+    if (_isBg) { window._bgFrom = _mDisp; S.tradingMode = _m; window._bgResolve = true; }   // [MODES SÉPARÉS · 10/10/2026] + le mode de l'écran, gardé pour 02 _screenMode
     // [HORIZONS APPRIS · 27/09/2026] mode réel (EV / RE) traité en arrière-plan : ses paires reçoivent le dernier prix RÉEL accepté (02 _rcLastPrice,
     // s'il a moins de 2 min) — le flux n'écrit ps.price que dans le mode à l'écran : sans ça, les entrées, stops, perte max et sorties de ce mode
     // lisaient un prix qui datait (relecture indépendante du 27/09)
     if (_isBg && (S.tradingMode === 'paperReal' || S.tradingMode === 'real') && typeof _rcLastPrice === 'function' && typeof _rcPriceAge === 'function') {
-      try { Object.keys(S.pairStates || {}).forEach(function (p) { var q = S.pairStates[p]; if (q && _rcPriceAge(p) <= 120000) { var lp = Number(_rcLastPrice(p)); if (lp > 0) q.price = lp; } }); } catch (e) {}
+      try { _livePairs().forEach(function (p) { var q = S.pairStates[p]; if (q && _rcPriceAge(p) <= 120000) { var lp = Number(_rcLastPrice(p)); if (lp > 0) q.price = lp; } }); } catch (e) {}   // [PAIRES VIVANTES · 10/10/2026]
     }
     try {
       // Protection SL/TP du mode traite (les positions EV/RE sont surveillees
@@ -3058,7 +3121,10 @@ function simTick() {
       try { if (window._pathRecord) window._pathRecord(); } catch(e) {}   // [MÉMOIRE DES CHEMINS · 22/09/2026] avant les sorties : le chemin d'abord
       try { if (window._botExitSweep) window._botExitSweep(); } catch(e) {}
       try { if (window._fleetHeartbeat) window._fleetHeartbeat(); } catch(e) { try{window._decErr&&window._decErr(e)}catch(_e){} }   // [SURVEILLANCE PERMANENTE · 27/09/2026] les bots, au rythme du mode
-      Object.entries(S.pairStates).forEach(([pair, ps]) => {
+      // [PAIRES VIVANTES · 10/10/2026] seules les paires vivantes ont un cycle. Avant, la paire retirée gardait le sien dans chaque mode : en AA l'analyse
+      // complète (signaux techniques sur ses bougies figées, vote des 23 voix, photo des votes) à chaque passage, en EV un passage arrêté à la porte, et
+      // S.cycle — l'horloge commune des caches et des périodes de grâce — avançait pour elle (sonde 1 h sur le backup du 10/10 : 50 passages en AA, 30 en EV).
+      _livePairEntries().forEach(([pair, ps]) => {
         ps.cycleTimer -= _step;
         if(ps.cycleTimer <= 0) {
           ps.cycleTimer = ps.cycleMax;
@@ -3071,6 +3137,9 @@ function simTick() {
     // blendRealPrices ; l'ancrage est posé par 02 _schoolBgAnchor au moment où le prix arrive), puis une bougie fabriquée par paire (_simCandleStep). Même cadence
     // qu'à l'écran (un tick sur trois), après les cycles comme à l'écran. S.tradingMode vaut 'sim' ici : S.pairStates est celui de l'AA, rien d'autre n'est écrit.
     // Deux gardes séparées : un état abîmé qui fait échouer le mélange n'empêche pas la bougie.
+    // [MODES SÉPARÉS · 10/10/2026] un mode en play derrière l'écran reçoit la surveillance que le mode affiché reçoit plus bas (sorties, consignes, financement,
+    // portefeuille) : _bgModeWatch, ci-dessus. Après ses cycles et avant sa bougie, dans l'ordre du mode à l'écran.
+    if (_isBg) { try { _bgModeWatch(tick); } catch(e) { try{window._decErr&&window._decErr(e)}catch(_e){} } }
     if (_isBg && S.tradingMode === 'sim') {
       try { blendRealPrices(); } catch(e) { try{window._decErr&&window._decErr(e)}catch(_e){} }
       try { _simCandleStep(); } catch(e) { try{window._decErr&&window._decErr(e)}catch(_e){} }
@@ -3187,7 +3256,7 @@ function simTick() {
   _phEnd('learnFromOpenPositions + estimateStakes');
   // ── DREAM TRIGGER (Feature #2) — check after every pair resolution ──
   if(tick % 8 === 0 && !S.dreamActive) {
-    Object.keys(S.pairStates).forEach(pair => {
+    _livePairs().forEach(pair => {   // [PAIRES VIVANTES · 10/10/2026] une paire retirée, « hold » pour toujours, ne compte plus ses attentes
       const ps = S.pairStates[pair];
       if(ps.lastAction === 'hold') {
         S._holdConsecutive[pair] = (S._holdConsecutive[pair] || 0) + 1;

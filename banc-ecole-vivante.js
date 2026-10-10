@@ -11,6 +11,10 @@
 // invariants passent.
 // La relecture adverse (agent séparé, app réelle) a trouvé que l'AA rendue vivante derrière l'EV aurait armé l'anti-revenge COMMUN aux trois modes (15 min sans ouverture
 // en EV / RE, écran de refroidissement) et grossi une fuite du cache des signaux fondamentaux (clé sans le mode) : R1 à R4 tiennent ces deux corrections et les états abîmés.
+// [PAIRES VIVANTES · MODES SÉPARÉS · 10/10/2026 soir, token 20261010b] le multiplexeur ne passe plus que par les paires vivantes (02 _livePairEntries) et donne
+// à un mode en play derrière l'écran sa surveillance (08 _bgModeWatch : M5) ; closePosition signale chaque fermeture à l'anti-revenge de SON mode (état par
+// mode, 06) et réserve les effets d'écran au mode affiché, l'AA ou l'EV (R2 réécrit). Les aides réelles de 02 (_livePairs…, _modeBehind, _screenMode) sont
+// installées dans le monde comme dans l'app. A4 : l'amplitude de l'école (cfg.vol) n'est plus éteinte par une variation 24 h nulle ni rendue NaN par une illisible.
 'use strict';
 const fs = require('fs'), vm = require('vm'), assert = require('assert'), path = require('path');
 const ROOT = process.env.BANC_ROOT || __dirname, rd = f => fs.readFileSync(path.join(ROOT, f), 'utf8');
@@ -47,9 +51,12 @@ const GEN = HAS_GEN ? fnSrc(s08, '_simCandleStep') : '';
 const MX = between(s08, '  var _mDisp = S.tradingMode;', '  try { if (window._botMeritAudit) window._botMeritAudit(); } catch(e) {}');
 const FUND = 'const _fundCache = {};\n' + fnSrc(s08, 'getFundamentalSignals');
 const CLOSE = between(s02, 'function closePosition(id, botClose = false) {', '\nfunction quickOpen(side) {');
+const LIVEFN = between(s02, 'function _livePairs() {', 'window._livePairs = _livePairs;');   // [PAIRES VIVANTES · 10/10/2026] les trois aides réelles
+const MODEFN = between(s02, 'function _modeBehind() {', 'window._modeBehind = _modeBehind;');   // [MODES SÉPARÉS · 10/10/2026] _modeBehind, _screenMode, _modeLab
+const BGWATCH = fnSrc(s08, '_bgModeWatch');
 // Deux fragments RÉELS de closePosition, exécutés tels quels : l'appel de l'anti-revenge et le bloc des jalons (de son titre à la fin de la chaîne if / else if).
 const CP_RV = between(CLOSE, '  // ANTI-REVENGE : à chaque fermeture', '  // v7.12 LIVRAISON 8 · STATS + RÈGLES en mode Réel');
-const CP_MS = between(CLOSE, '  // ═══ v5.1 — Milestones & Particles ═══', '  updatePairBtnStates();\n  renderPositions();\n  if(S.currentPage===4) renderChain();\n}');
+const CP_MS = between(CLOSE, '  // ═══ v5.1 — Milestones & Particles ═══', '  // [MODES SÉPARÉS · 10/10/2026] les rendus immédiats');
 const CP_AL = CLOSE.split('\n').filter(l => /checkPnlAlerts\(\)|checkBadges\(\)/.test(l) && !/^\s*\/\//.test(l)).join('\n');
 
 // Le monde : 13 paires dans chaque portefeuille, dans l'ordre du backup de Rams (GBP/USDT, retirée, AVANT BNB/USDT) ; 12 dans PAIRS.
@@ -71,7 +78,7 @@ function world(o) {
   const rnd = mulberry(o.seed || 7), M = Object.create(Math); M.random = rnd;
   const S = { tradingMode: o.screen || 'paperReal', cycle: 0, chainLog: [] };
   const PAIRS = {}; LIVEPAIRS.forEach(p => { PAIRS[p] = { sym: p.split('/')[0], vol: PX[p] * 0.0005, minP: PX[p] * 0.65, maxP: PX[p] * 1.55, startPrice: PX[p], dec: 4 }; });
-  const log = { cyc: [], proj: [], prot: [], agg: [], urls: [], decErr: [] };
+  const log = { cyc: [], proj: [], prot: [], agg: [], urls: [], decErr: [], watch: [] };
   const c = { S, PAIRS, Math: M, Number, Object, Array, JSON, Set, String, Date, isFinite, parseFloat, encodeURIComponent, console, localStorage: mkStore(),
     AbortSignal: { timeout: () => undefined }, performance: { now: () => 0 }, setTimeout: () => 0,
     CG: cgData(PX), BNRESP: null,
@@ -83,10 +90,16 @@ function world(o) {
     checkAntiRevenge: (usd, pct, pair) => { c.rv.push([usd, pct, pair]); }, emitVictoryParticles: (n) => { c.fx.push('particules ' + n); }, emitLossParticles: (n) => { c.fx.push('particules perte ' + n); },
     showMilestone: (i, t) => { c.fx.push('jalon ' + i); }, checkPnlAlerts: () => { c.fx.push('alertes'); }, checkBadges: () => { c.fx.push('badges'); },
     RC: {}, _rcLastPrice: (p) => (c.RC[p] ? c.RC[p].px : 0), _rcPriceAge: (p) => (c.RC[p] ? c.RC[p].age : Infinity),
-    _decErr: (e) => { log.decErr.push(String(e && e.message || e)); } };
+    _decErr: (e) => { log.decErr.push(String(e && e.message || e)); },
+    // [MODES SÉPARÉS · 10/10/2026] ce que _bgModeWatch appelle pour un mode derrière l'écran : des témoins qui notent le mode traité
+    learnFromOpenPositions: () => { log.watch.push(['sorties', S.tradingMode]); }, estimateStakes: () => { log.watch.push(['mises', S.tradingMode]); },
+    _manConsignesWatchdog: () => { log.watch.push(['consignes', S.tradingMode]); }, applyFundingFees: () => { log.watch.push(['financement', S.tradingMode]); }, applyLeverageBorrowFees: () => { log.watch.push(['levier', S.tradingMode]); },
+    _computePortfolio: () => { log.watch.push(['portefeuille', S.tradingMode]); return 42; },
+    _walletKey: (m) => (m === 'paperReal' || m === 'real') ? m : 'sim' };
   c.window = c; c.log = log;
   vm.createContext(c);
   vm.runInContext(WALLET, c);
+  vm.runInContext(LIVEFN + '\n' + MODEFN + '\n' + BGWATCH, c);
   ['sim', 'paperReal', 'real'].forEach(m => {
     const w = S.walletStore[m]; w.pairStates = {};
     ORDER.forEach((p, k) => { const px = (m === 'sim' && o.frozenSim) ? PX[p] * (1 + (k % 2 ? 0.03 : -0.05)) : PX[p]; w.pairStates[p] = mkPs(px, (m === 'sim' && p === 'BNB/USDT') ? 50 : (o.ncSim !== undefined && m === 'sim' ? o.ncSim : 60), k + (m === 'sim' ? 0 : m === 'paperReal' ? 20 : 40)); });
@@ -94,9 +107,9 @@ function world(o) {
   });
   vm.runInContext(MAP + '\nlet _lastPriceFetch = 0, _pricesFetched = ' + (o.fetched === false ? 'false' : 'true') + ', _fetchInProgress = false, _priceRetryDelay = 2000; const _PRICE_RETRY_MAX = 32000; let _priceSource = 0, _cgFailCount = 0; const _CG_FAIL_THRESHOLD = 2;\n' +
     BN + '\n' + LIVE + '\n' + BLEND + '\n' + GEN + '\n' + FUND + '\nfunction __mx(tick) {\n' + MX + '\n}\nfunction __oracle() {\n' + ORACLE.generateur + '\n}' +
-    '\nfunction __rv(realisedUsd, realisedPct, pos) {\n' + CP_RV + '\n  return (typeof _aaBehind === "undefined") ? null : _aaBehind;\n}' +
-    '\nfunction __ms(realisedPct, pos, _aaBehind) { const pnlStr = "p", usdtStr = "u";\n' + CP_MS + '\n}' +
-    '\nfunction __al(_aaBehind) {\n' + CP_AL + '\n}', c);
+    '\nfunction __rv(realisedUsd, realisedPct, pos) {\n' + CP_RV + '\n  return (typeof _behind === "undefined") ? null : _behind;\n}' +
+    '\nfunction __ms(realisedPct, pos, _behind) { const pnlStr = "p", usdtStr = "u";\n' + CP_MS + '\n}' +
+    '\nfunction __al(_behind) {\n' + CP_AL + '\n}', c);
   S.agents = [];
   return { c, S, PAIRS, log, sim: () => S.walletStore.sim.pairStates, ev: () => S.walletStore.paperReal.pairStates, re: () => S.walletStore.real.pairStates, run: code => vm.runInContext(code, c) };
 }
@@ -237,6 +250,30 @@ await T('A3 · secours Binance RÉEL (CoinGecko en panne deux fois), EV à l\'é
   assert.strictEqual(w.sim()['ETH/USDT']._targetPrice, undefined, 'paire non servie par le secours : pas d\'ancrage');
 });
 
+await T('A4 · [MODES SÉPARÉS] amplitude de l\'école (cfg.vol) : une variation 24 h NULLE (CoinGecko : 0 — le piège de la première sonde du 10/10) ou ILLISIBLE (secours Binance : NaN) la GARDE, dix réceptions de suite ; une vraie variation applique la formule inchangée, max(vol × 0,3, amplitude du jour / 9,8) ; avant : × 0,3 à chaque réception (0,3¹⁰ en 2,5 min), ou NaN', async () => {
+  const w = world(Object.assign({ frozenSim: true, seed: 2 }, EVSCREEN));
+  const vol0 = {}; LIVEPAIRS.forEach(p => { vol0[p] = w.PAIRS[p].vol; });
+  w.c.CG = cgData(PX); Object.keys(w.c.CG).forEach(k => { w.c.CG[k].usd_24h_change = 0; if ('eur_24h_change' in w.c.CG[k]) w.c.CG[k].eur_24h_change = 0; });
+  for (let i = 0; i < 10; i++) await w.run('fetchLivePrices(true)');
+  LIVEPAIRS.forEach(p => { assert.strictEqual(w.PAIRS[p].vol, vol0[p], 'amplitude changée sans variation : ' + p); assert.strictEqual(w.ev()[p].pnl24h, 0, 'variation reçue : ' + p); });
+  w.c.CG = cgData(PX); await w.run('fetchLivePrices(true)');
+  LIVEPAIRS.forEach(p => { const q = w.run('_cgQuote(' + JSON.stringify(p) + ', CG)'); assert.ok(q && isFinite(q.change) && q.change !== 0, 'variation attendue : ' + p);
+    const want = Math.max(vol0[p] * 0.3, PX[p] * Math.abs(q.change) / 100 / 9.8); assert.ok(Math.abs(w.PAIRS[p].vol - want) <= 1e-12 * want, 'formule : ' + p + ' ' + w.PAIRS[p].vol + ' ≠ ' + want); });
+  const w2 = world(Object.assign({ frozenSim: true, seed: 2 }, EVSCREEN));
+  w2.c.CGFAIL = true; w2.c.BNRESP = [{ symbol: 'BTCUSDT', lastPrice: '82800.5', priceChangePercent: 'n/a', openPrice: '83800' }, { symbol: 'ETHUSDT', lastPrice: '2499.37', priceChangePercent: '-2.0', openPrice: '2550' }];
+  await w2.run('fetchLivePrices(true)'); await w2.run('fetchLivePrices(true)');
+  assert.ok(w2.log.urls.some(u => u.indexOf('api.binance.com/api/v3/ticker/24hr') >= 0), 'secours non appelé');
+  assert.strictEqual(w2.PAIRS['BTC/USDT'].vol, vol0['BTC/USDT'], 'variation illisible : amplitude touchée (' + w2.PAIRS['BTC/USDT'].vol + ')');
+  const wantE = Math.max(vol0['ETH/USDT'] * 0.3, 2499.37 * 2.0 / 100 / 9.8); assert.ok(Math.abs(w2.PAIRS['ETH/USDT'].vol - wantE) <= 1e-12 * wantE, 'secours : formule');
+  // relecture adverse du 10/10 soir : une amplitude déjà NaN ou nulle en mémoire (état hérité) est réparée par la première vraie variation, aux deux sites
+  const w3 = world(Object.assign({ frozenSim: true, seed: 2 }, EVSCREEN)); w3.PAIRS['BTC/USDT'].vol = NaN; w3.PAIRS['ETH/USDT'].vol = 0; w3.c.CG = cgData(PX);
+  await w3.run('fetchLivePrices(true)');
+  ['BTC/USDT', 'ETH/USDT'].forEach(p => { const q = w3.run('_cgQuote(' + JSON.stringify(p) + ', CG)'), want = PX[p] * Math.abs(q.change) / 100 / 9.8; assert.ok(Math.abs(w3.PAIRS[p].vol - want) <= 1e-12 * want, 'réparée (CoinGecko) : ' + p + ' ' + w3.PAIRS[p].vol); });
+  const w4 = world(Object.assign({ frozenSim: true, seed: 2 }, EVSCREEN)); w4.PAIRS['BTC/USDT'].vol = NaN; w4.c.CGFAIL = true; w4.c.BNRESP = [{ symbol: 'BTCUSDT', lastPrice: '82800.5', priceChangePercent: '-1.2', openPrice: '83800' }];
+  await w4.run('fetchLivePrices(true)'); await w4.run('fetchLivePrices(true)');
+  const wantB = 82800.5 * 1.2 / 100 / 9.8; assert.ok(Math.abs(w4.PAIRS['BTC/USDT'].vol - wantB) <= 1e-12 * wantB, 'réparée (secours Binance) : ' + w4.PAIRS['BTC/USDT'].vol);
+});
+
 await T('E1 · AA derrière l\'EV pendant 50 minutes de battements (3 000 ticks, prix reçu toutes les 15 s, marché réel en dérive de +3 %) : jamais figée (60 clôtures distinctes par paire), toujours près du marché (< 1 % ; PEPE, sous le pas du mélange, < 2 %) ; l\'EV identique à ce qu\'il est AA en pause', async () => {
   const w = world(Object.assign({ frozenSim: true, seed: 21 }, EVSCREEN)), ctl = world({ screen: 'paperReal', run: { sim: false, paperReal: true }, frozenSim: true, seed: 21 });
   const ctlSim0 = JSON.stringify(ctl.sim());
@@ -277,14 +314,14 @@ await T('R1 · _schoolBehind RÉEL : vrai seulement quand le mode en cours est s
   assert.strictEqual(a.c._auraScreenMode, 'sim'); a.log.cyc.forEach(x => assert.strictEqual(x.beh, false, 'AA à l\'écran, cycle ' + x.m));
 });
 
-await T('R2 · closePosition, fragments RÉELS exécutés : une fermeture de l\'AA DERRIÈRE l\'EV n\'arme pas l\'anti-revenge commun (aucun appel), ne vérifie ni alertes ni badges, n\'affiche ni jalon ni particules, même à −6 % ou +6 % ; AA à l\'écran, EV à l\'écran, EV derrière l\'AA : tout comme avant', () => {
+await T('R2 · closePosition, fragments RÉELS exécutés : chaque fermeture signale l\'anti-revenge (état par mode, 06) — l\'AA derrière l\'EV comme l\'EV derrière l\'AA ; les effets d\'écran (alertes, badges, jalons, particules) ne partent que pour le mode AFFICHÉ, quel qu\'il soit ; le drapeau du multiplexeur ou la photo de 01 décident', () => {
   const w = world(Object.assign({ seed: 5 }, EVSCREEN));
   const set = (mode, bg, scr) => { w.S.tradingMode = mode; w.c._bgResolve = bg; w.c._auraScreenMode = scr; w.c.rv.length = 0; w.c.fx.length = 0; };
   const pos = "{ pair: 'PEPE/USDT', side: 'short' }";
-  // AA derrière l'EV (multiplexeur), puis (perte max : pas de drapeau)
+  // AA derrière l'EV (drapeau du multiplexeur), puis (perte max : sans drapeau, la photo de l'écran tranche)
   [[true, 'paperReal'], [false, 'paperReal'], [true, 'real']].forEach(([bg, scr]) => {
     set('sim', bg, scr);
-    assert.strictEqual(w.run('__rv(-1.2, -2.32, ' + pos + ')'), true); assert.deepStrictEqual(J(w.c.rv), [], 'anti-revenge armé par l\'AA derrière');
+    assert.strictEqual(w.run('__rv(-1.2, -2.32, ' + pos + ')'), true); assert.deepStrictEqual(J(w.c.rv), [[-1.2, -2.32, 'PEPE/USDT']], 'l\'anti-revenge de l\'AA elle-même est signalé (état par mode)');
     [6, 2.5, -6, 1].forEach(pct => w.run('__ms(' + pct + ', ' + pos + ', true)')); w.run('__al(true)');
     assert.deepStrictEqual(J(w.c.fx), [], 'effet d\'écran pour l\'AA derrière');
   });
@@ -293,16 +330,39 @@ await T('R2 · closePosition, fragments RÉELS exécutés : une fermeture de l\'
   assert.strictEqual(w.run('__rv(-1.2, -2.32, ' + pos + ')'), false); assert.deepStrictEqual(J(w.c.rv), [[-1.2, -2.32, 'PEPE/USDT']]);
   [6, 2.5, -6, 1].forEach(pct => w.run('__ms(' + pct + ', ' + pos + ', false)')); w.run('__al(false)');
   assert.deepStrictEqual(J(w.c.fx), ['particules 55', 'jalon 🎉', 'particules 22', 'jalon 💰', 'particules perte 15', 'jalon ⚠️', 'alertes', 'badges']);
-  // EV à l'écran, et EV derrière l'AA (mode réel en arrière-plan) : la garde reste
+  // EV à l'écran : tout ; EV derrière l'AA (bascule du multiplexeur) : signalé à son propre anti-revenge, aucun effet d'écran ([MODES SÉPARÉS] : avant, un mode réel derrière gardait les effets d'écran)
   set('paperReal', false, 'paperReal'); assert.strictEqual(w.run('__rv(-1.2, -2.32, ' + pos + ')'), false); assert.strictEqual(w.c.rv.length, 1);
-  set('paperReal', true, 'sim'); assert.strictEqual(w.run('__rv(-0.8, -1.5, ' + pos + ')'), false); assert.deepStrictEqual(J(w.c.rv), [[-0.8, -1.5, 'PEPE/USDT']]);
+  [6, 1].forEach(pct => w.run('__ms(' + pct + ', ' + pos + ', false)')); w.run('__al(false)'); assert.deepStrictEqual(J(w.c.fx), ['particules 55', 'jalon 🎉', 'alertes', 'badges']);
+  set('paperReal', true, 'sim'); assert.strictEqual(w.run('__rv(-0.8, -1.5, ' + pos + ')'), true, 'EV derrière l\'AA : derrière'); assert.deepStrictEqual(J(w.c.rv), [[-0.8, -1.5, 'PEPE/USDT']]);
+  [6, 2.5, -6].forEach(pct => w.run('__ms(' + pct + ', ' + pos + ', true)')); w.run('__al(true)'); assert.deepStrictEqual(J(w.c.fx), [], 'effet d\'écran pour l\'EV derrière l\'AA');
   w.S.tradingMode = 'paperReal'; w.c._bgResolve = false;
-  // textes : les quatre gardes sont dans closePosition, _aaBehind est posé une fois, avant son premier usage ; 06 et 09c (l'état commun et sa porte) non touchés par l'idée
+  // textes : _behind est posé une fois, avant son premier usage ; six gardes dans closePosition (alertes, badges, badge ⊗, jalons, rendus) ; l'anti-revenge n'a plus de garde
   const cc = codeStrict(CLOSE);
-  assert.strictEqual(cc.split("const _aaBehind = (typeof _schoolBehind === 'function') && _schoolBehind();").length - 1, 1);
-  assert.strictEqual(cc.split('_aaBehind').length - 1, 5, 'définition + 4 gardes : anti-revenge, alertes, badges, jalons');
-  assert.ok(cc.indexOf('const _aaBehind') < cc.indexOf('if (!_aaBehind && typeof checkAntiRevenge'));
-  assert.ok(cc.includes("  showToast('Fermé '+pos.pair+levTag+' · '+pnlStr+' · '+usdtStr);"), 'le toast de fermeture reste pour tous');
+  assert.strictEqual(cc.split("const _behind = ((typeof _modeBehind === 'function') && _modeBehind()) || ((typeof _schoolBehind === 'function') && _schoolBehind());").length - 1, 1);
+  assert.strictEqual(cc.split('_aaBehind').length - 1, 0, 'plus de _aaBehind');
+  ['if(!_behind && typeof checkPnlAlerts', 'if(!_behind && typeof checkBadges', 'if (!_behind && typeof _updateCloseAllBadge', 'if (_behind) { /* un mode derrière', 'if (!_behind) {\n    updatePairBtnStates();\n    renderPositions();\n    if(S.currentPage===4) renderChain();\n  }'].forEach(k => assert.strictEqual(cc.split(k).length - 1, 1, k.slice(0, 40)));
+  assert.ok(cc.indexOf('const _behind') < cc.indexOf("if (typeof checkAntiRevenge === 'function') {")); assert.ok(!cc.includes('_behind && typeof checkAntiRevenge'), 'l\'anti-revenge est signalé pour tous (état par mode)');
+  assert.ok(cc.includes("  showToast('Fermé '+pos.pair+levTag+' · '+pnlStr+' · '+usdtStr);"), 'le toast de fermeture reste pour tous (08 showToast le marque)');
+});
+
+await T('M5 · [MODES SÉPARÉS] un mode en play DERRIÈRE l\'écran reçoit sa surveillance (08 _bgModeWatch RÉEL) à chaque passage : sorties, mises, portefeuille ; consignes un tick sur douze, financement et levier un tick sur trente ; dans SON contexte ; jamais pour le mode à l\'écran ni pour un mode en pause ; le mode de l\'écran est gardé pendant la bascule (window._bgFrom) et _screenMode le rend', () => {
+  const w = world({ screen: 'sim', run: { sim: true, paperReal: true, real: false }, seed: 5 });
+  w.c._screenSeen = []; const _ls = w.c.learnFromOpenPositions; w.c.learnFromOpenPositions = () => { _ls(); w.c._screenSeen.push([w.run('_screenMode()'), w.run('_modeBehind()'), w.c._bgFrom]); };
+  for (let t = 1; t <= 60; t++) w.run('__mx(' + t + ')');
+  const by = k => w.log.watch.filter(x => x[0] === k);
+  assert.ok(by('sorties').every(x => x[1] === 'paperReal') && by('sorties').length === 20, 'sorties de l\'EV derrière, un tick sur trois : ' + by('sorties').length);
+  assert.strictEqual(by('mises').length, 20); assert.strictEqual(by('portefeuille').length, 20); assert.ok(w.log.watch.every(x => x[1] === 'paperReal'), 'jamais pour l\'AA à l\'écran ni pour le RE en pause');
+  assert.strictEqual(by('consignes').length, 5, 'consignes aux ticks 12, 24, 36, 48, 60'); assert.strictEqual(by('financement').length, 2, 'financement aux ticks 30 et 60'); assert.strictEqual(by('levier').length, 2);
+  assert.strictEqual(w.S.walletStore.paperReal.portfolio, 42, 'le portefeuille du mode derrière est réécrit dans SON portefeuille');
+  assert.ok(w.c._screenSeen.length === 20 && w.c._screenSeen.every(x => x[0] === 'sim' && x[1] === true && x[2] === 'sim'), 'pendant la bascule : écran = sim, derrière = vrai');
+  assert.strictEqual(w.run('_screenMode()'), 'sim'); assert.strictEqual(w.run('_modeBehind()'), false); assert.strictEqual(w.S.tradingMode, 'sim');
+  // EV à l'écran, AA derrière : la surveillance est pour l'AA ; le portefeuille de l'AA est réécrit
+  const e = world(Object.assign({ seed: 5 }, EVSCREEN)); for (let t = 1; t <= 30; t++) e.run('__mx(' + t + ')');
+  assert.ok(e.log.watch.length > 0 && e.log.watch.every(x => x[1] === 'sim')); assert.strictEqual(e.S.walletStore.sim.portfolio, 42); assert.notStrictEqual(e.S.walletStore.paperReal.portfolio, 42);
+  // tout en pause sauf l'écran : rien
+  const p = world({ screen: 'paperReal', run: { sim: false, paperReal: true }, seed: 5 }); for (let t = 1; t <= 30; t++) p.run('__mx(' + t + ')'); assert.deepStrictEqual(p.log.watch, []);
+  // texte : la surveillance est appelée APRÈS les cycles et AVANT la bougie de l'école ; chaque appel a sa garde
+  const mx = codeStrict(MX); assert.ok(mx.indexOf('resolvePairCycle(pair, ps);') < mx.indexOf('if (_isBg) { try { _bgModeWatch(tick); }') && mx.indexOf('if (_isBg) { try { _bgModeWatch(tick); }') < mx.indexOf("if (_isBg && S.tradingMode === 'sim') {"));
 });
 
 await T('R3 · getFundamentalSignals RÉEL : le cache est tenu PAR MODE — une valeur calculée pendant le passage de l\'AA (ses bougies fabriquées : +5 %) n\'est jamais relue par l\'EV (son marché : −5 %) dans la même fenêtre de 5 cycles ; dans un même mode le cache sert toujours', () => {

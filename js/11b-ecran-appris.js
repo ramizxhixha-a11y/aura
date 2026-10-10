@@ -261,15 +261,26 @@ function _learnedPanelHtml() {
     h += '<div style="color:#667;font-size:10px;padding:3px 2px;">bilan : ' + (em.good || 0) + ' amélioration(s) · ' + (em.bad || 0) + ' dégradation(s) · ' + (em.inconclusive || 0) + ' non concluant(s)</div>';
   }
   // 5 · journal
+  // [MODES SÉPARÉS · 10/10/2026] les ouvertures, fermetures, sorties et refus comptés ici sont ceux du mode À L'ÉCRAN (02 _eventNote : st._m[mode]). Avant, un
+  // seul total pour les trois modes : depuis que l'école trade derrière l'EV (10/10), ses trades s'y mêlaient à ceux de l'EV. Le réseau reste commun.
+  // Un jour sans détail par mode, ou dont le détail est incomplet (jours d'avant cette version, jour de la mise à jour), garde son total, marqué « * ».
   var es = S.eventStats || {}, days = Object.keys(es).sort().slice(-3);
-  h += title('JOURNAL', '· événements comptés par jour');
+  var _jm = (typeof _walletKey === 'function') ? _walletKey(S.tradingMode) : S.tradingMode, _jl = (typeof _modeLab === 'function') ? _modeLab(_jm) : _jm;
+  var _jk = ['ouverture', 'fermeture', 'sortie_gain', 'sortie_trailing', 'sortie_zombie', 'sortie_consensus', 'veto'], _jStar = false;
+  h += title('JOURNAL', '· événements comptés par jour · ' + _jl);
   if (!days.length) h += '<div style="color:#667;font-size:11px;">rien encore</div>';
   else days.forEach(function (d) {
-    var st = es[d] || {};
+    var st = es[d] || {}, bm = st._m || null;
+    // détail complet = pour chaque nature de trade, la somme des modes fait le total du jour
+    var full = !!bm && _jk.every(function (k) { var s = 0; Object.keys(bm).forEach(function (m) { s += Number((bm[m] || {})[k]) || 0; }); return s === (Number(st[k]) || 0); });
+    var sm = full ? (bm[_jm] || {}) : null;
+    if (!sm) _jStar = true;
     var keys = ['ouverture', 'fermeture', 'sortie_gain', 'sortie_trailing', 'sortie_zombie', 'sortie_consensus', 'reseau', 'veto'];
-    var parts = keys.filter(function (k) { return st[k]; }).map(function (k) { return k.replace('sortie_', '') + ' ' + st[k]; });
-    h += row([{ t: d.slice(5), w: '.6fr', s: 'font-weight:600;' }, { t: parts.join(' · ') || '—', w: '3fr', s: 'color:#aab;' }]);
+    var val = function (k) { return (sm && k !== 'reseau') ? sm[k] : st[k]; };
+    var parts = keys.filter(function (k) { return val(k); }).map(function (k) { return k.replace('sortie_', '') + ' ' + val(k); });
+    h += row([{ t: d.slice(5) + (sm ? '' : ' *'), w: '.6fr', s: 'font-weight:600;' }, { t: parts.join(' · ') || '—', w: '3fr', s: 'color:#aab;' }]);
   });
+  if (_jStar) h += '<div style="color:#667;font-size:10px;padding:3px 2px;">* tous modes confondus (compté avant le détail par mode)</div>';
   return h;
 }
 function openLearnedPanel() {

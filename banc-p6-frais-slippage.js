@@ -124,7 +124,7 @@ T('09c : mise ×0.5 après le bloc bêta, avant VALIDATION ANTI-NÉGATIF, planch
   assert.ok(iB > 0 && iC > iB && iAN > iC); assert.strictEqual(c9.split('const _redC = Math.max(_stakeFloor(), _stakeRound(baseStake * _ct.stakeFactor));').length - 1, 1); assert.ok(c9.includes('baseStake = _redC;'));
 });
 T('09c : node --check (syntaxe)', () => { new vm.Script(c9, { filename: '09c' }); });
-T('09c : diff limité au bloc P6 (aucune autre fonction touchée : 1017 lignes, 984 identiques à la version 20260906d)', () => { assert.strictEqual(c9.split('\n').length, 1049); /* [PLAFOND DE SENS 21/09] +bloc plafond de sens, +1 ligne d'en-tête, +1 déclaration */ /* [GO FISCAL 07/10] +1 : _fxIn (cours USD→EUR à l'ouverture) */ assert.strictEqual(c9.split('_betaGateForOpen(pair, side)').length - 1, 1); });
+T('09c : diff limité au bloc P6 (aucune autre fonction touchée : 1017 lignes, 984 identiques à la version 20260906d)', () => { assert.strictEqual(c9.split('\n').length, 1053); /* [MODES SÉPARÉS 10/10] +4 : rendus de l'ouverture réservés au mode affiché (garde _modeBehind + 2 lignes de commentaire) */ /* [PLAFOND DE SENS 21/09] +bloc plafond de sens, +1 ligne d'en-tête, +1 déclaration */ /* [GO FISCAL 07/10] +1 : _fxIn (cours USD→EUR à l'ouverture) */ assert.strictEqual(c9.split('_betaGateForOpen(pair, side)').length - 1, 1); });
 console.log('━━ G · HTML et intégrité ━━');
 const html = fs.readFileSync('AURA8_v118.html', 'utf8');
 T('HTML : 78 ressources au token 20260906i ([SKILL BORNÉ]), aucune au token précédent, DOC_V = 20260906i', () => { assert.strictEqual((html.match(/\?v=20260906i/g) || []).length, 78); assert.ok(!html.includes('20260906h')); assert.ok(html.includes("var DOC_V = '20260906i';")); });

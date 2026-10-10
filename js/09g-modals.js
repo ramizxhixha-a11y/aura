@@ -89,8 +89,9 @@ function openDiagnostic() {
   const staleThreshold = 60000;
   const isGloballyStale = lastFetch === 0 || (now - lastFetch) > staleThreshold;
   let staleCount = 0;
+  const _nLive = (typeof _livePairs === 'function') ? _livePairs().length : Object.keys(pairStates).length;   // [PAIRES VIVANTES · 10/10/2026] « 0 / 12 », plus « 0 / 13 »
   if (!_diagSimMode && isGloballyStale) {
-    staleCount = Object.keys(pairStates).length;
+    staleCount = _nLive;
   }
 
   const ageSinceUpdate = lastFetch ? Math.floor((now - lastFetch) / 1000) : -1;
@@ -125,7 +126,7 @@ function openDiagnostic() {
   // En sim, la source de prix réelle n'a pas de sens
   if (_diagSimMode) currentSource = 'Mode Auto-apprentissage';
 
-  const staleCls  = staleCount === 0 ? 'ok' : staleCount < Object.keys(pairStates).length ? 'warn' : 'crit';
+  const staleCls  = staleCount === 0 ? 'ok' : staleCount < _nLive ? 'warn' : 'crit';
   const updateCls = _diagSimMode ? 'neu' : (ageSinceUpdate < 0 ? 'crit' : ageSinceUpdate > 120 ? 'crit' : ageSinceUpdate > 30 ? 'warn' : 'ok');
 
   // ── AGENTS ──
@@ -183,7 +184,7 @@ function openDiagnostic() {
         return `<div class="diag-line"><span class="diag-label">Stabilité (1h)</span><span class="diag-val ${cls}">${upPct}% · ${discCount} coupure(s)</span></div>`;
       })() : ''}
       <div class="diag-line"><span class="diag-label">Régime détecté</span><span class="diag-val neu">${regime.toUpperCase()}</span></div>
-      <div class="diag-line"><span class="diag-label">Paires figées (STALE)</span><span class="diag-val ${staleCls}">${_diagSimMode ? 'N/A · simulation' : staleCount + ' / ' + Object.keys(pairStates).length}</span></div>
+      <div class="diag-line"><span class="diag-label">Paires figées (STALE)</span><span class="diag-val ${staleCls}">${_diagSimMode ? 'N/A · simulation' : staleCount + ' / ' + _nLive}</span></div>
       ${(!_diagSimMode && staleCount > 0) ? '<div class="diag-note">⚠ Des paires n\'ont pas reçu de nouvelles bougies depuis 2+ min</div>' : ''}
     </div>
 

@@ -84,7 +84,8 @@ function mkCtx(opts) {
   ctx.window = ctx; ctx.calls = calls;
   vm.createContext(ctx);
   vm.runInContext('let _currentDetailPair = null; let _pendingClosePair = null;', ctx);
-  const src = [fnSrc(s02, '_manOpenWarnings'), fnSrc(s02, '_manConsigneOf'), fnSrc(s02, 'openPosition'),   // [CONSIGNES · 06/10/2026] openPosition lit _manConsigneOf
+  const src = [fnSrc(s02, '_livePairs'),   // [PAIRES VIVANTES · 10/10/2026] 10h _manPlan compte les emplacements sur les paires vivantes (02)
+    fnSrc(s02, '_manOpenWarnings'), fnSrc(s02, '_manConsigneOf'), fnSrc(s02, 'openPosition'),   // [CONSIGNES · 06/10/2026] openPosition lit _manConsigneOf
     fnSrc(s03, 'closePairDetail'), fnSrc(s10e, '_openManTrade'),
     fnSrc(s10g, '_saveManConsigne'), fnSrc(s09e, '_manConsignesWatchdog'), fnSrc(s10d, '_confirmForceClose'),
     fnSrc(s10h, '_manFmtPx'), fnSrc(s10h, '_manPlan'), fnSrc(s10h, '_manSideLevels'), fnSrc(s10h, '_manSystemHtml'), fnSrc(s10h, '_manPreviewHtml'),
@@ -214,9 +215,10 @@ T('P2 · formules identiques à 10f : TP / SL (tpPctE, _slNoise, slPctE, bonus t
   const p2 = run(c2, '_manPlan("BTC/USDT")'); assert.ok(Math.abs(p2.lv.long.tp - big.tp) < 1e-12 && Math.abs(p2.lv.short.sl - big.sl) < 1e-12);
   // mise : bloc _stkBase de 10f exécuté sur le même état
   const blk = s10f.slice(s10f.indexOf('    var _acc   = S.tradingAccount || 0;'), s10f.indexOf('    _stkBase = Math.max(_floor, _share);') + '    _stkBase = Math.max(_floor, _share);'.length);
-  assert.ok(blk.length > 100 && blk.length < 900, 'bloc _stkBase de 10f');
+  assert.ok(blk.length > 100 && blk.length < 1300, 'bloc _stkBase de 10f');   // [PAIRES VIVANTES · 10/10/2026] 900 → 1 300 : deux lignes de commentaire dans le bloc
+  assert.ok(blk.includes('var _slots = _livePairs().filter(') && s10h.includes('const slots = _livePairs().filter('), 'emplacements = paires vivantes, des deux côtés (10f et 10h)');
   const st = baseS(); st.openPositions = [{ pair: 'SOL/USDT', stakeUsdt: 100 }];
-  const ref = vm.runInNewContext('var _stkBase;' + blk + '; _stkBase', { S: st, ps: st.pairStates['ETH/USDT'], Math, Object, Number });
+  const ref = vm.runInNewContext(fnSrc(s02, '_livePairs') + '\nvar _stkBase;' + blk + '; _stkBase', { S: st, ps: st.pairStates['ETH/USDT'], PAIRS, Math, Object, Number });   // [PAIRES VIVANTES · 10/10/2026] le bloc de 10f lit 02 _livePairs
   const c3 = mkCtx({ S: { openPositions: [{ pair: 'SOL/USDT', stakeUsdt: 100 }] } });
   assert.strictEqual(run(c3, '_manPlan("ETH/USDT").stake'), Math.floor(ref * 10) / 10, 'mise = part libre des bots : ' + ref);
 });

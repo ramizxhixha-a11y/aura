@@ -3857,11 +3857,23 @@ window.renderGraceSection = renderGraceSection;
 // Detect : perte significative + intervalle court + tentative de retrade
 // Affiche un overlay de refroidissement avec timer et stats comportementales
 
-let _rvActive     = false;
+// ═══ [MODES SÉPARÉS · 10/10/2026] UN ÉTAT PAR MODE (go Rams 10/10 20:01 : « Go pour tout ») ═══
+// Avant : un seul état (_rvActive, _rvEndTime, _rvLastLossTs) pour AA, EV et RE. Une perte de 1 % dans N'IMPORTE quel mode refusait 15 min toute ouverture des
+// bots dans les TROIS (09c lit isRevengeBlocked) — sonde du 10/10, AA à l'écran : sa perte de 2,7 % sur BTC a tenu l'EV et le RE fermés 900 s. Le matin du
+// 10/10, seule l'AA derrière un autre écran avait été écartée (02 closePosition).
+// Maintenant : chaque mode a son état, lu et écrit dans le mode EN COURS de traitement (S.tradingMode : les accesseurs de 02). Une perte de l'école n'arrête
+// que l'école ; une perte de l'EV n'arrête que l'EV. La règle elle-même (seuils, durée : S.antiRevengeCfg) est inchangée et reste commune.
+// Le refroidissement À L'ÉCRAN (message, son, vibration, boutons, compte à rebours) ne part que si le mode qui vient de perdre est celui de l'écran.
+const _rvStates = {};
+function _rvOf(mode) {
+  const m = mode || ((typeof S !== 'undefined' && S) ? S.tradingMode : 'sim');
+  const k = (m === 'paperReal' || m === 'real') ? m : 'sim';
+  return _rvStates[k] || (_rvStates[k] = { active: false, end: 0, lastLoss: 0 });
+}
+// Lecture pour les sondes et les écrans : { active (cooldown en cours), end, lastLoss } du mode demandé (défaut : le mode en cours de traitement)
+window._rvState = function(mode) { const st = _rvOf(mode); return { active: !!(st.active && Date.now() < st.end), end: st.end, lastLoss: st.lastLoss }; };
 let _rvTimer      = null;
-let _rvEndTime    = 0;
 let _rvCountdown  = null;
-let _rvLastLossTs = 0;
 
 function _rvGet() {
   if(!S.antiRevengeCfg) S.antiRevengeCfg = {
@@ -3879,7 +3891,9 @@ function _rvGet() {
 // Vérifier si un trade vient d'être perdu et si revenge trading est probable
 function checkAntiRevenge(pnlUsd, pct, pair) {
   const cfg = _rvGet();
-  if(!cfg.enabled || _rvActive) return;
+  const st  = _rvOf();   // [MODES SÉPARÉS · 10/10/2026] l'état du mode en cours de traitement (celui dont on ferme la position)
+  if (st.active && Date.now() >= st.end) st.active = false;   // cooldown expiré : libre (avant, seul isRevengeBlocked — un bot qui veut ouvrir — le remettait ; une nouvelle perte tombait alors dans le vide)
+  if(!cfg.enabled || st.active) return;
 
   const now  = Date.now();
   const loss = pnlUsd < 0;
@@ -3888,25 +3902,27 @@ function checkAntiRevenge(pnlUsd, pct, pair) {
   // Critères de déclenchement
   const bigLoss       = Math.abs(pnlUsd) >= cfg.triggerLoss;
   const pctLoss       = Math.abs(pct||0) >= cfg.triggerPct;
-  const recentLoss    = (now - _rvLastLossTs) < 600000; // 10min
-  const consecLosses  = _rvConsecLosses();
+  const recentLoss    = (now - st.lastLoss) < 600000; // 10min
+  const consecLosses  = _rvConsecLosses();   // S.pairStates : les trades du mode en cours, déjà par mode
 
   const shouldBlock = bigLoss || pctLoss || (recentLoss && consecLosses>=cfg.triggerStreak);
 
   if(shouldBlock) {
-    _rvLastLossTs = now;
+    st.lastLoss = now;
     triggerAntiRevenge(pnlUsd, pct, pair, consecLosses);
   } else {
-    _rvLastLossTs = now;
+    st.lastLoss = now;
   }
 }
 window.checkAntiRevenge = checkAntiRevenge;
 // Getter exposé : permet au flux de décision (autoOpenPosition) de savoir si le
 // blocage anti-revenge est actif. Vérifie aussi l'expiration du cooldown.
-window.isRevengeBlocked = function() {
+// [MODES SÉPARÉS · 10/10/2026] répond pour le mode EN COURS de traitement (09c l'appelle dans le mode qui veut ouvrir) ; un mode peut être nommé.
+window.isRevengeBlocked = function(mode) {
   try {
-    if (_rvActive && Date.now() >= _rvEndTime) { _rvActive = false; }  // cooldown expiré
-    return _rvActive;
+    const st = _rvOf(mode);
+    if (st.active && Date.now() >= st.end) { st.active = false; }  // cooldown expiré
+    return st.active;
   } catch(e) { return false; }
 };
 
@@ -3919,9 +3935,17 @@ function _rvConsecLosses() {
 
 function triggerAntiRevenge(pnlUsd, pct, pair, streakN) {
   const cfg  = _rvGet();
-  _rvActive  = true;
-  _rvEndTime = Date.now() + cfg.cooldownMin*60000;
+  const st   = _rvOf();   // [MODES SÉPARÉS · 10/10/2026] le mode en cours de traitement
+  st.active  = true;
+  st.end     = Date.now() + cfg.cooldownMin*60000;
   cfg.blockCount++;
+  // [MODES SÉPARÉS · 10/10/2026] un mode derrière l'écran : son cooldown est posé et dit au journal (la ligne porte son mode), rien d'autre — le message, le
+  // son, la vibration, les boutons et le compte à rebours sont pour l'utilisateur qui regarde CE mode.
+  if ((typeof _modeBehind === 'function') && _modeBehind()) {
+    S.chainLog = S.chainLog||[];
+    S.chainLog.push({icon:'🛑',desc:`Anti-revenge activé · ${cfg.cooldownMin}min · après perte $${Math.abs(pnlUsd||0).toFixed(2)}`,hash:Math.random().toString(36).slice(2,8),time:new Date().toLocaleTimeString(),m:_walletKey(S.tradingMode)});
+    return;
+  }
 
   // Stats comportementales personnalisées
   const allT       = Object.values(S.pairStates||{}).flatMap(ps=>(ps.trades||[]).filter(t=>t.type==='position'&&t.ts)).sort((a,b)=>b.ts-a.ts);
@@ -3954,9 +3978,9 @@ function triggerAntiRevenge(pnlUsd, pct, pair, streakN) {
   // Démarrer le countdown
   _rvStartCountdown();
 
-  // Log
+  // Log — la ligne dit son mode (m), à l'écran comme derrière : la pastille de 08 renderChain la nomme dès qu'un autre mode est affiché
   S.chainLog = S.chainLog||[];
-  S.chainLog.push({icon:'🛑',desc:`Anti-revenge activé · ${cfg.cooldownMin}min · après perte $${Math.abs(pnlUsd||0).toFixed(2)}`,hash:Math.random().toString(36).slice(2,8),time:new Date().toLocaleTimeString()});
+  S.chainLog.push({icon:'🛑',desc:`Anti-revenge activé · ${cfg.cooldownMin}min · après perte $${Math.abs(pnlUsd||0).toFixed(2)}`,hash:Math.random().toString(36).slice(2,8),time:new Date().toLocaleTimeString(),m:_walletKey(S.tradingMode)});
 }
 window.triggerAntiRevenge = triggerAntiRevenge;
 
@@ -3967,8 +3991,9 @@ function _rvStartCountdown() {
   const timerEl = document.getElementById('rvTimer');
   if(btn) { btn.disabled=true; btn.style.opacity='.3'; btn.style.cursor='default'; }
 
+  const _stCd = _rvOf();   // [MODES SÉPARÉS · 10/10/2026] le compte à rebours du mode qui vient de l'armer (à l'écran)
   _rvCountdown = setInterval(()=>{
-    const rem = Math.max(0, _rvEndTime - Date.now());
+    const rem = Math.max(0, _stCd.end - Date.now());
     const m   = Math.floor(rem/60000);
     const s   = Math.floor((rem%60000)/1000);
     const str = `${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
@@ -3985,9 +4010,10 @@ function _rvStartCountdown() {
 }
 
 function unlockRevenge() {
-  if(Date.now() < _rvEndTime) return;
+  const st = _rvOf();   // [MODES SÉPARÉS · 10/10/2026] bouton de l'écran : le mode affiché
+  if(Date.now() < st.end) return;
   clearInterval(_rvCountdown);
-  _rvActive = false;
+  st.active = false;
   document.getElementById('revengeBlock')?.classList.remove('show');
   _rvBlockButtons(false);
   showToast('✅ Blocage levé — trade avec discipline 🎯', 2500, 'win');
@@ -4055,7 +4081,7 @@ function renderAntiRevengeSection() {
       <div style="background:var(--s2);border-radius:8px;padding:10px;margin-top:8px;">
         <div style="font-size:8px;color:var(--t3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:5px;">Efficacité du système</div>
         <div style="display:flex;justify-content:space-between;font-size:10px;padding:3px 0;"><span style="color:var(--t2);">Blocages effectués</span><span style="font-weight:700;color:var(--down);">${cfg.blockCount||0}</span></div>
-        <div style="display:flex;justify-content:space-between;font-size:10px;padding:3px 0;"><span style="color:var(--t2);">Actuellement bloqué</span><span style="font-weight:700;color:${_rvActive?'var(--down)':'var(--up)'};">${_rvActive?'OUI':'non'}</span></div>
+        ${['sim','paperReal','real'].map(m=>{ const b = window._rvState(m), lab = m==='paperReal'?'EV':(m==='real'?'RE':'AA'); return `<div style="display:flex;justify-content:space-between;font-size:10px;padding:3px 0;"><span style="color:var(--t2);">Actuellement bloqué · ${lab}</span><span style="font-weight:700;color:${b.active?'var(--down)':'var(--up)'};">${b.active?('OUI · encore '+Math.ceil((b.end-Date.now())/60000)+' min'):'non'}</span></div>`; }).join('')}
       </div>
 
       <!-- Test -->

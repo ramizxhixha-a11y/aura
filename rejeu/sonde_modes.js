@@ -13,6 +13,11 @@
 //     [--switch "min:mode,…"]         bascule d'écran par le vrai bouton (cycleTradeMode) à la minute donnée (ex. "4:paperReal,8:sim")
 //     [--pausesim 1]                  AA mise en pause avant la mesure (témoin)   [--split 1] deux suites de hasard (contexte sim / autres)
 //     [--dump <fichier>]              état complet (hors portefeuille AA) pour comparer deux versions du code
+//     [--inject <fichier.js>]         [10/10 soir] script de mesure propre à une mission, évalué dans la page après la pose de la sonde (portée globale : S, PAIRS,
+//                                     toutes les fonctions de l'app). Il peut poser window.__probe = { second(i), minute(m), end() } : second et minute sont appelés à
+//                                     chaque seconde / minute simulée, end() rend un objet gardé dans result.probe (sa clé « dit », si elle existe, est affichée).
+//                                     Une sonde de mission ne réécrit donc plus l'outil : elle n'écrit que sa mesure (exemples : rejeu/sondes/).
+//     [--injectarg '<json>']          réglages du script de mesure, lus par lui dans window.__probeArg (objet)
 // Mesure : trades et prix de l'AA (dont fermetures au prix d'entrée exact), portefeuille EV, cycles par mode, temps de calcul du battement, exceptions qui
 // interrompent le battement, déclenchements de l'anti-revenge et secondes bloquées, relectures du cache des signaux fondamentaux par un AUTRE mode (par identité de
 // l'objet rendu), toasts et jalons par contexte. Réseau : le ping Binance répond, CoinGecko est simulé (prix EV du backup), tout le reste échoue tout de suite.
@@ -26,6 +31,8 @@ const args = {}; for (let i = 2; i < process.argv.length; i += 2) args[process.a
 const ROOT = path.resolve(args.root), BACKUP = args.backup, OUT = args.out;
 const HOURS = Number(args.hours || 2), PORT = Number(args.port || 8911), SEED = Number(args.seed || 1), SCREEN = args.screen || 'paperReal';
 const FORCE = args.force || '', CGCHG = args.cgchg || '0.5', FLUSH = args.flush === '1', SPLIT = args.split === '1', DUMP = args.dump || '';
+const INJECT = args.inject ? fs.readFileSync(path.resolve(args.inject), 'utf8') : '';   // script de mesure de la mission (voir l'en-tête)
+let INJECT_ARG = {}; if (args.injectarg) { try { INJECT_ARG = JSON.parse(args.injectarg); } catch (e) { console.error('--injectarg : JSON illisible'); process.exit(2); } }
 const JUMPS = (args.jump || '').split(',').filter(Boolean).map(s => { const [m, p] = s.split(':'); return { min: Number(m), pct: Number(p) }; });
 const PAUSE_SIM = args.pausesim === '1';
 const EVTEST = (args.evtest || '').split(',').filter(Boolean).map(Number);   // minutes où l'on tente une ouverture EV par l'entonnoir réel (09c autoOpenPosition)   // met l'AA en pause avant la mesure (témoin)
@@ -141,7 +148,8 @@ const CG = { BTC: 'bitcoin', ETH: 'ethereum', XRP: 'ripple', SOL: 'solana', DOGE
     window.__ms = { tick: 0, n: 0, cyc: {}, max: 0 };
     // ── instrumentation ──
     const I = window.__I = { rvTrig: [], ao: {}, rvSec: 0, secs: 0, fc: { hit: 0, miss: 0, x: {}, xCore: [], }, evDec: [], closes: [], revengeDom: null, toasts: { sim: 0, other: 0 }, milestones: [] };
-    const rvState = new Function('try{return [_rvActive,_rvEndTime]}catch(e){return [null,0]}'); window.__rvState = rvState;
+    // anti-revenge : depuis 20261010b un état PAR MODE (06 window._rvState) — on lit ici celui du mode en cours de traitement ; avant, l'état unique
+    const rvState = new Function('try{ if (typeof window._rvState === "function") { var s = window._rvState(S.tradingMode); return [s.active, s.end]; } return [_rvActive,_rvEndTime]}catch(e){return [null,0]}'); window.__rvState = rvState;
     const getFC = new Function('try{return _fundCache}catch(e){return null}');
     try { const _tr = window.triggerAntiRevenge; window.triggerAntiRevenge = function (pnlUsd, pct, pair, n) { I.rvTrig.push({ t: window.__now(), mode: S.tradingMode, bg: window._bgResolve === true, pnlUsd: pnlUsd, pct: pct, pair: pair, streak: n }); return _tr.apply(this, arguments); }; } catch (e) { out.eTrig = String(e); }
     try { const _ao = window.autoOpenPosition; window.autoOpenPosition = function (pair, side, stv) { const rs = rvState(), blk = !!(rs[0] && Date.now() < rs[1]); const k = S.tradingMode + (blk ? ':bloqué' : ':libre'); I.ao[k] = (I.ao[k] || 0) + 1; return _ao.apply(this, arguments); }; } catch (e) { out.eAo = String(e); }
@@ -200,6 +208,7 @@ const CG = { BTC: 'bitcoin', ETH: 'ethereum', XRP: 'ripple', SOL: 'solana', DOGE
     }
     return out;
   }, { SCREEN, FORCE, PAUSE_SIM });
+  if (INJECT) { const ie = await page.evaluate(({ src, arg }) => { try { window.__probeArg = arg; (0, eval)(src); return null; } catch (e) { return String(e && e.stack || e).slice(0, 600); } }, { src: INJECT, arg: INJECT_ARG }); if (ie) { console.error('--inject : le script de mesure a levé une exception\n' + ie); await browser.close(); server.close(); process.exit(4); } }
   const tStart = setup.t, nMin = Math.round(HOURS * 60);
   const EVP = Object.fromEntries(Object.keys(evPS).filter(p => p !== 'GBP/USDT').map(p => [p, evPS[p].price]));
   for (let m = 0; m < nMin; m++) {
@@ -216,7 +225,9 @@ const CG = { BTC: 'bitcoin', ETH: 'ethereum', XRP: 'ripple', SOL: 'solana', DOGE
         window.__advanceTo(t0 + (s + 1) * 1000);
         if (FLUSH) { for (let i = 0; i < 12; i++) { await window.__yield(); if (!window.__fip()) break; } }
         const rs = window.__rvState(); I.secs++; if (rs[0] && window.__now() < rs[1]) I.rvSec++;
+        if (window.__probe && typeof window.__probe.second === 'function') { try { window.__probe.second(I.secs); } catch (e) { window.__probeErr = String(e && e.stack || e).slice(0, 400); } }
       }
+      if (window.__probe && typeof window.__probe.minute === 'function') { try { window.__probe.minute(Math.round((window.__now() - window.__tStart) / 60000)); } catch (e) { window.__probeErr = String(e && e.stack || e).slice(0, 400); } }
     }, { EVP, FLUSH });
     for (const sw of SWITCH) if (sw.min === m + 1) {
       const r = await page.evaluate((target) => { const out = { de: S.tradingMode }; let n = 0; while (window.AuraChrono.getCurrentMode() !== target && n++ < 4) window.cycleTradeMode(); out.a = S.tradingMode; out.chrono = window.AuraChrono.getCurrentMode(); out.run = { sim: _isModeRunning('sim'), paperReal: _isModeRunning('paperReal') }; out.engine = !!(window._auraSimState && window._auraSimState.running); out.nc = {}; ['BTC/USDT', 'BNB/USDT'].forEach(p => { out.nc[p] = S.walletStore.sim.pairStates[p].candles.length; }); out.min = Math.round((window.__now() - window.__tStart) / 60000); return out; }, sw.mode);
@@ -256,6 +267,8 @@ const CG = { BTC: 'bitcoin', ETH: 'ethereum', XRP: 'ripple', SOL: 'solana', DOGE
     out.events = (S.eventLog || []).filter(e => e.t >= tStart && e.k !== 'evolution').map(e => new Date(e.t).toISOString().slice(11, 19) + ' ' + e.k + ' ' + e.d);
     out.I = window.__I; out.rng = window.__rng; out.cycle = S.cycle; out.errStats = S._errStats || null; out.simLearnSkipped = S._simLearnSkipped || 0; out.realJudgments = S._realJudgments || 0;
     out.rvEnd = window.__rvState(); out.antiRevengeCfg = S.antiRevengeCfg || null;
+    if (window.__probe && typeof window.__probe.end === 'function') { try { out.probe = window.__probe.end(); } catch (e) { out.probe = { err: String(e && e.stack || e).slice(0, 400) }; } }
+    if (window.__probeErr) out.probeErr = window.__probeErr;
     if (wantDump) {
       const acc = (window._WALLET_ACCESSOR_FIELDS || []).reduce((o, k) => (o[k] = 1, o), {});
       const skip = { walletStore: 1, perf: 1, perfLog: 1 };
@@ -286,5 +299,7 @@ const CG = { BTC: 'bitcoin', ETH: 'ethereum', XRP: 'ripple', SOL: 'solana', DOGE
   console.log('décisions EV notées', I.evDec.length, '| toasts ctx sim / autres', JSON.stringify(I.toasts), '| jalons', JSON.stringify(I.milestones.slice(0, 5)));
   console.log('erreurs minuteries', result.terrN, '| erreurs page', perr.length, '| console', cerr.length, '| simTick interrompu', result.tickErr, 'sur', result.ms.n, '| errStats', JSON.stringify(result.errStats), '|', o.wallSec, 's');
   if (result.terrN) console.log(result.terr.slice(0, 4).join('\n'));
+  if (result.probe) { const d = result.probe.dit; if (Array.isArray(d)) d.forEach(l => console.log('SONDE · ' + l)); else if (d) console.log('SONDE · ' + (typeof d === 'string' ? d : JSON.stringify(d))); if (result.probe.err) console.log('SONDE · erreur de end() : ' + result.probe.err); }
+  if (result.probeErr) console.log('SONDE · exception dans second() / minute() : ' + result.probeErr);
   await browser.close(); server.close();
 })().then(() => process.exit(0)).catch(async e => { console.error('ERR', e && e.stack || e); try { if (global.__br) await global.__br.close(); } catch (_) {} try { server.close(); } catch (_) {} process.exit(1); });

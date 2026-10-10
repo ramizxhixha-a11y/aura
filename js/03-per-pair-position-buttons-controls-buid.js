@@ -2393,7 +2393,7 @@ window.addEventListener('resize', () => {
 function updateMarketMood() {
   // Aggregate LMSR probabilities across pairs weighted by volume
   let totalProb = 0, totalWeight = 0;
-  Object.values(S.pairStates || {}).forEach(ps => {
+  _livePairStates().forEach(ps => {   // [PAIRES VIVANTES · 10/10/2026] l'humeur du marché : sans la paire retirée (en AA ses 59 trades lui donnaient le plus gros poids)
     const p = lmsrP(ps);
     const w = (ps.totalTrades || 0) + 1;
     totalProb  += p * w;
@@ -2435,7 +2435,7 @@ function updateMarketMood() {
 function buildThoughtPhrase() {
   const agents = S.agents || [];
   if(!agents.length) return 'Initialisation...';
-  const pairs = Object.keys(S.pairStates || {});
+  const pairs = _livePairs();   // [PAIRES VIVANTES · 10/10/2026]
   if(!pairs.length) return 'Chargement des paires...';
 
   const parts = [];

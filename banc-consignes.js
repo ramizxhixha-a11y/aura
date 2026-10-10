@@ -62,6 +62,7 @@ function mkCtx(over) {
   ctx.window = ctx; ctx.toasts = toasts; ctx.els = els;
   vm.createContext(ctx);
   vm.runInContext([
+    fnSrc(s02, '_livePairs'),   // [PAIRES VIVANTES · 10/10/2026] 10h _manPlan compte les emplacements sur les paires vivantes (02)
     fnSrc(s02, '_manOpenWarnings'), fnSrc(s02, '_manConsigneOf'), fnSrc(s02, 'openPosition'), fnSrc(s02, 'applyBotSuggestion'), fnSrc(s02, 'quickOpen'),
     fnSrc(s03, '_openProposedPosition'), fnSrc(s07, '_calcBotTpSl'), fnSrc(s07, 'manuInvert'), fnSrc(s09e, '_manConsignesWatchdog'), fnSrc(s10h, '_manPlan')
   ].join('\n'), ctx);

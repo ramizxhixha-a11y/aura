@@ -284,7 +284,7 @@ T('S1 · 10f : trade virtuel noté avec la perte max du vrai trade ; position ma
   const sweep = codeStrict(between(s10f, 'window._botExitSweep = function _botExitSweep() {', 'window._lossCapSweep = function', false));
   const iT = sweep.indexOf('if (pos._thX) {'), iH = sweep.indexOf('_horizonExit(pos, pnlPct, Date.now())'), iS = sweep.indexOf("if (S.tradingMode === 'paperReal' && pos._pathStale > 0");
   assert.ok(iS > 0 && iT > iS && iH > iT, 'après le stop sur coupure, avant les règles apprises et les niveaux');
-  const s08 = codeStrict(rd('js/08-learning-history-render.js')), i08 = s08.indexOf('if (_isBg) { S.tradingMode = _m; window._bgResolve = true; }');
+  const s08 = codeStrict(rd('js/08-learning-history-render.js')), i08 = s08.indexOf('if (_isBg) { window._bgFrom = _mDisp; S.tradingMode = _m; window._bgResolve = true; }');   // [MODES SÉPARÉS · 10/10/2026] la bascule garde aussi le mode de l'écran (window._bgFrom)
   assert.ok(i08 > 0 && s08.indexOf("if (_isBg && (S.tradingMode === 'paperReal' || S.tradingMode === 'real') && typeof _rcLastPrice === 'function' && typeof _rcPriceAge === 'function') {") > i08, '08 : mode réel en arrière-plan → dernier prix réel');
   assert.ok(s08.includes('if (q && _rcPriceAge(p) <= 120000) { var lp = Number(_rcLastPrice(p)); if (lp > 0) q.price = lp; }'));
   const c04 = codeStrict(rd('js/04-v8-0-livraison-35-mode-max-permissif-v.js')), c10d = codeStrict(rd('js/10d-protections-indicateurs.js'));

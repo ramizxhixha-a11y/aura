@@ -408,7 +408,7 @@ function _p4AntiDetteWatchdog() {
       S.tradingAccount   = Math.max(0, trading - repay);
       S.leverageBorrowed = Math.max(0, debtTotal - repay);
       S._autoLevBorrowed = Math.max(0, debtAuto - repay);
-      S.portfolio        = (S.cashAccount || 0) + (S.tradingAccount || 0);
+      S.portfolio        = (typeof _computePortfolio === 'function') ? _computePortfolio() : ((S.cashAccount || 0) + (S.tradingAccount || 0));   // [PORTEFEUILLE JUSTE · 10/10/2026] canonique : cette branche tourne AVEC des positions ouvertes, leurs mises étaient oubliées jusqu'au recalcul suivant
       if (typeof syncLeverageReserve === 'function') syncLeverageReserve();
       S.chainLog.push({ icon: '🔧', desc: `P12 Watchdog · remboursement dette orpheline $${repay.toFixed(2)} (reste $${(S.leverageBorrowed||0).toFixed(2)})`, hash: (typeof rndHash === 'function' ? rndHash() : Math.random().toString(36).slice(2,10)), time: (typeof nowStr === 'function' ? nowStr() : new Date().toLocaleTimeString()) });
       if (S.chainLog.length > 100) S.chainLog.splice(0, S.chainLog.length - 100);
@@ -421,7 +421,7 @@ function _p4AntiDetteWatchdog() {
       S.tradingAccount   = Math.max(0, trading - repay);
       S.leverageBorrowed = Math.max(0, debtTotal - repay);
       S._autoLevBorrowed = Math.max(0, debtAuto - repay);
-      S.portfolio        = (S.cashAccount || 0) + (S.tradingAccount || 0);
+      S.portfolio        = (typeof _computePortfolio === 'function') ? _computePortfolio() : ((S.cashAccount || 0) + (S.tradingAccount || 0));   // [PORTEFEUILLE JUSTE · 10/10/2026] canonique (ici sans position : même valeur qu'avant)
       if (typeof syncLeverageReserve === 'function') syncLeverageReserve();
       S.chainLog.push({ icon: '🔧', desc: `P12 · Aucune position ouverte · remboursement total $${repay.toFixed(2)}`, hash: rndHash(), time: nowStr() });
       if (S.chainLog.length > 100) S.chainLog.splice(0, S.chainLog.length - 100);

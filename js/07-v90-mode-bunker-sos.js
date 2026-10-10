@@ -4860,7 +4860,7 @@ function renderHomePrices() {
   }
   // Signal stats for actions header (BUY/SELL/HOLD counts)
   let _buyN=0, _sellN=0, _holdN=0;
-  Object.values(S.pairStates).forEach(psx => {
+  _livePairStates().forEach(psx => {   // [PAIRES VIVANTES · 10/10/2026]
     const prb = lmsrP(psx);
     if(prb > 0.6) _buyN++;
     else if(prb < 0.4) _sellN++;
@@ -4963,7 +4963,8 @@ function renderHome() {
   const posPct   = total > 0 ? (posVal / total * 100) : 0;   // [23/08] le plafond Math.min(20,…) mentait : les positions montraient 20% max quel que soit le réel — camouflage retiré
 
   // Avg LMSR prob across all pairs
-  const avgProb  = Object.values(S.pairStates).reduce((s,ps)=>s+lmsrP(ps),0) / Object.keys(PAIRS).length;
+  const _lvH = _livePairStates();   // [PAIRES VIVANTES · 10/10/2026] avant : la somme de TOUTES les paires (retirée comprise) divisée par le nombre de paires vivantes
+  const avgProb  = _lvH.reduce((s,ps)=>s+lmsrP(ps),0) / Math.max(1, _lvH.length);
 
   // Patch
   // v7.1 P1: hero value = portfolioTotal EUR (cash + fiscal × USD/EUR). S.portfolio reste interne.
@@ -5290,7 +5291,8 @@ function renderHome() {
   // ── Stats row 3 : best agent, avg cycle, generations, composite signal ──
   const analAgents = S.agents.filter(a=>!a.isBot&&!a.isMeta);
   const best = analAgents.length ? [...analAgents].sort((a,b)=>b.fitness-a.fitness)[0] : null;
-  const avgCycleMs = Object.values(S.pairStates).reduce((s,ps)=>s+ps.cycleMax,0)/Object.keys(PAIRS).length;
+  const _lvQ = _livePairStates();   // [PAIRES VIVANTES · 10/10/2026] même défaut que avgProb
+  const avgCycleMs = _lvQ.reduce((s,ps)=>s+ps.cycleMax,0)/Math.max(1, _lvQ.length);
   // Live LMSR consensus across all pairs
   const pairKeys = Object.keys(PAIRS);
   const avgLmsr  = pairKeys.reduce((s,p) => { try { return s + lmsrP(S.pairStates[p]||{}); } catch(_eL){ _qhErr('lmsrP('+p+')', _eL); return s + 0.5; } }, 0) / Math.max(1, pairKeys.length);

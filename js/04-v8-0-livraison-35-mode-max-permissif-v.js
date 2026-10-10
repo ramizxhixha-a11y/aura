@@ -1802,7 +1802,7 @@ function executePending(actionId, opts) {
   const _auto = !!(opts && opts.auto);
   // [SURVEILLANCE PERMANENTE · 27/09/2026] une proposition s'exécute dans le mode où le bot l'a faite (positions, portefeuille de CE mode)
   const _m0 = S.tradingMode, _sw = !!(action.mode && action.mode !== _m0);
-  if (_sw) { S.tradingMode = action.mode; window._bgResolve = true; }
+  if (_sw) { window._bgFrom = _m0; S.tradingMode = action.mode; window._bgResolve = true; }   // [MODES SÉPARÉS · 10/10/2026] + le mode de l'écran (02 _screenMode)
   let _changed = false;
   try {
     switch(action.action) {

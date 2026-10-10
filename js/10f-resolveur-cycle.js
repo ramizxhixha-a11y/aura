@@ -523,7 +523,9 @@ function _resolvePairCycleCore(pair, ps) {
     var _free  = Math.max(0, _capT - _eng);
     var _held  = {};
     (S.openPositions || []).forEach(function(p){ if (p && p.pair) _held[p.pair] = 1; });
-    var _slots = Object.keys(S.pairStates || {}).filter(function(k){ return !_held[k]; }).length;
+    // [PAIRES VIVANTES · 10/10/2026] les emplacements = les paires VIVANTES sans position. Avant, la paire retirée en était un : la part du capital libre était
+    // divisée par 13 au lieu de 12 (backup du 10/10 : 81,3 $ au lieu de 88,1 $ en EV).
+    var _slots = _livePairs().filter(function(k){ return !_held[k]; }).length;
     var _share = _free / Math.max(2, _slots);
     var _floor = (ps.stake && ps.stake > 0) ? ps.stake : 0;
     _stkBase = Math.max(_floor, _share);
@@ -817,8 +819,10 @@ window._lossCapSweep = function _lossCapSweep() {
       if (_m === _disp || window._isModeRunning(_m)) _modes.push(_m);
     });
     _modes.forEach(function(_m){
-      var _sw = (_m !== _disp);
-      if (_sw) S.tradingMode = _m;
+      var _sw = (_m !== _disp), _b0 = window._bgResolve, _f0 = window._bgFrom;
+      // [MODES SÉPARÉS · 10/10/2026] la bascule se DIT, comme celles de 08 et de 04 (window._bgResolve, window._bgFrom : 02 _modeBehind / _screenMode). Avant,
+      // cette troisième bascule était muette : une fermeture « perte max » d'un mode derrière l'écran passait pour une fermeture de l'écran.
+      if (_sw) { window._bgFrom = _disp; S.tradingMode = _m; window._bgResolve = true; }
       try {
         (S.openPositions || []).slice().forEach(function(pos){
           var ps = S.pairStates && S.pairStates[pos.pair];
@@ -845,7 +849,7 @@ window._lossCapSweep = function _lossCapSweep() {
           }
         });
       } catch(e){ try{window._decErr&&window._decErr(e)}catch(_e){} }
-      if (_sw) S.tradingMode = _disp;
+      if (_sw) { S.tradingMode = _disp; window._bgResolve = _b0; window._bgFrom = _f0; }
     });
   } catch(e){ try{window._decErr&&window._decErr(e)}catch(_e){} }
 };

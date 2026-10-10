@@ -26,7 +26,10 @@ const TOK = (html.match(/DOC_V = '(\d{8}[a-z])'/) || [])[1];
 const STALE = between(s02, 'var RC_HOLE_WIN = ', 'window._realCandlesStale = _realCandlesStale;', true);   // ancre sans la valeur : la fenêtre est éprouvée par V1
 const GATE_EV = between(s10g, 'function _resolvePaperRealCycle(pair, ps) {', '\nwindow._resolvePaperRealCycle = _resolvePaperRealCycle;', false);
 const GATE_RE = between(s08, 'function resolvePairCycle(pair, ps) {', "\nif(typeof resolvePairCycle==='function') window.resolvePairCycle = resolvePairCycle;", false);
-const PROJ = between(s08, 'function _projectRealCandles() {', 'window._projectRealCandles = _projectRealCandles;', true);
+// [PAIRES VIVANTES · 10/10/2026] _projectRealCandles ne projette que les paires vivantes (02 _livePairEntries : dans PAIRS et dans le portefeuille du mode) :
+// les aides réelles de 02 précèdent le fragment, et chaque contexte dit ses paires (PAIRS).
+const LIVE = between(s02, 'function _livePairs() {', 'window._livePairs = _livePairs;', false);
+const PROJ = LIVE + '\n' + between(s08, 'function _projectRealCandles() {', 'window._projectRealCandles = _projectRealCandles;', true);
 const TECH = between(s08, 'function _closes(candles){', '\nconst _fundCache = {};', false);
 const DEGEL = between(s03, 'function _techRsi(tech) {', 'window._techRsi = _techRsi;', false);
 const ENGINE = between(s03, 'const GENOME_DEFAULTS = {', 'window.GENOME_DEFAULTS = GENOME_DEFAULTS;', false);
@@ -89,13 +92,13 @@ T('V2 · portes RÉELLES EV (10g) et RE (08) : série trouée → vraies bougies
 });
 T('V3 · 08 _projectRealCandles RÉEL : série trouée → pas projetée (les voix gardent les dernières vraies bougies, _candlesStale) ; réparée → 60 vraies bougies ; sans le critère de 02, un bouche-trou projeté garde sa marque _gap (et lui seul)', () => {
   const now = Date.now(), S = { tradingMode: 'paperReal', paperRealTimeframe: '15m', realCandles: { 'E/USDT': { '15m': hole(mk(80, 100, now), 75) } }, pairStates: { 'E/USDT': { candles: [{ o: 1, h: 1, l: 1, c: 1, v: 1 }], price: 100 } } };
-  const c = { S, Date, Math, Object, Array, window: {}, REAL_CANDLE_INTERVALS: TFMS, _getActiveRealTimeframe: () => '15m' }; vm.createContext(c); vm.runInContext(STALE + '\n' + PROJ, c);
+  const c = { S, PAIRS: { 'E/USDT': {} }, Date, Math, Object, Array, window: {}, REAL_CANDLE_INTERVALS: TFMS, _getActiveRealTimeframe: () => '15m' }; vm.createContext(c); vm.runInContext(STALE + '\n' + PROJ, c);
   const before = S.pairStates['E/USDT'].candles;
   assert.strictEqual(vm.runInContext('_projectRealCandles()', c), 0); assert.strictEqual(S.pairStates['E/USDT'].candles, before); assert.strictEqual(S.pairStates['E/USDT']._candlesStale, true);
   const arr = S.realCandles['E/USDT']['15m']; delete arr[75]._gap; arr[75].v = 3;
   assert.strictEqual(vm.runInContext('_projectRealCandles()', c), 1); const pc = S.pairStates['E/USDT'].candles;
   assert.strictEqual(pc.length, 60); assert.ok(pc.every(k => !('_gap' in k) && Object.keys(k).join() === 'o,h,l,c,v,ts'), 'vraies bougies : 6 champs, aucune marque');
-  const c2 = { S: { tradingMode: 'paperReal', paperRealTimeframe: '15m', realCandles: { 'E/USDT': { '15m': hole(mk(80, 100, now), 75) } }, pairStates: { 'E/USDT': { candles: [], price: 100 } } }, Date, Math, Object, Array, window: {}, _getActiveRealTimeframe: () => '15m' };
+  const c2 = { S: { tradingMode: 'paperReal', paperRealTimeframe: '15m', realCandles: { 'E/USDT': { '15m': hole(mk(80, 100, now), 75) } }, pairStates: { 'E/USDT': { candles: [], price: 100 } } }, PAIRS: { 'E/USDT': {} }, Date, Math, Object, Array, window: {}, _getActiveRealTimeframe: () => '15m' };
   vm.createContext(c2); vm.runInContext(PROJ, c2); vm.runInContext('_projectRealCandles()', c2);
   const q = c2.S.pairStates['E/USDT'].candles; assert.strictEqual(q.filter(k => k._gap === true).length, 1); assert.strictEqual(q[55]._gap, true);
 });
@@ -287,7 +290,7 @@ T('V16 · persistance, en-têtes, jeton : _degelMigrated écrit (09b1), relu (09
   assert.ok(/'_abstMigrated','_degelMigrated',/.test((s9b2.match(/window\._APPLYSNAP_MANIFEST = \[([^\]]*)\]/) || [])[1] || ''), 'manifeste');
   const H = '// [DÉGEL DES VOIX · 02/10/2026] VERSION 20261002a';
   [s02, s03, s07, s08, s9b1, s9b2, s10g, rd('js/10i-intel-bus.js'), s12].forEach((s, i) => assert.ok(s.startsWith(H), 'en-tête ' + i));
-  assert.strictEqual(TOK, '20261010a'); assert.strictEqual(html.split('20261010a').length - 1, 85); assert.strictEqual(html.split('20261007b').length - 1, 0); assert.strictEqual(html.split('20261007a').length - 1, 0); assert.strictEqual(html.split('20261006b').length - 1, 0); assert.strictEqual(html.split('20261006a').length - 1, 0); assert.strictEqual(html.split('20261005b').length - 1, 0); assert.strictEqual(html.split('20261005a').length - 1, 0); assert.strictEqual(html.split('20261004a').length - 1, 0);   // [ÉCOLE VIVANTE · 10/10/2026] HTML au jeton 20261010a (85 : aucun fichier ajouté) · [VOIX TENDANCE LONGUE · 07/10/2026] HTML au jeton 20261007a
+  assert.strictEqual(TOK, '20261010b'); assert.strictEqual(html.split('20261010b').length - 1, 85); assert.strictEqual(html.split('20261010a').length - 1, 0); assert.strictEqual(html.split('20261007b').length - 1, 0); assert.strictEqual(html.split('20261007a').length - 1, 0); assert.strictEqual(html.split('20261006b').length - 1, 0); assert.strictEqual(html.split('20261006a').length - 1, 0); assert.strictEqual(html.split('20261005b').length - 1, 0); assert.strictEqual(html.split('20261005a').length - 1, 0); assert.strictEqual(html.split('20261004a').length - 1, 0);   // [MODES SÉPARÉS · 10/10/2026] jeton 20261010b (85, aucun fichier ajouté) · [ÉCOLE VIVANTE · 10/10/2026] HTML au jeton 20261010a (85 : aucun fichier ajouté) · [VOIX TENDANCE LONGUE · 07/10/2026] HTML au jeton 20261007a
    assert.strictEqual(html.split('20261002a').length - 1, 0); assert.strictEqual(html.split('20261001a').length - 1, 0);
   assert.ok(s03.includes("// ═══ [DÉGEL DES VOIX · 02/10/2026] LES VOIX LISENT CE QU'ELLES CROIENT LIRE (go Rams 01/10 20:51 : « l'horloge par mode en premier … Ensuite le dégel ») ═══"));
   assert.ok(fs.existsSync(path.join(ROOT, 'banc-fixtures/harmonic-avant-genome-20260923c.js')) && fs.existsSync(path.join(ROOT, 'banc-fixtures/analyse-avant-genome-20260916a.js')), 'oracles');
@@ -315,7 +318,7 @@ T('V18 · volume : bougies REST marquées _r (02 _fetchAndBootstrapRealCandles R
   const ca = { S: { realCandles: { 'B/USDT': { '15m': arr } } }, Date, Math, Object, window: {}, _rcLastPx: {}, REAL_CANDLE_INTERVALS: { '15m': F }, REAL_CANDLES_MAX: 200, _ensureRealCandlesStruct: () => {} };
   vm.createContext(ca); vm.runInContext(OUTLIER + CSTART + AGG, ca); vm.runInContext("_aggregateRealPrice('B/USDT', 100.6, " + (t1 + 5000) + ')', ca);
   assert.strictEqual(arr[59]._r, undefined, 'bougie en cours retouchée par le flux : plus REST'); assert.strictEqual(arr[59].v, arr[59].n, 'son v devient un compte'); assert.ok(arr.slice(0, 59).every(k => k._r === 1), 'les closes restent REST');
-  const pc = { S: { tradingMode: 'paperReal', paperRealTimeframe: '15m', realCandles: { 'B/USDT': { '15m': arr } }, pairStates: { 'B/USDT': { candles: [], price: 100.6 } } }, Date, Math, Object, Array, window: {}, _getActiveRealTimeframe: () => '15m' };
+  const pc = { S: { tradingMode: 'paperReal', paperRealTimeframe: '15m', realCandles: { 'B/USDT': { '15m': arr } }, pairStates: { 'B/USDT': { candles: [], price: 100.6 } } }, PAIRS: { 'B/USDT': {} }, Date, Math, Object, Array, window: {}, _getActiveRealTimeframe: () => '15m' };
   vm.createContext(pc); vm.runInContext(PROJ, pc); vm.runInContext('_projectRealCandles()', pc); const P = pc.S.pairStates['B/USDT'].candles;
   assert.deepStrictEqual([P.length, P.filter(k => k._r === 1).length, P._real], [60, 59, true], 'projection : marques gardées');
   // volume_v1 : fenêtre de 20 bougies (recentN 5 + histN 15), bougie en cours comprise (comme avant)
