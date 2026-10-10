@@ -375,7 +375,9 @@ T('D8 · recordTradeForHeatmap RÉEL : une clôture AA n\'écrit rien ; la premi
   assert.ok(S.heatmap._realOnlySince > 0); assert.strictEqual(S.heatmap.byHour[hM], undefined, 'compteur mélangé remis à zéro');
   const h = new Date().getHours(); assert.deepStrictEqual(JSON.parse(JSON.stringify(S.heatmap.byHour[h])), { count: 1, pnl: 1.5, wins: 1 });   // objet né dans la vm : aller-retour JSON
   const c08 = codeStrict(s08);
-  assert.ok(c08.includes("if (S.tradingMode === 'sim') Object.entries(S.pairStates).forEach(([pair, ps]) => {"), 'générateur réservé à sim');
+  // [ÉCOLE VIVANTE · 10/10/2026] la boucle du générateur est dans _simCandleStep (même corps) ; « réservé à sim » = chacun de ses DEUX appels est sous la condition du mode sim
+  // (écran : bloc du tick sur trois ; AA en play derrière un autre écran : multiplexeur) et il n'y en a pas d'autre — avant : `if (S.tradingMode === 'sim') Object.entries(S.pairStates).forEach(…)`
+  assert.ok(c08.includes("    if (S.tradingMode === 'sim') _simCandleStep();\n") && c08.includes("    if (_isBg && S.tradingMode === 'sim') {\n      try { blendRealPrices(); }") && c08.includes("      try { _simCandleStep(); }") && count(c08, '_simCandleStep()') === 3, 'générateur réservé à sim');
   assert.strictEqual(count(c08, 'ps.candles.push({ o, h, l, c, v });'), 1);
   assert.ok(c08.indexOf('_projectRealCandles();') < c08.indexOf('window._botExitSweep()'), 'projection avant les sorties');
 });

@@ -2057,7 +2057,10 @@ function getFundamentalSignals(pair) {
   const ps = S.pairStates[pair];
   if(!ps) return null;
   const tick5 = Math.floor(S.cycle / 5);
-  if(_fundCache[pair] && _fundCache[pair].tick === tick5) return _fundCache[pair].val;
+  // [ÉCOLE VIVANTE · 10/10/2026] le cache est tenu PAR MODE. Avant, sa clé était la paire seule : une valeur calculée pendant le passage de l'AA (variation de SES
+  // bougies fabriquées, SON marché LMSR, tendance de SON BTC) était relue par le cycle EV de la même paire s'il tombait dans les 5 cycles suivants (S.cycle est commun
+  // aux modes) — 3 % des cycles EV avec l'AA figée, 5 à 8 % avec l'AA vivante (relecture adverse du 10/10, app réelle, 4 tirages de 6 h). Chaque mode relit le sien.
+  if(_fundCache[pair] && _fundCache[pair].tick === tick5 && _fundCache[pair].mode === S.tradingMode) return _fundCache[pair].val;
 
   const agentById = id => S.agents.find(a=>a.id===id)||{score:0,conf:0.5};
   const macro  = agentById('macro_v1');
@@ -2142,7 +2145,7 @@ function getFundamentalSignals(pair) {
     // Score global
     fundScore
   };
-  _fundCache[pair] = { tick: Math.floor(S.cycle / 5), val: result };
+  _fundCache[pair] = { tick: Math.floor(S.cycle / 5), mode: S.tradingMode, val: result };
   return result;
 }
 
@@ -2804,6 +2807,71 @@ window._lmsrWallet = _lmsrWallet; window._lmsrRefill = _lmsrRefill; window._lmsr
 // Rejeu avant livraison (app réelle en accéléré, 81 h, 9 fenêtres de 9 h, 2 tirages, ce code, comparé au même rejeu avec 20260928a) : tirage 1 : 0 trades, net 0 $ ; tirage 2 : 0 trades, net 0 $ ; 0 erreur. Fitness vivante hors de sa
 // définition en fin de fenêtre (le débit du marché) : avec ce code : tirage 1 0 sur 144, tirage 2 0 sur 141 — avec 20260928a (même harnais, mêmes fenêtres) : 12 sur 144 (écart moyen -242 T$, jusqu'à -737) et 15 sur 142 (écart moyen -228 T$, jusqu'à -580). sièges ≤ 80 T$ en fin de fenêtre (cumul des 9 fenêtres) : ce code 40 vivante / 38 bougie et 38 vivante / 32 bougie — 20260928a : 43 vivante / 35 bougie et 42 vivante / 31 bougie. fitness vivante = horizons pour les sièges au record complet en fin de fenêtre : ce code 97/97 et 96/96 — 20260928a : 90/100 et 85/96.
 // Évolutions (hook du harnais dans triggerEvolution) : tirage 1 : 78 évolutions (03 (après jugements) : 78), cible = le plus faible par fitness vivante 78, = le siège que les horizons retireraient 78, désaccord des deux définitions 16, cible au record complet 18, cible débitée 0 — tirage 2 : 77 évolutions (03 (après jugements) : 77), cible = le plus faible par fitness vivante 77, = le siège que les horizons retireraient 77, désaccord des deux définitions 19, cible au record complet 18, cible débitée 0 — 20260928a : 77 et 77 évolutions. Nouveau-nés : ce code : tirage 1 39 nouveau-nés en fin de fenêtre, fitness moyenne 436, 11 sous 150, 4 sans preuve (dont 0 sous 350) ; tirage 2 42 nouveau-nés en fin de fenêtre, fitness moyenne 385, 16 sous 150, 6 sans preuve (dont 0 sous 350) — 20260928a : 42 nouveau-nés en fin de fenêtre, fitness moyenne 345, 14 sous 150, 4 sans preuve (dont 1 sous 350) ; 41 nouveau-nés en fin de fenêtre, fitness moyenne 379, 12 sous 150, 6 sans preuve (dont 1 sous 350). Dépense de marché : tirage 1 : 81 sièges-fenêtres avec dépense, 1025 T$ en moyenne par siège et par fenêtre de 9 h, max 15651 ; tirage 2 : 85 sièges-fenêtres avec dépense, 1027 T$ en moyenne par siège et par fenêtre de 9 h, max 18595.
+// ═══ [ÉCOLE VIVANTE · 10/10/2026] LE MARCHÉ DE L'ÉCOLE (AA) : UNE BOUGIE FABRIQUÉE PAR PAIRE ═══
+// Le corps est celui du bloc « New candle » de simTick, déplacé tel quel (mêmes formules, même ordre des tirages) pour être appelé de DEUX endroits :
+//  · AA à l'écran : par simTick, un tick sur trois, comme avant ;
+//  · AA en play derrière un autre écran : par le multiplexeur de simTick, à chaque passage de l'AA (un tick sur trois aussi), après ses cycles.
+// Avant, seul le premier existait : derrière l'EV, les cycles de l'AA tournaient (≈ 900 par heure) sur un prix et des bougies qui ne bougeaient plus — elle ouvrait,
+// le prix restait au prix d'entrée, la position était refermée à +0,00 %, et recommençait (backup 10/10 : 89 fermetures sur 89 au prix d'entrée exact en trois jours,
+// 58 sur PEPE au même prix à 16 chiffres ; sonde navigateur : 0,000 % de mouvement sur les 13 paires en une heure pour 908 cycles). Les modes réels en arrière-plan
+// reçoivent leur prix du flux Binance depuis le 27/09 (plus haut) ; l'AA n'avait pas l'équivalent. Écrit dans S.pairStates : celui du mode EN COURS de traitement.
+// Ne touche ni l'EV ni le RE ; l'école ne note toujours pas les agents (03 learnFromOutcome, 17/09).
+function _simCandleStep() {
+  Object.entries(S.pairStates).forEach(([pair, ps]) => {
+    try {   // une paire en défaut n'arrête ni les suivantes ni le battement ; l'erreur est comptée et dite une fois au journal (00 _decErr)
+    const cfg  = PAIRS[pair];
+    // [ÉCOLE VIVANTE · 10/10/2026] paire RETIRÉE (11 : sortie de PAIRS, pairState gardé) : pas de réglage, pas de bougie. Avant, cfg.vol levait une exception ici à
+    // chaque passage — GBP/USDT depuis le 22/09 : le battement s'arrêtait net un tick sur trois quand l'AA était à l'écran (exception avalée par le minuteur de 01,
+    // invisible au Guardian), et la paire suivante (BNB/USDT) n'a jamais eu une seule bougie d'école.
+    if (!cfg || !ps || !Array.isArray(ps.candles)) return;
+    const last = ps.candles[ps.candles.length - 1] || { c: ps.price };
+
+    // ── Prix simule SANS retroaction des agents (30/07/2026) ──────────
+    // Le terme retire etait : lmsrBias = (lmsrP(ps) - 0.5) * cfg.vol * 0.7
+    // Il faisait bouger le prix DANS LA DIRECTION que les agents predisaient.
+    // Boucle fermee : les agents predisent -> le prix leur donne raison ->
+    // ils sont recompenses -> leur conviction se renforce. Mesure : a la
+    // valeur observee lmsrProb=0.5658, 38,5 % du mouvement entre deux
+    // ancrages reels etait produit par les agents eux-memes ; au-dela de
+    // lmsrProb=0.70 ils fabriquaient plus de 100 % du prix.
+    // Comme S.agents est GLOBAL (non cloisonne par mode), cette population
+    // entrainee dans un monde qui lui obeissait decidait ensuite en EV et RE
+    // sur de vrais prix, ou sa prediction n a aucun pouvoir causal.
+    // Le prix simule ne doit dependre que du marche et du hasard.
+    // Mean-reversion component: gently pull toward a recent moving avg
+    const closes       = ps.candles.slice(-20).map(c => c.c);
+    const ma20         = closes.length > 3 ? closes.reduce((a,b)=>a+b,0)/closes.length : last.c;
+    const reversionPull= (ma20 - last.c) * 0.015;  // gentle, realistic
+    // Random walk (GBM-like)
+    const noise        = (Math.random() - 0.5) * cfg.vol * 1.4;
+    // Occasional larger moves (fat tails — realistic crypto)
+    const fatTail      = Math.random() < 0.04 ? (Math.random()-0.5)*cfg.vol*4 : 0;
+
+    const ch = reversionPull + noise + fatTail;
+    const o  = last.c;
+    const c  = o + ch;
+    const h  = Math.max(o, c) + Math.abs(ch)*0.3 + Math.random()*cfg.vol*0.3;
+    const l  = Math.min(o, c) - Math.abs(ch)*0.3 - Math.random()*cfg.vol*0.3;
+    const v  = Math.abs(ch) / cfg.vol * 1000 + Math.random() * 500;
+
+    ps.candles.push({ o, h, l, c, v });
+    if(ps.candles.length > 60) ps.candles.shift();
+
+    // Apply price — no hard min/max clamp when real prices are live (they set the range)
+    // Always use live price — no clamp when real data available
+    ps.price = _pricesFetched ? c : Math.max(cfg.minP, Math.min(cfg.maxP, c));
+    // pnl24h reflète la VRAIE variation du prix simulé sur la fenêtre de bougies
+    // (avant : marche aléatoire déconnectée du prix, sans rappel → régime figé en
+    //  BULL/BEAR en permanence). Désormais le régime suit réellement le marché simulé.
+    if (ps.candles.length >= 2) {
+      const _oldC = ps.candles[0].c;
+      ps.pnl24h = (_oldC > 0) ? Math.max(-40, Math.min(40, ((c - _oldC) / _oldC) * 100)) : 0;
+    }
+    } catch (e) { try{window._decErr&&window._decErr(e)}catch(_e){} }
+  });
+}
+window._simCandleStep = _simCandleStep;
+
 function simTick() {
   // v7.2 Phase 18 · Perf monitoring (rolling window, sans impact perceptible)
   const _perfStart = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
@@ -2931,6 +2999,9 @@ function simTick() {
   // Le Reel n'entre ici que si TU l'as mis en play — et ses ouvertures restent
   // gouvernees par les Regles Reel v2 (MANU jamais ; AUTO : bases solides).
   var _mDisp = S.tradingMode;
+  // [ÉCOLE VIVANTE · 10/10/2026] le mode que le battement voit à l'écran en commençant, gardé pour 02 _schoolBehind : pendant le tick, S.tradingMode est basculé
+  // vers les modes d'arrière-plan (ici, 10f _lossCapSweep, 04 executePending) — une fermeture de l'AA faite alors n'est pas une fermeture de l'écran.
+  window._auraScreenMode = _mDisp;
   var _mRun  = [];
   try {
     ['sim','paperReal','real'].forEach(function(_m){
@@ -2996,6 +3067,14 @@ function simTick() {
         }
       });
     } catch(e) {}
+    // [ÉCOLE VIVANTE · 10/10/2026] AA en play derrière un autre écran : son marché avance comme à l'écran — le prix va vers l'ancrage reçu de CoinGecko (02
+    // blendRealPrices ; l'ancrage est posé par 02 _schoolBgAnchor au moment où le prix arrive), puis une bougie fabriquée par paire (_simCandleStep). Même cadence
+    // qu'à l'écran (un tick sur trois), après les cycles comme à l'écran. S.tradingMode vaut 'sim' ici : S.pairStates est celui de l'AA, rien d'autre n'est écrit.
+    // Deux gardes séparées : un état abîmé qui fait échouer le mélange n'empêche pas la bougie.
+    if (_isBg && S.tradingMode === 'sim') {
+      try { blendRealPrices(); } catch(e) { try{window._decErr&&window._decErr(e)}catch(_e){} }
+      try { _simCandleStep(); } catch(e) { try{window._decErr&&window._decErr(e)}catch(_e){} }
+    }
     if (_isBg) { S.tradingMode = _mDisp; window._bgResolve = false; }
   });
 
@@ -3199,52 +3278,8 @@ function simTick() {
     // [1b-b · 15/09/2026] GÉNÉRATEUR RÉSERVÉ À AA : en EV/RE ps.candles vient des klines Binance (_projectRealCandles,
     // battement ci-dessus). Avant, ce bloc fabriquait 60 bougies de marche aléatoire (mèches, volumes, corps inventés)
     // pour le mode AFFICHÉ, EV compris, et écrasait ps.price avec le close synthétique toutes les 3 s.
-    if (S.tradingMode === 'sim') Object.entries(S.pairStates).forEach(([pair, ps]) => {
-      const cfg  = PAIRS[pair];
-      const last = ps.candles[ps.candles.length - 1] || { c: ps.price };
-
-      // ── Prix simule SANS retroaction des agents (30/07/2026) ──────────
-      // Le terme retire etait : lmsrBias = (lmsrP(ps) - 0.5) * cfg.vol * 0.7
-      // Il faisait bouger le prix DANS LA DIRECTION que les agents predisaient.
-      // Boucle fermee : les agents predisent -> le prix leur donne raison ->
-      // ils sont recompenses -> leur conviction se renforce. Mesure : a la
-      // valeur observee lmsrProb=0.5658, 38,5 % du mouvement entre deux
-      // ancrages reels etait produit par les agents eux-memes ; au-dela de
-      // lmsrProb=0.70 ils fabriquaient plus de 100 % du prix.
-      // Comme S.agents est GLOBAL (non cloisonne par mode), cette population
-      // entrainee dans un monde qui lui obeissait decidait ensuite en EV et RE
-      // sur de vrais prix, ou sa prediction n a aucun pouvoir causal.
-      // Le prix simule ne doit dependre que du marche et du hasard.
-      // Mean-reversion component: gently pull toward a recent moving avg
-      const closes       = ps.candles.slice(-20).map(c => c.c);
-      const ma20         = closes.length > 3 ? closes.reduce((a,b)=>a+b,0)/closes.length : last.c;
-      const reversionPull= (ma20 - last.c) * 0.015;  // gentle, realistic
-      // Random walk (GBM-like)
-      const noise        = (Math.random() - 0.5) * cfg.vol * 1.4;
-      // Occasional larger moves (fat tails — realistic crypto)
-      const fatTail      = Math.random() < 0.04 ? (Math.random()-0.5)*cfg.vol*4 : 0;
-
-      const ch = reversionPull + noise + fatTail;
-      const o  = last.c;
-      const c  = o + ch;
-      const h  = Math.max(o, c) + Math.abs(ch)*0.3 + Math.random()*cfg.vol*0.3;
-      const l  = Math.min(o, c) - Math.abs(ch)*0.3 - Math.random()*cfg.vol*0.3;
-      const v  = Math.abs(ch) / cfg.vol * 1000 + Math.random() * 500;
-
-      ps.candles.push({ o, h, l, c, v });
-      if(ps.candles.length > 60) ps.candles.shift();
-
-      // Apply price — no hard min/max clamp when real prices are live (they set the range)
-      // Always use live price — no clamp when real data available
-      ps.price = _pricesFetched ? c : Math.max(cfg.minP, Math.min(cfg.maxP, c));
-      // pnl24h reflète la VRAIE variation du prix simulé sur la fenêtre de bougies
-      // (avant : marche aléatoire déconnectée du prix, sans rappel → régime figé en
-      //  BULL/BEAR en permanence). Désormais le régime suit réellement le marché simulé.
-      if (ps.candles.length >= 2) {
-        const _oldC = ps.candles[0].c;
-        ps.pnl24h = (_oldC > 0) ? Math.max(-40, Math.min(40, ((c - _oldC) / _oldC) * 100)) : 0;
-      }
-    });
+    // [ÉCOLE VIVANTE · 10/10/2026] le corps est dans _simCandleStep (plus haut, inchangé) : l'AA en play derrière un autre écran l'appelle aussi (multiplexeur).
+    if (S.tradingMode === 'sim') _simCandleStep();
   }
 
   // ★ "PORTFOLIO DRIFT" SUPPRIME (05/07/2026) · ce mecanisme creait de l'argent

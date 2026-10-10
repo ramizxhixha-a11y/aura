@@ -919,6 +919,7 @@ async function fetchBinancePrices() {
         if(ps.candles.length > 0) ps.candles[ps.candles.length-1].c = realPrice;
       }
       ps._targetPrice = realPrice;
+      if (typeof _schoolBgAnchor === 'function') _schoolBgAnchor(pair, realPrice);   // [ÉCOLE VIVANTE · 10/10/2026] l'AA derrière un autre écran : même ancrage (plus bas)
       ps.pnl24h = change24h;
       if (typeof _ref24Set === 'function') _ref24Set(pair, parseFloat(item.openPrice), 'binance');   // [CARTES · 05/10/2026]
 
@@ -3919,6 +3920,8 @@ async function fetchLivePrices(force = false) {
         }
         ps._targetPrice   = realPrice;
       }
+      // [ÉCOLE VIVANTE · 10/10/2026] l'AA en play derrière un autre écran reçoit le même ancrage, au même moment, du même prix (_schoolBgAnchor, plus bas)
+      if (typeof _schoolBgAnchor === 'function') _schoolBgAnchor(pair, realPrice);
       ps.pnl24h         = change24h;
       if (typeof _ref24Set === 'function' && isFinite(change24h) && change24h > -99 && realPrice > 0) _ref24Set(pair, realPrice / (1 + change24h / 100), 'coingecko');   // [CARTES · 05/10/2026]
 
@@ -4011,6 +4014,50 @@ async function fetchLivePrices(force = false) {
     _fetchInProgress = false;
   }
 }
+
+// ═══ [ÉCOLE VIVANTE · 10/10/2026] L'ANCRAGE DE L'ÉCOLE QUAND ELLE N'EST PAS À L'ÉCRAN ═══
+// Le prix reçu (CoinGecko ci-dessus, secours Binance plus haut) n'est écrit que dans S.pairStates : celui du mode À L'ÉCRAN. L'AA en play derrière l'EV
+// ne recevait donc ni ancrage ni bougie (08 : le générateur ne tournait que pour le mode affiché) : son marché était figé, elle ouvrait et refermait au
+// même prix (backup 10/10). Ici, la règle d'ancrage de l'école — la même, au mot près, que les lignes ci-dessus pour l'AA à l'écran : premier écart de
+// plus de 0,5 % sans cible en cours → prix posé tout de suite, sinon cible que 08 rejoint par blendRealPrices — est appliquée à la paire du portefeuille
+// de l'AA quand l'AA est en play et qu'un AUTRE mode est à l'écran. AA en pause : rien. AA à l'écran : rien ici (les lignes d'origine s'en chargent).
+// N'écrit que dans le portefeuille de l'AA (walletStore.sim.pairStates) : ni l'EV, ni le RE, ni les bougies réelles, ni les agents.
+function _schoolBgPs(pair) {
+  try {
+    if (typeof S === 'undefined' || !S || S.tradingMode === 'sim') return null;
+    if (typeof _isModeRunning !== 'function' || typeof _walletFor !== 'function' || !_isModeRunning('sim')) return null;
+    const w = _walletFor('sim');
+    return (w && w.pairStates && w.pairStates[pair]) || null;
+  } catch (e) { return null; }
+}
+function _schoolBgAnchor(pair, realPrice) {
+  try {   // un portefeuille d'école abîmé ne doit jamais interrompre le lot de prix du mode à l'écran (l'appelant)
+    const sp = _schoolBgPs(pair);
+    if (!sp || !(realPrice > 0)) return false;
+    if(!sp._targetPrice && Math.abs(realPrice - sp.price) / sp.price > 0.005) {
+      sp.price = realPrice;  // premier sync: immédiat
+      if(Array.isArray(sp.candles) && sp.candles.length > 0 && sp.candles[sp.candles.length-1]) sp.candles[sp.candles.length-1].c = realPrice;
+    }
+    sp._targetPrice = realPrice;
+    return true;
+  } catch (e) { return false; }
+}
+// Ce qui se passe maintenant est-il fait par l'AA pendant qu'un AUTRE mode est à l'écran ? Le mode en cours de traitement est sim (bascule du multiplexeur de 08,
+// de 10f _lossCapSweep ou de 04 executePending) et l'écran, tel que le battement l'a vu en commençant (08 window._auraScreenMode), montre l'EV ou le RE ; le drapeau
+// du multiplexeur (window._bgResolve) le dit aussi. Lu par closePosition : une fermeture de l'AA derrière l'EV ne touche ni aux gardes communes ni à l'écran.
+// La photo du battement vieillit quand plus rien ne bat (tous les modes en pause) ou dans la seconde qui suit une bascule d'écran : il faut donc que l'horloge de 01
+// (AuraChrono, maître du mode affiché, à jour dès la bascule) montre AUSSI un mode réel. Dans le doute la réponse est non : la fermeture est traitée comme à l'écran.
+function _schoolBehind() {
+  try {
+    if (typeof S === 'undefined' || !S || S.tradingMode !== 'sim') return false;
+    if (window._bgResolve === true) return true;
+    const scr = window._auraScreenMode;
+    if (!(scr === 'paperReal' || scr === 'real')) return false;
+    const ch = (window.AuraChrono && typeof window.AuraChrono.getCurrentMode === 'function') ? window.AuraChrono.getCurrentMode() : scr;
+    return ch === 'paperReal' || ch === 'real';
+  } catch (e) { return false; }
+}
+window._schoolBgPs = _schoolBgPs; window._schoolBgAnchor = _schoolBgAnchor; window._schoolBehind = _schoolBehind;
 
 // v7.0: Watchdog — si pas de fetch réussi depuis 45s, force un retry
 function _priceWatchdog() {
@@ -6194,7 +6241,12 @@ function closePosition(id, botClose = false) {
   // ANTI-REVENGE : à chaque fermeture, on signale le résultat au système qui décide
   // de bloquer le bot après une grosse perte ou une série de pertes (cooldown).
   // Branché ici pour que la protection s'active réellement (avant, jamais appelée).
-  if (typeof checkAntiRevenge === 'function') {
+  // [ÉCOLE VIVANTE · 10/10/2026] SAUF une fermeture de l'AA quand elle tourne derrière un autre écran (_aaBehind). L'anti-revenge est UN SEUL état pour les trois
+  // modes (06 _rvActive) : armé, il refuse 15 min toute ouverture des bots en EV et en RE (09c) et pose son écran de refroidissement, son alerte sonore et le
+  // blocage des boutons devant l'utilisateur. Tant que le marché de l'AA était figé derrière l'EV, ses fermetures valaient 0 et ne l'armaient jamais ; vivant, une
+  // perte d'école de 1 % l'aurait armé contre l'EV (relecture adverse du 10/10 : 2 déclenchements en 6 h, 15 min de blocage chacun). L'AA à l'écran : inchangé.
+  const _aaBehind = (typeof _schoolBehind === 'function') && _schoolBehind();
+  if (!_aaBehind && typeof checkAntiRevenge === 'function') {
     try { checkAntiRevenge(realisedUsd, realisedPct, pos.pair); } catch(e) {}
   }
 
@@ -6510,8 +6562,10 @@ function closePosition(id, botClose = false) {
       // v19 · #38 Notification trade fermé
       try { if(typeof notifTradeClose === 'function') notifTradeClose(pos.pair, pos.side, realisedUsd, realisedPct); } catch(e) {}
       // v23 · #5 Vérifier alertes après chaque trade
-      try { if(typeof checkPnlAlerts === 'function') checkPnlAlerts(); } catch(e) {}
-      try { if(typeof checkBadges === 'function') checkBadges(); } catch(e) {}
+      // [ÉCOLE VIVANTE · 10/10/2026] pas pour l'AA derrière un autre écran : ces alertes et ces badges s'affichent devant l'utilisateur et leurs drapeaux
+      // (S.pnlAlerts, une fois par session) sont communs aux modes — l'écran les vérifie lui-même pour le mode affiché (renderHome)
+      try { if(!_aaBehind && typeof checkPnlAlerts === 'function') checkPnlAlerts(); } catch(e) {}
+      try { if(!_aaBehind && typeof checkBadges === 'function') checkBadges(); } catch(e) {}
       if(typeof closeDecisionCascade  === 'function') closeDecisionCascade(pos.pair, pos.side, pos.currentPrice || pos.entryPrice, realisedUsd, realisedPct);
       if(typeof runBotFleet           === 'function') runBotFleet('post_trade', { pnlUsd: realisedUsd, sizerMult: pos._sizerMult });
       // [SPÉCIALISATION · 15/08/2026] les trois juges notent les réponses du jury
@@ -6551,7 +6605,10 @@ function closePosition(id, botClose = false) {
   showToast('Fermé '+pos.pair+levTag+' · '+pnlStr+' · '+usdtStr);
 
   // ═══ v5.1 — Milestones & Particles ═══
-  if(realisedPct >= 5.0) {
+  // [ÉCOLE VIVANTE · 10/10/2026] rien de tout cela pour une fermeture de l'AA derrière un autre écran : un jalon « VICTOIRE » ou « Perte » en plein écran EV
+  // pour un trade d'école serait faux. Le toast « Fermé … » ci-dessus et la ligne du journal restent, comme avant.
+  if (_aaBehind) { /* l'AA derrière un autre écran : ni jalon ni particules */ }
+  else if(realisedPct >= 5.0) {
     // Big win: 🎉 celebration
     emitVictoryParticles(55);
     showMilestone('🎉', 'VICTOIRE · '+pos.pair+' +'+realisedPct.toFixed(1)+'% · '+usdtStr);

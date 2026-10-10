@@ -407,7 +407,9 @@ window._auraGetGlobalS = _auraGetGlobalS;
     const simTick = _getSimTick();
     if (!simTick) { _toast('⚠ simTick introuvable', 'warn'); return; }
     window._auraSimState.interval = setInterval(function() {
-      try { simTick(); } catch(e) { console.warn('[AURA simTick]', e); }
+      // [ÉCOLE VIVANTE · 10/10/2026] une exception qui interrompt le battement est aussi comptée et dite une fois au journal (00 _decErr) : celle du générateur de
+      // l'école l'a interrompu un tick sur trois du 22/09 au 10/10 (AA à l'écran) sans laisser d'autre trace qu'un avertissement de console, invisible au Guardian
+      try { simTick(); } catch(e) { console.warn('[AURA simTick]', e); try { if (window._decErr) window._decErr(e); } catch(_e) {} }
     }, 1000);
     window._auraSimState.running = true;
     // ETAPE 3 · play/pause PAR MODE : marque le mode actif comme "en cours"
