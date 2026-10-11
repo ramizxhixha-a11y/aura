@@ -1,4 +1,5 @@
 // ▓▓▓ VERSION 20260906g ▓▓▓
+// [PONT DIRECT · 11/10/2026] VERSION 20261011a · renderNewsScoreSection : titre des actualités (CoinStats, 10e7) échappé avant innerHTML — du TEXTE, jamais du HTML (un titre piégé aurait pu lire le PAT du pont)
 // [P7 · 06/09/2026] Scoring News par Coin : fetch CryptoCompare mort + NLP local SUPPRIMÉS, rendu sur la source unique 10e7
 // [P2 · 06/09/2026] calendrier v60 : _getRecurringEvents déplacée dans 10e2-calendrier-eco.js (source unique décision+affichage) ; renderCalSection inchangé, compte à rebours « En cours » dans la fenêtre post-annonce.
 // [P0 RÉGIME UNIFIÉ · 05/09/2026] toutes les lectures de régime passent par detectMarketRegime() (source unique, 02). Mode Démo : les presets forcent le régime via S._regimeOverride (clé preset renommée regime).
@@ -4647,7 +4648,7 @@ function renderNewsScoreSection() {
           ${(d.top||[]).slice(0,2).map(a=>`
             <div class="ns-article">
               ${a.s>0.1?'<span class="ns-keyword ns-kw-bull">▲</span>':a.s<-0.1?'<span class="ns-keyword ns-kw-bear">▼</span>':''}
-              ${a.title}
+              ${String(a.title == null ? '' : a.title).replace(/[&<>"']/g, c => '&#' + c.charCodeAt(0) + ';')}
             </div>`).join('')}
         </div>`;
       }).join('')}

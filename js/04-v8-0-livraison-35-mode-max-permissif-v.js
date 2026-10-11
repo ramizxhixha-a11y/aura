@@ -1,4 +1,5 @@
 // [HORIZONS APPRIS · 27/09/2026] VERSION 20260927i · propositions exécutées automatiquement (fermer une position, rééquilibrer une paire) : jamais une position tenue jusqu'à son horizon prouvé ; validées à la main, inchangées
+// [PONT DIRECT · 11/10/2026] VERSION 20261011a · renderSentimentNewsSection : titre et source des actualités (CoinStats, 10e7) échappés avant innerHTML — un titre piégé ne s'exécute plus (il aurait pu lire le PAT du pont dans localStorage)
 // [DÉCISION COMMUNE · 27/09/2026] VERSION 20260927g · en automatique, un bot ne trade plus seul (aucun mode) : son occasion devient une affirmation jugée par le marché et sa lecture de la paire est une VOIX de la décision commune (03), lue par le cerveau ; ta validation à la main passe toujours
 // [FREIN · 27/09/2026] VERSION 20260927f · EV : un bot qui se trompe au moins autant qu'il a raison (≥ 5 actes jugés) n'ouvre plus de trade en automatique — son occasion reste une affirmation jugée par le marché, il retrade dès que son bilan redevient positif (la « mise minimum » valait la mise normale) ; Réel et AA inchangés
 // [PLAFOND DU CERVEAU · 27/09/2026] VERSION 20260927d · une ouverture de bot se signale à l'entonnoir (window._openingBot) et marque son entrée « open » (bot) : le plafond d'ouvertures par jour du cerveau ne la compte ni ne la bloque
@@ -3597,6 +3598,7 @@ function renderSentimentNewsSection() {
       <!-- Articles scorés les plus marqués -->
       <div style="font-size:var(--fs-9);color:var(--t3);margin-bottom:5px;">Titres scorés les plus marqués (${v.recent.length})</div>
       ${v.recent.slice(0,8).map(a=>{
+        const _escN = x => String(x == null ? '' : x).replace(/[&<>"']/g, c => '&#' + c.charCodeAt(0) + ';');   // [PONT DIRECT · 11/10/2026] titre et source viennent de CoinStats : du TEXTE, jamais du HTML
         const sentiment = a.s>0.2?'bull':a.s<-0.2?'bear':'neut';
         const sentCol = sentiment==='bull'?'var(--up)':sentiment==='bear'?'var(--down)':'var(--t3)';
         const ago2 = Math.floor((Date.now()-a.ts)/3600000)+'h';
@@ -3604,9 +3606,9 @@ function renderSentimentNewsSection() {
           <div style="display:flex;align-items:flex-start;gap:6px;">
             <span class="sn-article-badge ${sentiment}">${sentiment==='bull'?'▲ BULL':sentiment==='bear'?'▼ BEAR':'● NEUT'}</span>
             <div>
-              <div class="sn-article-title">${a.title.slice(0,80)}${a.title.length>80?'…':''}</div>
+              <div class="sn-article-title">${_escN(String(a.title || '').slice(0,80))}${String(a.title || '').length>80?'…':''}</div>
               <div class="sn-article-meta">
-                <span>${a.source}</span>
+                <span>${_escN(a.source)}</span>
                 <span>il y a ${ago2}</span>
                 <span style="color:${sentCol};">bull:${a.bull} bear:${a.bear}</span>
               </div>
