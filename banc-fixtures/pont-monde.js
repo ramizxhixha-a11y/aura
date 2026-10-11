@@ -113,6 +113,8 @@ function monde(o) {
   if (o.natif !== false) c.Capacitor = { Plugins: {} };
   c.window = c;
   vm.createContext(c);
+  // localStorage bâti DANS la vm (objet simple de ce royaume, comme… aucun objet de l'app) : seule la garde par identité de 17 (interdit) l'empêche d'être ouvert
+  c.__ls = localStorage; vm.runInContext('(function (L) { window.localStorage = { getItem: function (k) { return L.getItem(k); }, setItem: function (k, v) { return L.setItem(k, v); }, removeItem: function (k) { return L.removeItem(k); } }; })(__ls); delete window.__ls;', c);
   vm.runInContext('(function () { const C = __clock, RD = Date; class FD extends RD { constructor(...a) { if (!a.length) super(C.t); else super(...a); } static now() { return C.t; } } globalThis.Date = FD; Math.random = function () { __stats.alea++; return 0.5; }; })();', c);
   vm.runInContext('Object.assign(window, ' + JSON.stringify(autour(clock.t)) + ');\nlet _wakeLockEnabled = true, _wakeLockSentinel = null;\n'
     + 'window._perfOp = function (name) { __stats.ops.push(String(name)); window._auraLastOp = { name: String(name), at: Date.now() }; };', c);   // _perfOp : celui de 08 (il pose le marqueur), compté

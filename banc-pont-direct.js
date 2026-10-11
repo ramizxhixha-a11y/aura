@@ -173,6 +173,9 @@ T('P9 · PAT en lecture seule sur aura-pont (l\'écriture de etat.json répond 4
   await X.avancer(10 * MIN); assert.strictEqual(X.gh.journal.length, 4);
   X = monde({ lsRefuse: 'aura_pont_mem' }); await X.activer(PAT_OK);
   assert.strictEqual(X.st().etat, 'actif'); assert.ok(/dernier incident .*la mémoire du pont n'est pas gardée/.test(ligne(X)), ligne(X));
+  const b9 = X.demande(1, 'backup'); await X.jusqua(() => X.rep(b9) !== null); await X.avancer(3 * MIN);
+  const p9 = X.demande(2, 'ping'); await X.jusqua(() => X.rep(p9) !== null); await X.avancer(MIN);   // la liste change : son ETag ne protège plus
+  assert.strictEqual(X.puts(/reponses/).length, 2, 'mémoire non sauvée : celle de la page fait foi, la demande n\'est pas reprise à chaque battement'); assert.strictEqual(X.gh.chemins().filter(p => p.startsWith('backups/a')).length, 1);
 });
 
 // ───────────── D · où part le PAT ─────────────
@@ -816,6 +819,17 @@ T('P41 · relecture — une entrée « empoisonnée » (la liste la dit fichier,
   assert.ok(X.rep(ok1) && X.rep(ok1).ok, 'après 3 lectures le poison est écarté, la file reprend');
   const lus = () => X.gh.journal.filter(r => r.m === 'GET' && r.url.endsWith(poison + '.json')).length; assert.strictEqual(lus(), 3);
   await X.avancer(10 * MIN); assert.strictEqual(lus(), 3, 'plus jamais relue'); assert.strictEqual(X.rep(poison), null); assert.strictEqual(X.st().echecs, 0);
+});
+
+T('P42 · une seule place pour les demandes cette heure-ci : un ping passe, un backup (deux écritures : le fichier et la réponse) ATTEND — rien n\'est bâti ni écrit — et passe quand l\'heure tourne', async () => {
+  const X = monde({ ls: { aura_pont_mem: seme(46, 30 * MIN) } }); await X.activer(PAT_OK); assert.strictEqual(mem(X).ecrits.length, 48);   // 60 − 12 gardées − 48 = 0 place
+  const b = X.demande(1, 'backup'); await X.avancer(MIN);
+  assert.strictEqual(X.rep(b), null); assert.strictEqual(X.gh.chemins().filter(p => p.startsWith('backups/a')).length, 0); assert.deepStrictEqual(X.stats.ops, [], 'rien n\'est exécuté');
+  const Y = monde({ ls: { aura_pont_mem: seme(45, 30 * MIN) } }); await Y.activer(PAT_OK); assert.strictEqual(mem(Y).ecrits.length, 47);   // une place
+  const yb = Y.demande(1, 'backup', undefined, { ttl: 3600 }); await Y.avancer(MIN);
+  assert.strictEqual(Y.rep(yb), null, 'le backup attend'); assert.strictEqual(Y.gh.chemins().filter(p => p.startsWith('backups/a')).length, 0); assert.deepStrictEqual(Y.stats.ops, []); assert.ok(/quota d'écritures/.test(Y.st().err), Y.st().err);
+  const yp = Y.demande(2, 'ping'); await Y.avancer(MIN); assert.ok(Y.rep(yp) && Y.rep(yp).ok, 'un ping (une écriture) passe');
+  await Y.jusqua(() => Y.rep(yb) !== null, 15000, 200); assert.strictEqual(Y.rep(yb).ok, true); assert.strictEqual(Y.gh.chemins().filter(p => p.startsWith('backups/a')).length, 1); assert.ok(Y.clock.t - T0 > 29 * MIN, 'quand les écritures semées sortent de l\'heure');
 });
 
 (async () => {
