@@ -7,6 +7,7 @@
 //   1. HTML : DOC_V présent, les 87 ?v= identiques à DOC_V, chaque script/css déclaré existe sur le disque.
 //   1b. PASSATION : PASSATION-AURA8.md présente à la racine et 1re ligne portant `DOC_V` — la passation est versionnée et
 //       réécrite dans CHAQUE commit de livraison (push direct depuis le 12/09) ; l'oublier ou la laisser à l'ancien token BLOQUE.
+//   1c. ÉTAT COURT (13/10) : ETAT-AURA8.md présent, 1re ligne au token, ≤ 20 Ko ; CLAUDE.md présent. Sinon BLOQUE.
 //   2. Syntaxe : chaque .js du dépôt (js/, racine, bancs) compile (vm.Script).
 //   3. COLLISIONS GLOBALES — la classe d'erreur la plus coûteuse de ce projet (09b3 `_buildFullBackup()` a écrasé en silence
 //      celui de 03 pendant 2 mois et demi → store IDB obèse, gels de 6 s à chaque boot) : tous les scripts chargés par le HTML
@@ -56,6 +57,22 @@ else {
   if (TOK && l1.includes('`' + TOK + '`')) ok(PASS + ' : 1re ligne au token ' + TOK);
   else ko(PASS + ' : 1re ligne sans le token ' + TOK + ' — passation NON mise à jour : « ' + l1.slice(0, 90) + ' »');
 }
+
+/* ───── 1c. [GO AUDIT · 13/10/2026] État court et règles de Claude : ETAT-AURA8.md (≤ 20 Ko, 1re ligne au token) + CLAUDE.md ─────
+   La passation (438 Ko) n'est lisible par aucune session : ETAT-AURA8.md est ce qu'une session lit EN PREMIER (état vivant,
+   règles de Rams, registre des défauts ouverts). Il doit être réécrit à chaque livraison et rester court. */
+console.log('▶ État court + règles');
+const ETAT = 'ETAT-AURA8.md', ETAT_MAX = 20000;
+if (!fs.existsSync(path.join(ROOT, ETAT))) ko(ETAT + ' ABSENT de la racine — l\'état court est commité avec chaque livraison');
+else {
+  const e = rd(ETAT), l1e = e.split('\n')[0], taille = Buffer.byteLength(e, 'utf8');
+  if (TOK && l1e.includes('`' + TOK + '`')) ok(ETAT + ' : 1re ligne au token ' + TOK);
+  else ko(ETAT + ' : 1re ligne sans le token ' + TOK + ' — état NON mis à jour : « ' + l1e.slice(0, 90) + ' »');
+  if (taille <= ETAT_MAX) ok(ETAT + ' : ' + taille + ' octets (≤ ' + ETAT_MAX + ')');
+  else ko(ETAT + ' : ' + taille + ' octets > ' + ETAT_MAX + ' — l\'état court doit le rester (le détail va dans la passation, les bancs, les scripts)');
+}
+if (fs.existsSync(path.join(ROOT, 'CLAUDE.md'))) ok('CLAUDE.md présent (règles de travail de Claude)');
+else ko('CLAUDE.md ABSENT de la racine — les règles de travail de Claude ne doivent pas disparaître');
 
 /* ───── 2. Syntaxe de tous les .js du dépôt ───── */
 console.log('▶ Syntaxe');
