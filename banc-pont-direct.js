@@ -13,6 +13,9 @@
 const fs = require('fs'), vm = require('vm'), assert = require('assert'), path = require('path'), zlib = require('zlib');
 const M = require('./banc-fixtures/pont-monde.js')({ pont: process.argv[2], lect: process.argv[3] });
 const { monde, empreinte, between, codeStrict, rd, J, ROOT, F17, F17B, HTML, TOK, O, DEPOT, SONDE, T0, MIN, H, EXPORT_10H, PAT_OK, PAT_LARGE, PAT_RO, PAT_AUTRE, PAT_MORT, PAT_CLASSIQUE } = M;
+// [GO DÉMO · 12/10/2026] la version PROPRE du pont (17, 17b, rejeu/pont.js) est celle de sa livraison ; le jeton du document (TOK, lu dans le HTML), lui, avance à
+// chaque livraison. Avant, ce banc comparait les deux au même TOK : il cassait à la première livraison qui ne retouchait pas le pont.
+const PONT_TOK = '20261011a';
 let pass = 0, fail = 0;
 const TESTS = [];
 function T(name, fn) { TESTS.push([name, fn]); }
@@ -40,7 +43,7 @@ T('P2 · la ligne du panneau Outils : posée tout de suite si la page est charg�
   const on = [...bar.innerHTML.matchAll(/onclick="([^"]+)"/g)].map(m => m[1]);
   assert.deepStrictEqual(on, ['pontDirectActiver()', 'pontDirectEnvoyer()', 'pontDirectCouper()']);
   on.forEach(f => assert.strictEqual(typeof X.c[f.replace('()', '')], 'function', f));
-  assert.ok(bar.innerHTML.includes('type="password"') && bar.innerHTML.includes('autocomplete="off"') && bar.innerHTML.includes('Pont direct ' + TOK));
+  assert.ok(bar.innerHTML.includes('type="password"') && bar.innerHTML.includes('autocomplete="off"') && bar.innerHTML.includes('Pont direct ' + PONT_TOK));
   assert.ok(/^coupé · colle le PAT/.test(ligne(X))); assert.strictEqual(X.els.pontDirectSaisie.style.display, 'flex'); assert.strictEqual(X.els.pontDirectActions.style.display, 'none');
   X.docL[0][1](); assert.strictEqual(X.els.pontDirectBar, bar, 'une seule barre');
   X = monde({ barre10h: true }); assert.strictEqual(X.els.pontDirectBar._avant, X.els.claudeExportBar);
@@ -75,7 +78,7 @@ T('P5 · etat.json : version chargée, mode à l\'écran, les trois modes (play,
   const X = monde({ ls: { aura_throttle_log: JSON.stringify(Array.from({ length: 7 }, (_, i) => ({ t: '1' + i + '/10/2026 07:22:01', gapS: 44640 + i }))) } });
   await X.activer(PAT_OK);
   const e = JSON.parse(X.gh.texte('etat.json'));
-  assert.strictEqual(e.pont, 1); assert.strictEqual(e.v, TOK); assert.strictEqual(e.doc, TOK); assert.strictEqual(e.t, T0 + 2000); assert.strictEqual(e.iso, '2026-10-11T09:45:14.000Z'); assert.strictEqual(e.fuseauMin, new Date(T0).getTimezoneOffset());
+  assert.strictEqual(e.pont, 1); assert.strictEqual(e.v, PONT_TOK); assert.strictEqual(e.doc, TOK); assert.strictEqual(e.t, T0 + 2000); assert.strictEqual(e.iso, '2026-10-11T09:45:14.000Z'); assert.strictEqual(e.fuseauMin, new Date(T0).getTimezoneOffset());
   assert.ok(/^[a-z0-9]{6,16}$/.test(e.inst)); assert.strictEqual(e.natif, true); assert.strictEqual(e.pret, true); assert.strictEqual(e.enLigne, true); assert.strictEqual(e.visible, 'visible'); assert.deepStrictEqual(e.scripts, { n: 2, jetons: { [TOK]: 2 } });
   assert.strictEqual(e.ecran, 'paperReal'); assert.strictEqual(e.cycle, 1253765);
   assert.deepStrictEqual(Object.keys(e.modes), ['sim', 'paperReal', 'real']);
@@ -333,7 +336,7 @@ T('P17 · ping, etat, diag, lire : servis une fois, réponse bien formée (insta
   const X = monde(); await X.activer(PAT_OK);
   const a = X.demande(1, 'ping'), b = X.demande(2, 'etat'), d = X.demande(3, 'diag');
   await X.avancer(30000);
-  const ra = X.rep(a); assert.deepStrictEqual(Object.keys(ra), ['id', 'cmd', 'ok', 'r', 't', 'iso', 'ms', 'doc', 'v', 'inst']); assert.deepStrictEqual(ra.r, { pong: true }); assert.strictEqual(ra.id, a); assert.strictEqual(ra.cmd, 'ping'); assert.strictEqual(ra.doc, TOK); assert.strictEqual(ra.v, TOK); assert.strictEqual(ra.inst, mem(X).inst);
+  const ra = X.rep(a); assert.deepStrictEqual(Object.keys(ra), ['id', 'cmd', 'ok', 'r', 't', 'iso', 'ms', 'doc', 'v', 'inst']); assert.deepStrictEqual(ra.r, { pong: true }); assert.strictEqual(ra.id, a); assert.strictEqual(ra.cmd, 'ping'); assert.strictEqual(ra.doc, TOK); assert.strictEqual(ra.v, PONT_TOK); assert.strictEqual(ra.inst, mem(X).inst);
   assert.strictEqual(X.rep(b).r.cycle, 1253765); assert.strictEqual(X.rep(b).r.etatPont.etat, 'actif');
   const rd = X.rep(d).r; assert.strictEqual(rd.journal.length, 50); assert.strictEqual(rd.perfLog.gels[0].loaf.dur, 1442); assert.deepStrictEqual(rd.erreursAvalees, { 'x is not defined': 3 }); assert.strictEqual(rd.scripts.liste.length, 2);
   assert.deepStrictEqual(rd.stockage, { usage: 1234, quota: 5678 }); assert.deepStrictEqual(rd.appareil.memoireMo, [21, 30, 954]); assert.strictEqual(rd.RT.SAVE_KEY, 'nexus_state_v2'); assert.strictEqual(rd.recComplet.lines, 4200); assert.deepStrictEqual(rd.erreursPage, []); assert.strictEqual(rd.lents[0].dur, 1408);
@@ -739,8 +742,8 @@ T('P35 · textes : ni eval, ni Function, ni Math.random, showToast, _decErr, XML
   assert.ok(p.includes("var SONDE = API + 'aura/contents/" + F17B + "';")); assert.ok(fs.existsSync(path.join(ROOT, F17B)));
   assert.ok(p.includes("var CMDS = ['ping', 'etat', 'diag', 'lire', 'backup'];")); assert.ok(p.includes("var LS_PAT = 'aura_pont_pat', LS_MEM = 'aura_pont_mem';"));
   assert.deepStrictEqual([...new Set(p.match(/window\._perfOp|window\.buildSnapshot|window\.(?!(?:add|remove)EventListener)\w+\s*\(/g) || [])].sort(), ['window._perfOp', 'window.buildSnapshot'], 'de l\'app, le pont n\'appelle que buildSnapshot et _perfOp');
-  assert.ok(M.PONT.startsWith('// ═══ [PONT DIRECT · 11/10/2026] VERSION ' + TOK + ' · « go pont »')); assert.ok(M.LECT.startsWith('// ═══ [PONT DIRECT · 11/10/2026] VERSION ' + TOK + ' · LECTURE'));
-  assert.ok(p.includes("var PONT_V = '" + TOK + "'") && l.includes("var LECT_V = '" + TOK + "'"));
+  assert.ok(M.PONT.startsWith('// ═══ [PONT DIRECT · 11/10/2026] VERSION ' + PONT_TOK + ' · « go pont »')); assert.ok(M.LECT.startsWith('// ═══ [PONT DIRECT · 11/10/2026] VERSION ' + PONT_TOK + ' · LECTURE'));
+  assert.ok(p.includes("var PONT_V = '" + PONT_TOK + "'") && l.includes("var LECT_V = '" + PONT_TOK + "'"));
 });
 T('P36 · HTML : 17-pont-lecture puis 17b-pont-direct, une fois chacun, juste après 16b, au jeton courant ; aucun autre fichier chargé ne connaît aura_pont_pat ; les énumérations de localStorage du dépôt sont celles relues le 11/10 (03 et 06 : noms et tailles ; Guardian : seulement un JSON d\'état — le PAT n\'en est pas un)', () => {
   assert.ok(HTML.includes('<script src="js/16b-fiscal-ecran.js?v=' + TOK + '"></script>\n<script src="' + F17 + '?v=' + TOK + '"></script>\n<script src="' + F17B + '?v=' + TOK + '"></script>\n'));
@@ -792,7 +795,7 @@ T('P39 · rejeu/pont.js (côté session), statique — le comportement est tenu 
   assert.ok(o.includes("const CMDS = ['ping', 'etat', 'diag', 'lire', 'backup'], SOURCES = ['S', 'RT', 'rec', 'tl', 'lents', 'throttle', 'pont'];"));
   assert.deepStrictEqual(J(monde().c._pontLecture.sources), ['S', 'RT', 'rec', 'tl', 'lents', 'throttle', 'pont']);
   assert.ok(o.includes("RE_BACKUP = /^backups\\/(aura_guardian_full_\\d{8}-\\d{6}\\.json)(\\.gz)?$/"), 'le nom du backup reçu est validé avant d\'écrire');
-  assert.ok(brut.startsWith('// [PONT DIRECT · 11/10/2026] VERSION ' + TOK));
+  assert.ok(brut.startsWith('// [PONT DIRECT · 11/10/2026] VERSION ' + PONT_TOK));
 });
 
 T('P40 · relecture — les titres d\'actualités (CoinStats, 10e7) sont du TEXTE : les VRAIS rendus de 04 (renderSentimentNewsSection) et 05 (renderNewsScoreSection) échappent titre et source ; un titre piégé ne devient jamais une balise (il aurait pu lire le PAT du pont)', () => {

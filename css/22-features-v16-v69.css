@@ -1178,30 +1178,6 @@ body{transition:background .4s,color .3s;}
   opacity:0;pointer-events:none;transition:all .4s;min-width:220px;}
 #badgeToast.show{opacity:1;transform:translateX(-50%) translateY(0);}
 
-/* v50 MULTI-COMPTE */
-.mc-section{background:var(--s1);border:1px solid var(--border);border-radius:12px;padding:12px;margin-bottom:10px;}
-.mc-title{font-size:10px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:var(--t2);margin-bottom:10px;display:flex;justify-content:space-between;align-items:center;}
-.mc-account{display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:10px;border:1px solid var(--border);background:var(--s2);margin-bottom:6px;cursor:pointer;transition:all .2s;}
-.mc-account:last-child{margin-bottom:0;}
-.mc-account.active{border-color:rgba(56,212,245,.4);background:rgba(56,212,245,.06);}
-.mc-account-avatar{width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0;}
-.mc-account-info{flex:1;}
-.mc-account-name{font-size:11px;font-weight:700;color:var(--t1);}
-.mc-account-sub{font-size:8px;color:var(--t3);margin-top:1px;}
-.mc-account-pnl{font-size:12px;font-weight:800;font-family:var(--font-mono);}
-.mc-active-badge{font-size:8px;padding:2px 7px;border-radius:8px;background:rgba(56,212,245,.12);color:var(--ice);font-weight:700;}
-.mc-add-btn{width:100%;padding:9px;border-radius:8px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;background:rgba(255,255,255,.04);border:1px dashed var(--border);color:var(--t3);margin-top:8px;transition:all .15s;}
-.mc-add-btn:active{background:rgba(255,255,255,.08);}
-
-/* v51 MODE DEMO */
-#demoBanner{position:fixed;top:0;left:0;right:0;z-index:1100;height:28px;
-  background:linear-gradient(90deg,#7c3aed,#a855f7,#7c3aed);
-  background-size:200% 100%;animation:demoShimmer 2s linear infinite;
-  display:flex;align-items:center;justify-content:center;gap:10px;
-  font-size:10px;font-weight:700;letter-spacing:.1em;color:#fff;
-  opacity:0;pointer-events:none;transition:opacity .3s;}
-#demoBanner.show{opacity:1;pointer-events:auto;}
-
 /* v52 DASHBOARD PUBLIC */
 .dp-section{background:var(--s1);border:1px solid var(--border);border-radius:12px;padding:12px;margin-bottom:10px;}
 .dp-title{font-size:10px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:var(--t2);margin-bottom:10px;display:flex;justify-content:space-between;align-items:center;}
@@ -1557,20 +1533,6 @@ body{transition:background .4s,color .3s;}
   box-shadow:0 2px 10px rgba(0,0,0,.5);
   opacity:0;pointer-events:none;transition:opacity .3s;}
 .pip-btn-open.show{opacity:1;pointer-events:auto;}
-@keyframes demoShimmer{0%{background-position:200% 0;}100%{background-position:-200% 0;}}
-.demo-section{background:var(--s1);border:1px solid rgba(167,139,250,.3);border-radius:12px;padding:12px;margin-bottom:10px;}
-.demo-title{font-size:10px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:var(--pur);margin-bottom:10px;display:flex;justify-content:space-between;align-items:center;}
-.demo-preset{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:8px;border:1px solid var(--border);background:var(--s2);margin-bottom:6px;cursor:pointer;transition:all .2s;}
-.demo-preset:hover{border-color:rgba(167,139,250,.3);}
-.demo-preset-icon{font-size:20px;flex-shrink:0;}
-.demo-preset-info{flex:1;}
-.demo-preset-name{font-size:11px;font-weight:700;color:var(--t1);}
-.demo-preset-desc{font-size:8px;color:var(--t3);margin-top:1px;}
-.demo-preset-badge{font-size:9px;font-weight:700;padding:2px 8px;border-radius:8px;}
-.mc-switcher-bar{display:flex;gap:5px;overflow-x:auto;padding:4px 0;scrollbar-width:none;margin-bottom:10px;}
-.mc-switcher-bar::-webkit-scrollbar{display:none;}
-.mc-chip{padding:4px 10px;border-radius:20px;font-size:9px;font-weight:700;cursor:pointer;border:1px solid var(--border);background:var(--s2);color:var(--t2);white-space:nowrap;transition:all .15s;font-family:inherit;}
-.mc-chip.active{background:rgba(56,212,245,.15);border-color:rgba(56,212,245,.4);color:var(--ice);}
 #badgeToast .bt-emoji{font-size:28px;}
 #badgeToast .bt-text{flex:1;}
 #badgeToast .bt-title{font-size:10px;color:var(--gold);font-weight:800;letter-spacing:.05em;}

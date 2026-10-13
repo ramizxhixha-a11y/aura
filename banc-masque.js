@@ -4,8 +4,9 @@
 //    évolution RÉELLE, 07 triggerEvolution(weak, { manual, quiet })) ; « Revigoration forcée » des bots retirée ;
 //  · 04 « Apprentissage accéléré » (modes ×3 / ×8, session rejouée ±5 à tous, boost +50 / +200) → panneau « Apprentissage réel » ;
 //  · 02 juge caché « v6.0 » de la clôture retiré (il créditait toujours le premier hybride, macro_v1, pour les avis des autres).
-// Invariant vérifié sur TOUT le code : la fitness ne s'écrit que par le jugement, la naissance, la restauration (et la démo, le
-// marché LMSR — connus, listés).
+// Invariant vérifié sur TOUT le code : la fitness ne s'écrit que par le jugement, la naissance, la restauration (et le marché LMSR — connu, listé).
+// [GO DÉMO · 12/10/2026] le Mode Démo (05), qui la tirait au hasard pour les 31 agents, est retiré : son écriture sort de la liste. Entre : la réparation
+// (18), qui REND à un agent sa fitness du backup quand la carte l'avait laissé avec une valeur tirée au hasard et qu'aucun jugement ne l'a recalculée.
 'use strict';
 const fs = require('fs'), vm = require('vm'), assert = require('assert'), path = require('path');
 const ROOT = __dirname, rd = f => fs.readFileSync(path.join(ROOT, f), 'utf8');
@@ -71,10 +72,10 @@ T('D3 · panneau « Apprentissage réel » RÉEL (04) : jugements réels, fenêt
   S.agents = [{ fitness: 500 }]; S._lastEvolutionAt = now - 2 * 3600000; vm.runInContext('renderLearningAccelSection();', c);
   assert.ok(!el.innerHTML.includes('Faire évoluer') && el.innerHTML.includes('possible maintenant'));
 });
-T('D4 · invariant sur TOUT le code : la fitness ne s\'écrit que par le jugement (03), la naissance (07), la restauration (09b2) — plus la démo (05, restaurée à la sortie) ; le marché LMSR (08) ne la débite plus [MARCHÉ LMSR À PART · 28/09/2026] ; aucune autre écriture', () => {
+T('D4 · invariant sur TOUT le code : la fitness ne s\'écrit que par le jugement (03), la naissance (07), la restauration (09b2) — plus la réparation d\'un compte abîmé par le Mode Démo (18 : la valeur du backup, rendue ; la démo elle-même est retirée de 05 le 12/10) ; le marché LMSR (08) ne la débite plus [MARCHÉ LMSR À PART · 28/09/2026] ; aucune autre écriture', () => {
   const ALLOW = [
     ['03', 'a.fitness = f;', 2], ['03', 'if (_fw !== null) a.fitness = _fw;', 1], ['03', 'if (_fa !== null) a.fitness = _fa;', 1], ['03', 'else if (before >= FIT_MIN_N) a.fitness = 350;', 1],
-    ['03', 'a._judgments = []; a.fitness = 350; a.streak = 0;', 2], ['05', 'a.fitness = preset.agentFitness', 1], ['07', 'weak.fitness = Math.max(350,', 1],
+    ['03', 'a._judgments = []; a.fitness = 350; a.streak = 0;', 2], ['18', 'if (ag) ag.fitness = x.a;', 1], ['07', 'weak.fitness = Math.max(350,', 1],
     ['09b2', 'a.fitness        = sa.fitness;', 1], ['09b2', 'a.fitness = r.f;', 1], ['09b2', 'a.fitness = 350; a.lmsrWallet = 350;', 1],
     ['03', 'sec._judgments = []; sec.fitness = 350; sec.streak = 0;', 1]];   // [DÉGEL DES VOIX · 02/10/2026] record de security_v1 gagné par le faux achat du feu vert, effacé une fois (migration)   // [MARCHÉ LMSR À PART · 28/09/2026] plus d'écriture additive du marché (08) ; résidu des sauvegardes d'avant remis à 350 une fois (09b2)
   const found = [];

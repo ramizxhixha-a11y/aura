@@ -91,7 +91,7 @@ const _LIGHT_KEYS = [
   'leverageMaxMult','leverageBorrowRate','leverageBorrowed','leverageTotalFees',
   '_autoLevBase','_autoLevBorrowed','_marginCallFired',
   'usdEurRate','_usdEurLastFetch','fiatRates','fiatConvFeePct',
-  'tradingMode','botAutoMode','_mcActiveSlot',
+  'tradingMode','botAutoMode',   // (GO DÉMO · 12/10/2026) « _mcActiveSlot » (Multi-compte, retiré) sorti de la liste : 09b1 ne l'a jamais écrit, il n'existait dans aucun snapshot
   'totalTrades','winTrades','_genCount','_totalCompounded','_startPortfolio',
   'taxConfig','feeConfig','region','regions','toastVerbose','suggestionsEnabled',
   'b','userStake','realTimeframe'
@@ -128,24 +128,9 @@ async function saveState(silent = false) {
     return false;
   }
 
-  // [GARDE DÉMO · 09/08/2026] le mode Démo (05) écrase S avec des données fictives
-  // (fitness aléatoires, comptes preset, tradingMode forcé 'real') et ne garde le vrai
-  // état qu'en mémoire JS (_demoBackup). Sans cette garde, l'autosave persistait la
-  // FICTION : app tuée pendant une démo = au reboot, fitness des agents détruite et
-  // comptes remplacés (mécanique des bugs du 31/05 et du 05/08). Aucune sauvegarde en
-  // démo : un crash redémarre sur le dernier VRAI état.
-  if (typeof S !== 'undefined' && S && S._demoMode) {
-    try {
-      if (!window._demoSaveWarned) {
-        window._demoSaveWarned = true;
-        if (S.chainLog) {
-          S.chainLog.push({ icon:'🎭', desc:'Mode Démo actif · sauvegarde suspendue (le vrai état reste intact sur disque)', hash:Math.random().toString(36).slice(2,8), time:new Date().toLocaleTimeString() });
-          if (S.chainLog.length > 100) S.chainLog.splice(0, S.chainLog.length - 100);
-        }
-      }
-    } catch(e) {}
-    return false;
-  }
+  // [GO DÉMO · 12/10/2026 · VERSION 20261012a] la garde du Mode Démo (09/08) qui se tenait ici est retirée avec lui (05) : plus rien n'écrit un compte
+  // fictif dans S, il n'y a plus de sauvegarde à suspendre. Elle ne gardait d'ailleurs que cette sauvegarde périodique — celle de sortie
+  // (_flushSyncOnExit, plus bas) écrivait la fiction : c'est ce qui a remplacé le compte EV de Rams le 11/10 à 18:33.
 
   // [CHRONO · 08/08/2026] annonce l'op (sonde longtask de 08 la nommera dans un gel)
   // + mesure chaque phase synchrone ; si le total dépasse ~800 ms, une ligne ⏱ est

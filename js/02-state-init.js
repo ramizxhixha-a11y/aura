@@ -701,9 +701,8 @@ window._livePairs = _livePairs; window._livePairEntries = _livePairEntries; wind
 // v7.0: MARKET REGIME DETECTION — détecte le contexte actuel du marché
 // Classifie en: 'bull' (hausse forte), 'bear' (baisse forte), 'volatile' (agité), 'calm' (stable)
 function detectMarketRegime() {
-  // [P0 · 05/09/2026] SOURCE UNIQUE du régime. L'override ci-dessous appartient au
-  // Mode Démo (v51, fichier 05) : posé par enterDemoMode, retiré par exitDemoMode.
-  if (S._regimeOverride) return S._regimeOverride;
+  // [P0 · 05/09/2026] SOURCE UNIQUE du régime. [GO DÉMO · 12/10/2026 · VERSION 20261012a] le régime forcé (S._regimeOverride) appartenait au Mode Démo : retiré avec lui —
+  // plus rien ne peut imposer un régime à la décision, il se lit toujours sur le marché.
   if(!S.pairStates) return 'calm';
   const pairs = _livePairStates();   // [PAIRES VIVANTES · 10/10/2026] avant : Object.values(S.pairStates), paire retirée comprise (sa variation figée entrait dans la moyenne)
   if(pairs.length === 0) return 'calm';
