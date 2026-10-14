@@ -95,6 +95,9 @@ T('K2 · TP / SL par défaut = la règle des bots que la fiche affiche (10h _man
   const c = mkCtx();
   const L = run(c, "_manPlan('SOL/USDT').lv"), e = PRICES['SOL/USDT'];
   const a = run(c, "openPosition('SOL/USDT', 'long')"); sides(a); near(pct(a.tp, e), L.long.tp, 'TP LONG'); near(pct(a.sl, e), L.long.sl, 'SL LONG');
+  // [GO ARGENT · 13/10/2026] openPosition ne ferme plus en silence la position de la paire : on la ferme d'abord, comme « ✕ Fermer »
+  assert.strictEqual(run(c, "openPosition('SOL/USDT', 'short')"), null, 'position déjà ouverte : refus dit, rien de fermé');
+  assert.ok(c.S.openPositions.some(p => p.id === a.id), 'la LONG est toujours là'); run(c, "closePosition(" + JSON.stringify(a.id) + ")");
   const b = run(c, "openPosition('SOL/USDT', 'short')"); sides(b); near(pct(b.tp, e), L.short.tp, 'TP SHORT'); near(pct(b.sl, e), L.short.sl, 'SL SHORT');
 });
 

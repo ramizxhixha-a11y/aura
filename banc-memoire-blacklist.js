@@ -14,7 +14,7 @@ const i0 = s02.indexOf('    // v7.12 MOD 5+ · Track loss streak + fenêtre glis
 assert.ok(i0 > 0 && i1 > i0); const BLOCK = s02.slice(i0, i1 + '      S._lossStreaks[pos.pair] = streak;'.length) + '\n    }';   // referme le if (pos.auto === true && mode) ouvert par le bloc
 function run(S, pos, realisedPct) {
   const c = { S, pos, realisedPct, Math, Number, Date, isFinite, rndHash: () => 'h', nowStr: () => 't', showToast: () => {}, window: {} };
-  vm.createContext(c); vm.runInContext('(function(){' + BLOCK + '})()', c); return S;
+  vm.createContext(c); vm.runInContext('(function(){ var _urg = false; /* [GO ARGENT · 13/10/2026] fermeture ordinaire (02 : vrai seulement pour l\'urgence, 06) */\n' + BLOCK + '})()', c); return S;
 }
 console.log('▶ banc-memoire-blacklist');
 T('D1 · bloc RÉEL : 10 pertes sur 10 en EV → blacklist 2 h et journal 🚫 ; la fenêtre glisse (15) ; la 11e n\'ajoute pas une 2e pause tant que la 1re court', () => {

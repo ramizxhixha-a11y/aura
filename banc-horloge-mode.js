@@ -84,14 +84,11 @@ T('H1 · 02 réel : S.realPairCycle devient un accesseur du portefeuille du MODE
   // portefeuille d'avant (sauvegarde du 29/09 : pas de champ) : complété au chargement (_ensureWalletStore réel)
   delete S.walletStore.real.realPairCycle; S.tradingMode = 'real'; assert.strictEqual(S.realPairCycle, undefined);
   c._ensureWalletStore(); assert.deepStrictEqual(J(S.walletStore.real.realPairCycle), {}, 'complété'); assert.strictEqual(S.walletStore.paperReal.realPairCycle['BTC/USDT'], 111, 'EV intact');
-  // retour pré-réel (02, ligne RÉELLE) : le mode est déjà AA quand il remet les horloges à zéro → EV et RE remis à zéro, AA intact
-  assert.strictEqual(RESET.length, 1, 'ligne de remise à zéro unique dans 02');
-  S.walletStore.sim.realPairCycle = { x: 1 }; S.walletStore.real.realPairCycle = { 'BTC/USDT': 5 }; S.tradingMode = 'sim';
-  vm.runInContext(RESET[0], c);
-  assert.deepStrictEqual([J(S.walletStore.paperReal.realPairCycle), J(S.walletStore.real.realPairCycle), J(S.walletStore.sim.realPairCycle)], [{}, {}, { x: 1 }]);
-  const rb = codeStrict(between(s02, '    // 4. Réinitialiser les modes spéciaux', '    // 5. UI refresh', false));
-  const rbCode = rb.split('\n').map(l => l.replace(/\/\/.*$/, '')).join('\n');   // sans les commentaires de fin de ligne
-  assert.ok(rb.indexOf("S.tradingMode = 'sim';") < rb.indexOf(RESET[0].trim().slice(0, 40)) && !/S\.realPairCycle\s*=\s*\{\}/.test(rbCode), 'retour pré-réel : plus d\'affectation à l\'horloge du mode courant (AA) à la place de celles d\'EV et RE');
+  // [GO ARGENT · 13/10/2026] le « retour pré-réel » (02 confirmRollbackPreReal) qui remettait les horloges EV et RE à zéro est RETIRÉ (il réécrivait
+  // le portefeuille RE et les agents, ETAT n° 7) : plus aucune ligne de 02 ne remet une horloge à zéro, et la fonction n'écrit plus rien dans S.
+  assert.strictEqual(RESET.length, 0, 'plus de remise à zéro des horloges dans 02');
+  const rb = codeStrict(s02.slice(s02.indexOf('function confirmRollbackPreReal() {'), s02.indexOf('window.confirmRollbackPreReal = confirmRollbackPreReal;')));
+  assert.ok(rb.length > 20 && !/S\.[A-Za-z_$]+\s*=[^=]|realPairCycle/.test(rb), 'retour pré-réel : n\'écrit plus rien');
 });
 
 T('H2 · portes RÉELLES 10g (EV) et 08 (RE) entrelacées, cadences du backup du 29/09 (EV BTC 120 s / RE 50 s, EV ETH 40 s / RE 50 s, SOL 60 s / 60 s), 15 min tous les deux, 6 h : chaque mode a son cycle à CHAQUE bougie close de chaque paire, une fois, dans l\'ordre, et lit SA bougie — dents : sur l\'ancienne horloge, une bougie = un seul mode, toujours le même par paire', () => {
@@ -326,13 +323,13 @@ T('H9 · 02 réel : changer le pas de temps d\'un mode remet SON horloge à zér
 T('H10 · textes : en-têtes 02, 03, 11b (VERSION 20261001a) ; HTML : 81 × 20261001a, plus de 20260930a ; les portes 10g / 08 et les lecteurs de 03 lisent S.realPairCycle comme avant (c\'est l\'accesseur du mode) ; nulle part ailleurs', () => {
   const HD = '// [HORLOGE PAR MODE · 01/10/2026] VERSION 20261001a';
   assert.ok(s02.split('\n').slice(0, 2).some(l => l.startsWith(HD)) && s03.split('\n').slice(0, 2).some(l => l.startsWith(HD)) && rd('js/11b-ecran-appris.js').startsWith(HD));   // [DÉGEL DES VOIX · 02/10/2026] 02 et 03 relivrés : en-tête HORLOGE en 2e ligne
-  assert.strictEqual(html.split('20261012a').length - 1, 88); assert.strictEqual(html.split('20261011a').length - 1, 0); assert.strictEqual(html.split('20261010b').length - 1, 0); assert.strictEqual(html.split('20261010a').length - 1, 0); assert.strictEqual(html.split('20261007b').length - 1, 0); assert.strictEqual(html.split('20261007a').length - 1, 0); assert.strictEqual(html.split('20261006b').length - 1, 0); assert.strictEqual(html.split('20261006a').length - 1, 0); assert.strictEqual(html.split('20261005b').length - 1, 0); assert.strictEqual(html.split('20261005a').length - 1, 0); assert.strictEqual(html.split('20261004a').length - 1, 0);   // [MODES SÉPARÉS · 10/10/2026] jeton 20261010b (85, aucun fichier ajouté) · [ÉCOLE VIVANTE · 10/10/2026] HTML au jeton 20261010a (85 : aucun fichier ajouté) · [VOIX TENDANCE LONGUE · 07/10/2026] HTML au jeton 20261007a
+  assert.strictEqual(html.split('20261013a').length - 1, 88); assert.strictEqual(html.split('20261012a').length - 1, 0); assert.strictEqual(html.split('20261011a').length - 1, 0); assert.strictEqual(html.split('20261010b').length - 1, 0); assert.strictEqual(html.split('20261010a').length - 1, 0); assert.strictEqual(html.split('20261007b').length - 1, 0); assert.strictEqual(html.split('20261007a').length - 1, 0); assert.strictEqual(html.split('20261006b').length - 1, 0); assert.strictEqual(html.split('20261006a').length - 1, 0); assert.strictEqual(html.split('20261005b').length - 1, 0); assert.strictEqual(html.split('20261005a').length - 1, 0); assert.strictEqual(html.split('20261004a').length - 1, 0);   // [GO ARGENT · 13/10/2026] jeton 20261013a (88, aucun fichier ajouté) · [MODES SÉPARÉS · 10/10/2026] jeton 20261010b (85, aucun fichier ajouté) · [ÉCOLE VIVANTE · 10/10/2026] HTML au jeton 20261010a (85 : aucun fichier ajouté) · [VOIX TENDANCE LONGUE · 07/10/2026] HTML au jeton 20261007a
    assert.strictEqual(html.split('20261002a').length - 1, 0); assert.strictEqual(html.split('20261001a').length - 1, 0); assert.strictEqual(html.split('20260930a').length - 1, 0);   // [DÉGEL DES VOIX · 02/10/2026] HTML au jeton 20261002a
   assert.ok(GATE_EV.includes('const lastSeenTs = (S.realPairCycle && S.realPairCycle[pair]) || 0;') && GATE_EV.includes('S.realPairCycle[pair] = closedTs;'));
   assert.ok(GATE_RE.includes('const lastSeenTs = (S.realPairCycle && S.realPairCycle[pair]) || 0;') && GATE_RE.includes('S.realPairCycle[pair] = closedTs;'));
   const files = html.match(/src="js\/[^"?]+/g).map(x => x.slice(5)), who = {};
   files.forEach(f => codeStrict(rd(f)).split('\n').forEach(l => { if (/realPairCycle/.test(l)) who[f] = (who[f] || 0) + 1; }));
-  assert.deepStrictEqual(who, { 'js/02-state-init.js': 6, 'js/03-per-pair-position-buttons-controls-buid.js': 5, 'js/08-learning-history-render.js': 3, 'js/10g-resolveur-ev-csv.js': 3 }, JSON.stringify(who));
+  assert.deepStrictEqual(who, { 'js/02-state-init.js': 5, 'js/03-per-pair-position-buttons-controls-buid.js': 5, 'js/08-learning-history-render.js': 3, 'js/10g-resolveur-ev-csv.js': 3 }, JSON.stringify(who));
 });
 
 console.log('\n' + (fail ? '❌ ' : '✅ ') + pass + ' ✅ · ' + fail + ' ❌');

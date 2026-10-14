@@ -45,7 +45,8 @@ const proche = (a, b, tol, quoi) => assert.ok(typeof a === 'number' && typeof b 
 // ─────────────── le monde d'essai : trois portefeuilles, les VRAIS accesseurs de 02 ───────────────
 const ACC = between(s02, 'var _WALLET_ACCESSOR_FIELDS = [', '];', true) + '\n' + ['_walletKey', '_walletFor', '_activeWallet', '_installWalletAccessors', '_computePortfolio', '_tradingCapitalBase', 'syncLeverageReserve'].map(n => fnSrc(s02, n)).join('\n');
 const BUNKER = ['_bkState', '_bkCapital', '_bkInitCapRef'].map(n => fnSrc(s07, n)).join('\n');
-const RECAL = between(s9b2, '      var _pfFirst = false;', "      if (_pfFirst) { try { localStorage.setItem('aura_startpf_recal_v3', String(Date.now())); } catch(e) {} }", false);   // le recalage de relance, tel quel
+// [GO ARGENT · 13/10/2026] la « purge une fois » (drapeau aura_startpf_recal_v3) est retirée de 09b2 : le recalage est celui que la relance faisait déjà (drapeau posé)
+const RECAL = between(s9b2, "    if (S.walletStore && typeof S.walletStore === 'object') {\n      ['sim','paperReal','real'].forEach(function(_mk){", "  } catch(e) { dbg.push('startPf-recal:err'); }", false);   // le recalage de relance, tel quel
 const ROTATION = fnSrc(s10c, '_checkAndRotatePeriods');
 // le VRAI jugement des sièges (03) : fenêtre, échelle, _fitOf, _fitJudge (n'écrit RIEN sans preuve), _fitCurrent, _fjMode. Le monde d'essai n'a pas de record aux horizons : la preuve y est faite de jugements (≥ 5).
 const FIT = between(s03, 'const FIT_WINDOW = 60, FIT_MIN_N = 5;', '\n', true) + between(s03, 'const FIT_KEEP = 240;', '\n', true) + ['_fitWindow', '_fitScale', '_fitOf', '_fitJudge', '_fitCurrent', '_fjMode'].map(n => fnSrc(s03, n)).join('\n') + '\nfunction _fitHz() { return null; }';
@@ -347,21 +348,30 @@ T('D6 · REFUS, sans rien écrire : backup d\'APRÈS l\'accident ; backup trop a
   cas('backup à 1e308 $ : la réserve de levier rendue ne serait pas un nombre fini', 'resultat', (A, F) => { const G = J(F), w = G.walletStore.paperReal; w.tradingAccount = 1e308; w.cashAccount = 0; w.portfolio = 1e308; return { F: G }; });
   // fermeture d'urgence « tout fermer » (06) depuis le backup : sa ligne au journal durable est la seule trace
   const ctxK = {}; vm.createContext(ctxK); vm.runInContext(between(s02, 'const EVENT_KINDS = [', '\n];', true) + '\n' + fnSrc(s02, '_eventKind') + '\nthis._eventKind = _eventKind;', ctxK);
-  assert.ok(s06.includes('desc:`URGENCE: ${pos.pair} ${pos.side} fermé manuellement') && between(s02, 'const EVENT_MODE_KINDS = {', '};', true).includes('fermeture: 1'), 'la ligne d\'urgence de 06, gardée au journal durable avec son mode');
-  assert.strictEqual(ctxK._eventKind({ desc: 'URGENCE: ETH/USDT long fermé manuellement · +$1.10' }), 'fermeture');
-  const urg = (t, m) => ({ t, k: 'fermeture', i: '🚨', d: 'URGENCE: ETH/USDT long fermé manuellement · +$1.10', m });
+  // [GO ARGENT · 13/10/2026] l'urgence ferme par closePosition (06) : sa ligne de journal dit le résultat de la ligne d'historique, « avant frais »
+  assert.ok(s06.includes('desc:`URGENCE: ${pos.pair} ${pos.side} fermé · ') && between(s02, 'const EVENT_MODE_KINDS = {', '};', true).includes('fermeture: 1'), 'la ligne d\'urgence de 06, gardée au journal durable avec son mode');
+  assert.strictEqual(ctxK._eventKind({ desc: 'URGENCE: ETH/USDT long fermé · +$1.10 (avant frais)' }), 'fermeture');
+  const urg = (t, m) => ({ t, k: 'fermeture', i: '🚨', d: 'URGENCE: ETH/USDT long fermé · +$1.10 (avant frais)', m });
   cas('fermeture d\'urgence depuis le backup', 'urgence', A => { A.X.S.eventLog.push(urg(H, 'paperReal')); }); cas('fermeture d\'urgence, mode non dit', 'urgence', A => { A.X.S.eventLog.push(urg(H, undefined)); });
   cas('fermeture d\'urgence, backup sans heure', 'urgence', (A, F) => { A.X.S.eventLog.push(urg(T0 - 99999999, 'paperReal')); const G = J(F); delete G.savedAt; return { F: G }; });
   { const A = vie(true), B = vie(false); [A, B].forEach(V => { V.X.S.eventLog.push(urg(T0 - 5000, 'paperReal'), urg(H, 'sim'), { t: H, k: 'fermeture', d: 'Fermé ETH/USDT · urgence passée', m: 'paperReal' }); });   // une urgence d'AVANT le backup, une d'un AUTRE mode, une ligne qui n'en est pas une : acceptées
     const r1 = R.appliquer(A.X.S, A.F, 'paperReal'); assert.ok(r1.ok, r1.msg); comparer(A.X.S.walletStore.paperReal, B.X.S.walletStore.paperReal, 'urgences sans rapport'); }
   // la VRAIE fermeture d'urgence (06 urgenceCloseAll) et le VRAI relais du journal (02) : les deux cas trouvés par la revue du 13/10 — une position ouverte après le backup et fermée
-  // en urgence AVANT l'accident (écart : son résultat) ; une position ouverte à l'accident et fermée en urgence APRÈS (écart : toute sa mise). Ni ligne d'historique, ni frais : le journal seul le dit.
+  // en urgence AVANT l'accident ; une position ouverte à l'accident et fermée en urgence APRÈS. [GO ARGENT · 13/10/2026] l'urgence passe désormais par closePosition (une ligne
+  // d'historique, des frais) : ici closePosition est le modèle de ce banc (fermer, plus haut), la ligne de journal est celle du VRAI 06 ; la réparation refuse toujours.
+  // modèle de closePosition(id, false, { urgence: true }) (02) : l'argent et les frais comme une fermeture, une ligne d'historique de type « urgence »,
+  // compteurs de la paire inchangés (aucun lecteur de la décision ne la voit)
+  const urgence = X => { X.c.closePosition = (id, b, o) => { assert.ok(o && o.urgence, 'urgence passée à closePosition'); const S = X.S, pos = S.openPositions.find(q => q.id === id), ps = S.pairStates[pos.pair], cur = ps.price, gain = pos.stakeUsdt * (cur - pos.entryPrice) / pos.entryPrice;
+    const rec = vrai(pos.pair, Number(String(id).slice(1)), gain, pos.entryTs)[1]; rec.ts = H; rec.type = 'urgence'; ps.trades.push(rec);
+    S.tradingAccount += pos.stakeUsdt + gain - 0.2; S.fees.tradeCount++; S.fees.totalTradingFees += 0.2;
+    S.portfolio = S.cashAccount + S.tradingAccount + S.openPositions.reduce((t, q) => t + (q === pos ? 0 : q.stakeUsdt), 0); X.run('syncLeverageReserve()'); S.pnlHistory.push(S.portfolio);
+    S.openPositions = S.openPositions.filter(q => q.id !== pos.id); }; X.run('urgenceCloseAll()'); };
   ['avant', 'apres'].forEach(quand => {
     H = T0; let X = monde(depart()); const F = X.plain(); F.savedAt = new Date(H).toISOString(); H += 600000; ouvrir(X, 'ETH/USDT', 60); X.S.pairStates['ETH/USDT'].price = 158.4;   // mise 110 $, entrée 160 → −1 %
-    if (quand === 'avant') X.run('urgenceCloseAll()'); H = T0 + 5850000; accident(X, 'crise', 7); X = relancer(X); if (quand === 'apres') { H += 60000; X.run('urgenceCloseAll()'); }
+    if (quand === 'avant') urgence(X); H = T0 + 5850000; accident(X, 'crise', 7); X = relancer(X); if (quand === 'apres') { H += 60000; urgence(X); }
     H += 3600000; trade(X, 'BTC/USDT', 71, 0.4, 0.26, false, 0.03); X = relancer(X);
-    const l = X.S.eventLog.filter(e => /^URGENCE: ETH\/USDT long fermé manuellement · \$-1\.10$/.test(e.d)); assert.strictEqual(l.length, 1, 'la ligne d\'urgence est au journal durable : ' + JSON.stringify(X.S.eventLog)); assert.strictEqual(l[0].k, 'fermeture'); assert.strictEqual(l[0].m, 'paperReal'); assert.ok(l[0].t > Date.parse(F.savedAt));
-    assert.strictEqual(X.S.walletStore.paperReal.openPositions.length, 0); assert.strictEqual(X.S.walletStore.paperReal.pairStates['ETH/USDT'].trades.filter(t => t.type === 'position' && !R.faux(t)).length, 0, 'aucune ligne de fermeture dans l\'historique');
+    const l = X.S.eventLog.filter(e => /^URGENCE: ETH\/USDT long fermé · \$-1\.10 \(avant frais\)$/.test(e.d)); assert.strictEqual(l.length, 1, 'la ligne d\'urgence est au journal durable : ' + JSON.stringify(X.S.eventLog)); assert.strictEqual(l[0].k, 'fermeture'); assert.strictEqual(l[0].m, 'paperReal'); assert.ok(l[0].t > Date.parse(F.savedAt));
+    assert.strictEqual(X.S.walletStore.paperReal.openPositions.length, 0);
     const av = X.plain(), r0 = R.appliquer(X.S, F, 'paperReal'); assert.strictEqual(r0.code, 'urgence', 'urgence ' + quand + ' l\'accident → ' + r0.code + ' · ' + r0.msg); assert.deepStrictEqual(X.plain(), av);
   });
   // l'état de l'app absent ou sans portefeuilles : refus, pas d'exception

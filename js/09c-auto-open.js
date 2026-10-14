@@ -1027,6 +1027,14 @@ setInterval(function _twapSweep() {
       } catch(e) {}
       const t = pos._twap;
       if (!t || t.filled >= t.n || now < t.nextAt) return;
+      // [GO ARGENT · 13/10/2026] morceau en retard de plus de 2 min (app endormie, ou relancée : les positions ne sont plus fermées à la sortie de
+      // page, 09b2) : l'exchange l'aurait rempli à l'heure — l'acheter des heures plus tard au prix du retour réécrirait l'entrée (revue du 13/10 :
+      // 100 → 105 après 3 h). Le plan s'arrête, l'entrée reste la moyenne des morceaux remplis à l'heure ; le juge « exécution » n'est pas noté.
+      if (now - t.nextAt > 120000) {
+        pos._twap = null;
+        try { S.chainLog.push({ icon: '⏸', desc: 'TWAP ' + pos.pair + ' arrêté (' + t.filled + '/' + t.n + ' morceaux à l\'heure) · entrée gardée ' + Number(pos.entryPrice).toPrecision(6), hash: Math.random().toString(36).slice(2, 8), time: new Date().toLocaleTimeString() }); if (S.chainLog.length > 100) S.chainLog.splice(0, S.chainLog.length - 100); } catch(e) {}
+        return;
+      }
       const ps = S.pairStates && S.pairStates[pos.pair];
       if (!ps || !ps.price) return;
       t.filled++;

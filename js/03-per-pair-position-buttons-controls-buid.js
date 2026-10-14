@@ -5919,12 +5919,12 @@ const AURA_IMPORT_ALLOWED_FIELDS = [
   'paperRealActivePairs',      // ON/OFF par paire en mode Réel
   'realActivePairs',           // ON/OFF par paire en mode réel
   'realTimeframe',             // timeframe mode réel
-  'tradingMode',               
+  // [GO ARGENT · 13/10/2026] 'tradingMode' RETIRÉ : le mode à l'écran est le tien ; importé, il change aussi le portefeuille où vont les accesseurs
   'autoTradeEnabled',
   'currentInterval',
   'tf',                        // timeframe
-  'leverage',
-  'leverageMaxMult',
+  // [GO ARGENT · 13/10/2026] 'leverage' RETIRÉ : accesseur du portefeuille du mode à l'écran (02) — un vieux fichier réécrivait ton levier
+  // [GO ARGENT · 13/10/2026] 'leverageMaxMult' RETIRÉ : plafond du levier (10× les fonds propres, règle Rams)
   'slAtrMultiplier',
   'tpAtrMultiplier',
   'maxOpenPositions',
@@ -5932,21 +5932,19 @@ const AURA_IMPORT_ALLOWED_FIELDS = [
   'stakePercent',
   'autoPauseAfterLosses',
   'maxLossesBeforeStop',
-  'profitSplitCaissePct',      // % de profit allant en caisse
-  'fiatConvFeePct',            // frais de conversion fiat
+  // [GO ARGENT · 13/10/2026] 'profitSplitCaissePct' RETIRÉ : la part des gains vers la caisse est ton choix (bouton ± de la carte Répartition)
+  // [GO ARGENT · 13/10/2026] 'fiatConvFeePct' RETIRÉ : frais de conversion (argent)
   // ─── Configurations par paire ───
   'pairConfigs',
   'enabledPairs',
   // ─── Préférences UI ───
   'toastVerbose',
   'silentMode',
-  'mode',                      // auto, manuel
-  'botAutoMode',
+  // [GO ARGENT · 13/10/2026] 'mode' et 'botAutoMode' RETIRÉS : AUTO / MANU, Rams seul — un vieux fichier en AUTO remettait le bot en AUTO (ETAT n° 3)
   // ─── Calibrations et paramètres bots ───
   'calibrations',
   'agentParams',
-  'feeConfig',                 // configuration des frais
-  'taxConfig',                 // configuration fiscale
+  // [GO ARGENT · 13/10/2026] 'feeConfig' et 'taxConfig' RETIRÉS : frais d'échange et impôt déplacent l'argent (04 _importNeverField)
   // ─── Phases d'intelligence (toggles) ───
   'phase1Enabled',
   'phase2Enabled',

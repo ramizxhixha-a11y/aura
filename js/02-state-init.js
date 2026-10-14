@@ -3032,25 +3032,8 @@ async function confirmSwitchToReal() {
       return;
     }
   }
-  // v7.12 LIVRAISON 6 · SAFETY · auto-snapshot avant activation
-  try {
-    const snap = (typeof buildSnapshot === 'function') ? buildSnapshot() : null;
-    if (snap) {
-      // v114 FIX · anti-récursion : un snapshot ne doit jamais contenir un autre snapshot
-      delete snap.preRealSnapshot;
-      delete snap.preRealSnapshotPaperReal;
-      S.preRealSnapshot = {
-        snap: snap,
-        takenAt: Date.now(),
-        mode: 'auto-pre-real',
-        meta: {
-          totalUsd: snap.b || 0,
-          tradesCount: (snap.openPositions || []).length,
-          activePairs: activePairs.slice()
-        }
-      };
-    }
-  } catch(e) {}
+  // [GO ARGENT · 13/10/2026] plus d'« auto-snapshot avant activation » : il ne servait qu'au bouton « ↶ Restaurer état pré-réel », retiré
+  // (voir confirmRollbackPreReal, plus bas). Les backups (Guardian, 3 h) gardent l'état d'avant, sans rien réécrire.
 
   // Activer
   S.tradingMode = 'real';
@@ -3068,110 +3051,13 @@ async function confirmSwitchToReal() {
 }
 window.confirmSwitchToReal = confirmSwitchToReal;
 
-// v7.12 LIVRAISON 6 · Rollback vers le snapshot pris avant activation real
+// [GO ARGENT · 13/10/2026] « ↶ RESTAURER L'ÉTAT PRÉ-RÉEL » RETIRÉ (ETAT n° 7). Il réécrivait pairStates / fees / pnlHistory / agents / cycle
+// pendant que le mode était encore RE : les accesseurs (02) envoyaient l'historique et les frais d'un AUTRE mode dans le portefeuille RE, la
+// population d'agents entière était remplacée et les stats EV effacées — sous une confirmation qui disait « la mémoire SIMULATION sera préservée ».
+// Le RE n'envoie aucun ordre réel (aucun appel /api/v3/order) : il n'y a rien à « annuler ». Le bouton n'est plus dessiné (04) ; cette fonction
+// reste pour un ancien bouton encore affiché et ne touche à rien.
 function confirmRollbackPreReal() {
-  if (!S.preRealSnapshot || !S.preRealSnapshot.snap) {
-    if (typeof showToast === 'function') showToast('Pas de snapshot disponible', 2500, 'warn');
-    return;
-  }
-  const ps = S.preRealSnapshot;
-  const ageMin = Math.floor((Date.now() - ps.takenAt) / 60000);
-  const ageStr = ageMin < 60 ? ageMin + ' min' : (ageMin < 1440 ? Math.floor(ageMin/60) + 'h' : Math.floor(ageMin/1440) + 'j');
-  const dollarStr = '$' + (ps.meta?.totalUsd || 0).toFixed(0);
-  if (!confirm('↶ RESTAURER L\'ÉTAT PRÉ-RÉEL\n\nÉtat sauvegardé il y a ' + ageStr + '\nTotal à l\'époque : ' + dollarStr + '\nPaires alors actives : ' + (ps.meta?.activePairs || []).join(', ') + '\n\n⚠ Toutes les modifications depuis seront perdues :\n· trades en mode réel\n· apprentissage agents (mémoire real)\n· stats par paire\n\nLa mémoire SIMULATION sera préservée.\n\nContinuer ?')) {
-    return;
-  }
-  try {
-    // v7.12 LIVRAISON 11 · ROLLBACK SÉCURISÉ
-    // Le snapshot peut avoir des champs corrompus ou à zéro.
-    // On ne restaure QUE les champs explicitement nécessaires, pas tout le snapshot.
-    const snap = ps.snap;
-    const meta = ps.meta || {};
-
-    // 1. Sauvegarder l'état actuel comme garde-fou
-    const safeBackup = {
-      b: S.b,
-      tradingAccount: S.tradingAccount,
-      cashAccount: S.cashAccount,
-      taxReserve: S.taxReserve,
-      ownFunds: S.ownFunds,
-      simLessons: S.agentLessons ? S.agentLessons.slice() : []
-    };
-
-    // 2. Restaurer SEULEMENT les champs d'apprentissage et de mode trading
-    // (PAS les champs financiers qui peuvent être corrompus dans le snapshot)
-    const SAFE_FIELDS_TO_RESTORE = [
-      'agentLessons',
-      'agents',                // état des agents (fitness, etc.)
-      'cycle',                 // cycle bot
-      'pnlHistory',            // historique pnl
-      'learningHistory',       // historique apprentissage
-      'pairStates',            // états des paires
-      'fees',                  // structure de fees
-      // PAS S.b, S.tradingAccount, S.cashAccount → on garde l'actuel
-    ];
-
-    SAFE_FIELDS_TO_RESTORE.forEach(field => {
-      if (snap[field] !== undefined && snap[field] !== null) {
-        S[field] = JSON.parse(JSON.stringify(snap[field]));
-      }
-    });
-
-    // 3. Restaurer le capital depuis meta (priorité) ou snapshot.b (fallback)
-    // SEULEMENT si la valeur est saine (> 0 et numérique)
-    let restoredCapital = 0;
-    if (meta.totalUsd && isFinite(meta.totalUsd) && meta.totalUsd > 0) {
-      restoredCapital = meta.totalUsd;
-    } else if (snap.b && isFinite(snap.b) && snap.b > 0) {
-      restoredCapital = snap.b;
-    }
-
-    if (restoredCapital > 0) {
-      S.b = restoredCapital;
-      // Répartir : 90% trading, 10% caisse (si l'état initial n'a pas ces champs)
-      if (snap.tradingAccount && isFinite(snap.tradingAccount) && snap.tradingAccount > 0) {
-        S.tradingAccount = snap.tradingAccount;
-        S.cashAccount = snap.cashAccount || (restoredCapital - snap.tradingAccount);
-      } else {
-        S.tradingAccount = restoredCapital * 0.9;
-        S.cashAccount = restoredCapital * 0.1;
-      }
-    } else {
-      // Si pas de capital sain dans le snapshot, on garde la valeur actuelle
-      // (qui est elle-même peut-être à zéro, mais au moins on n'écrase pas)
-      S.b = safeBackup.b || 0;
-      S.tradingAccount = safeBackup.tradingAccount || 0;
-      S.cashAccount = safeBackup.cashAccount || 0;
-    }
-
-    // 4. Réinitialiser les modes spéciaux
-    S.tradingMode = 'sim';
-    S.realActivePairs = {};
-    S.realStatsByPair = {};
-    S.realKillSwitch = {};
-    ['paperReal', 'real'].forEach(function (_m) { try { _walletFor(_m).realPairCycle = {}; } catch (e) {} });   // [HORLOGE PAR MODE · 01/10/2026] les horloges EV et RE (avant : S.realPairCycle = {}, une seule pour les deux ; ici le mode est déjà AA)
-    S.realModeStartedAt = 0;
-    // Effacer aussi les états Réel (sauf la mémoire d'apprentissage)
-    S.paperRealActivePairs = {};
-    S.paperRealStats = {};
-    S.paperRealKillSwitch = {};
-    S.paperRealConsecLosses = 0;
-    S.paperRealGlobalPauseUntil = 0;
-    S.paperRealLastClose = {};
-    S.paperRealStartedAt = 0;
-
-    // 5. UI refresh
-    if (typeof _updateRealModeBanner === 'function') _updateRealModeBanner();
-    if (typeof renderSettingsPanel === 'function') renderSettingsPanel();
-    if (typeof renderHome === 'function') renderHome();
-
-    if (typeof showToast === 'function') {
-      showToast('✅ État restauré · $' + (S.b || 0).toFixed(0), 4000, 'win');
-    }
-  } catch(e) {
-    if (typeof showToast === 'function') showToast('❌ Erreur rollback : ' + (e.message || e), 4000, 'critical');
-    console.error('Rollback error:', e);
-  }
+  if (typeof showToast === 'function') showToast('↶ Restauration pré-réel retirée : elle réécrivait le portefeuille RE et les agents. Utilise un backup si besoin.', 4500, 'warn');
 }
 window.confirmRollbackPreReal = confirmRollbackPreReal;
 
@@ -3681,15 +3567,21 @@ setInterval(_ctxCandlesRefresh, 10000);   // 12 paires × 2 horizons : tour comp
 // 5 min ; > 2 % d'écart → rejet (glitch). Sans référence fraîche, le prix est accepté et DEVIENT la référence :
 // le filtre se répare seul en 5 min au lieu de se verrouiller. Source unique pour @trade, @kline et le modal.
 var _rcLastPx = {};   // { 'BTC/USDT': { px, ts } }
+var _rcLastJump = {}; // [GO ARGENT · 13/10/2026] { 'BTC/USDT': ts } dernier prix REÇU mais écarté pour un saut de plus de 2 % (le flux vit)
 function _rcOutlier(pair, price, ts) {
   if (!isFinite(price) || price <= 0) return true;
   var now = ts || Date.now();
   var ref = _rcLastPx[pair];
-  if (ref && (now - ref.ts) < 300000 && Math.abs(price - ref.px) / ref.px > 0.02) return true;
+  if (ref && (now - ref.ts) < 300000 && Math.abs(price - ref.px) / ref.px > 0.02) { _rcLastJump[pair] = now; return true; }
   _rcLastPx[pair] = { px: price, ts: now };
   return false;
 }
 window._rcOutlier = _rcOutlier;
+// [GO ARGENT · 13/10/2026] âge du dernier prix RÉEL REÇU (accepté, ou écarté pour un saut > 2 % : le marché bouge, le flux vit) — Infinity si aucun.
+// Lu par les gardes « aucune sortie sur un prix figé » (07 learnFromOpenPositions, 10f _botExitSweep) : un saut de prix ne doit pas couper les sorties
+// pendant les 5 min où le filtre l'écarte (revue du 13/10, 2e passage). _rcPriceAge (prix ACCEPTÉ) reste celui de la mémoire des chemins.
+function _rcSeenAge(pair) { var a = _rcPriceAge(pair), j = _rcLastJump[pair]; return j ? Math.min(a, Date.now() - j) : a; }
+window._rcSeenAge = _rcSeenAge;
 // [PRIX FIGÉ · 25/09/2026] âge (ms) du dernier prix RÉEL accepté pour la paire — Infinity si aucun. Lu par la mémoire des chemins :
 // pendant une coupure, ps.price ne bouge plus et un chemin enregistré sur ce prix figé est faux (PEPE 24/09 : P&L figé à −0,699 %
 // à 15, 30 et 60 min pendant que le marché filait vers −5 %).
@@ -4667,7 +4559,10 @@ function recordFees(pair, notionalUsdt, pnlUsd, tradeType, reservedAmount, pos, 
   }
   // Cumul de l'ESTIMATEUR de la décision (10f / 10 : detectFiscalRegime + fiscalBotAdvicePerPair, lu avant ouverture) :
   // gardé tel quel — le brancher sur le registre changerait les ouvertures (porte TALENT d'abord).
-  if (typeof addAnnualNetRealised === 'function') addAnnualNetRealised(netGain);
+  // [GO ARGENT · 13/10/2026] fermeture d'urgence (02 pos._urgence) : frais payés, impôt au registre légal (16), totaux de frais — mais rien dans ce que lit
+  // la DÉCISION : ni ce cumul, ni le journal des 50 derniers frais (detectFiscalRegime : durées, fréquence, mises). Avant, l'urgence n'y laissait rien non plus.
+  const _urgF = !!(pos && pos._urgence);
+  if (!_urgF && typeof addAnnualNetRealised === 'function') addAnnualNetRealised(netGain);
 
   // P&L net final (après frais + impôt provisionné)
   const pnlNet = pnlUsd - totalFee - taxAmount;
@@ -4702,11 +4597,16 @@ function recordFees(pair, notionalUsdt, pnlUsd, tradeType, reservedAmount, pos, 
   bp.netPct = bp.pnlGross !== 0 ? (bp.pnlNet / Math.abs(bp.pnlGross) * 100) : 0;
 
   // Log (max 50 entrées)
+  // [GO ARGENT · 13/10/2026] closePosition passe maintenant l'EXPOSITION (frais justes avec levier) : le journal garde la MISE dans « notional »,
+  // le champ que lit l'estimateur du régime fiscal de la décision (detectFiscalRegime, indice 4 « mises disproportionnées » → 10f gain net exigé) —
+  // il lit donc la même chose qu'avant ; l'exposition est écrite à part (« exposure »). Sans levier, les deux valent la mise.
   const cfg = PAIRS[pair] || {};
-  S.fees.feeLog.unshift({
+  const _miseJ = (pos && Number(pos.stakeUsdt) > 0) ? Number(pos.stakeUsdt) : notionalUsdt;
+  if (!_urgF) S.fees.feeLog.unshift({
     pair,
     sym:        cfg.sym || pair,
-    notional:   notionalUsdt,
+    notional:   _miseJ,
+    exposure:   notionalUsdt,
     tradingFee, slipFee, totalFee, taxAmount,
     pnlGross:   pnlUsd,
     pnlNet,
@@ -4725,7 +4625,7 @@ function recordFees(pair, notionalUsdt, pnlUsd, tradeType, reservedAmount, pos, 
 
   // Auto-persist to IndexedDB
   // [GO FISCAL · 07/10/2026] + mode, régime, gain légal en € : la base IndexedDB garde CHAQUE fermeture sans limite (le registre en garde 1 500 en RE)
-  saveFeeRecord({ pair, notional: notionalUsdt, pnlGross: pnlUsd,
+  saveFeeRecord({ pair, notional: _miseJ, exposure: notionalUsdt, urgence: _urgF || undefined, pnlGross: pnlUsd,
     tradingFee, slipFee, totalFee, taxAmount, pnlNet, time: nowStr(), cycle: S.cycle,
     mode: S.tradingMode, regime: fisc ? fisc.regime : null, gainEur: fisc ? fisc.gainEur : null, ts: Date.now() });
   return { tradingFee, slipFee, totalFee, taxAmount, pnlNet, feeShortfall: _feeShortfall, fisc };
@@ -6137,11 +6037,14 @@ function openPosition(pair, side, opts) {
   const cfg = PAIRS[pair];
   if(!ps) { showToast('⚠ ' + pair + ' : paire inconnue'); return null; }
 
-  // Max 1 position par paire — fermer l'existante d'abord
+  // Max 1 position par paire.
+  // [GO ARGENT · 13/10/2026] une position déjà ouverte n'est plus fermée en silence AVANT les contrôles : la fermeture était faite, puis
+  // l'ouverture pouvait être refusée (capital, levier) — position perdue, aucune nouvelle (ETAT n° 20) ; elle pouvait aussi être celle d'un bot.
+  // Désormais l'ouverture est refusée et dit pourquoi : « ✕ Fermer » ou « ↓ Inverser » (07 manuInvert : ferme, vérifie, rouvre) restent là.
   const existing = S.openPositions.find(p => p.pair === pair);
   if(existing) {
-    closePosition(existing.id);
-    showToast('🔄 '+pair+' — position précédente fermée');
+    showToast('⚠ ' + pair + ' : une position ' + String(existing.side || '').toUpperCase() + (existing.auto === true ? ' du bot est déjà ouverte — ferme-la d\'abord (✕)' : ' est déjà ouverte — ferme-la (✕) ou inverse-la (↓) d\'abord'), 3500, 'warn');
+    return null;
   }
 
   const id        = 'p'+Date.now().toString(36);
@@ -6272,7 +6175,12 @@ function openPosition(pair, side, opts) {
 }
 
 // botClose=true means called from bot — MUST NOT close manual positions
+// [GO ARGENT · 13/10/2026] opts.urgence (06 urgenceCloseAll : bouton Urgence, Bunker) : l'argent, l'historique, les frais et l'impôt comme toute
+// fermeture, mais AUCUN juge ni aucune porte — ni agents, ni bots, ni anti-revenge, ni stats / pauses / cooldown EV, ni kill switch RE, ni série de
+// pertes / blacklist, ni heatmap, ni attribution : une fermeture d'urgence n'est la décision de personne (même règle que la sortie de page, ETAT
+// n° 8). Avant « go argent », l'urgence ne passait par rien de tout cela non plus : la décision d'ouvrir reste celle d'avant après une urgence.
 function closePosition(id, botClose = false) {
+  const _urg = !!(arguments[2] && arguments[2].urgence);   // [GO ARGENT · 13/10/2026] 3e argument { urgence: true } (06), voir ci-dessus
   // ★ REGLES REEL v2 (Rams 05/07) · les fermetures de PROTECTION (stop-loss,
   // TP, perte excessive) sont PERMISES en Reel, en MANU comme en AUTO :
   // "le bot surveille et stoppe si necessaire, meme si je l'ai oublie".
@@ -6328,12 +6236,12 @@ function closePosition(id, botClose = false) {
   // Les effets d'ÉCRAN, eux (alertes, badges, jalons, rendus — plus bas), ne partent que pour le mode affiché : _behind est vrai pour TOUT mode traité derrière
   // l'écran (avant : seulement l'AA).
   const _behind = ((typeof _modeBehind === 'function') && _modeBehind()) || ((typeof _schoolBehind === 'function') && _schoolBehind());
-  if (typeof checkAntiRevenge === 'function') {
+  if (!_urg && typeof checkAntiRevenge === 'function') {
     try { checkAntiRevenge(realisedUsd, realisedPct, pos.pair); } catch(e) {}
   }
 
   // v7.12 LIVRAISON 8 · STATS + RÈGLES en mode Réel
-  if (S.tradingMode === 'paperReal' && pos.auto === true) {
+  if (!_urg && S.tradingMode === 'paperReal' && pos.auto === true) {
     if (!S.paperRealStats) S.paperRealStats = {};
     if (!S.paperRealStats[pos.pair]) {
       S.paperRealStats[pos.pair] = { wins:0, losses:0, pnlNet:0, trades:0, lastTrades:[], lastUpdate:0 };
@@ -6392,7 +6300,7 @@ function closePosition(id, botClose = false) {
   }
 
   // v7.12 LIVRAISON 6 · STATS PAR PAIRE en mode real (avant kill switch)
-  if (S.tradingMode === 'real' && pos.auto === true) {
+  if (!_urg && S.tradingMode === 'real' && pos.auto === true) {
     if (!S.realStatsByPair) S.realStatsByPair = {};
     if (!S.realStatsByPair[pos.pair]) {
       S.realStatsByPair[pos.pair] = { wins:0, losses:0, pnlNet:0, trades:0, lastTrades:[], lastUpdate:0 };
@@ -6427,7 +6335,7 @@ function closePosition(id, botClose = false) {
 
   // v7.12 LIVRAISON 4 · KILL SWITCH en mode real
   // Si 3 pertes consécutives sur une paire (trades AUTO uniquement) → pause auto cette paire
-  if (S.tradingMode === 'real' && pos.auto === true) {
+  if (!_urg && S.tradingMode === 'real' && pos.auto === true) {
     if (!S.realKillSwitch) S.realKillSwitch = {};
     if (!S.realKillSwitch[pos.pair]) S.realKillSwitch[pos.pair] = { paused:false, lossStreak:0, reason:'' };
     const ks = S.realKillSwitch[pos.pair];
@@ -6446,10 +6354,13 @@ function closePosition(id, botClose = false) {
 
   if(ps) {
     // ── Enregistrer dans l'historique des trades de la paire ──
+    // [GO ARGENT · 13/10/2026] urgence : la ligne est écrite (le compte garde sa trace) mais avec le type « urgence » — tous les lecteurs de l'historique
+    // qui nourrissent la décision ne lisent que « position » (10e4 refroidissement après perte, 06 pertes consécutives, 10e6 espérance nette, 09e…) :
+    // ils voient ce qu'ils voyaient avant, quand l'urgence ne laissait aucune ligne (revue du 13/10, 2e passage). Les compteurs de la paire non plus.
     const amount = pos.amount || (pos.stakeUsdt / Math.max(0.0001, pos.entryPrice)).toFixed(cfg.dec>=4?4:6);
     ps.trades.push({
       side:      pos.side === 'long' ? 'buy' : 'sell',
-      type:      'position',
+      type:      _urg ? 'urgence' : 'position',
       amount:    String(amount),
       price:     cur,
       pnl:       realisedPct,
@@ -6462,17 +6373,19 @@ function closePosition(id, botClose = false) {
       time:      nowStr()
     });
     if(ps.trades.length > 100) ps.trades.splice(0, ps.trades.length - 100);
-    ps.totalPnlPct += realisedPct;
-    ps.totalPnlUsd += realisedUsd;
-    ps.totalTrades++;
-    if(realisedPct > 0) ps.winTrades++;
+    if (!_urg) {
+      ps.totalPnlPct += realisedPct;
+      ps.totalPnlUsd += realisedUsd;
+      ps.totalTrades++;
+      if(realisedPct > 0) ps.winTrades++;
+    }
 
     // v7.12 MOD 5+ · Track loss streak + fenêtre glissante pour blacklist
     // [MÉMOIRE DE LA BLACKLIST · 22/09/2026] (1) seuls les résultats RÉELS (EV/RE) nourrissent la fenêtre : l'AA (bougies
     // fabriquées, 12 paires en continu) la remplissait de bruit — même règle que « l'école ne note plus » (17/09) ;
     // (2) S._lossStreaks est désormais sauvegardé (09b1/09b2) : chaque relance l'effaçait, et il fallait 10 nouveaux
     // trades avant que la blacklist puisse agir — BTC (27 % de réussite) n'a jamais été mis en pause (backup 21/09).
-    if (pos.auto === true && S.tradingMode !== 'sim') {
+    if (!_urg && pos.auto === true && S.tradingMode !== 'sim') {
       if (!S._lossStreaks) S._lossStreaks = {};
       const streak = S._lossStreaks[pos.pair] || {
         count: 0, pausedAt: 0,
@@ -6525,9 +6438,10 @@ function closePosition(id, botClose = false) {
     // Return original stake to trading account, then apply net P&L
     // 🔒 RÈGLE: on retourne au tradingAccount (jamais vers cashAccount)
     const totalExp  = pos.totalExposure || pos.stakeUsdt;
-    const pnlOnExp  = totalExp * (realisedPct / 100);
-    // P&L calculé sur l'exposition totale (stake + levier)
-    const netPnl    = pnlOnExp;
+    // [GO ARGENT · 13/10/2026] le compte reçoit le MÊME résultat que l'historique : realisedUsd (P&L sur l'exposition, perte bornée à la mise —
+    // règle « liquidation nette », plus haut). Avant : le compte prenait totalExp × % NON borné — levier ×10, prix −15 % : −45 $ au compte,
+    // −30 $ écrits à l'historique (ETAT n° 5). Sans levier ou sans dépassement de la mise, la valeur est identique à l'ancienne.
+    const netPnl    = realisedUsd;
 
     // Rembourser le levier emprunté AVANT de créditer le trading
     if(pos.levBorrowed && pos.levBorrowed > 0) {
@@ -6569,7 +6483,10 @@ function closePosition(id, botClose = false) {
     const exitType = (pos.auto && realisedPct > 0.3) ? 'maker' : 'taker';
     // Durée de détention réelle (pour le score fiscal composite — indice de spéculation)
     S._lastTradeHoldMs = (pos.entryTs && Date.now() > pos.entryTs) ? (Date.now() - pos.entryTs) : 0;
-    const _rf = recordFees(pos.pair, pos.stakeUsdt, realisedUsd, exitType, pos._reservedAmount, pos, cur) || {};
+    // [GO ARGENT · 13/10/2026] frais et glissement sur l'EXPOSITION (ce que l'exchange achète et revend), plus sur la seule mise : avec levier ×N
+    // ils étaient sous-comptés d'un facteur N (ETAT n° 21). Sans levier, exposition = mise : rien ne change.
+    if (_urg) pos._urgence = true;   // lu par recordFees : ni journal des frais lu par la décision, ni cumul de l'estimateur fiscal de la décision
+    const _rf = recordFees(pos.pair, totalExp, realisedUsd, exitType, pos._reservedAmount, pos, cur) || {};
     if (netPnl > 0) {
       const _taxAmount = Number(_rf.taxAmount) || 0;
       const _trulyNet = Math.max(0, netPnl - (Number(_rf.totalFee) || 0) - _taxAmount);
@@ -6626,8 +6543,8 @@ function closePosition(id, botClose = false) {
     // Le champ reste dans les sauvegardes (manifest) mais n'est plus ni écrit ni lu.
     // Track best/worst trade
     const tradeRecord = { pnl: realisedPct, pnlUsd: realisedUsd, price: cur, side: pos.side, time: nowStr() };
-    if(!ps.bestTrade  || realisedPct > ps.bestTrade.pnl)   ps.bestTrade  = tradeRecord;
-    if(!ps.worstTrade || realisedPct < ps.worstTrade.pnl)  ps.worstTrade = tradeRecord;
+    if(!_urg && (!ps.bestTrade  || realisedPct > ps.bestTrade.pnl))   ps.bestTrade  = tradeRecord;
+    if(!_urg && (!ps.worstTrade || realisedPct < ps.worstTrade.pnl))  ps.worstTrade = tradeRecord;
     // Update pnlHistory on every significant close
     S.pnlHistory.push(S.portfolio);
     if(S.pnlHistory.length > 80) S.pnlHistory.shift();
@@ -6636,11 +6553,11 @@ function closePosition(id, botClose = false) {
     // v7.12 · PACK RÉSILIENCE · notifier export auto + snapshot silencieux
     try { if (typeof _notifyTradeForExport === 'function') _notifyTradeForExport(); } catch(e) {}
     try { if (typeof _autoSnapshotOnTradeClose === 'function') _autoSnapshotOnTradeClose(); } catch(e) {}
-    recordTradeForHeatmap(realisedUsd, pos.pair); /* v5.3+v24 */
+    if (!_urg) recordTradeForHeatmap(realisedUsd, pos.pair); /* v5.3+v24 */
     /* v5.4 + v5.6 · post-close hooks (v6.0 · agent learning) */
     try {
-      if(typeof recordShadowFromClose === 'function') recordShadowFromClose(realisedUsd, realisedPct, pos.pair, pos.side);
-      if(typeof generateDreamEntry    === 'function') generateDreamEntry(pos.pair, pos.side, realisedPct, realisedUsd);
+      if(!_urg && typeof recordShadowFromClose === 'function') recordShadowFromClose(realisedUsd, realisedPct, pos.pair, pos.side);
+      if(!_urg && typeof generateDreamEntry    === 'function') generateDreamEntry(pos.pair, pos.side, realisedPct, realisedUsd);
       // v19 · #38 Notification trade fermé
       try { if(typeof notifTradeClose === 'function') notifTradeClose(pos.pair, pos.side, realisedUsd, realisedPct); } catch(e) {}
       // v23 · #5 Vérifier alertes après chaque trade
@@ -6648,11 +6565,11 @@ function closePosition(id, botClose = false) {
       // (S.pnlAlerts, une fois par session) sont communs aux modes — l'écran les vérifie lui-même pour le mode affiché (renderHome)
       try { if(!_behind && typeof checkPnlAlerts === 'function') checkPnlAlerts(); } catch(e) {}   // [MODES SÉPARÉS · 10/10/2026] tout mode derrière l'écran, plus seulement l'AA
       try { if(!_behind && typeof checkBadges === 'function') checkBadges(); } catch(e) {}
-      if(typeof closeDecisionCascade  === 'function') closeDecisionCascade(pos.pair, pos.side, pos.currentPrice || pos.entryPrice, realisedUsd, realisedPct);
-      if(typeof runBotFleet           === 'function') runBotFleet('post_trade', { pnlUsd: realisedUsd, sizerMult: pos._sizerMult });
+      if(!_urg && typeof closeDecisionCascade  === 'function') closeDecisionCascade(pos.pair, pos.side, pos.currentPrice || pos.entryPrice, realisedUsd, realisedPct);
+      if(!_urg && typeof runBotFleet           === 'function') runBotFleet('post_trade', { pnlUsd: realisedUsd, sizerMult: pos._sizerMult });
       // [SPÉCIALISATION · 15/08/2026] les trois juges notent les réponses du jury
       // capturé à l'ouverture — mérite par tâche des disciples (module 12).
-      try { if (typeof window._judgeDisciples === 'function') window._judgeDisciples(pos, realisedUsd); } catch(e) {}
+      try { if (!_urg && typeof window._judgeDisciples === 'function') window._judgeDisciples(pos, realisedUsd); } catch(e) {}
 
       // [MASQUE CORRIGÉ · 26/09/2026] « v6.0 · AGENT LEARNING » RETIRÉ — un second juge, caché. Il retrouvait l'agent par le PRÉFIXE de son
       // nom (_openAgents garde name.split(' ')[0] = « Hybrid ») : S.agents.find(name.includes('Hybrid')) = toujours le PREMIER
@@ -6664,14 +6581,14 @@ function closePosition(id, botClose = false) {
   }
 
   // [DÉCISION COMMUNE · 27/09/2026] jugés sur ce qu'ils disaient À L'OUVERTURE (10f pos._votes) — avant : sur le vote de la fin, qui avait vu tout le trajet
-  try { window.__voteOverride = (pos._votes && typeof pos._votes === 'object') ? { pair: pos.pair, votes: pos._votes } : null; learnFromOutcome('position', realisedPct, pos.pair); } finally { window.__voteOverride = null; }
-  try { if (typeof _dcJudgeComposite === 'function') _dcJudgeComposite(pos._comp, realisedPct, 1.3); } catch(e) {}
+  if (!_urg) try { window.__voteOverride = (pos._votes && typeof pos._votes === 'object') ? { pair: pos.pair, votes: pos._votes } : null; learnFromOutcome('position', realisedPct, pos.pair); } finally { window.__voteOverride = null; }
+  if (!_urg) try { if (typeof _dcJudgeComposite === 'function') _dcJudgeComposite(pos._comp, realisedPct, 1.3); } catch(e) {}
   // [SURVEILLANCE PERMANENTE · 27/09/2026] la position a été ouverte par un bot : il est jugé sur SON résultat réel (en $), comme l'économie du TWAP
   // [MISE AU MÉRITE · 27/09/2026] poids en % (realisedPct), la même unité que ses affirmations (mouvement en %) : sa mise se règle sur UNE mesure
-  try { if (pos._bot && typeof _botJudgeMeasured === 'function') { _botJudgeMeasured(pos._bot, realisedPct, 'trade'); if (S.botFleet && S.botFleet[pos._bot]) S.botFleet[pos._bot].pnlContrib = (S.botFleet[pos._bot].pnlContrib || 0) + (Number(realisedUsd) || 0); } } catch(e) {}
+  if (!_urg) try { if (pos._bot && typeof _botJudgeMeasured === 'function') { _botJudgeMeasured(pos._bot, realisedPct, 'trade'); if (S.botFleet && S.botFleet[pos._bot]) S.botFleet[pos._bot].pnlContrib = (S.botFleet[pos._bot].pnlContrib || 0) + (Number(realisedUsd) || 0); } } catch(e) {}
   // [ATTRIBUTION PAR SOURCE · 17/09/2026] A5 : crédite chaque source de données selon ce qu'elle disait à l'OUVERTURE
   // de cette position (10i, lecture seule — aucune décision n'utilise S.attribution).
-  try { if (typeof _attributionRecord === 'function') _attributionRecord(pos, realisedPct); } catch(e) {}
+  if (!_urg) try { if (typeof _attributionRecord === 'function') _attributionRecord(pos, realisedPct); } catch(e) {}
 
   S.openPositions = S.openPositions.filter(p=>p.id!==id);
   if (!_behind && typeof _updateCloseAllBadge === 'function') _updateCloseAllBadge();   // [MODES SÉPARÉS · 10/10/2026] le badge ⊗ compte les positions du mode AFFICHÉ
@@ -6710,6 +6627,42 @@ function closePosition(id, botClose = false) {
     renderPositions();
     if(S.currentPage===4) renderChain();
   }
+}
+
+// [GO ARGENT · 13/10/2026] AJOUT À UNE POSITION OUVERTE — une seule règle pour la pyramide (05 pyramidPosition) et « ↑ Renforcer » (07 manuReinforce).
+// Avant : la mise ajoutée entrait dans stakeUsdt mais le prix d'entrée restait celui de la 1re entrée — closePosition comptait toute la mise depuis
+// ce prix (pyramide LONG 30 $ @100 + 20 $ @97, fermée @99 : +0,11 $ réel, −0,50 $ crédité, ETAT n° 4) — et la pyramide remettait l'exposition
+// à la mise (levier effacé). Ici : chaque entrée achète au prix du moment ; le prix d'entrée devient la moyenne pondérée par les QUANTITÉS
+// (exposition ÷ prix), le seul avec lequel closePosition rend exactement Σ exposition_i × (prix − prix_i) ÷ prix_i, en LONG comme en SHORT ;
+// l'exposition s'ajoute à l'existante (levier de la 1re entrée gardé). La mise ajoutée est retirée du trading par l'appelant, comme avant.
+function _addToPosition(pos, addStake, price) {
+  const add = Number(addStake), px = Number(price);
+  if (!pos || !(add > 0) || !isFinite(px) || !(px > 0)) return null;
+  const e0 = Number(pos.entryPrice), exp0 = Number(pos.totalExposure) || Number(pos.stakeUsdt) || 0;
+  if (!isFinite(e0) || !(e0 > 0) || !(exp0 > 0)) return null;
+  // un remplissage TWAP en cours (09c _twapSweep) réécrit pos.entryPrice à chaque morceau : un ajout pendant ce temps serait écrasé — refusé
+  if (pos._twap && Number(pos._twap.filled) < Number(pos._twap.n)) return null;
+  if (!pos._pyFirst) pos._pyFirst = { price: e0, stake: Number(pos.stakeUsdt) || exp0 };   // la 1re entrée, pour la pyramide (05) et l'écran
+  const qty = exp0 / e0 + add / px, expo = exp0 + add;
+  // cours USD → EUR de l'entrée (registre fiscal 16 : valeur en € payée = exposition × _fxIn) : moyenne des entrées pondérée par leur exposition
+  const fxNow = (Number(S._usdEurLastFetch) > 0 && Number(S.usdEurRate) > 0) ? Number(S.usdEurRate) : null;
+  if (Number(pos._fxIn) > 0 && fxNow) pos._fxIn = (exp0 * Number(pos._fxIn) + add * fxNow) / expo;
+  pos.entryPrice    = expo / qty;
+  pos.stakeUsdt     = (Number(pos.stakeUsdt) || 0) + add;
+  pos.totalExposure = expo;
+  const cfg = (typeof PAIRS !== 'undefined' && PAIRS) ? PAIRS[pos.pair] : null;
+  pos.amount = parseFloat(qty.toFixed(cfg && cfg.dec >= 4 ? 4 : 6));
+  // les repères mesurés depuis l'ANCIEN prix d'entrée repartent de l'ajout : pic du trailing (07 _trailStopHit : sinon il fermait au prix même du
+  // renforcement — revue du 13/10), pic affiché, chemin (10i : pic / creux / repères de rendu lus par la règle de gain 10f) ; l'anti-zombie (07) compte
+  // ses 30 min depuis l'ajout. Les jalons d'âge du chemin (at) sont ré-exprimés sur la nouvelle entrée (même prix, nouvelle base).
+  delete pos._peakPct; delete pos._peakProg; pos._peakPnl = 0;
+  if (pos._path && typeof pos._path === 'object') {
+    const isL = pos.side === 'long', e1 = pos.entryPrice, rb = (v) => { const x = isL ? e0 * (1 + v / 100) : e0 * (1 - v / 100); return Math.round((isL ? (x - e1) / e1 : (e1 - x) / e1) * 100000) / 1000; };
+    const at = {}; Object.keys(pos._path.at || {}).forEach(k => { const v = Number(pos._path.at[k]); if (isFinite(v)) at[k] = rb(v); });
+    pos._path = { mfe: 0, mae: 0, at: at };
+  }
+  pos._addedAt = Date.now();
+  return pos.entryPrice;
 }
 
 function quickOpen(side) {

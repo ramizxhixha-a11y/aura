@@ -47,8 +47,46 @@ const AURA_PROTECTED_FIELDS = [
   'ownFundsLog'
 ];
 
-// Note : pairStates (qui contient les trades fermés) est protégé champ par champ
-// dans la fonction importBackupMaxPermissive (les trades historiques sont préservés)
+// [GO ARGENT · 13/10/2026] CE QU'AUCUN IMPORT N'ÉCRIT (« SÉCURISÉ » comme « MAX PERMISSIF ») — l'argent et l'historique des TROIS modes,
+// AUTO / MANU, le mode à l'écran, la part caisse. La liste ci-dessus datait d'avant la séparation des modes : portfolio, tradingAccount… n'y sont
+// plus que des ACCESSEURS vers walletStore[mode à l'écran] (02 _WALLET_ACCESSOR_FIELDS) et walletStore lui-même n'y était pas — un vieux fichier
+// remplaçait les trois portefeuilles, leurs trades, positions et registre fiscal, la fitness des agents et remettait AUTO, sous une confirmation
+// qui disait « capital, trades, archives protégés » (vm : EV 1 075,70 $ / 354 trades → 500 $ / 3, ETAT n° 2). Tout champ qui est un accesseur
+// de portefeuille sur S est aussi refusé, même s'il venait à manquer ici.
+const AURA_IMPORT_NEVER_FIELDS = [
+  'walletStore', 'botAutoMode', 'mode', 'tradingMode', 'profitSplitCaissePct',
+  'cycle', 'archives', 'tendance', 'preRealSnapshot', 'preRealSnapshotPaperReal',
+  'paperRealStats', 'realStatsByPair', 'realKillSwitch', 'paperRealKillSwitch', '_lossStreaks',
+  'paperRealConsecLosses', 'paperRealGlobalPauseUntil', 'paperRealLastClose', 'fiscalYear',
+  // [revue du 13/10] ce qui déplace l'argent APRÈS l'import, sans geste : taux et réglages fiscaux (le bot fiscal 16 réajuste le dépôt toutes les
+  // 10 min : additionnels communaux 0 → 9 % = 9,90 $ passés du trading au dépôt), cours USD → EUR, frais d'échange, intérêts et plafond du levier,
+  // et le Bunker (son action « Fermer les positions » ferme tout sur un seuil)
+  'fiscalCfg', 'taxConfig', 'usdEurRate', '_usdEurLastFetch', 'fiatRates', 'fiatConvFeePct', 'feeConfig',
+  'leverageMaxMult', 'leverageBorrowRate', 'bunkerCfg'
+];
+// Les champs qui pèsent sur la DÉCISION d'ouvrir ou de fermer : toujours nommés EN PREMIER dans la confirmation (jamais cachés dans « … et N autres »)
+const AURA_IMPORT_DECISION_FIELDS = ['agents', 'dcThreshold', 'genome', 'genomeHistory', 'pairGenome', 'gainRules', 'stopRules', 'horizonRules', 'capRules',
+  'botFleet', 'botMerit', 'evoRule', 'paperRealConfig', 'paperRealActivePairs', 'realActivePairs', '_manualPairs', '_pausedPairs', 'fullPowerMode',
+  'antiRevengeCfg', 'stakeConfig', 'stakeUsdt', '_manConsignes', 'attribution', 'agentPairSkill', 'discipleTaskSkill'];
+function _importNeverField(f) {
+  // [revue du 13/10] « __proto__ » (JSON.parse en fait une clé propre) remplaçait le PROTOTYPE de S : tout champ absent de S se lisait alors dans le
+  // fichier (fullPowerMode, _manualPairs…). Refusés : les noms qui ne sont pas des identifiants simples, ceux du prototype, et tout champ que S
+  // n'a pas EN PROPRE — un import remplace des réglages existants, il n'en crée pas.
+  if (typeof f !== 'string' || !/^[A-Za-z_$][\w$]*$/.test(f) || f === '__proto__' || f === 'constructor' || f === 'prototype') return true;
+  if (typeof S === 'undefined' || !S || !Object.prototype.hasOwnProperty.call(S, f)) return true;
+  if (AURA_PROTECTED_FIELDS.includes(f) || AURA_IMPORT_NEVER_FIELDS.includes(f)) return true;
+  try { if (Array.isArray(window._WALLET_ACCESSOR_FIELDS) && window._WALLET_ACCESSOR_FIELDS.includes(f)) return true; } catch(e) {}
+  try { const d = Object.getOwnPropertyDescriptor(S, f); if (d && typeof d.get === 'function') return true; } catch(e) {}
+  return false;
+}
+window._importNeverField = _importNeverField;
+// Ce que la confirmation dit, mot pour mot, de ce qui NE change PAS.
+const AURA_IMPORT_KEPT_TEXT = 'Ne changent PAS : tes 3 portefeuilles (comptes, positions, historique des trades, frais, registre fiscal), AUTO / MANU, le mode à l\'écran, la part caisse, le cycle, les frais d\'échange, l\'impôt (taux, réglages, cours €), le levier (taux, plafond), le Bunker.';
+// Liste lisible des champs remplacés : TOUS, ceux de la décision d'abord (rien n'est tronqué)
+function _importFieldsText(fields) {
+  const f = (fields || []).slice(), dec = f.filter(x => AURA_IMPORT_DECISION_FIELDS.includes(x)), aut = f.filter(x => !AURA_IMPORT_DECISION_FIELDS.includes(x));
+  return (dec.length ? '🧠 décision (' + dec.length + ') : ' + dec.join(', ') + (aut.length ? '\n  • ' : '') : '') + (aut.length ? 'autres (' + aut.length + ') : ' + aut.join(', ') : '');
+}
 
 // Validateur de cohérence : retourne {ok, warnings}
 function _validateBackupCoherence(state) {
@@ -129,9 +167,9 @@ async function importBackupMaxPermissive(file) {
       throw new Error('Ce fichier n\'est pas un backup AURA');
     }
 
-    // Construire la liste des champs à appliquer (tout sauf protégés)
+    // Construire la liste des champs à appliquer (tout sauf l'argent, l'historique, AUTO/MANU, le mode : _importNeverField)
     const allFields = Object.keys(backup.state);
-    const fieldsToApply = allFields.filter(f => !AURA_PROTECTED_FIELDS.includes(f));
+    const fieldsToApply = allFields.filter(f => !_importNeverField(f));
 
     // Compter les changements
     const changeInfo = _countBackupChanges(S, backup.state, fieldsToApply);
@@ -152,7 +190,14 @@ async function importBackupMaxPermissive(file) {
     let confirmMsg = '🔴 IMPORT MAX PERMISSIF\n\n';
     confirmMsg += 'Date backup : ' + new Date(backup.meta.date).toLocaleString('fr-FR') + '\n';
     confirmMsg += 'Label       : ' + (backup.meta.label || '?') + '\n\n';
-    confirmMsg += 'Champs à modifier : ' + changeInfo.changes + '\n';
+    confirmMsg += 'Seront REMPLACÉS par le fichier (' + changeInfo.changes + ') :\n';
+    if (changeInfo.fields.includes('agents')) {
+      const _nA = Array.isArray(S.agents) ? S.agents.length : 0, _nB = Array.isArray(backup.state.agents) ? backup.state.agents.length : 0;
+      confirmMsg += '  🧠 agents : TOUTE la population (' + _nA + ' → ' + _nB + ' agents : fitness, mémoire, compétences)\n';
+    }
+    const _autres = changeInfo.fields.filter(f => f !== 'agents');
+    if (_autres.length) confirmMsg += '  • ' + _importFieldsText(_autres) + '\n';
+    if (!changeInfo.changes) confirmMsg += '  (rien : le fichier dit la même chose que l\'app)\n';
 
     if (changeInfo.changes > 30) {
       confirmMsg += '⚠ Beaucoup de changements (>30) - vérifie bien la source\n';
@@ -167,7 +212,7 @@ async function importBackupMaxPermissive(file) {
 
     confirmMsg += modLog;
 
-    confirmMsg += '\n\nLes données HISTORIQUES (capital, trades, archives) sont protégées.\n';
+    confirmMsg += '\n\n' + AURA_IMPORT_KEPT_TEXT + '\n';
     confirmMsg += 'Un backup auto sera créé avant l\'import.\n\n';
     confirmMsg += 'Continuer l\'import MAX PERMISSIF ?';
 
@@ -183,44 +228,12 @@ async function importBackupMaxPermissive(file) {
     let protectedSkipped = 0;
 
     for (const field of allFields) {
-      if (AURA_PROTECTED_FIELDS.includes(field)) {
+      if (_importNeverField(field)) {
         protectedSkipped++;
         continue;
       }
-      // Cas spécial pairStates : préserver les trades historiques
-      if (field === 'pairStates') {
-        try {
-          const newPS = backup.state[field];
-          if (newPS && typeof newPS === 'object') {
-            for (const pair of Object.keys(newPS)) {
-              if (S.pairStates[pair]) {
-                // Préserver l'historique des trades existants
-                const oldTrades = S.pairStates[pair].trades || [];
-                S.pairStates[pair] = JSON.parse(JSON.stringify(newPS[pair]));
-                // Restaurer les trades si le backup les a écrasés
-                S.pairStates[pair].trades = oldTrades;
-              } else {
-                S.pairStates[pair] = JSON.parse(JSON.stringify(newPS[pair]));
-              }
-            }
-            applied++;
-          }
-        } catch(e) { skipped++; }
-        continue;
-      }
-      // Cas spécial fees : préserver feeLog historique
-      if (field === 'fees') {
-        try {
-          const newFees = backup.state[field];
-          if (newFees && typeof newFees === 'object') {
-            const oldFeeLog = (S.fees && S.fees.feeLog) || [];
-            S.fees = JSON.parse(JSON.stringify(newFees));
-            S.fees.feeLog = oldFeeLog;
-            applied++;
-          }
-        } catch(e) { skipped++; }
-        continue;
-      }
+      // [GO ARGENT · 13/10/2026] les cas spéciaux pairStates / fees sont partis : ce sont des accesseurs du portefeuille du mode à l'écran (02),
+      // jamais importés (_importNeverField). Avant, pairStates remplaçait compteurs et P&L de chaque paire en gardant seulement la liste des trades.
       // Cas général
       try {
         S[field] = JSON.parse(JSON.stringify(backup.state[field]));
@@ -251,7 +264,7 @@ async function importBackupMaxPermissive(file) {
       '• ' + applied + ' champs appliqués\n' +
       '• ' + protectedSkipped + ' champs protégés (intouchés)\n' +
       (skipped > 0 ? '• ' + skipped + ' erreurs ignorées\n' : '') +
-      '\nDonnées historiques (capital, trades, archives) intactes.\n' +
+      '\n' + AURA_IMPORT_KEPT_TEXT + '\n' +
       'Backup "Avant import MAX" créé pour rollback.'
     );
   } catch(e) {
@@ -287,14 +300,21 @@ async function importBackup(file) {
       throw new Error('Ce fichier n\'est pas un backup AURA');
     }
 
-    // Confirmer
+    // [GO ARGENT · 13/10/2026] la confirmation NOMME ce qui change ; la liste blanche (03) est filtrée par _importNeverField (AUTO / MANU, mode,
+    // levier, part caisse en sont sortis : un vieux fichier en AUTO remettait le bot en AUTO sous « seules les CONFIGURATIONS », ETAT n° 3)
+    const _allowed = AURA_IMPORT_ALLOWED_FIELDS.filter(f => !_importNeverField(f));
+    const _chg = _countBackupChanges(S, backup.state, _allowed);
+    if (!_chg.changes) {
+      if (typeof showToast === 'function') showToast('Import : rien à changer (les configurations du fichier sont déjà les tiennes)', 3500, 'user');
+      return;
+    }
     const ok = confirm(
       'Importer ce backup ?\n\n' +
       '• Date : ' + new Date(backup.meta.date).toLocaleString('fr-FR') + '\n' +
       '• Version : ' + (backup.meta.version || '?') + '\n' +
       '• Label : ' + (backup.meta.label || '?') + '\n\n' +
-      'Seules les CONFIGURATIONS seront appliquées.\n' +
-      'Tes trades, ton capital et ton historique sont protégés.\n\n' +
+      'Configurations REMPLACÉES par le fichier (' + _chg.changes + ') :\n  • ' + _importFieldsText(_chg.fields) + '\n\n' +
+      AURA_IMPORT_KEPT_TEXT + '\n\n' +
       'Un backup auto sera créé avant l\'import (sécurité).'
     );
     if (!ok) return;
@@ -306,8 +326,8 @@ async function importBackup(file) {
     // Appliquer SEULEMENT les champs autorisés
     let applied = 0;
     let skipped = 0;
-    for (const field of AURA_IMPORT_ALLOWED_FIELDS) {
-      if (backup.state.hasOwnProperty(field)) {
+    for (const field of _chg.fields) {
+      if (backup.state.hasOwnProperty(field) && !_importNeverField(field)) {
         try {
           // Deep clone pour éviter pollution
           S[field] = JSON.parse(JSON.stringify(backup.state[field]));
@@ -1504,23 +1524,7 @@ function renderSettingsPanel() {
         <div style="font-size:var(--fs-9);color:var(--t3);font-weight:700;text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;">Paires actives · MODE RÉEL (argent réel)</div>
         <div style="margin-bottom:14px;">${pairsHTML}</div>
 
-        <!-- v7.12 LIVRAISON 6 · Bouton rollback si snapshot disponible -->
-        ${(function(){
-          const ps = S.preRealSnapshot;
-          if (!ps || !ps.takenAt) return '';
-          const ageMin = Math.floor((Date.now() - ps.takenAt) / 60000);
-          let ageStr;
-          if (ageMin < 60) ageStr = ageMin + ' min';
-          else if (ageMin < 1440) ageStr = Math.floor(ageMin/60) + 'h';
-          else ageStr = Math.floor(ageMin/1440) + 'j';
-          const dollarStr = '$' + (ps.meta?.totalUsd || 0).toFixed(0);
-          return `
-            <button onclick="confirmRollbackPreReal()" style="background:rgba(245,200,66,.06);color:var(--gold);border:1px solid rgba(245,200,66,.35);border-radius:10px;padding:9px 14px;font-size:10.5px;font-weight:700;cursor:pointer;letter-spacing:.04em;width:100%;display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
-              <span>↶ Restaurer état pré-réel · ${dollarStr}</span>
-              <span style="opacity:.7;font-size:var(--fs-9);font-weight:600;letter-spacing:0;">il y a ${ageStr}</span>
-            </button>
-          `;
-        })()}
+        <!-- [GO ARGENT · 13/10/2026] bouton « ↶ Restaurer état pré-réel » retiré (02 confirmRollbackPreReal) -->
 
         <!-- Switch master -->
         ${masterBtn}

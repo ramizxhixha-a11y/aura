@@ -2417,11 +2417,16 @@ function manuReinforce(pair) {
   if(S.tradingAccount < addStake) {
     showToast('⚠ Capital insuffisant pour renforcer', 2000, 'warn'); return;
   }
+  // [GO ARGENT · 13/10/2026] la mise ajoutée achète au prix DU MOMENT : prix d'entrée effectif, mise et exposition par la règle commune (02
+  // _addToPosition). Avant : la mise montait mais le prix d'entrée restait le 1er — la fermeture comptait l'ajout depuis ce prix (même défaut que
+  // la pyramide, ETAT n° 4) : un renforcement fait après une hausse était crédité de la hausse qu'il n'a pas vécue.
+  const _px = Number(ps.price);
+  if (!(_px > 0) || typeof _addToPosition !== 'function' || _addToPosition(pos, addStake, _px) === null) {
+    showToast('⚠ '+pair+' : renforcement impossible (pas de prix, position illisible ou exécution TWAP en cours)', 2500, 'warn'); return;
+  }
   S.tradingAccount -= addStake;
   S.portfolio = (typeof _computePortfolio==='function') ? _computePortfolio() : ((S.cashAccount||0)+(S.tradingAccount||0));   // [23/08] canonique
-  pos.stakeUsdt     = (pos.stakeUsdt || 0) + addStake;
-  pos.totalExposure = (pos.totalExposure || 0) + addStake;
-  showToast('✅ '+pair+' renforcé +$'+addStake, 2000, 'win');
+  showToast('✅ '+pair+' renforcé +$'+addStake+' · entrée moyenne '+pos.entryPrice.toPrecision(6), 2000, 'win');
   if(typeof renderActionsGrid === 'function') try { renderActionsGrid(); } catch(e) {}
   if(typeof renderOpenPosSummary === 'function') try { renderOpenPosSummary(); } catch(e) {}
 }
@@ -3287,6 +3292,10 @@ function learnFromOpenPositions() {
   S.openPositions.forEach(pos => {
     const ps  = S.pairStates[pos.pair];
     if(!ps) return;
+    // [GO ARGENT · 13/10/2026] EV / RE : aucune sortie (trailing, anti-zombie, bascule du consensus, TP / SL manuels) sur un prix réel vieux de plus
+    // de 2 min — coupure, ou app relancée sans réseau : les positions ne sont plus fermées à la sortie de page (09b2) et l'anti-zombie les fermait au
+    // boot, en MANU comme en AUTO, au prix sauvegardé (revue du 13/10 : « 120min flat », aucun prix reçu). Même règle que 10f. Prix frais : inchangé.
+    if ((S.tradingMode === 'paperReal' || S.tradingMode === 'real') && typeof _rcSeenAge === 'function' && _rcSeenAge(pos.pair) > 120000) return;
     const cur = ps.price;
     const unrealisedPct = pos.side === 'long'
       ? ((cur - pos.entryPrice) / pos.entryPrice) * 100
@@ -3337,7 +3346,7 @@ function learnFromOpenPositions() {
 
     // ── C. TIMER ANTI-ZOMBIE ── (positions des bots seulement depuis le 06/10/2026)
     // Si position ouverte > 30 min ET P&L entre -0.3% et +0.3% (flat) → fermer
-    const posAgeMs = Date.now() - (pos.openedAt || Date.now());
+    const posAgeMs = Date.now() - (pos._addedAt || pos.openedAt || Date.now());   // [GO ARGENT · 13/10/2026] après un ajout (pyramide), la fenêtre repart de l'ajout
     // [PREUVE D'ACTION · 25/09/2026] backup 25/09 : DOT pic +0,89 → +0,01 à 30 min, ETH +0,40 → −0,18, SOL +0,32 → −0,08 — l'anti-zombie
     // fermait à plat des positions qui avaient respiré. Quand la paire a une règle de gain ARMÉE (prouvée sur ses chemins), c'est
     // elle qui décide de la sortie : l'anti-zombie s'efface. Sans règle armée, il garde son rôle.
@@ -5146,7 +5155,7 @@ function renderHome() {
 
   const tl = document.getElementById('mobileTradeList');
   if (tl) try { tl.innerHTML = allTShown.map(t => {
-    const isClose = t.type === 'position';
+    const isClose = t.type === 'position' || t.type === 'urgence';   // [GO ARGENT · 13/10/2026] fermeture d'urgence (06) : ligne à part, affichée comme une clôture
     const isOpen  = t.type === 'open';
     const isPos   = isClose || isOpen;
     const cfg     = PAIRS[t.pair];
@@ -5163,7 +5172,7 @@ function renderHome() {
       ? (cfg.dec>=4 ? parseFloat(t.entryPrice).toFixed(cfg.dec) : '$'+Math.floor(t.entryPrice).toLocaleString())
       : null;
 
-    const badgeHtml = isClose ? ' <span style="font-size:8px;background:rgba(167,139,250,.15);color:var(--pur);padding:1px 4px;border-radius:4px;">CLOSE</span>'
+    const badgeHtml = isClose ? ' <span style="font-size:8px;background:rgba(167,139,250,.15);color:var(--pur);padding:1px 4px;border-radius:4px;">' + (t.type === 'urgence' ? 'URGENCE' : 'CLOSE') + '</span>'
                     : isOpen  ? ' <span style="font-size:8px;background:rgba(56,212,245,.12);color:var(--ice);padding:1px 4px;border-radius:4px;">OPEN</span>'
                     : '';
 

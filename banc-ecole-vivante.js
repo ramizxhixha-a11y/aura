@@ -107,7 +107,7 @@ function world(o) {
   });
   vm.runInContext(MAP + '\nlet _lastPriceFetch = 0, _pricesFetched = ' + (o.fetched === false ? 'false' : 'true') + ', _fetchInProgress = false, _priceRetryDelay = 2000; const _PRICE_RETRY_MAX = 32000; let _priceSource = 0, _cgFailCount = 0; const _CG_FAIL_THRESHOLD = 2;\n' +
     BN + '\n' + LIVE + '\n' + BLEND + '\n' + GEN + '\n' + FUND + '\nfunction __mx(tick) {\n' + MX + '\n}\nfunction __oracle() {\n' + ORACLE.generateur + '\n}' +
-    '\nfunction __rv(realisedUsd, realisedPct, pos) {\n' + CP_RV + '\n  return (typeof _behind === "undefined") ? null : _behind;\n}' +
+    '\nfunction __rv(realisedUsd, realisedPct, pos) {\n  var _urg = false;   // [GO ARGENT · 13/10/2026] fermeture ordinaire (02 : vrai seulement pour l\'urgence, 06)\n' + CP_RV + '\n  return (typeof _behind === "undefined") ? null : _behind;\n}' +
     '\nfunction __ms(realisedPct, pos, _behind) { const pnlStr = "p", usdtStr = "u";\n' + CP_MS + '\n}' +
     '\nfunction __al(_behind) {\n' + CP_AL + '\n}', c);
   S.agents = [];
@@ -341,7 +341,7 @@ await T('R2 · closePosition, fragments RÉELS exécutés : chaque fermeture sig
   assert.strictEqual(cc.split("const _behind = ((typeof _modeBehind === 'function') && _modeBehind()) || ((typeof _schoolBehind === 'function') && _schoolBehind());").length - 1, 1);
   assert.strictEqual(cc.split('_aaBehind').length - 1, 0, 'plus de _aaBehind');
   ['if(!_behind && typeof checkPnlAlerts', 'if(!_behind && typeof checkBadges', 'if (!_behind && typeof _updateCloseAllBadge', 'if (_behind) { /* un mode derrière', 'if (!_behind) {\n    updatePairBtnStates();\n    renderPositions();\n    if(S.currentPage===4) renderChain();\n  }'].forEach(k => assert.strictEqual(cc.split(k).length - 1, 1, k.slice(0, 40)));
-  assert.ok(cc.indexOf('const _behind') < cc.indexOf("if (typeof checkAntiRevenge === 'function') {")); assert.ok(!cc.includes('_behind && typeof checkAntiRevenge'), 'l\'anti-revenge est signalé pour tous (état par mode)');
+  assert.ok(cc.indexOf('const _behind') < cc.indexOf("if (!_urg && typeof checkAntiRevenge === 'function') {")); assert.ok(!cc.includes('_behind && typeof checkAntiRevenge'), 'l\'anti-revenge est signalé pour tous (état par mode)');   // [GO ARGENT · 13/10/2026] seule l'urgence (06) le saute
   assert.ok(cc.includes("  showToast('Fermé '+pos.pair+levTag+' · '+pnlStr+' · '+usdtStr);"), 'le toast de fermeture reste pour tous (08 showToast le marque)');
 });
 

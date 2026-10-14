@@ -673,37 +673,12 @@ async function loadState() {
   // la session ecoulee dans le cumul (_totalCompounded, zero perte) puis on
   // recale _startPortfolio sur le portefeuille courant : la P&L de session
   // repart de 0, la P&L totale reste identique.
-  // ★ ASSAINISSEMENT ONE-SHOT (05/07/2026, demande par Rams) · remet chaque
-  // compte trading au REEL : injections nettes + vrais P&L de trades journalises
-  // (fees.totalPnlNet). Purge : l'argent cree par le 'portfolio drift' (~+51 $
-  // fantomes sur AA et EV en 3 jours) et compense le trou de migration RE
-  // (-10.76 : mises des positions abandonnees le 02/07 jamais re-creditees).
-  // Le cumul P&L repart sur les vrais gains. Ne touche PAS : reserve fiscale,
-  // caisse, intelligence (agents/lecons), pairStates, journaux.
-  try {
-    if (S.walletStore && typeof S.walletStore === 'object'
-        && !localStorage.getItem('aura_assainissement_v1')) {
-      ['sim','paperReal','real'].forEach(function(_mk){
-        var _w = S.walletStore[_mk]; if (!_w || typeof _w !== 'object') return;
-        var _inj = _w.ownFundsInjected || 0;
-        var _net = (_w.fees && typeof _w.fees.totalPnlNet === 'number') ? _w.fees.totalPnlNet : 0;
-        var _reel = Math.max(0, _inj + _net - (_w.cashAccount || 0));
-        _w.tradingAccount   = _reel;
-        _w.portfolio        = (_w.cashAccount || 0) + _reel;
-        _w._totalCompounded = _net;
-        _w._startPortfolio  = _w.portfolio;
-        if (_w.pnlPeriod && typeof _w.pnlPeriod === 'object') {
-          _w.pnlPeriod.todayStartPortfolio = _w.portfolio;
-          _w.pnlPeriod.day = 0;
-        }
-        if (_w.bunker && typeof _w.bunker === 'object') _w.bunker.capRef = _reel;
-        if (Array.isArray(_w.pnlHistory)) _w.pnlHistory = [_w.portfolio];
-        _w.pnl24h = 0;
-      });
-      try { localStorage.setItem('aura_assainissement_v1', String(Date.now())); } catch(e) {}
-      dbg.push('assaini:v1');
-    }
-  } catch(e) { dbg.push('assaini:err'); }
+  // [GO ARGENT · 13/10/2026] « ASSAINISSEMENT ONE-SHOT » du 05/07 RETIRÉ, avec la « PURGE ONE-SHOT » du cumul (recalage v3) et le « RESET UNIQUE ·
+  // SÉPARATION 3 MODES v2 » plus bas. Les trois n'étaient gardés que par un drapeau localStorage (aura_assainissement_v1, aura_startpf_recal_v3,
+  // aura_walletsep_reset_v2) qu'AUCUN backup ne porte : sur un stockage neuf (nouvelle tablette, données effacées), « Récupérer un backup » ou
+  // « Importer backup » rappelait loadState sans ces drapeaux et les trois tournaient sur le VRAI compte — trading recalculé (EV +7,45 $, AA
+  // +10,35 $ sortis de nulle part sur le backup du 13/10), cumul P&L et courbe effacés, chronos à zéro (ETAT n° 1). Ils avaient fait leur
+  // travail en juillet sur la tablette ; un état d'aujourd'hui n'en a plus besoin. Le recalage NORMAL de session, lui, reste (ci-dessous).
 
   // FIX SEPARATION · le recalage s'applique aux TROIS wallets, pas seulement au
   // mode actif au boot. Sans ca, les bases de session/jour des modes non actifs
@@ -711,23 +686,13 @@ async function loadState() {
   // ex. base ~5000 d'une vieille epoque) -> P&L de session faux au switch.
   try {
     if (S.walletStore && typeof S.walletStore === 'object') {
-      // PURGE ONE-SHOT (drapeau LS) : les bases de session/jour heritees d'avant la
-      // separation etaient polluees (ex. todayStartPortfolio ~5000 du flat legacy
-      // copie dans les wallets par les anciens boots) et les cumuls ont pu absorber
-      // ces fausses "sessions". Conformement a la spec de separation (compteurs de
-      // perf PAR MODE a zero), le premier boot remet le cumul a 0 et recale les
-      // bases SANS versement. Les boots suivants versent normalement.
-      var _pfFirst = false;
-      try { _pfFirst = !localStorage.getItem('aura_startpf_recal_v3'); } catch(e) {}
       ['sim','paperReal','real'].forEach(function(_mk){
         var _w = S.walletStore[_mk]; if (!_w || typeof _w !== 'object') return;
         // [P&L AFFICHAGE · 17/09/2026] même définition que 02 (_computePortfolio, « engagé inclus » 23/08) : avant, le recalage
         // au boot excluait les mises des positions ouvertes → portfolio faux au boot (88,39 pour 118,6 le 14/09) et, au 1er
         // trade, un « P&L de session » égal aux mises (+30,20 $ fantômes, audit #23). Le P&L de session repart bien de 0.
         var _wpf = (typeof _computePortfolio === 'function') ? _computePortfolio(_w) : ((_w.cashAccount||0) + (_w.tradingAccount||0) + (_w.openPositions||[]).reduce(function(a,p){ return a + (Number(p.stakeUsdt)||0); }, 0));
-        if (_pfFirst) {
-          _w._totalCompounded = 0;
-        } else if (typeof _w._startPortfolio === 'number' && _w._startPortfolio > 0) {
+        if (typeof _w._startPortfolio === 'number' && _w._startPortfolio > 0) {
           var _el = _wpf - _w._startPortfolio;
           if (Math.abs(_el) > 0.01) _w._totalCompounded = (_w._totalCompounded || 0) + _el;
         }
@@ -735,31 +700,10 @@ async function loadState() {
         _w._startPortfolio = _wpf;
         if (_w.pnlPeriod && typeof _w.pnlPeriod === 'object') _w.pnlPeriod.todayStartPortfolio = _wpf;
       });
-      if (_pfFirst) { try { localStorage.setItem('aura_startpf_recal_v3', String(Date.now())); } catch(e) {} }
     }
   } catch(e) { dbg.push('startPf-recal:err'); }
 
-  // ── RESET UNIQUE · SEPARATION 3 MODES v2 ─────────────────────────────────
-  // Les balances viennent maintenant de walletStore (a zero au depart), donc le
-  // faux solde herite n'est plus restaure. Ici on remet a zero ce qui n'est pas
-  // encore par-mode : les 3 chronos + l'historique P&L cosmetique. UNE SEULE
-  // FOIS (drapeau LS), ensuite tout s'accumule normalement. Cerveau et
-  // cycle/generations NON touches.
-  try {
-    if (!localStorage.getItem('aura_walletsep_reset_v2')) {
-      if (window.AuraChrono && typeof window.AuraChrono.resetAll === 'function') window.AuraChrono.resetAll();
-      S.pnlHistory = [];
-      S.pnl24h = 0;
-      if (S.pnlPeriod && typeof S.pnlPeriod === 'object') {
-        S.pnlPeriod.todayStartPortfolio = null; S.pnlPeriod.todayDate = null;
-        S.pnlPeriod.weekStartPortfolio  = null; S.pnlPeriod.weekStart = null;
-        S.pnlPeriod.monthStartPortfolio = null; S.pnlPeriod.monthStart = null;
-        S.pnlPeriod.history = [];
-      }
-      localStorage.setItem('aura_walletsep_reset_v2', String(Date.now()));
-      dbg.push('walletsep-reset-v2: OK');
-    }
-  } catch(e) { dbg.push('walletsep-reset:err'); }
+  // [GO ARGENT · 13/10/2026] « RESET UNIQUE · SÉPARATION 3 MODES v2 » retiré (chronos, courbe et bases de période remis à zéro sur un stockage neuf) — voir plus haut.
 
   setTimeout(() => {
     try { if (typeof renderAll === 'function') renderAll(); } catch(e){}
@@ -894,25 +838,17 @@ function _flushSyncOnExit(reason) {
   }
 }
 
-function _closeTradesOnExit(reason) {
-  try {
-    if (typeof window !== 'undefined' && window._stateReady === false) return;
-    if (typeof window !== 'undefined' && window._resetInProgress) return;
-    let St; try { St = (0, eval)('S'); } catch(e){ return; }
-    if (!St || !Array.isArray(St.openPositions) || St.openPositions.length === 0) return;
-    let closeFn; try { closeFn = (0, eval)('closePosition'); } catch(e){ return; }
-    if (typeof closeFn !== 'function') return;
-    const ids = St.openPositions.map(p => p.id);
-    for (const id of ids) {
-      try { closeFn(id, true); } catch(e){}
-    }
-    console.log('[closeTradesOnExit] ' + reason + ' · ' + ids.length + ' position(s) fermée(s)');
-  } catch (e) {}
-}
-
-window.addEventListener('pagehide',     () => { _closeTradesOnExit('pagehide'); _flushSyncOnExit('pagehide'); });
-window.addEventListener('beforeunload', () => { _closeTradesOnExit('beforeunload'); _flushSyncOnExit('beforeunload'); });
-window.addEventListener('freeze',       () => { _closeTradesOnExit('freeze'); _flushSyncOnExit('freeze'); });
+// [GO ARGENT · 13/10/2026] _closeTradesOnExit RETIRÉE. À pagehide / beforeunload / freeze elle fermait toutes les positions du BOT du mode à
+// l'écran (MANU ou AUTO, peu importe) au prix du moment, et chaque fermeture était jugée comme un vrai trade (agents, mérite des bots, stats EV,
+// série de pertes, impôt) — une sortie que personne n'avait décidée, contraire à « tenir une position le temps qu'il faut » (ETAT n° 8).
+// Elle fermait aussi les positions d'un état qu'on restaurait (le rechargement qui suit « RESTAURER » déclenche pagehide).
+// Désormais la sortie SAUVEGARDE seulement : les positions restent ouvertes et sauvegardées. À la reprise, les sorties (10f balayage des bots,
+// 07 trailing / anti-zombie / bascule) attendent un PRIX RÉEL frais (moins de 2 min) en EV / RE, puis s'appliquent comme pendant la marche — en MANU
+// aussi pour les positions du bot (07 ne lit pas AUTO / MANU ; 10f, si). Le stop sur coupure (10f) compte une position fermée AU stop si le prix l'a
+// traversé pendant l'absence ; un TWAP en retard de plus de 2 min s'arrête (09c).
+window.addEventListener('pagehide',     () => { _flushSyncOnExit('pagehide'); });
+window.addEventListener('beforeunload', () => { _flushSyncOnExit('beforeunload'); });
+window.addEventListener('freeze',       () => { _flushSyncOnExit('freeze'); });
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'hidden') _flushSyncOnExit('visibility-hidden');
 });

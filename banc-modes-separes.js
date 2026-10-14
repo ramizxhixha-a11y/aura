@@ -123,7 +123,8 @@ T('S2e · textes 06 : plus aucune variable d\'état unique (_rvActive, _rvEndTim
   assert.ok(codeStrict(fnSrc(s06, 'checkAntiRevenge')).includes('if (st.active && Date.now() >= st.end) st.active = false;'), 'expiration en tête');
   assert.strictEqual(codeStrict(fnSrc(s06, 'triggerAntiRevenge')).split(',m:_walletKey(S.tradingMode)});').length - 1, 2, 'la ligne du journal porte son mode aux deux sites');
   const cp = codeStrict(fnSrc(s02, 'closePosition'));
-  assert.ok(/if \(typeof checkAntiRevenge === 'function'\) \{\s*try \{ checkAntiRevenge\(realisedUsd, realisedPct, pos\.pair\); \} catch\(e\) \{\}\s*\}/.test(cp), 'closePosition : signal inconditionnel');
+  assert.ok(/if \(!_urg && typeof checkAntiRevenge === 'function'\) \{\s*try \{ checkAntiRevenge\(realisedUsd, realisedPct, pos\.pair\); \} catch\(e\) \{\}\s*\}/.test(cp), 'closePosition : signal inconditionnel (sauf urgence, GO ARGENT 13/10 : 06 urgenceCloseAll ne juge rien, comme avant)');
+  assert.ok(/const _urg = !!\(arguments\[2\] && arguments\[2\]\.urgence\);/.test(cp), '_urg : seulement le 3e argument { urgence: true }');
   assert.ok(!cp.includes('_aaBehind') && !cp.includes('_behind && typeof checkAntiRevenge'), 'ancienne exception de l\'AA derrière');
 });
 
@@ -198,7 +199,7 @@ T('S6 · getAnnualNetRealised / addAnnualNetRealised RÉELS : l\'AA ajoute +10 p
   w.S.fiscalYear = { year: new Date(w.c.now).getFullYear(), netRealisedEur: 100 }; assert.strictEqual(w.run('getAnnualNetRealised()'), 0, 'ancien cumul sans détail : rien pour ce mode'); assert.deepStrictEqual(J(w.S.fiscalYear.byMode), {});
   w.c.now += 366 * 86400000; assert.strictEqual(w.run('addAnnualNetRealised(1)'), 1); assert.strictEqual(w.S.fiscalYear.netRealisedEur, 1, 'nouvelle année');
   const c2 = codeStrict(s02); assert.ok(codeStrict(fnSrc(s02, 'fiscalBotAdvicePerPair')).includes("const annual = (typeof getAnnualNetRealised === 'function') ? getAnnualNetRealised() : 0;"));
-  assert.ok(codeStrict(fnSrc(s02, 'recordFees')).includes("if (typeof addAnnualNetRealised === 'function') addAnnualNetRealised(netGain);")); assert.strictEqual(c2.split('addAnnualNetRealised(').length - 1, 2, 'un seul nourrisseur');
+  assert.ok(codeStrict(fnSrc(s02, 'recordFees')).includes("if (!_urgF && typeof addAnnualNetRealised === 'function') addAnnualNetRealised(netGain);"));   // [GO ARGENT · 13/10/2026] toute fermeture sauf l'urgence (06) assert.strictEqual(c2.split('addAnnualNetRealised(').length - 1, 2, 'un seul nourrisseur');
 });
 
 // ── S8 · écran 11b : les compteurs du mode à l'écran ──

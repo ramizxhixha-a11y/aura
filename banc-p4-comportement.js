@@ -94,7 +94,7 @@ T('porte qui crashe → ouverture continue sans plafond (try/catch, _bg null)', 
 console.log('\n── C · source vivante, mode, HTML, intégrité ──');
 const src02 = fs.readFileSync('js/02-state-init.js', 'utf8');
 T('02 : closePosition écrit dans ps.trades {type:position, stakeUsdt, pnlUsdt, ts} ; ouvertures {type:open, ts}', () => {
-  const blk = src02.slice(src02.indexOf("      type:      'position',"), src02.indexOf("      type:      'position',") + 600);
+  const blk = src02.slice(src02.indexOf("      type:      _urg ? 'urgence' : 'position',"), src02.indexOf("      type:      _urg ? 'urgence' : 'position',") + 600);   // [GO ARGENT · 13/10/2026] « urgence » pour 06 seulement
   assert.ok(blk.includes('stakeUsdt: pos.stakeUsdt') && blk.includes('pnlUsdt:   realisedUsd') && blk.includes('ts:        Date.now()'));
   assert.ok(src02.includes("type:          'open',") && src09c.includes("type:          'open',"));
 });

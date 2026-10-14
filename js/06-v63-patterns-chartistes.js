@@ -699,25 +699,21 @@ function urgenceCloseAll() {
   const positions = [...(S.openPositions||[])];
   if(positions.length===0) { _urgAppendLog('⚠ Aucune position à fermer'); return; }
 
+  // [GO ARGENT · 13/10/2026] chaque position passe par closePosition (02), la seule porte de sortie : frais, historique de la paire, registre
+  // fiscal, levier remboursé, résultat sur l'exposition. Avant : retirée de la liste et créditée ici à la main — ni frais, ni historique, ni impôt,
+  // levier jamais rendu (dette fantôme), P&L sur la seule mise (ETAT n° 6). Atteint aussi par le Bunker (07 activateBunker, action « Fermer les positions »).
+  // { urgence: true } : aucun juge ni aucune porte (agents, bots, anti-revenge, pauses, cooldown, blacklist…) — comme avant, l'urgence n'enseigne rien.
   let closed=0;
   positions.forEach(pos=>{
     try {
-      // Fermer manuellement chaque position
-      const ps  = S.pairStates?.[pos.pair];
-      const cur = ps?.price || pos.entryPrice;
-      const pnlPct  = pos.side==='long'
-        ? (cur-pos.entryPrice)/pos.entryPrice*100
-        : (pos.entryPrice-cur)/pos.entryPrice*100;
-      const pnlUsd  = (pos.stakeUsdt||0)*pnlPct/100;
-
-      // Retirer de openPositions
-      S.openPositions = (S.openPositions||[]).filter(p=>p.id!==pos.id);
-      S.tradingAccount = (S.tradingAccount||0) + (pos.stakeUsdt||0) + pnlUsd;
-      S.portfolio = (typeof _computePortfolio==='function') ? _computePortfolio() : ((S.cashAccount||0)+(S.tradingAccount||0));   // [23/08] canonique
-
-      // Log dans chain
+      closePosition(pos.id, false, { urgence: true });
+      if ((S.openPositions||[]).some(p => p && p.id === pos.id)) { _urgAppendLog('⚠ Fermeture non aboutie '+pos.pair); return; }
+      const _tr = (S.pairStates && S.pairStates[pos.pair] && S.pairStates[pos.pair].trades) || [];
+      const _last = _tr[_tr.length - 1];
+      const pnlUsd = (_last && _last.type === 'urgence' && isFinite(_last.pnlUsdt)) ? Number(_last.pnlUsdt) : 0;   // la ligne « urgence » de 02 (lue par aucun juge ni aucune porte)
       S.chainLog = S.chainLog||[];
-      S.chainLog.push({icon:'🚨',desc:`URGENCE: ${pos.pair} ${pos.side} fermé manuellement · ${pnlUsd>=0?'+':''}$${pnlUsd.toFixed(2)}`,hash:Math.random().toString(36).slice(2,8),time:new Date().toLocaleTimeString()});
+      S.chainLog.push({icon:'🚨',desc:`URGENCE: ${pos.pair} ${pos.side} fermé · ${pnlUsd>=0?'+':''}$${pnlUsd.toFixed(2)} (avant frais)`,hash:Math.random().toString(36).slice(2,8),time:new Date().toLocaleTimeString()});
+      if (S.chainLog.length > 100) S.chainLog.splice(0, S.chainLog.length - 100);
       closed++;
     } catch(e) { _urgAppendLog('⚠ Erreur fermeture '+pos.pair); }
   });

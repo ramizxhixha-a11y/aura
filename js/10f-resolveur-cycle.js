@@ -720,6 +720,11 @@ window._botExitSweep = function _botExitSweep() {
           return;
         }
       }
+      // [GO ARGENT · 13/10/2026] EV / RE : le dernier prix RÉEL de la paire date de plus de 2 min (coupure, ou app relancée sans réseau — les
+      // positions ne sont plus fermées à la sortie de page, 09b2) → aucune sortie de ce balayage sur un prix qui n'est pas le marché : horizon,
+      // règles apprises, TP / SL attendent un prix frais, comme le faisait déjà la branche « horizon prouvé » ci-dessous. Le stop sur coupure
+      // ci-dessus (au premier prix frais) et la perte max (_lossCapSweep) restent. Prix frais : rien ne change.
+      if ((S.tradingMode === 'paperReal' || S.tradingMode === 'real') && typeof _rcSeenAge === 'function' && _rcSeenAge(pos.pair) > 120000) return;
       // [HORIZONS APPRIS · 27/09/2026] position ouverte sur un horizon prouvé (10f np._thX) : elle sort à la clôture de sa bougie de sortie, comme
       // le trade virtuel qui l'a prouvée, au dernier prix RÉEL (ps.price peut dater : mode en arrière-plan, coupure, réouverture de l'app) — figé
       // depuis plus de 2 min : on attend un prix frais ; d'ici là, aucune autre sortie de ce balayage (règles apprises, TP / SL, breakeven) — la

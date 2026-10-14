@@ -505,18 +505,23 @@ function pyramidPosition(posId) {
   if(!pos) { showToast('⚠ Position introuvable', 1500, 'warn'); return; }
 
   const ps     = S.pairStates[pos.pair];
-  const price  = ps?.price || pos.entryPrice;
+  const price  = Number(ps && ps.price);   // [GO ARGENT · 13/10/2026] plus de repli sur le prix d'entrée : après un ajout c'est la MOYENNE, pas un prix du marché
+  if(!(price > 0)) { showToast('⚠ ' + pos.pair + ' : pas de prix — entrée non ajoutée', 2000, 'warn'); return; }
   const entries= pos._pyramidEntries || [];
+  // [GO ARGENT · 13/10/2026] la 1re entrée est gardée telle quelle (prix, mise) : après un ajout, pos.entryPrice devient le prix d'entrée
+  // EFFECTIF (02 _addToPosition) et pos.stakeUsdt la mise totale — les deux ne disent plus la 1re entrée. Avant : la 2e pyramide repartait
+  // de la mise TOTALE (×0,6 de 50 $ au lieu de 30 $) et recomptait l'entrée 1 avec la mise totale.
+  const first  = pos._pyFirst || { price: pos.entryPrice, stake: pos.stakeUsdt || 10 };
 
   // Vérifications sécurité
   if(entries.length >= _PY_CFG.maxEntries - 1) {
     showToast('⚠ Maximum '+_PY_CFG.maxEntries+' entrées atteint', 2000, 'warn'); return;
   }
 
-  // Vérifier que le prix est plus favorable (LONG = prix baissé, SHORT = prix monté)
+  // Vérifier que le prix est plus favorable que l'entrée INITIALE (LONG = prix baissé, SHORT = prix monté)
   const dropPct = pos.side==='long'
-    ? (pos.entryPrice - price) / pos.entryPrice * 100
-    : (price - pos.entryPrice) / pos.entryPrice * 100;
+    ? (first.price - price) / first.price * 100
+    : (price - first.price) / first.price * 100;
 
   if(dropPct < _PY_CFG.minDropPct) {
     showToast(`⚠ Prix pas assez favorable (${dropPct.toFixed(2)}% vs min ${_PY_CFG.minDropPct}%)`, 2500, 'warn');
@@ -524,7 +529,7 @@ function pyramidPosition(posId) {
   }
 
   // Calculer la mise de cette entrée
-  const baseStake = pos.stakeUsdt || 10;
+  const baseStake = first.stake || 10;
   const newStake  = Math.max(5, baseStake * Math.pow(_PY_CFG.stakeDecay, entries.length + 1));
   const rounded   = Math.round(newStake / 5) * 5;
 
@@ -532,18 +537,15 @@ function pyramidPosition(posId) {
     showToast('⚠ Capital insuffisant ($'+S.tradingAccount?.toFixed(0)+')', 2000, 'warn'); return;
   }
 
-  // Ajouter l'entrée
+  // Ajouter l'entrée : prix d'entrée effectif, mise et exposition mis à jour par la règle commune (02)
+  if (typeof _addToPosition !== 'function' || _addToPosition(pos, rounded, price) === null) {
+    showToast('⚠ Entrée non ajoutée (position illisible ou exécution TWAP en cours)', 2500, 'warn'); return;
+  }
+  if(!pos._pyFirst) pos._pyFirst = { price: first.price, stake: first.stake };
   if(!pos._pyramidEntries) pos._pyramidEntries = [];
   pos._pyramidEntries.push({ price, stake:rounded, ts:Date.now() });
-
-  // Mettre à jour l'entrée moyenne
-  const allEntries = [{ price:pos.entryPrice, stake:pos.stakeUsdt }, ...pos._pyramidEntries];
-  const totalStake = allEntries.reduce((s,e)=>s+e.stake,0);
-  const avgEntry   = allEntries.reduce((s,e)=>s+e.price*e.stake,0) / totalStake;
-
+  const avgEntry = pos.entryPrice;
   pos._avgEntryPrice = avgEntry;
-  pos.stakeUsdt      = totalStake;
-  pos.totalExposure  = totalStake;
 
   // Déduire du capital
   S.tradingAccount = Math.max(0, (S.tradingAccount||0) - rounded);
@@ -606,10 +608,11 @@ function renderPyramideSection() {
             const pnl     = pos.pnlUsdt || 0;
             const pnlCol  = pnl>=0?'var(--up)':'var(--down)';
             const canAdd  = nEntries < _PY_CFG.maxEntries;
+            const first   = pos._pyFirst || { price: pos.entryPrice, stake: pos.stakeUsdt || 10 };   // [GO ARGENT · 13/10/2026] la 1re entrée, comme pyramidPosition
             const dropPct = pos.side==='long'
-              ? (pos.entryPrice - price) / pos.entryPrice * 100
-              : (price - pos.entryPrice) / pos.entryPrice * 100;
-            const nextStake = Math.round(pos.stakeUsdt * Math.pow(_PY_CFG.stakeDecay, nEntries) / 5) * 5;
+              ? (first.price - price) / first.price * 100
+              : (price - first.price) / first.price * 100;
+            const nextStake = Math.round(Math.max(5, first.stake * Math.pow(_PY_CFG.stakeDecay, nEntries)) / 5) * 5;
 
             return `<div class="py-pos-card">
               <div class="py-pos-header">
@@ -624,8 +627,8 @@ function renderPyramideSection() {
                 <div class="py-entry">
                   <div class="py-entry-dot" style="background:var(--ice);"></div>
                   <span style="color:var(--t2);">Entrée 1 (initiale)</span>
-                  <span style="color:var(--t3);">${pos.entryPrice.toFixed(dec)}</span>
-                  <span style="font-weight:700;">$${pos.stakeUsdt.toFixed(0)}</span>
+                  <span style="color:var(--t3);">${Number(first.price).toFixed(dec)}</span>
+                  <span style="font-weight:700;">$${Number(first.stake).toFixed(0)}</span>
                 </div>
                 ${entries.map((e,i)=>`<div class="py-entry">
                   <div class="py-entry-dot" style="background:var(--pur);"></div>
