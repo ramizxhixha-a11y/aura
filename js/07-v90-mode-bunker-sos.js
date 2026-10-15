@@ -148,17 +148,24 @@ function _bkState() {
 }
 try { localStorage.removeItem('aura_bunker_cap_ref_v90'); } catch(e) {}  // cle legacy GLOBALE supprimee (remplacee par S.bunker.capRef par mode)
 
+// [GO RÉGLAGES · 14/10/2026] ETAT n° 13 et 14.
+//  · « 📉 Réduire les mises » (action ON d'usine) et « Mises réduites à 5 % » RETIRÉS : activateBunker écrivait S.stakeConfig.defaultStake (objet jamais
+//    créé), S.stakeUsdt et a.stake (champ qu'aucun agent n'a) — l'ouvreur (09c) ne lit aucun des trois (vm de l'audit du 13/10 : mise lue avant et après
+//    identique). Le bunker annonçait « Mises réduites » sans rien réduire. Le brancher, ce serait un seuil posé à la main (−10 % → mises à 5 %) sur la
+//    taille des mises de l'ouvreur : non fait, dit à Rams. Restent : l'alerte, le backup, Telegram, et « Fermer les positions » (OFF d'usine, par closePosition).
+//  · Le réglage est SAUVEGARDÉ (09b1 → 09b2 _reglagesRelus) : avant, un bunker désactivé se réactivait à chaque relance. L'interrupteur écrit un booléen
+//    (toggleBkEnabled) : updateBkParam en faisait 1 / 0.
+//  · « 🧪 Simuler un déclenchement (test) » RETIRÉ : il déclenchait le VRAI bunker (backup, Telegram, et la fermeture de TOUTES les positions si l'action
+//    était ON), avec un seuil lu dans une variable globale de passage.
 function _bkGet() {
   if(!S.bunkerCfg) S.bunkerCfg = {
     enabled:        true,
     triggerDropPct: 10,   // % de chute pour déclencher
     actions: {
-      reduceMises:  true,
       closePositions: false,  // risqué — off par défaut
       sendTelegram: true,
       saveBackup:   true,
     },
-    minStakePct:    5,    // % des mises normales en mode bunker
     recoveryPct:    3,    // % de remontée pour sortir auto
   };
   return S.bunkerCfg;
@@ -240,21 +247,16 @@ function activateBunker(dropPct) {
   _bst.startCapital= _bkCapital();
   const dropStr   = (dropPct||0).toFixed(1);
 
-  // Actions immédiates — le bunker ne met JAMAIS le bot en pause (Option A) :
-  // il réduit les mises et laisse le bot continuer en AUTO. Il ne peut donc plus
-  // piéger un mode en arrière-plan (EV/RE) dans un état actif+bloqué non levé.
-  if(cfg.actions.reduceMises) {
-    const prevStake = S.stakeConfig?.defaultStake||S.stakeUsdt||20;
-    const newStake  = Math.max(1, Math.round(prevStake*cfg.minStakePct/100));
-    if(S.stakeConfig) S.stakeConfig.defaultStake = newStake;
-    S.stakeUsdt = newStake;
-    (S.agents||[]).forEach(a=>{ if(a.stake&&!a._bunkerOrigStake) { a._bunkerOrigStake=a.stake; a.stake=Math.max(1,Math.round(a.stake*cfg.minStakePct/100)); }});
-  }
+  // Actions immédiates — le bunker ne met JAMAIS le bot en pause (Option A) et laisse le bot continuer en AUTO, avec ses mises habituelles
+  // ([GO RÉGLAGES · 14/10/2026] la « réduction des mises » n'a jamais agi : retirée). Il ne peut donc pas piéger un mode en arrière-plan (EV/RE).
   if(cfg.actions.closePositions) {
     try { urgenceCloseAll?.(); } catch(e) {}
   }
   if(cfg.actions.saveBackup) {
-    try { _abExecute?.('bunker'); } catch(e) {}
+    // [GO RÉGLAGES · 14/10/2026] « 💾 Sauvegarder un backup » : un VRAI backup dans l'historique (Réglages › HISTORIQUE DES BACKUPS, RESTAURER).
+    // Avant : _abExecute (06) ne faisait qu'une sauvegarde ordinaire (saveState) — aucun point de retour (relecture adverse du 14/10).
+    // Rangé avec les AUTO (7 gardés) : il ne chasse ni tes 5 backups manuels ni les 3 « avant import ».
+    try { if (typeof _buildFullBackup === 'function' && typeof _saveBackupToDB === 'function') _saveBackupToDB(_buildFullBackup('Bunker · capital -' + dropStr + '% · ' + new Date().toLocaleString('fr-FR'), 'auto')); } catch(e) {}
   }
   if(cfg.actions.sendTelegram) {
     try { tgOnUrgence?.(`🚨 BUNKER : capital chute de ${dropStr}% · $${(_bkCapital()).toFixed(2)} (compte + positions)`); } catch(e) {}
@@ -270,7 +272,7 @@ function activateBunker(dropPct) {
   try { if(typeof playSound==='function') playSound('urgence'); } catch(e) {}
 
   // Toast
-  showToast(`🚨 BUNKER activé — Capital -${dropStr}% · Mises réduites`, 5000, 'warn');
+  showToast(`🚨 BUNKER activé — Capital -${dropStr}%`, 5000, 'warn');
   S.chainLog = S.chainLog||[];
   S.chainLog.push({icon:'🚨',desc:`BUNKER: capital -${dropStr}% ($${(_bkCapital()).toFixed(2)} compte + positions) · actions ${Object.entries(cfg.actions).filter(([,v])=>v).map(([k])=>k).join(',')}`,hash:Math.random().toString(36).slice(2,8),time:new Date().toLocaleTimeString()});
 
@@ -337,6 +339,13 @@ function updateBkParam(key, val) {
 }
 window.updateBkParam = updateBkParam;
 
+function toggleBkEnabled() {   // [GO RÉGLAGES · 14/10/2026] un booléen (updateBkParam écrivait 1 / 0)
+  const cfg = _bkGet();
+  cfg.enabled = !cfg.enabled;
+  renderBunkerSection();
+}
+window.toggleBkEnabled = toggleBkEnabled;
+
 // Vérification automatique toutes les 2min
 setInterval(()=>{ try { checkBunker(); } catch(e){}; }, 120000);
 // Init référence au démarrage
@@ -348,7 +357,7 @@ function renderBunkerSection() {
   const cfg = _bkGet();
   const _bact = _bkState().active;   // etat PAR MODE (le badge ACTIF ne concerne que le mode courant)
   const capRef = _bkGetCapRef();
-  const cap    = S.tradingAccount||0;
+  const cap    = _bkCapital();   // [GO RÉGLAGES · 14/10/2026] le même capital que le déclencheur : compte et positions ouvertes ; avant : le compte seul
   const dropPct= capRef>0?(capRef-cap)/capRef*100:0;
   const trigColor = dropPct >= cfg.triggerDropPct ? 'var(--down)' : dropPct >= cfg.triggerDropPct*0.7 ? 'var(--gold)' : 'var(--up)';
 
@@ -360,8 +369,8 @@ function renderBunkerSection() {
 
       <!-- Status -->
       <div class="bk-status">
-        <div style="font-size:28px;margin-bottom:6px;">${_bact?'🚨':'🛡️'}</div>
-        <div style="font-size:${_bact?14:11}px;font-weight:900;color:${_bact?'var(--down)':'var(--t1)'};">${_bact?'BUNKER ACTIVÉ':'Protection active'}</div>
+        <div style="font-size:28px;margin-bottom:6px;">${_bact?'🚨':(cfg.enabled?'🛡️':'⏸')}</div>
+        <div style="font-size:${_bact?14:11}px;font-weight:900;color:${_bact?'var(--down)':'var(--t1)'};">${_bact?'BUNKER ACTIVÉ':(cfg.enabled?'Protection active':'Protection désactivée')}</div>
         <div style="font-size:9px;color:var(--t3);margin-top:4px;">
           Référence capital : $${capRef.toFixed(0)} · Actuel : $${cap.toFixed(0)}
         </div>
@@ -378,7 +387,7 @@ function renderBunkerSection() {
           <div style="font-size:11px;font-weight:700;color:var(--t1);">Activation automatique</div>
           <div style="font-size:8px;color:var(--t3);">Déclenché si capital chute de ${cfg.triggerDropPct}%</div>
         </div>
-        <button onclick="updateBkParam('enabled',${!cfg.enabled?1:0});renderBunkerSection();"
+        <button onclick="toggleBkEnabled();"
           style="padding:5px 12px;border-radius:7px;font-size:10px;font-weight:700;cursor:pointer;font-family:inherit;
                  background:${cfg.enabled?'rgba(255,61,107,.12)':'rgba(255,255,255,.06)'};
                  border:1px solid ${cfg.enabled?'rgba(255,61,107,.3)':'var(--border)'};
@@ -391,7 +400,6 @@ function renderBunkerSection() {
       <div style="font-size:9px;color:var(--t3);margin-bottom:5px;">Paramètres</div>
       ${[
         {k:'triggerDropPct', lbl:'Seuil déclenchement', unit:'%', min:3, max:50, step:1},
-        {k:'minStakePct',    lbl:'Mises réduites à',    unit:'%', min:1, max:30, step:1},
         {k:'recoveryPct',    lbl:'Remontée auto-sortie', unit:'%', min:1, max:20, step:1},
       ].map(p=>`<div class="bk-trigger-row">
         <span style="color:var(--t2);min-width:110px;">${p.lbl}</span>
@@ -403,7 +411,6 @@ function renderBunkerSection() {
       <!-- Actions -->
       <div style="font-size:9px;color:var(--t3);margin:8px 0 5px;">Actions au déclenchement</div>
       ${[
-        {k:'reduceMises',    lbl:'📉 Réduire les mises'},
         {k:'closePositions', lbl:'🛑 Fermer les positions (risqué)'},
         {k:'sendTelegram',   lbl:'📲 Alerter via Telegram'},
         {k:'saveBackup',     lbl:'💾 Sauvegarder un backup'},
@@ -417,12 +424,6 @@ function renderBunkerSection() {
           ${cfg.actions[a.k]?'✅ ON':'OFF'}
         </button>
       </div>`).join('')}
-
-      <!-- Test -->
-      <button onclick="activateBunker(cfg.triggerDropPct)"
-        style="width:100%;margin-top:8px;padding:8px;border-radius:7px;background:rgba(255,255,255,.04);border:1px solid var(--border);color:var(--t3);font-size:9px;cursor:pointer;font-family:inherit;">
-        🧪 Simuler un déclenchement (test)
-      </button>
 
       <div style="font-size:8px;color:var(--t3);margin-top:6px;text-align:center;">
         Vérification automatique toutes les 2min · Sortie auto si capital remonte ${cfg.recoveryPct}%
@@ -3190,6 +3191,7 @@ function activateDynamicPair(sym) {
     dec:        candidate.dec
   };
   S.pairStates[pairKey] = makePairState(PAIRS[pairKey]);
+  try { if (typeof _ensureWalletStore === 'function') _ensureWalletStore(); } catch (e) {}   // [GO RÉGLAGES · 14/10/2026] les 3 portefeuilles reçoivent la paire (ETAT n° 10)
 
   // Mark proposal as executed
   const prop = S.proposals.find(p => p.isPairProposal && p.pairSym === sym);
@@ -3509,7 +3511,8 @@ function dismissInstall() {
 // PAIR P&L RENDERING
 // ============================================================
 function renderPairPnl() {
-  const pairs = Object.keys(PAIRS).map(pair => {
+  // [GO RÉGLAGES · 14/10/2026] une paire sans état dans le portefeuille à l'écran est sautée (avant : TypeError → le reste du battement sautait, ETAT n° 10)
+  const pairs = Object.keys(PAIRS).filter(pair => !!S.pairStates[pair]).map(pair => {
     const ps = S.pairStates[pair];
     return { pair, ps, cfg: PAIRS[pair], usd: ps.totalPnlUsd, pct: ps.totalPnlPct, trades: ps.totalTrades, wr: ps.totalTrades > 0 ? Math.round(ps.winTrades/ps.totalTrades*100) : 0 };
   }).sort((a, b) => b.usd - a.usd);  // best first

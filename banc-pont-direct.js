@@ -279,6 +279,9 @@ T('P14 · secrets et objets interdits : tout champ au nom de secret masqué (tab
   assert.ok(/absent/.test(L.lire({ quoi: 'S', chemin: ['chainLog', 'constructor'] })._err), 'propriétés propres seulement');
   assert.deepStrictEqual(J(L.secrets()).sort(), ['123456:ABC-SECRET-TG', 'CLE-COINSTATS-SECRETE-123'].concat(secrets.map(k => 'V-' + k).filter(v => v.length >= 12)).sort(),
     'valeurs de 12 caractères au moins (plus courtes, elles masqueraient n\'importe quoi), dans S et ses objets directs');
+  // [GO RÉGLAGES · 14/10/2026] S.telegramCfg est non énumérable dans l'app (06 _tgGet) : le jeton reste connu du dernier filet
+  X.run('Object.defineProperty(S, "telegramCfg", { value: S.telegramCfg, writable: true, configurable: true, enumerable: false });');
+  assert.ok(J(L.secrets()).includes('123456:ABC-SECRET-TG'), 'jeton Telegram non énumérable : inconnu du dernier filet');
 });
 T('P15 · bornes de la copie : profondeur 8, N derniers d\'un tableau (500 au plus), 400 clés, 2 000 caractères, cycle, 40 000 valeurs — CHAQUE valeur compte (relecture : le coût d\'une lecture est borné) — types nommés (Date, Map, classe, fonction, NaN) ; rien n\'est modifié', async () => {
   const X = monde(), cp = (...a) => J(X.c._pontLecture.copie(...a));

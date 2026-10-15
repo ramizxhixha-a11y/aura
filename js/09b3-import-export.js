@@ -38,66 +38,33 @@ function importState() {
         return;
       }
 
+      // [GO RÉGLAGES · 14/10/2026] ETAT n° 12 · la confirmation dit ce qui change (3 portefeuilles et leur play / pause, AUTO / MANU, cycle, Bunker,
+      // Anti-Revenge, Mode Vacances — 09b2 _chosenStateText) ; l'écriture passe par _writeChosenState (09b2) : IDB d'abord, LS allégé, repère de cycle AU
+      // CYCLE DU FICHIER ; puis l'app RECHARGE (comme « RESTAURER »). Avant, le repère restait au cycle d'avant : un fichier de plus de 2 000 cycles en
+      // retard était remplacé au chargement suivant par le backup Guardian le plus haut, sans rien demander ; plus près, chaque sauvegarde était refusée
+      // jusqu'à ce que le cycle rattrape. Appliqué en place (loadState), l'import laissait l'écran sur un mode et l'argent sur celui du fichier, et les
+      // paires de l'état d'avant dans PAIRS (relecture adverse du 14/10). Un état d'avant juillet (sans les 3 portefeuilles) est refusé.
+      const refus = (typeof _chosenStateRefus === 'function') ? _chosenStateRefus(snap) : null;
+      if (refus) { if (typeof showToast === 'function') showToast('❌ Refusé : ' + refus + ' · rien n\'est changé', 7000, 'critical'); return; }
       const confirmed = confirm(
         'Restaurer cette sauvegarde ?\n\n' +
-        'Cycle : #'        + (snap.cycle || '?') + '\n' +
-        'Trades : '        + (snap.totalTrades || 0) + '\n' +
-        'Portefeuille : '  + (snap.portfolio ? snap.portfolio.toFixed(2) : 0) + ' USDT\n' +
-        'Sauvegardé : '    + (snap.savedAt ? new Date(snap.savedAt).toLocaleString() : '?') + '\n\n' +
-        "L'état actuel sera remplacé."
+        'Sauvegardé : '    + (snap.savedAt ? new Date(snap.savedAt).toLocaleString('fr-FR') : '?') + '\n\n' +
+        "L'état actuel est REMPLACÉ par celui du fichier :\n" +
+        (typeof _chosenStateText === 'function' ? _chosenStateText(snap) : ('Cycle : #' + snap.cycle)) + '\n\nL\'application se recharge ensuite. Continuer ?'
       );
       if (!confirmed) return;
 
-      // Stop sim si elle tourne (avec try/catch)
-      const wasRunning = RT._simRunning;
-      if (wasRunning) {
-        try { if (typeof stopSim === 'function') stopSim(); } catch(e) {}
-      }
-
-      // Écrire dans IDB + LS en parallèle
-      if (!snap.savedAt) snap.savedAt = new Date().toISOString();
-      if (!snap.key) snap.key = RT.SAVE_KEY;
-
       try {
-        const db = await openDB();
-        await new Promise(res => {
-          try {
-            const tx  = db.transaction(RT.STORE_STATE, 'readwrite');
-            const req = tx.objectStore(RT.STORE_STATE).put(snap, RT.SAVE_KEY);
-            req.onsuccess = () => res(true);
-            req.onerror   = () => res(false);
-            tx.oncomplete = () => res(true);
-            tx.onerror    = () => res(false);
-          } catch(e) { res(false); }
-        });
-      } catch (dbErr) {}
-
-      try {
-        localStorage.setItem(RT.SAVE_KEY, JSON.stringify(snap));
-      } catch (lsErr) {}
-
-      const ok = await loadState();
-
-      if (ok) {
-        try { if (typeof renderAll === 'function') renderAll(); } catch(e){}
-        if (typeof showToast === 'function') {
-          showToast('✅ Session restaurée depuis fichier · cycle #' + S.cycle, 5000, 'user');
-        }
-        try {
-          if (S.chainLog) {
-            S.chainLog.push({
-              icon: '📥',
-              desc: 'Session importée depuis fichier · cycle #' + S.cycle,
-              hash: (typeof rndHash === 'function') ? rndHash() : '0x' + Date.now().toString(16),
-              time: (typeof nowStr === 'function') ? nowStr() : new Date().toLocaleTimeString()
-            });
-          }
-        } catch(e) {}
-      } else {
-        if (typeof showToast === 'function') {
-          showToast('⚠ Restauration partielle', 4000, 'user');
-        }
+        if (!Array.isArray(snap.chainLog)) snap.chainLog = [];
+        snap.chainLog.push({ icon: '📥', desc: 'Session importée depuis fichier · cycle #' + snap.cycle, hash: (typeof rndHash === 'function') ? rndHash() : '0x' + Date.now().toString(16), time: (typeof nowStr === 'function') ? nowStr() : new Date().toLocaleTimeString() });
+      } catch(e) {}
+      const w = await _writeChosenState(snap);
+      if (!w.idb) {
+        if (typeof showToast === 'function') showToast('❌ Import NON écrit : le stockage de l\'appareil a refusé · rien n\'est changé', 6000, 'critical');
+        return;
       }
+      if (typeof showToast === 'function') showToast('✅ Sauvegarde écrite · cycle #' + w.cycle + ' · rechargement…', 3000, 'user');
+      setTimeout(() => location.reload(), 600);   // _auraChosenStateWriting reste posé : rien ne réécrit l'état d'avant d'ici là
     } catch (err) {
       console.error('Import failed', err);
       if (typeof showToast === 'function') {
@@ -540,28 +507,21 @@ function recoverFromFiles() {
         } catch(e){}
       }
       if (!best) { if (typeof showToast === 'function') showToast('❌ Aucune sauvegarde AURA dans ce choix', 4000, 'critical'); return; }
-      const pf = typeof best.portfolio === 'number' ? Math.round(best.portfolio) : '?';
-      const ok = confirm('Récupérer ce backup ?\n\nFichier : ' + bestName + '\nCycle : ' + best.cycle + '\nPortefeuille : ' + pf + '\n\nCela remplacera l\'état actuel.');
+      // [GO RÉGLAGES · 14/10/2026] même écriture et même confirmation que « Importer backup » (09b2 _writeChosenState, _chosenStateText) : IDB d'abord,
+      // LS allégé (le snapshot complet dans le LS pouvait dépasser le quota et laisser l'ancien LS gagner au chargement), repère au cycle du fichier.
+      const refus = (typeof _chosenStateRefus === 'function') ? _chosenStateRefus(best) : null;
+      if (refus) { if (typeof showToast === 'function') showToast('❌ Refusé : ' + refus + ' · rien n\'est changé', 7000, 'critical'); return; }
+      const ok = confirm('Récupérer ce backup ?\n\nFichier : ' + bestName + '\n\nL\'état actuel est REMPLACÉ par celui du fichier :\n'
+        + (typeof _chosenStateText === 'function' ? _chosenStateText(best) : ('Cycle : #' + best.cycle)) + '\n\nL\'application se recharge ensuite. Continuer ?');
       if (!ok) return;
-      // Appliquer le snapshot : même logique qu'importState (IDB + LS), puis loadState.
       try {
-        if (!best.key) best.key = RT.SAVE_KEY;
-        try {
-          const db = await openDB();
-          await new Promise((res) => {
-            const tx = db.transaction(RT.STORE_STATE, 'readwrite');
-            const store = tx.objectStore(RT.STORE_STATE);
-            const req = store.keyPath ? store.put(best) : store.put(best, RT.SAVE_KEY);
-            req.onsuccess = () => res(); req.onerror = () => res();
-          });
-        } catch(e){}
-        try { localStorage.setItem(RT.SAVE_KEY, JSON.stringify(best)); } catch(e){}
-        try { localStorage.setItem('aura_highwater_cycle', String(best.cycle)); } catch(e){}
-        if (typeof loadState === 'function') { await loadState(); if (typeof renderAll === 'function') renderAll(); }
-        else location.reload();
-        if (typeof showToast === 'function') showToast('✅ Backup récupéré : cycle ' + best.cycle, 5000, 'user');
+        const w = await _writeChosenState(best);
+        if (!w.idb) { if (typeof showToast === 'function') showToast('❌ Récupération NON écrite : le stockage de l\'appareil a refusé · rien n\'est changé', 6000, 'critical'); return; }
+        if (typeof showToast === 'function') showToast('✅ Backup récupéré : cycle ' + best.cycle + ' · rechargement…', 3000, 'user');
+        setTimeout(() => location.reload(), 600);
       } catch(e) {
-        try { localStorage.setItem(RT.SAVE_KEY, JSON.stringify(best)); location.reload(); } catch(e2){}
+        try { window._auraChosenStateWriting = false; } catch(_e) {}
+        try { if (typeof showToast === 'function') showToast('⚠ Récupération : ' + String(e && e.message || e).slice(0, 80), 6000, 'critical'); } catch(_e) {}
       }
     };
     input.click();

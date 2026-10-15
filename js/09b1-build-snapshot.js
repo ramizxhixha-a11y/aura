@@ -136,6 +136,16 @@ function buildSnapshot() {
       _manConsignes: S._manConsignes || {},           // [CONSIGNES · 06/10/2026] tes consignes par paire (perte max %, durée min) : perdues à chaque relance avant
       tendance: S.tendance || null,                   // [VOIX TENDANCE LONGUE · 07/10/2026] poche de la voix (15) : positions tenues des semaines, décisions du lundi, trades fermés, cumul
       fiscalCfg: S.fiscalCfg || null,                 // [GO FISCAL · 07/10/2026] réglages du registre fiscal (16) : additionnels communaux %, plus-values hors AURA par année (€) — les registres eux-mêmes sont dans walletStore[mode].fiscal
+      // [GO RÉGLAGES · 14/10/2026] réglages de l'écran (ETAT n° 13) — aucun n'était sauvegardé : retour aux valeurs d'usine à chaque relance (un Bunker
+      // désactivé se réactivait, un blocage anti-revenge réglé à 5 min revenait à 15, un Mode Vacances en cours était oublié alors que la pause du bot,
+      // elle, restait). Relus par 09b2 (_reglagesRelus : champ par champ, même type que la valeur d'usine) et nommés dans _APPLYSNAP_MANIFEST.
+      // Telegram (jeton du bot) n'est PAS ici : comme la clé CoinStats, il vit hors snapshot et hors backups (06, localStorage aura_tg_cfg).
+      antiRevengeCfg: S.antiRevengeCfg || null,
+      bunkerCfg:      S.bunkerCfg      || null,
+      vacancesCfg:    S.vacancesCfg    || null,
+      soundCfg:       S.soundCfg       || null,
+      notifConfig:    S.notifConfig    || null,
+      toastVerbose:   S.toastVerbose === true,
       botDisciples:   S.botDisciples   || {},   // [15/08] sièges des disciples par bot
       discipleTasks:  S.discipleTasks  || {},   // [15/08] tâche élue de chaque disciple
       discipleAngles: S.discipleAngles || {},   // [15/08] angle mesurable de chaque disciple

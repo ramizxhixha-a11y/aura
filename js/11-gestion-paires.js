@@ -56,6 +56,11 @@ function _replayPairChanges() {
       }
     } catch (e) {}
   });
+  // [GO RÉGLAGES · 14/10/2026] chaque portefeuille (AA, EV, RE) reçoit l'état d'une paire ajoutée, pas seulement le mode à l'écran. Avant : ce rejeu
+  // tourne APRÈS loadState (et son _ensureWalletStore, qui ne voyait pas encore les paires ajoutées) → EUR/USDT et BNB/USDT absentes du portefeuille RE
+  // (backup du 14/10 18:45 : RE 10 paires, EV 13), alors que la liste RE les coche ; l'écran RE plantait (07 renderPairPnl) 1 battement sur 2 (ETAT n° 10).
+  // _ensureWalletStore ajoute ce qui manque, n'écrase rien.
+  try { if (typeof _ensureWalletStore === 'function') _ensureWalletStore(); } catch (e) {}
 }
 
 // ── AJOUT ────────────────────────────────────────────────────────────────
@@ -96,6 +101,7 @@ async function addPair(input) {
     var hadMemory = !!S.pairStates[pair];
     if (!hadMemory) S.pairStates[pair] = makePairState(cfg);
     S.pairStates[pair].price = price;   // prix réel immédiat, pas le startPrice théorique
+    try { if (typeof _ensureWalletStore === 'function') _ensureWalletStore(); } catch (e) {}   // [GO RÉGLAGES · 14/10/2026] les 2 autres portefeuilles aussi (ETAT n° 10)
     try { if (typeof _openBgWs === 'function') _openBgWs(pair); } catch (e) {}
     try { if (typeof _fetchAndBootstrapRealCandles === 'function') _fetchAndBootstrapRealCandles(pair, '15m'); } catch (e) {}
     // EV : activer la paire si la liste des actives existe (miroir du comportement défaut)

@@ -678,6 +678,11 @@ function _urgAppendLog(msg) {
   if(el) el.textContent = _urgLog.slice(0,8).join('\n');
 }
 
+// [GO RÉGLAGES · 14/10/2026] ETAT n° 19 · openUrgence vise #urgenceOverlay, qui n'existe nulle part (ni HTML ni JS) : ses deux boutons (« 🚨 Ouvrir Mode
+// Urgence » de la carte Score de Risque, « OUVRIR MODE URGENCE PLEIN ÉCRAN ») n'ouvraient rien, en silence. La carte dit maintenant où agir pour de vrai
+// (⊗ de l'en-tête → confirmCloseAll → closePosition ; AUTO / MANU) ; le bouton plein écran et la phrase sur un bouton « SOS » inexistant sont retirés de
+// la section Urgence, ainsi que « 📉 Mises à 10 % » (ETAT n° 14 : l'ouvreur 09c ne lit aucun des champs écrits). Cette section vit dans l'onglet
+// « 🛠 Outils », que l'écran n'expose pas (ETAT n° 17 : laissé caché, 14 outils sur 14 à corriger — rejeu/reglages-20261014/outils-audit.md).
 function openUrgence() {
   _urgLog = [];
   const el = document.getElementById('urgenceOverlay');
@@ -799,15 +804,10 @@ function renderUrgenceSection() {
         </div>
       </div>
 
-      <div style="font-size:9px;color:var(--t2);line-height:1.5;margin-bottom:10px;">
-        Appuie sur <strong style="color:var(--down);">SOS</strong> (bouton flottant en bas à droite) pour ouvrir l'overlay d'urgence en plein écran.
-      </div>
-
       <!-- Actions rapides inline -->
       ${[
         {label:'🛑 Fermer toutes les positions',fn:'urgenceCloseAll()',dis:pos===0,col:'var(--down)'},
         {label:'⏸ Pause bot immédiate',fn:'urgencePauseBot()',dis:!botOn,col:'var(--gold)'},
-        {label:'📉 Mises à 10%',fn:'urgenceReduceStake()',dis:false,col:'var(--ice)'},
         {label:'💾 Backup d\'urgence',fn:'urgenceSaveBackup()',dis:false,col:'var(--up)'},
       ].map(a=>`<button onclick="${a.fn}"
         style="width:100%;margin-bottom:6px;padding:9px;border-radius:8px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;
@@ -815,11 +815,6 @@ function renderUrgenceSection() {
                ${a.dis?'opacity:.4;pointer-events:none;':''}">
         ${a.label}
       </button>`).join('')}
-
-      <button onclick="openUrgence()"
-        style="width:100%;padding:10px;border-radius:8px;font-size:12px;font-weight:800;cursor:pointer;font-family:inherit;background:rgba(255,61,107,.15);border:2px solid rgba(255,61,107,.5);color:var(--down);letter-spacing:.05em;margin-top:4px;">
-        🚨 OUVRIR MODE URGENCE PLEIN ÉCRAN
-      </button>
     </div>`;
 }
 window.renderUrgenceSection = renderUrgenceSection;
@@ -1686,10 +1681,9 @@ function renderRiskScoreSection() {
       </div>
 
       ${globalScore>=70?`
-      <button onclick="openUrgence()"
-        style="width:100%;margin-top:8px;padding:9px;border-radius:8px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;background:rgba(255,61,107,.1);border:1px solid rgba(255,61,107,.3);color:var(--down);">
-        🚨 Ouvrir Mode Urgence
-      </button>`:''}
+      <div style="margin-top:8px;padding:8px 10px;border-radius:8px;background:rgba(255,61,107,.06);border:1px solid rgba(255,61,107,.2);font-size:10px;color:var(--t2);line-height:1.5;">
+        🚨 Pour agir vite : <b style="color:var(--down);">⊗</b> en haut de l'écran ferme tes positions (avec confirmation) ; le bouton <b>AUTO</b> de l'en-tête, passé en <b>MAN</b>, empêche le bot d'ouvrir (ses sorties du cycle s'arrêtent aussi ; trailing et stops continuent).
+      </div>`:''}
     </div>`;
 }
 window.renderRiskScoreSection = renderRiskScoreSection;
@@ -2436,24 +2430,52 @@ window.renderPaperUltraSection = renderPaperUltraSection;
 // Envoie des notifications vers un bot Telegram via l'API Bot
 // Events : trades ouverts/fermés, alertes prix, résumé hebdo, urgences
 
+// [GO RÉGLAGES · 14/10/2026] ETAT n° 13 · le réglage Telegram n'était sauvegardé nulle part (jeton et chat à ressaisir à chaque relance). Le jeton du bot
+// est un SECRET : il vit dans localStorage « aura_tg_cfg », jamais dans le snapshot, les backups ou le pont (17 masque déjà telegramCfg.botToken).
+// Relu ici à la création du réglage, écrit par _tgSave à chaque changement fait à l'écran. S.telegramCfg est NON ÉNUMÉRABLE (relecture adverse du 14/10) :
+// le backup de l'historique (03 _buildFullBackup), les exports .json / .txt et le backup d'urgence font JSON.stringify(S) — une propriété non énumérable
+// n'y entre pas. Le réglage reste lu et écrit normalement (S.telegramCfg.x).
+const _TG_LS = 'aura_tg_cfg';
 function _tgGet() {
-  if(!S.telegramCfg) S.telegramCfg = {
-    botToken:   '',
-    chatId:     '',
-    enabled:    false,
-    onTrade:    true,
-    onAlert:    true,
-    onHebdo:    false,
-    onUrgence:  true,
-    onPnlGoal:  false,
-    log:        [],
-  };
+  if(!S.telegramCfg) {
+    const _tgCfg = {
+      botToken:   '',
+      chatId:     '',
+      enabled:    false,
+      onTrade:    true,
+      onAlert:    true,
+      onHebdo:    false,
+      onUrgence:  true,
+      onPnlGoal:  false,
+      log:        [],
+    };
+    try {
+      const raw = localStorage.getItem(_TG_LS), sv = raw ? JSON.parse(raw) : null;
+      if (sv && typeof sv === 'object') {
+        ['botToken','chatId'].forEach(k => { if (typeof sv[k] === 'string') _tgCfg[k] = sv[k]; });
+        ['enabled','onTrade','onAlert','onHebdo','onUrgence','onPnlGoal'].forEach(k => { if (typeof sv[k] === 'boolean') _tgCfg[k] = sv[k]; });
+      }
+    } catch(e) {}
+    S.telegramCfg = _tgCfg;
+  }
+  try {
+    const d = Object.getOwnPropertyDescriptor(S, 'telegramCfg');
+    if (d && d.enumerable) Object.defineProperty(S, 'telegramCfg', { value: S.telegramCfg, writable: true, configurable: true, enumerable: false });
+  } catch(e) {}
   return S.telegramCfg;
+}
+function _tgSave() {
+  try {
+    const c = S.telegramCfg || {}, o = { botToken: String(c.botToken || ''), chatId: String(c.chatId || '') };
+    ['enabled','onTrade','onAlert','onHebdo','onUrgence','onPnlGoal'].forEach(k => { o[k] = !!c[k]; });
+    localStorage.setItem(_TG_LS, JSON.stringify(o));
+  } catch(e) {}
 }
 
 function updateTgField(key, val) {
   const cfg = _tgGet();
   cfg[key] = val.trim();
+  _tgSave();
   renderTelegramSection();
 }
 window.updateTgField = updateTgField;
@@ -2461,6 +2483,7 @@ window.updateTgField = updateTgField;
 function toggleTgOption(key) {
   const cfg = _tgGet();
   cfg[key] = !cfg[key];
+  _tgSave();
   renderTelegramSection();
 }
 window.toggleTgOption = toggleTgOption;
@@ -2469,6 +2492,7 @@ function toggleTgEnabled() {
   const cfg = _tgGet();
   if(!cfg.botToken||!cfg.chatId) { showToast('⚠ Configure le Bot Token et le Chat ID', 2500, 'warn'); return; }
   cfg.enabled = !cfg.enabled;
+  _tgSave();
   showToast(cfg.enabled?'📲 Telegram activé':'⏸ Telegram désactivé', 1500, cfg.enabled?'win':'user');
   renderTelegramSection();
 }
@@ -3221,57 +3245,77 @@ function renderLeaderboardSection() {
 }
 window.renderLeaderboardSection = renderLeaderboardSection;
 // ═══ v81 · MODE VACANCES ═══
-// Réduit les mises à X% · définit une durée · protection du capital
-// Bannière bleue · rapport de synthèse à la sortie
+// Définit une durée · bot en pause (ou laissé tourner) · perte max par jour · rapport de synthèse au retour
+// [GO RÉGLAGES · 14/10/2026] ETAT n° 13 et 14.
+//  · « Mises à X % » RETIRÉ : la réduction écrivait S.stakeConfig.defaultStake (objet jamais créé), S.stakeUsdt et a.stake (champ qu'aucun agent n'a) —
+//    l'ouvreur (09c) ne lit aucun des trois : le bot tradait avec ses mises habituelles en affichant « mises réduites ». La brancher toucherait la taille
+//    des mises de l'ouvreur (porte TALENT / SOURCE) : non fait, dit à Rams.
+//  · Le réglage est désormais SAUVEGARDÉ (09b1 → 09b2 _reglagesRelus) et le suivi reprend au chargement (_vacResume) : avant, une relance pendant les
+//    vacances oubliait le mode (ni retour à la date prévue, ni contrôle de perte) alors que la pause du bot, elle, restait sauvegardée.
+//  · AUTO / MANU : le RETOUR ne remet jamais AUTO tout seul (relecture adverse du 14/10 : un retour automatique — date passée, au chargement ou pendant
+//    la marche — rendait AUTO sans geste, même si Rams était repassé en MANU entre-temps ou venait de confirmer « MANU » en restaurant un état).
+//    Retour à la date prévue : le bot reste comme il est, le message le dit. « ✈️ Rentrer de vacances » : une confirmation propose de remettre AUTO.
+//  · « Perte max/jour ($) » : comparait des dollars à S.pnl24h, qui est un POURCENTAGE depuis le dernier chargement (08) — 50 $ n'agissait qu'à −50 %.
+//    Désormais : la perte en $ du jour (minuit local) sur le portefeuille du mode où les vacances ont commencé ; repère gardé dans le réglage (survit aux
+//    relances). Au-delà de ta limite, le bot est mis en pause (MANU), comme avant — c'est la règle que tu poses en partant.
+//  · « Bannière bleue » : #vacancesBanner n'existe que dans le gabarit du rapport PDF (07), pas dans l'app — l'état se lit dans cette section.
 
 let _vacTimer = null;
 
 function _vacGet() {
   if(!S.vacancesCfg) S.vacancesCfg = {
     active:      false,
-    stakePct:    10,     // % des mises habituelles
     maxDailyLoss:50,     // $ perte max par jour avant pause
     startDate:   null,
     endDate:     null,
     daysLeft:    0,
-    prevStake:   null,   // stake original sauvegardé
     prevBotMode: null,
     startPortfolio: null,
-    allowAuto:   false,  // Laisser le bot tourner (en mode réduit)
+    allowAuto:   false,  // Laisser le bot tourner
+    mode:        '',     // [GO RÉGLAGES · 14/10/2026] mode à l'écran au départ : la perte du jour et le bilan se lisent dans SON portefeuille
+    dayKey:      0,      // jour local (AAAAMMJJ) du repère de perte
+    dayStartPf:  0,      // portefeuille de ce mode au premier contrôle du jour
   };
   return S.vacancesCfg;
+}
+function _vacDayKey(t) { const d = new Date(t || Date.now()); return d.getFullYear() * 10000 + (d.getMonth() + 1) * 100 + d.getDate(); }
+// valeur du portefeuille du mode de départ, positions ouvertes à leur valeur du moment (comme le Bunker, 07 _bkCapital) : une perte latente compte
+function _vacPf(cfg) {
+  try {
+    const w = (typeof _walletFor === 'function') ? _walletFor(cfg.mode || S.tradingMode) : null;
+    if (w) {
+      let pos = 0; (w.openPositions || []).forEach(p => { if (!p) return; const v = Number(p.currentVal); pos += (isFinite(v) && v > 0) ? v : (Number(p.stakeUsdt) || 0); });
+      return (Number(w.cashAccount) || 0) + (Number(w.tradingAccount) || 0) + pos;
+    }
+  } catch(e) {}
+  return S.portfolio || 0;
 }
 
 function enterVacancesMode() {
   const cfg   = _vacGet();
   const days  = parseInt(document.getElementById('vacDays')?.value||'7');
-  const pct   = parseInt(document.getElementById('vacPct')?.value||'10');
   const maxLoss= parseInt(document.getElementById('vacMaxLoss')?.value||'50');
 
   if(days<1||days>90) { showToast('⚠ Durée : 1 à 90 jours', 1500,'warn'); return; }
 
   // Sauvegarder l'état actuel
-  cfg.prevStake   = S.stakeConfig?.defaultStake || S.stakeUsdt || 20;
   cfg.prevBotMode = S.botAutoMode;
-  cfg.startPortfolio = S.portfolio||0;
+  cfg.mode        = (typeof _walletKey === 'function') ? _walletKey(S.tradingMode) : (S.tradingMode || 'sim');
+  cfg.startPortfolio = _vacPf(cfg);
+  cfg.dayKey      = _vacDayKey();
+  cfg.dayStartPf  = cfg.startPortfolio;
   cfg.startDate   = Date.now();
   cfg.endDate     = Date.now() + days*86400000;
   cfg.daysLeft    = days;
-  cfg.stakePct    = pct;
   cfg.maxDailyLoss= maxLoss;
   cfg.active      = true;
   cfg.allowAuto   = document.getElementById('vacAllowAuto')?.checked||false;
-
-  // Appliquer réduction des mises
-  const newStake = Math.max(1, Math.round(cfg.prevStake * pct/100));
-  if(S.stakeConfig) S.stakeConfig.defaultStake = newStake;
-  S.stakeUsdt = newStake;
-  (S.agents||[]).forEach(a=>{ if(a.stake) { a._prevStake=a.stake; a.stake=Math.max(1,Math.round(a.stake*pct/100)); }});
 
   // Pauser le bot si demandé
   if(!cfg.allowAuto) {
     S.botAutoMode = false;
     S.mode = 'manual';
+    try { if (typeof updateModeButton === 'function') updateModeButton(); } catch(e) {}
   }
 
   // Bannière
@@ -3280,64 +3324,91 @@ function enterVacancesMode() {
   _vacUpdateBanner();
 
   // Timer quotidien
+  clearInterval(_vacTimer);
   _vacTimer = setInterval(_vacDailyCheck, 3600000); // check chaque heure
   _vacDailyCheck();
 
-  showToast(`🏖️ Mode Vacances activé · ${days} jours · mises à ${pct}%`, 3000, 'win');
+  showToast(`🏖️ Mode Vacances activé · ${days} jours · bot ${cfg.allowAuto?'laissé en marche':'en pause'}`, 3000, 'win');
   S.chainLog = S.chainLog||[];
-  S.chainLog.push({icon:'🏖️',desc:`Mode Vacances: ${days}j · mises ${pct}% · max perte $${maxLoss}/jour`,hash:Math.random().toString(36).slice(2,8),time:new Date().toLocaleTimeString()});
+  S.chainLog.push({icon:'🏖️',desc:`Mode Vacances: ${days}j · bot ${cfg.allowAuto?'en marche':'en pause'} · max perte $${maxLoss}/jour`,hash:Math.random().toString(36).slice(2,8),time:new Date().toLocaleTimeString()});
+  try { if (typeof saveState === 'function') saveState(true); } catch(e) {}
   renderVacancesSection();
   try { closeOutils(); } catch(e) {}
 }
 window.enterVacancesMode = enterVacancesMode;
 
-function exitVacancesMode() {
+// auto = true : retour à la date prévue (minuteur, chargement) — AUTO / MANU n'est jamais touché. Sans argument : le bouton « ✈️ Rentrer de vacances ».
+function exitVacancesMode(auto) {
   const cfg = _vacGet();
   clearInterval(_vacTimer); _vacTimer=null;
 
-  // Restaurer les mises
-  if(cfg.prevStake && S.stakeConfig) S.stakeConfig.defaultStake = cfg.prevStake;
-  if(cfg.prevStake) S.stakeUsdt = cfg.prevStake;
-  (S.agents||[]).forEach(a=>{ if(a._prevStake) { a.stake=a._prevStake; delete a._prevStake; }});
-
-  // Restaurer le mode bot
-  if(cfg.prevBotMode!==null) S.botAutoMode = cfg.prevBotMode;
-
-  // Bilan de vacances
-  const pnlVac = (S.portfolio||0) - (cfg.startPortfolio||0);
+  // Bilan de vacances (portefeuille du mode de départ)
+  const pnlVac = _vacPf(cfg) - (cfg.startPortfolio||0);
   const daysGone= cfg.startDate?Math.round((Date.now()-cfg.startDate)/86400000):0;
+  const prev = cfg.prevBotMode;
 
   cfg.active = false;
+
+  // AUTO / MANU : seulement par ton geste
+  let modeTxt = 'bot ' + (S.botAutoMode !== false ? 'AUTO' : 'MAN');
+  if (auto !== true && prev === true && S.botAutoMode === false) {
+    let ok = false; try { ok = confirm('Remettre le bot en AUTO, comme avant tes vacances ?\n\nOK : AUTO (le bot peut ouvrir des positions)\nAnnuler : il reste en MAN'); } catch(e) {}
+    if (ok) { if (typeof setBotMode === 'function') setBotMode(true); else S.botAutoMode = true; try { if (typeof updateModeButton === 'function') updateModeButton(); } catch(e) {} modeTxt = 'bot AUTO'; }
+  } else if (auto === true && prev === true && S.botAutoMode === false) {
+    modeTxt = 'bot resté en MAN — touche AUTO pour reprendre';
+  }
 
   // Cacher la bannière
   document.getElementById('vacancesBanner')?.classList.remove('show');
   document.getElementById('pages')?.style.removeProperty('padding-top');
 
-  showToast(`🏖️ Vacances terminées · ${daysGone}j · P&L: ${pnlVac>=0?'+':''}$${pnlVac.toFixed(2)}`, 4000, 'win');
-  S.chainLog.push({icon:'🏖️',desc:`Fin vacances: ${daysGone}j · P&L $${pnlVac.toFixed(2)}`,hash:Math.random().toString(36).slice(2,8),time:new Date().toLocaleTimeString()});
+  showToast(`🏖️ Vacances terminées · ${daysGone}j · P&L: ${pnlVac>=0?'+':''}$${pnlVac.toFixed(2)} · ${modeTxt}`, 6000, 'win');
+  S.chainLog = S.chainLog||[];
+  S.chainLog.push({icon:'🏖️',desc:`Fin vacances${auto===true?' (date prévue)':''}: ${daysGone}j · P&L $${pnlVac.toFixed(2)} · ${modeTxt}`,hash:Math.random().toString(36).slice(2,8),time:new Date().toLocaleTimeString()});
+  try { if (typeof saveState === 'function') saveState(true); } catch(e) {}
   renderVacancesSection();
 }
 window.exitVacancesMode = exitVacancesMode;
+
+// [GO RÉGLAGES · 14/10/2026] reprise au chargement (09b2 _reglagesRelus) : date de retour passée → fin des vacances (AUTO / MANU inchangé) ; sinon le
+// contrôle horaire repart (retour à la date prévue, perte max par jour).
+function _vacResume() {
+  const cfg = _vacGet();
+  if(!cfg.active) return;
+  if(!(Number(cfg.endDate) > Date.now())) { exitVacancesMode(true); return; }
+  clearInterval(_vacTimer);
+  _vacTimer = setInterval(_vacDailyCheck, 3600000);
+  _vacDailyCheck();
+}
+window._vacResume = _vacResume;
 
 function _vacUpdateBanner() {
   const cfg = _vacGet();
   if(!cfg.active) return;
   const daysLeft= Math.max(0,Math.ceil((cfg.endDate-Date.now())/86400000));
   const info    = document.getElementById('vacBannerInfo');
-  if(info) info.textContent = `Mises à ${cfg.stakePct}% · J-${daysLeft} restant(s)`;
+  if(info) info.textContent = `Bot ${cfg.allowAuto?'en marche':'en pause'} · J-${daysLeft} restant(s)`;
   cfg.daysLeft  = daysLeft;
-  if(daysLeft<=0) exitVacancesMode();
+  if(daysLeft<=0) exitVacancesMode(true);
 }
 
 function _vacDailyCheck() {
   _vacUpdateBanner();
   const cfg = _vacGet();
   if(!cfg.active) return;
-  // Vérifier perte max journalière
-  const pnl24 = S.pnl24h||0;
-  if(pnl24 < -(cfg.maxDailyLoss||50)) {
+  // des vacances d'un état plus ancien n'ont pas de mode : le mode à l'écran devient le leur, avec un repère neuf (pas de fausse perte d'un autre portefeuille)
+  if (!cfg.mode) { cfg.mode = (typeof _walletKey === 'function') ? _walletKey(S.tradingMode) : (S.tradingMode || 'sim'); cfg.dayKey = 0; }
+  // Perte du jour en $ (minuit local) sur le portefeuille du mode de départ, contrôlée chaque heure
+  const pf = _vacPf(cfg), k = _vacDayKey();
+  if (cfg.dayKey !== k || !(cfg.dayStartPf > 0)) { cfg.dayKey = k; cfg.dayStartPf = pf; }
+  const perte = pf - cfg.dayStartPf;
+  if(perte < -(cfg.maxDailyLoss||50) && S.botAutoMode !== false) {
     S.botAutoMode = false;
-    showToast(`⚠️ Vacances : perte journalière -$${Math.abs(pnl24).toFixed(0)} > seuil $${cfg.maxDailyLoss}. Bot pausé.`, 5000, 'warn');
+    S.mode = 'manual';
+    try { if (typeof updateModeButton === 'function') updateModeButton(); } catch(e) {}
+    showToast(`⚠️ Vacances : perte du jour -$${Math.abs(perte).toFixed(2)} > ta limite $${cfg.maxDailyLoss}. Bot en pause (MAN).`, 6000, 'warn');
+    S.chainLog = S.chainLog||[];
+    S.chainLog.push({icon:'🏖️',desc:`Vacances : perte du jour -$${Math.abs(perte).toFixed(2)} > limite $${cfg.maxDailyLoss} · bot en pause (MAN)`,hash:Math.random().toString(36).slice(2,8),time:new Date().toLocaleTimeString()});
   }
 }
 
@@ -3346,7 +3417,7 @@ function renderVacancesSection() {
   if(!el) return;
   const cfg = _vacGet();
   const daysLeft = cfg.active?Math.max(0,Math.ceil((cfg.endDate-Date.now())/86400000)):0;
-  const pnlVac   = cfg.active&&cfg.startPortfolio?(S.portfolio||0)-cfg.startPortfolio:0;
+  const pnlVac   = cfg.active&&cfg.startPortfolio?_vacPf(cfg)-cfg.startPortfolio:0;
 
   el.innerHTML = `
     <div class="vac-section">
@@ -3362,10 +3433,6 @@ function renderVacancesSection() {
         <div style="font-size:9px;color:var(--t3);margin:2px 0 8px;">jour(s) de vacances restant(s)</div>
         <div style="display:flex;justify-content:center;gap:20px;">
           <div style="text-align:center;">
-            <div style="font-size:11px;font-weight:700;color:var(--t1);">${cfg.stakePct}%</div>
-            <div style="font-size:8px;color:var(--t3);">des mises</div>
-          </div>
-          <div style="text-align:center;">
             <div style="font-size:11px;font-weight:700;color:${pnlVac>=0?'var(--up)':'var(--down)'};">${pnlVac>=0?'+':''}$${pnlVac.toFixed(2)}</div>
             <div style="font-size:8px;color:var(--t3);">P&L vacances</div>
           </div>
@@ -3377,7 +3444,7 @@ function renderVacancesSection() {
       </div>
       <div class="vac-row"><span style="color:var(--t2);">Départ</span><span style="font-weight:700;font-size:9px;">${cfg.startDate?new Date(cfg.startDate).toLocaleDateString('fr-FR'):'-'}</span></div>
       <div class="vac-row"><span style="color:var(--t2);">Retour prévu</span><span style="font-weight:700;font-size:9px;">${cfg.endDate?new Date(cfg.endDate).toLocaleDateString('fr-FR'):'-'}</span></div>
-      <div class="vac-row"><span style="color:var(--t2);">Bot</span><span style="font-weight:700;">${cfg.allowAuto?'✅ Actif (mises réduites)':'⏸ En pause'}</span></div>
+      <div class="vac-row"><span style="color:var(--t2);">Bot</span><span style="font-weight:700;">${S.botAutoMode!==false?'✅ AUTO (mises habituelles)':'⏸ En pause (MAN)'}</span></div>
       <div class="vac-row"><span style="color:var(--t2);">Perte max/jour</span><span style="font-weight:700;">$${cfg.maxDailyLoss}</span></div>
       <button class="vac-btn" onclick="exitVacancesMode()"
         style="background:rgba(255,61,107,.1);border-color:rgba(255,61,107,.3);color:var(--down);margin-top:10px;">
@@ -3386,15 +3453,11 @@ function renderVacancesSection() {
       ` : `
       <!-- Configuration vacances -->
       <div style="font-size:9px;color:var(--t2);line-height:1.5;margin-bottom:10px;">
-        Pars en vacances l'esprit tranquille. AURA réduit les mises et protège le capital.
+        Pars en vacances : le bot se met en pause (ou continue, si tu le laisses tourner) et passe en MAN si la perte du jour dépasse ta limite (contrôle chaque heure, positions ouvertes comprises). À la date prévue, les vacances s'arrêtent ; le bot reste comme il est — AUTO seulement par toi.
       </div>
       <div class="vac-row">
         <span style="color:var(--t2);">Durée (jours)</span>
         <input id="vacDays" class="vac-inp" type="number" value="7" min="1" max="90">
-      </div>
-      <div class="vac-row">
-        <span style="color:var(--t2);">Mises à X%</span>
-        <input id="vacPct" class="vac-inp" type="number" value="10" min="1" max="50">
       </div>
       <div class="vac-row">
         <span style="color:var(--t2);">Perte max/jour ($)</span>
@@ -3405,7 +3468,7 @@ function renderVacancesSection() {
         <input type="checkbox" id="vacAllowAuto" style="width:18px;height:18px;cursor:pointer;">
       </div>
       <div style="font-size:8px;color:var(--t3);padding:6px 0 10px;line-height:1.4;">
-        Si bot activé : il trade avec les mises réduites. Sinon : pause totale mais prix surveillés.
+        Si bot activé : il trade avec ses mises habituelles. Sinon : pause totale mais prix surveillés.
       </div>
       <button class="vac-btn" onclick="enterVacancesMode()"
         style="background:rgba(6,182,212,.1);border-color:rgba(6,182,212,.3);color:#06b6d4;">
@@ -4080,11 +4143,9 @@ function renderAntiRevengeSection() {
         ${['sim','paperReal','real'].map(m=>{ const b = window._rvState(m), lab = m==='paperReal'?'EV':(m==='real'?'RE':'AA'); return `<div style="display:flex;justify-content:space-between;font-size:10px;padding:3px 0;"><span style="color:var(--t2);">Actuellement bloqué · ${lab}</span><span style="font-weight:700;color:${b.active?'var(--down)':'var(--up)'};">${b.active?('OUI · encore '+Math.ceil((b.end-Date.now())/60000)+' min'):'non'}</span></div>`; }).join('')}
       </div>
 
-      <!-- Test -->
-      <button onclick="triggerAntiRevenge(-25,2.5,'BTC/USDT',2)"
-        style="width:100%;margin-top:8px;padding:8px;border-radius:7px;font-size:10px;font-weight:700;cursor:pointer;font-family:inherit;background:rgba(255,255,255,.04);border:1px solid var(--border);color:var(--t3);">
-        🧪 Simuler un blocage (test)
-      </button>
+      <!-- [GO RÉGLAGES · 14/10/2026] « 🧪 Simuler un blocage (test) » RETIRÉ (ETAT n° 16) : il appelait triggerAntiRevenge, qui pose un VRAI blocage —
+           le bot du mode à l'écran n'ouvrait plus rien pendant la durée réglée (09c isRevengeBlocked), sans moyen de lever avant la fin, et « Blocages
+           effectués » augmentait. Le voile qu'il devait montrer (#revengeBlock) n'existe que dans le gabarit du rapport PDF : rien à démontrer. -->
     </div>`;
 }
 window.renderAntiRevengeSection = renderAntiRevengeSection;

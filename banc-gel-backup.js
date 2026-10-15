@@ -156,6 +156,8 @@ function mkCtx(opts){
     showToast: (m) => toasts.push(m), alert: (m) => toasts.push('ALERT:' + m), confirm: () => (opts.confirm !== undefined ? opts.confirm : true),
     location: { reload(){ ctx._reloaded = (ctx._reloaded || 0) + 1; } },
     saveState: () => { ctx._saved = (ctx._saved || 0) + 1; return true; }, buildSnapshot: () => J(S),
+    // [GO RÉGLAGES · 14/10/2026] restoreBackup écrit l'état choisi par 09b2 _writeChosenState (IDB, LS allégé, repère de cycle), plus par saveState (que l'anti-régression refusait)
+    _writeChosenState: async (snap) => { ctx._written = J(snap); return { idb: opts.idbOk !== false, ls: opts.idbOk !== false, cycle: snap.cycle }; },
     renderSettingsPanel: () => { ctx._rendered = (ctx._rendered || 0) + 1; },
     Blob: function(parts, o){ this.size = parts.join('').length; this.type = o && o.type; },
     URL: { createObjectURL: () => 'blob:x', revokeObjectURL(){} },
@@ -352,16 +354,25 @@ const V1_NOMETA = (cycle) => ({ _type: 'aura_guardian_full', savedAt: '2026-08-0
     assert.ok(toasts.some(t => /Backup exporté · \d+ Ko/.test(t)), toasts.join(' | '));
     assert.ok(!toasts.some(t => /Erreur/.test(t)));
   });
-  await T('04 · restoreBackup(id) : 1 seule désérialisation (l\'enregistrement choisi), backup de sécurité pré-import, S remplacé par backup.state, saveState + reload', async () => {
-    const { ctx, stats, idb, S } = mkCtx({ confirm: true });
+  await T('04 · restoreBackup(id) : 1 seule désérialisation (l\'enregistrement choisi), backup de sécurité pré-import, S remplacé par backup.state, état écrit par _writeChosenState (pas saveState) + reload', async () => {
+    const { ctx, stats, idb, S, toasts, timers } = mkCtx({ confirm: true });
     await ctx._saveBackupToDB(V1_VALID('auto', 100, 4242)); await ctx._saveBackupToDB(V1_VALID('auto', 200, 1));
     stats.reads.backups = 0;
     await ctx.restoreBackup(1);
     assert.strictEqual(stats.reads.backups, 1, 'désérialisations pendant restoreBackup');
     assert.strictEqual(S.cycle, 4242); assert.strictEqual(S.portfolio, 50);
-    assert.strictEqual(ctx._saved, 1);
+    assert.strictEqual(ctx._saved, undefined, 'saveState (refusé par l\'anti-régression) n\'est plus le chemin');
+    assert.strictEqual(ctx._written && ctx._written.cycle, 4242, 'snapshot écrit au cycle du backup');
+    assert.ok(toasts.some(t => /^ALERT:✅ Backup restauré \(cycle #4242\)/.test(t)) && timers.includes(800), toasts.join(' | '));
     const rows = idb.rows('aura_backups', 'backups'); assert.strictEqual(rows.filter(x => x.meta.type === 'pre-import').length, 1);
     assert.strictEqual(stats.opened, stats.closed);
+  });
+  await T('04 · restoreBackup(id) : écriture IndexedDB refusée → « NON écrite », rien n\'est annoncé restauré, rechargement sur l\'état d\'avant', async () => {
+    const { ctx, toasts, timers } = mkCtx({ confirm: true, idbOk: false });
+    await ctx._saveBackupToDB(V1_VALID('auto', 100, 4242));
+    await ctx.restoreBackup(1);
+    assert.ok(toasts.some(t => /^ALERT:❌ Restauration NON écrite/.test(t)) && !toasts.some(t => /Backup restauré/.test(t)) && timers.includes(400), toasts.join(' | '));
+    assert.strictEqual(ctx._auraChosenStateWriting, true, 'aucune sauvegarde de sortie ne réécrit l\'état à moitié remplacé');
   });
   await T('04 · restoreBackup(id) refusé (confirm = false) : rien ne change · id inconnu : « Backup introuvable »', async () => {
     const { ctx, stats, S, toasts } = mkCtx({ confirm: false });

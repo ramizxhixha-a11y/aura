@@ -118,6 +118,145 @@ function _mergeHeavyFrom(target, heavySrc) {
   return target;
 }
 
+// ════════════════════════════════════════════════════════════════════════
+// [GO RÉGLAGES · 14/10/2026] ÉTAT CHOISI PAR RAMS — écriture directe (ETAT n° 11, 12)
+// Trois boutons remettent un état que Rams a choisi : « RESTAURER » de l'historique des backups (04 restoreBackup), « ⬆ Importer backup » et
+// « 📂 Récupérer un backup » (09b3 importState, recoverFromFiles). Avant, l'état choisi — presque toujours PLUS ANCIEN que l'état vivant — se heurtait
+// au repère aura_highwater_cycle resté au cycle d'avant :
+//  · RESTAURER : saveState le refusait (anti-régression, ci-dessous), la sortie aussi ; l'écran disait « ✅ Backup restauré », le rechargement
+//    relisait l'état d'avant — rien n'était restauré ;
+//  · Importer backup : un fichier de plus de 2 000 cycles en retard était remplacé au chargement suivant par le backup Guardian le plus haut,
+//    sans rien demander ; à moins de 2 000, chaque sauvegarde était refusée jusqu'à ce que le cycle rattrape.
+// Désormais les QUATRE (+ « 📂 Restaurer un backup » de la bannière de régression, plus bas) écrivent ici puis RECHARGENT l'app : IDB = snapshot COMPLET
+// d'abord (s'il échoue, rien d'autre n'est touché) ; LS = version ALLÉGÉE (comme saveState — le complet de ~3 Mo pouvait dépasser le quota, laisser
+// l'ancien LS d'un cycle plus haut gagner au chargement et mélanger deux états) ; repère aura_highwater_cycle = cycle de l'état choisi (relu ; s'il
+// n'a pas pu être écrit, il est retiré — sans repère, aucune « régression » ne remplace l'état choisi). Jusqu'au rechargement, aucune sauvegarde
+// (périodique ou de sortie) ne réécrit l'état d'avant par-dessus : window._auraChosenStateWriting. Le rechargement (relecture adverse du 14/10) :
+// appliqué en place, un import laissait l'écran sur un mode et l'argent sur celui du fichier, et les paires de l'état d'avant dans PAIRS.
+// Un état sans cycle ou sans les 3 portefeuilles (format d'avant juillet) est refusé : _chosenStateRefus.
+async function _writeChosenState(snap) {
+  const out = { idb: false, ls: false, cycle: null };
+  if (!snap || typeof snap !== 'object' || typeof snap.cycle !== 'number' || !isFinite(snap.cycle)) return out;
+  out.cycle = snap.cycle;
+  if (snap._lightened) delete snap._lightened;
+  // Ce que la confirmation dit « inchangé » l'est vraiment (relecture adverse du 14/10, 2e passage) : un réglage absent du fichier (tous les backups
+  // d'avant cette livraison) garde la valeur vivante — sinon, au rechargement, le Bunker repartait du réglage d'usine (ON) et des vacances en cours
+  // s'arrêtaient sans message. Et le mode à l'écran ne change pas : au rechargement, 01 remet l'écran mémorisé ; si le fichier portait un autre mode,
+  // l'écran disait EV pendant que l'argent pointait sur le mode du fichier (course 09b2 / 01, vue avec un IDB lent).
+  try {
+    ['antiRevengeCfg', 'bunkerCfg', 'vacancesCfg', 'soundCfg', 'notifConfig', 'toastVerbose'].forEach(function (k) {
+      if ((snap[k] === undefined || snap[k] === null) && typeof S !== 'undefined' && S && S[k] !== undefined && S[k] !== null) snap[k] = JSON.parse(JSON.stringify(S[k]));
+    });
+  } catch (e) {}
+  try { const ec = _ecranMode(); if (ec) snap.tradingMode = ec; } catch (e) {}
+  if (!snap.savedAt) snap.savedAt = new Date().toISOString();
+  if (!snap.key) snap.key = RT.SAVE_KEY;
+  try { window._auraChosenStateWriting = true; } catch (e) {}
+  try {
+    const db = await openDB();
+    out.idb = await new Promise(res => {
+      try {
+        const tx = db.transaction(RT.STORE_STATE, 'readwrite');
+        const store = tx.objectStore(RT.STORE_STATE);
+        const req = store.keyPath ? store.put(snap) : store.put(snap, RT.SAVE_KEY);
+        req.onerror = () => res(false);
+        tx.oncomplete = () => { try { db.close(); } catch (x) {} res(true); };
+        tx.onerror = () => { try { db.close(); } catch (x) {} res(false); };
+        tx.onabort = () => { try { db.close(); } catch (x) {} res(false); };
+      } catch (e) { try { db.close(); } catch (x) {} res(false); }
+    });
+  } catch (e) { out.idb = false; }
+  if (!out.idb) { try { window._auraChosenStateWriting = false; } catch (e) {} return out; }   // l'état d'avant reste entier
+  try { localStorage.setItem(RT.SAVE_KEY, JSON.stringify(_lightSnapshot(snap))); out.ls = true; }
+  catch (e) { try { localStorage.removeItem(RT.SAVE_KEY); } catch (x) {} }   // sans LS, l'IDB (l'état choisi) est seul candidat au chargement
+  try { localStorage.setItem('aura_highwater_cycle', String(snap.cycle)); } catch (e) {}
+  try { if (localStorage.getItem('aura_highwater_cycle') !== String(snap.cycle)) localStorage.removeItem('aura_highwater_cycle'); } catch (e) {}
+  return out;
+}
+window._writeChosenState = _writeChosenState;
+
+// le mode à l'écran (01 AuraChrono, mémorisé dans localStorage) ; à défaut S.tradingMode
+function _ecranMode() {
+  let m = null;
+  try { if (typeof window !== 'undefined' && window.AuraChrono && typeof window.AuraChrono.getCurrentMode === 'function') m = window.AuraChrono.getCurrentMode(); } catch (e) {}
+  if (m !== 'sim' && m !== 'paperReal' && m !== 'real') { try { m = (typeof S !== 'undefined' && S) ? S.tradingMode : null; } catch (e) { m = null; } }
+  return (m === 'sim' || m === 'paperReal' || m === 'real') ? m : null;
+}
+
+// null si l'état peut être choisi ; sinon la raison, dite telle quelle à Rams (rien n'est changé)
+function _chosenStateRefus(st) {
+  if (!st || typeof st !== 'object' || typeof st.cycle !== 'number' || !isFinite(st.cycle)) return 'ce fichier ne contient pas d\'état AURA lisible (cycle absent)';
+  const w = st.walletStore;
+  if (!w || typeof w !== 'object' || !['sim', 'paperReal', 'real'].every(m => w[m] && typeof w[m] === 'object'))
+    return 'cet état date d\'avant la séparation des 3 modes (juillet) : son argent irait dans le mode à l\'écran';
+  return null;
+}
+window._chosenStateRefus = _chosenStateRefus;
+
+// Ce qui change, dit mot pour mot dans la confirmation (CLAUDE.md règle 9) : les 3 portefeuilles (actuel → choisi), AUTO / MANU, le cycle.
+function _chosenStateText(st) {
+  const f2 = v => (Number(v) || 0).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const pf = w => (typeof _computePortfolio === 'function') ? _computePortfolio(w) : ((w.cashAccount || 0) + (w.tradingAccount || 0));
+  const lab = { sim: 'AA', paperReal: 'EV', real: 'RE' };
+  const lignes = [];
+  try {
+    const cur = (typeof S !== 'undefined' && S && S.walletStore) || {};
+    const nv = (st && st.walletStore && typeof st.walletStore === 'object') ? st.walletStore : null;
+    const un = w => f2(pf(w)) + ' $ · ' + (Number(w.totalTrades) || 0) + ' trades · ' + ((w.openPositions || []).length) + ' position(s) · ' + (w.running ? '▶ en marche' : '⏸ en pause');
+    ['sim', 'paperReal', 'real'].forEach(m => {
+      const a = cur[m] || {}, b = nv ? (nv[m] || {}) : null;
+      lignes.push('• ' + lab[m] + ' : ' + un(a) + '  →  ' + (b ? un(b) : 'absent du fichier (ancien format)'));
+    });
+    const am = v => v === true ? 'AUTO' : (v === false ? 'MANU' : '?');
+    lignes.push('• AUTO / MANU : ' + am(S.botAutoMode) + '  →  ' + am(st && st.botAutoMode));
+    lignes.push('• Cycle : #' + S.cycle + '  →  #' + (st && st.cycle));
+    const ec = _ecranMode(); lignes.push('• Mode à l\'écran : inchangé' + (ec ? ' (' + lab[ec] + ')' : ''));
+    // les réglages qui agissent sur tes positions et sur AUTO / MANU (relecture adverse du 14/10 : le Bunker du fichier s'appliquait sans être nommé)
+    const dt = t => { try { return new Date(t).toLocaleDateString('fr-FR'); } catch (e) { return '?'; } };
+    const bk = c => c ? ((c.enabled ? 'ON' : 'OFF') + ' · seuil ' + c.triggerDropPct + ' % · « fermer les positions » ' + (c.actions && c.actions.closePositions ? 'ON' : 'OFF')) : 'réglage d\'usine';
+    const rv = c => c ? ((c.enabled ? 'ON' : 'OFF') + ' · ' + c.cooldownMin + ' min') : 'réglage d\'usine';
+    const vc = c => (c && c.active) ? ('en cours jusqu\'au ' + dt(c.endDate) + (c.allowAuto ? ' (bot laissé en marche)' : ' (bot en pause)')) : 'non';
+    const R = (nom, f, k) => lignes.push('• ' + nom + ' : ' + f(S[k]) + '  →  ' + ((st && st[k] && typeof st[k] === 'object') ? f(st[k]) : 'inchangé (absent du fichier)'));   // « inchangé » : _writeChosenState y garde la valeur vivante
+    R('Bunker', bk, 'bunkerCfg'); R('Anti-Revenge', rv, 'antiRevengeCfg'); R('Mode Vacances', vc, 'vacancesCfg');
+  } catch (e) {}
+  lignes.push('• Agents, mémoires, autres réglages, historiques : ceux de l\'état choisi.');
+  return lignes.join('\n');
+}
+window._chosenStateText = _chosenStateText;
+
+// [GO RÉGLAGES · 14/10/2026] RÉGLAGES DE L'ÉCRAN RELUS (ETAT n° 13) — Anti-Revenge (06), Bunker (07), Mode Vacances (06), Son (06), Notifications (07),
+// notifications verbeuses (04). Chaque réglage part de ses valeurs d'usine (le getter de son module les crée) et ne reprend du snapshot QUE les champs
+// qu'il connaît, du même type (un nombre non fini, un champ inconnu ou d'un autre type est ignoré) : un réglage ajouté plus tard garde sa valeur d'usine,
+// un champ retiré (Bunker « Réduire les mises », Vacances « mises à X % ») ne revient pas d'un vieux snapshot.
+function _reglageMerge(cur, saved) {
+  if (!cur || typeof cur !== 'object' || !saved || typeof saved !== 'object' || Array.isArray(saved)) return cur;
+  Object.keys(cur).forEach(function (k) {
+    if (!Object.prototype.hasOwnProperty.call(saved, k)) return;
+    const c = cur[k], v = saved[k];
+    if (Array.isArray(c)) return;                                               // aucun de ces réglages ne relit une liste
+    if (c && typeof c === 'object') { _reglageMerge(c, v); return; }            // ex. Bunker « actions »
+    if (c === null) { if (v === null || typeof v === 'boolean' || (typeof v === 'number' && isFinite(v))) cur[k] = v; return; }   // dates, AUTO/MANU d'avant les vacances
+    if (typeof c === 'boolean' && (v === 0 || v === 1)) { cur[k] = v === 1; return; }   // l'ancien interrupteur du Bunker écrivait 1 / 0
+    if (typeof v !== typeof c) return;
+    if (typeof v === 'number' && !isFinite(v)) return;
+    cur[k] = v;
+  });
+  return cur;
+}
+function _reglagesRelus(snap) {
+  if (!snap || typeof snap !== 'object' || typeof S === 'undefined' || !S) return;
+  const G = { antiRevengeCfg: '_rvGet', bunkerCfg: '_bkGet', vacancesCfg: '_vacGet', soundCfg: '_sndGet', notifConfig: '_initNotifConfig' };
+  Object.keys(G).forEach(function (k) {
+    const sv = snap[k];
+    if (!sv || typeof sv !== 'object' || Array.isArray(sv)) return;
+    try { const fn = (typeof window !== 'undefined') ? window[G[k]] : null; if (typeof fn === 'function') fn(); } catch (e) {}
+    if (S[k] && typeof S[k] === 'object') _reglageMerge(S[k], sv);
+  });
+  if (typeof snap.toastVerbose === 'boolean') S.toastVerbose = snap.toastVerbose;
+  try { if (S.vacancesCfg && S.vacancesCfg.active === true && typeof window !== 'undefined' && typeof window._vacResume === 'function') setTimeout(function () { try { window._vacResume(); } catch (e) {} }, 1500); } catch (e) {}
+}
+window._reglagesRelus = _reglagesRelus;
+
 
 // ════════════════════════════════════════════════════════════════════════
 // saveState — IDB = snapshot COMPLET · localStorage = snapshot ALLÉGÉ
@@ -127,6 +266,7 @@ async function saveState(silent = false) {
     if (!silent) console.warn('[saveState] BLOQUÉ : _stateReady=false (démarrage en cours)');
     return false;
   }
+  if (typeof window !== 'undefined' && window._auraChosenStateWriting === true) return false;   // [GO RÉGLAGES · 14/10/2026] un état choisi par Rams s'écrit (_writeChosenState)
 
   // [GO DÉMO · 12/10/2026 · VERSION 20261012a] la garde du Mode Démo (09/08) qui se tenait ici est retirée avec lui (05) : plus rien n'écrit un compte
   // fictif dans S, il n'y a plus de sauvegarde à suspendre. Elle ne gardait d'ailleurs que cette sauvegarde périodique — celle de sortie
@@ -448,6 +588,7 @@ async function loadState() {
     if (snap._manConsignes && typeof snap._manConsignes === 'object')         S._manConsignes     = snap._manConsignes;     // [CONSIGNES · 06/10/2026] tes consignes par paire
     if (snap.tendance && typeof snap.tendance === 'object')                   S.tendance          = snap.tendance;          // [VOIX TENDANCE LONGUE · 07/10/2026] poche de la voix (15)
     if (snap.fiscalCfg && typeof snap.fiscalCfg === 'object')                 S.fiscalCfg         = snap.fiscalCfg;         // [GO FISCAL · 07/10/2026] réglages du registre fiscal (16)
+    try { _reglagesRelus(snap); } catch(e) { dbg.push('reglages:err'); }                                                   // [GO RÉGLAGES · 14/10/2026] réglages de l'écran (ETAT n° 13)
     if (snap._gbpToBnbDone) S._gbpToBnbDone = true;
     if (isFinite(snap._realJudgments)) S._realJudgments = Number(snap._realJudgments) || 0;   // [COMPTEURS RÉGLAGES · 24/09/2026]
     if (snap._lossStreaks && typeof snap._lossStreaks === 'object')           S._lossStreaks      = snap._lossStreaks;      // [MÉMOIRE DE LA BLACKLIST · 22/09/2026]
@@ -653,6 +794,7 @@ async function loadState() {
       });
     }
     if (snap.pairCandidates) S.pairCandidates = snap.pairCandidates;
+    try { if (typeof _ensureWalletStore === 'function') _ensureWalletStore(); } catch(e) {}   // [GO RÉGLAGES · 14/10/2026] une paire rajoutée ici : les 3 portefeuilles (ETAT n° 10)
   } catch(e) { dbg.push('dynPairs:err'); }
 
   try {
@@ -755,19 +897,16 @@ function _showRecoveryBanner(highWater, currentCycle) {
       try { obj = JSON.parse(rd.result); } catch(e){ alert('Fichier JSON invalide.'); return; }
       let snapObj = obj;
       if (obj && obj._type === 'aura_guardian_full' && obj.aura) snapObj = obj.aura;
-      const cyc = snapObj && typeof snapObj.cycle === 'number' ? snapObj.cycle : null;
-      if (cyc == null) { alert('Ce fichier ne contient pas d\'état AURA valide.'); return; }
-      if (!confirm('Restaurer le cycle #' + cyc + ' ? L\'état actuel sera remplacé.')) return;
-      try {
-        let saveKey = 'nexus_state_v2';
-        try { if (typeof RT !== 'undefined' && RT.SAVE_KEY) saveKey = RT.SAVE_KEY; } catch(e){}
-        if (!snapObj.key) snapObj.key = saveKey;
-        if (!snapObj.savedAt) snapObj.savedAt = new Date().toISOString();
-        localStorage.setItem(saveKey, JSON.stringify(snapObj));
-        localStorage.setItem('aura_highwater_cycle', String(cyc));
-        bar.remove(); fileInput.remove();
+      // [GO RÉGLAGES · 14/10/2026] même chemin que les 3 autres restaurations (_chosenStateRefus, _chosenStateText, _writeChosenState) : avant, le
+      // snapshot COMPLET allait dans le localStorage seul (quota), sans IDB — un IDB d'un cycle plus haut gagnait au chargement, sans rien dire.
+      const refus = _chosenStateRefus(snapObj);
+      if (refus) { alert('❌ Refusé : ' + refus + '.\nRien n\'a été changé.'); return; }
+      if (!confirm('Restaurer ce backup ?\n\nL\'état actuel est REMPLACÉ par celui du fichier :\n' + _chosenStateText(snapObj) + '\n\nL\'application se recharge ensuite. Continuer ?')) return;
+      _writeChosenState(snapObj).then(w => {
+        if (!w.idb) { alert('❌ Restauration NON écrite : le stockage de l\'appareil a refusé l\'écriture.\nRien n\'a été changé.'); return; }
+        try { bar.remove(); fileInput.remove(); } catch(e) {}
         setTimeout(() => location.reload(), 400);
-      } catch(e){ alert('Échec de la restauration : ' + e.message); }
+      }).catch(e => { try { window._auraChosenStateWriting = false; } catch(_e) {} alert('Échec de la restauration : ' + (e && e.message)); });
     };
     rd.readAsText(f);
   };
@@ -784,6 +923,7 @@ function _flushSyncOnExit(reason) {
   try {
     if (typeof window !== 'undefined' && window._stateReady === false) return;
     if (typeof window !== 'undefined' && window._resetInProgress) return;
+    if (typeof window !== 'undefined' && window._auraChosenStateWriting === true) return;   // [GO RÉGLAGES · 14/10/2026] l'état choisi est déjà écrit : la sortie ne le remplace pas
     try {
       if (sessionStorage.getItem('nexus_factory_reset') === '1') return;
     } catch (e) {}
@@ -1181,4 +1321,4 @@ setTimeout(_auraRotatePurge, 20000);
 // relue » — le bug du 16/08 (7 clés perdues à chaque boot) devient structurellement
 // détectable. RÈGLE : toute clé ajoutée à 09b1 s'ajoute à applySnap ET ici.
 window._WALLET_MIRRORS = ['portfolio','totalTrades','winTrades','leverageReserve','leverageTotalFees','fiscalReserveLog','cashLog','ownFundsInjected','_ownFundsLegacyEUR','ownFundsLog','_autoLevBase','dreamJournal'];
-window._APPLYSNAP_MANIFEST = ['genome','genomeHistory','pairGenome','pairGenomeHistory','_pairGenomeDay','attribution','horizonRules','capRules','_manConsignes','tendance','fiscalCfg','_gbpToBnbDone','_realJudgments','_lossStreaks','gainRules','stopRules','fitWindowRule','botMerit','dcVoices','dcThreshold','_botPredictions','_botMeritMigrated','evoTrials','evoMerit','_metaMeritMigrated','_lastEvolutionAt','_lastDreamAt','_abstMigrated','_degelMigrated','eventLog','eventStats','feeConfig','vMinor','pairBestWorst','profitSplitCaissePct','vMajor','fiatConvFeePct','agentMemories','globalMemoryPool','dreams','dynamicPairKeys','pairCandidates','proposals','decisionCascade','resonanceHistory','mutedAgents','agentLessons','realTimeframe','realActivePairs','agentLessonsReal','realKillSwitch','realModeStartedAt','preRealSnapshot','agentLessonsPaperReal','paperRealTimeframe','paperRealStartedAt','paperRealKillSwitch','paperRealLastClose','paperRealConsecLosses','paperRealGlobalPauseUntil','_genCount','key','cycle','cycleMax','chainLog','learningHistory','evoLog','agents','pairStates','walletStore','openPositions','pendingActions','botFleet','paperRealConfig','adaptiveState','abTesting','taxConfig','realCandles','preRealSnapshotPaperReal','heatmap','shadow','archives','paperRealStats','realStatsByPair','paperRealActivePairs','fees','tradeContextMemory','agentPairSkill','customPairs','removedPairs','botDisciples','discipleTasks','discipleAngles','discipleTaskSkill','savedAt','version','tradingMode','botAutoMode','fullPowerMode','leverage','_autoLevBorrowed','leverageBorrowed','cashAccount','tradingAccount','fiscalReserveAccount','antiNegReserve','_startPortfolio','_fleetTruthReset0908','_totalCompounded','brainLog','_errStats','_riskVetoes','_botSurplusCarry','evoRule','mktLog','mktStats','_fpByBot','perfLog'];
+window._APPLYSNAP_MANIFEST = ['genome','genomeHistory','pairGenome','pairGenomeHistory','_pairGenomeDay','attribution','horizonRules','capRules','_manConsignes','tendance','fiscalCfg','antiRevengeCfg','bunkerCfg','vacancesCfg','soundCfg','notifConfig','toastVerbose','_gbpToBnbDone','_realJudgments','_lossStreaks','gainRules','stopRules','fitWindowRule','botMerit','dcVoices','dcThreshold','_botPredictions','_botMeritMigrated','evoTrials','evoMerit','_metaMeritMigrated','_lastEvolutionAt','_lastDreamAt','_abstMigrated','_degelMigrated','eventLog','eventStats','feeConfig','vMinor','pairBestWorst','profitSplitCaissePct','vMajor','fiatConvFeePct','agentMemories','globalMemoryPool','dreams','dynamicPairKeys','pairCandidates','proposals','decisionCascade','resonanceHistory','mutedAgents','agentLessons','realTimeframe','realActivePairs','agentLessonsReal','realKillSwitch','realModeStartedAt','preRealSnapshot','agentLessonsPaperReal','paperRealTimeframe','paperRealStartedAt','paperRealKillSwitch','paperRealLastClose','paperRealConsecLosses','paperRealGlobalPauseUntil','_genCount','key','cycle','cycleMax','chainLog','learningHistory','evoLog','agents','pairStates','walletStore','openPositions','pendingActions','botFleet','paperRealConfig','adaptiveState','abTesting','taxConfig','realCandles','preRealSnapshotPaperReal','heatmap','shadow','archives','paperRealStats','realStatsByPair','paperRealActivePairs','fees','tradeContextMemory','agentPairSkill','customPairs','removedPairs','botDisciples','discipleTasks','discipleAngles','discipleTaskSkill','savedAt','version','tradingMode','botAutoMode','fullPowerMode','leverage','_autoLevBorrowed','leverageBorrowed','cashAccount','tradingAccount','fiscalReserveAccount','antiNegReserve','_startPortfolio','_fleetTruthReset0908','_totalCompounded','brainLog','_errStats','_riskVetoes','_botSurplusCarry','evoRule','mktLog','mktStats','_fpByBot','perfLog'];

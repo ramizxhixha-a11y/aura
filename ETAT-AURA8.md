@@ -1,14 +1,15 @@
-# ÉTAT-AURA8 — 14/10/2026 — token `20261013a` — À LIRE EN PREMIER (≤ 20 Ko, banc-all le vérifie)
+# ÉTAT-AURA8 — 15/10/2026 — token `20261014a` — À LIRE EN PREMIER (≤ 20 Ko, banc-all le vérifie)
 
 Ce fichier dit OÙ EN EST AURA8 aujourd'hui. L'histoire de chaque livraison est dans `PASSATION-AURA8.md` (438 Ko) : on y CHERCHE (`grep -n`), on ne la lit pas en entier. Les règles de travail de Claude sont dans `CLAUDE.md`. Le détail de l'audit du 13/10 est dans `rejeu/audit-20261013/`.
 
-## 1. L'app (lue en direct par le pont, 14/10 14:52 — dernier etat.json écrit à 07:12 : tablette partie sans réseau)
-- Version chargée `20261012a` (le token `20261013a` « go argent » se charge à la prochaine relance avec réseau), 58 scripts, aucune erreur de page. `banc-all` : LIVRABLE.
+## 1. L'app (lue en direct par le pont, 15/10 ~04:00 — en marche sans arrêt depuis le 14/10 18:39, réseau présent)
+- Version chargée `20261013a` (le token `20261014a` « go réglages » se charge à la prochaine relance avec réseau), 58 scripts, aucune erreur de page. `banc-all` : LIVRABLE.
 - Modes : AA, EV et RE en play ; EV à l'écran. RE n'envoie aucun ordre réel (aucun appel `/api/v3/order`).
-- EV : 1 082,27 $, 354 trades, aucune position (inchangé depuis le 11/10 20:40). AA : 1 032,43 $, 2 004 trades. RE : 1 145,42 $. Levier : 0 partout.
+- EV : 1 082,27 $, 354 trades, aucune position (inchangé depuis le 11/10 20:40). AA : 1 025,78 $, 2 030 trades. RE : 1 145,42 $, 0 trade. Levier : 0 partout.
 - Poche tendance longue (`js/15`) : 11 positions tenues (pont).
-- **La décision n'a aucune information** : sur 3 599 décisions (08/10 → 13/10), −0,26 % net à 15 min (t = −10,5) ; la décision INVERSE perd autant (−0,29 %). Ce qui est perdu, ce sont les frais. Le seuil appris garde le marché fermé : le bot EV n'ouvre plus. Six portes de recherche (TALENT, SOURCE, RÉPLIQUE, CARNET, PORTAGE, FLUX) et TENDANCE n'ont trouvé aucune source qui change ça ; TENDANCE LONGUE est la seule entrée (fragile).
+- **La décision n'a aucune information** : sur 3 899 décisions (09/10 → 14/10, backup du 14/10 18:45), −0,265 % net à 15 min (t = −11,7) ; la décision INVERSE perd autant (−0,286 %). Ce qui est perdu, ce sont les frais. Le seuil appris garde le marché fermé : le bot EV n'ouvre plus. Six portes de recherche (TALENT, SOURCE, RÉPLIQUE, CARNET, PORTAGE, FLUX) et TENDANCE n'ont trouvé aucune source qui change ça ; TENDANCE LONGUE est la seule entrée (fragile).
 - Arrêts : la tablette part avec Rams au travail, sans réseau loin du Wi-Fi et sur batterie (GO VEILLE). Remède côté Rams, pas dans le code.
+- **RE et les paires ajoutées** (go réglages, dit à Rams) : EUR/USDT et BNB/USDT, cochées dans la liste RE, n'avaient pas d'état dans le portefeuille RE (créé seulement si l'écran était RE au démarrage) → le RE ne les voyait pas. Désormais les 3 portefeuilles les reçoivent (règle « toute paire ajoutée se met en place partout », 26/09) : le bot RE peut les trader (papier). Au 14/10, sa porte « bases solides » (10f) les tient fermées (net appris négatif).
 
 ## 2. Règles de Rams en vigueur (ne pas les redemander)
 - AUTO / MANU : Rams seul. En MANU, le bot peut surveiller, préremplir, fermer — jamais ouvrir.
@@ -20,7 +21,7 @@ Ce fichier dit OÙ EN EST AURA8 aujourd'hui. L'histoire de chaque livraison est 
 - Fiscal (07/10) : calcul de la loi trade par trade — MANU LONG sans levier = normal (10 000 €/an exonérés), AUTO ou levier = spéculatif 33 %.
 - Être explicite sur chaque modification ; vérité d'abord ; réponses courtes en français.
 
-## 3. Défauts OUVERTS — registre (audit du 13/10 ; G1 n° 1–7 et n° 8, 20, 21 fermés par « go argent » le 14/10, token `20261013a`)
+## 3. Défauts OUVERTS — registre (audit du 13/10 ; G1 n° 1–8, 20, 21 fermés par « go argent » le 14/10, `20261013a` ; G2 n° 10–19 fermés par « go réglages » le 15/10, `20261014a`)
 Preuve : **R** = revérifiée par la session principale (code relu et/ou script rejoué) · **vm** = vrai code exécuté par un script de `rejeu/audit-20261013/` · **c** = lu dans le code. Taille du remède : S ≤ 20 lignes.
 
 ### G1 — argent ou données faux
@@ -34,33 +35,28 @@ Preuve : **R** = revérifiée par la session principale (code relu et/ou script 
 | n° | Défaut | Où | Preuve | Taille |
 |---|---|---|---|---|
 | 9 | Part des gains vers la caisse à 0 % depuis le 11/10 ~18:40 : la caisse ne reçoit plus rien. Aucun journal ne dit qui l'a changé → **demander à Rams** | `cashLog` · 10g:209-217 | backup | — |
-| 10 | Écran RE : `renderPairPnl` plante (EUR/USDT et BNB/USDT sans état RE) → la fin du battement saute un tick sur deux quand RE est à l'écran | 07:3502-3504 | R vm | S |
-| 11 | « RESTAURER » depuis l'historique des backups : refusé en silence par le garde anti-régression, l'écran dit « ✅ Backup restauré » | 04:347-410 · 09b2:175 | c | S |
-| 12 | « Importer backup » ne pose pas le repère de cycle : fichier en avance → l'app charge un autre backup sans demander ; en retard → sauvegardes refusées | 09b3:17-80 | c | S |
-| 13 | Réglages jamais sauvegardés (retour usine à chaque relance) : Anti-Revenge, Bunker, Telegram, Vacances, Son, notifications verbeuses | absents de 09b1 | c + backup | S |
-| 14 | « Réduire les mises » (Bunker, Vacances, Urgence) : l'ouvreur 09c ne lit aucune des valeurs changées | 07 · 09c | vm | S |
-| 15 | Hedge automatique affiché ON (Rams l'a activé), `_checkHedgingTrigger` jamais appelé | — | c + backup | S |
-| 16 | « 🧪 Simuler un blocage (test) » pose un VRAI blocage du bot de 15 min, sans déblocage | 06:4087 → 09c:93 | c | S |
-| 17 | Onglet « 🛠 Outils » sans bouton d'accès : 15 outils invisibles (Urgence, Stress test, Calculatrice, Backtest, PDF…) | 07:1196 | c | S |
-| 18 | Snapshots internes (Réglages) : la fenêtre plante (`listInternalSnapshots` absent), aucun snapshot n'existe ; `_snapshotActionCreate` non défini | 04:1580 · 09g:222/236 | vm | S |
-| 19 | « 🚨 Ouvrir Mode Urgence » vise `#urgenceOverlay`, absent du DOM | 06:681, 06:807 | c | S |
 | 22 | Mise ×0,4 à ×1,5 selon un Sharpe dès 5 trades par paire | 10d:210 · 02:6074 | c | S |
 | 23 | Pause auto des paires (WR < 40 % sur 50 trades) impossible : l'historique est coupé à 40 lignes | 09e:165 · 09b2:1052 | c | S |
 | 24 | Les trades de la paire du graphique n'entrent jamais dans `S.flowStats` (whale_v1 / flow_v1 aveugles sur elle) | 02:5138-5140 | c | S |
 | 28 | Fenêtre « bougies réelles » ouverte hors réseau : son rafraîchissement de 1 s passe `ps.price` (figé) dans le filtre des prix réels → l'âge du prix est remis à zéro, les gardes « prix figé » (07, 10f, 10i) voient un prix frais pour la paire affichée | 02:1069, 1206-1217, 1438, 1474 | revue c | S |
 | 29 | Estimations restées sur la MISE alors que les frais réels sont sur l'exposition (« net en poche », P&L net de la carte, solvabilité) — faux seulement avec levier | 16:416 · 07:4350 · 02:77 | revue c | S |
+| 30 | Interrupteurs sans effet : Telegram « 📊 Chaque trade », « 🔔 Alertes prix » (tgOnTrade / tgOnAlert : 0 appelant), « 💰 Objectif P&L » (jamais lu) ; Notifications « TP / SL » (jamais lu), « Twin », « Régime » (notifTwinAlert / notifRegimeChange : 0 appelant). Seuls l'urgence Telegram (Bunker) et ouverture / fermeture / drawdown des notifications agissent | 06:2584, 2594, 2655 · 07:1853, 1954, 1967 | revue grep | S |
+| 31 | Alertes prix (`S.priceAlerts`) et seuils d'alertes P&L (`S.pnlAlerts`) jamais sauvegardés : perdus à chaque relance (même onglet que les réglages sauvegardés le 15/10) | 06:825 · 04:2266 · absents de 09b1 | revue grep | S |
+| 32 | Clé CoinStats (`S.newsApiKey`) dans les backups de l'historique et les exports .json / .txt : `JSON.stringify(S)` (03 _buildFullBackup) la copie — même défaut que le jeton Telegram, corrigé le 15/10 par une propriété non énumérable (06 _tgGet) | 10e7:194, 325 · 03:6063 | revue c | S |
+| 33 | Onglet « 🛠 Outils » laissé sans bouton (décision du 15/10) : 14 sections sur 14 à corriger avant de l'exposer (Urgence sans confirmation, Coffre qui plante et remplace tout l'état, stress test / ADN / Paper Ultra / auto-backup faux, calculateur, PDF, Excel, hebdo faux) | `rejeu/reglages-20261014/outils-audit.md` | agent + vm | M |
 
-### G3 (9) et G4 (31)
-Liste complète, avec fichier:ligne : `rejeu/audit-20261013/registre.md` (n° 13 à 50) et `promesses.md` (n° 9 et 12). Les plus visibles : « ✕ Fermer hedges » ne ferme rien et « Hedge manuel » annonce « ouvert » même refusé ; calendrier éco et montants fiscaux écrits pour 2026 seulement ; additionnels communaux à 0 % (saisie de Rams) ; écran anti-revenge absent ; `pnl24h` = depuis la relance ; module 18 (réparation démo) inerte à retirer ; `banc-pont-direct.js` P22 intermittent.
+### G3 (9) et G4 (32)
+Liste complète, avec fichier:ligne : `rejeu/audit-20261013/registre.md` (n° 13 à 50) et `promesses.md` (n° 9 et 12). Ajouté le 15/10 (G4) : `_writeChosenState` (09b2) attend la fin de la transaction IDB sans délai maximal — une transaction qui ne finirait jamais laisserait les sauvegardes suspendues jusqu'au rechargement (supposé, jamais vu). Les plus visibles : « ✕ Fermer hedges » ne ferme rien et « Hedge manuel » annonce « ouvert » même refusé ; calendrier éco et montants fiscaux écrits pour 2026 seulement ; additionnels communaux à 0 % (saisie de Rams) ; écran anti-revenge absent ; `pnl24h` = depuis la relance ; module 18 (réparation démo) inerte à retirer ; `banc-pont-direct.js` P22 intermittent.
 
 ### Corrigé / faux depuis les rapports précédents
 27 points corrigés, 6 périmés, 7 énoncés faux rectifiés (dont : `_closeTradesOnExit` ne ferme que les positions du bot ; les 7 bots non votants agissent par veto, taille de mise, découpage et sauvetage) — `rejeu/audit-20261013/registre.md` §2–4.
 
 ## 4. Missions proposées, dans l'ordre (aucune sans « go » de Rams)
-1. **go réglages** — G2 n° 10 à 19 : ce que l'écran promet, le code le fait (ou le bouton disparaît).
-2. **go levier** — G1 n° 25, 26 et G2 n° 29 avant toute utilisation du levier (inactif aujourd'hui).
-3. **go nettoyage** — G3 / G4 choisis par Rams (dont n° 27, 28).
+1. **go levier** — G1 n° 25, 26 et G2 n° 29 avant toute utilisation du levier (inactif aujourd'hui).
+2. **go alertes** — G2 n° 30, 31, 32 : les interrupteurs Telegram / notifications font ce qu'ils disent (ou disparaissent), alertes sauvegardées, clé CoinStats hors des backups.
+3. **go outils** — n° 33 : corriger les 14 outils, puis rendre l'onglet accessible.
+4. **go nettoyage** — G3 / G4 choisis par Rams (dont n° 27, 28).
 Hors code, à Rams : réseau de la tablette (GO VEILLE) ; la part caisse à 0 % (n° 9) ; additionnels communaux ; révoquer l'ancienne clé CoinStats et l'ancien PAT ; 2FA GitHub.
 
 ## 5. Outils (détail : PASSATION, points numérotés)
-App en direct : `node rejeu/pont.js etat | journal --heures 24 | backup | lire S <chemin>` (point 21 ; rattacher `aura-pont` en lecture SANS le cloner). Lecture d'un backup : `node rejeu/lecture_backup.js <fichier>`. Argent : `node banc-argent.js` (vm) et `node rejeu/sonde_argent.js --root . --backup <backup>` (vraie page, 19 étapes). Sonde navigateur : point 15. Sonde des modes : point 20. Portes de recherche : points 9 à 17. Fiscal : point 19. Enveloppe Android : point 23.
+App en direct : `node rejeu/pont.js etat | journal --heures 24 | backup | lire S <chemin>` (point 21 ; rattacher `aura-pont` en lecture SANS le cloner). Lecture d'un backup : `node rejeu/lecture_backup.js <fichier>`. Argent : `node banc-argent.js` (vm) et `node rejeu/sonde_argent.js --root . --backup <backup>` (vraie page, 19 étapes). Réglages / restaurations : `node banc-reglages.js` (vm, 27) et `node rejeu/sonde_reglages.js --root . --backup <backup>` (vraie page, 17 étapes, rechargements compris). Sonde navigateur : point 15. Sonde des modes : point 20. Portes de recherche : points 9 à 17. Fiscal : point 19. Enveloppe Android : point 23.

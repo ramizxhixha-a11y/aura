@@ -229,65 +229,42 @@ function closeAllHedges() {
 }
 window.closeAllHedges = closeAllHedges;
 
+// [GO RÉGLAGES · 14/10/2026] ETAT n° 15 · « Hedge Automatique » affichait « Système actif · ON · ✅ En veille / ⚡ Seuil atteint » et laissait régler
+// le seuil et l'allocation, mais son déclencheur (10d _checkHedgingTrigger) n'a JAMAIS été appelé : aucun hedge n'a été posé ni suggéré. Et le
+// « stress » affiché avançait d'un cran à chaque AFFICHAGE de cette section (09d1 _detectSystemicBearStress incrémente à chaque appel) : ce n'était
+// pas un compte de bougies. L'écran dit maintenant la vérité ; tes réglages (ON, seuil, allocation) restent enregistrés tels quels, sans effet.
+// Brancher un hedge qui OUVRE un short, c'est une décision d'ouvrir : porte TALENT / SOURCE d'abord (CLAUDE.md règle 10) — non fait.
+// L'écran ne rappelle plus _detectSystemicBearStress (il polluait S.adaptiveState.bearStreak). Hedge manuel / Fermer hedges : inchangés (ETAT G3).
 function renderHedgeAutoSection() {
   const el = document.getElementById('hedgeAutoSection');
   if(!el) return;
 
   const cfg      = S.paperRealConfig || {};
   const enabled  = cfg.hedgingEnabled || false;
-  const adapt    = S.adaptiveState   || {};
-  const lastAct  = adapt.lastHedgeAction;
-  const hedgeActive = adapt.hedgeActive || false;
-  const stress   = typeof _detectSystemicBearStress==='function' ? _detectSystemicBearStress() : {streak:0,regime:'calm'};
   const triggerStreak = cfg.hedgingTriggerBearStreak || 3;
   const maxAlloc = cfg.hedgingMaxAllocPct || 2.0;
-  const openHedges = (S.openPositions||[]).filter(p=>p.side==='short'&&p.auto===true);
 
   // Log des 5 dernières entrées chain sur le hedge
   const hedgeLog = (S.chainLog||[]).filter(e=>e.icon==='🛡️').slice(-5).reverse();
 
-  // Statut
-  const statusClass = !enabled ? 'off' : hedgeActive ? 'active' : stress.streak>=triggerStreak ? 'triggered' : 'on';
-  const statusLabel = !enabled ? 'Désactivé' : hedgeActive ? '🛡️ Hedge actif' : stress.streak>=triggerStreak ? '⚡ Seuil atteint' : '✅ En veille';
-  const statusColor = !enabled ? 'var(--t3)' : hedgeActive ? 'var(--up)' : stress.streak>=triggerStreak ? 'var(--gold)' : 'var(--ice)';
-
   el.innerHTML = `
     <div class="hg-section">
       <div class="hg-title">
-        🛡️ Hedge Automatique
-        <span style="font-size:9px;font-weight:700;color:${statusColor};">${statusLabel}</span>
+        🛡️ Hedge
+        <span style="font-size:9px;font-weight:700;color:var(--gold);">automatique non branché</span>
       </div>
 
-      <!-- Statut actuel -->
-      <div class="hg-status-card ${statusClass}">
-        <div class="hg-status-header">
-          <span class="hg-status-title">${enabled ? 'Système actif' : 'Système désactivé'}</span>
-          <span class="hg-badge" style="background:${enabled?'rgba(56,212,245,.12)':'rgba(255,255,255,.06)'};color:${enabled?'var(--ice)':'var(--t3)'};">${enabled?'ON':'OFF'}</span>
+      <div class="hg-status-card off">
+        <div style="font-size:10px;color:var(--t2);line-height:1.5;">
+          ⚠ <b>Aucun hedge n'est posé ni suggéré automatiquement</b> : le déclencheur n'a jamais été relié au moteur.
+          Tes réglages restent enregistrés, sans effet : ${enabled ? 'ON' : 'OFF'} · seuil ${triggerStreak} · allocation ${maxAlloc} %.
         </div>
-        <div class="hg-row"><span style="color:var(--t3);">Stress marché actuel</span><span style="font-weight:700;color:${stress.streak>=triggerStreak?'var(--down)':stress.streak>0?'var(--gold)':'var(--up)'};">${stress.streak} BEAR / ${triggerStreak} seuil</span></div>
-        <div class="hg-row"><span style="color:var(--t3);">Régime détecté</span><span style="font-weight:700;color:var(--t1);">${(stress.regime||'calm').toUpperCase()}</span></div>
-        <div class="hg-row"><span style="color:var(--t3);">Positions SHORT actives</span><span style="font-weight:700;color:${openHedges.length>0?'var(--up)':'var(--t3)'};">${openHedges.length}</span></div>
-        ${lastAct ? `<div class="hg-row"><span style="color:var(--t3);">Dernier déclenchement</span><span style="font-weight:700;color:var(--gold);">${lastAct.candidate?.replace('/USDT','')||'?'} · $${lastAct.stake||'?'}</span></div>` : ''}
-      </div>
-
-      <!-- Paramètres -->
-      <div style="font-size:9px;color:var(--t3);margin-bottom:6px;">Paramètres</div>
-      <div class="hg-param-row">
-        <span class="hg-param-lbl">Seuil BEAR streak (bougies)</span>
-        <input type="number" class="hg-param-input" value="${triggerStreak}" min="1" max="10" step="1"
-          onchange="updateHedgeParam('hedgingTriggerBearStreak',this.value)">
-      </div>
-      <div class="hg-param-row">
-        <span class="hg-param-lbl">Allocation max hedge (% capital)</span>
-        <input type="number" class="hg-param-input" value="${maxAlloc}" min="0.5" max="10" step="0.5"
-          onchange="updateHedgeParam('hedgingMaxAllocPct',this.value)">
+        <div style="font-size:9px;color:var(--t3);line-height:1.5;margin-top:6px;">
+          Un hedge automatique ouvrirait un SHORT : c'est une décision d'ouvrir, qui se prouve d'abord sur données réelles (porte TALENT / SOURCE).
+        </div>
       </div>
 
       <!-- Boutons -->
-      <button class="hg-toggle-btn" onclick="toggleHedging()"
-        style="background:${enabled?'rgba(255,255,255,.04)':'rgba(56,212,245,.1)'};border-color:${enabled?'var(--border)':'rgba(56,212,245,.3)'};color:${enabled?'var(--t3)':'var(--ice)'};">
-        ${enabled ? '⏸ Désactiver le hedge auto' : '▶ Activer le hedge auto'}
-      </button>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:6px;">
         <button onclick="manualHedge()" style="padding:8px;border-radius:7px;background:rgba(245,200,66,.1);border:1px solid rgba(245,200,66,.3);color:var(--gold);font-size:10px;font-weight:700;cursor:pointer;font-family:inherit;">🛡️ Hedge manuel</button>
         <button onclick="closeAllHedges()" style="padding:8px;border-radius:7px;background:rgba(255,61,107,.08);border:1px solid rgba(255,61,107,.25);color:var(--down);font-size:10px;font-weight:700;cursor:pointer;font-family:inherit;">✕ Fermer hedges</button>
@@ -304,7 +281,7 @@ function renderHedgeAutoSection() {
           </div>
         </div>`).join('')}` : `
         <div style="text-align:center;padding:10px;font-size:9px;color:var(--t3);">
-          Aucune action hedge enregistrée — le hedge se déclenche automatiquement en régime BEAR prolongé.
+          Aucune action hedge enregistrée.
         </div>`}
     </div>`;
 }

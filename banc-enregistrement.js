@@ -332,9 +332,9 @@ T('E21 · restaurations RÉELLES de 09b3 : un enregistrement est refusé sans ri
   let o = mk(); o.c.importState(); await o.inp.onchange({ target: { files: [file(rec, 'aura_guardian_full_rec-20261004.json')] } });
   assert.strictEqual(o.conf.length, 0); assert.strictEqual(o.writes, 0); assert.ok(/Pas une sauvegarde AURA \(enregistrement du marché\)/.test(o.toasts[0]));
   o = mk(); o.c.importState(); await o.inp.onchange({ target: { files: [file(full, 'aura_guardian_full_20261003-201027.json')] } });
-  assert.strictEqual(o.conf.length, 1); assert.ok(o.conf[0].includes('Cycle : #1064359') && o.conf[0].includes('Trades : 221'));
+  assert.strictEqual(o.conf.length, 1); assert.ok(o.conf[0].includes('#1064359'), o.conf[0]);   // [GO RÉGLAGES · 14/10/2026] la confirmation nomme les 3 portefeuilles et le cycle (09b2 _chosenStateText ; absent de ce contexte : repli « Cycle : #… »)
   o = mk(); o.c.recoverFromFiles(); await o.inp.onchange({ target: { files: [file(rec, 'aura_guardian_full_rec-20261004.json'), file(full, 'aura_guardian_full_20261003-201027.json')] } });
-  assert.strictEqual(o.conf.length, 1); assert.ok(o.conf[0].includes('aura_guardian_full_20261003-201027.json') && o.conf[0].includes('Cycle : 1064359'));
+  assert.strictEqual(o.conf.length, 1); assert.ok(o.conf[0].includes('aura_guardian_full_20261003-201027.json') && o.conf[0].includes('#1064359'), o.conf[0]);
   o = mk(); o.c.recoverFromFiles(); await o.inp.onchange({ target: { files: [file(rec, 'aura_guardian_full_rec-20261004.json')] } });
   assert.strictEqual(o.conf.length, 0); assert.strictEqual(o.writes, 0); assert.ok(/Aucune sauvegarde AURA/.test(o.toasts[0]));
 });

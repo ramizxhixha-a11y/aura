@@ -146,10 +146,11 @@
     return { quoi: q, chemin: ch.map(function (k) { return txt(k, 60); }), type: type, v: copie(v, prof, { n: (typeof args.n === 'number' && isFinite(args.n)) ? (args.n | 0) : 0 }) };
   }
   // Les VALEURS des champs au nom de secret (S et ses objets directs) : 17b les retire de tout ce qui part, où qu'elles aient pu se glisser.
+  // [GO RÉGLAGES · 14/10/2026] noms propres NON énumérables compris : S.telegramCfg l'est désormais (06 _tgGet, hors des JSON.stringify(S) des backups).
   function secrets() {
     var out = [], S0 = liveS();
     var voir = function (o, prof) {
-      var ks; try { ks = Object.keys(o); } catch (e) { return; }
+      var ks; try { ks = Object.getOwnPropertyNames(o); } catch (e) { return; }
       for (var i = 0; i < ks.length && i < 400 && out.length < 20; i++) {
         var v = val(o, ks[i]);
         if (typeof v === 'string') { if (v.length >= 12 && RE_SECRET.test(ks[i]) && out.indexOf(v) < 0) out.push(v); }

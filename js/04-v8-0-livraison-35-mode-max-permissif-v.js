@@ -62,7 +62,10 @@ const AURA_IMPORT_NEVER_FIELDS = [
   // 10 min : additionnels communaux 0 → 9 % = 9,90 $ passés du trading au dépôt), cours USD → EUR, frais d'échange, intérêts et plafond du levier,
   // et le Bunker (son action « Fermer les positions » ferme tout sur un seuil)
   'fiscalCfg', 'taxConfig', 'usdEurRate', '_usdEurLastFetch', 'fiatRates', 'fiatConvFeePct', 'feeConfig',
-  'leverageMaxMult', 'leverageBorrowRate', 'bunkerCfg'
+  'leverageMaxMult', 'leverageBorrowRate', 'bunkerCfg',
+  // [GO RÉGLAGES · 14/10/2026] le Mode Vacances garde AUTO / MANU d'avant les vacances et le rend au retour (un vieux fichier réécrirait ton AUTO / MANU
+  // plus tard) ; le réglage Telegram porte un jeton secret (hors snapshot et backups : localStorage aura_tg_cfg, 06)
+  'vacancesCfg', 'telegramCfg'
 ];
 // Les champs qui pèsent sur la DÉCISION d'ouvrir ou de fermer : toujours nommés EN PREMIER dans la confirmation (jamais cachés dans « … et N autres »)
 const AURA_IMPORT_DECISION_FIELDS = ['agents', 'dcThreshold', 'genome', 'genomeHistory', 'pairGenome', 'gainRules', 'stopRules', 'horizonRules', 'capRules',
@@ -81,7 +84,7 @@ function _importNeverField(f) {
 }
 window._importNeverField = _importNeverField;
 // Ce que la confirmation dit, mot pour mot, de ce qui NE change PAS.
-const AURA_IMPORT_KEPT_TEXT = 'Ne changent PAS : tes 3 portefeuilles (comptes, positions, historique des trades, frais, registre fiscal), AUTO / MANU, le mode à l\'écran, la part caisse, le cycle, les frais d\'échange, l\'impôt (taux, réglages, cours €), le levier (taux, plafond), le Bunker.';
+const AURA_IMPORT_KEPT_TEXT = 'Ne changent PAS : tes 3 portefeuilles (comptes, positions, historique des trades, frais, registre fiscal), AUTO / MANU, le mode à l\'écran, la part caisse, le cycle, les frais d\'échange, l\'impôt (taux, réglages, cours €), le levier (taux, plafond), le Bunker, le Mode Vacances, Telegram.';
 // Liste lisible des champs remplacés : TOUS, ceux de la décision d'abord (rien n'est tronqué)
 function _importFieldsText(fields) {
   const f = (fields || []).slice(), dec = f.filter(x => AURA_IMPORT_DECISION_FIELDS.includes(x)), aut = f.filter(x => !AURA_IMPORT_DECISION_FIELDS.includes(x));
@@ -380,49 +383,77 @@ async function restoreBackup(id) {
       alert('Backup introuvable');
       return;
     }
+    // [GO RÉGLAGES · 14/10/2026] ETAT n° 11. Avant : l'état du backup était copié dans S puis saveState() — que l'anti-régression (09b2) REFUSAIT dès
+    // que le backup était plus ancien de 5 cycles (le cas normal), sans que personne lise le résultat ; « ✅ Backup restauré » s'affichait quand même et
+    // le rechargement relisait l'état d'avant. Désormais : (1) la confirmation dit ce qui change (3 portefeuilles, AUTO / MANU, cycle) ; (2) S reçoit
+    // l'état du backup — sans les champs « argent » du mode à l'écran quand le backup porte walletStore : ces accesseurs (02) écrivaient selon l'ORDRE
+    // des clés dans le portefeuille du mode à l'écran d'AVANT ; walletStore les porte déjà, par mode ; (3) le snapshot est écrit tel quel par
+    // _writeChosenState (09b2 : IDB, LS allégé, repère de cycle) ; (4) le message dit ce qui s'est réellement passé.
+    const restored = backup.state;
+    const refus = (typeof _chosenStateRefus === 'function') ? _chosenStateRefus(restored)
+      : ((typeof restored.cycle !== 'number' || !isFinite(restored.cycle)) ? 'ce backup ne contient pas d\'état AURA lisible (cycle absent)' : null);
+    if (refus) {
+      alert('❌ Refusé : ' + refus + '.\nRien n\'a été changé.');
+      return;
+    }
 
     const ok = confirm(
       '⚠ RESTAURATION COMPLÈTE\n\n' +
       '• Date : ' + new Date(backup.meta.date).toLocaleString('fr-FR') + '\n' +
       '• Type : ' + backup.meta.type + '\n' +
       '• Label : ' + backup.meta.label + '\n\n' +
-      'Tout l\'état actuel sera REMPLACÉ par celui de ce backup.\n' +
-      'Cela inclut : trades, capital, agents, historique, etc.\n\n' +
-      'Un backup de sécurité sera créé d\'abord.\n\n' +
+      'Tout l\'état actuel est REMPLACÉ par celui de ce backup :\n' +
+      (typeof _chosenStateText === 'function' ? _chosenStateText(restored) : '') + '\n\n' +
+      'Un backup de sécurité de l\'état actuel est créé d\'abord (historique, « pre-import »).\n' +
+      'L\'application se recharge ensuite.\n\n' +
       'Continuer ?'
     );
     if (!ok) return;
 
-    // Backup de sécurité avant restauration
+    // Backup de sécurité avant restauration — vérifié : sans lui, rien n'est remplacé (relecture adverse du 14/10 : son échec passait inaperçu)
     const safetyBackup = _buildFullBackup('Avant restore · ' + new Date().toLocaleString('fr-FR'), 'pre-import');
-    await _saveBackupToDB(safetyBackup);
+    if (!(await _saveBackupToDB(safetyBackup))) {
+      alert('❌ Le backup de sécurité de ton état actuel n\'a pas pu être écrit (stockage de l\'appareil).\nRestauration annulée : rien n\'a été changé.');
+      return;
+    }
 
     // Restaurer TOUT l'état (différent de l'import qui est sélectif)
+    try { window._auraChosenStateWriting = true; } catch(e) {}   // aucune sauvegarde de l'état à moitié remplacé
     try {
-      const restored = backup.state;
+      const acc = (typeof window !== 'undefined' && Array.isArray(window._WALLET_ACCESSOR_FIELDS)) ? window._WALLET_ACCESSOR_FIELDS : [];
+      const parWallet = !!(restored.walletStore && typeof restored.walletStore === 'object');
       Object.keys(restored).forEach(key => {
+        if (key === '__proto__' || key === 'constructor' || key === 'prototype') return;
+        if (key === 'telegramCfg') return;   // secret : vit hors état (06, localStorage aura_tg_cfg) — un vieux backup n'y écrit rien
+        if (key === 'tradingMode') return;   // le mode à l'écran ne change pas (09b2 _writeChosenState) : les accesseurs restent sur le bon portefeuille
+        if (parWallet && acc.includes(key)) return;
         try {
           S[key] = JSON.parse(JSON.stringify(restored[key]));
         } catch(e) {}
       });
     } catch(e) {
       console.error('Erreur restauration:', e);
-      alert('❌ Erreur lors de la restauration : ' + e.message);
+      alert('❌ Erreur lors de la restauration : ' + e.message + '\nL\'application se recharge sur ton état d\'avant.');
+      setTimeout(() => location.reload(), 400);
       return;
     }
 
-    // Sauvegarder l'état restauré
-    try {
-      // Sauvegarde via la fonction officielle (ecrit nexus_state_v2 allege + IDB).
-      if (typeof saveState === 'function') saveState();
-      else { const snap = buildSnapshot(); localStorage.setItem('nexus_state_v2', JSON.stringify(snap)); }
-    } catch(e) {}
-
-    if (typeof showToast === 'function') {
-      showToast('✅ Backup restauré', 3000, 'win');
+    // Écrire l'état restauré tel quel (09b2) : sans le repère de cycle, l'anti-régression le refusait
+    try { _backupJournal('↩️', 'Backup restauré · ' + (backup.meta.label || '') + ' · cycle #' + restored.cycle); } catch(e) {}
+    let w = { idb: false };
+    try { const snap = buildSnapshot(); w = await _writeChosenState(snap); } catch(e) {}
+    try { window._auraChosenStateWriting = true; } catch(e) {}   // jusqu'au rechargement : la sortie ne réécrit rien
+    if (!w.idb) {
+      alert('❌ Restauration NON écrite : le stockage de l\'appareil (IndexedDB) a refusé l\'écriture.\nRien n\'est changé : l\'application se recharge sur ton état d\'avant.');
+      setTimeout(() => location.reload(), 400);
+      return;
     }
 
-    alert('✅ Backup restauré.\nL\'application va se recharger.');
+    if (typeof showToast === 'function') {
+      showToast('✅ Backup restauré · cycle #' + w.cycle, 3000, 'win');
+    }
+
+    alert('✅ Backup restauré (cycle #' + w.cycle + ').\nL\'application va se recharger.');
     setTimeout(() => location.reload(), 800);
   } catch(e) {
     alert('❌ Erreur restauration : ' + e.message);
@@ -1198,9 +1229,8 @@ function renderSettingsPanel() {
               '</div>';
             }).join('') : '<span style="color:var(--t3);font-size:9.5px;">Pas encore de Sharpe (5+ trades par paire requis)</span>';
 
-            const hedgeStatus = hedgingEnabled ?
-              '<span style="color:var(--up);font-weight:700;">Activé</span>' :
-              '<span style="color:var(--t3);font-weight:700;">Désactivé (opt-in)</span>';
+            // [GO RÉGLAGES · 14/10/2026] ETAT n° 15 : le déclencheur (10d _checkHedgingTrigger) n'est appelé nulle part — « Activé » trompait
+            const hedgeStatus = '<span style="color:var(--gold);font-weight:700;">Non branché' + (hedgingEnabled ? ' (réglé ON, sans effet)' : '') + '</span>';
 
             const hedgeStreakColor = bearStreak >= 3 ? 'var(--down)' : bearStreak >= 1 ? 'var(--gold)' : 'var(--t2)';
 
@@ -1223,14 +1253,10 @@ function renderSettingsPanel() {
                 '<span style="color:var(--t2);">État</span>' +
                 hedgeStatus +
               '</div>' +
-              '<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 8px;background:rgba(20,25,35,.5);border:1px solid var(--border);border-radius:6px;margin-bottom:5px;font-size:var(--fs-9);font-family:ui-monospace,monospace;">' +
-                '<span style="color:var(--t2);">BEAR streak</span>' +
-                '<span style="color:' + hedgeStreakColor + ';font-weight:700;">' + bearStreak + ' / 3</span>' +
-              '</div>' +
               hedgeActionHTML +
             '</div>' +
             '<div style="font-size:8.5px;color:var(--t3);padding:0 10px;margin-bottom:4px;">' +
-              'Capital alloué proportionnellement au Sharpe de chaque paire (×0.4 → ×1.5). Hedging suggéré si 3 régimes BEAR consécutifs.' +
+              'Capital alloué proportionnellement au Sharpe de chaque paire (×0.4 → ×1.5). Hedging : non branché — aucun hedge posé ni suggéré automatiquement.' +
             '</div>';
           })()}
 
@@ -1581,10 +1607,9 @@ function renderSettingsPanel() {
         <button onclick="importState()" style="flex:1;padding:10px;background:rgba(56,212,245,.10);border:1px solid rgba(56,212,245,.35);border-radius:8px;color:var(--ice);font-size:var(--fs-11);font-weight:700;cursor:pointer;font-family:inherit;">⬆ Importer backup</button>
       </div>
 
-      <div style="font-size:var(--fs-10);font-weight:700;color:var(--t2);margin-bottom:6px;letter-spacing:.05em;">📸 SNAPSHOTS INTERNES</div>
-      <div style="font-size:var(--fs-9);color:var(--t3);margin-bottom:8px;line-height:1.5;">Auto toutes les 30 min + après chaque trade · 5 conservés en rotation.</div>
-      <button onclick="openSnapshotsModal();closeSettingsModal();" style="width:100%;padding:10px;background:rgba(245,200,66,.10);border:1px solid rgba(245,200,66,.3);border-radius:8px;color:#f5c542;font-size:var(--fs-11);font-weight:700;cursor:pointer;font-family:inherit;text-align:left;margin-bottom:14px;">📸 Voir et restaurer (1 tap)</button>
-
+      <!-- [GO RÉGLAGES · 14/10/2026] « 📸 SNAPSHOTS INTERNES · Auto toutes les 30 min + après chaque trade · 5 conservés » RETIRÉ (ETAT n° 18) : ce système
+           a été supprimé en v125 (10a), le bouton « Voir et restaurer (1 tap) » levait une erreur (listInternalSnapshots absent) et aucun snapshot n'existait.
+           Les vrais points de retour sont juste en dessous : l'historique des backups (RESTAURER). -->
       <div style="font-size:var(--fs-10);font-weight:700;color:var(--t2);margin-bottom:6px;letter-spacing:.05em;">📜 HISTORIQUE DES BACKUPS</div>
       <div style="font-size:var(--fs-9);color:var(--t3);margin-bottom:8px;line-height:1.5;">Auto : 1/jour pendant 7 jours · Manuel : 5 derniers · Pré-import : 3 derniers</div>
       ${HISTORIQUE_HTML}

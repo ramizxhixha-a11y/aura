@@ -1,7 +1,7 @@
 // ════════════════════════════════════════════════════════════════════════
 // ▓▓▓ AURA8 — 09g-modals.js · maj 10/06/2026 (curseur répartition retiré → Portefeuille) ▓▓▓
 // ════════════════════════════════════════════════════════════════════════
-// Modals — openDiagnostic, openSnapshotsModal, openWhyModal.
+// Modals — openDiagnostic, openWhyModal. (openSnapshotsModal retirée le 14/10/2026, GO RÉGLAGES)
 //
 // Dépend de 09a-runtime-state.js (accès via window.RT).
 // ════════════════════════════════════════════════════════════════════════
@@ -9,9 +9,8 @@
 
 // ════════════════════════════════════════════════════════════════════════
 // SECTION Modals
-// Trois fenêtres modales avec rendu HTML détaillé :
+// Fenêtres modales avec rendu HTML détaillé :
 //  - openDiagnostic       : diagnostic complet (trades, P&L, marché, agents, capital, slider répartition)
-//  - openSnapshotsModal   : gestion des snapshots
 //  - openWhyModal(posId)  : explication "pourquoi cette position a été ouverte"
 // ════════════════════════════════════════════════════════════════════════
 
@@ -215,39 +214,9 @@ window.openDiagnostic = openDiagnostic;
 
 
 // ──────────────────────────────────────────────────────────────────────
-// Modal de gestion des snapshots
-// Création auto du DOM au premier appel, puis simple rafraîchissement
+// [GO RÉGLAGES · 14/10/2026] openSnapshotsModal RETIRÉE (ETAT n° 18) : elle appelait listInternalSnapshots, _refreshSnapshotsList et
+// _snapshotActionCreate, supprimés en v125 (10a) — le bouton des Réglages (04) levait une ReferenceError et ne fermait même pas la fenêtre.
 // ──────────────────────────────────────────────────────────────────────
-function openSnapshotsModal() {
-  const snaps = listInternalSnapshots();
-  const modal = document.getElementById('snapshotsModal');
-
-  if (!modal) {
-    // Création initiale du modal
-    const m = document.createElement('div');
-    m.id = 'snapshotsModal';
-    m.style.cssText = 'position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.85);display:flex;align-items:center;justify-content:center;padding:16px;';
-    m.innerHTML = `
-      <div style="background:var(--bg-card);border:1px solid rgba(56,212,245,.3);border-radius:16px;padding:20px;max-width:440px;width:100%;max-height:90vh;overflow-y:auto;">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
-          <div style="font-family:var(--font-mono);font-size:14px;font-weight:700;color:var(--ice);">📸 SNAPSHOTS</div>
-          <button onclick="document.getElementById('snapshotsModal').remove()" style="background:none;border:none;color:var(--t2);font-size:22px;cursor:pointer;padding:0 8px;">×</button>
-        </div>
-        <button onclick="window._snapshotActionCreate()" style="width:100%;padding:14px;background:rgba(56,212,245,.12);border:1px solid rgba(56,212,245,.4);border-radius:10px;color:var(--ice);font-family:var(--font-mono);font-weight:700;font-size:13px;cursor:pointer;margin-bottom:12px;">
-          📸 CRÉER UN SNAPSHOT MAINTENANT
-        </button>
-        <div id="snapshotsList" style="display:flex;flex-direction:column;gap:10px;"></div>
-        <div style="margin-top:14px;font-size:10px;color:var(--t3);line-height:1.5;">
-          💡 Les snapshots sont conservés sur l'appareil. Max 3 emplacements (le plus ancien est remplacé).
-        </div>
-      </div>
-    `;
-    document.body.appendChild(m);
-  }
-
-  _refreshSnapshotsList();
-}
-window.openSnapshotsModal = openSnapshotsModal;
 
 
 // ──────────────────────────────────────────────────────────────────────
