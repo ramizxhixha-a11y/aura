@@ -20,6 +20,7 @@ Ce fichier dit OÙ EN EST AURA8 aujourd'hui. L'histoire de chaque livraison est 
 - Le bot doit pouvoir tenir une position le temps qu'il faut (pas 15 min) ; perdre peu, gagner gros.
 - Fiscal (07/10) : calcul de la loi trade par trade — MANU LONG sans levier = normal (10 000 €/an exonérés), AUTO ou levier = spéculatif 33 %.
 - Être explicite sur chaque modification ; vérité d'abord ; réponses courtes en français.
+- Part des gains vers la caisse : 0 % depuis le 11/10, réglée par Rams lui-même (confirmé le 15/10) — ce n'est pas un défaut.
 
 ## 3. Défauts OUVERTS — registre (audit du 13/10 ; G1 n° 1–8, 20, 21 fermés par « go argent » le 14/10, `20261013a` ; G2 n° 10–19 fermés par « go réglages » le 15/10, `20261014a`)
 Preuve : **R** = revérifiée par la session principale (code relu et/ou script rejoué) · **vm** = vrai code exécuté par un script de `rejeu/audit-20261013/` · **c** = lu dans le code. Taille du remède : S ≤ 20 lignes.
@@ -34,7 +35,6 @@ Preuve : **R** = revérifiée par la session principale (code relu et/ou script 
 ### G2 — promesse non tenue ou décision faussée
 | n° | Défaut | Où | Preuve | Taille |
 |---|---|---|---|---|
-| 9 | Part des gains vers la caisse à 0 % depuis le 11/10 ~18:40 : la caisse ne reçoit plus rien. Aucun journal ne dit qui l'a changé → **demander à Rams** | `cashLog` · 10g:209-217 | backup | — |
 | 22 | Mise ×0,4 à ×1,5 selon un Sharpe dès 5 trades par paire | 10d:210 · 02:6074 | c | S |
 | 23 | Pause auto des paires (WR < 40 % sur 50 trades) impossible : l'historique est coupé à 40 lignes | 09e:165 · 09b2:1052 | c | S |
 | 24 | Les trades de la paire du graphique n'entrent jamais dans `S.flowStats` (whale_v1 / flow_v1 aveugles sur elle) | 02:5138-5140 | c | S |
@@ -56,7 +56,7 @@ Liste complète, avec fichier:ligne : `rejeu/audit-20261013/registre.md` (n° 13
 2. **go alertes** — G2 n° 30, 31, 32 : les interrupteurs Telegram / notifications font ce qu'ils disent (ou disparaissent), alertes sauvegardées, clé CoinStats hors des backups.
 3. **go outils** — n° 33 : corriger les 14 outils, puis rendre l'onglet accessible.
 4. **go nettoyage** — G3 / G4 choisis par Rams (dont n° 27, 28).
-Hors code, à Rams : réseau de la tablette (GO VEILLE) ; la part caisse à 0 % (n° 9) ; additionnels communaux ; révoquer l'ancienne clé CoinStats et l'ancien PAT ; 2FA GitHub.
+Hors code, à Rams : réseau de la tablette (GO VEILLE) ; additionnels communaux ; révoquer l'ancienne clé CoinStats et l'ancien PAT ; 2FA GitHub.
 
 ## 5. Outils (détail : PASSATION, points numérotés)
 App en direct : `node rejeu/pont.js etat | journal --heures 24 | backup | lire S <chemin>` (point 21 ; rattacher `aura-pont` en lecture SANS le cloner). Lecture d'un backup : `node rejeu/lecture_backup.js <fichier>`. Argent : `node banc-argent.js` (vm) et `node rejeu/sonde_argent.js --root . --backup <backup>` (vraie page, 19 étapes). Réglages / restaurations : `node banc-reglages.js` (vm, 27) et `node rejeu/sonde_reglages.js --root . --backup <backup>` (vraie page, 17 étapes, rechargements compris). Sonde navigateur : point 15. Sonde des modes : point 20. Portes de recherche : points 9 à 17. Fiscal : point 19. Enveloppe Android : point 23.
