@@ -374,8 +374,9 @@ function _fiscHarvest(mode) {
     var pct = p.side === 'long' ? (px - p.entryPrice) / p.entryPrice : (p.entryPrice - px) / p.entryPrice;
     var pnl = Math.max(-_fiscNum(p.stakeUsdt), N * pct);
     if (!(pnl < 0)) return;
-    var stake = _fiscNum(p.stakeUsdt);
-    var tf = stake * (_fiscNum(fc.takerRate) * 2), sf = stake * _fiscNum(fc.slippage) * 2;
+    // [GO LEVIER · 18/10/2026] (ETAT n° 29) frais = ceux que recordFees (02) passerait au registre, sur l'EXPOSITION (02 _posCloseFees) — avant sur la mise
+    var _cf = (typeof _posCloseFees === 'function') ? _posCloseFees(p, pct * 100) : null;
+    var tf = _cf ? _cf.tradingFee : N * (_fiscNum(fc.takerRate) * 2), sf = _cf ? _cf.slipFee : N * _fiscNum(fc.slippage) * 2;
     var rg = _fiscRegimeOf(p);
     var fxIn = (_fiscNum(p._fxIn) > 0) ? _fiscNum(p._fxIn) : fx;
     var g = _fiscGainEur(p.side, N, pnl, sf, fxIn, fx);
@@ -413,7 +414,9 @@ function _fiscLatentTaxUsd(mode) {
     var N = _fiscNum(p.totalExposure) || _fiscNum(p.stakeUsdt), stake = _fiscNum(p.stakeUsdt);
     var pct = p.side === 'long' ? (px - p.entryPrice) / p.entryPrice : (p.entryPrice - px) / p.entryPrice;
     var pnl = Math.max(-stake, N * pct);
-    var tf = stake * _fiscNum(fc.takerRate) * 2, sf = stake * _fiscNum(fc.slippage) * 2;
+    // [GO LEVIER · 18/10/2026] (ETAT n° 29) frais = ceux que recordFees (02) passerait au registre, sur l'EXPOSITION (02 _posCloseFees) — avant sur la mise
+    var _cf = (typeof _posCloseFees === 'function') ? _posCloseFees(p, pct * 100) : null;
+    var tf = _cf ? _cf.tradingFee : N * _fiscNum(fc.takerRate) * 2, sf = _cf ? _cf.slipFee : N * _fiscNum(fc.slippage) * 2;
     var rg = _fiscRegimeOf(p);
     var g = _fiscGainEur(p.side, N, pnl, sf, (_fiscNum(p._fxIn) > 0 ? _fiscNum(p._fxIn) : fx), fx);
     var b = rg.regime === 'normal' ? cp.normal : cp.spec;

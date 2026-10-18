@@ -315,8 +315,7 @@ function _resolvePairCycleCore(pair, ps) {
     const pnlPct=botPos.side==='long'
       ?((ps.price-botPos.entryPrice)/botPos.entryPrice*100)
       :((botPos.entryPrice-ps.price)/botPos.entryPrice*100);
-    const pnlUsd=botPos.stakeUsdt*(pnlPct/100);
-    botPos.pnl=pnlPct; botPos.pnlUsdt=pnlUsd; botPos.currentVal=botPos.stakeUsdt+pnlUsd;
+    _posMark(botPos, ps.price);   // [GO LEVIER · 18/10/2026] (ETAT n° 29) P&L latent = ce que closePosition réaliserait (02 : exposition, perte bornée à la mise) — avant sur la mise
 
     const tpPct=Math.max(1.2,effectiveConviction*4.5*(1+volCV*8));
     const slPct=Math.max(0.6,tpPct*0.35);
@@ -703,8 +702,7 @@ window._botExitSweep = function _botExitSweep() {
       if (!px || !entry) return;
       var isLong = pos.side === 'long';
       var pnlPct = isLong ? (px - entry) / entry * 100 : (entry - px) / entry * 100;
-      var pnlUsd = (Number(pos.stakeUsdt) || 0) * (pnlPct / 100);
-      pos.pnl = pnlPct; pos.pnlUsdt = pnlUsd; pos.currentVal = (Number(pos.stakeUsdt) || 0) + pnlUsd;
+      _posMark(pos, px);   // [GO LEVIER · 18/10/2026] (ETAT n° 29) P&L latent = ce que closePosition réaliserait (02 : exposition, perte bornée à la mise) — avant sur la mise
       var tpHit, slHit, why;
       // ═══ [STOP CÔTÉ EXCHANGE SIMULÉ · 26/09/2026] décision Rams (« oui aux deux ») ═══
       // En papier, le stop vit dans l'app : sans réseau, aucune protection (PEPE 24/09 : prix figé 1 h, −5,13 % au retour au lieu de −2).

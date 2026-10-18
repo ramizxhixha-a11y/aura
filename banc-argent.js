@@ -60,7 +60,10 @@ function world(o) {
     checkPnlAlerts() {}, checkBadges() {}, _updateCloseAllBadge() {}, updatePairBtnStates() {}, renderPositions() {}, renderChain() {}, renderHome() {}, renderPyramideSection() {},
     renderActionsGrid() {}, renderOpenPosSummary() {}, _urgAppendLog() {}, saveFeeRecord() {}, addAnnualNetRealised() {}, _fiscOnClose: () => ({ movedUsd: 0, regime: 'speculatif', gainEur: 0 }) };
   c.window = c; vm.createContext(c);
-  const names = ['_computePortfolio', '_computePortfolioSans', 'repayLeverage', 'releaseTradeReserve', 'recordFees'];
+  // [GO LEVIER · 18/10/2026] closePosition rend l'emprunt versé en argent sur le trading (_posLevCash, _repayCashDebt, _levFreeDebt) et mesure une position par
+  // _posLatent / _posCloseFees : ces fonctions de 02 entrent dans le monde quand elles existent (BANC_ROOT d'un commit plus ancien : sans elles)
+  const names = ['_computePortfolio', '_computePortfolioSans', 'repayLeverage', 'releaseTradeReserve', 'recordFees']
+    .concat(['_posLatent', '_posCloseFees', '_posMark', '_posLevCash', '_repayCashDebt', '_levFreeDebt', '_levCashDebt', '_levNormAuto'].filter(n => has(s02, n)));
   const extra = (o.extra || []).map(([src, n]) => fnSrc(src, n)).join('\n');
   vm.runInContext(names.map(n => fnSrc(s02, n)).join('\n') + '\n' + (o.close || fnSrc(s02, 'closePosition')) + '\n' + extra
     + (has(s02, '_addToPosition') ? '\n' + fnSrc(s02, '_addToPosition') : '') + '\nvar S = this.S;', c);

@@ -96,12 +96,10 @@ function _abChg24(pair, ps) {
   return { v: Number(ps.pnl24h) || 0, real: false };
 }
 // P&L en direct d'une position (exposition × variation ; perte bornée à la mise propre, comme closePosition)
+// [GO LEVIER · 18/10/2026] une seule formule pour tout le système : 02 _posLatent (même calcul que closePosition, % borné à [−100, +500] pour le $)
 function _abPosPnl(pos, px) {
-  const e = Number(pos.entryPrice); px = Number(px);
-  if (!(e > 0) || !(px > 0)) return { pct: 0, usd: 0 };
-  const pct = (pos.side === 'long' ? (px - e) / e : (e - px) / e) * 100;
-  const exp = Number(pos.totalExposure) || Number(pos.stakeUsdt) || 0;
-  return { pct: pct, usd: Math.max(-(Number(pos.stakeUsdt) || 0), exp * pct / 100) };
+  const lt = _posLatent(pos, px);
+  return { pct: lt.pct, usd: lt.usd };
 }
 let _abSlowTurn = 0;
 function updateActionBricks() {

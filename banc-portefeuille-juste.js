@@ -53,7 +53,8 @@ function world(o) {
   c.window = c; vm.createContext(c);
   // sur un code qui n'a pas encore _computePortfolioSans / _modeBehind (avant le 10/10), on les laisse absents : J1 et J4 tombent, et J2/J3 montrent le vrai défaut
   const opt = n => { try { return fnSrc(s02, n); } catch (e) { return '/* ' + n + ' absent */'; } };
-  vm.runInContext([fnSrc(s02, '_computePortfolio'), opt('_computePortfolioSans'), opt('_modeBehind'), fnSrc(s02, '_walletKey'), fnSrc(s02, 'closePosition')].join('\n'), c);
+  // [GO LEVIER · 18/10/2026] closePosition lit la part de l'emprunt versée en argent (_posLevCash) et la rend sur le trading (_repayCashDebt)
+  vm.runInContext([fnSrc(s02, '_computePortfolio'), opt('_computePortfolioSans'), opt('_modeBehind'), fnSrc(s02, '_walletKey'), opt('_posLevCash'), opt('_repayCashDebt'), opt('_levCashDebt'), opt('_levNormAuto'), fnSrc(s02, 'closePosition')].join('\n'), c);
   return { c, S, A, B, seen, run: code => vm.runInContext(code, c) };
 }
 const truth = S => (S.cashAccount || 0) + (S.tradingAccount || 0) + S.openPositions.reduce((a, p) => a + p.stakeUsdt, 0);

@@ -798,17 +798,17 @@ function updateManualSuggestion(pair, pairKey) {
     : 'Signal oppose votre '+posDir+' → '+signal;
 
   // Live P&L
-  const pnlPct = pos.side==='long'
-    ? ((ps.price - pos.entryPrice)/pos.entryPrice*100)
-    : ((pos.entryPrice - ps.price)/pos.entryPrice*100);
-  const pnlUsd = pos.stakeUsdt * (pnlPct/100);
+  // [GO LEVIER · 18/10/2026] (ETAT n° 29) résultat et frais comme closePosition les réaliserait (02 _posLatent, _posCloseFees : sur l'EXPOSITION) — avant
+  // sur la mise ; le funding (3 périodes, comme avant) reste sur la mise : c'est sur elle que applyFundingFees le prélève. Sans levier, mêmes nombres.
+  const _lt    = _posLatent(pos, ps.price);
+  const pnlPct = _lt.pct;
+  const pnlUsd = _lt.usd;
   const pnlCol = pnlPct >= 0 ? 'var(--up)' : 'var(--down)';
 
   // Fee context
   const fc     = S.feeConfig;
   const reg    = S.taxConfig.regions[S.taxConfig.region];
-  const feePct = (fc.takerRate + fc.slippage) * 2 + fc.fundingRate * 3;
-  const fees   = pos.stakeUsdt * feePct;
+  const fees   = _posCloseFees(pos, pnlPct).total + pos.stakeUsdt * fc.fundingRate * 3;
   const taxPct = (reg?.inclusion||0)*(reg?.rate||0);
   const tax    = pnlUsd > fees ? (pnlUsd - fees) * taxPct : 0;
   const netPnl = pnlUsd - fees - tax;
@@ -2846,10 +2846,9 @@ function computeWhatIfScenarios() {
       const idx = candles.length - 1 - offset;
       if(idx < 0) return null;
       const priceAt = candles[idx].c;
-      const pct = pos.side === 'long'
-        ? ((priceAt - pos.entryPrice) / pos.entryPrice * 100)
-        : ((pos.entryPrice - priceAt) / pos.entryPrice * 100);
-      return { pnlPct: pct, pnlUsd: pos.stakeUsdt * pct/100 };
+      // [GO LEVIER · 18/10/2026] (ETAT n° 29) ce que closePosition aurait réalisé à ce prix (02 _posLatent : exposition, perte bornée à la mise) — avant sur la mise
+      const _lt = _posLatent(pos, priceAt);
+      return { pnlPct: _lt.pct, pnlUsd: _lt.usd };
     };
     out.positions.push({
       id: pos.id, pair: pos.pair, side: pos.side,
@@ -5656,7 +5655,7 @@ function _executeAccountReset(accId) {
       S._autoLevBase = 0;
       S._orphanDebtSince = 0;
       // Nettoyer aussi levBorrowed sur les positions ouvertes (cohérence)
-      (S.openPositions || []).forEach(p => { p.levBorrowed = 0; });
+      (S.openPositions || []).forEach(p => { p.levBorrowed = 0; p._levCash = 0; });   // [GO LEVIER · 18/10/2026] _levCash avec : rien à rendre sur le trading à la fermeture
       // Resync la réserve levier
       if (typeof syncLeverageReserve === 'function') syncLeverageReserve();
       msg = 'Dette levier remise à 0 (positions nettoyées)';

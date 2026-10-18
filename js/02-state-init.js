@@ -51,32 +51,30 @@
 // ce reste net tombe au niveau du coussin de securite, on solde AVANT que le
 // compte ne puisse passer sous zero — on ne descend jamais en negatif parce
 // qu'on ferme pendant qu'il reste de quoi payer.
+// [GO LEVIER · 18/10/2026] (ETAT n° 29) Le reste net se mesure comme closePosition le réaliserait : chaque position vaut sa mise + son résultat
+// sur l'EXPOSITION (perte bornée à la mise), les frais dus sont l'aller-retour que recordFees prendra (sur l'exposition, couvert d'abord par la
+// réserve anti-négatif), et la dette retranchée est celle versée en ARGENT (au trading ou comme mise) — la part « exposition » d'une position
+// (02 borrowLeverage) est rendue par la position elle-même à sa fermeture. Avant : résultat et frais sur la MISE, et TOUTE la dette retranchée
+// d'une valeur où la part « exposition » n'était pas comptée : avec un levier ×3 (mise 30, exposition 90, compte trading vide) le reste net
+// tombait sous zéro dès l'ouverture et tout était soldé. Ne tourne que s'il y a une dette (02 _leverageMarginCheck) : sans levier, rien ne change.
 function _leverageSolvency() {
-  var out = { equity: 0, debt: 0, fees: 0, tax: 0, net: 0, hasLev: false };
+  var out = { equity: 0, debt: 0, debtTotal: 0, fees: 0, tax: 0, net: 0, hasLev: false };
   try {
-    var feeConf  = S.feeConfig || {};
-    var feeRate  = (feeConf.takerRate || 0.001) + (feeConf.slippage || 0.0005);
     var taxReg   = (S.taxConfig && S.taxConfig.regions && S.taxConfig.regions[S.taxConfig.region]) || null;
     var taxRate  = taxReg ? ((taxReg.inclusion || 0) * (taxReg.rate || 0)) : 0;
-    var debt = Number(S.leverageBorrowed || 0);
-    out.debt   = debt;
-    out.hasLev = debt > 0;
+    var debtTotal = Number(S.leverageBorrowed || 0);
     var liq = 0, fees = 0, gains = 0;
     (S.openPositions || []).forEach(function(pos){
-      var stake = Number(pos.stakeUsdt) || 0;
-      var entry = Number(pos.entryPrice) || 0;
-      var ps    = S.pairStates && S.pairStates[pos.pair];
-      var px    = ps ? Number(ps.price) : 0;
-      var pnl   = 0;
-      if (entry > 0 && px > 0) {
-        var sd = String(pos.side || '').toLowerCase();
-        var isLong = sd.indexOf('long') === 0 || sd === 'buy';
-        pnl = stake * ((isLong ? (px - entry) : (entry - px)) / entry);
-      }
-      liq  += stake + pnl;          // valeur de liquidation immediate
-      fees += stake * feeRate;      // frais de sortie
-      if (pnl > 0) gains += pnl;    // seuls les gains sont imposes
+      var ps = S.pairStates && S.pairStates[pos.pair], px = ps ? Number(ps.price) : NaN;
+      var lt = _posLatent(pos, px > 0 ? px : NaN);           // prix absent ou nul : la position compte pour sa mise (comme avant)
+      liq  += lt.val;                                   // mise + résultat réalisable (valeur de liquidation immédiate)
+      fees += _posCloseFees(pos, lt.pct).total;         // aller-retour que recordFees prendra
+      if (lt.usd > 0) gains += lt.usd;                  // seuls les gains sont imposés
     });
+    var debt = _levCashDebt(S, null);                   // la part « exposition » est rendue par la position elle-même
+    out.debtTotal = debtTotal;
+    out.debt   = debt;
+    out.hasLev = debtTotal > 0;
     out.equity = (S.tradingAccount || 0) + liq;
     out.fees   = fees;
     out.tax    = gains * taxRate;
@@ -92,16 +90,16 @@ function _forceCloseAllForSolvency(reason) {
     ids.forEach(function(id){
       try { closePosition(id, false); } catch(e) {}
     });
-    var debt = Number(S.leverageBorrowed || 0);
-    if (debt > 0 && typeof repayLeverage === 'function') {
-      try { repayLeverage(Math.min(debt, S.tradingAccount || 0)); } catch(e) {}
-    }
+    // [GO LEVIER · 18/10/2026] (ETAT n° 25) la dette qui reste (index du levier, reste d'une fermeture) a été versée en ARGENT au trading : elle
+    // est rendue au prêteur SUR le trading. Avant : repayLeverage effaçait la dette sans rien prendre — l'emprunt devenait de l'argent.
+    var _rc = { paid: 0, left: 0 };
+    try { _rc = _repayCashDebt(_levFreeDebt()); } catch(e) {}
     // le compte ne descend jamais sous zero
     if ((S.tradingAccount || 0) < 0) S.tradingAccount = 0;
     if (typeof S.leverage !== 'undefined') S.leverage = 0;
     try {
       if (S.chainLog) {
-        S.chainLog.push({ icon:'\uD83D\uDED1', desc:'Cl\u00f4ture de solvabilit\u00e9 \u00b7 ' + reason + ' \u2014 positions sold\u00e9es, frais et imp\u00f4ts r\u00e9gl\u00e9s, levier restitu\u00e9', hash: Math.random().toString(36).slice(2,8), time: new Date().toLocaleTimeString() });
+        S.chainLog.push({ icon:'\uD83D\uDED1', desc:'Cl\u00f4ture de solvabilit\u00e9 \u00b7 ' + reason + ' \u2014 ' + ids.length + ' position(s) sold\u00e9e(s), frais et imp\u00f4ts r\u00e9gl\u00e9s, levier rendu au pr\u00eateur' + (_rc.paid > 0.005 ? ' (' + _rc.paid.toFixed(2) + ' $ pris au trading)' : '') + (_rc.left > 0.005 ? ' \u00b7 reste d\u00fb ' + _rc.left.toFixed(2) + ' $' : ''), hash: Math.random().toString(36).slice(2,8), time: new Date().toLocaleTimeString() });
         if (S.chainLog.length > 100) S.chainLog.splice(0, S.chainLog.length - 100);
       }
     } catch(e) {}
@@ -115,6 +113,10 @@ window._leverageMarginCheck = function _leverageMarginCheck() {
   try {
     // sortie immediate sans dette : le controle ne coute rien au flux de prix
     if (!S || !(Number(S.leverageBorrowed || 0) > 0)) return;
+    // [GO LEVIER · 18/10/2026] rien à solder sans position ouverte : ce contrôle ferme des positions AVANT que le compte passe sous zéro. Une dette
+    // sans position (index du levier) se rend au transfert vers la caisse ou à la baisse du levier. Avant : une dette restée sans position (et le
+    // trading à 0) relançait une « clôture » vide — journal, toast et sauvegarde — à CHAQUE prix reçu (relecture adverse du 18/10).
+    if (!((S.openPositions || []).length)) return;
     // anti-reentrance : la cloture ferme des positions, ce qui peut relancer
     // des mises a jour de prix — on ne veut pas la declencher deux fois.
     if (window._solvencyClosing) return;
@@ -159,6 +161,14 @@ function _computePortfolio(w) {
   return (o.cashAccount || 0) + (o.tradingAccount || 0) + eng;
 }
 window._computePortfolio = _computePortfolio;
+// [GO LEVIER · 18/10/2026] La dette versée en argent d'un portefeuille (o) : dette totale moins la part « exposition » des positions ouvertes (sans
+// exceptPos). Retranchée par la solvabilité, le « net en poche » (07), le Bunker (07) et le mode vacances (06). PAS par le portefeuille canonique
+// ci-dessus, qui compte encore l'argent emprunté : la décision le lit (plafond de mise 5 %, gardien de risque) — registre, porte TALENT d'abord.
+function _levCashDebt(o, exceptPos) {
+  const expo = (o.openPositions || []).reduce((a, p) => a + ((p && p !== exceptPos) ? Math.max(0, (Number(p.levBorrowed) || 0) - _posLevCash(p)) : 0), 0);
+  return Math.max(0, (Number(o.leverageBorrowed) || 0) - expo);
+}
+window._levCashDebt = _levCashDebt;
 // [PORTEFEUILLE JUSTE · 10/10/2026] Le même, SANS une position en cours de fermeture. closePosition rend la mise au trading, règle les frais, partage le gain,
 // et ne retire la position de S.openPositions qu'à la toute fin (les juges ont besoin d'elle entre-temps) : pendant ce temps _computePortfolio() comptait sa
 // mise DEUX fois — rendue au trading ET encore « engagée ». Ce portefeuille gonflé d'une mise était écrit dans S.portfolio, poussé sur la courbe, lu par les
@@ -4436,8 +4446,10 @@ function borrowLeverage(amount, pair) {
   if(available < 10) return 0;
   S.leverageReserve  -= available;
   S.leverageBorrowed += available;
-  // v7.12 · P10 · Tracker aussi dans _autoLevBorrowed pour que P4/P5 le voient
-  S._autoLevBorrowed = (S._autoLevBorrowed || 0) + available;
+  // [GO LEVIER · 18/10/2026] la part « exposition » n'entre plus dans _autoLevBorrowed, qui ne compte désormais que la dette versée en ARGENT (index,
+  // JIT, mise de la réserve) : c'est elle que la baisse ou l'arrêt du levier rend sur le trading (applyAutoLeverageBorrow). Avant : un bonus de 60 $
+  // y était compté — baisser le levier en prenait 60 $ au trading, et la position les rendait encore à sa fermeture (−20 $ perdus, relecture du 18/10).
+  // Un refus d'ouverture après l'emprunt laissait aussi ce suivi gonflé (repayLeverage ne le touchait pas). P4 / P5, pour qui il était tenu, n'ont aucun appelant.
   S.chainLog.push({
     icon:'\u26A1',
     desc:`Levier emprunte +${fmt$(available)} pour ${pair} - Taux: ${(S.leverageBorrowRate*100).toFixed(3)}%/cycle`,
@@ -4446,6 +4458,9 @@ function borrowLeverage(amount, pair) {
   return available;
 }
 
+// repayLeverage rend au compteur une dette dont l'argent n'est JAMAIS entré dans le trading : la part « exposition » d'une position (borrowLeverage :
+// l'exposition dépasse la mise, la position la rend elle-même à sa fermeture) ou un emprunt annulé avant l'ouverture. Pour une dette versée en
+// ARGENT (au trading, ou comme mise), c'est _repayCashDebt.
 function repayLeverage(amount) {
   if(amount <= 0) return;
   const repaid = Math.min(S.leverageBorrowed, amount);
@@ -4455,37 +4470,78 @@ function repayLeverage(amount) {
   S.leverageReserve = Math.min(maxReserve, S.leverageReserve);
 }
 
+// [GO LEVIER · 18/10/2026] (ETAT n° 25) Trois emprunts versent de l'ARGENT : l'emprunt « juste à temps » quand la mise dépasse le trading
+// (ensureLeverageCoverForTrade → trading), la mise empruntée du bot quand le trading est presque vide (09c, la mise vient de la réserve) et
+// l'index du levier (applyAutoLeverageBorrow → trading). Les deux premiers étaient effacés à la fermeture par repayLeverage, sans rien reprendre :
+// mise 50 $ avec 20 $ au trading, fermée au prix d'entrée → 50 $ au trading et plus aucune dette (+30 $ venus de nulle part). Le troisième, de
+// même, à la restitution du transfert trading → caisse et à la clôture de solvabilité. Ici la dette est rendue au prêteur SUR le trading ;
+// ce que le trading ne couvre pas reste dû (compteurs gardés), jamais effacé. Retour : { paid, left } (left = ce qui reste dû de la demande).
+function _repayCashDebt(amount) {
+  const want = Math.max(0, Number(amount) || 0);
+  const pay  = Math.min(want, Math.max(0, Number(S.tradingAccount) || 0), Math.max(0, Number(S.leverageBorrowed) || 0));
+  if (pay > 0) {
+    S.tradingAccount   = Math.max(0, (S.tradingAccount || 0) - pay);
+    S.leverageBorrowed = Math.max(0, (S.leverageBorrowed || 0) - pay);
+    S._autoLevBorrowed = Math.max(0, (S._autoLevBorrowed || 0) - pay);
+  }
+  return { paid: pay, left: Math.min(Math.max(0, want - pay), Math.max(0, Number(S.leverageBorrowed) || 0)) };
+}
+// _autoLevBorrowed (dette versée en argent) ≤ la dette totale moins la part « exposition » des positions encore ouvertes (exceptPos : celle qu'on ferme)
+function _levNormAuto(exceptPos) {
+  const cap = _levCashDebt(S, exceptPos);
+  if ((Number(S._autoLevBorrowed) || 0) > cap) S._autoLevBorrowed = cap;
+}
+// La dette qu'aucune position ouverte ne porte : l'index du levier et ce qu'une fermeture n'a pas pu rendre. Tout son argent a été versé au trading.
+function _levFreeDebt() {
+  const att = (S.openPositions || []).reduce((s, p) => s + Math.max(0, Number(p && p.levBorrowed) || 0), 0);
+  return Math.max(0, (Number(S.leverageBorrowed) || 0) - att);
+}
+// La part de l'emprunt d'une position versée en ARGENT (au trading, ou comme mise) — le reste de pos.levBorrowed est la part « exposition ».
+// Posée à l'ouverture (02 openPosition, 09c) ; pour une position ouverte avant le 18/10 : ce que l'emprunt dépasse de l'exposition ajoutée à la mise.
+function _posLevCash(pos) {
+  const tot = Math.max(0, Number(pos && pos.levBorrowed) || 0);
+  if (!(tot > 0)) return 0;
+  if (pos._levCash !== undefined && pos._levCash !== null && isFinite(Number(pos._levCash))) return Math.min(tot, Math.max(0, Number(pos._levCash)));
+  const stake = Number(pos.stakeUsdt) || 0, expo = Number(pos.totalExposure) || stake;
+  return Math.min(tot, Math.max(0, tot - Math.max(0, expo - stake)));
+}
+
 // ── v7.1 PHASE 3 · Restitution du levier au moment d'un transfert trading→caisse ──
 // Spec utilisateur: "restituer la somme empruntée au compte levier / index levier défaut x1
 // à chaque recommencement du processus / réévaluer réserve sur trading disponible"
 // Conservateur: ne rembourse que le levier LIBRE (non engagé dans des positions ouvertes).
 // Les positions ouvertes gardent leur pos.levBorrowed jusqu'à leur clôture naturelle.
+// [GO LEVIER · 18/10/2026] (ETAT n° 25) la dette « libre » (index du levier, reste d'une fermeture) a été versée au trading : elle est rendue au
+// prêteur SUR le trading (_repayCashDebt) ; ce que le trading ne couvre pas reste dû. Avant : effacée par repayLeverage sans rien prendre — levier ×1
+// sur 100 $ (trading 200 $, dette 100 $), puis un transfert de 50 $ vers la caisse : 150 $ au trading, 50 $ en caisse, plus aucune dette (+100 $).
 function restoreLeverageAtCashout() {
   const committed = (S.openPositions || []).reduce((s,p) => s + (p.levBorrowed || 0), 0);
   const free      = Math.max(0, (S.leverageBorrowed || 0) - committed);
+  let _rc = { paid: 0, left: 0 };
   if(free > 0) {
-    repayLeverage(free);
+    _rc = _repayCashDebt(free);
     S.chainLog.push({
       icon: '\u21A9',  // ↩
-      desc: `Levier libre restitué: ${fmt$(free)} (engagé sur positions: ${fmt$(committed)})`,
+      desc: `Levier libre rendu au prêteur : ${fmt$(_rc.paid)} pris au trading${_rc.left > 0.005 ? ' · reste dû ' + fmt$(_rc.left) : ''} (engagé sur positions : ${fmt$(committed)})`,
       hash: rndHash(), time: nowStr()
     });
   }
   // v7.5 · Reset index levier à 0 (désactivé) au recommencement, conforme au défaut
   const _prevLev = S.leverage || 0;
   S.leverage = 0;
-  if(typeof S.leverageMaxMult !== 'undefined') {
-    // leverageMaxMult reste le plafond (10×), seul l'index actif revient à 1
-  }
   // Réévaluer la réserve sur le trading disponible courant
   if(typeof syncLeverageReserve === 'function') syncLeverageReserve();
-  return { freeRepaid: free, committed, prevLev: _prevLev };
+  return { freeRepaid: _rc.paid, left: _rc.left, committed, prevLev: _prevLev };
 }
 
 function applyLeverageBorrowFees() {
   if(S.leverageBorrowed <= 0) return;
-  const fee = S.leverageBorrowed * S.leverageBorrowRate;
-  if(fee <= 0) return;
+  const fee0 = S.leverageBorrowed * S.leverageBorrowRate;
+  if(fee0 <= 0) return;
+  // [GO LEVIER · 18/10/2026] l'intérêt pris au trading ne dépasse pas le trading ; ce qu'il ne couvre pas s'ajoute à la dette (en argent). Avant : le
+  // trading était borné à 0 mais la réserve recevait l'intérêt entier (de l'argent créé). Taux à 0 par défaut : inactif aujourd'hui.
+  const fee = Math.min(fee0, Math.max(0, Number(S.tradingAccount) || 0));
+  if (fee0 > fee) { S.leverageBorrowed = (S.leverageBorrowed || 0) + (fee0 - fee); S._autoLevBorrowed = (S._autoLevBorrowed || 0) + (fee0 - fee); }
   S.tradingAccount    = Math.max(0, S.tradingAccount - fee);
   S.leverageTotalFees = (S.leverageTotalFees || 0) + fee;
   S.fees.totalFunding = (S.fees.totalFunding || 0) + fee;
@@ -5925,21 +5981,53 @@ function rndHash(){ let h='0x'; for(let i=0;i<10;i++) h+='0123456789abcdef'[Math
 // ============================================================
 // OPEN POSITIONS — render
 // ============================================================
+// [GO LEVIER · 18/10/2026] (ETAT n° 29) LA mesure d'une position ouverte : ce que closePosition réaliserait au prix px — même formule, même ordre
+// des calculs (% borné à [−100, +500], résultat sur l'EXPOSITION, perte bornée à la mise). pct = variation brute du prix (non bornée, affichée),
+// usd = résultat réalisable, val = ce que la position rendrait au trading avant frais (mise + usd). Avant, chaque écran avait sa formule :
+// le P&L latent (pos.pnlUsdt, lu par le garde-fou de tes consignes 09e, le Bunker, les cartes) était tantôt sur la MISE (10f, 07), tantôt sur
+// l'exposition sans borne (02, 07, 08), et la « valeur » comptait l'argent emprunté. Sans levier (exposition = mise), mêmes nombres qu'avant.
+function _posLatent(pos, px) {
+  const stake = Number(pos && pos.stakeUsdt) || 0;
+  const expo  = Number(pos && pos.totalExposure) || stake;
+  const e = Number(pos && pos.entryPrice), p = Number(px);
+  // un prix à 0 se mesure comme closePosition le réaliserait (−100 % en LONG) ; prix absent, négatif ou illisible : aucune mesure (valeur = la mise)
+  if (!(e > 0) || !isFinite(p) || p < 0) return { pct: 0, usd: 0, val: stake, stake: stake, expo: expo };
+  const pct = pos.side === 'long' ? ((p - e) / e) * 100 : ((e - p) / e) * 100;
+  const usd = Math.max(-stake, expo * (Math.max(-100, Math.min(500, pct)) / 100));
+  return { pct: pct, usd: usd, val: stake + usd, stake: stake, expo: expo };
+}
+window._posLatent = _posLatent;
+// Les frais que recordFees prendrait si la position fermait maintenant à pct % : aller-retour sur l'EXPOSITION (entrée taker, sortie maker ou taker
+// comme closePosition la choisit, glissement des deux côtés). Le funding, lui, est prélevé pendant la tenue (applyFundingFees, sur la mise).
+function _posCloseFees(pos, pct) {
+  const fc = S.feeConfig || {};
+  const n  = Number(pos && pos.totalExposure) || Number(pos && pos.stakeUsdt) || 0;
+  const rp = Math.max(-100, Math.min(500, Number(pct) || 0));
+  const exitMaker = !!(pos && pos.auto && rp > 0.3);
+  const tradingFee = n * (Number(fc.takerRate) || 0) + n * (exitMaker ? (Number(fc.makerRate) || 0) : (Number(fc.takerRate) || 0));
+  const slipFee    = n * (Number(fc.slippage) || 0) * 2;
+  return { tradingFee: tradingFee, slipFee: slipFee, total: tradingFee + slipFee };
+}
+window._posCloseFees = _posCloseFees;
+// Écrit sur la position son P&L latent (pos.pnl %, pos.pnlUsdt, pos.currentVal) par _posLatent — un seul calcul pour tous les écrans et gardes.
+function _posMark(pos, px) {
+  const lt = _posLatent(pos, px);
+  pos.pnl = lt.pct; pos.pnlUsdt = lt.usd; pos.currentVal = lt.val;
+  return lt;
+}
+window._posMark = _posMark;
+
 function renderPositions() {
   // Les positions s'affichent inline sous chaque carte d'action (renderInlinePosForPair)
   // Cette fonction met à jour uniquement le compteur global
   const countEl = document.getElementById('posCount');
 
   // Update unrealised PnL + USDT value for all positions — sur exposition totale
+  // [GO LEVIER · 18/10/2026] par _posMark (02) : la valeur est mise + résultat réalisable (avant : exposition + résultat, l'emprunt compté)
   S.openPositions.forEach(pos => {
     const ps = S.pairStates[pos.pair];
     if(!ps) return;
-    const exp     = pos.totalExposure || pos.stakeUsdt;
-    pos.pnl       = pos.side==='long'
-      ? ((ps.price - pos.entryPrice) / pos.entryPrice) * 100
-      : ((pos.entryPrice - ps.price) / pos.entryPrice) * 100;
-    pos.pnlUsdt   = exp * (pos.pnl/100);
-    pos.currentVal= exp + pos.pnlUsdt;
+    _posMark(pos, ps.price);
   });
 
   if(countEl) countEl.textContent = S.openPositions.length + ' POSITIONS';
@@ -6083,6 +6171,15 @@ function openPosition(pair, side, opts) {
     _jitBorrowedManual = Math.max(_jitBorrowedManual, S._pendingPositionBorrow);
     S._pendingPositionBorrow = 0;
   }
+  // [GO LEVIER · 18/10/2026] (ETAT n° 25) la mise ne dépasse jamais ce que le trading tient VRAIMENT (emprunt « juste à temps » compris) : le débit
+  // ci-dessous était borné à zéro — une mise de 124 $ avec 73 $ au trading (levier ×0 : le contrôle de capital laisse passer jusqu'au double du
+  // disponible ; levier ×1+ : emprunt JIT plafonné) ouvrait 124 $ et créait les 51 $ manquants. Refus dit ; les emprunts de cette ouverture sont rendus.
+  if (stakeUsdt > (S.tradingAccount || 0) + 1e-9) {
+    if (_jitBorrowedManual > 0) _repayCashDebt(_jitBorrowedManual);
+    if (levBorrowed > 0) repayLeverage(levBorrowed);
+    showToast('⚠ ' + pair + ' : mise ' + fmt$2(stakeUsdt) + ' > trading ' + fmt$2(S.tradingAccount || 0) + ((S.leverage || 0) >= 1 ? ' (emprunt du levier insuffisant)' : ' (levier ×0)') + ' · rien ouvert', 3500, 'critical');
+    return null;
+  }
 
   // Déduire la mise propre du compte trading
   S.tradingAccount = Math.max(0, S.tradingAccount - stakeUsdt);
@@ -6110,12 +6207,13 @@ function openPosition(pair, side, opts) {
     amount:       parseFloat(amount),
     stakeUsdt,
     levBorrowed: (levBorrowed || 0) + _jitBorrowedManual,  // v7.12 · P7 · inclure JIT
+    _levCash:    _jitBorrowedManual,                        // [GO LEVIER · 18/10/2026] part versée en ARGENT au trading (JIT) : rendue sur le trading à la fermeture
     totalExposure,
     entryTime:    nowStr(),
     entryTs:      Date.now(),
     _fxIn:        ((Number(S._usdEurLastFetch) > 0 && Number(S.usdEurRate) > 0) ? Number(S.usdEurRate) : null),   // [GO FISCAL · 07/10/2026] cours USD→EUR reçu, à l'achat (16)
     pnl:          0, pnlUsdt: 0,
-    currentVal:   totalExposure,
+    currentVal:   stakeUsdt,   // [GO LEVIER · 18/10/2026] ce que la position rendrait au trading (02 _posMark) — avant : l'exposition, l'emprunt compté
     auto:         false,
     tp:           _tp,
     sl:           _sl,
@@ -6449,15 +6547,15 @@ function closePosition(id, botClose = false) {
     const netPnl    = realisedUsd;
 
     // Rembourser le levier emprunté AVANT de créditer le trading
-    if(pos.levBorrowed && pos.levBorrowed > 0) {
-      repayLeverage(pos.levBorrowed);
+    // [GO LEVIER · 18/10/2026] (ETAT n° 25) SEULE la part « exposition » (borrowLeverage : l'exposition dépasse la mise) est rendue ici au compteur :
+    // son argent n'est jamais entré au trading, la position la rend elle-même (le compte ne reçoit que la mise + le résultat). La part versée en
+    // ARGENT (JIT, mise empruntée de 09c : _posLevCash) est rendue SUR le trading plus bas, après les frais. Avant : tout pos.levBorrowed était effacé
+    // ici — l'argent emprunté restait au trading. Sans part en argent, ce bloc est celui d'avant.
+    const _levCash = _posLevCash(pos), _levExpo = Math.max(0, (Number(pos.levBorrowed) || 0) - _levCash);
+    if(_levExpo > 0) {
+      repayLeverage(_levExpo);
       // Les frais d'emprunt ont déjà été prélevés cycle par cycle
-      // v7.12 · P8 · Rembourser aussi le tracking _autoLevBorrowed
-      // (car pos.levBorrowed peut inclure du JIT borrow tracké dans _autoLevBorrowed)
-      if ((S._autoLevBorrowed || 0) > 0) {
-        const autoRepay = Math.min(pos.levBorrowed, S._autoLevBorrowed);
-        S._autoLevBorrowed = Math.max(0, S._autoLevBorrowed - autoRepay);
-      }
+      // (_autoLevBorrowed ne compte plus la part « exposition » : 02 borrowLeverage)
     }
 
     // ═══ v7.12 · PROTECTION P2 · Auto-remboursement dette orpheline ═══
@@ -6492,6 +6590,14 @@ function closePosition(id, botClose = false) {
     // ils étaient sous-comptés d'un facteur N (ETAT n° 21). Sans levier, exposition = mise : rien ne change.
     if (_urg) pos._urgence = true;   // lu par recordFees : ni journal des frais lu par la décision, ni cumul de l'estimateur fiscal de la décision
     const _rf = recordFees(pos.pair, totalExp, realisedUsd, exitType, pos._reservedAmount, pos, cur) || {};
+    // [GO LEVIER · 18/10/2026] (ETAT n° 25) l'emprunt versé en ARGENT pour cette mise est rendu au prêteur SUR le trading, après les frais (un frais
+    // non couvert disparaîtrait, une dette non couverte reste due) et avant le partage caisse / trading (la caisse ne prend que le gain, pas le capital
+    // emprunté). Ce que le trading ne couvre pas reste dû : compteurs gardés, dit au journal (le trading, lui, ne passe jamais sous zéro).
+    if (_levCash > 0) {
+      const _rc = _repayCashDebt(_levCash);
+      S.chainLog.push({ icon: '\u21A9', desc: `Levier ${pos.pair} · ${fmt$2(_rc.paid)} empruntés pour la mise rendus au prêteur (pris au trading)${_rc.left > 0.005 ? ' · reste dû ' + fmt$2(_rc.left) : ''}`, hash: rndHash(), time: nowStr() });
+      if (S.chainLog.length > 100) S.chainLog.splice(0, S.chainLog.length - 100);
+    }
     if (netPnl > 0) {
       const _taxAmount = Number(_rf.taxAmount) || 0;
       const _trulyNet = Math.max(0, netPnl - (Number(_rf.totalFee) || 0) - _taxAmount);
@@ -6525,7 +6631,11 @@ function closePosition(id, botClose = false) {
 
     // ═══ v7.12 · PROTECTION P2 · Appliquer le remboursement dette orpheline ═══
     if (pos._p2RepayPending && pos._p2RepayPending > 0) {
-      const repay = Math.min(pos._p2RepayPending, S.tradingAccount || 0, S._autoLevBorrowed || 0);
+      // [GO LEVIER · 18/10/2026] seulement la dette qu'aucune AUTRE position ouverte ne porte (celle de cette position est déjà réglée plus haut) :
+      // avant, _autoLevBorrowed comptait aussi la part « exposition » d'autres positions ouvertes — payée ici sur le trading, puis rendue encore par
+      // ces positions à leur fermeture (de l'argent perdu). Possible après une restitution au transfert (index à ×0, positions à levier ouvertes).
+      const _freeP2 = Math.max(0, (Number(S.leverageBorrowed) || 0) - (S.openPositions || []).reduce((s2, p2) => s2 + (p2 === pos ? 0 : Math.max(0, Number(p2 && p2.levBorrowed) || 0)), 0));
+      const repay = Math.min(pos._p2RepayPending, S.tradingAccount || 0, S._autoLevBorrowed || 0, _freeP2);
       if (repay > 0) {
         S.tradingAccount   = Math.max(0, (S.tradingAccount || 0) - repay);
         S.leverageBorrowed = Math.max(0, (S.leverageBorrowed || 0) - repay);
@@ -6540,6 +6650,9 @@ function closePosition(id, botClose = false) {
       }
       delete pos._p2RepayPending;
     }
+    // [GO LEVIER · 18/10/2026] le suivi de la dette en argent ne dépasse jamais la dette en argent (une position ouverte avant le 18/10 y avait mis sa
+    // part « exposition »)
+    _levNormAuto(pos);
 
     syncLeverageReserve();  // recalculer la réserve disponible
     // [MÉNAGE · 23/09/2026] « auto-compound » retiré : il ajoutait 70 % de chaque gain brut à _totalCompounded, que les panneaux
@@ -7178,6 +7291,25 @@ function confirmTransfer() {
     showToast('✅ +' + fmt$(amount) + ' → Trading · Levier mis à jour');
   } else {
     if(amount > S.tradingAccount) { showToast('⚠ Fonds insuffisants en trading', 2800, 'critical'); return; }
+    // [GO LEVIER · 18/10/2026] Avant le transfert, les intérêts du levier sont réglés et la dette « libre » (index) est rendue au prêteur SUR le trading,
+    // l'index revient à ×0 (02 restoreLeverageAtCashout). Tout se vérifie AVANT de toucher à quoi que ce soit, et ce qui change est dit et confirmé
+    // (règle 9) : avant, un transfert refusé APRÈS coup avait déjà remboursé et remis l'index à ×0, sans rien demander.
+    {
+      const _tr = Math.max(0, Number(S.tradingAccount) || 0), _db = Number(S.leverageBorrowed) || 0;
+      const _int0 = _db > 0 ? _db * (Number(S.leverageBorrowRate) || 0) : 0, _int = Math.min(_int0, _tr);
+      const _att = (S.openPositions || []).reduce((a, p) => a + (Number(p && p.levBorrowed) || 0), 0);
+      const _free = Math.max(0, _db + (_int0 - _int) - _att), _rend = Math.min(_free, _tr - _int), _dispo = _tr - _int - _rend;
+      if (amount > _dispo + 1e-9) {
+        showToast('⚠ Transfert non fait : après le remboursement du levier (' + fmt$2(_rend) + ')' + (_int > 0 ? ' et de ses intérêts (' + fmt$2(_int) + ')' : '') + ', il resterait ' + fmt$2(_dispo) + ' au trading', 4000, 'critical');
+        return;
+      }
+      if ((Number(S.leverage) || 0) > 0 || _free > 0) {
+        const _q = 'Transférer ' + fmt$2(amount) + ' vers la caisse :\n— rend d\'abord au prêteur ' + fmt$2(_rend) + ' pris au trading (dette du levier)' + (_int > 0 ? '\n— règle ' + fmt$2(_int) + ' d\'intérêts' : '')
+          + (_free > _rend + 0.005 ? '\n— il restera ' + fmt$2(_free - _rend) + ' dus' : '') + '\n— remet le levier à ×0 (il est à ×' + (Number(S.leverage) || 0) + ')\nContinuer ?';
+        let _ok = false; try { _ok = (typeof confirm === 'function') ? confirm(_q) : false; } catch(e) { _ok = false; }
+        if (!_ok) { showToast('Transfert annulé · rien n\'a changé', 2500, 'warn'); return; }
+      }
+    }
     // v7.1 P2: Règlement des intérêts levier en attente AVANT transfert trading→caisse
     // (les taxes sur gains ont déjà été provisionnées à la clôture de chaque trade)
     const _fiscalBefore = S.fiscalReserveAccount || 0;
@@ -7186,11 +7318,14 @@ function confirmTransfer() {
     }
     const _fiscalJustDeducted = (S.fiscalReserveAccount || 0) - _fiscalBefore;
     // v7.1 P3: Restitution du levier libre + reset index à x1 (spec utilisateur)
-    let _levRestoreInfo = { freeRepaid:0, committed:0, prevLev: S.leverage||1 };
+    let _levRestoreInfo = { freeRepaid:0, left:0, committed:0, prevLev: S.leverage||0 };
     try { _levRestoreInfo = restoreLeverageAtCashout(); } catch(e) {}
     // Revérification après prélèvement intérêts
+    // [GO LEVIER · 18/10/2026] et après le remboursement du levier libre, pris au trading (02 restoreLeverageAtCashout) : il est fait, le transfert non
     if(amount > S.tradingAccount) {
-      showToast('⚠ Solde insuffisant après intérêts levier (' + fmt$(S.tradingAccount) + ' dispo)', 2800, 'critical');
+      showToast('⚠ Solde insuffisant après remboursement du levier et de ses intérêts (' + fmt$(S.tradingAccount) + ' dispo) · transfert non fait', 2800, 'critical');
+      try{renderAll();}catch(e){}
+      try{saveState();}catch(e){}
       return;
     }
     // v7.1: Permettre vidage total trading → caisse même avec positions ouvertes
@@ -7205,8 +7340,9 @@ function confirmTransfer() {
     if(_fiscalJustDeducted > 0) {
       warnMsg += ' · ' + fmt$(_fiscalJustDeducted) + ' → réserve fiscale';
     }
-    if(_levRestoreInfo.freeRepaid > 0 || _levRestoreInfo.prevLev !== 1) {
-      warnMsg += ' · Levier restitué, index reset ×1';
+    // [GO LEVIER · 18/10/2026] l'index revient à ×0 (02 restoreLeverageAtCashout) — l'ancien texte disait « ×1 », et s'affichait à chaque transfert même sans levier
+    if(_levRestoreInfo.freeRepaid > 0 || _levRestoreInfo.prevLev > 0) {
+      warnMsg += ' · Levier rendu au prêteur (' + fmt$(_levRestoreInfo.freeRepaid || 0) + ' pris au trading' + ((_levRestoreInfo.left || 0) > 0.005 ? ', reste dû ' + fmt$(_levRestoreInfo.left) : '') + '), index ×0';
     }
     S.tradingAccount -= amount;
     S.cashAccount    += amount;
@@ -7261,7 +7397,7 @@ function renderClosePositionsList() {
     const pnlPct = pos.side === 'long'
       ? ((cur - pos.entryPrice) / pos.entryPrice) * 100
       : ((pos.entryPrice - cur) / pos.entryPrice) * 100;
-    const pnlUsd = (pos.totalExposure || pos.stakeUsdt) * (pnlPct / 100);
+    const pnlUsd = _posLatent(pos, cur).usd;   // [GO LEVIER · 18/10/2026] (ETAT n° 29) ce que closePosition réaliserait (perte bornée à la mise)
     const pnlCol = pnlUsd >= 0 ? 'var(--up)' : 'var(--down)';
     const sideLabel = pos.side === 'long' ? '↑ LONG' : '↓ SHORT';
     const sideCol = pos.side === 'long' ? 'var(--up)' : 'var(--down)';
@@ -7292,7 +7428,7 @@ function confirmCloseOne(id) {
   const pnlPct = pos.side === 'long'
     ? ((cur - pos.entryPrice) / pos.entryPrice) * 100
     : ((pos.entryPrice - cur) / pos.entryPrice) * 100;
-  const pnlUsd = (pos.totalExposure || pos.stakeUsdt) * (pnlPct / 100);
+  const pnlUsd = _posLatent(pos, cur).usd;   // [GO LEVIER · 18/10/2026] (ETAT n° 29) ce que closePosition réaliserait (perte bornée à la mise)
   // Appeler closePosition — botClose=false donc l'utilisateur peut fermer aussi les positions bot
   closePosition(id, false);
   showToast(`⊗ ${pos.pair} ${pos.side.toUpperCase()} fermé · ${pnlUsd >= 0 ? '+' : ''}${fmt$(pnlUsd)}`, 2800, 'user');
@@ -7311,7 +7447,7 @@ function confirmCloseAll() {
     const pnlPct = pos.side === 'long'
       ? ((cur - pos.entryPrice) / pos.entryPrice) * 100
       : ((pos.entryPrice - cur) / pos.entryPrice) * 100;
-    totalPnl += (pos.totalExposure || pos.stakeUsdt) * (pnlPct / 100);
+    totalPnl += _posLatent(pos, cur).usd;   // [GO LEVIER · 18/10/2026] (ETAT n° 29) ce que closePosition réaliserait
     closePosition(pos.id, false);
   });
   showToast(`⊗ ${positions.length} position(s) fermée(s) · ${totalPnl >= 0 ? '+' : ''}${fmt$(totalPnl)}`, 3500, 'user');

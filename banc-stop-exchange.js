@@ -10,6 +10,8 @@ function T(name, fn) { try { fn(); pass++; console.log('  ✅ ' + name); } catch
 const between = (s, a, b, incl) => { const i = s.indexOf(a); assert.ok(i >= 0, 'ancre début : ' + a.slice(0, 40)); assert.strictEqual(s.indexOf(a, i + 1), -1, 'ancre non unique'); const j = s.indexOf(b, i + a.length); assert.ok(j > i, 'ancre fin'); return s.slice(i, incl ? j + b.length : j); };
 const codeStrict = s => s.split('\n').filter(l => !/^\s*\/\//.test(l)).join('\n');
 const s10f = rd('js/10f-resolveur-cycle.js'), s02 = rd('js/02-state-init.js');
+// [GO LEVIER · 18/10/2026] 10f marque le P&L latent d'une position par 02 _posMark (ce que closePosition réaliserait) : la mesure de 02 entre dans le monde
+const LEV02 = (s => { const i = s.indexOf('function _posLatent(pos, px) {'), j = s.indexOf('window._posMark = _posMark;'); return (i >= 0 && j > i) ? s.slice(i, j) : ''; })(s02);
 function ctxSweep(S, priceAge) {
   const closed = [];
   const ctx = { console, Math, Date, String, Error, isFinite, Number, window: {}, S, _rcPriceAge: () => priceAge,
@@ -17,6 +19,7 @@ function ctxSweep(S, priceAge) {
     learnFromOutcome: () => {}, showToast: () => {} };
   vm.createContext(ctx);
   vm.runInContext(between(s10f, 'function _closeCompleted(pos, label) {', 'window._closeCompleted = _closeCompleted;', true), ctx);
+  vm.runInContext(LEV02, ctx);
   vm.runInContext(between(s10f, 'window._botExitSweep = function _botExitSweep() {', '\nwindow._lossCapSweep = function', false), ctx);
   return { ctx, closed, run: () => vm.runInContext('window._botExitSweep()', ctx) };
 }

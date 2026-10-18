@@ -830,6 +830,16 @@ function autoOpenPosition(pair, side, stakeOverride) {
     } catch (e) {
       console.warn('bot auto-leverage:', e);
     }
+    // [GO LEVIER · 18/10/2026] (ETAT n° 25) la mise ne dépasse jamais ce que le trading tient (emprunt « juste à temps » compris) : le débit était borné
+    // à zéro — un emprunt refusé (P9) ou plafonné laissait ouvrir une mise de 100 $ sur 60 $ (+40 $ créés, relecture du 18/10). Rien n'est ouvert,
+    // les emprunts de cette ouverture sont rendus. C'est de l'argent : la décision d'ouvrir n'est pas touchée (elle a déjà dit oui).
+    if (baseStake > (S.tradingAccount || 0) + 1e-9) {
+      if (_jitBorrowed > 0) { try { _repayCashDebt(_jitBorrowed); } catch(e){ try{window._decErr&&window._decErr(e)}catch(_e){} } S._pendingPositionBorrow = 0; }
+      if (levBorrowed > 0) { try { repayLeverage(levBorrowed); } catch(e){ try{window._decErr&&window._decErr(e)}catch(_e){} } }
+      S.chainLog.push({ icon: '🛡️', desc: `Ouverture ${pair} ${side.toUpperCase()} annulée · mise $${baseStake} > trading $${(S.tradingAccount || 0).toFixed(2)} (emprunt du levier ${(S.leverage || 0) >= 1 ? 'refusé ou plafonné' : 'coupé'})`, hash: rndHash(), time: nowStr() });
+      if (S.chainLog.length > 100) S.chainLog.splice(0, S.chainLog.length - 100);
+      return;
+    }
     S.tradingAccount = Math.max(0, S.tradingAccount - baseStake);
   }
 
@@ -910,13 +920,14 @@ function autoOpenPosition(pair, side, stakeOverride) {
     amount:        parseFloat(amount),
     stakeUsdt:     baseStake,                       // mise propre (sans levier)
     levBorrowed:   (levBorrowed || 0) + _jitBorrowed,
+    _levCash:      _jitBorrowed,                    // [GO LEVIER · 18/10/2026] part versée en ARGENT (JIT au trading, ou mise empruntée à la réserve) : rendue sur le trading à la fermeture (02 closePosition)
     totalExposure: stakeUsdt,                       // exposition totale (stake + levier)
     entryTime:     nowStr(),
     entryTs:       Date.now(),
     _fxIn:         ((Number(S._usdEurLastFetch) > 0 && Number(S.usdEurRate) > 0) ? Number(S.usdEurRate) : null),   // [GO FISCAL · 07/10/2026] cours USD→EUR reçu, à l'achat (16)
     pnl:           0,
     pnlUsdt:       0,
-    currentVal:    stakeUsdt,
+    currentVal:    baseStake,                       // [GO LEVIER · 18/10/2026] ce que la position rendrait au trading (02 _posMark) — avant : l'exposition
     auto:          true,
     tp:            null,
     sl:            null,

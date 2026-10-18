@@ -23,6 +23,8 @@ function P(phase, name) { pend++; console.log('  ⏳ ' + name + '  ← en attent
 const F02 = 'js/02-state-init.js', F08 = 'js/08-learning-history-render.js', F10F = 'js/10f-resolveur-cycle.js',
       F10G = 'js/10g-resolveur-ev-csv.js', F9B2 = 'js/09b2-save-load.js';
 const s02 = rd(F02), s08 = rd(F08), s10f = rd(F10F), s10g = rd(F10G), s9b2 = rd(F9B2), html = rd('AURA8_v118.html');
+// [GO LEVIER · 18/10/2026] 10f marque le P&L latent d'une position par 02 _posMark (ce que closePosition réaliserait) : la mesure de 02 entre dans le monde
+const LEV02 = (s => { const i = s.indexOf('function _posLatent(pos, px) {'), j = s.indexOf('window._posMark = _posMark;'); return (i >= 0 && j > i) ? s.slice(i, j) : ''; })(s02);
 const count = (s, k) => s.split(k).length - 1;
 const codeStrict = s => s.split('\n').filter(l => !/^\s*\/\//.test(l)).map(l => l.replace(/\/\/.*$/, '')).join('\n');
 const between = (s, a, b, what, incl) => {
@@ -196,6 +198,7 @@ function ctxSweep(S) {
     showToast: t => toasts.push(t) };
   vm.createContext(ctx);
   vm.runInContext(between(s10f, 'function _closeCompleted(pos, label) {', 'window._closeCompleted = _closeCompleted;', 'closeCompleted', true), ctx);
+  vm.runInContext(LEV02, ctx);
   vm.runInContext(between(s10f, 'window._botExitSweep = function _botExitSweep() {', '\nwindow._lossCapSweep = function', 'sweep'), ctx);
   return { ctx, closed, learned, toasts, run: () => vm.runInContext('window._botExitSweep()', ctx) };
 }
@@ -241,6 +244,7 @@ T('D11 · _closeCompleted / _botExitSweep RÉELS (hotfix) : closePosition qui l�
       closePosition: (id, bot) => { calls.close++; return closeImpl(S, id); }, learnFromOutcome: () => calls.learn++, showToast: () => {} };
     vm.createContext(ctx);
     vm.runInContext(between(s10f, 'function _closeCompleted(pos, label) {', 'window._closeCompleted = _closeCompleted;', 'closeCompleted', true), ctx);
+    vm.runInContext(LEV02, ctx);
     vm.runInContext(between(s10f, 'window._botExitSweep = function _botExitSweep() {', '\nwindow._lossCapSweep = function', 'sweep'), ctx);
     return { ctx, calls, S, run: () => vm.runInContext('window._botExitSweep()', ctx) };
   };

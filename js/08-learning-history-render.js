@@ -1483,7 +1483,9 @@ function openPosEdit(posId) {
   if(!cfg || !ps) return;
 
   const fmt = v => cfg.dec>=4 ? parseFloat(v).toFixed(cfg.dec) : Math.floor(v).toLocaleString();
-  const fmtInput = v => cfg.dec>=4 ? parseFloat(v).toFixed(cfg.dec) : Math.floor(v);
+  // [GO LEVIER · 18/10/2026] les champs reçoivent la valeur EXACTE : tronquée (Math.floor pour les paires à 0–2 décimales), elle était réécrite sur la
+  // position au premier « ✓ Appliquer » — DOT à 6,80 : entrée 6 → +4 $ créés en changeant seulement le TP (relecture du 18/10)
+  const fmtInput = v => String(Number(v));
 
   // TP/SL distance hints
   const curPrice = ps.price;
@@ -1501,6 +1503,7 @@ function openPosEdit(posId) {
 
   document.getElementById('peModalTitle').textContent  = pos.pair+' — '+pos.side.toUpperCase();
   document.getElementById('peEntryInput').value        = fmtInput(pos.entryPrice);
+  try { document.getElementById('peEntryInput').readOnly = true; } catch(e) {}   // [GO LEVIER · 18/10/2026] le prix d'entrée est celui de l'achat : il se lit, il ne s'écrit pas
   document.getElementById('peTpInput').value           = pos.tp  ? fmtInput(pos.tp)  : '';
   document.getElementById('peSlInput').value           = pos.sl  ? fmtInput(pos.sl)  : '';
   document.getElementById('peStakeInput').value        = pos.stakeUsdt;
@@ -1535,9 +1538,11 @@ function applyPosEdit() {
 
   let changed = [];
 
+  // [GO LEVIER · 18/10/2026] le prix d'entrée d'une position ouverte ne se modifie plus : il fabriquait du résultat (entrée 100 → 50 en LONG : +100 % à la
+  // fermeture, sans que le prix ait bougé). Un écart est refusé et dit.
+  let _entryMsg = null;
   if(!isNaN(entry) && entry > 0 && entry !== pos.entryPrice) {
-    pos.entryPrice = entry;
-    changed.push('Entrée→'+entry.toFixed(_editModal.cfg.dec>=4?_editModal.cfg.dec:2));
+    _entryMsg = '⚠ Prix d\'entrée non modifié : c\'est le prix de l\'achat (il ne se change pas)';
   }
   if(!isNaN(tp) && tp > 0) {
     pos.tp = tp;
@@ -1551,33 +1556,49 @@ function applyPosEdit() {
   } else if(document.getElementById('peSlInput').value === '') {
     pos.sl = null; changed.push('SL effacé');
   }
+  // [GO LEVIER · 18/10/2026] (ETAT n° 26) Changer la MISE d'une position ouverte, c'est acheter ou vendre : la mise ajoutée est retirée du trading et
+  // achète au prix du moment (02 _addToPosition, la règle de « ↑ Renforcer » et de la pyramide : prix d'entrée moyen, exposition ajoutée, levier de
+  // la position gardé). Avant : stakeUsdt était réécrit sans rien débiter — 30 → 40 $ créait +10 $ à la fermeture, 40 → 30 $ en détruisait 10.
+  // Réduire = vendre une partie : il n'existe pas encore de vente partielle juste (frais, impôt, historique) — refusé, et dit.
+  let _stakeMsg = null, _stakeAdded = false;
   if(!isNaN(stake) && stake >= 10 && stake !== pos.stakeUsdt) {
-    pos.stakeUsdt = stake;
-    changed.push('Mise→$'+stake);
+    const _add = stake - (Number(pos.stakeUsdt) || 0);
+    const _ps = S.pairStates[pos.pair], _px = Number(_ps && _ps.price);
+    if (!(_add > 0)) {
+      _stakeMsg = '⚠ Mise non réduite : réduire une position ouverte, c\'est en vendre une partie — ferme-la (✕) puis rouvre avec la mise voulue';
+    } else if (!((S.tradingAccount || 0) >= _add)) {
+      _stakeMsg = '⚠ Mise non changée : il faut ' + fmt$2(_add) + ' au trading (' + fmt$2(S.tradingAccount || 0) + ' disponibles)';
+    } else if (!(_px > 0) || typeof _addToPosition !== 'function' || _addToPosition(pos, _add, _px) === null) {
+      _stakeMsg = '⚠ Mise non changée : pas de prix, position illisible ou exécution TWAP en cours';
+    } else {
+      S.tradingAccount = Math.max(0, (S.tradingAccount || 0) - _add);
+      S.portfolio = (typeof _computePortfolio === 'function') ? _computePortfolio() : S.portfolio;
+      _stakeAdded = true;
+      changed.push('Mise→$' + (Number(pos.stakeUsdt) || 0).toFixed(2) + ' (+' + fmt$2(_add) + ' achetés au prix du moment, retirés du trading · entrée moyenne ' + Number(pos.entryPrice).toPrecision(6) + ')');
+    }
   }
 
+  if (_entryMsg) _stakeMsg = _stakeMsg ? _entryMsg + ' · ' + _stakeMsg : _entryMsg;
   if(changed.length) {
-    showToast('✓ '+pos.pair+': '+changed.join(' · '));
+    // un achat (mise ajoutée) se voit toujours ; les autres changements gardent le niveau « info » d'avant (masqué hors mode verbeux)
+    showToast('✓ '+pos.pair+': '+changed.join(' · ') + (_stakeMsg ? ' · ' + _stakeMsg : ''), _stakeMsg ? 5000 : (_stakeAdded ? 4000 : 2800), _stakeMsg ? 'warn' : (_stakeAdded ? 'user' : 'info'));
     S.chainLog.push({ icon:'✏️', desc:'Edit '+pos.pair+' '+pos.side.toUpperCase()+': '+changed.join(', '), hash:rndHash(), time:nowStr() });
+  } else if (_stakeMsg) {
+    showToast(pos.pair + ' : ' + _stakeMsg, 5000, 'warn');
   }
   closePosEditModal();
 }
 
+// [GO LEVIER · 18/10/2026] « ↓ Convertir » ferme VRAIMENT puis rouvre dans l'autre sens (07 manuInvert : closePosition — résultat, frais, impôt, historique,
+// emprunt rendu — puis openPosition avec la même mise, le même levier, les mêmes distances de TP / SL et tes consignes). Avant : le sens et le prix d'entrée
+// étaient réécrits sur la position — le résultat latent disparaissait sans être réalisé (une perte de 9 $ effacée, relecture du 18/10).
 function flipPosition(posId) {
   const resolvedId = posId || _editModal?.posId;
   const pos = S.openPositions.find(p => p.id === resolvedId);
   if(!pos || pos.auto === true) return;
-  const newSide = pos.side === 'long' ? 'short' : 'long';
-  const ps = S.pairStates[pos.pair];
-  pos.side       = newSide;
-  pos.entryPrice = ps ? ps.price : pos.entryPrice;
-  pos.entryTs    = Date.now();
-  pos.pnl        = 0; pos.pnlUsdt = 0;
-  // Swap TP and SL when flipping
-  const oldTp = pos.tp; pos.tp = pos.sl; pos.sl = oldTp;
-  showToast('🔄 '+pos.pair+' → '+newSide.toUpperCase()+' @'+pos.entryPrice.toFixed(2));
-  S.chainLog.push({ icon:'🔄', desc:`Flip ${pos.pair} → ${newSide.toUpperCase()} @${pos.entryPrice.toFixed(2)}`, hash:rndHash(), time:nowStr() });
   closePosEditModal();
+  if (typeof manuInvert === 'function') manuInvert(pos.pair);
+  else showToast('⚠ ' + pos.pair + ' : conversion indisponible', 2500, 'warn');
 }
 
 function setTpSl(posId, type, pct) {
@@ -2922,10 +2943,7 @@ function _bgModeWatch(tk) {
   g(() => { (S.openPositions || []).forEach(pos => {
     const ps = pos && S.pairStates[pos.pair];
     if (!ps || !(Number(ps.price) > 0) || !(Number(pos.entryPrice) > 0)) return;
-    const exp = pos.totalExposure || pos.stakeUsdt;
-    pos.pnl = pos.side === 'long' ? ((ps.price - pos.entryPrice) / pos.entryPrice) * 100 : ((pos.entryPrice - ps.price) / pos.entryPrice) * 100;
-    pos.pnlUsdt = exp * (pos.pnl / 100);
-    pos.currentVal = exp + pos.pnlUsdt;
+    _posMark(pos, ps.price);   // [GO LEVIER · 18/10/2026] ce que closePosition réaliserait (02) — avant : exposition × % sans borne, valeur = exposition + résultat
   }); });
   g(() => { if (typeof learnFromOpenPositions === 'function') learnFromOpenPositions(); });
   g(() => { if (typeof estimateStakes === 'function') estimateStakes(); });

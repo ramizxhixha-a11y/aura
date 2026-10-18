@@ -243,7 +243,9 @@ T('M10 · journal 🎚 à chaque changement seulement ; système neuf fermé ; a
 });
 
 T('M11 · _botExitSweep RÉEL (10f) : une position marquée d\'un horizon n\'est fermée par rien avant son heure (même au-delà du SL, du TP ou d\'une règle apprise) ; à l\'heure dite → « Horizon appris » ; sur coupure, son stop est la perte max ; une position non marquée garde ses sorties', () => {
-  const code = between(s10f, 'function _closeCompleted(pos, label) {', 'window._lossCapSweep = function', false);
+  // [GO LEVIER · 18/10/2026] 10f marque le P&L latent par 02 _posMark : la mesure de 02 entre dans le monde
+  const _s02 = rd('js/02-state-init.js'), _i = _s02.indexOf('function _posLatent(pos, px) {'), _j = _s02.indexOf('window._posMark = _posMark;');
+  const code = ((_i >= 0 && _j > _i) ? _s02.slice(_i, _j) + '\n' : '') + between(s10f, 'function _closeCompleted(pos, label) {', 'window._lossCapSweep = function', false);
   const mkS = (pos, px, now) => {
     const S = { openPositions: [pos], pairStates: { 'SOL/USDT': { price: px } }, chainLog: [], tradingMode: 'paperReal', botAutoMode: true };
     const c = { S, Math, Number, String, Object, Array, isFinite, JSON, window: { __thJudgeTs: now }, Date: { now: () => now }, nowStr: () => '12:00',

@@ -1583,7 +1583,10 @@ function simulateBtcMove(pct) {
     const newPrice= cur * (1 + pairPct/100);
     // Impact sur positions ouvertes
     const pos     = (S.openPositions||[]).find(p=>p.pair===pair);
-    const pnlImpact = pos ? (pos.stakeUsdt||0)*pairPct/100*(pos.side==='long'?1:-1) : 0;
+    // [GO LEVIER · 18/10/2026] (ETAT n° 29) l'impact est ce que closePosition réaliserait au nouveau prix moins ce qu'elle réaliserait au prix du moment
+    // (02 _posLatent : exposition, perte bornée à la mise) — avant : mise × variation, rapportée au prix du moment au lieu du prix d'entrée (écart de
+    // l'ordre du P&L déjà fait : à +2 %, l'ancien chiffre était 2 % trop bas). Avec levier ×N, l'ancien chiffre était N fois trop petit.
+    const pnlImpact = pos ? (_posLatent(pos, newPrice).usd - _posLatent(pos, cur).usd) : 0;
     results[pair] = {beta, pairPct, cur, newPrice, pnlImpact};
   });
   return results;
@@ -3516,8 +3519,10 @@ function _vacPf(cfg) {
   try {
     const w = (typeof _walletFor === 'function') ? _walletFor(cfg.mode || S.tradingMode) : null;
     if (w) {
-      let pos = 0; (w.openPositions || []).forEach(p => { if (!p) return; const v = Number(p.currentVal); pos += (isFinite(v) && v > 0) ? v : (Number(p.stakeUsdt) || 0); });
-      return (Number(w.cashAccount) || 0) + (Number(w.tradingAccount) || 0) + pos;
+      let pos = 0; (w.openPositions || []).forEach(p => { if (!p) return; const v = Number(p.currentVal); pos += (isFinite(v) && v >= 0) ? v : (Number(p.stakeUsdt) || 0); });
+      // [GO LEVIER · 18/10/2026] moins la dette versée en argent (02 _levCashDebt), comme le Bunker (07 _bkCapital) ; une position à 0 compte 0
+      const debt = ((Number(w.leverageBorrowed) || 0) > 0 && typeof _levCashDebt === 'function') ? _levCashDebt(w, null) : 0;
+      return debt > 0 ? (Number(w.cashAccount) || 0) + (Number(w.tradingAccount) || 0) + pos - debt : (Number(w.cashAccount) || 0) + (Number(w.tradingAccount) || 0) + pos;
     }
   } catch(e) {}
   return S.portfolio || 0;

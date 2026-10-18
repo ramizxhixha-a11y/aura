@@ -250,7 +250,7 @@ function openWhyModal(posId) {
   const pnlPct      = entryPrice > 0
     ? (pos.side === 'long' ? (curPrice - entryPrice) / entryPrice * 100 : (entryPrice - curPrice) / entryPrice * 100)
     : 0;
-  const pnlUsd      = pos.stakeUsdt * pnlPct / 100;
+  const pnlUsd      = _posLatent(pos, curPrice).usd;   // [GO LEVIER · 18/10/2026] (ETAT n° 29) ce que closePosition réaliserait (02 : exposition, perte bornée à la mise) — avant sur la mise
   const pnlCol      = pnlPct >= 0 ? 'var(--up)' : 'var(--down)';
 
   // ── Régime et indicateurs au moment de l'ouverture ──

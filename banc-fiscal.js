@@ -193,7 +193,8 @@ const run = (sb, code) => vm.runInContext(code, sb);
     t('région ≠ BE : aucun impôt provisionné (la page le dit)', r4.taxAmount === 0 && !r4.fisc);
     // closePosition : le partage prend le net réel
     const cp = S02.slice(S02.indexOf('function closePosition('), S02.indexOf('\n}\n', S02.indexOf('function closePosition(')));
-    t('closePosition : P&L crédité au trading, PUIS recordFees(…, pos, cur) — sur l\'exposition depuis GO ARGENT 13/10 —, PUIS la caisse prend sa part du net réel', /S\.tradingAccount = Math\.max\(0, S\.tradingAccount \+ netPnl\);[\s\S]{0,1200}const _rf = recordFees\(pos\.pair, totalExp, realisedUsd, exitType, pos\._reservedAmount, pos, cur\)[\s\S]{0,300}_trulyNet = Math\.max\(0, netPnl - \(Number\(_rf\.totalFee\) \|\| 0\) - _taxAmount\)/.test(cp));
+    // [GO LEVIER · 18/10/2026] entre recordFees et le partage : l'emprunt versé en argent pour la mise est rendu au prêteur sur le trading (≈ 900 car.)
+    t('closePosition : P&L crédité au trading, PUIS recordFees(…, pos, cur) — sur l\'exposition depuis GO ARGENT 13/10 —, PUIS la caisse prend sa part du net réel', /S\.tradingAccount = Math\.max\(0, S\.tradingAccount \+ netPnl\);[\s\S]{0,1200}const _rf = recordFees\(pos\.pair, totalExp, realisedUsd, exitType, pos\._reservedAmount, pos, cur\)[\s\S]{0,1400}_trulyNet = Math\.max\(0, netPnl - \(Number\(_rf\.totalFee\) \|\| 0\) - _taxAmount\)/.test(cp));
     t('closePosition : plus d\'estimation de frais de sortie ni d\'impôt déduite avant recordFees (double débit retiré)', !/_exitFee/.test(cp) && !/_computeMarginalTax/.test(cp) && (cp.match(/recordFees\(/g) || []).length === 1);
     t('_computeMarginalTax retirée de tout le code (plus aucun lecteur)', !fs.readdirSync(path.join(ROOT, 'js')).some(f => /\.js$/.test(f) && fs.readFileSync(path.join(ROOT, 'js', f), 'utf8').split('\n').some(l => !/^\s*\/\//.test(l) && /_computeMarginalTax\s*\(/.test(l))));
   }

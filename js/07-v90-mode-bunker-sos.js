@@ -179,10 +179,14 @@ function _bkGet() {
 // sur une perte qui n'existait pas. Même défaut que le « portfolio » de l'accueil (AUDIT #23). Désormais le capital
 // surveillé = compte trading + valeur courante des positions ouvertes du mode (repli : la mise). La référence, le
 // seuil de déclenchement, la récupération et la bannière lisent tous cette même valeur.
+// [GO LEVIER · 18/10/2026] … MOINS la dette versée en argent (02 _levCashDebt) : l'argent emprunté au trading n'est pas du capital — avant, rendre un
+// emprunt au prêteur faisait « chuter » le capital et déclenchait le Bunker (−60 % sur une fermeture à l'équilibre, relecture du 18/10). Une position qui
+// ne vaut plus rien compte 0 (avant : sa mise). Sans dette et sans position à 0 : inchangé.
 function _bkCapital() {
   var acc = Number(S.tradingAccount) || 0, pos = 0;
-  try { (S.openPositions || []).forEach(function(p){ if (!p) return; var v = Number(p.currentVal); pos += isFinite(v) && v > 0 ? v : (Number(p.stakeUsdt) || 0); }); } catch(e) {}
-  return acc + pos;
+  try { (S.openPositions || []).forEach(function(p){ if (!p) return; var v = Number(p.currentVal); pos += isFinite(v) && v >= 0 ? v : (Number(p.stakeUsdt) || 0); }); } catch(e) {}
+  var debt = 0; try { debt = ((Number(S.leverageBorrowed) || 0) > 0 && typeof _levCashDebt === 'function') ? _levCashDebt(S, null) : 0; } catch(e) {}
+  return debt > 0 ? acc + pos - debt : acc + pos;
 }
 window._bkCapital = _bkCapital;
 
@@ -4019,12 +4023,14 @@ function renderActionsGrid() {
           // TP
           const tpPrice  = p.tp;
           const tpPct    = tpPrice ? (p.side==='long' ? (tpPrice-p.entryPrice)/p.entryPrice*100 : (p.entryPrice-tpPrice)/p.entryPrice*100) : null;
-          const tpGain   = tpPrice ? Math.abs(p.stakeUsdt * (tpPct||0) / 100) : null;
+          // [GO LEVIER · 18/10/2026] (ETAT n° 29) gain au TP et perte au SL = ce que closePosition réaliserait à ces prix (02 _posLatent : exposition,
+          // perte bornée à la mise) — avant : sur la mise (avec levier ×N, N fois trop petits)
+          const tpGain   = tpPrice ? Math.abs(_posLatent(p, tpPrice).usd) : null;
 
           // SL
           const slPrice  = p.sl;
           const slPct    = slPrice ? (p.side==='long' ? (p.entryPrice-slPrice)/p.entryPrice*100 : (slPrice-p.entryPrice)/p.entryPrice*100) : null;
-          const slLoss   = slPrice ? Math.abs(p.stakeUsdt * (slPct||0) / 100) : null;
+          const slLoss   = slPrice ? Math.abs(_posLatent(p, slPrice).usd) : null;
 
           // Capital restant
           const capRestant = (S.tradingAccount || 0);
@@ -4310,10 +4316,14 @@ function renderActionsGrid() {
         const reg   = S.taxConfig.regions[S.taxConfig.region];
         // v11quinquies · BUG FIX : utiliser la position réelle si ouverte, sinon le stake configuré
         const _activePos = S.openPositions ? S.openPositions.find(p => p.pair === pair) : null;
-        const stake = _activePos ? (_activePos.stakeUsdt || ps.stake || 0) : (ps.stake||0) * (ps.pairLeverage||1);
+        // [GO LEVIER · 18/10/2026] (ETAT n° 29) frais d'aller-retour et mouvement attendu sur l'EXPOSITION (ce que l'exchange achète : recordFees),
+        // funding sur la MISE (applyFundingFees le prélève sur elle). Avant : la mise d'une position ouverte (sans son levier), mais la mise × levier
+        // quand aucune n'était ouverte. Sans levier : mêmes nombres.
+        const stake = _activePos ? (Number(_activePos.totalExposure) || _activePos.stakeUsdt || ps.stake || 0) : (ps.stake||0) * (ps.pairLeverage||1);
+        const _own  = _activePos ? (_activePos.stakeUsdt || ps.stake || 0) : (ps.stake||0);
         if(stake > 0) {
           const roundTripFee = stake * (fc.takerRate * 2 + fc.slippage * 2);
-          const fundFee      = stake * fc.fundingRate;
+          const fundFee      = _own * fc.fundingRate;
           const totalFeeEst  = roundTripFee + fundFee;
           if(feeEl) feeEl.textContent = '−$'+totalFeeEst.toFixed(2);
           // Expected net: conviction-based expected move − fees − tax provision
@@ -4334,24 +4344,24 @@ function renderActionsGrid() {
 
       if(pos) {
         // Position ouverte — calcul P&L live brut
-        const pnlPct = pos.side==='long'
-          ? ((ps.price - pos.entryPrice) / pos.entryPrice) * 100
-          : ((pos.entryPrice - ps.price) / pos.entryPrice) * 100;
-        const pnlUsdGross = pos.stakeUsdt * (pnlPct/100);
+        // [GO LEVIER · 18/10/2026] (ETAT n° 29) résultat et frais = ce que closePosition et recordFees prendraient maintenant (02 _posLatent,
+        // _posCloseFees : sur l'EXPOSITION, perte bornée à la mise) ; funding sur la mise (applyFundingFees). Avant : résultat et frais sur la mise.
+        // La valeur affichée est ce que la position rendrait au trading (mise + résultat). Sans levier : mêmes nombres.
+        const _lt        = _posLatent(pos, ps.price);
+        const pnlPct     = _lt.pct;
+        const pnlUsdGross = _lt.usd;
 
         // Frais déjà courus (aller) + frais sortie estimés
         const fc         = S.feeConfig;
         const reg        = S.taxConfig.regions[S.taxConfig.region];
-        const entryFee   = pos.stakeUsdt * (fc.takerRate + fc.slippage);
-        const exitFee    = pos.stakeUsdt * (fc.takerRate + fc.slippage);
         const fundCost   = pos.stakeUsdt * fc.fundingRate;
-        const totalFee   = entryFee + exitFee + fundCost;
+        const totalFee   = _posCloseFees(pos, pnlPct).total + fundCost;
         // Provision fiscale sur gain brut - frais
         const netGain    = pnlUsdGross - totalFee;
         const taxProv    = netGain > 0 ? netGain * reg.inclusion * reg.rate : 0;
         const pnlUsdNet  = pnlUsdGross - totalFee - taxProv;
 
-        const curVal     = pos.stakeUsdt + pnlUsdGross;
+        const curVal     = _lt.val;
         const up         = pnlUsdNet >= 0;
         const col        = up ? 'var(--up)' : 'var(--down)';
 
@@ -4398,14 +4408,10 @@ function renderInlinePosForPair(pair, pairKey, cfg, ps) {
   const positions = S.openPositions.filter(p=>p.pair===pair);
 
   // Update PnL live for all positions of this pair — sur l'exposition totale
+  // [GO LEVIER · 18/10/2026] par 02 _posMark (ce que closePosition réaliserait) — avant : exposition × % sans borne, valeur = exposition + résultat
   positions.forEach(pos => {
     if(!ps) return;
-    const exp     = pos.totalExposure || pos.stakeUsdt;
-    pos.pnl       = pos.side==='long'
-      ? ((ps.price - pos.entryPrice) / pos.entryPrice) * 100
-      : ((pos.entryPrice - ps.price) / pos.entryPrice) * 100;
-    pos.pnlUsdt   = exp * (pos.pnl / 100);
-    pos.currentVal= exp + pos.pnlUsdt;
+    _posMark(pos, ps.price);
   });
 
   if(positions.length === 0) {
@@ -4537,11 +4543,7 @@ function renderOpenPosSummary() {
     if(!ps || !cfg) return '';
 
     const exp     = pos.totalExposure || pos.stakeUsdt;
-    pos.pnl       = pos.side === 'long'
-      ? ((ps.price - pos.entryPrice) / pos.entryPrice) * 100
-      : ((pos.entryPrice - ps.price) / pos.entryPrice) * 100;
-    pos.pnlUsdt   = exp * (pos.pnl / 100);
-    pos.currentVal= exp + pos.pnlUsdt;
+    _posMark(pos, ps.price);   // [GO LEVIER · 18/10/2026] ce que closePosition réaliserait (02) — avant : exposition × % sans borne, valeur = exposition + résultat
     // Track peak P&L for the whole position lifetime
     if(pos._peakPnl == null || pos.pnl > pos._peakPnl) pos._peakPnl = pos.pnl;
 
@@ -4706,16 +4708,21 @@ function renderOpenPosSummary() {
 // trading + caisse + anti-négatif + valeur des positions (mise+latent)
 // − frais de clôture estimés (taker) − impôt anticipé sur latent positif (taux marginal)
 // − funding couru non encore prélevé sur la dette levier.
+// [GO LEVIER · 18/10/2026] (ETAT n° 29) chaque position compte ce que closePosition rendrait (02 _posLatent : mise + résultat sur l'EXPOSITION, perte
+// bornée à la mise) moins les frais que recordFees prendra (02 _posCloseFees : l'aller-retour sur l'exposition — la réserve anti-négatif, comptée
+// ci-dessous, en paie la part qu'elle tient) ; la dette versée en argent est retranchée. Avant : résultat et frais de sortie seuls sur la mise (lus
+// sur S.feeConfig.taker, une clé qui n'existe pas), dette ignorée — levier ×3 à +10 % : 72,97 $ affichés pour 78,77 $. Sans levier : quelques
+// centimes de moins par position (frais d'entrée et glissement oubliés).
 function _computeNetUsdParts() {
-  const taker = (S.feeConfig && S.feeConfig.taker) || 0.001;
   let posVal = 0, latentPos = 0, closeFees = 0;
   (S.openPositions||[]).forEach(p => {
-    const stake = Number(p.stakeUsdt)||0;
-    const pnl$  = stake * ((Number(p.pnl)||0)/100);
-    posVal += stake + pnl$;
-    if (pnl$ > 0) latentPos += pnl$;
-    closeFees += (stake + Math.max(0,pnl$)) * taker;
+    const ps = S.pairStates && S.pairStates[p.pair], px = ps ? Number(ps.price) : NaN;
+    const lt = _posLatent(p, px > 0 ? px : NaN);
+    posVal += lt.val;
+    if (lt.usd > 0) latentPos += lt.usd;
+    closeFees += _posCloseFees(p, lt.pct).total;
   });
+  const levDebt = ((Number(S.leverageBorrowed) || 0) > 0) ? _levCashDebt(S, null) : 0;
   let taxAnt = 0;
   // [GO FISCAL · 07/10/2026] registre légal (16) : l'impôt de l'année qui bougerait si tout fermait maintenant, par régime
   // (une perte peut en rendre) — avant : taux marginal d'un régime deviné, sur le seul latent positif
@@ -4724,8 +4731,8 @@ function _computeNetUsdParts() {
   // les 30 s directement du trading — le résidu couru est ≤30 s ≈ 0, le déduire encore
   // aurait été un double comptage. fundCum = compteur cumulé réel (informatif).
   const fundCum = ((S.fees&&S.fees.totalFunding)||0) + (S.leverageTotalFees||0);
-  const net = Math.max(0,(S.cashAccount||0)+(S.tradingAccount||0)+(S.antiNegReserve||0)+posVal-closeFees-taxAnt);
-  return { trading:(S.tradingAccount||0), cash:(S.cashAccount||0), antiNeg:(S.antiNegReserve||0), posVal, latentPos, closeFees, taxAnt, fundCum, net };
+  const net = Math.max(0,(S.cashAccount||0)+(S.tradingAccount||0)+(S.antiNegReserve||0)+posVal-closeFees-taxAnt-levDebt);
+  return { trading:(S.tradingAccount||0), cash:(S.cashAccount||0), antiNeg:(S.antiNegReserve||0), posVal, latentPos, closeFees, taxAnt, fundCum, levDebt, net };
 }
 function _computeNetUsd() { return _computeNetUsdParts().net; }
 // [TUILES · 23/08, maquette validée] composition dépliable des deux portefeuilles,
@@ -4766,6 +4773,7 @@ window._toggleHeroBk = function(which){
        +_tile('\u2702\ufe0f','Frais de clôture est.','\u2212'+fmt$2(p.closeFees),'','neg')
        +_tile('\ud83c\udfdb\ufe0f','Impôt anticipé',(p.taxAnt>=0?'\u2212':'+')+fmt$2(Math.abs(p.taxAnt)),'si tout fermait maintenant · registre fiscal',p.taxAnt>=0?'neg':'')
        +_tile('\u23f3','Funding payé (cumul)',fmt$2(p.fundCum),'prélevé en continu du trading','cy')
+       +(p.levDebt > 0.005 ? _tile('\u26a1','Dette du levier','\u2212'+fmt$2(p.levDebt),'emprunt versé au trading ou dans une mise','neg') : '')   // [GO LEVIER · 18/10/2026]
        +_tile('\u03a3','En $',fmt$2(p.net),'','sum');
     }
     tgt.style.display='grid';

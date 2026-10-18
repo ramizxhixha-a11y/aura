@@ -99,7 +99,9 @@ function world(o) {
   c.window = c; c.log = log;
   vm.createContext(c);
   vm.runInContext(WALLET, c);
-  vm.runInContext(LIVEFN + '\n' + MODEFN + '\n' + BGWATCH, c);
+  // [GO LEVIER · 18/10/2026] _bgModeWatch marque le P&L latent par 02 _posMark : la mesure de 02 entre dans le monde
+  const LEV02 = (s => { const i = s.indexOf('function _posLatent(pos, px) {'), j = s.indexOf('window._posMark = _posMark;'); return (i >= 0 && j > i) ? s.slice(i, j) : ''; })(s02);
+  vm.runInContext(LEV02 + '\n' + LIVEFN + '\n' + MODEFN + '\n' + BGWATCH, c);
   ['sim', 'paperReal', 'real'].forEach(m => {
     const w = S.walletStore[m]; w.pairStates = {};
     ORDER.forEach((p, k) => { const px = (m === 'sim' && o.frozenSim) ? PX[p] * (1 + (k % 2 ? 0.03 : -0.05)) : PX[p]; w.pairStates[p] = mkPs(px, (m === 'sim' && p === 'BNB/USDT') ? 50 : (o.ncSim !== undefined && m === 'sim' ? o.ncSim : 60), k + (m === 'sim' ? 0 : m === 'paperReal' ? 20 : 40)); });

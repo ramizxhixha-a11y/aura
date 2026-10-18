@@ -653,6 +653,9 @@ const _SP_PALIERS_DEF = [
 function closePartial(posId, palierIdx) {
   const pos = (S.openPositions||[]).find(p=>p.id===posId);
   if(!pos) { showToast('⚠ Position introuvable', 1500, 'warn'); return; }
+  // [GO LEVIER · 18/10/2026] pas de sortie partielle d'une position à levier : ce calcul compte le résultat sur la MISE et remet l'exposition à la mise
+  // (le levier de ce qui reste disparaît, son emprunt reste) — relecture du 18/10 : −59,72 $ sur un palier à +1 %. Refusé et dit (registre).
+  if ((Number(pos.levBorrowed) || 0) > 0) { showToast('⚠ ' + pos.pair + ' : sortie partielle indisponible pour une position à levier — ferme-la entière (✕)', 3500, 'warn'); return; }
 
   if(!pos._spPaliers) pos._spPaliers = _SP_PALIERS_DEF.map(p=>({...p, hit:false, closedAt:null, pnlUsd:0}));
   const pal = pos._spPaliers[palierIdx];
@@ -706,6 +709,7 @@ function _spRemainingFactor(paliers, upToIdx) {
 function checkSpPaliersAuto() {
   (S.openPositions||[]).forEach(pos=>{
     if(!pos._spEnabled || !pos._spPaliers) return;
+    if((Number(pos.levBorrowed) || 0) > 0) return;   // [GO LEVIER · 18/10/2026] jamais pour une position à levier (closePartial le refuse ; toggleSpAuto ne l'active pas)
     const ps  = S.pairStates[pos.pair];
     if(!ps) return;
     const cur = ps.price;
@@ -724,6 +728,7 @@ setInterval(checkSpPaliersAuto, 5000); // check toutes les 5s
 function toggleSpAuto(posId) {
   const pos = (S.openPositions||[]).find(p=>p.id===posId);
   if(!pos) return;
+  if(!pos._spEnabled && (Number(pos.levBorrowed) || 0) > 0) { showToast('⚠ ' + pos.pair + ' : paliers indisponibles pour une position à levier', 3000, 'warn'); return; }   // [GO LEVIER · 18/10/2026]
   pos._spEnabled = !pos._spEnabled;
   if(pos._spEnabled && !pos._spPaliers) {
     pos._spPaliers = _SP_PALIERS_DEF.map(p=>({...p, hit:false, closedAt:null, pnlUsd:0}));

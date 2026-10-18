@@ -50,7 +50,8 @@ function mkCtx(over) {
   vm.createContext(ctx);
   const ref = s02.match(/\nconst _ref24 = \{\};\n/); assert.ok(ref, 'const _ref24 dans 02');
   const slow = s09f1.match(/\nlet _abSlowTurn = 0;\n/); assert.ok(slow);
-  vm.runInContext(ref[0] + slow[0] + [fnSrc(s02, '_ref24Set'), fnSrc(s02, '_ref24Pct'), fnSrc(s09f1, '_abFmtPx'), fnSrc(s09f1, '_abChg24'), fnSrc(s09f1, '_abPosPnl'),
+  // [GO LEVIER · 18/10/2026] _abPosPnl (09f1) délègue à 02 _posLatent : la mesure de 02 entre dans le monde
+  vm.runInContext(ref[0] + slow[0] + [fnSrc(s02, '_ref24Set'), fnSrc(s02, '_ref24Pct'), fnSrc(s02, '_posLatent'), fnSrc(s09f1, '_abFmtPx'), fnSrc(s09f1, '_abChg24'), fnSrc(s09f1, '_abPosPnl'),
     fnSrc(s09f1, 'updateActionBricks'), fnSrc(s08, 'renderOpenPnlBanner')].join('\n'), ctx);
   return ctx;
 }
