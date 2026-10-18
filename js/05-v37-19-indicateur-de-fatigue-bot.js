@@ -877,7 +877,7 @@ function checkTrailingStops() {
       const drop = pos._tsPeakPct - pnlPct;
       if(drop >= trailDrop) {
         pos._tsEnabled = false; // éviter double-déclenchement
-        try { closePosition(pos.id, pos.auto===true); } catch(e) {}
+        try { closePosition(pos.id, pos.auto===true, { sortie: { k: 'sl', why: 'trailing stop' } }); } catch(e) {}   // [GO ALERTES · 15/10/2026] raison pour les notifications
         S.chainLog.push({ icon:'🎯', desc:`Trailing v42 · ${pos.pair} · pic +${pos._tsPeakPct.toFixed(2)}% → sortie +${pnlPct.toFixed(2)}%`, hash:rndHash(), time:nowStr() });
         showToast('🎯 Trailing stop · '+pos.pair+' verrouillé +'+pnlPct.toFixed(2)+'%', 3000, 'win');
         renderTrailingStopSection();

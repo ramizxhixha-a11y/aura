@@ -113,7 +113,9 @@ function _manConsignesWatchdog() {
     if (pos._manWdFailAt && (Date.now() - pos._manWdFailAt) < 60000) return;
 
     let err = null;
-    try { closePosition(pos.id, false); } catch (e) { err = e; }
+    // [GO ALERTES · 15/10/2026] la perte max de tes consignes est un stop : raison passée aux notifications (« 🎯 TP / SL atteint ») et à Telegram
+    const _sortie = (maxLossPct !== null && lossAsPctOfCap >= maxLossPct) ? { sortie: { k: 'sl', why: 'perte max (consigne)' } } : undefined;
+    try { closePosition(pos.id, false, _sortie); } catch (e) { err = e; }
     const gone = !(S.openPositions || []).some(p => p && p.id === pos.id);
     if (gone) {
       S.chainLog.push({

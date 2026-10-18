@@ -3298,6 +3298,7 @@ function simTick() {
   // v7.0: Update regime badge chaque tick (léger)
   if(typeof detectMarketRegime === 'function') {
     const _r = detectMarketRegime();
+    try { if (typeof _notifRegimeWatch === 'function') _notifRegimeWatch(_r); } catch(e) {}   // [GO ALERTES · 15/10/2026] notification « changement de régime » (07)
     const _rb = document.getElementById('regimeBadge');
     const _rbOld = document.getElementById('regimeBadgeOld'); // v15 · doublon Brain Network
     if(_rb && _r) {
@@ -3384,6 +3385,11 @@ function simTick() {
   }
 
   _phEnd('bougies + briques + portfolio');
+  // [GO ALERTES · 15/10/2026] alertes qui ne dépendent pas de l'écran — à chaque battement, quelle que soit la page, écran éteint compris (ici S est le mode
+  // affiché : les modes d'arrière-plan ont été rendus plus haut). Alertes prix (06, prix réel Binance) : avant, renderHome seulement (accueil, écran allumé).
+  // Résumé Telegram de la semaine (06) : n'agit que si son interrupteur est mis et que 7 jours sont passés.
+  try { if (typeof checkPriceAlerts === 'function') checkPriceAlerts(); } catch(e) {}
+  try { if (typeof _tgHebdoTick === 'function') _tgHebdoTick(); } catch(e) {}
   // ── Render active page (throttled) · SAUTÉ si l'écran est masqué : inutile de peindre une
   //    interface invisible, et ça évite un rattrapage brutal au retour. Le trading et
   //    l'apprentissage (au-dessus) continuent normalement — aucune donnée n'est affectée. ──

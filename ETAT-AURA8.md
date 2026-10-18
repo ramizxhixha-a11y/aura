@@ -1,11 +1,12 @@
-# ÉTAT-AURA8 — 15/10/2026 — token `20261014a` — À LIRE EN PREMIER (≤ 20 Ko, banc-all le vérifie)
+# ÉTAT-AURA8 — 18/10/2026 — token `20261018a` — À LIRE EN PREMIER (≤ 20 Ko, banc-all le vérifie)
 
 Ce fichier dit OÙ EN EST AURA8 aujourd'hui. L'histoire de chaque livraison est dans `PASSATION-AURA8.md` (438 Ko) : on y CHERCHE (`grep -n`), on ne la lit pas en entier. Les règles de travail de Claude sont dans `CLAUDE.md`. Le détail de l'audit du 13/10 est dans `rejeu/audit-20261013/`.
 
-## 1. L'app (lue en direct par le pont, 15/10 ~04:00 — en marche sans arrêt depuis le 14/10 18:39, réseau présent)
-- Version chargée `20261013a` (le token `20261014a` « go réglages » se charge à la prochaine relance avec réseau), 58 scripts, aucune erreur de page. `banc-all` : LIVRABLE.
+## 1. L'app (lue en direct par le pont, 18/10 ~01:35 — relancée le 17/10 22:40 après un arrêt, réseau présent)
+- Version chargée `20261014a` (le token `20261018a` « go alertes » se charge à la prochaine relance avec réseau), 58 scripts, aucune erreur de page. `banc-all` : LIVRABLE.
 - Modes : AA, EV et RE en play ; EV à l'écran. RE n'envoie aucun ordre réel (aucun appel `/api/v3/order`).
-- EV : 1 082,27 $, 354 trades, aucune position (inchangé depuis le 11/10 20:40). AA : 1 025,78 $, 2 030 trades. RE : 1 145,42 $, 0 trade. Levier : 0 partout.
+- EV : 1 080,64 $, 367 trades, aucune position (13 trades et −1,63 $ depuis le 15/10). AA : 1 003,29 $, 2 121 trades. RE : 1 145,42 $, 0 trade. Levier : 0 partout.
+- Arrêt de 14 h le 16/10 (05:59, tablette hors réseau avec Rams) ; « veille empêchée » demandée mais NON tenue par le système au dernier relevé.
 - Poche tendance longue (`js/15`) : 11 positions tenues (pont).
 - **La décision n'a aucune information** : sur 3 899 décisions (09/10 → 14/10, backup du 14/10 18:45), −0,265 % net à 15 min (t = −11,7) ; la décision INVERSE perd autant (−0,286 %). Ce qui est perdu, ce sont les frais. Le seuil appris garde le marché fermé : le bot EV n'ouvre plus. Six portes de recherche (TALENT, SOURCE, RÉPLIQUE, CARNET, PORTAGE, FLUX) et TENDANCE n'ont trouvé aucune source qui change ça ; TENDANCE LONGUE est la seule entrée (fragile).
 - Arrêts : la tablette part avec Rams au travail, sans réseau loin du Wi-Fi et sur batterie (GO VEILLE). Remède côté Rams, pas dans le code.
@@ -22,7 +23,7 @@ Ce fichier dit OÙ EN EST AURA8 aujourd'hui. L'histoire de chaque livraison est 
 - Être explicite sur chaque modification ; vérité d'abord ; réponses courtes en français.
 - Part des gains vers la caisse : 0 % depuis le 11/10, réglée par Rams lui-même (confirmé le 15/10) — ce n'est pas un défaut.
 
-## 3. Défauts OUVERTS — registre (audit du 13/10 ; G1 n° 1–8, 20, 21 fermés par « go argent » le 14/10, `20261013a` ; G2 n° 10–19 fermés par « go réglages » le 15/10, `20261014a`)
+## 3. Défauts OUVERTS — registre (audit du 13/10 ; G1 n° 1–8, 20, 21 fermés par « go argent » le 14/10 ; G2 n° 10–19 par « go réglages » le 15/10 ; G2 n° 30–32 par « go alertes » le 18/10, `20261018a`)
 Preuve : **R** = revérifiée par la session principale (code relu et/ou script rejoué) · **vm** = vrai code exécuté par un script de `rejeu/audit-20261013/` · **c** = lu dans le code. Taille du remède : S ≤ 20 lignes.
 
 ### G1 — argent ou données faux
@@ -40,10 +41,10 @@ Preuve : **R** = revérifiée par la session principale (code relu et/ou script 
 | 24 | Les trades de la paire du graphique n'entrent jamais dans `S.flowStats` (whale_v1 / flow_v1 aveugles sur elle) | 02:5138-5140 | c | S |
 | 28 | Fenêtre « bougies réelles » ouverte hors réseau : son rafraîchissement de 1 s passe `ps.price` (figé) dans le filtre des prix réels → l'âge du prix est remis à zéro, les gardes « prix figé » (07, 10f, 10i) voient un prix frais pour la paire affichée | 02:1069, 1206-1217, 1438, 1474 | revue c | S |
 | 29 | Estimations restées sur la MISE alors que les frais réels sont sur l'exposition (« net en poche », P&L net de la carte, solvabilité) — faux seulement avec levier | 16:416 · 07:4350 · 02:77 | revue c | S |
-| 30 | Interrupteurs sans effet : Telegram « 📊 Chaque trade », « 🔔 Alertes prix » (tgOnTrade / tgOnAlert : 0 appelant), « 💰 Objectif P&L » (jamais lu) ; Notifications « TP / SL » (jamais lu), « Twin », « Régime » (notifTwinAlert / notifRegimeChange : 0 appelant). Seuls l'urgence Telegram (Bunker) et ouverture / fermeture / drawdown des notifications agissent | 06:2584, 2594, 2655 · 07:1853, 1954, 1967 | revue grep | S |
-| 31 | Alertes prix (`S.priceAlerts`) et seuils d'alertes P&L (`S.pnlAlerts`) jamais sauvegardés : perdus à chaque relance (même onglet que les réglages sauvegardés le 15/10) | 06:825 · 04:2266 · absents de 09b1 | revue grep | S |
-| 32 | Clé CoinStats (`S.newsApiKey`) dans les backups de l'historique et les exports .json / .txt : `JSON.stringify(S)` (03 _buildFullBackup) la copie — même défaut que le jeton Telegram, corrigé le 15/10 par une propriété non énumérable (06 _tgGet) | 10e7:194, 325 · 03:6063 | revue c | S |
 | 33 | Onglet « 🛠 Outils » laissé sans bouton (décision du 15/10) : 14 sections sur 14 à corriger avant de l'exposer (Urgence sans confirmation, Coffre qui plante et remplace tout l'état, stress test / ADN / Paper Ultra / auto-backup faux, calculateur, PDF, Excel, hebdo faux) | `rejeu/reglages-20261014/outils-audit.md` | agent + vm | M |
+| 34 | Le Twin Live n'avance QU'À l'ouverture de l'accueil (seul appelant de `tickTwinLive`) : son encart et sa notification « Twin devant » ne bougent pas tant que tu n'ouvres pas l'accueil. Dit à l'écran | 02:4973 · 07 tickTwinLive | revue grep | S |
+| 35 | Alertes P&L : les drapeaux « déjà déclenchée » sont communs aux 3 modes — le premier mode qui atteint le seuil consomme l'alerte des autres jusqu'à la remise à zéro de 24 h | 02:6565 · 04:2340 | revue c | M |
+| 36 | `notifConfig.lastNotifTs` écrit et plus lu (l'anti-spam est par genre, en mémoire) : champ mort gardé dans le snapshot pour ne pas changer la forme du réglage | 07:1904 | revue grep | S |
 
 ### G3 (9) et G4 (32)
 Liste complète, avec fichier:ligne : `rejeu/audit-20261013/registre.md` (n° 13 à 50) et `promesses.md` (n° 9 et 12). Ajouté le 15/10 (G4) : `_writeChosenState` (09b2) attend la fin de la transaction IDB sans délai maximal — une transaction qui ne finirait jamais laisserait les sauvegardes suspendues jusqu'au rechargement (supposé, jamais vu). Les plus visibles : « ✕ Fermer hedges » ne ferme rien et « Hedge manuel » annonce « ouvert » même refusé ; calendrier éco et montants fiscaux écrits pour 2026 seulement ; additionnels communaux à 0 % (saisie de Rams) ; écran anti-revenge absent ; `pnl24h` = depuis la relance ; module 18 (réparation démo) inerte à retirer ; `banc-pont-direct.js` P22 intermittent.
@@ -53,10 +54,9 @@ Liste complète, avec fichier:ligne : `rejeu/audit-20261013/registre.md` (n° 13
 
 ## 4. Missions proposées, dans l'ordre (aucune sans « go » de Rams)
 1. **go levier** — G1 n° 25, 26 et G2 n° 29 avant toute utilisation du levier (inactif aujourd'hui).
-2. **go alertes** — G2 n° 30, 31, 32 : les interrupteurs Telegram / notifications font ce qu'ils disent (ou disparaissent), alertes sauvegardées, clé CoinStats hors des backups.
-3. **go outils** — n° 33 : corriger les 14 outils, puis rendre l'onglet accessible.
-4. **go nettoyage** — G3 / G4 choisis par Rams (dont n° 27, 28).
-Hors code, à Rams : réseau de la tablette (GO VEILLE) ; additionnels communaux ; révoquer l'ancienne clé CoinStats et l'ancien PAT ; 2FA GitHub.
+2. **go outils** — n° 33 : corriger les 14 outils, puis rendre l'onglet accessible.
+3. **go nettoyage** — G3 / G4 choisis par Rams (dont n° 27, 28, 34, 35, 36).
+Hors code, à Rams : réseau de la tablette (GO VEILLE) ; additionnels communaux ; révoquer l'ancienne clé CoinStats (les backups faits AVANT le 18/10 la portent encore) et l'ancien PAT ; 2FA GitHub ; pour être prévenu hors de l'app (la WebView Android n'a pas de notifications du système) : configurer Telegram dans Outils Avancés › 🔔 Alertes.
 
 ## 5. Outils (détail : PASSATION, points numérotés)
-App en direct : `node rejeu/pont.js etat | journal --heures 24 | backup | lire S <chemin>` (point 21 ; rattacher `aura-pont` en lecture SANS le cloner). Lecture d'un backup : `node rejeu/lecture_backup.js <fichier>`. Argent : `node banc-argent.js` (vm) et `node rejeu/sonde_argent.js --root . --backup <backup>` (vraie page, 19 étapes). Réglages / restaurations : `node banc-reglages.js` (vm, 27) et `node rejeu/sonde_reglages.js --root . --backup <backup>` (vraie page, 17 étapes, rechargements compris). Sonde navigateur : point 15. Sonde des modes : point 20. Portes de recherche : points 9 à 17. Fiscal : point 19. Enveloppe Android : point 23.
+App en direct : `node rejeu/pont.js etat | journal --heures 24 | backup | lire S <chemin>` (point 21 ; rattacher `aura-pont` en lecture SANS le cloner). Lecture d'un backup : `node rejeu/lecture_backup.js <fichier>`. Argent : `node banc-argent.js` (vm) et `node rejeu/sonde_argent.js --root . --backup <backup>` (vraie page, 19 étapes). Réglages / restaurations : `node banc-reglages.js` (vm, 27) et `node rejeu/sonde_reglages.js --root . --backup <backup>` (vraie page, 17 étapes, rechargements compris). Alertes : `node banc-alertes.js` (vm, 28) et `node rejeu/sonde_alertes.js --root . --backup <backup>` (vraie page, 14 étapes, Telegram bouchonné). Sonde navigateur : point 15. Sonde des modes : point 20. Portes de recherche : points 9 à 17. Fiscal : point 19. Enveloppe Android : point 23.

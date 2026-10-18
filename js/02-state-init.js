@@ -6181,6 +6181,11 @@ function openPosition(pair, side, opts) {
 // n° 8). Avant « go argent », l'urgence ne passait par rien de tout cela non plus : la décision d'ouvrir reste celle d'avant après une urgence.
 function closePosition(id, botClose = false) {
   const _urg = !!(arguments[2] && arguments[2].urgence);   // [GO ARGENT · 13/10/2026] 3e argument { urgence: true } (06), voir ci-dessus
+  // [GO ALERTES · 15/10/2026] 3e argument { sortie: { k: 'tp' | 'sl', why } } : posé par les sorties « objectif » ou « stop » (07 TP / SL / trailing /
+  // garde-fou −90 %, 05 trailing, 09e perte max de tes consignes, 10f niveaux ATR, gain et stop appris, stop sur coupure, perte max) — lu SEULEMENT par
+  // les notifications (« 🎯 TP / SL atteint ») et le message Telegram du trade. Aucune règle d'argent ni de décision ne le lit.
+  const _sortie = (arguments[2] && arguments[2].sortie && (arguments[2].sortie.k === 'tp' || arguments[2].sortie.k === 'sl'))
+    ? { k: arguments[2].sortie.k, why: String(arguments[2].sortie.why || '') } : null;
   // ★ REGLES REEL v2 (Rams 05/07) · les fermetures de PROTECTION (stop-loss,
   // TP, perte excessive) sont PERMISES en Reel, en MANU comme en AUTO :
   // "le bot surveille et stoppe si necessaire, meme si je l'ai oublie".
@@ -6558,8 +6563,10 @@ function closePosition(id, botClose = false) {
     try {
       if(!_urg && typeof recordShadowFromClose === 'function') recordShadowFromClose(realisedUsd, realisedPct, pos.pair, pos.side);
       if(!_urg && typeof generateDreamEntry    === 'function') generateDreamEntry(pos.pair, pos.side, realisedPct, realisedUsd);
-      // v19 · #38 Notification trade fermé
-      try { if(typeof notifTradeClose === 'function') notifTradeClose(pos.pair, pos.side, realisedUsd, realisedPct); } catch(e) {}
+      // v19 · #38 Notification trade fermé — [GO ALERTES · 15/10/2026] avec la raison (« 🎯 TP / SL atteint ») et le mode
+      try { if(typeof notifTradeClose === 'function') notifTradeClose(pos.pair, pos.side, realisedUsd, realisedPct, _sortie, S.tradingMode); } catch(e) {}
+      // [GO ALERTES · 15/10/2026] Telegram « 📊 Chaque trade » (06 tgOnTrade : EV et RE seulement) — avant, rien ne l'appelait
+      try { if(typeof tgOnTrade === 'function') tgOnTrade({ pair: pos.pair, side: pos.side, pnlUsd: realisedUsd, pnlPct: realisedPct, mode: S.tradingMode, auto: pos.auto === true, urgence: _urg, sortie: _sortie }); } catch(e) {}
       // v23 · #5 Vérifier alertes après chaque trade
       // [ÉCOLE VIVANTE · 10/10/2026] pas pour l'AA derrière un autre écran : ces alertes et ces badges s'affichent devant l'utilisateur et leurs drapeaux
       // (S.pnlAlerts, une fois par session) sont communs aux modes — l'écran les vérifie lui-même pour le mode affiché (renderHome)

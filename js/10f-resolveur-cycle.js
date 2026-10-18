@@ -664,7 +664,13 @@ if(typeof _resolvePairCycleCore==='function') window._resolvePairCycleCore = _re
 function _closeCompleted(pos, label) {
   if (pos._exitFailAt && (Date.now() - pos._exitFailAt) < 60000) return false;
   var err = null;
-  try { closePosition(pos.id, pos.auto === true); } catch(e) { err = e; }
+  // [GO ALERTES · 15/10/2026] raison « objectif » / « stop », lue sur l'étiquette que ce module pose lui-même : « bot TP … » / « bot SL … » (niveaux ATR et
+  // repli %), « bot Gain appris … » / « bot Stop appris … » (10i), « bot stop exchange simulé (coupure) », « perte max … » (_lossCapSweep). Transmise à
+  // closePosition (02) pour les notifications (« 🎯 TP / SL atteint ») et le message Telegram du trade — rien d'autre ne la lit. Horizon, etc. : aucune.
+  var _L = String(label || ''), _so = /^bot TP /.test(_L) ? { k: 'tp', why: _L.slice(4) } : /^bot SL /.test(_L) ? { k: 'sl', why: _L.slice(4) }
+    : /^bot Gain appris/.test(_L) ? { k: 'tp', why: 'gain appris' } : /^bot Stop appris/.test(_L) ? { k: 'sl', why: 'stop appris' }
+    : /^bot stop exchange/.test(_L) ? { k: 'sl', why: 'stop (coupure r\u00e9seau)' } : /^perte max /.test(_L) ? { k: 'sl', why: _L } : null;
+  try { closePosition(pos.id, pos.auto === true, _so ? { sortie: _so } : undefined); } catch(e) { err = e; }
   var gone = !(S.openPositions || []).some(function(p){ return p && p.id === pos.id; });
   if (gone) return true;
   pos._exitFailAt = Date.now();

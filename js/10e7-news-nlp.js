@@ -178,6 +178,15 @@ function _newsKeyStore(v) {
   if (typeof localStorage === 'undefined') return;
   try { if (v) localStorage.setItem(NEWS_KEY_LS, v); else localStorage.removeItem(NEWS_KEY_LS); } catch(e) {}
 }
+// [GO ALERTES · 15/10/2026] ETAT n° 32 — la clé vit dans S.newsApiKey (RAM) : propriété NON ÉNUMÉRABLE, comme le réglage Telegram (06 _tgGet). Avant,
+// elle était énumérable : _buildFullBackup (03), les exports .json / .txt, le backup d'urgence, le coffre et Guardian font JSON.stringify(S) — la clé
+// partait dans chaque backup de l'historique et chaque fichier exporté. Une propriété non énumérable n'y entre pas ; elle se lit et s'écrit comme avant
+// (S.newsApiKey), et le pont (17) la voit toujours pour la masquer. Les backups faits AVANT cette livraison la contiennent encore.
+function _newsKeyHide(v) {
+  if (typeof S === 'undefined' || !S) return;
+  try { Object.defineProperty(S, 'newsApiKey', { value: String(v === undefined ? (S.newsApiKey || '') : v), writable: true, configurable: true, enumerable: false }); }
+  catch(e) { try { S.newsApiKey = String(v || ''); } catch(_e) {} }
+}
 function _newsKeyLoad() {
   if (typeof localStorage === 'undefined') return '';
   let k = '';
@@ -191,12 +200,16 @@ function _newsKeyLoad() {
     } catch(e) {}
     if (k) _newsKeyStore(k);
   }
-  if (typeof S !== 'undefined' && S) S.newsApiKey = k;
+  _newsKeyHide(k);
   return k;
 }
 
 // ─ État de la source ─
-function _newsHasKey() { return !!(typeof S !== 'undefined' && S && typeof S.newsApiKey === 'string' && S.newsApiKey.trim().length >= 16); }
+function _newsHasKey() {
+  if (typeof S === 'undefined' || !S) return false;
+  try { const d = Object.getOwnPropertyDescriptor(S, 'newsApiKey'); if (d && d.enumerable) _newsKeyHide(d.value); } catch(e) {}   // [GO ALERTES] réécrite énumérable (vieux chemin) : recachée
+  return typeof S.newsApiKey === 'string' && S.newsApiKey.trim().length >= 16;
+}
 function _newsSourceAlive() {
   return _newsHasKey() && _newsStore.lastFetch > 0 && (Date.now() - _newsStore.lastFetch) < 3 * NEWS_TTL_MS && _newsStore.count > 0;
 }
@@ -322,7 +335,7 @@ function updateNewsApiKey(val) {
   if (typeof S === 'undefined' || !S) return;
   const v = String(val || '').trim();
   const changed = v !== (S.newsApiKey || '');
-  S.newsApiKey = v;
+  _newsKeyHide(v);   // [GO ALERTES · 15/10/2026] non énumérable : hors de JSON.stringify(S)
   _newsKeyStore(v);   // [P0b] seule persistance de la clé
   if (changed) {
     _newsStore.byId = {}; _newsStore.count = 0; _newsStore.lastFetch = 0; _newsStore.lastHttp = 0;

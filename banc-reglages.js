@@ -124,7 +124,7 @@ function fakeOpenDB(ok, rec) {
   await T('B4 · restoreBackup (04) : plus de saveState (refusé par l\'anti-régression) ; _writeChosenState ; champs « argent » du mode à l\'écran sautés quand le backup porte walletStore ; telegramCfg jamais copié', () => {
     const rb = code(fnSrc(s04, 'restoreBackup'));
     assert.ok(!/saveState\(/.test(rb) && /await _writeChosenState\(snap\)/.test(rb) && /if \(parWallet && acc\.includes\(key\)\) return;/.test(rb) && /Restauration NON écrite/.test(rb));
-    assert.ok(/if \(key === 'telegramCfg'\) return;/.test(rb) && /if \(key === 'tradingMode'\) return;/.test(rb), 'telegramCfg / tradingMode');
+    assert.ok(/if \(key === 'telegramCfg'( \|\| key === 'newsApiKey')?\) return;/.test(rb) && /if \(key === 'tradingMode'\) return;/.test(rb), 'telegramCfg / tradingMode');   // [GO ALERTES · 15/10/2026] + newsApiKey
   });
   const RB = (o) => {
     const seen = { alerts: [], written: null, saved: [], conf: [] }, S = { cycle: 900, botAutoMode: false, walletStore: { sim: {}, paperReal: {}, real: {} } };
@@ -262,7 +262,16 @@ function fakeOpenDB(ok, rec) {
   await T('E2 · l\'ouvreur (09c) et la fermeture (02 closePosition / openPosition) : texte identique au commit 61aeac6 — la taille des mises n\'est pas touchée', () => {
     const h = s => crypto.createHash('sha256').update(s).digest('hex').slice(0, 16);
     assert.strictEqual(h(rd('js/09c-auto-open.js')), '246bff0cee30b335', '09c modifié');
-    assert.strictEqual(h(fnSrc(s02, 'openPosition') + fnSrc(s02, 'closePosition')), '774d37994384441d', '02 open/close modifiés');
+    // [GO ALERTES · 15/10/2026] closePosition a reçu la raison « objectif / stop » et l'appel Telegram du trade (notifications seulement) : ces lignes,
+    // et elles seules, sont ramenées à leur texte d'avant — le reste doit rester identique au commit 61aeac6 (banc-alertes.js vérifie ce qu'elles font).
+    const AL = [
+      [/\n  \/\/ \[GO ALERTES · 15\/10\/2026\] 3e argument \{ sortie[^\n]*\n(  \/\/[^\n]*\n){2}  const _sortie = [^\n]*\n    \? [^\n]*\n/, '\n'],
+      [/      \/\/ v19 · #38 Notification trade fermé — \[GO ALERTES · 15\/10\/2026\][^\n]*\n      try \{ if\(typeof notifTradeClose === 'function'\) notifTradeClose\(pos\.pair, pos\.side, realisedUsd, realisedPct, _sortie, S\.tradingMode\); \} catch\(e\) \{\}\n      \/\/ \[GO ALERTES · 15\/10\/2026\] Telegram[^\n]*\n      try \{ if\(typeof tgOnTrade === 'function'\)[^\n]*\n/,
+       "      // v19 · #38 Notification trade fermé\n      try { if(typeof notifTradeClose === 'function') notifTradeClose(pos.pair, pos.side, realisedUsd, realisedPct); } catch(e) {}\n"],
+    ];
+    let cp = fnSrc(s02, 'closePosition');
+    if (/GO ALERTES/.test(cp)) AL.forEach(([re, by]) => { assert.ok(re.test(cp), 'GO ALERTES : ligne attendue absente de closePosition'); cp = cp.replace(re, by); });
+    assert.strictEqual(h(fnSrc(s02, 'openPosition') + cp), '774d37994384441d', '02 open/close modifiés');
   });
 
   console.log('▶ F. Hedge automatique — n° 15');

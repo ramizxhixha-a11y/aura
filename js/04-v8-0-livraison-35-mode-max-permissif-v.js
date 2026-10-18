@@ -65,7 +65,9 @@ const AURA_IMPORT_NEVER_FIELDS = [
   'leverageMaxMult', 'leverageBorrowRate', 'bunkerCfg',
   // [GO RÉGLAGES · 14/10/2026] le Mode Vacances garde AUTO / MANU d'avant les vacances et le rend au retour (un vieux fichier réécrirait ton AUTO / MANU
   // plus tard) ; le réglage Telegram porte un jeton secret (hors snapshot et backups : localStorage aura_tg_cfg, 06)
-  'vacancesCfg', 'telegramCfg'
+  'vacancesCfg', 'telegramCfg',
+  // [GO ALERTES · 15/10/2026] la clé CoinStats est un secret (localStorage aura_news_key, 10e7) : un vieux fichier qui la porte n'y écrit rien
+  'newsApiKey'
 ];
 // Les champs qui pèsent sur la DÉCISION d'ouvrir ou de fermer : toujours nommés EN PREMIER dans la confirmation (jamais cachés dans « … et N autres »)
 const AURA_IMPORT_DECISION_FIELDS = ['agents', 'dcThreshold', 'genome', 'genomeHistory', 'pairGenome', 'gainRules', 'stopRules', 'horizonRules', 'capRules',
@@ -424,7 +426,7 @@ async function restoreBackup(id) {
       const parWallet = !!(restored.walletStore && typeof restored.walletStore === 'object');
       Object.keys(restored).forEach(key => {
         if (key === '__proto__' || key === 'constructor' || key === 'prototype') return;
-        if (key === 'telegramCfg') return;   // secret : vit hors état (06, localStorage aura_tg_cfg) — un vieux backup n'y écrit rien
+        if (key === 'telegramCfg' || key === 'newsApiKey') return;   // secrets : vivent hors état (06 aura_tg_cfg, 10e7 aura_news_key) — un vieux backup n'y écrit rien [GO ALERTES · 15/10/2026 : + newsApiKey]
         if (key === 'tradingMode') return;   // le mode à l'écran ne change pas (09b2 _writeChosenState) : les accesseurs restent sur le bon portefeuille
         if (parWallet && acc.includes(key)) return;
         try {
@@ -2274,6 +2276,8 @@ function _initAlerts() {
   };
 }
 
+// [GO ALERTES · 15/10/2026] « EV · » — le mode dont parlent ces alertes (celui à l'écran : checkPnlAlerts ne tourne que pour lui)
+function _alertModeLab() { return (({ sim: 'AA', paperReal: 'EV', real: 'RE' })[S.tradingMode] || '') + (S.tradingMode ? ' · ' : ''); }
 // Vérifier toutes les alertes (appelé après chaque trade et dans renderHome)
 function checkPnlAlerts() {
   _initAlerts();
@@ -2294,26 +2298,28 @@ function checkPnlAlerts() {
   if(a.sessionGain.enabled && !a.sessionGain.triggered && pnlSession >= a.sessionGain.value) {
     a.sessionGain.triggered = true;
     showMilestone('🎯', `Objectif session atteint ! +$${pnlSession.toFixed(2)}`, false, 4000);
-    try { sendNotif('🎯 AURA — Objectif session !', `+$${pnlSession.toFixed(2)} en session`, '🎯'); } catch(e) {}
+    try { sendNotif('🎯 AURA — Objectif session !', `+$${pnlSession.toFixed(2)} en session`, '🎯', 'objectif-session'); } catch(e) {}
+    try { if (typeof tgOnPnlGoal === 'function') tgOnPnlGoal(_alertModeLab() + 'Gain session ≥ $' + a.sessionGain.value + ' : +$' + pnlSession.toFixed(2) + ' depuis minuit'); } catch(e) {}   // [GO ALERTES · 15/10/2026]
   }
   // Perte session
   if(a.sessionLoss.enabled && !a.sessionLoss.triggered && pnlSession <= a.sessionLoss.value) {
     a.sessionLoss.triggered = true;
     showMilestone('⚠', `Alerte perte session : $${pnlSession.toFixed(2)}`, true, 4000);
-    try { sendNotif('⚠️ AURA — Perte session', `$${pnlSession.toFixed(2)} — surveille tes positions`, '⚠️'); } catch(e) {}
+    try { sendNotif('⚠️ AURA — Perte session', `$${pnlSession.toFixed(2)} — surveille tes positions`, '⚠️', 'perte-session'); } catch(e) {}
   }
   // Gain journalier
   const pnl24h = (S.pnl24h || 0);
   if(a.dailyGain.enabled && !a.dailyGain.triggered && pnl24h >= a.dailyGain.value) {
     a.dailyGain.triggered = true;
     showMilestone('💰', `Excellent ! +$${pnl24h.toFixed(2)} aujourd'hui !`, false, 4000);
-    try { sendNotif('💰 AURA — Grande journée !', `+$${pnl24h.toFixed(2)} en 24h`, '💰'); } catch(e) {}
+    try { sendNotif('💰 AURA — Grande journée !', `+$${pnl24h.toFixed(2)} en 24h`, '💰', 'objectif-jour'); } catch(e) {}
+    try { if (typeof tgOnPnlGoal === 'function') tgOnPnlGoal(_alertModeLab() + 'Gain journalier ≥ $' + a.dailyGain.value + ' : +$' + pnl24h.toFixed(2)); } catch(e) {}   // [GO ALERTES · 15/10/2026]
   }
   // Perte journalière
   if(a.dailyLoss.enabled && !a.dailyLoss.triggered && pnl24h <= a.dailyLoss.value) {
     a.dailyLoss.triggered = true;
     showMilestone('🚨', `Alerte : -$${Math.abs(pnl24h).toFixed(2)} aujourd'hui`, true, 4000);
-    try { sendNotif('🚨 AURA — Pertes importantes', `-$${Math.abs(pnl24h).toFixed(2)} en 24h`, '🚨'); } catch(e) {}
+    try { sendNotif('🚨 AURA — Pertes importantes', `-$${Math.abs(pnl24h).toFixed(2)} en 24h`, '🚨', 'perte-jour'); } catch(e) {}
   }
   // Drawdown
   if(a.drawdown.enabled && !a.drawdown.triggered && Math.abs(dd*100) >= a.drawdown.value) {
@@ -2466,9 +2472,12 @@ function _getGoals() {
 }
 
 // Rendu de la section Alertes + Objectifs dans le Home
+// [GO ALERTES · 15/10/2026] Outils Avancés › 🔔 Alertes affiche cette section dans « alertsSection2 » (07 _renderOutilsTab ne lui prête l'id
+// « alertsSection » que le temps du premier rendu). Un clic (interrupteur, seuil) re-rendait le conteneur caché de l'accueil : l'interrupteur changeait
+// l'état mais restait affiché comme avant. Le rendu va maintenant dans chacun des deux conteneurs présents.
 function renderAlertsSection() {
-  const el = document.getElementById('alertsSection');
-  if(!el) return;
+  const els = ['alertsSection', 'alertsSection2'].map(id => document.getElementById(id)).filter(Boolean);
+  if(!els.length) return;
   _initAlerts();
   const a = S.pnlAlerts;
   const goals = _getGoals();
@@ -2484,7 +2493,7 @@ function renderAlertsSection() {
     { key:'tradeCount',  emoji:'📊', label:'Nb Trades',       sub:'Alerte à N trades complétés',       loss:false },
   ];
 
-  el.innerHTML = `
+  const _html = `
     <!-- Alertes P&L -->
     <div class="alert-card">
       <div class="alert-card-title">🔔 Alertes Seuils P&L</div>
@@ -2542,6 +2551,7 @@ function renderAlertsSection() {
       }).join('')}
     </div>
   `;
+  els.forEach(el => { el.innerHTML = _html; });
 }
 window.renderAlertsSection = renderAlertsSection;
 // ═══ v24 · #2 HEATMAP TEMPORELLE ENRICHIE ═══

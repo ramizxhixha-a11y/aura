@@ -94,7 +94,11 @@ const _LIGHT_KEYS = [
   'tradingMode','botAutoMode',   // (GO DÉMO · 12/10/2026) « _mcActiveSlot » (Multi-compte, retiré) sorti de la liste : 09b1 ne l'a jamais écrit, il n'existait dans aucun snapshot
   'totalTrades','winTrades','_genCount','_totalCompounded','_startPortfolio',
   'taxConfig','feeConfig','region','regions','toastVerbose','suggestionsEnabled',
-  'b','userStake','realTimeframe'
+  'b','userStake','realTimeframe',
+  // GO ALERTES · 18/10/2026 (sans crochets : banc-p0b-newskey lit cette liste jusqu'au premier crochet fermant) — tes alertes et les seuils des alertes
+  // P&L : petits, et l'écran promet qu'ils sont gardés d'une relance à l'autre ; sans eux ici, un chargement où l'IDB n'a rien rendu (LS allégé seul,
+  // plus bas) les perdait quand même (relecture adverse du 18/10, 2e passage)
+  'priceAlerts','pnlAlerts'
 ];
 
 // Copie allegee pour le LS : UNIQUEMENT les cles de la liste blanche.
@@ -144,7 +148,7 @@ async function _writeChosenState(snap) {
   // s'arrêtaient sans message. Et le mode à l'écran ne change pas : au rechargement, 01 remet l'écran mémorisé ; si le fichier portait un autre mode,
   // l'écran disait EV pendant que l'argent pointait sur le mode du fichier (course 09b2 / 01, vue avec un IDB lent).
   try {
-    ['antiRevengeCfg', 'bunkerCfg', 'vacancesCfg', 'soundCfg', 'notifConfig', 'toastVerbose'].forEach(function (k) {
+    ['antiRevengeCfg', 'bunkerCfg', 'vacancesCfg', 'soundCfg', 'notifConfig', 'toastVerbose', 'priceAlerts', 'pnlAlerts'].forEach(function (k) {   // [GO ALERTES · 15/10/2026] + alertes
       if ((snap[k] === undefined || snap[k] === null) && typeof S !== 'undefined' && S && S[k] !== undefined && S[k] !== null) snap[k] = JSON.parse(JSON.stringify(S[k]));
     });
   } catch (e) {}
@@ -245,14 +249,20 @@ function _reglageMerge(cur, saved) {
 }
 function _reglagesRelus(snap) {
   if (!snap || typeof snap !== 'object' || typeof S === 'undefined' || !S) return;
-  const G = { antiRevengeCfg: '_rvGet', bunkerCfg: '_bkGet', vacancesCfg: '_vacGet', soundCfg: '_sndGet', notifConfig: '_initNotifConfig' };
+  // [GO ALERTES · 15/10/2026] + seuils des alertes P&L (04 _initAlerts : « activée » et valeur, champ par champ comme les autres)
+  const G = { antiRevengeCfg: '_rvGet', bunkerCfg: '_bkGet', vacancesCfg: '_vacGet', soundCfg: '_sndGet', notifConfig: '_initNotifConfig', pnlAlerts: '_initAlerts' };
   Object.keys(G).forEach(function (k) {
-    const sv = snap[k];
+    let sv = snap[k];
     if (!sv || typeof sv !== 'object' || Array.isArray(sv)) return;
+    // [GO ALERTES · 15/10/2026] d'un seuil P&L, seuls « activée » et la valeur reviennent : « déjà déclenchée » reste une affaire de la session (un vieux
+    // fichier ou un import qui le porterait ferait taire l'alerte jusqu'à sa remise à zéro de 24 h, repoussée à chaque relance)
+    if (k === 'pnlAlerts') sv = Object.keys(sv).reduce(function (o, n) { const a = sv[n]; if (a && typeof a === 'object') o[n] = { enabled: a.enabled, value: a.value }; return o; }, {});
     try { const fn = (typeof window !== 'undefined') ? window[G[k]] : null; if (typeof fn === 'function') fn(); } catch (e) {}
     if (S[k] && typeof S[k] === 'object') _reglageMerge(S[k], sv);
   });
   if (typeof snap.toastVerbose === 'boolean') S.toastVerbose = snap.toastVerbose;
+  // [GO ALERTES · 15/10/2026] alertes prix : relues par 06 _prSane (champs connus, du bon type ; paire au format XXX/YYY ; ids uniques)
+  if (Array.isArray(snap.priceAlerts)) { try { const f = (typeof window !== 'undefined') ? window._prSane : null; if (typeof f === 'function') S.priceAlerts = f(snap.priceAlerts); } catch (e) {} }
   try { if (S.vacancesCfg && S.vacancesCfg.active === true && typeof window !== 'undefined' && typeof window._vacResume === 'function') setTimeout(function () { try { window._vacResume(); } catch (e) {} }, 1500); } catch (e) {}
 }
 window._reglagesRelus = _reglagesRelus;
@@ -1321,4 +1331,4 @@ setTimeout(_auraRotatePurge, 20000);
 // relue » — le bug du 16/08 (7 clés perdues à chaque boot) devient structurellement
 // détectable. RÈGLE : toute clé ajoutée à 09b1 s'ajoute à applySnap ET ici.
 window._WALLET_MIRRORS = ['portfolio','totalTrades','winTrades','leverageReserve','leverageTotalFees','fiscalReserveLog','cashLog','ownFundsInjected','_ownFundsLegacyEUR','ownFundsLog','_autoLevBase','dreamJournal'];
-window._APPLYSNAP_MANIFEST = ['genome','genomeHistory','pairGenome','pairGenomeHistory','_pairGenomeDay','attribution','horizonRules','capRules','_manConsignes','tendance','fiscalCfg','antiRevengeCfg','bunkerCfg','vacancesCfg','soundCfg','notifConfig','toastVerbose','_gbpToBnbDone','_realJudgments','_lossStreaks','gainRules','stopRules','fitWindowRule','botMerit','dcVoices','dcThreshold','_botPredictions','_botMeritMigrated','evoTrials','evoMerit','_metaMeritMigrated','_lastEvolutionAt','_lastDreamAt','_abstMigrated','_degelMigrated','eventLog','eventStats','feeConfig','vMinor','pairBestWorst','profitSplitCaissePct','vMajor','fiatConvFeePct','agentMemories','globalMemoryPool','dreams','dynamicPairKeys','pairCandidates','proposals','decisionCascade','resonanceHistory','mutedAgents','agentLessons','realTimeframe','realActivePairs','agentLessonsReal','realKillSwitch','realModeStartedAt','preRealSnapshot','agentLessonsPaperReal','paperRealTimeframe','paperRealStartedAt','paperRealKillSwitch','paperRealLastClose','paperRealConsecLosses','paperRealGlobalPauseUntil','_genCount','key','cycle','cycleMax','chainLog','learningHistory','evoLog','agents','pairStates','walletStore','openPositions','pendingActions','botFleet','paperRealConfig','adaptiveState','abTesting','taxConfig','realCandles','preRealSnapshotPaperReal','heatmap','shadow','archives','paperRealStats','realStatsByPair','paperRealActivePairs','fees','tradeContextMemory','agentPairSkill','customPairs','removedPairs','botDisciples','discipleTasks','discipleAngles','discipleTaskSkill','savedAt','version','tradingMode','botAutoMode','fullPowerMode','leverage','_autoLevBorrowed','leverageBorrowed','cashAccount','tradingAccount','fiscalReserveAccount','antiNegReserve','_startPortfolio','_fleetTruthReset0908','_totalCompounded','brainLog','_errStats','_riskVetoes','_botSurplusCarry','evoRule','mktLog','mktStats','_fpByBot','perfLog'];
+window._APPLYSNAP_MANIFEST = ['genome','genomeHistory','pairGenome','pairGenomeHistory','_pairGenomeDay','attribution','horizonRules','capRules','_manConsignes','tendance','fiscalCfg','antiRevengeCfg','bunkerCfg','vacancesCfg','soundCfg','notifConfig','toastVerbose','priceAlerts','pnlAlerts','_gbpToBnbDone','_realJudgments','_lossStreaks','gainRules','stopRules','fitWindowRule','botMerit','dcVoices','dcThreshold','_botPredictions','_botMeritMigrated','evoTrials','evoMerit','_metaMeritMigrated','_lastEvolutionAt','_lastDreamAt','_abstMigrated','_degelMigrated','eventLog','eventStats','feeConfig','vMinor','pairBestWorst','profitSplitCaissePct','vMajor','fiatConvFeePct','agentMemories','globalMemoryPool','dreams','dynamicPairKeys','pairCandidates','proposals','decisionCascade','resonanceHistory','mutedAgents','agentLessons','realTimeframe','realActivePairs','agentLessonsReal','realKillSwitch','realModeStartedAt','preRealSnapshot','agentLessonsPaperReal','paperRealTimeframe','paperRealStartedAt','paperRealKillSwitch','paperRealLastClose','paperRealConsecLosses','paperRealGlobalPauseUntil','_genCount','key','cycle','cycleMax','chainLog','learningHistory','evoLog','agents','pairStates','walletStore','openPositions','pendingActions','botFleet','paperRealConfig','adaptiveState','abTesting','taxConfig','realCandles','preRealSnapshotPaperReal','heatmap','shadow','archives','paperRealStats','realStatsByPair','paperRealActivePairs','fees','tradeContextMemory','agentPairSkill','customPairs','removedPairs','botDisciples','discipleTasks','discipleAngles','discipleTaskSkill','savedAt','version','tradingMode','botAutoMode','fullPowerMode','leverage','_autoLevBorrowed','leverageBorrowed','cashAccount','tradingAccount','fiscalReserveAccount','antiNegReserve','_startPortfolio','_fleetTruthReset0908','_totalCompounded','brainLog','_errStats','_riskVetoes','_botSurplusCarry','evoRule','mktLog','mktStats','_fpByBot','perfLog'];

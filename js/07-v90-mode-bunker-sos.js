@@ -1873,7 +1873,7 @@ async function requestNotifPermission() {
       // Notification de test
       setTimeout(() => {
         sendNotif('🎉 AURA ∞ — Notifications actives !',
-          'Tu recevras des alertes pour tes trades et événements importants.', '🔔');
+          'Tu recevras des alertes pour tes trades et événements importants.', '🔔', 'test');
       }, 500);
     } else {
       showToast('⚠ Permission refusée — active les notifs dans les réglages Chrome', 4000, 'warn');
@@ -1885,15 +1885,26 @@ async function requestNotifPermission() {
 }
 window.requestNotifPermission = requestNotifPermission;
 
-// Envoyer une notification (avec anti-spam 30s)
-function sendNotif(title, body, icon) {
+// Envoyer une notification
+// [GO ALERTES · relecture adverse du 18/10/2026] (1) `Notification` était lu NU : dans l'app Android (WebView, pas de notifications du système) le
+// moindre appel levait une ReferenceError dès que le réglage « activé » avait été restauré d'un snapshot fait au navigateur — tous les appelants sont
+// sous try, donc rien ne cassait, mais les quatre interrupteurs se taisaient sans laisser de trace. (2) L'anti-spam de 30 s était GLOBAL : avec les
+// quatre producteurs branchés par cette livraison, une notification de régime avalait le « 🎯 Objectif atteint » du trade qui suivait. Il est désormais
+// PAR GENRE. Le genre « trade » n'en a pas : chaque fermeture est annoncée, comme le dit son interrupteur — le bandeau Android porte le même tag
+// (« aura-notif ») et se remplace donc lui-même au lieu de s'empiler.
+// [2e passage] les genres « trade:… » gardent une petite fenêtre de 3 s : une fermeture d'urgence ou un Bunker ferment onze positions dans la même
+// seconde — onze vibrations pour un seul bandeau (les notifications portent le même tag et se remplacent). La liste complète reste dans Telegram et au
+// journal. Ouverture et fermeture ont leur propre genre : une ouverture ne peut pas cacher la fermeture qui suit (vu à la sonde du 18/10).
+const _NF_FEN = 30000, _NF_FEN_TRADE = 3000;
+const _nfLast = {};   // { genre : date } — en mémoire, jamais sauvegardé
+function sendNotif(title, body, icon, genre) {
   _initNotifConfig();
   if(!S.notifConfig.enabled) return;
-  if(Notification.permission !== 'granted') return;
-  // Anti-spam : pas plus d'une notif toutes les 30s
-  const now = Date.now();
-  if(now - (S.notifConfig.lastNotifTs||0) < 30000) return;
-  S.notifConfig.lastNotifTs = now;
+  if(typeof Notification === 'undefined' || Notification.permission !== 'granted') return;
+  const now = Date.now(), g = String(genre || 'autre');
+  if(now - (_nfLast[g] || 0) < (g.indexOf('trade') === 0 ? _NF_FEN_TRADE : _NF_FEN)) return;
+  _nfLast[g] = now;
+  S.notifConfig.lastNotifTs = now;   // gardé : l'écran et d'éventuels appelants externes le lisent
   try {
     const n = new Notification(title, {
       body,
@@ -1910,30 +1921,46 @@ function sendNotif(title, body, icon) {
 window.sendNotif = sendNotif;
 
 // Notification : trade ouvert
+// [GO ALERTES · relecture adverse du 18/10/2026, 2e passage] l'AA est exclue, comme pour Telegram : elle trade sur des bougies FABRIQUÉES et des milliers
+// de fois (2 054 trades contre 354 en EV) — mesuré sur l'historique du 15/10 : 520 des 1 015 événements d'une journée venaient d'elle, jusqu'à quatre
+// notifications dans la même seconde. Le mode est celui du trade (S.tradingMode l'est au moment de l'appel : 02 openPosition / closePosition).
 function notifTradeOpen(pair, side, stake) {
   _initNotifConfig();
   if(!S.notifConfig.tradeOpen) return;
+  if(S.tradingMode === 'sim') return;
   const sideStr = side === 'long' ? '↑ LONG' : '↓ SHORT';
   sendNotif(
     `🤖 AURA — Position ouverte`,
     `${pair} ${sideStr} · $${(stake||0).toFixed(0)}`,
-    side === 'long' ? '📈' : '📉'
+    side === 'long' ? '📈' : '📉',
+    'trade:ouverture'
   );
 }
 window.notifTradeOpen = notifTradeOpen;
 
 // Notification : trade fermé
-function notifTradeClose(pair, side, pnlUsd, pnlPct) {
+// [GO ALERTES · 15/10/2026] « 🎯 TP / SL atteint » n'était lu par rien. closePosition (02) passe maintenant la raison de la fermeture quand c'est un
+// objectif ou un stop ({ k: 'tp' | 'sl', why }) et le mode du trade : avec l'interrupteur TP / SL, CETTE fermeture est annoncée comme « Objectif atteint »
+// ou « Stop atteint » (une seule notification par fermeture : l'anti-spam de 30 s de sendNotif aurait mangé la seconde) ; sinon « Trade clôturé » si
+// son interrupteur est mis. Avant, une perte s'affichait « −$x (+−y %) » : le signe du % est maintenant le sien.
+function notifTradeClose(pair, side, pnlUsd, pnlPct, sortie, mode) {
   _initNotifConfig();
-  if(!S.notifConfig.tradeClose) return;
-  const win = pnlUsd >= 0;
-  const emoji = win ? '✅' : '❌';
-  const pnlStr = (win?'+':'') + '$' + Math.abs(pnlUsd).toFixed(2)
-               + ' (' + (win?'+':'') + pnlPct.toFixed(2) + '%)';
+  const c = S.notifConfig;
+  if((mode || S.tradingMode) === 'sim') return;   // [2e passage] AA exclue, comme pour Telegram (bougies fabriquées, des milliers de trades)
+  const usd = Number(pnlUsd) || 0, pct = Number(pnlPct) || 0, win = usd >= 0;
+  const lab = ({ sim: ' · AA', paperReal: ' · EV', real: ' · RE' })[mode] || '';
+  const pnlStr = (win ? '+' : '−') + '$' + Math.abs(usd).toFixed(2) + ' (' + (pct >= 0 ? '+' : '') + pct.toFixed(2) + ' %)';
+  if (sortie && (sortie.k === 'tp' || sortie.k === 'sl') && c.tpSl) {
+    sendNotif(sortie.k === 'tp' ? '🎯 AURA — Objectif atteint' : '🛑 AURA — Stop atteint',
+      `${pair}${lab} · ${sortie.why || (sortie.k === 'tp' ? 'objectif' : 'stop')} · ${pnlStr}`, sortie.k === 'tp' ? '🎯' : '🛑', 'trade:fermeture');
+    return;
+  }
+  if(!c.tradeClose) return;
   sendNotif(
-    `${emoji} AURA — Trade clôturé`,
-    `${pair} · ${pnlStr}`,
-    win ? '💰' : '📉'
+    `${win ? '✅' : '❌'} AURA — Trade clôturé`,
+    `${pair}${lab} · ${pnlStr}`,
+    win ? '💰' : '📉',
+    'trade:fermeture'
   );
 }
 window.notifTradeClose = notifTradeClose;
@@ -1945,29 +1972,67 @@ function notifDrawdown(ddPct) {
   sendNotif(
     '⚠️ AURA — Drawdown critique',
     `Drawdown ${ddPct.toFixed(1)}% — surveille tes positions`,
-    '⚠️'
+    '⚠️',
+    'drawdown'
   );
 }
 window.notifDrawdown = notifDrawdown;
 
 // Notification : changement de régime
-function notifRegimeChange(newRegime) {
+// [GO ALERTES · 15/10/2026] notifRegimeChange n'avait aucun appelant. _notifRegimeWatch le reçoit du battement (08), avec le régime que le badge de
+// l'en-tête vient d'afficher (detectMarketRegime, mode à l'écran) : un changement → une notification. Changer de mode à l'écran n'en est pas un
+// (chaque mode a ses prix : le régime de référence repart du nouveau mode, sans notification). Rien n'est calculé quand l'interrupteur est coupé.
+const _NR_LAB = { bull:'🟢 BULL', bear:'🔴 BEAR', volatile:'🟡 VOLATILE', volatile_bull:'🟢🟡 VOLATILE haussier', volatile_bear:'🔴🟡 VOLATILE baissier', calm:'⚪ CALM' };
+function notifRegimeChange(newRegime, oldRegime) {
   _initNotifConfig();
   if(!S.notifConfig.regimeChange) return;
-  const labels = { bull:'🟢 BULL', bear:'🔴 BEAR', volatile:'🟡 VOLATILE', calm:'⚪ CALM' };
+  const lb = r => _NR_LAB[r] || String(r || '?').toUpperCase();
+  const lab = ({ sim: 'AA', paperReal: 'EV', real: 'RE' })[S.tradingMode] || '';
   sendNotif(
     '📊 AURA — Régime marché changé',
-    `Nouveau régime : ${labels[newRegime] || newRegime.toUpperCase()}`,
-    '📊'
+    `${lab ? lab + ' · ' : ''}${oldRegime ? lb(oldRegime) + ' → ' : 'Nouveau régime : '}${lb(newRegime)}`,
+    '📊',
+    'regime'
   );
 }
 window.notifRegimeChange = notifRegimeChange;
+// [GO ALERTES · relecture adverse du 18/10/2026] le nouveau régime doit TENIR _NR_TENUE lectures de suite avant d'être annoncé. Le battement appelle
+// cette veille une fois par seconde avec le régime du badge, et detectMarketRegime (02) compare une moyenne à des bornes sèches (± 2 %) : une moyenne
+// qui frôle une borne basculait à chaque seconde → une notification toutes les 30 s en boucle (mesuré : 119 bascules sur 120 battements). Un vrai
+// changement de régime tient bien plus d'une minute ; un frôlement, jamais. Ce délai ne touche QUE l'annonce : ni la décision, ni les mises, ni le badge.
+// [2e passage] la tenue se compte par FAMILLE (hausse / baisse / volatile / calme), pas sur le sous-type : la volatilité a elle aussi une borne sèche
+// (2 %), et un vrai passage à la hausse dont le sous-type papillonne entre « bull » et « volatile_bull » n'aurait JAMAIS été annoncé. Un frôlement de
+// la borne ± 2 % change de famille à chaque lecture : toujours rien d'annoncé. L'annonce dit le régime précis du moment.
+const _NR_TENUE = 60;
+const _NR_FAM = { bull: 'hausse', volatile_bull: 'hausse', bear: 'baisse', volatile_bear: 'baisse', volatile: 'volatile', calm: 'calme' };
+function _nrFam(r) { return _NR_FAM[r] || String(r || '?'); }
+let _nrLast = null;   // { mode, regime, fam } — en mémoire seulement
+let _nrCand = null;   // { fam, regime, n } — famille candidate, en attente de confirmation
+function _notifRegimeWatch(regime) {
+  try {
+    if (typeof S === 'undefined' || !S) return;
+    _initNotifConfig();
+    const c = S.notifConfig;
+    if (!c.enabled || !c.regimeChange || !regime) { _nrLast = null; _nrCand = null; return; }
+    const mode = S.tradingMode, fam = _nrFam(regime);
+    if (!_nrLast || _nrLast.mode !== mode) { _nrLast = { mode: mode, regime: regime, fam: fam }; _nrCand = null; return; }
+    if (fam === _nrLast.fam) { _nrLast.regime = regime; _nrCand = null; return; }
+    if (!_nrCand || _nrCand.fam !== fam) { _nrCand = { fam: fam, regime: regime, n: 1 }; return; }
+    _nrCand.regime = regime;
+    if (++_nrCand.n < _NR_TENUE) return;
+    const avant = _nrLast.regime;
+    _nrLast = { mode: mode, regime: regime, fam: fam };
+    _nrCand = null;
+    notifRegimeChange(regime, avant);
+  } catch(e) {}
+}
+window._notifRegimeWatch = _notifRegimeWatch;
 
 // Notification Twin Live
 function notifTwinAlert(msg) {
   _initNotifConfig();
   if(!S.notifConfig.twinAlert) return;
-  sendNotif('👯 AURA Twin Live', msg, '👯');
+  sendNotif('👯 AURA Twin Live', msg, '👯', 'twin');
 }
 window.notifTwinAlert = notifTwinAlert;
 
@@ -1995,12 +2060,12 @@ function renderNotifSettings() {
                   : 'default';
 
   const types = [
-    { key:'tradeOpen',     label:'Trade ouvert',        emoji:'📥', sub:'À chaque ouverture de position' },
-    { key:'tradeClose',    label:'Trade fermé',          emoji:'📤', sub:'Avec résultat P&L' },
-    { key:'tpSl',          label:'TP / SL atteint',      emoji:'🎯', sub:'Alerte prix cible ou stop' },
-    { key:'drawdownAlert', label:'Drawdown critique',    emoji:'⚠️', sub:'Si drawdown > 10%' },
-    { key:'twinAlert',     label:'Twin Live alerte',     emoji:'👯', sub:'Quand Twin surpasse le bot' },
-    { key:'regimeChange',  label:'Changement de régime', emoji:'📊', sub:'BULL / BEAR / VOLATILE' },
+    { key:'tradeOpen',     label:'Trade ouvert',        emoji:'📥', sub:'À chaque ouverture en EV / RE (l\'AA, bougies fabriquées, n\'en envoie pas)' },
+    { key:'tradeClose',    label:'Trade fermé',          emoji:'📤', sub:'Avec résultat P&L, en EV / RE · une au plus par salve de 3 s (urgence, Bunker)' },
+    { key:'tpSl',          label:'TP / SL atteint',      emoji:'🎯', sub:'Objectif ou stop (TP, SL, trailing, perte max) — remplace « Trade fermé » pour cette fermeture' },
+    { key:'drawdownAlert', label:'Drawdown critique',    emoji:'⚠️', sub:'Au seuil de l\'alerte « Drawdown » (Alertes P&L)' },
+    { key:'twinAlert',     label:'Twin Live alerte',     emoji:'👯', sub:'Quand le Twin passe devant le bot — il n\'avance qu\'à l\'ouverture de l\'accueil (défaut antérieur, n° 34 au registre)' },
+    { key:'regimeChange',  label:'Changement de régime', emoji:'📊', sub:'Régime du badge de l\'en-tête (mode à l\'écran)' },
   ];
 
   el.innerHTML = `
@@ -2015,16 +2080,21 @@ function renderNotifSettings() {
         </div>
         <div style="display:flex;align-items:center;gap:8px;">
           <span class="notif-permission-status ${permClass}">${permLabel}</span>
-          ${perm !== 'granted' && perm !== 'denied' ? `
+          ${perm !== 'granted' && perm !== 'denied' && perm !== 'unsupported' ? `
             <button class="notif-request-btn" onclick="requestNotifPermission()">Activer</button>
           ` : ''}
           ${perm === 'granted' ? `
-            <button class="notif-request-btn" onclick="sendNotif('🔔 Test AURA','Notifications fonctionnelles !','🔔')">Test</button>
+            <button class="notif-request-btn" onclick="sendNotif('🔔 Test AURA','Notifications fonctionnelles !','🔔','test')">Test</button>
           ` : ''}
         </div>
       </div>
 
-      ${perm !== 'granted' ? `
+      ${perm === 'unsupported' ? `
+        <div style="font-size:9px;color:var(--t3);text-align:center;padding:8px;line-height:1.5;">
+          L'app Android (WebView) n'a pas de notifications du système : ces réglages n'agissent que dans un navigateur.<br>
+          Pour être prévenu hors de l'app : <strong>Telegram</strong> (accueil › 🔧 Outils Avancés › 🔔 Alertes) — trades EV / RE, alertes prix, objectif P&L, Bunker, résumé de la semaine.
+        </div>
+      ` : perm !== 'granted' ? `
         <div style="font-size:9px;color:var(--t3);text-align:center;padding:8px;line-height:1.5;">
           Appuie sur "Activer" puis autorise les notifications dans Chrome.<br>
           Fonctionne mieux si AURA est installée en PWA.
@@ -2140,12 +2210,32 @@ function tickTwinLive() {
     }
   });
 
+  // [GO ALERTES · 15/10/2026] « 👯 Twin Live alerte · quand le Twin passe devant le bot » : notifTwinAlert n'avait aucun appelant. Même lecture que
+  // l'encart (_twinVerdict, aussi utilisé par renderTwinLive) : une notification quand le verdict DEVIENT « Twin devant », pas à chaque tick.
+  try {
+    const v = _twinVerdict();
+    if (v.etat === 'twin' && S.twin._devant !== true) { S.twin._devant = true; notifTwinAlert(`Twin +$${v.delta.toFixed(2)} devant le bot sur ${v.n} trades`); }
+    else if (v.etat !== 'twin') S.twin._devant = false;
+  } catch(e) {}
+
   // Rafraîchir UI si sur la page HOME
   if(S.currentPage === 0) {
     try { renderTwinLive(); } catch(e) {}
   }
 }
 window.tickTwinLive = tickTwinLive;
+// Verdict Twin / bot — celui que l'encart affiche (seuils de l'encart d'origine : 3 trades, écart de 1 $)
+function _twinVerdict() {
+  _initTwin();
+  const twin = S.twin, n = twin.trades.length;
+  const mainPnl = (S.portfolio && S._startPortfolio ? (S.portfolio - S._startPortfolio) : 0);
+  const delta = twin.virtualPnl - mainPnl;
+  if (!twin.active && n === 0) return { etat: 'inactif', n: n, delta: delta, mainPnl: mainPnl };
+  if (n < 3) return { etat: 'attente', n: n, delta: delta, mainPnl: mainPnl };
+  if (Math.abs(delta) < 1) return { etat: 'egal', n: n, delta: delta, mainPnl: mainPnl };
+  return { etat: twin.virtualPnl > mainPnl ? 'twin' : 'bot', n: n, delta: delta, mainPnl: mainPnl };
+}
+window._twinVerdict = _twinVerdict;
 
 function toggleTwinLive() {
   _initTwin();
@@ -2193,18 +2283,19 @@ function renderTwinLive() {
   if(mainWrEl) mainWrEl.textContent = S.totalTrades > 0 ? `WR ${mainWr}% · ${S.totalTrades} trades` : '—';
   if(altWrEl)  altWrEl.textContent  = twin.trades.length > 0 ? `WR ${twinWr}% · ${twin.trades.length} trades` : '—';
 
-  // Insight
+  // Insight — [GO ALERTES · 15/10/2026] verdict partagé avec la notification Twin (_twinVerdict)
   if(insightEl) {
-    if(!twin.active && twin.trades.length === 0) {
+    const _v = _twinVerdict();
+    if(_v.etat === 'inactif') {
       insightEl.textContent = 'Activez le Twin pour démarrer l\'observation parallèle.';
     } else {
-      const delta = twin.virtualPnl - mainPnl;
-      const n = twin.trades.length;
-      if(n < 3) {
+      const delta = _v.delta;
+      const n = _v.n;
+      if(_v.etat === 'attente') {
         insightEl.textContent = `⏳ ${n}/3 trades nécessaires pour l'analyse comparative…`;
-      } else if(Math.abs(delta) < 1) {
+      } else if(_v.etat === 'egal') {
         insightEl.textContent = `⚖️ Performances équivalentes sur ${n} trades. Les deux stratégies convergent.`;
-      } else if(twin.virtualPnl > mainPnl) {
+      } else if(_v.etat === 'twin') {
         insightEl.textContent = `🔵 Twin +$${Math.abs(delta).toFixed(2)} devant sur ${n} trades. Stratégie moins sélective plus rentable ici.`;
         insightEl.style.color = 'var(--pur)';
       } else {
@@ -3335,7 +3426,7 @@ function learnFromOpenPositions() {
     // TP ATR, rend au plus 40 % du gain acquis ou un quart de la distance ; règle v7.12 conservée sans niveau TP).
     const _trail = (typeof _trailStopHit === 'function') ? _trailStopHit(pos, cur) : null;
     if (_trail) {
-      closePosition(pos.id, pos.auto === true);
+      closePosition(pos.id, pos.auto === true, { sortie: { k: 'sl', why: 'trailing stop' } });   // [GO ALERTES · 15/10/2026] raison lue par les notifications seulement
       S.chainLog.push({
         icon: '🎯',
         desc: `Trailing stop · ${pos.pair} ${pos.side.toUpperCase()} · ${_trail.why}`,
@@ -3401,7 +3492,7 @@ function learnFromOpenPositions() {
       if(pos.tp !== null) {
         const tpHit = pos.side==='long' ? cur >= pos.tp : cur <= pos.tp;
         if(tpHit) {
-          closePosition(pos.id, false);  // user-set TP — always allowed
+          closePosition(pos.id, false, { sortie: { k: 'tp', why: 'TP' } });  // user-set TP — always allowed · [GO ALERTES] raison pour les notifications
           S.chainLog.push({ icon:'🎯', desc:`TP atteint ${pos.pair} ${pos.side.toUpperCase()} @${cur.toFixed(2)}`, hash:rndHash(), time:nowStr() });
           showToast('🎯 TP atteint — '+pos.pair+' fermé');
           return;
@@ -3414,7 +3505,7 @@ function learnFromOpenPositions() {
           ? ((cur - pos.entryPrice) / pos.entryPrice) * 100
           : ((pos.entryPrice - cur) / pos.entryPrice) * 100;
         if (rawLossPct <= -90) {
-          closePosition(pos.id, false);
+          closePosition(pos.id, false, { sortie: { k: 'sl', why: 'garde-fou −90 %' } });
           S.chainLog.push({ icon:'💥', desc:`LIQUIDATION ${pos.pair} ${pos.side.toUpperCase()} @${cur.toFixed(pos.pair.includes('USDT')&&ps.price<10?4:2)} · perte extrême évitée`, hash:rndHash(), time:nowStr() });
           showToast('💥 Liquidation — '+pos.pair+' (garde-fou -90%)', 4000, 'critical');
           return;
@@ -3424,7 +3515,7 @@ function learnFromOpenPositions() {
       if(pos.sl !== null) {
         const slHit = pos.side==='long' ? cur <= pos.sl : cur >= pos.sl;
         if(slHit) {
-          closePosition(pos.id, false);  // user-set SL — always allowed
+          closePosition(pos.id, false, { sortie: { k: 'sl', why: 'SL' } });  // user-set SL — always allowed · [GO ALERTES] raison pour les notifications
           S.chainLog.push({ icon:'🛑', desc:`SL déclenché ${pos.pair} ${pos.side.toUpperCase()} @${cur.toFixed(2)}`, hash:rndHash(), time:nowStr() });
           showToast('🛑 Stop Loss — '+pos.pair+' fermé', 2800, 'critical');
           return;
@@ -5411,8 +5502,7 @@ function renderHome() {
   // Le bunker tourne uniquement via son timer dédié (toutes les 120s) + _bkInitCapRef() au démarrage
   // v23 · Vérifier alertes P&L (silencieux)
   try { if(typeof checkPnlAlerts === 'function') checkPnlAlerts(); } catch(e) {}
-  // v69 · Alertes prix temps réel
-  try { if(typeof checkPriceAlerts === 'function') checkPriceAlerts(); } catch(e) {}
+  // v69 · Alertes prix temps réel — [GO ALERTES · 15/10/2026] vérifiées au battement (08), plus ici : renderHome ne tourne que l'accueil affiché, écran allumé
   try { if(typeof checkBadges === 'function') checkBadges(); } catch(e) {}
 }
 

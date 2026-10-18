@@ -819,124 +819,236 @@ function renderUrgenceSection() {
 }
 window.renderUrgenceSection = renderUrgenceSection;
 // ═══ v69 · ALERTES PRIX TEMPS RÉEL ═══
-// Alertes sur le prix des paires — vérifiées à chaque tick
-// Types : Prix > X · Prix < X · Variation % · RSI · P&L position
+// Types : Prix ≥ X · Prix ≤ X · Variation % depuis la création · P&L d'une position
+// [GO ALERTES · 15/10/2026] ETAT n° 30 / 31. Avant : (1) la liste n'était jamais sauvegardée — perdue à chaque relance ; (2) elle n'était vérifiée que
+// par renderHome (07), qui ne tourne que l'accueil affiché ET l'écran allumé (08) : écran éteint ou autre page, aucune alerte ne partait ; (3) sur le prix
+// du mode à l'écran — en AA, celui de bougies FABRIQUÉES ; (4) « +% en 1h » mesurait en fait depuis la création ; (5) l'interrupteur Telegram « Alertes
+// prix » n'était appelé par rien ; (6) dans l'app Android (WebView, sans notifications du système), « Activer » plantait sur Notification absent.
+// Désormais : sauvegardée (09b1 priceAlerts, relue par _prSane depuis 09b2 _reglagesRelus) ; vérifiée à chaque battement (08), quelle que soit la page,
+// écran éteint compris ; prix = dernier prix RÉEL Binance de la paire (_rcLastPrice, 02) de moins de 2 min — sans prix réel frais, l'alerte attend ;
+// P&L : la position de la paire dans le mode où l'alerte a été créée, au prix de CE mode (celui de son portefeuille), même calcul que closePosition (02) ;
+// « +/−% depuis la création » ; au déclenchement : toast, vibration, son « alerte », notification du système si elle existe, Telegram si activé.
+// Le texte d'une alerte est recalculé depuis ses champs vérifiés (_prNote) : rien de stocké (backup, import) n'entre tel quel dans la page.
+const _PR_TYPES = ['above', 'below', 'pct_up', 'pct_down', 'pnl_pos', 'pnl_neg'];
+const _PR_MODES = ['sim', 'paperReal', 'real'];
+const _PR_MODE_LAB = { sim: 'AA', paperReal: 'EV', real: 'RE' };
+if(!Array.isArray(S.priceAlerts)) S.priceAlerts = [];
 
-if(!S.priceAlerts) S.priceAlerts = [];
-let _prNextId = 1;
+function _prOkPair(p) { return typeof p === 'string' && /^[A-Z0-9]{1,20}\/[A-Z0-9]{2,10}$/.test(p); }
+function _prEsc(s) { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;'); }
+function _prDec(pair) { const d = (typeof PAIRS !== 'undefined' && PAIRS && PAIRS[pair]) ? Number(PAIRS[pair].dec) : 0; return d >= 4 ? d : 2; }
+function _prIsPnl(a) { return !!a && (a.type === 'pnl_pos' || a.type === 'pnl_neg'); }
+function _prNote(a) {
+  const v = Number(a.value), m = _PR_MODE_LAB[a.mode];
+  if (a.type === 'above')    return a.pair + ' ≥ ' + v.toFixed(_prDec(a.pair));
+  if (a.type === 'below')    return a.pair + ' ≤ ' + v.toFixed(_prDec(a.pair));
+  if (a.type === 'pct_up')   return a.pair + ' +' + v + ' % depuis la création';
+  if (a.type === 'pct_down') return a.pair + ' −' + v + ' % depuis la création';
+  return 'Position ' + a.pair + (m ? ' ' + m : '') + ' · P&L ' + (a.type === 'pnl_pos' ? '≥ +$' : '≤ −$') + v;
+}
+function _prIcon(a) { return a.type === 'above' ? '📈' : a.type === 'below' ? '📉' : _prIsPnl(a) ? '💰' : '📊'; }
+function _prMoney(v) { return (v >= 0 ? '+$' : '−$') + Math.abs(v).toFixed(2); }
 
-function _prGetId() { return _prNextId++; }
+// Liste relue d'un snapshot, d'un backup ou d'un import : seuls les champs connus, du bon type ; ids rendus uniques.
+// [GO ALERTES · relecture adverse du 18/10/2026] id BORNÉ à _PR_ID_MAX : un fichier portant un id démesuré (2^53) bloquait « le plus grand + 1 »
+// — toutes les alertes recevaient alors le MÊME id et « 🗑 » les supprimait toutes ensemble. Au-delà de la borne, l'id est réattribué.
+const _PR_ID_MAX = 1e9;
+function _prSane(list) {
+  const out = [], fin = x => typeof x === 'number' && isFinite(x);
+  if (!Array.isArray(list)) return out;
+  list.forEach(r => {
+    if (!r || typeof r !== 'object' || !_prOkPair(r.pair) || _PR_TYPES.indexOf(r.type) < 0 || !fin(r.value) || !(r.value > 0)) return;
+    const a = { id: (fin(r.id) && r.id > 0 && r.id <= _PR_ID_MAX) ? Math.floor(r.id) : 0, pair: r.pair, type: r.type, value: r.value,
+                createdAt: fin(r.createdAt) ? r.createdAt : Date.now(), triggered: r.triggered === true };
+    if (_PR_MODES.indexOf(r.mode) >= 0) a.mode = r.mode;
+    if (fin(r.priceAtCreation) && r.priceAtCreation > 0) a.priceAtCreation = r.priceAtCreation;
+    if (a.triggered) {
+      if (fin(r.triggeredAt)) a.triggeredAt = r.triggeredAt;
+      if (fin(r.triggeredPrice)) a.triggeredPrice = r.triggeredPrice;
+      if (fin(r.triggeredPnl)) a.triggeredPnl = r.triggeredPnl;
+    }
+    out.push(a);
+  });
+  const vu = {};
+  let next = Math.min(_PR_ID_MAX, out.reduce((m, a) => Math.max(m, a.id), 0)) + 1;
+  out.forEach(a => { if (!a.id || vu[a.id]) a.id = next++; vu[a.id] = true; });
+  return out;
+}
+window._prSane = _prSane;
+
+// id = le plus petit libre (avant : un compteur remis à 1 à chaque relance — deux alertes avec le même id après une relance ; puis « le plus grand + 1 »,
+// qui dépassait la borne quand un fichier portait un id proche d'elle — relecture adverse du 18/10/2026, 2e passage)
+function _prGetId() {
+  const pris = {};
+  (Array.isArray(S.priceAlerts) ? S.priceAlerts : []).forEach(a => { const v = Number(a && a.id) || 0; if (v > 0) pris[v] = true; });
+  let i = 1; while (pris[i] && i < _PR_ID_MAX) i++;
+  return i;
+}
+
+// [GO ALERTES · relecture adverse du 18/10/2026, 2e passage] Les paires dont le prix RÉEL arrive sont celles du collecteur de bougies (02) : une alerte
+// sur une autre paire ne pourrait jamais partir. La liste est donc lue à SA source — mode AFFICHÉ compris (un écran RE en pause reçoit quand même son
+// flux : _bgModesNeeded), et son repli d'une seule paire quand aucun mode à prix réels n'est concerné (02 _startBgCollector : `[keys[0]]`). Le
+// formulaire ne propose que celles-là ; une alerte gardée sur une autre paire dit « prix réel indisponible » au lieu d'attendre muette.
+function _prPairsSuivies() {
+  const out = {};
+  try {
+    const dispo = (typeof _bgModesNeeded === 'function') ? _bgModesNeeded() : null;
+    const need = dispo || { ev: true, re: true };
+    [['real', need.re], ['paperReal', need.ev]].forEach(([m, pris]) => {
+      if (!pris) return;
+      const act = m === 'real' ? S.realActivePairs : S.paperRealActivePairs;
+      Object.keys(act || {}).forEach(p => { if (act[p] && _prOkPair(p)) out[p] = true; });
+    });
+  } catch(e) {}
+  let l = Object.keys(out);
+  if (!l.length) { const k = Object.keys(PAIRS || {}).filter(_prOkPair); l = k.length ? [k[0]] : []; }   // même repli que 02 _startBgCollector
+  return l;
+}
+window._prPairsSuivies = _prPairsSuivies;
+
+// Dernier prix RÉEL de la paire, de moins de 2 min (même âge que les gardes « prix figé » de 10f) — 0 sinon
+function _prRealPx(pair) {
+  try {
+    if (typeof _rcLastPrice !== 'function' || typeof _rcPriceAge !== 'function') return 0;
+    const px = Number(_rcLastPrice(pair));
+    return (px > 0 && _rcPriceAge(pair) <= 120000) ? px : 0;
+  } catch(e) { return 0; }
+}
+// P&L ($) des positions de la paire dans le mode de l'alerte — null sans position ou sans prix utilisable ; calcul de closePosition (exposition,
+// % borné, perte ≤ mise). [GO ALERTES · relecture adverse du 18/10/2026] (1) en EV / RE le prix de la paire doit être un prix réel de moins de 2 min,
+// comme pour les alertes de prix : sans réseau, ps.price est figé et le P&L annoncé serait faux (en AA, les bougies sont fabriquées par l'app :
+// son prix est toujours « frais », c'est le bac à sable) ; (2) TOUTES les positions de la paire sont comptées, pas la première trouvée.
+function _prPosPnl(a) {
+  const mode = _PR_MODES.indexOf(a.mode) >= 0 ? a.mode : S.tradingMode;
+  const w = (S.walletStore && S.walletStore[mode]) || null;
+  const list = w ? (w.openPositions || []).filter(p => p && p.pair === a.pair) : [];
+  if (!list.length) return null;
+  const ps = w.pairStates ? w.pairStates[a.pair] : null;
+  let cur = ps ? Number(ps.price) : 0;
+  if (mode !== 'sim') { const px = _prRealPx(a.pair); if (!(px > 0)) return null; cur = px; }
+  if (!(cur > 0)) return null;
+  let pnl = 0;
+  list.forEach(pos => {
+    const entry = Number(pos.entryPrice);
+    if (!(entry > 0)) return;
+    const pct = Math.max(-100, Math.min(500, pos.side === 'long' ? (cur - entry) / entry * 100 : (entry - cur) / entry * 100));
+    const exp = Number(pos.totalExposure || pos.stakeUsdt) || 0;
+    pnl += Math.max(-(Number(pos.stakeUsdt) || 0), exp * pct / 100);
+  });
+  return pnl;
+}
 
 // Créer une alerte
 function addPriceAlert() {
   const pair  = document.getElementById('prPairSel')?.value;
   const type  = document.getElementById('prTypeSel')?.value;
   const value = parseFloat(document.getElementById('prValueInp')?.value||'0');
-  if(!pair || !type || !isFinite(value) || value<=0) {
+  if(!_prOkPair(pair) || _PR_TYPES.indexOf(type) < 0 || !isFinite(value) || value<=0) {
     showToast('⚠ Remplis tous les champs', 1500, 'warn'); return;
   }
-  const ps  = S.pairStates?.[pair];
-  const cur = ps?.price||0;
-  const cfg = PAIRS[pair]||{};
-  const dec = cfg.dec>=4?cfg.dec:2;
-
-  const alert = {
-    id:_prGetId(), pair, type, value,
-    createdAt:Date.now(), triggered:false,
-    note:`${pair} ${type==='above'?'> ':'< '}${value.toFixed(dec)}`,
-    col:type==='above'?'var(--up)':'var(--down)',
-  };
-  if(type==='pct_up'||type==='pct_down')   alert.note=`${pair} ${type==='pct_up'?'+':'−'}${value}% en 1h`;
-  if(type==='pnl_pos') alert.note=`Position ${pair} P&L ≥ +$${value}`;
-  if(type==='pnl_neg') alert.note=`Position ${pair} P&L ≤ -$${value}`;
-
+  const alert = { id:_prGetId(), pair, type, value, createdAt:Date.now(), triggered:false };
+  if (_prIsPnl(alert)) alert.mode = _PR_MODES.indexOf(S.tradingMode) >= 0 ? S.tradingMode : 'paperReal';   // le mode à l'écran au moment de la création
+  if (type === 'pct_up' || type === 'pct_down') { const px = _prRealPx(pair); if (px > 0) alert.priceAtCreation = px; }   // sinon : au premier prix réel
+  if (!Array.isArray(S.priceAlerts)) S.priceAlerts = [];
   S.priceAlerts.push(alert);
-  showToast('🔔 Alerte créée : '+alert.note, 2000, 'win');
+  showToast('🔔 Alerte créée : ' + _prNote(alert), 2000, 'win');
   renderPriceAlertSection();
 }
 window.addPriceAlert = addPriceAlert;
 
 function deletePriceAlert(id) {
-  S.priceAlerts = (S.priceAlerts||[]).filter(a=>a.id!==id);
+  S.priceAlerts = (Array.isArray(S.priceAlerts) ? S.priceAlerts : []).filter(a=>a && a.id!==id);
   renderPriceAlertSection();
 }
 window.deletePriceAlert = deletePriceAlert;
 
 function clearTriggeredAlerts() {
-  S.priceAlerts = (S.priceAlerts||[]).filter(a=>!a.triggered);
+  S.priceAlerts = (Array.isArray(S.priceAlerts) ? S.priceAlerts : []).filter(a=>a && !a.triggered);
   renderPriceAlertSection();
 }
 window.clearTriggeredAlerts = clearTriggeredAlerts;
 
-// Vérifier les alertes — appelé à chaque tick
+// Vérifier les alertes — appelé à chaque battement (08), quelle que soit la page, écran éteint compris
+let _prLastCheck = 0;
 function checkPriceAlerts() {
-  if(!S.priceAlerts?.length) return;
+  _prLastCheck = Date.now();
+  const list = S.priceAlerts;
+  if (!Array.isArray(list) || !list.length) return;
   const now = Date.now();
-  S.priceAlerts.forEach(alert=>{
-    if(alert.triggered) return;
-    const ps  = S.pairStates?.[alert.pair];
-    if(!ps)   return;
-    const cur = ps.price||0;
-    let fire  = false;
-
-    if(alert.type==='above' && cur>=alert.value) fire=true;
-    if(alert.type==='below' && cur>0&&cur<=alert.value) fire=true;
-
-    if(alert.type==='pct_up'||alert.type==='pct_down') {
-      // Variation % depuis l'entrée de l'alerte
-      const ref  = alert.priceAtCreation||(()=>{ alert.priceAtCreation=cur; return cur; })();
-      const pct  = cur>0&&ref>0?(cur-ref)/ref*100:0;
-      if(alert.type==='pct_up'  && pct>=alert.value)  fire=true;
-      if(alert.type==='pct_down'&& pct<=-alert.value) fire=true;
-    }
-
-    if(alert.type==='pnl_pos'||alert.type==='pnl_neg') {
-      const pos = (S.openPositions||[]).find(p=>p.pair===alert.pair);
-      if(pos) {
-        const pnl = pos.pnlUsdt||0;
-        if(alert.type==='pnl_pos' && pnl>=alert.value)  fire=true;
-        if(alert.type==='pnl_neg' && pnl<=-alert.value) fire=true;
+  list.forEach(alert => {
+    if (!alert || alert.triggered || _PR_TYPES.indexOf(alert.type) < 0 || !_prOkPair(alert.pair)) return;
+    let fire = false, cur = 0, pnl = null;
+    if (_prIsPnl(alert)) {
+      pnl = _prPosPnl(alert);
+      if (pnl === null) return;
+      fire = alert.type === 'pnl_pos' ? pnl >= alert.value : pnl <= -alert.value;
+    } else {
+      cur = _prRealPx(alert.pair);
+      if (!(cur > 0)) return;                                   // pas de prix réel frais : l'alerte attend (jamais sur un prix fabriqué ou figé)
+      if (alert.type === 'above') fire = cur >= alert.value;
+      else if (alert.type === 'below') fire = cur <= alert.value;
+      else {
+        if (!(alert.priceAtCreation > 0)) { alert.priceAtCreation = cur; return; }
+        const pct = (cur - alert.priceAtCreation) / alert.priceAtCreation * 100;
+        fire = alert.type === 'pct_up' ? pct >= alert.value : pct <= -alert.value;
       }
     }
-
-    if(fire) {
-      alert.triggered   = true;
-      alert.triggeredAt = now;
-      alert.triggeredPrice = cur;
-      _prFireAlert(alert, cur);
-    }
+    if (!fire) return;
+    alert.triggered   = true;
+    alert.triggeredAt = now;
+    if (pnl !== null) alert.triggeredPnl = pnl; else alert.triggeredPrice = cur;
+    _prFireAlert(alert, cur, pnl);
   });
 }
 window.checkPriceAlerts = checkPriceAlerts;
+// [GO ALERTES · relecture adverse du 18/10/2026] Le battement (08) est la voie normale — mais son minuteur MEURT quand les trois modes sont en pause
+// (01 stopSim) : plus aucune alerte ne partait, alors que l'écran promet « vérifiée en continu ». Cette veilleuse de 30 s ne fait quelque chose QUE dans
+// ce cas (aucun passage du battement depuis 10 s) : un seul réveil par 30 s, rien de doublé quand le moteur bat.
+// [2e passage] Mêmes gardes que la sauvegarde automatique (09b2) : rien pendant le démarrage (window._stateReady === false — sinon une alerte partirait
+// sur le prix relu d'un snapshot vieux de plusieurs heures) ni pendant l'écriture d'un état choisi (RESTAURER / import : la liste va être remplacée).
+// Son exception reste dans la console : elle ne passe PAS par _decErr, dont les compteurs (persistés, lus par le Guardian) parlent de la décision.
+setInterval(function () {
+  try {
+    if (typeof window !== 'undefined' && (window._stateReady === false || window._auraChosenStateWriting === true)) return;
+    if (Date.now() - _prLastCheck < 10000) return;
+    checkPriceAlerts();
+    if (typeof _tgHebdoTick === 'function') _tgHebdoTick();
+  } catch(e) { try { console.warn('[alertes · veilleuse]', e); } catch(_e) {} }
+}, 30000);
 
-function _prFireAlert(alert, cur) {
+function _prFireAlert(alert, cur, pnl) {
+  const quoi = _prNote(alert) + (pnl !== null && pnl !== undefined ? ' · P&L ' + _prMoney(pnl) : ' · prix ' + Number(cur).toFixed(_prDec(alert.pair)));
   // Toast visuel
   const toastEl = document.getElementById('prToast');
   const textEl  = document.getElementById('prToastText');
   const iconEl  = document.getElementById('prToastIcon');
   if(toastEl&&textEl&&iconEl) {
-    iconEl.textContent = alert.type==='above'?'📈':alert.type==='below'?'📉':alert.type.includes('pct')?'📊':'💰';
-    textEl.textContent = alert.note + ` · ${cur.toFixed(PAIRS[alert.pair]?.dec>=4?PAIRS[alert.pair].dec:2)}`;
+    iconEl.textContent = _prIcon(alert);
+    textEl.textContent = quoi;
     toastEl.classList.add('show');
     setTimeout(()=>toastEl.classList.remove('show'), 5000);
   }
-  // Vibration
   try { navigator.vibrate?.([200,100,200]); } catch(e) {}
-  // Chain log
+  try { if (typeof playSound === 'function') playSound('alert'); } catch(e) {}   // [GO ALERTES] Sons « 🔔 Alerte prix déclenchée » : rien ne le jouait ici
   S.chainLog = S.chainLog||[];
-  S.chainLog.push({icon:'🔔',desc:`Alerte PRIX: ${alert.note} · ${cur}`,hash:Math.random().toString(36).slice(2,8),time:new Date().toLocaleTimeString()});
-  // Notification push si permission
+  S.chainLog.push({icon:'🔔',desc:'Alerte PRIX: ' + quoi,hash:Math.random().toString(36).slice(2,8),time:new Date().toLocaleTimeString()});
+  if (S.chainLog.length > 100) S.chainLog.splice(0, S.chainLog.length - 100);
+  // Notification du système — seulement si elle existe (absente dans l'app Android : WebView)
   try {
-    if(Notification.permission==='granted') {
-      new Notification('🔔 AURA Prix Alert',{body:alert.note,icon:'/favicon.ico'});
+    if(typeof Notification !== 'undefined' && Notification.permission==='granted') {
+      new Notification('🔔 AURA — Alerte prix',{body:quoi,icon:'/favicon.ico'});
     }
   } catch(e) {}
-  // Re-render section
+  try { if (typeof tgOnAlert === 'function') tgOnAlert(quoi); } catch(e) {}   // [GO ALERTES] interrupteur Telegram « 🔔 Alertes prix déclenchées »
   try { renderPriceAlertSection(); } catch(e) {}
 }
 
-// Demander permission notifications
+// Demander permission notifications (navigateur seulement)
 function requestNotifPerm() {
+  if (typeof Notification === 'undefined' || typeof Notification.requestPermission !== 'function') {
+    showToast('ℹ Pas de notifications du système dans l\'app Android — Telegram les remplace (plus bas)', 3500, 'warn');
+    return;
+  }
   Notification.requestPermission().then(p=>{
     showToast(p==='granted'?'🔔 Notifications activées':'⚠ Notifications refusées', 2000, p==='granted'?'win':'warn');
     renderPriceAlertSection();
@@ -944,18 +1056,16 @@ function requestNotifPerm() {
 }
 window.requestNotifPerm = requestNotifPerm;
 
-// Hook dans le tick principal
-const _prOrigCheckPnlAlerts = typeof checkPnlAlerts==='function'?checkPnlAlerts:null;
-// Appeler checkPriceAlerts dans renderHome aussi
 function renderPriceAlertSection() {
   const el = document.getElementById('priceAlertSection');
   if(!el) return;
 
-  const alerts  = S.priceAlerts||[];
+  const alerts  = (Array.isArray(S.priceAlerts) ? S.priceAlerts : []).filter(a => a && _prOkPair(a.pair) && _PR_TYPES.indexOf(a.type) >= 0);
   const active  = alerts.filter(a=>!a.triggered);
   const triggered=alerts.filter(a=>a.triggered);
-  const pairs   = Object.keys(PAIRS||{});
-  const notifPerm = typeof Notification!=='undefined'?Notification.permission:'denied';
+  const pairs   = _prPairsSuivies();
+  const notifPerm = typeof Notification!=='undefined'?Notification.permission:'unsupported';
+  const ecran = _PR_MODE_LAB[S.tradingMode] || '';
 
   el.innerHTML = `
     <div class="pr-section">
@@ -963,8 +1073,10 @@ function renderPriceAlertSection() {
         <span style="font-size:8px;color:var(--t3);font-weight:400;">${active.length} active(s)</span>
       </div>
 
-      <!-- Permission notifs -->
-      ${notifPerm!=='granted'?`
+      ${notifPerm==='unsupported'?`
+      <div style="font-size:9px;color:var(--t3);margin-bottom:8px;line-height:1.5;">
+        Pas de notifications du système dans l'app Android : pour être prévenu hors de l'app, active Telegram (plus bas, « 🔔 Alertes prix déclenchées »).
+      </div>`:notifPerm!=='granted'?`
       <div style="background:rgba(245,200,66,.08);border:1px solid rgba(245,200,66,.2);border-radius:7px;padding:7px 10px;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center;">
         <span style="font-size:9px;color:var(--gold);">🔔 Active les notifications push</span>
         <button onclick="requestNotifPerm()" style="font-size:9px;padding:3px 10px;border-radius:5px;background:rgba(245,200,66,.12);border:1px solid rgba(245,200,66,.3);color:var(--gold);cursor:pointer;font-family:inherit;font-weight:700;">Activer</button>
@@ -975,23 +1087,26 @@ function renderPriceAlertSection() {
         <div style="font-size:9px;color:var(--t3);margin-bottom:6px;">Créer une alerte</div>
         <div class="pr-form-row">
           <select id="prPairSel" class="pr-select">
-            ${pairs.map(p=>`<option value="${p}">${p.replace('/USDT','')}</option>`).join('')}
+            ${pairs.map(p=>`<option value="${_prEsc(p)}">${_prEsc(p.replace('/USDT',''))}</option>`).join('')}
           </select>
           <select id="prTypeSel" class="pr-select">
             <option value="above">Prix ≥ (monte)</option>
             <option value="below">Prix ≤ (baisse)</option>
-            <option value="pct_up">+% en 1h</option>
-            <option value="pct_down">−% en 1h</option>
-            <option value="pnl_pos">P&L pos. ≥ $</option>
-            <option value="pnl_neg">P&L pos. ≤ -$</option>
+            <option value="pct_up">+% depuis la création</option>
+            <option value="pct_down">−% depuis la création</option>
+            <option value="pnl_pos">P&L pos. ${ecran} ≥ $</option>
+            <option value="pnl_neg">P&L pos. ${ecran} ≤ -$</option>
           </select>
         </div>
         <div class="pr-form-row">
           <input id="prValueInp" class="pr-inp" type="number" placeholder="Valeur cible" step="any" min="0">
           <button class="pr-add-btn" onclick="addPriceAlert()">+ Créer</button>
         </div>
-        <div style="font-size:8px;color:var(--t3);">
-          Vérifiée à chaque tick (~15s) · Toast + vibration + notification push
+        <div style="font-size:8px;color:var(--t3);line-height:1.5;">
+          Vérifiée à chaque battement, écran éteint compris — et toutes les 30 s si le bot est en pause (tant que l'app tourne) · prix réel Binance de
+          moins de 2 min, sinon elle attend · paires proposées : celles dont le flux Binance est ouvert (modes EV / RE en marche ou à l'écran) ·
+          P&L : les positions du mode à l'écran à la création — sur son prix réel en EV / RE, sur le prix de l'école en AA ·
+          toast + vibration + son${notifPerm==='granted'?' + notification':''} + Telegram si activé · gardée d'une relance à l'autre
         </div>
       </div>
 
@@ -999,20 +1114,29 @@ function renderPriceAlertSection() {
       ${active.length>0?`
       <div style="font-size:9px;color:var(--t3);margin-bottom:5px;">Actives (${active.length})</div>
       ${active.map(a=>{
-        const ps  = S.pairStates?.[a.pair];
-        const cur = ps?.price||0;
-        const dec = PAIRS[a.pair]?.dec>=4?PAIRS[a.pair].dec:2;
-        const dist= a.type==='above'?((a.value-cur)/cur*100):a.type==='below'?((cur-a.value)/cur*100):null;
-        const pairCol = PAIRS[a.pair]?.color||'var(--t1)';
+        const id = Number(a.id) || 0;
+        const pairCol = (PAIRS[a.pair] && /^[#a-zA-Z0-9(),.\s%-]+$/.test(String(PAIRS[a.pair].color||''))) ? PAIRS[a.pair].color : 'var(--t1)';
+        let actuel = '', dist = null;
+        if (_prIsPnl(a)) {
+          const pnl = _prPosPnl(a);
+          actuel = pnl === null ? 'Aucune position ' + (_PR_MODE_LAB[a.mode] || '') : 'P&L actuel : ' + _prMoney(pnl);
+        } else {
+          const cur = _prRealPx(a.pair);
+          actuel = cur > 0 ? 'Prix réel : ' + cur.toFixed(_prDec(a.pair)) : 'Prix réel indisponible — l\'alerte attend';
+          // [relecture adverse du 18/10/2026] sans prix réel au moment de la création, la référence est posée au PREMIER prix réel reçu : elle est dite
+          if ((a.type === 'pct_up' || a.type === 'pct_down')) actuel += a.priceAtCreation > 0 ? ' · référence ' + Number(a.priceAtCreation).toFixed(_prDec(a.pair)) : ' · référence au premier prix réel';
+          if (cur > 0 && a.type === 'above') dist = (a.value - cur) / cur * 100;
+          if (cur > 0 && a.type === 'below') dist = (cur - a.value) / cur * 100;
+        }
         return `<div class="pr-alert-card">
-          <span class="pr-alert-icon">${a.type==='above'?'📈':a.type==='below'?'📉':a.type.includes('pct')?'📊':'💰'}</span>
+          <span class="pr-alert-icon">${_prIcon(a)}</span>
           <div class="pr-alert-body">
-            <div class="pr-alert-pair" style="color:${pairCol};">${a.pair.replace('/USDT','')}</div>
-            <div class="pr-alert-cond">${a.note}</div>
-            <div style="font-size:8px;color:var(--t3);">Actuel: ${cur.toFixed(dec)}</div>
+            <div class="pr-alert-pair" style="color:${pairCol};">${_prEsc(a.pair.replace('/USDT',''))}</div>
+            <div class="pr-alert-cond">${_prEsc(_prNote(a))}</div>
+            <div style="font-size:8px;color:var(--t3);">${_prEsc(actuel)}</div>
           </div>
           ${dist!==null?`<span class="pr-alert-dist" style="color:${dist>0?'var(--t3)':'var(--gold)'};">${dist>0?'Δ'+dist.toFixed(1)+'%':'⚡ Proche'}</span>`:''}
-          <button onclick="deletePriceAlert(${a.id})" style="background:none;border:none;color:var(--t3);cursor:pointer;font-size:14px;">🗑</button>
+          <button onclick="deletePriceAlert(${id})" style="background:none;border:none;color:var(--t3);cursor:pointer;font-size:14px;">🗑</button>
         </div>`;
       }).join('')}`:'<div style="text-align:center;padding:10px;font-size:10px;color:var(--t3);">Aucune alerte active</div>'}
 
@@ -1022,12 +1146,12 @@ function renderPriceAlertSection() {
         <span style="font-size:9px;color:var(--gold);">Déclenchées (${triggered.length})</span>
         <button onclick="clearTriggeredAlerts()" style="font-size:8px;padding:2px 8px;border-radius:5px;background:rgba(255,255,255,.06);border:1px solid var(--border);color:var(--t3);cursor:pointer;font-family:inherit;">Effacer</button>
       </div>
-      ${triggered.slice(0,3).map(a=>`<div class="pr-alert-card triggered">
+      ${triggered.slice(-3).reverse().map(a=>`<div class="pr-alert-card triggered">
         <span class="pr-alert-icon">✅</span>
         <div class="pr-alert-body">
-          <div class="pr-alert-pair">${a.pair.replace('/USDT','')}</div>
-          <div class="pr-alert-cond">${a.note}</div>
-          <div style="font-size:8px;color:var(--gold);">Déclenché à ${a.triggeredPrice?.toFixed(PAIRS[a.pair]?.dec>=4?PAIRS[a.pair].dec:2)||'—'}</div>
+          <div class="pr-alert-pair">${_prEsc(a.pair.replace('/USDT',''))}</div>
+          <div class="pr-alert-cond">${_prEsc(_prNote(a))}</div>
+          <div style="font-size:8px;color:var(--gold);">Déclenchée ${typeof a.triggeredPnl === 'number' && isFinite(a.triggeredPnl) ? 'à P&L ' + _prMoney(a.triggeredPnl) : (typeof a.triggeredPrice === 'number' && isFinite(a.triggeredPrice) ? 'à ' + a.triggeredPrice.toFixed(_prDec(a.pair)) : '')}${typeof a.triggeredAt === 'number' && isFinite(a.triggeredAt) ? ' · ' + _prEsc(new Date(a.triggeredAt).toLocaleString('fr-FR')) : ''}</div>
         </div>
       </div>`).join('')}`:''}
     </div>`;
@@ -2447,6 +2571,7 @@ function _tgGet() {
       onHebdo:    false,
       onUrgence:  true,
       onPnlGoal:  false,
+      lastHebdoAt: 0,     // [GO ALERTES · 15/10/2026] date du dernier résumé de la semaine envoyé (automatique, _tgHebdoTick)
       log:        [],
     };
     try {
@@ -2454,6 +2579,7 @@ function _tgGet() {
       if (sv && typeof sv === 'object') {
         ['botToken','chatId'].forEach(k => { if (typeof sv[k] === 'string') _tgCfg[k] = sv[k]; });
         ['enabled','onTrade','onAlert','onHebdo','onUrgence','onPnlGoal'].forEach(k => { if (typeof sv[k] === 'boolean') _tgCfg[k] = sv[k]; });
+        if (typeof sv.lastHebdoAt === 'number' && isFinite(sv.lastHebdoAt) && sv.lastHebdoAt > 0) _tgCfg.lastHebdoAt = sv.lastHebdoAt;
       }
     } catch(e) {}
     S.telegramCfg = _tgCfg;
@@ -2468,9 +2594,13 @@ function _tgSave() {
   try {
     const c = S.telegramCfg || {}, o = { botToken: String(c.botToken || ''), chatId: String(c.chatId || '') };
     ['enabled','onTrade','onAlert','onHebdo','onUrgence','onPnlGoal'].forEach(k => { o[k] = !!c[k]; });
+    o.lastHebdoAt = (typeof c.lastHebdoAt === 'number' && isFinite(c.lastHebdoAt)) ? c.lastHebdoAt : 0;
     localStorage.setItem(_TG_LS, JSON.stringify(o));
   } catch(e) {}
 }
+// [GO ALERTES · 15/10/2026] texte mis dans un message Telegram (parse_mode HTML) : « < », « > », « & » échappés. Avant, une alerte « BTC/USDT < 50000 »
+// aurait été refusée par Telegram (« can't parse entities »).
+function _tgEsc(s) { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
 
 function updateTgField(key, val) {
   const cfg = _tgGet();
@@ -2483,6 +2613,7 @@ window.updateTgField = updateTgField;
 function toggleTgOption(key) {
   const cfg = _tgGet();
   cfg[key] = !cfg[key];
+  if (key === 'onHebdo' && cfg.onHebdo) cfg.lastHebdoAt = Date.now();   // [GO ALERTES] le premier résumé automatique part 7 jours après (le bouton l'envoie tout de suite)
   _tgSave();
   renderTelegramSection();
 }
@@ -2499,7 +2630,16 @@ function toggleTgEnabled() {
 window.toggleTgEnabled = toggleTgEnabled;
 
 // Envoyer un message Telegram
-async function sendTelegram(text, silent) {
+// [GO ALERTES · 15/10/2026] une FILE : un message à la fois, 1,1 s entre deux (Telegram demande au plus un message par seconde dans une même
+// conversation ; au-delà il répond « Too Many Requests » et le message est perdu — ex. le Bunker qui ferme 11 positions d'un coup).
+let _tgChain = Promise.resolve();
+function sendTelegram(text, silent) {
+  const p = _tgChain.then(() => _tgSendNow(text, silent));
+  const pause = () => new Promise(r => setTimeout(r, 1100));
+  _tgChain = p.then(pause, pause);
+  return p;
+}
+async function _tgSendNow(text, silent) {
   const cfg = _tgGet();
   if(!cfg.enabled||!cfg.botToken||!cfg.chatId) return false;
   const ts = new Date().toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'});
@@ -2559,49 +2699,95 @@ async function testTelegram() {
 window.testTelegram = testTelegram;
 
 // Envoyer un résumé hebdo
-async function sendHebdoTelegram() {
-  const n   = S.totalTrades||0;
-  const wr  = n>0?Math.round((S.winTrades||0)/n*100):0;
-  const pnl = Object.values(S.pairStates||{}).reduce((s,ps)=>s+(ps.totalPnlUsd||0),0);
-  const cap = S.tradingAccount||0;
-  const m   = typeof computeAdvancedMetrics==='function'?computeAdvancedMetrics():null;
-  const msg = `📅 <b>AURA ∞ — Résumé Hebdomadaire</b>
-
-💰 Portfolio : <code>$${cap.toFixed(2)}</code>
-📊 P&L Net : <code>${pnl>=0?'+':''}$${pnl.toFixed(2)}</code>
-🎯 Win Rate : <code>${wr}%</code> (${n} trades)
-📐 Sharpe : <code>${m?m.sharpe.toFixed(2):'—'}</code>
-📉 Max DD : <code>${m?m.maxDDPct.toFixed(1):'—'}%</code>
-🤖 Agents : <code>${(S.agents||[]).length}</code> · Régime : <code>${(typeof detectMarketRegime==='function'?detectMarketRegime():'calm').toUpperCase()}</code>
-
-<i>Rapport automatique AURA ∞</i>`;
-  const ok = await sendTelegram(msg, true);
-  showToast(ok?'📲 Résumé hebdo envoyé':'❌ Erreur envoi', 2500, ok?'win':'warn');
+// [GO ALERTES · 15/10/2026] l'interrupteur « 📅 Résumé hebdo » ne faisait qu'afficher ce bouton : rien ne partait jamais seul. Désormais il part
+// AUTOMATIQUEMENT tous les 7 jours (_tgHebdoTick, appelé au battement 08) et le bouton l'envoie tout de suite. Avant, le message disait « hebdomadaire »
+// mais donnait le cumul de toujours du seul mode à l'écran ; il donne maintenant, pour EV, RE et AA, les trades fermés des 7 derniers jours (historique
+// de chaque paire, 100 derniers par paire) et leur P&L brut (avant frais, comme l'historique), plus le portefeuille du moment.
+const _TG_SEMAINE_MS = 7 * 86400000;
+function _tgHebdoText(now) {
+  const t0 = (now || Date.now()) - _TG_SEMAINE_MS, lab = { paperReal: 'EV', real: 'RE', sim: 'AA' }, lignes = [];
+  ['paperReal', 'real', 'sim'].forEach(m => {
+    const w = S.walletStore && S.walletStore[m];
+    if (!w || typeof w !== 'object') return;
+    let n = 0, gagnants = 0, pnl = 0;
+    Object.values(w.pairStates || {}).forEach(ps => (ps && Array.isArray(ps.trades) ? ps.trades : []).forEach(t => {
+      if (!t || !(Number(t.ts) >= t0) || (t.type !== 'position' && t.type !== 'urgence')) return;
+      n++; pnl += Number(t.pnlUsdt) || 0; if (Number(t.pnl) > 0) gagnants++;
+    }));
+    let pf = 0; try { pf = (typeof _computePortfolio === 'function') ? _computePortfolio(w) : (Number(w.portfolio) || 0); } catch(e) { pf = Number(w.portfolio) || 0; }
+    lignes.push(`<b>${lab[m]}</b> ${w.running ? '▶' : '⏸'} · portefeuille <code>$${(Number(pf) || 0).toFixed(2)}</code>\n   ${n} trade(s) fermé(s)` +
+      (n ? ` · ${gagnants} gagnant(s) · P&L brut <code>${pnl >= 0 ? '+' : '−'}$${Math.abs(pnl).toFixed(2)}</code>` : ''));
+  });
+  // [relecture adverse du 18/10/2026] l'historique d'une paire ne garde que ses 100 dernières lignes (02 closePosition) : sur une paire très active, les
+  // 7 jours peuvent être plus longs que ce qui reste. C'est dit, plutôt qu'un total faussement complet.
+  return `📅 <b>AURA ∞ — Les 7 derniers jours</b>\n\n${lignes.join('\n')}\n\n<i>P&L brut = avant frais, comme l'historique des trades · compté sur l'historique gardé (100 dernières lignes par paire)</i>`;
+}
+async function sendHebdoTelegram(auto) {
+  const ok = await sendTelegram(_tgHebdoText(), true);
+  if (ok) { const cfg = _tgGet(); cfg.lastHebdoAt = Date.now(); _tgSave(); }
+  if (auto !== true) showToast(ok?'📲 Résumé de la semaine envoyé':'❌ Erreur envoi', 2500, ok?'win':'warn');
+  return ok;
 }
 window.sendHebdoTelegram = sendHebdoTelegram;
+let _tgHebdoBusy = false;
+function _tgHebdoTick() {
+  if (_tgHebdoBusy || typeof S === 'undefined' || !S) return;
+  const cfg = _tgGet();
+  if (!cfg.enabled || !cfg.onHebdo || !cfg.botToken || !cfg.chatId) return;
+  if (!(cfg.lastHebdoAt > 0)) { cfg.lastHebdoAt = Date.now(); _tgSave(); return; }   // réglage d'avant cette livraison : la semaine commence maintenant
+  if (Date.now() - cfg.lastHebdoAt < _TG_SEMAINE_MS) return;
+  _tgHebdoBusy = true;
+  sendHebdoTelegram(true).catch(() => false).then(ok => {
+    // un échec (pas de réseau) : nouvel essai dans 1 h, pas à chaque battement
+    if (!ok) { const c = _tgGet(); c.lastHebdoAt = Date.now() - _TG_SEMAINE_MS + 3600000; _tgSave(); }
+    _tgHebdoBusy = false;
+  });
+}
+window._tgHebdoTick = _tgHebdoTick;
 
 // Hook dans les events AURA
-function tgOnTrade(pair, side, pnlUsd, isWin) {
+// [GO ALERTES · 15/10/2026] « 📊 Chaque trade » n'était appelé par rien. Désormais closePosition (02) l'appelle à CHAQUE fermeture ; il n'envoie que
+// les trades EV et RE (prix réels) — l'AA, qui trade sur des bougies fabriquées, n'envoie rien (sinon des dizaines de messages par jour sans valeur
+// de marché). Le message dit le mode, bot ou manuel, le sens, le résultat ($ et %, comme l'historique), et la raison si c'est un objectif ou un stop.
+// Gagnant = % > 0, le critère de l'historique (02). Avant, le sens était lu sur 'buy' alors que la position dit 'long' : un LONG s'affichait SHORT.
+function tgOnTrade(info) {
   const cfg = _tgGet();
-  if(!cfg.enabled||!cfg.onTrade) return;
-  const msg = `${isWin?'🟢':'🔴'} <b>${isWin?'WIN':'LOSS'} — ${pair}</b>
-${side==='buy'?'↑ LONG':'↓ SHORT'} · P&L : <code>${pnlUsd>=0?'+':''}$${pnlUsd.toFixed(2)}</code>
+  if(!cfg.enabled||!cfg.onTrade) return false;
+  const i = (info && typeof info === 'object') ? info : {};
+  if (i.mode !== 'paperReal' && i.mode !== 'real') return false;
+  const usd = Number(i.pnlUsd) || 0, pct = Number(i.pnlPct) || 0, win = pct > 0, nul = pct === 0;
+  const lab = i.mode === 'real' ? 'RE' : 'EV';
+  const sortie = (i.sortie && (i.sortie.k === 'tp' || i.sortie.k === 'sl')) ? (i.sortie.k === 'tp' ? '🎯 ' : '🛑 ') + _tgEsc(i.sortie.why || (i.sortie.k === 'tp' ? 'objectif' : 'stop')) : '';
+  const msg = `${win?'🟢':nul?'⚪':'🔴'} <b>${win?'WIN':nul?'NUL':'LOSS'} — ${_tgEsc(i.pair || '?')}</b> · ${lab} · ${i.auto ? '🤖 bot' : '👤 manuel'}${i.urgence ? ' · fermeture d\'urgence' : ''}
+${i.side==='long'?'↑ LONG':'↓ SHORT'} · P&L : <code>${usd>=0?'+':'−'}$${Math.abs(usd).toFixed(2)}</code> (${pct>=0?'+':''}${pct.toFixed(2)} %)${sortie ? '\n' + sortie : ''}
 <i>AURA ∞</i>`;
   sendTelegram(msg, true);
+  return true;
 }
 window.tgOnTrade = tgOnTrade;
 
 function tgOnAlert(alertNote) {
   const cfg = _tgGet();
-  if(!cfg.enabled||!cfg.onAlert) return;
-  sendTelegram(`🔔 <b>Alerte Prix</b>\n${alertNote}`, false);
+  if(!cfg.enabled||!cfg.onAlert) return false;
+  sendTelegram(`🔔 <b>Alerte Prix</b>\n${_tgEsc(alertNote)}`, false);
+  return true;
 }
 window.tgOnAlert = tgOnAlert;
+
+// [GO ALERTES · 15/10/2026] « 💰 Objectif P&L atteint » n'était lu par rien : checkPnlAlerts (04) l'appelle quand l'alerte « Gain session » ou
+// « Gain journalier » se déclenche (mêmes seuils que l'écran Alertes P&L, une fois par période comme elles).
+function tgOnPnlGoal(texte) {
+  const cfg = _tgGet();
+  if(!cfg.enabled||!cfg.onPnlGoal) return false;
+  sendTelegram(`💰 <b>Objectif P&L atteint</b>\n${_tgEsc(texte)}`, false);
+  return true;
+}
+window.tgOnPnlGoal = tgOnPnlGoal;
 
 function tgOnUrgence(action) {
   const cfg = _tgGet();
   if(!cfg.enabled||!cfg.onUrgence) return;
-  sendTelegram(`🚨 <b>MODE URGENCE</b>\n${action}\nCapital : <code>$${(S.tradingAccount||0).toFixed(2)}</code>`, false);
+  sendTelegram(`🚨 <b>BUNKER</b>\n${_tgEsc(action)}`, false);   // [GO ALERTES] seul appelant : le Bunker (07), dont le texte dit déjà le capital du mode
 }
 window.tgOnUrgence = tgOnUrgence;
 
@@ -2631,10 +2817,10 @@ function renderTelegramSection() {
       <!-- Config -->
       <div style="font-size:9px;color:var(--t3);margin-bottom:3px;">Bot Token</div>
       <input class="tg-inp" type="password" placeholder="110201543:AAHdqTcvCH1vGWJxfSeofSAs0K5PALDsaw"
-        value="${cfg.botToken}" onchange="updateTgField('botToken',this.value)">
+        value="${_prEsc(cfg.botToken)}" onchange="updateTgField('botToken',this.value)">
       <div style="font-size:9px;color:var(--t3);margin-bottom:3px;">Chat ID</div>
       <input class="tg-inp" type="text" placeholder="-1001234567890 ou 123456789"
-        value="${cfg.chatId}" onchange="updateTgField('chatId',this.value)">
+        value="${_prEsc(cfg.chatId)}" onchange="updateTgField('chatId',this.value)">
 
       <!-- Boutons config -->
       <div style="display:flex;gap:6px;margin-bottom:10px;">
@@ -2648,27 +2834,30 @@ function renderTelegramSection() {
       <!-- Options événements -->
       <div style="font-size:9px;color:var(--t3);margin-bottom:5px;">Événements à notifier</div>
       ${[
-        {k:'onTrade',   lbl:'📊 Chaque trade (WIN/LOSS)'},
-        {k:'onAlert',   lbl:'🔔 Alertes prix déclenchées'},
-        {k:'onUrgence', lbl:'🚨 Mode Urgence activé'},
-        {k:'onHebdo',   lbl:'📅 Résumé hebdo'},
-        {k:'onPnlGoal', lbl:'💰 Objectif P&L atteint'},
+        // [GO ALERTES · 15/10/2026] chaque interrupteur dit ce qu'il fait — et le fait (avant : « Chaque trade », « Alertes prix », « Objectif P&L »
+        // n'étaient branchés sur rien, « Résumé hebdo » n'envoyait rien seul, « Mode Urgence » n'est appelé que par le Bunker)
+        {k:'onTrade',   lbl:'📊 Chaque trade EV / RE (WIN/LOSS)', sub:'À chaque fermeture en EV et en RE, avec la raison si objectif ou stop · l\'AA (bougies fabriquées) n\'envoie rien'},
+        {k:'onAlert',   lbl:'🔔 Alertes prix déclenchées',        sub:'Chaque alerte de « Alertes Prix » (plus haut), écran éteint compris'},
+        {k:'onUrgence', lbl:'🚨 Bunker déclenché',                sub:'Si l\'action « 📲 Alerter via Telegram » du Bunker est cochée'},
+        {k:'onHebdo',   lbl:'📅 Résumé de la semaine',            sub:'Automatique tous les 7 jours : trades et P&L brut des 7 jours, EV / RE / AA'},
+        {k:'onPnlGoal', lbl:'💰 Objectif P&L atteint',            sub:'Quand l\'alerte « Gain session » ou « Gain journalier » (Alertes P&L) se déclenche'},
       ].map(opt=>`<div class="tg-row">
-        <span style="flex:1;color:var(--t2);">${opt.lbl}</span>
+        <span style="flex:1;color:var(--t2);">${opt.lbl}<span style="display:block;font-size:8px;color:var(--t3);line-height:1.35;margin-top:1px;">${opt.sub}</span></span>
         <button class="tg-toggle ${cfg[opt.k]?'on':''}" onclick="toggleTgOption('${opt.k}')"></button>
       </div>`).join('')}
 
-      <!-- Résumé hebdo manuel -->
+      <!-- Résumé de la semaine, tout de suite -->
       ${cfg.onHebdo?`
       <button class="tg-btn-full" onclick="sendHebdoTelegram()"
         style="background:rgba(0,136,204,.1);border-color:rgba(0,136,204,.3);color:#29b6f6;margin-top:6px;">
-        📅 Envoyer résumé hebdo maintenant
-      </button>`:''}
+        📅 Envoyer le résumé de la semaine maintenant
+      </button>
+      <div style="font-size:8px;color:var(--t3);margin-top:3px;text-align:center;">${cfg.lastHebdoAt>0?'Prochain envoi automatique : ' + new Date(cfg.lastHebdoAt + 7*86400000).toLocaleString('fr-FR'):''}</div>`:''}
 
       <!-- Log -->
       ${cfg.log.length>0?`
       <div style="font-size:8px;color:var(--t3);margin-top:8px;margin-bottom:3px;">Log des envois</div>
-      <div class="tg-log">${cfg.log.join('\n')}</div>`:''}
+      <div class="tg-log">${_tgEsc(cfg.log.join('\n'))}</div>`:''}
 
       <div style="font-size:8px;color:var(--t3);margin-top:8px;text-align:center;line-height:1.4;">
         API officielle Telegram Bot · HTTPS · Aucun serveur intermédiaire<br>

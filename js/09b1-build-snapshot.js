@@ -146,6 +146,11 @@ function buildSnapshot() {
       soundCfg:       S.soundCfg       || null,
       notifConfig:    S.notifConfig    || null,
       toastVerbose:   S.toastVerbose === true,
+      // [GO ALERTES · 15/10/2026] ETAT n° 31 — tes alertes prix et les seuils de tes alertes P&L, perdus à chaque relance avant. Des seuils P&L, seuls
+      // « activée » et la valeur partent (le drapeau « déjà déclenchée » reste une affaire de la session, comme avant). Relus par 09b2 _reglagesRelus.
+      priceAlerts:    Array.isArray(S.priceAlerts) ? S.priceAlerts : [],
+      pnlAlerts:      (S.pnlAlerts && typeof S.pnlAlerts === 'object') ? Object.keys(S.pnlAlerts).reduce(function (o, k) {
+                        var a = S.pnlAlerts[k]; if (a && typeof a === 'object') o[k] = { enabled: a.enabled === true, value: Number(a.value) }; return o; }, {}) : null,
       botDisciples:   S.botDisciples   || {},   // [15/08] sièges des disciples par bot
       discipleTasks:  S.discipleTasks  || {},   // [15/08] tâche élue de chaque disciple
       discipleAngles: S.discipleAngles || {},   // [15/08] angle mesurable de chaque disciple
