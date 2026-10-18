@@ -1002,16 +1002,80 @@ function renderTrailingStopSection() {
     </div>`;
 }
 window.renderTrailingStopSection = renderTrailingStopSection;
+// ═══ [GO OUTILS · 18/10/2026] ETAT n° 33 · aides communes aux exports de l'onglet « 🛠 Outils » ═══
+// (1) Les lignes d'historique (02 closePosition) n'ont PAS de champ pair : le rapport, l'Excel, le résumé hebdo et l'ADN affichaient « — » ou
+//     « undefined » à la place de la paire. _outilsClosedTrades rend des COPIES des trades clos du mode affiché, paire jointe — l'historique
+//     n'est jamais modifié. pnlUsdt y est BRUT de frais (10e6 en-tête) ; l'historique est COUPÉ (09b2 : 40 lignes par paire, ~20 clôtures) : « trades gardés ».
+// (2) _outilsSaveText écrit un fichier d'export. Dans l'app Android, un lien blob ne télécharge RIEN (09b3 _shareOrDownloadJSON, en-tête) et
+//     window.open + print() n'est pas un chemin sûr : on écrit par le plugin Filesystem, le chemin des backups Guardian (09b3 _fsWriteBackup →
+//     Download/AURA). Dans un navigateur : téléchargement. Le résultat dit ce qui s'est vraiment passé — plus de « téléchargé » inconditionnel.
+function _outilsClosedTrades() {
+  const out = [];
+  Object.entries(S.pairStates||{}).forEach(([pair, ps]) => {
+    ((ps && ps.trades) || []).forEach(t => {
+      if(t && t.type === 'position' && t.pnlUsdt != null) out.push(Object.assign({}, t, { pair }));
+    });
+  });
+  return out;
+}
+window._outilsClosedTrades = _outilsClosedTrades;
+function _outilsModeName(m) {
+  const k = (typeof _walletKey === 'function') ? _walletKey(m) : m;
+  return k === 'paperReal' ? 'EV · Évaluation (prix réels, argent fictif)' : (k === 'real' ? 'RE · Réel' : 'AA · Auto-apprentissage (marché fabriqué)');
+}
+window._outilsModeName = _outilsModeName;
+function _outilsIsNative() { return !!(window.Capacitor || window.cordova); }
+function _outilsStamp() { const d = new Date(), z = n => String(n).padStart(2, '0'); return d.getFullYear() + z(d.getMonth()+1) + z(d.getDate()) + '-' + z(d.getHours()) + z(d.getMinutes()); }
+async function _outilsSaveText(text, filename, mime) {
+  if (typeof _fsWriteBackup === 'function') {
+    try {
+      const r = await _fsWriteBackup(text, filename);
+      if (r) return { ok: true, how: 'fs', where: (window._fsLastDir === 'DOCUMENTS' ? 'Documents/AURA_Backups/' : 'Download/AURA/') + filename };
+    } catch (e) {}
+  }
+  if (_outilsIsNative()) return { ok: false, how: 'fs', diag: String(window._fsLastDiag || 'écriture native refusée') };
+  try {
+    const blob = new Blob([text], { type: mime || 'application/octet-stream' });
+    const url = URL.createObjectURL(blob), a = document.createElement('a');
+    a.href = url; a.download = filename;
+    document.body.appendChild(a); a.click();
+    setTimeout(() => { try { document.body.removeChild(a); } catch (_) {} try { URL.revokeObjectURL(url); } catch (_) {} }, 100);
+    return { ok: true, how: 'download', where: filename };
+  } catch (e) { return { ok: false, how: 'download', diag: (e && e.message) || String(e) }; }
+}
+window._outilsSaveText = _outilsSaveText;
+// Un rapport HTML imprimable : app Android → fichier .html écrit dans Download/AURA (à ouvrir dans Chrome, puis Imprimer › PDF) ; navigateur →
+// nouvel onglet + boîte d'impression, comme avant.
+async function _outilsPrintable(html, base, label) {
+  if (_outilsIsNative()) {
+    const name = base + '_' + _outilsStamp() + '.html';
+    const r = await _outilsSaveText(html, name, 'text/html');
+    if (r.ok) showToast('📄 ' + label + ' écrit : ' + r.where + ' — ouvre-le dans Chrome, puis ⋮ › Partager › Imprimer › Enregistrer en PDF', 8000, 'win');
+    else showToast('❌ ' + label + ' non écrit : ' + String(r.diag || '').split('\n')[0], 6000, 'warn');
+    return r;
+  }
+  const win = window.open('', '_blank', 'width=900,height=700');
+  if (!win) { showToast('⚠ Autoriser les popups pour exporter le PDF', 3000, 'warn'); return { ok: false, how: 'window', diag: 'popup bloquée' }; }
+  win.document.write(html);
+  win.document.close();
+  win.focus();
+  setTimeout(() => { try { win.print(); } catch (e) {} }, 800);
+  showToast('📄 ' + label + ' ouvert — Enregistrer comme PDF dans la boîte d\'impression', 4000, 'user');
+  return { ok: true, how: 'window' };
+}
+window._outilsPrintable = _outilsPrintable;
+
 // ═══ v43 · #13 EXPORT RAPPORT PDF MENSUEL ═══
 // Génère un rapport HTML complet dans une nouvelle fenêtre
 // Utilise window.print() → Save as PDF dans Chrome
 // Contient : résumé, P&L, paires, agents, frais, graphiques ASCII
 
+// [GO OUTILS · 18/10/2026] ETAT n° 33 · avant (vm, EV du 14/10, écran RE) : « Mode : Auto-apprentissage » pour le RE ; « P&L Net Total » −20,41 $
+// = somme BRUTE des trades gardés, le vrai net du mode était −60,09 $ ; « mensuel » sans aucun filtre de date ; Top agents à 0 trade / WR « — »
+// (a.trades / a.wins n'existent pas) ; table par paire « P&L Net » = cumul BRUT. Désormais chaque chiffre dit ce qu'il est.
 function _buildReportHTML() {
   // ── Collecter toutes les données ──
-  const allTrades = Object.values(S.pairStates||{}).flatMap(ps=>
-    (ps.trades||[]).filter(t=>t.type==='position'&&t.pnlUsdt!=null)
-  );
+  const allTrades = _outilsClosedTrades().sort((a,b)=>(a.ts||0)-(b.ts||0));
   const n        = allTrades.length;
   const wins     = allTrades.filter(t=>t.pnlUsdt>0);
   const losses   = allTrades.filter(t=>t.pnlUsdt<=0);
@@ -1024,14 +1088,18 @@ function _buildReportHTML() {
   const agents   = S.agents || [];
   const m        = typeof computeAdvancedMetrics==='function' ? computeAdvancedMetrics() : null;
   const now      = new Date();
-  const monthStr = now.toLocaleDateString('fr-FR',{month:'long',year:'numeric'});
+  const _fd = ts => new Date(ts).toLocaleDateString('fr-FR');
+  const monthStr = n>0 ? `${_fd(allTrades[0].ts||0)} → ${_fd(allTrades[n-1].ts||0)}` : 'aucun trade gardé';
+  const modeName = _outilsModeName(S.tradingMode);
+  const netMode  = Number(fees.totalPnlNet)||0;
 
-  // P&L par paire
-  const pairStats = Object.entries(S.pairStates||{}).map(([pair,ps])=>({
-    pair, trades:ps.totalTrades||0, wins:ps.winTrades||0,
-    pnl:ps.totalPnlUsd||0,
-    wr: ps.totalTrades>0?Math.round((ps.winTrades||0)/ps.totalTrades*100):null
-  })).filter(p=>p.trades>0).sort((a,b)=>b.pnl-a.pnl);
+  // P&L par paire — compteurs de la paire (depuis le début) ; net = registre des frais par paire du mode (02 recordFees)
+  const pairStats = Object.entries(S.pairStates||{}).map(([pair,ps])=>{
+    const bp = (fees.byPair||{})[pair];
+    return { pair, trades:ps.totalTrades||0, wins:ps.winTrades||0,
+      pnl:ps.totalPnlUsd||0, net: bp && isFinite(bp.pnlNet) ? Number(bp.pnlNet) : null,
+      wr: ps.totalTrades>0?Math.round((ps.winTrades||0)/ps.totalTrades*100):null };
+  }).filter(p=>p.trades>0).sort((a,b)=>b.pnl-a.pnl);
 
   // Top 5 agents
   const topAgents = [...agents].sort((a,b)=>(b.fitness||0)-(a.fitness||0)).slice(0,5);
@@ -1060,7 +1128,7 @@ function _buildReportHTML() {
 <html lang="fr">
 <head>
 <meta charset="UTF-8">
-<title>AURA — Rapport ${monthStr}</title>
+<title>AURA — Rapport ${_modeLab(S.tradingMode)} ${now.toLocaleDateString('fr-FR')}</title>
 <style>
   * { margin:0; padding:0; box-sizing:border-box; }
   body { font-family: 'Segoe UI', Arial, sans-serif; color:#111; background:#fff; padding:20mm 15mm; font-size:10pt; }
@@ -1528,23 +1596,27 @@ function _buildReportHTML() {
 <div class="header">
   <div>
     <h1>AURA ∞ — Rapport de Trading</h1>
-    <div style="color:#6b7280;font-size:9pt;margin-top:4px;">Période : ${monthStr} · Généré le ${now.toLocaleDateString('fr-FR')} à ${now.toLocaleTimeString('fr-FR')}</div>
+    <div style="color:#6b7280;font-size:9pt;margin-top:4px;">Trades gardés (l'historique ne garde que les dernières clôtures de chaque paire) : ${monthStr} · Généré le ${now.toLocaleDateString('fr-FR')} à ${now.toLocaleTimeString('fr-FR')}</div>
   </div>
   <div>
     <div class="header-badge">ADAPTIVE UNIVERSAL RISK ARCHITECT</div>
-    <div style="text-align:right;font-size:8pt;color:#9ca3af;margin-top:6px;">Mode : ${S.tradingMode=== 'paperReal'?'Mode Évaluation d\'apprentissage':'Mode Auto-apprentissage'} · ${agents.length} agents</div>
+    <div style="text-align:right;font-size:8pt;color:#9ca3af;margin-top:6px;">Mode : ${modeName} · ${agents.length} agents</div>
   </div>
 </div>
 
 <h2>📊 Résumé de Performance</h2>
-<div class="kpi-grid">
+<div class="kpi-grid" style="grid-template-columns:repeat(5,1fr);">
+  <div class="kpi ${netMode>=0?'good':'bad'}">
+    <span class="kpi-val">${netMode>=0?'+':''}$${netMode.toFixed(2)}</span>
+    <span class="kpi-lbl">P&L net depuis le début (frais et impôt déduits)</span>
+  </div>
   <div class="kpi ${totalPnl>=0?'good':'bad'}">
     <span class="kpi-val">${totalPnl>=0?'+':''}$${totalPnl.toFixed(2)}</span>
-    <span class="kpi-lbl">P&L Net Total</span>
+    <span class="kpi-lbl">P&L brut des ${n} trades gardés</span>
   </div>
   <div class="kpi ice">
     <span class="kpi-val">${wr}%</span>
-    <span class="kpi-lbl">Win Rate (${n} trades)</span>
+    <span class="kpi-lbl">Win Rate (${n} trades gardés)</span>
   </div>
   <div class="kpi neu">
     <span class="kpi-val">$${portfolio.toFixed(2)}</span>
@@ -1559,16 +1631,16 @@ function _buildReportHTML() {
 <div class="kpi-grid">
   <div class="kpi good"><span class="kpi-val">+$${avgWin.toFixed(2)}</span><span class="kpi-lbl">Gain Moyen</span></div>
   <div class="kpi bad"><span class="kpi-val">-$${avgLoss.toFixed(2)}</span><span class="kpi-lbl">Perte Moyenne</span></div>
-  <div class="kpi ${m&&m.sharpe>=1?'good':m&&m.sharpe<0?'bad':'neu'}"><span class="kpi-val">${m?m.sharpe.toFixed(2):'—'}</span><span class="kpi-lbl">Sharpe Ratio</span></div>
-  <div class="kpi bad"><span class="kpi-val">${m?m.maxDDPct.toFixed(1)+'%':'—'}</span><span class="kpi-lbl">Max Drawdown</span></div>
+  <div class="kpi ${m&&m.sharpe>=1?'good':m&&m.sharpe<0?'bad':'neu'}"><span class="kpi-val">${m?m.sharpe.toFixed(2):'—'}</span><span class="kpi-lbl">Sharpe (avant frais)</span></div>
+  <div class="kpi bad"><span class="kpi-val">${m?m.maxDDPct.toFixed(1)+'%':'—'}</span><span class="kpi-lbl">Max Drawdown (avant frais)</span></div>
 </div>
 
-<h2>📈 Equity Curve (20 derniers trades)</h2>
+<h2>📈 Courbe P&L brut (20 derniers trades)</h2>
 <div class="chart-box">${asciiChart}</div>
 
 <h2>₿ Performance par Paire</h2>
 <table>
-  <tr><th>Paire</th><th>Trades</th><th>Win Rate</th><th>Gains</th><th>Pertes</th><th>P&L Net</th></tr>
+  <tr><th>Paire</th><th>Trades</th><th>Win Rate</th><th>Gains</th><th>Pertes</th><th>P&L brut</th><th>P&L net</th></tr>
   ${pairStats.map(p=>`<tr>
     <td><strong>${p.pair}</strong></td>
     <td>${p.trades}</td>
@@ -1576,6 +1648,7 @@ function _buildReportHTML() {
     <td class="tag-win">${p.wins}</td>
     <td class="tag-loss">${p.trades-p.wins}</td>
     <td class="${p.pnl>=0?'tag-win':'tag-loss'}">${p.pnl>=0?'+':''}$${p.pnl.toFixed(2)}</td>
+    <td class="${(p.net||0)>=0?'tag-win':'tag-loss'}">${p.net===null?'—':(p.net>=0?'+':'')+'$'+p.net.toFixed(2)}</td>
   </tr>`).join('')}
 </table>
 
@@ -1588,15 +1661,13 @@ function _buildReportHTML() {
 
 <h2>🤖 Top 5 Agents</h2>
 <table>
-  <tr><th>Agent</th><th>Fitness</th><th>Score</th><th>Trades</th><th>Win Rate</th><th>Streak</th></tr>
-  ${topAgents.map(a=>{const wr2=a.trades>0?Math.round((a.wins||0)/a.trades*100):null;return`<tr>
+  <tr><th>Agent</th><th>Fitness</th><th>Score</th><th>Série gagnante</th></tr>
+  ${topAgents.map(a=>`<tr>
     <td>${a.emoji||''} <strong>${a.name||'—'}</strong></td>
     <td><strong>${Math.floor(a.fitness||0)} T$</strong></td>
     <td class="${(a.score||0)>=0?'tag-win':'tag-loss'}">${(a.score||0)>=0?'+':''}${(a.score||0).toFixed(3)}</td>
-    <td>${a.trades||0}</td>
-    <td class="${(wr2||0)>=55?'tag-win':'tag-loss'}">${wr2!==null?wr2+'%':'—'}</td>
-    <td class="${(a.streak||0)>0?'tag-win':(a.streak||0)<0?'tag-loss':''}">${(a.streak||0)===0?'—':(a.streak>0?'W':'L')+Math.abs(a.streak||0)}</td>
-  </tr>`}).join('')}
+    <td>${(a.streak||0)>0?a.streak:'—'}</td>
+  </tr>`).join('')}
 </table>
 
 <div class="disclaimer">
@@ -1614,14 +1685,7 @@ function _buildReportHTML() {
 }
 
 function exportPdfReport() {
-  const html = _buildReportHTML();
-  const win  = window.open('','_blank','width=900,height=700');
-  if(!win) { showToast('⚠ Autoriser les popups pour exporter le PDF', 3000, 'warn'); return; }
-  win.document.write(html);
-  win.document.close();
-  win.focus();
-  setTimeout(()=>{ win.print(); }, 800);
-  showToast('📄 Rapport ouvert — Enregistrer comme PDF dans la boîte d\'impression', 4000, 'user');
+  return _outilsPrintable(_buildReportHTML(), 'AURA_rapport_' + _modeLab(S.tradingMode), 'Rapport');
 }
 window.exportPdfReport = exportPdfReport;
 
@@ -1629,11 +1693,10 @@ function renderPdfReportSection() {
   const el = document.getElementById('pdfReportSection');
   if(!el) return;
 
-  const allTrades = Object.values(S.pairStates||{}).flatMap(ps=>
-    (ps.trades||[]).filter(t=>t.type==='position'&&t.pnlUsdt!=null)
-  );
+  const allTrades = _outilsClosedTrades();
   const n      = allTrades.length;
   const totalPnl = allTrades.reduce((s,t)=>s+(t.pnlUsdt||0),0);
+  const netMode  = Number((S.fees||{}).totalPnlNet)||0;
   const wr     = n>0 ? Math.round(allTrades.filter(t=>t.pnlUsdt>0).length/n*100) : 0;
   const fees   = S.fees || {};
   const now    = new Date();
@@ -1642,27 +1705,28 @@ function renderPdfReportSection() {
   el.innerHTML = `
     <div class="rp-section">
       <div class="rp-title">
-        📄 Rapport PDF Mensuel
-        <span style="font-size:8px;color:var(--t3);font-weight:400;">${now.toLocaleDateString('fr-FR',{month:'long',year:'numeric'})}</span>
+        📄 Rapport PDF · ${_modeLab(S.tradingMode)}
+        <span style="font-size:8px;color:var(--t3);font-weight:400;">${now.toLocaleDateString('fr-FR')}</span>
       </div>
 
       <div class="rp-section-lbl">Aperçu du rapport</div>
       <div class="rp-preview-card">
-        <div class="rp-preview-row"><span style="color:var(--t3);">Trades analysés</span><span style="font-weight:700;">${n}</span></div>
-        <div class="rp-preview-row"><span style="color:var(--t3);">P&L Net</span><span style="font-weight:700;color:${totalPnl>=0?'var(--up)':'var(--down)'};">${totalPnl>=0?'+':''}$${totalPnl.toFixed(2)}</span></div>
+        <div class="rp-preview-row"><span style="color:var(--t3);">Trades gardés (dernières clôtures par paire)</span><span style="font-weight:700;">${n}</span></div>
+        <div class="rp-preview-row"><span style="color:var(--t3);">P&L net depuis le début</span><span style="font-weight:700;color:${netMode>=0?'var(--up)':'var(--down)'};">${netMode>=0?'+':''}$${netMode.toFixed(2)}</span></div>
+        <div class="rp-preview-row"><span style="color:var(--t3);">P&L brut des trades gardés</span><span style="font-weight:700;color:${totalPnl>=0?'var(--up)':'var(--down)'};">${totalPnl>=0?'+':''}$${totalPnl.toFixed(2)}</span></div>
         <div class="rp-preview-row"><span style="color:var(--t3);">Win Rate</span><span style="font-weight:700;color:${wr>=55?'var(--up)':'var(--down)'};">${wr}%</span></div>
         <div class="rp-preview-row"><span style="color:var(--t3);">Sharpe Ratio</span><span style="font-weight:700;">${m?m.sharpe.toFixed(2):'—'}</span></div>
         <div class="rp-preview-row"><span style="color:var(--t3);">Frais totaux</span><span style="font-weight:700;color:var(--down);">-$${(fees.totalGross||0).toFixed(2)}</span></div>
-        <div class="rp-preview-row"><span style="color:var(--t3);">Top agent</span><span style="font-weight:700;color:var(--pur);">${(S.agents||[]).sort((a,b)=>(b.fitness||0)-(a.fitness||0))[0]?.name||'—'}</span></div>
+        <div class="rp-preview-row"><span style="color:var(--t3);">Top agent</span><span style="font-weight:700;color:var(--pur);">${[...(S.agents||[])].sort((a,b)=>(b.fitness||0)-(a.fitness||0))[0]?.name||'—'}</span></div>
       </div>
 
       <div class="rp-section-lbl">Contenu du rapport</div>
       <div style="font-size:9px;color:var(--t2);line-height:1.8;padding:6px 0;">
-        ✅ Résumé de performance (8 KPIs)<br>
-        ✅ Equity curve ASCII (20 derniers trades)<br>
-        ✅ Performance détaillée par paire<br>
+        ✅ Résumé : net depuis le début, brut et WR des trades gardés, frais, Sharpe, drawdown<br>
+        ✅ Courbe du P&L brut (20 derniers trades)<br>
+        ✅ Performance par paire (brut et net)<br>
         ✅ Détail des frais (trading, slippage, funding)<br>
-        ✅ Top 5 agents (fitness, score, WR, streak)<br>
+        ✅ Top 5 agents (fitness, score, série gagnante)<br>
         ✅ Avertissement légal
       </div>
 
@@ -1670,7 +1734,7 @@ function renderPdfReportSection() {
         📥 Générer et Exporter le PDF
       </button>
       <div style="font-size:8px;color:var(--t3);margin-top:6px;text-align:center;">
-        S'ouvre dans un nouvel onglet → Ctrl+P → Enregistrer en PDF
+        App Android : fichier .html écrit dans Download/AURA, à ouvrir dans Chrome puis Imprimer › PDF · navigateur : nouvel onglet + impression
       </div>
     </div>`;
 }
@@ -1698,10 +1762,11 @@ function _csvSheet(headers, rows) {
   return lines.join('\n');
 }
 
+// [GO OUTILS · 18/10/2026] ETAT n° 33 · avant (vm, EV du 14/10) : colonne Paire « — » partout (pas de champ pair dans l'historique), « P&L Net
+// Total » = somme BRUTE, agents à 0 trade / WR « — » (champs inexistants), funding par paire toujours 0 (jamais cumulé par paire), mode en nom
+// interne, et le toast « Excel téléchargé » partait même quand rien n'était écrit (lien blob dans l'app Android).
 function buildExcelData() {
-  const allTrades = Object.values(S.pairStates||{}).flatMap(ps=>
-    (ps.trades||[]).filter(t=>t.type==='position'&&t.pnlUsdt!=null)
-  ).sort((a,b)=>(a.ts||0)-(b.ts||0));
+  const allTrades = _outilsClosedTrades().sort((a,b)=>(a.ts||0)-(b.ts||0));
 
   const n = allTrades.length;
   const wins = allTrades.filter(t=>t.pnlUsdt>0);
@@ -1721,13 +1786,14 @@ function buildExcelData() {
       ['Portfolio total', _xlCell(S.portfolio,'usd'), ''],
       ['Compte trading', _xlCell(S.tradingAccount,'usd'), ''],
       ['Caisse libre', _xlCell(S.cashAccount,'usd'), ''],
-      ['Mode', S.tradingMode||'—', ''],
+      ['Mode', _outilsModeName(S.tradingMode), ''],
       ['','',''],
-      ['Total trades', n, ''],
+      ['Trades gardés', n, "l'historique ne garde que les dernières clôtures de chaque paire"],
       ['Trades gagnants', wins.length, ''],
       ['Trades perdants', losses.length, ''],
       ['Win Rate', n>0?(wins.length/n*100).toFixed(1)+'%':'—', ''],
-      ['P&L Net Total', _xlCell(totalPnl,'usd'), ''],
+      ['P&L brut des trades gardés', _xlCell(totalPnl,'usd'), 'avant frais'],
+      ['P&L net depuis le début', _xlCell(Number(fees.totalPnlNet)||0,'usd'), 'frais et impôt provisionné déduits'],
       ['Gain moyen', wins.length>0?_xlCell(wins.reduce((s,t)=>s+t.pnlUsdt,0)/wins.length,'usd'):'—', ''],
       ['Perte moyenne', losses.length>0?_xlCell(Math.abs(losses.reduce((s,t)=>s+t.pnlUsdt,0)/losses.length),'usd'):'—', ''],
       ['','',''],
@@ -1750,15 +1816,15 @@ function buildExcelData() {
 
   // ── Onglet 2 : Trades ──
   const sheetTrades = _csvSheet(
-    ['#','Date','Paire','Côté','Stake $','Prix entrée','Prix sortie','P&L $','P&L %','Résultat'],
+    ['#','Date','Paire','Côté','Mise $','Prix entrée','Prix sortie','P&L brut $','P&L %','Résultat'],
     allTrades.map((t,i) => [
       i+1,
-      t.time||new Date(t.ts||0).toLocaleString('fr-FR'),
+      t.ts ? new Date(t.ts).toLocaleString('fr-FR') : (t.time||'—'),   // [GO OUTILS · 18/10/2026] t.time n'a que l'heure
       t.pair||'—',
       t.side==='buy'?'LONG':'SHORT',
       _xlCell(t.stakeUsdt,'num'),
-      _xlCell(t.entryPrice,'num'),
-      _xlCell(t.price,'num'),
+      isFinite(t.entryPrice) ? String(+t.entryPrice) : '',   // [GO OUTILS · 18/10/2026] prix entiers (PEPE : 0 à 4 décimales)
+      isFinite(t.price) ? String(+t.price) : '',
       _xlCell(t.pnlUsdt,'num'),
       _xlCell(t.pnl,'num')+'%',
       (t.pnlUsdt||0)>0?'WIN':'LOSS',
@@ -1773,7 +1839,7 @@ function buildExcelData() {
   })).sort((a,b)=>b.pnl-a.pnl);
 
   const sheetPaires = _csvSheet(
-    ['Paire','Total trades','Gagnants','Perdants','Win Rate %','P&L $','P&L %','Statut'],
+    ['Paire','Total trades','Gagnants','Perdants','Win Rate %','P&L brut $','P&L %','Statut (brut)'],
     pairRows.map(p=>[
       p.pair,
       p.t,
@@ -1788,9 +1854,8 @@ function buildExcelData() {
 
   // ── Onglet 4 : Agents ──
   const sheetAgents = _csvSheet(
-    ['Rang','Emoji','Nom','Type','Rôle','Fitness T$','Score','Trades','WR%','Streak','Erreurs','Statut'],
+    ['Rang','Emoji','Nom','Type','Rôle','Fitness T$','Score','Série gagnante','Erreurs','Statut'],
     [...agents].sort((a,b)=>(b.fitness||0)-(a.fitness||0)).map((a,i)=>{
-      const wr = a.trades>0?Math.round((a.wins||0)/a.trades*100):null;
       return [
         i+1,
         a.emoji||'—',
@@ -1799,9 +1864,7 @@ function buildExcelData() {
         a.role||'—',
         Math.floor(a.fitness||0),
         (a.score||0).toFixed(3),
-        a.trades||0,
-        wr!==null?wr+'%':'—',
-        (a.streak||0)===0?'—':(a.streak>0?'W':'L')+Math.abs(a.streak||0),
+        (a.streak||0)>0?a.streak:'—',
         a.errors||0,
         (a.fitness||0)>=1900?'Saturé':(a.fitness||0)>=800?'Élite':(a.fitness||0)>=300?'Actif':'Dégradé',
       ];
@@ -1811,13 +1874,12 @@ function buildExcelData() {
   // ── Onglet 5 : Frais par paire ──
   const feesByPair = fees.byPair || {};
   const sheetFrais = _csvSheet(
-    ['Paire','Frais trading $','Slippage $','Funding $','Total frais $','P&L brut $','P&L net $','Ratio frais/brut %'],
+    ['Paire','Frais trading $','Slippage $','Total frais $','P&L brut $','P&L net $','Ratio frais/brut %'],
     Object.entries(feesByPair).map(([pair,f])=>[
       pair,
       _xlCell(f.tradingFees||0,'num'),
       _xlCell(f.slippage||0,'num'),
-      _xlCell(f.funding||0,'num'),
-      _xlCell((f.tradingFees||0)+(f.slippage||0)+(f.funding||0),'num'),
+      _xlCell((f.tradingFees||0)+(f.slippage||0),'num'),
       _xlCell(f.pnlGross||0,'num'),
       _xlCell(f.pnlNet||0,'num'),
       (f.pnlGross||0)>0?((((f.tradingFees||0)+(f.slippage||0))/(f.pnlGross||1))*100).toFixed(1)+'%':'—',
@@ -1862,18 +1924,13 @@ ${_csvToXmlSheet('Frais', sheets.sheetFrais)}
 ${_csvToXmlSheet('Journal', sheets.sheetJournal)}
 </Workbook>`;
 
-    const blob = new Blob([xlsContent], { type:'application/vnd.ms-excel;charset=utf-8' });
-    const url  = URL.createObjectURL(blob);
-    const a    = document.createElement('a');
-    a.href     = url;
-    a.download = `AURA_rapport_${dateStr}.xls`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-
-    showToast('📊 Excel téléchargé — AURA_rapport_'+dateStr+'.xls', 3000, 'win');
-    if(btn) { btn.disabled=false; btn.innerHTML='📊 Exporter Excel (.xls)'; }
+    const fname = `AURA_rapport_${_modeLab(S.tradingMode)}_${_outilsStamp()}.xls`;
+    return _outilsSaveText(xlsContent, fname, 'application/vnd.ms-excel;charset=utf-8').then(r => {
+      if (r.ok) showToast('📊 Excel ' + (r.how === 'fs' ? 'écrit : ' : 'téléchargé : ') + r.where, 5000, 'win');
+      else showToast('❌ Excel non écrit : ' + String(r.diag || '').split('\n')[0], 6000, 'warn');
+      if(btn) { btn.disabled=false; btn.innerHTML='📊 Exporter Excel (.xls)'; }
+      return r;
+    });
   } catch(e) {
     showToast('⚠ Erreur export : '+e.message, 3000, 'warn');
     const btn = document.getElementById('xlExportBtn');
@@ -1912,18 +1969,18 @@ function renderXlExportSection() {
   const el = document.getElementById('xlExportSection');
   if(!el) return;
 
-  const allTrades = Object.values(S.pairStates||{}).flatMap(ps=>
-    (ps.trades||[]).filter(t=>t.type==='position')
-  );
+  const allTrades = _outilsClosedTrades();
   const agents  = S.agents || [];
   const journal = S.dreamJournal || [];
   const paires  = Object.keys(S.pairStates||{}).length;
+  let _nRes = 0;
+  try { _nRes = buildExcelData().sheetResume.split('\n').length - 1; } catch (e) {}
 
   const sheets = [
-    { icon:'📋', name:'Résumé', desc:'KPIs globaux, métriques, capital', count:'26 lignes' },
-    { icon:'📈', name:'Trades', desc:'Tous les trades avec entrée/sortie/P&L', count:allTrades.length+' trades' },
+    { icon:'📋', name:'Résumé', desc:'Net depuis le début, brut des trades gardés, métriques, capital', count:_nRes+' lignes' },
+    { icon:'📈', name:'Trades', desc:'Trades gardés (dernières clôtures par paire) : paire, entrée, sortie, P&L brut', count:allTrades.length+' trades' },
     { icon:'₿',  name:'Paires', desc:'Performance détaillée par paire', count:paires+' paires' },
-    { icon:'🤖', name:'Agents', desc:'Classement agents fitness/score/WR', count:agents.length+' agents' },
+    { icon:'🤖', name:'Agents', desc:'Classement agents : fitness, score, série gagnante', count:agents.length+' agents' },
     { icon:'💸', name:'Frais',  desc:'Frais détaillés par paire', count:paires+' paires' },
     { icon:'📔', name:'Journal',desc:'Journal de bord bot (100 dernières)', count:Math.min(100,journal.length)+' entrées' },
   ];
@@ -1931,7 +1988,7 @@ function renderXlExportSection() {
   el.innerHTML = `
     <div class="xl-section">
       <div class="xl-title">
-        📊 Export Excel Multi-onglets
+        📊 Export Excel Multi-onglets · ${_modeLab(S.tradingMode)}
         <span style="font-size:8px;color:var(--t3);font-weight:400;">Format .xls · 6 onglets</span>
       </div>
 
@@ -1949,7 +2006,7 @@ function renderXlExportSection() {
         📊 Exporter Excel (.xls)
       </button>
       <div style="font-size:8px;color:var(--t3);margin-top:6px;text-align:center;">
-        Compatible Microsoft Excel, Google Sheets, LibreOffice
+        App Android : écrit dans Download/AURA · Excel, Google Sheets, LibreOffice
       </div>
     </div>`;
 }
@@ -1972,13 +2029,21 @@ function _getWeekTrades(offset) {
   sunday.setDate(monday.getDate() + 6);
   sunday.setHours(23, 59, 59, 999);
 
-  const allTrades = Object.values(S.pairStates||{}).flatMap(ps=>
-    (ps.trades||[]).filter(t=>t.type==='position' && t.pnlUsdt!=null && t.ts)
-  );
+  // [GO OUTILS · 18/10/2026] ETAT n° 33 · trades COPIÉS avec leur paire (avant : t.pair absent → « Performance par paire » = une ligne
+  // « undefined », insights « Meilleure paire : undefined »). oldest = la date à partir de laquelle TOUTES les paires sont complètes :
+  // l'historique est coupé paire par paire (09b2 : 40 lignes) ; une paire est coupée quand son compteur de clôtures dépasse ses lignes
+  // gardées, et on prend la PLUS RÉCENTE des premières lignes gardées de ces paires (relecture adverse du 18/10 : le plus vieux trade de
+  // toutes les paires ne voyait presque jamais la coupure)
+  const allTrades = _outilsClosedTrades().filter(t => t.ts);
+  let oldest = -Infinity;
+  Object.entries(S.pairStates||{}).forEach(([pair, ps]) => {
+    const kept = ((ps && ps.trades) || []).filter(t => t && t.type === 'position' && t.ts);
+    if (kept.length && (Number(ps.totalTrades) || 0) > kept.length) oldest = Math.max(oldest, Math.min(...kept.map(t => t.ts)));
+  });
 
-  const weekTrades = allTrades.filter(t => t.ts >= monday.getTime() && t.ts <= sunday.getTime());
+  const weekTrades = allTrades.filter(t => t.ts >= monday.getTime() && t.ts <= sunday.getTime()).sort((a,b)=>a.ts-b.ts);
 
-  return { trades: weekTrades, monday, sunday };
+  return { trades: weekTrades, monday, sunday, oldest };
 }
 
 function _analyzeWeek(trades, monday, sunday) {
@@ -2019,8 +2084,8 @@ function _analyzeWeek(trades, monday, sunday) {
     if(wr !== null && wr >= 0.70) insights.push(`🔥 Excellente semaine ! Win Rate de ${Math.round(wr*100)}%.`);
     else if(wr !== null && wr < 0.40) insights.push(`⚠️ Win Rate faible (${Math.round(wr*100)}%) — revoir la stratégie.`);
 
-    if(totalPnl > 0) insights.push(`💰 Semaine profitable : +$${totalPnl.toFixed(2)} réalisés.`);
-    else insights.push(`📉 Semaine déficitaire : $${totalPnl.toFixed(2)}. Analyser les entrées.`);
+    if(totalPnl > 0) insights.push(`💰 P&L brut de la semaine : +$${totalPnl.toFixed(2)} (avant frais).`);
+    else insights.push(`📉 P&L brut de la semaine : $${totalPnl.toFixed(2)} (avant frais). Analyser les entrées.`);
 
     if(bestPair && bestPair[1].pnl > 0)  insights.push(`⭐ Meilleure paire : ${bestPair[0].replace('/USDT','')} (+$${bestPair[1].pnl.toFixed(2)})`);
     if(worstPair && worstPair[1].pnl < 0) insights.push(`🎯 À surveiller : ${worstPair[0].replace('/USDT','')} ($${worstPair[1].pnl.toFixed(2)})`);
@@ -2044,8 +2109,9 @@ function renderHebdoSection() {
   const el = document.getElementById('hebdoSection');
   if(!el) return;
 
-  const { trades, monday, sunday } = _getWeekTrades(_rhWeekOffset);
+  const { trades, monday, sunday, oldest } = _getWeekTrades(_rhWeekOffset);
   const stats = _analyzeWeek(trades, monday, sunday);
+  const incomplete = isFinite(oldest) && oldest > monday.getTime();
 
   const fmtDate = d => d.toLocaleDateString('fr-FR', {day:'2-digit',month:'2-digit'});
   const weekLabel = _rhWeekOffset === 0 ? 'Semaine en cours'
@@ -2082,8 +2148,8 @@ function renderHebdoSection() {
   el.innerHTML = `
     <div class="rh-section">
       <div class="rh-title">
-        📅 Résumé Hebdomadaire
-        <span style="font-size:8px;color:var(--t3);font-weight:400;">${dateRange}</span>
+        📅 Résumé Hebdomadaire · ${_modeLab(S.tradingMode)}
+        <span style="font-size:8px;color:var(--t3);font-weight:400;">${dateRange} · P&L brut</span>
       </div>
 
       <!-- Navigation semaines -->
@@ -2095,6 +2161,7 @@ function renderHebdoSection() {
       </div>
 
       <div class="rh-week-card">
+        ${incomplete ? `<div style="font-size:8px;color:var(--gold);margin-bottom:6px;">⚠ Semaine incomplète : l'historique est coupé paire par paire ; toutes les paires ne sont complètes qu'à partir du ${new Date(oldest).toLocaleDateString('fr-FR')}.</div>` : ''}
         <!-- En-tête semaine -->
         <div class="rh-week-header">
           <span class="rh-week-label">${weekLabel}</span>

@@ -2762,10 +2762,10 @@ function initWhatIfSection() {
     _WI_PARAMS.trades = Math.min(200, Math.max(10, allTrades.length*2));
     if(wins.length>0)  _WI_PARAMS.avgWin  = parseFloat((wins.reduce((s,t)=>s+(t.pnl||0),0)/wins.length).toFixed(2));
     if(loses.length>0) _WI_PARAMS.avgLoss = parseFloat((Math.abs(loses.reduce((s,t)=>s+(t.pnl||0),0)/loses.length)).toFixed(2));
-    if(S.pairStates) {
-      const stakes = Object.values(S.pairStates).map(ps=>ps.stake||0).filter(s=>s>0);
-      if(stakes.length>0) _WI_PARAMS.stake = Math.round(stakes.reduce((a,b)=>a+b,0)/stakes.length);
-    }
+    // [GO OUTILS · 18/10/2026] ETAT n° 33 · la mise pré-remplie = moyenne des MISES RÉELLES des trades clos (t.stakeUsdt) ; avant : le réglage
+    // de mise des paires (ps.stake), qui n'est pas ce que les trades ont misé.
+    const stakes = allTrades.map(t=>Number(t.stakeUsdt)||0).filter(s=>s>0);
+    if(stakes.length>0) _WI_PARAMS.stake = Math.max(10, Math.round(stakes.reduce((a,b)=>a+b,0)/stakes.length));
   }
 
   el.innerHTML = `
@@ -2863,7 +2863,7 @@ function updateWhatIf() {
       </div>
       <div class="wi-result-card">
         <span class="wi-result-val" style="color:var(--down);">-$${res.estMaxDD.toFixed(2)}</span>
-        <span class="wi-result-lbl">DD max estimé</span>
+        <span class="wi-result-lbl">Série de pertes typique</span>
       </div>
       <div class="wi-result-card">
         <span class="wi-result-val" style="color:var(--gold);">-$${res.totalFees.toFixed(2)}</span>
@@ -2871,7 +2871,7 @@ function updateWhatIf() {
       </div>
     </div>
     <div style="margin-top:8px;padding:6px 10px;background:rgba(255,255,255,.03);border-radius:8px;font-size:var(--fs-9);color:var(--t3);">
-      ${res.nWins} gains (+$${res.grossWin.toFixed(2)}) · ${res.nLoss} pertes (-$${res.grossLoss.toFixed(2)}) · Pire série: ~${res.maxConsecLoss} pertes cons.
+      ${res.nWins} gains (+$${res.grossWin.toFixed(2)}) · ${res.nLoss} pertes (-$${res.grossLoss.toFixed(2)}) · série typique de ~${res.maxConsecLoss} pertes d'affilée
       ${res.expectancy < 0 ? '<br><span style="color:var(--down);font-weight:700;">⚠ Espérance négative — stratégie non rentable à ces paramètres</span>' : ''}
     </div>`;
 
@@ -2879,21 +2879,22 @@ function updateWhatIf() {
   if(cmpEl) {
     const allT = Object.values(S.pairStates||{}).flatMap(ps=>(ps.trades||[]).filter(t=>t.type==='position'&&t.pnlUsdt!=null));
     if(allT.length >= 5) {
+      // [GO OUTILS · 18/10/2026] pnlUsdt est BRUT de frais (02 closePosition, 10e6 en-tête) : le réel est dit « brut », le simulé « net »
       const realPnl = allT.reduce((s,t)=>s+(t.pnlUsdt||0),0);
       const realWR  = allT.filter(t=>(t.pnlUsdt||0)>0).length/allT.length*100;
       const diff    = res.netPnl - realPnl;
       cmpEl.innerHTML = `
         <div style="font-size:var(--fs-9);font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:.08em;margin-bottom:5px;">Comparaison avec tes vrais trades</div>
         <div class="wi-compare-row">
-          <span style="color:var(--t2);">P&L réel (${allT.length} trades)</span>
+          <span style="color:var(--t2);">P&L réel BRUT, avant frais (${allT.length} trades gardés · ${_modeLab(S.tradingMode)})</span>
           <span style="font-family:var(--font-mono);font-weight:700;color:${realPnl>=0?'var(--up)':'var(--down)'};">${realPnl>=0?'+':''}$${realPnl.toFixed(2)}</span>
         </div>
         <div class="wi-compare-row">
-          <span style="color:var(--t2);">P&L simulé (${_WI_PARAMS.trades} trades)</span>
+          <span style="color:var(--t2);">P&L simulé NET de frais (${_WI_PARAMS.trades} trades)</span>
           <span style="font-family:var(--font-mono);font-weight:700;color:${res.netPnl>=0?'var(--up)':'var(--down)'};">${res.netPnl>=0?'+':''}$${res.netPnl.toFixed(2)}</span>
         </div>
         <div class="wi-compare-row">
-          <span style="color:var(--t2);">Différence</span>
+          <span style="color:var(--t2);">Différence (net simulé − brut réel)</span>
           <span style="font-family:var(--font-mono);font-weight:700;color:${diff>=0?'var(--up)':'var(--down)'};">${diff>=0?'+':''}$${diff.toFixed(2)}</span>
         </div>
         <div class="wi-compare-row">
@@ -2915,6 +2916,9 @@ function initBacktestSection() {
   el.innerHTML = `
     <div class="bt-section">
       <div class="bt-title">📊 Backtesting Rapide <span style="font-size:var(--fs-8);color:var(--t3);font-weight:400;">Données Binance réelles</span></div>
+      <!-- [GO OUTILS · 18/10/2026] ETAT n° 33 · ce banc teste une stratégie de DÉMONSTRATION (croisement EMA 9/21, TP 3 % / SL 2 %), pas la décision d'AURA ;
+           « Seuil signal » était l'écart minimal entre les deux EMA au croisement, pas un seuil du bot -->
+      <div style="font-size:var(--fs-9);color:var(--gold);margin-bottom:8px;line-height:1.4;">⚠ Stratégie de démonstration : croisement EMA 9/21, TP 3 % / SL 2 %, frais 0,1 % par côté. Ce n'est PAS la décision d'AURA (agents, votes, portes).</div>
       <div class="bt-controls">
         <div class="bt-control">
           <label>Paire</label>
@@ -2930,7 +2934,7 @@ function initBacktestSection() {
           </select>
         </div>
         <div class="bt-control">
-          <label>Seuil signal (%)</label>
+          <label>Écart EMA min. au croisement (51 ≈ 0,01 %, 60 = 0,1 %)</label>
           <input type="number" id="btThresh" value="60" min="51" max="90" step="1">
         </div>
         <div class="bt-control">
@@ -3057,7 +3061,10 @@ async function runBacktest() {
     const netPnl  = trades.reduce((s,t)=>s+t.netPnl,0);
     const avgWin  = wins.length>0 ? wins.reduce((s,t)=>s+t.pnlPct,0)/wins.length : 0;
     const avgLoss = losses.length>0 ? Math.abs(losses.reduce((s,t)=>s+t.pnlPct,0)/losses.length) : 0;
-    const pf      = avgLoss>0 ? (avgWin*(wins.length/trades.length))/(avgLoss*(losses.length/trades.length)) : 0;
+    // [GO OUTILS · 18/10/2026] Profit Factor = somme des gains NETS / somme des pertes NETTES (avant : % BRUTS, alors que gagnants et perdants
+    // sont classés sur le net — un trade gagnant brut mais perdant après frais comptait dans les deux sens)
+    const _sumW = wins.reduce((s,t)=>s+t.netPnl,0), _sumL = Math.abs(losses.reduce((s,t)=>s+t.netPnl,0));
+    const pf      = _sumL>0 ? _sumW/_sumL : 0;
 
     // Equity SVG mini
     const W=280, H=50;
@@ -3125,7 +3132,7 @@ function initReplaySection() {
       <div class="rp-controls">
         <button class="rp-btn play" id="rpPlayBtn" onclick="replayPlay()">▶ Play</button>
         <button class="rp-btn reset" onclick="replayReset()">↺ Reset</button>
-        <select class="rp-speed" id="rpSpeed" onchange="_RP.speed=parseFloat(this.value);">
+        <select class="rp-speed" id="rpSpeed" onchange="replaySetSpeed(this.value)">
           <option value="1">×1</option>
           <option value="2">×2</option>
           <option value="5">×5</option>
@@ -3180,9 +3187,12 @@ function _buildReplayEvents() {
   });
 
   // 3. Chain log (blocages, alertes)
-  (S.chainLog||[]).filter(e=>e.desc&&e.icon).slice(-50).forEach(e=>{
+  // [GO OUTILS · 18/10/2026] ETAT n° 33 · seules les lignes DATÉES entrent dans le replay. Aucune ligne du journal 🔗 n'a de champ ts (S.chainLog.push
+  // partout : { icon, desc, hash, time }) : avant, elles recevaient l'heure du clic (e.ts||Date.now()) et passaient toutes APRÈS les trades,
+  // horodatées « maintenant » — le replay n'était pas chronologique.
+  (S.chainLog||[]).filter(e=>e.desc&&e.icon&&typeof e.ts==='number'&&isFinite(e.ts)).slice(-50).forEach(e=>{
     events.push({
-      ts:    e.ts||Date.now(),
+      ts:    e.ts,
       type:  'chain',
       icon:  e.icon||'📡',
       pair:  '',
@@ -3218,6 +3228,13 @@ function replayPlay() {
   const btn = document.getElementById('rpPlayBtn');
   if(btn) { btn.textContent='⏸ Pause'; btn.className='rp-btn pause'; }
 
+  _replayStartTimer();
+}
+window.replayPlay = replayPlay;
+
+// [GO OUTILS · 18/10/2026] la vitesse s'applique tout de suite (avant : seulement après Pause + Play) ; ×10 = 80 ms (avant : plancher 150 ms)
+function _replayStartTimer() {
+  clearInterval(_RP.timer);
   _RP.timer = setInterval(()=>{
     if(_RP.idx >= _RP.events.length) {
       replayPause();
@@ -3227,9 +3244,14 @@ function replayPlay() {
     _showReplayEvent(_RP.events[_RP.idx]);
     _RP.idx++;
     _updateReplayUI();
-  }, Math.max(150, 800/_RP.speed));
+  }, Math.max(50, 800/(_RP.speed||1)));
 }
-window.replayPlay = replayPlay;
+function replaySetSpeed(v) {
+  const n = parseFloat(v);
+  _RP.speed = (isFinite(n) && n > 0) ? n : 1;
+  if(_RP.playing) _replayStartTimer();
+}
+window.replaySetSpeed = replaySetSpeed;
 
 function replayPause() {
   _RP.playing = false;

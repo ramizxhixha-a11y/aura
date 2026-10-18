@@ -532,50 +532,38 @@ function updateStCustom(key, val) {
 }
 window.updateStCustom = updateStCustom;
 
+// [GO OUTILS · 18/10/2026] ETAT n° 33 · le stress test chiffre ce qui arriverait à TON compte du mode affiché si toutes les cryptos baissaient du
+// pourcentage du scénario. Avant (vm, backup du 14/10) : un compte sans position « perdait » 258 $ dans le crash 2022 — l'USDT libre perdait
+// 30 % × la chute ; les longs perdaient mise × chute sans l'exposition ; les mises étaient retirées deux fois ; « WR bots après » = formule
+// inventée ; « agents résistants » = fitness > 200 quel que soit le scénario. Désormais :
+//   · l'USDT du compte trading, la caisse et les réserves ne bougent pas (ce sont des dollars) ;
+//   · chaque position ouverte du mode : P&L au prix du scénario = exposition × variation depuis l'entrée (LONG perd, SHORT gagne), perte
+//     bornée à la mise — exactement la règle de closePosition (02 : realisedUsd = max(−mise, brut)) ; avant frais ;
+//   · la poche tendance longue (15) n'est pas comptée : c'est une mesure, sans argent sur le compte.
+// Rien n'est écrit dans S.
 function _runStressTest() {
   const scenario = _ST_SCENARIOS[_stScenarioKey];
   const drop     = _stScenarioKey==='custom' ? -_stCustomDrop : scenario.drop;
-  const dropFactor = drop/100; // négatif
-
-  const capital    = S.tradingAccount || 0;
-  const openPos    = S.openPositions  || [];
-  const totalStake = openPos.reduce((s,p)=>s+(p.stakeUsdt||0),0);
-  const avgStake   = S.totalTrades>0 ? capital * (_stScenarioKey==='custom'?_stCustomStake/100:0.20) : 0;
-  const numOpenPos = openPos.length;
-
-  // Impact sur positions ouvertes (longs perdent, shorts gagnent partiellement)
-  const longPosLoss = openPos.filter(p=>p.side==='long').reduce((s,p)=>{
-    return s + (p.stakeUsdt||0) * Math.abs(dropFactor);
-  },0);
-  const shortPosGain= openPos.filter(p=>p.side==='short').reduce((s,p)=>{
-    return s + (p.stakeUsdt||0) * Math.abs(dropFactor) * 0.8; // partial hedge
-  },0);
-
-  // Impact sur capital non investi (crypto exposure)
-  const freeCapital = capital - totalStake;
-  const freeLoss    = freeCapital * Math.abs(dropFactor) * 0.3; // exposition partielle
-
-  // Impact total
-  const totalLoss  = longPosLoss - shortPosGain + freeLoss;
-  const capitalAfter = Math.max(0, capital - totalLoss);
-  const survivalPct  = capital>0 ? (capitalAfter/capital*100) : 0;
-  const drawdownPct  = Math.abs(dropFactor*100);
-
-  // Bot impact: win rate s'effondre pendant un bear market
-  const botWrBefore = S.totalTrades>0?Math.round((S.winTrades||0)/S.totalTrades*100):50;
-  const botWrAfter  = Math.max(20, botWrBefore + drop*0.3); // WR baisse proportionnellement
-
-  // Bots qui survivent (fitness > seuil minimal)
-  const agentsSurviving = (S.agents||[]).filter(a=>(a.fitness||0)>200).length;
-  const agentsTotal     = (S.agents||[]).length;
-
+  const f        = drop/100;   // négatif
+  const libre    = Number(S.tradingAccount) || 0;
+  const rows = (S.openPositions || []).filter(p => p && p.pair).map(p => {
+    const ps = S.pairStates && S.pairStates[p.pair];
+    const e = Number(p.entryPrice) || 0, cur = (ps && Number(ps.price)) || e;
+    const stake = Number(p.stakeUsdt) || 0, expo = Number(p.totalExposure) || stake, dir = p.side === 'short' ? -1 : 1;
+    const pnlAt = px => (e > 0 ? Math.max(-stake, expo * dir * (px - e) / e) : 0);
+    const now = pnlAt(cur), after = pnlAt(cur * (1 + f));
+    return { pair: p.pair, side: p.side, auto: p.auto === true, stake, expo, now, after, delta: after - now };
+  });
+  const engage   = rows.reduce((s, r) => s + r.stake, 0);
+  const valNow   = libre + rows.reduce((s, r) => s + r.stake + r.now, 0);
+  const valAfter = libre + rows.reduce((s, r) => s + r.stake + r.after, 0);
+  const longPosLoss  = -rows.filter(r => r.side !== 'short').reduce((s, r) => s + r.delta, 0);
+  const shortPosGain =  rows.filter(r => r.side === 'short').reduce((s, r) => s + r.delta, 0);
+  const totalLoss = valNow - valAfter;
   return {
-    drop, dropFactor, capital, capitalAfter, totalLoss,
-    longPosLoss, shortPosGain, freeLoss,
-    survivalPct, drawdownPct,
-    numOpenPos, totalStake,
-    botWrBefore, botWrAfter,
-    agentsSurviving, agentsTotal,
+    drop, libre, engage, rows, valNow, valAfter, totalLoss, longPosLoss, shortPosGain,
+    survivalPct: valNow > 0 ? valAfter / valNow * 100 : 100,
+    numOpenPos: rows.length, mode: _modeLab(S.tradingMode),
   };
 }
 
@@ -587,15 +575,7 @@ function renderStressTestSection() {
   const sc= _ST_SCENARIOS[_stScenarioKey];
 
   const survivalCol = r.survivalPct>=70?'var(--up)':r.survivalPct>=40?'var(--gold)':'var(--down)';
-  const survivalLabel = r.survivalPct>=70?'Résistant ✅':r.survivalPct>=40?'Vulnérable ⚠️':'Critique 🚨';
-
-  // Recommandations
-  const recs = [];
-  if(r.numOpenPos>3) recs.push({t:'danger',msg:`${r.numOpenPos} positions ouvertes = exposition élevée. En situation de crash, ferme les longs rapidement.`});
-  if(r.survivalPct<50) recs.push({t:'danger',msg:`Ton portfolio ne résisterait qu'à ${r.survivalPct.toFixed(0)}% de sa valeur. Réduis ta taille de position.`});
-  if(r.shortPosGain>0) recs.push({t:'warn',msg:`Tes positions short seraient partiellement hedgées (+$${r.shortPosGain.toFixed(2)}). Le hedge naturel fonctionne.`});
-  if(r.agentsSurviving < r.agentsTotal*0.5) recs.push({t:'danger',msg:`${r.agentsTotal-r.agentsSurviving} agents cassés après ce scénario. Pense à diversifier les stratégies.`});
-  if(recs.length===0) recs.push({t:'ok',msg:`Ton portfolio est relativement résistant à ce scénario (${r.survivalPct.toFixed(0)}% survie).`});
+  const survivalLabel = r.numOpenPos===0 ? 'Aucune exposition' : (r.survivalPct>=70?'Résistant':r.survivalPct>=40?'Vulnérable':'Critique');
 
   el.innerHTML = `
     <div class="st-section">
@@ -619,7 +599,7 @@ function renderStressTestSection() {
                 <div class="st-slider-row">
                   <span style="color:var(--t2);min-width:80px;">Crash %</span>
                   <input type="range" class="st-slider" min="10" max="99" value="${_stCustomDrop}"
-                    oninput="updateStCustom('drop',this.value);document.getElementById('stDropVal').textContent='-'+this.value+'%'">
+                    oninput="document.getElementById('stDropVal').textContent='-'+this.value+'%'" onchange="updateStCustom('drop',this.value)">
                   <span id="stDropVal" style="font-size:10px;color:var(--down);min-width:36px;">-${_stCustomDrop}%</span>
                 </div>
               </div>`:''}
@@ -627,12 +607,12 @@ function renderStressTestSection() {
       </div>
 
       <!-- Résultats -->
-      <div style="font-size:9px;color:var(--t3);margin-bottom:6px;">Impact simulé · Scénario : ${sc.name}</div>
+      <div style="font-size:9px;color:var(--t3);margin-bottom:6px;">Si toutes les cryptos baissent de ${Math.abs(r.drop)} % · compte trading ${r.mode} · avant frais</div>
 
       <!-- Barre de survie -->
-      <div style="font-size:9px;color:var(--t2);margin-bottom:3px;">Taux de survie du capital</div>
+      <div style="font-size:9px;color:var(--t2);margin-bottom:3px;">Compte trading restant (USDT libre + positions)</div>
       <div class="st-survival-bar">
-        <div class="st-survival-fill" style="width:${r.survivalPct.toFixed(0)}%;background:${survivalCol};"></div>
+        <div class="st-survival-fill" style="width:${Math.max(0,Math.min(100,r.survivalPct)).toFixed(0)}%;background:${survivalCol};"></div>
       </div>
       <div style="display:flex;justify-content:space-between;font-size:8px;color:var(--t3);margin-bottom:8px;">
         <span>0%</span>
@@ -641,26 +621,23 @@ function renderStressTestSection() {
       </div>
 
       <div class="st-result-grid">
-        <div class="st-result-kpi"><span class="st-result-val" style="color:var(--t1);">$${r.capital.toFixed(0)}</span><span class="st-result-lbl">Capital actuel</span></div>
-        <div class="st-result-kpi"><span class="st-result-val" style="color:${survivalCol};">$${r.capitalAfter.toFixed(0)}</span><span class="st-result-lbl">Capital après</span></div>
-        <div class="st-result-kpi"><span class="st-result-val" style="color:var(--down);">-$${r.totalLoss.toFixed(0)}</span><span class="st-result-lbl">Perte totale</span></div>
-        <div class="st-result-kpi"><span class="st-result-val" style="color:var(--t3);">${r.botWrAfter.toFixed(0)}%</span><span class="st-result-lbl">WR bots après</span></div>
-        <div class="st-result-kpi"><span class="st-result-val" style="color:var(--down);">-$${r.longPosLoss.toFixed(0)}</span><span class="st-result-lbl">Perte longs</span></div>
-        <div class="st-result-kpi"><span class="st-result-val" style="color:var(--up);">+$${r.shortPosGain.toFixed(0)}</span><span class="st-result-lbl">Gain shorts</span></div>
+        <div class="st-result-kpi"><span class="st-result-val" style="color:var(--t1);">$${r.valNow.toFixed(2)}</span><span class="st-result-lbl">Compte maintenant</span></div>
+        <div class="st-result-kpi"><span class="st-result-val" style="color:${survivalCol};">$${r.valAfter.toFixed(2)}</span><span class="st-result-lbl">Après le scénario</span></div>
+        <div class="st-result-kpi"><span class="st-result-val" style="color:${r.totalLoss>0?'var(--down)':'var(--up)'};">${r.totalLoss>0?'−':'+'}$${Math.abs(r.totalLoss).toFixed(2)}</span><span class="st-result-lbl">Variation</span></div>
+        <div class="st-result-kpi"><span class="st-result-val" style="color:var(--t2);">$${r.libre.toFixed(2)}</span><span class="st-result-lbl">USDT libre (ne bouge pas)</span></div>
+        <div class="st-result-kpi"><span class="st-result-val" style="color:var(--down);">−$${r.longPosLoss.toFixed(2)}</span><span class="st-result-lbl">Longs</span></div>
+        <div class="st-result-kpi"><span class="st-result-val" style="color:var(--up);">+$${r.shortPosGain.toFixed(2)}</span><span class="st-result-lbl">Shorts</span></div>
       </div>
 
-      <!-- Agents -->
-      <div style="font-size:9px;color:var(--t3);margin-bottom:4px;">Résistance des agents</div>
-      <div style="display:flex;justify-content:space-between;font-size:10px;margin-bottom:8px;">
-        <span style="color:var(--up);">${r.agentsSurviving} agents résistants</span>
-        <span style="color:var(--down);">${r.agentsTotal-r.agentsSurviving} cassés</span>
-      </div>
+      <!-- Positions -->
+      ${r.rows.length ? `<div style="font-size:9px;color:var(--t3);margin:6px 0 4px;">Par position (perte bornée à la mise, comme à la fermeture)</div>
+      ${r.rows.map(x=>`<div style="display:flex;justify-content:space-between;font-size:9px;padding:3px 0;border-bottom:1px solid rgba(255,255,255,.04);">
+        <span style="color:var(--t2);">${x.pair.replace('/USDT','')} ${x.side==='short'?'SHORT':'LONG'} ${x.auto?'🤖':'👤'} · mise $${x.stake.toFixed(2)}${x.expo!==x.stake?' · expo $'+x.expo.toFixed(2):''}</span>
+        <span style="font-weight:700;color:${x.after>=0?'var(--up)':'var(--down)'};">${x.after>=0?'+':'−'}$${Math.abs(x.after).toFixed(2)}</span>
+      </div>`).join('')}` : `<div style="font-size:9px;color:var(--t2);background:var(--s2);border-radius:8px;padding:8px 10px;line-height:1.5;">Aucune position ouverte en ${r.mode} : ton compte trading est en USDT, une baisse des cryptos ne le touche pas.</div>`}
 
-      <!-- Recommandations -->
-      ${recs.map(rec=>`<div class="st-recommendation st-rec-${rec.t}">${rec.t==='danger'?'🚨':rec.t==='warn'?'⚠️':'✅'} ${rec.msg}</div>`).join('')}
-
-      <div style="font-size:8px;color:var(--t3);margin-top:8px;text-align:center;">
-        Simulation basée sur ton portfolio actuel · Les marchés réels peuvent différer
+      <div style="font-size:8px;color:var(--t3);margin-top:8px;text-align:center;line-height:1.5;">
+        Calcul : prix actuel × (1 − ${Math.abs(r.drop)} %) sur chaque position, toutes paires ensemble · caisse et réserves non touchées · poche tendance (mesure) non comptée
       </div>
     </div>`;
 }
@@ -730,16 +707,66 @@ function urgenceCloseAll() {
 }
 window.urgenceCloseAll = urgenceCloseAll;
 
+// [GO OUTILS · 18/10/2026] ETAT n° 33 · « 🛑 Fermer toutes les positions » de la section Urgence : avant, un seul tap fermait tout, SANS confirmation
+// (manuelles comprises) — alors que le ⊗ de l'en-tête passe par une fiche. Désormais une confirmation qui liste chaque position (paire, sens, bot ou
+// manuel, mise, P&L latent au prix affiché, avant frais), dit que SEUL le mode affiché est fermé (les positions sont tenues par mode : 02
+// _WALLET_ACCESSOR_FIELDS) et combien d'autres positions restent dans les autres modes ; puis urgenceCloseAll (inchangé : closePosition pour chacune,
+// { urgence: true }, la porte normale — frais, historique « urgence », impôt — sans juge ni apprentissage). Le Bunker (07) appelle urgenceCloseAll
+// directement, comme avant.
+function _urgCloseText(positions) {
+  const lab = _modeLab(S.tradingMode);
+  const lines = positions.map(p => {
+    const ps = S.pairStates && S.pairStates[p.pair];
+    const cur = (ps && Number(ps.price)) || Number(p.entryPrice) || 0, e = Number(p.entryPrice) || 0;
+    const pct = e > 0 ? (p.side === 'long' ? (cur - e) / e * 100 : (e - cur) / e * 100) : 0;
+    const usd = Math.max(-(Number(p.stakeUsdt) || 0), (Number(p.totalExposure) || Number(p.stakeUsdt) || 0) * pct / 100);   // perte bornée à la mise, comme 02 closePosition
+    return '• ' + p.pair + ' ' + String(p.side || '').toUpperCase() + ' · ' + (p.auto === true ? 'bot' : 'manuel') + ' · mise ' + (Number(p.stakeUsdt) || 0).toFixed(2)
+      + ' $ · latent ' + (usd >= 0 ? '+' : '−') + Math.abs(usd).toFixed(2) + ' $';
+  });
+  let autres = '';
+  try {
+    autres = ['sim', 'paperReal', 'real'].filter(m => m !== _walletKey(S.tradingMode)).map(m => {
+      const n = ((S.walletStore && S.walletStore[m] && S.walletStore[m].openPositions) || []).length;
+      return n ? _modeLab(m) + ' ' + n : '';
+    }).filter(Boolean).join(' · ');
+  } catch (e) {}
+  return 'Fermer TOUTES les positions du mode ' + lab + ' (' + positions.length + ') ?\n\n' + lines.join('\n')
+    + '\n\n(latent au dernier prix connu, avant frais ; la fermeture se fait au prix du moment)\nChaque fermeture passe par la porte normale : frais, historique, impôt. Le bot n\'en apprend rien.'
+    + (autres ? '\n\nNON fermées (autres modes) : ' + autres + '.' : '');
+}
+function urgenceCloseAllConfirm() {
+  const positions = [...(S.openPositions || [])];
+  if (!positions.length) { showToast('Aucune position ouverte en ' + _modeLab(S.tradingMode), 2500, 'user'); try { renderUrgenceSection(); } catch (e) {} return; }
+  if (!confirm(_urgCloseText(positions))) return;
+  urgenceCloseAll();
+  try { renderUrgenceSection(); } catch (e) {}
+}
+window.urgenceCloseAllConfirm = urgenceCloseAllConfirm;
+
+// [GO OUTILS · 18/10/2026] ETAT n° 33 · « ⏸ Pause bot » : avant, S.botAutoMode = false écrit EN DIRECT, sans confirmation (règle : AUTO / MANU, Rams
+// seul), sans setBotMode (02 : journal 🔗, puces de l'en-tête, avertissement des positions du bot), plus S.mode et a._paused que RIEN ne lit (log
+// « N agents suspendus » faux). Désormais : une confirmation qui dit exactement ce qui change, puis setBotMode(false) — le même geste que le bouton
+// AUTO / MANU de l'en-tête. Ce qui s'arrête et ce qui continue en MANU (code relu) : 09c n'ouvre plus (63, 70) ; 10f ne fait plus les sorties du
+// cycle (signal inversé, durée : 348) ni le balayage du bot (SL / TP ATR, breakeven, horizon, gain / stop appris, stop sur coupure : _botExitSweep
+// 698) ; continuent de pouvoir fermer : la perte max (10f _lossCapSweep), le moteur de sortie de 07 (learnFromOpenPositions : trailing, anti-zombie,
+// bascule du consensus, TP / SL des fiches), le Sauvetage de session (03 botRescue : il ne regarde pas AUTO / MANU) — et d'autres protections :
+// relecture adverse du 18/10, le texte ne prétend donc pas donner une liste complète.
+function _urgPauseText() {
+  const n = { sim: 0, paperReal: 0, real: 0 };
+  try { ['sim', 'paperReal', 'real'].forEach(m => { const w = S.walletStore && S.walletStore[m]; n[m] = ((w && w.openPositions) || []).filter(p => p && p.auto === true).length; }); } catch (e) {}
+  const pos = n.sim + n.paperReal + n.real;
+  return 'Passer en MANU ?\n\n'
+    + 'AUTO / MANU vaut pour les 3 modes à la fois (AA, EV, RE) : le bot n\'ouvrira plus aucune position.\n\n'
+    + 'Positions du bot ouvertes : ' + pos + ' (AA ' + n.sim + ' · EV ' + n.paperReal + ' · RE ' + n.real + ') — ce geste n\'en ferme aucune.\n'
+    + 'S\'arrêtent tant que tu es en MANU : les sorties de cycle et de balayage du bot (SL / TP ATR, breakeven, horizon, gain / stop appris, signal inversé, durée).\n'
+    + 'Peuvent encore les fermer : les protections — perte max, trailing stop, anti-zombie, bascule du consensus, sauvetage de session…\n\n'
+    + 'Revenir en AUTO : bouton AUTO / MANU de l\'en-tête.';
+}
 function urgencePauseBot() {
-  const wasPaused = !S.botAutoMode;
-  S.botAutoMode = false;
-  S.mode = 'manual';
-  // Arrêter tous les agents actifs
-  (S.agents||[]).forEach(a=>{ a._paused=true; });
-  _urgAppendLog('⏸ Bot mis en PAUSE — mode Manuel');
-  _urgAppendLog(`🤖 ${(S.agents||[]).length} agents suspendus`);
-  showToast('⏸ Bot en pause — aucun trade ne sera ouvert', 3000, 'warn');
-  try { updateModeButton?.(); } catch(e) {}
+  if (S.botAutoMode === false) { try { renderUrgenceSection(); } catch (e) {} return; }
+  if (!confirm(_urgPauseText())) return;
+  setBotMode(false);
+  try { renderUrgenceSection(); } catch (e) {}
 }
 window.urgencePauseBot = urgencePauseBot;
 
@@ -756,22 +783,23 @@ function urgenceReduceStake() {
 }
 window.urgenceReduceStake = urgenceReduceStake;
 
+// [GO OUTILS · 18/10/2026] ETAT n° 33 · « 💾 Backup d'urgence » : avant, JSON.stringify(S) ENTIER poussé par un lien blob — l'app Android (WebView)
+// ne télécharge pas un lien blob (09b3 _shareOrDownloadJSON, en-tête) et le panneau n'affichait AUCUN retour (#urgLog n'existe pas) : il annonçait
+// une sauvegarde qui n'avait pas lieu. Désormais : le backup COMPLET de Guardian (09b3 _buildFullBackupFile : snapshot + Guardian, le format que
+// Récupérer / Importer relisent) écrit par le même chemin que les backups Guardian (_shareOrDownloadJSON : Download/AURA dans l'app Android), et
+// un toast qui dit ce qui s'est réellement passé.
+// (relecture adverse du 18/10) par 05 _outilsSaveText et non _shareOrDownloadJSON : dans l'app Android, si l'écriture native est refusée,
+// _shareOrDownloadJSON retombe sur un lien blob qui n'écrit rien et répond « downloaded » — le toast aurait dit « téléchargé ».
 function urgenceSaveBackup() {
-  try {
-    const snap = JSON.parse(JSON.stringify(S));
-    snap._urgencyBackup = true;
-    snap._urgencyTs     = Date.now();
-    const json = JSON.stringify(snap);
-    const blob = new Blob([json],{type:'application/json'});
-    const url  = URL.createObjectURL(blob);
-    const a    = document.createElement('a');
-    const ts   = new Date().toISOString().slice(0,19).replace('T','-').replace(/:/g,'');
-    a.href=url; a.download=`aura_URGENCE_${ts}.json`;
-    document.body.appendChild(a); a.click();
-    document.body.removeChild(a); URL.revokeObjectURL(url);
-    _urgAppendLog('💾 Backup d\'urgence sauvegardé');
-    _urgAppendLog(`📁 aura_URGENCE_${ts}.json`);
-  } catch(e) { _urgAppendLog('❌ Erreur backup: '+e.message); }
+  let full = null;
+  try { full = _buildFullBackupFile(); } catch (e) {}
+  if (!full) { showToast('❌ Backup impossible : état pas prêt', 4000, 'warn'); return Promise.resolve({ ok: false }); }
+  const name = _fullBackupName();
+  return _outilsSaveText(JSON.stringify(full), name, 'application/json').then(r => {
+    if (r.ok) showToast('💾 Backup complet ' + (r.how === 'fs' ? 'écrit : ' : 'téléchargé : ') + r.where, 5000, 'win');
+    else showToast('❌ Backup non écrit : ' + String(r.diag || '').split('\n')[0], 6000, 'warn');
+    return r;
+  }).catch(e => { showToast('❌ Backup non écrit : ' + ((e && e.message) || e), 6000, 'warn'); return { ok: false }; });
 }
 window.urgenceSaveBackup = urgenceSaveBackup;
 
@@ -782,33 +810,32 @@ function renderUrgenceSection() {
   const pos    = (S.openPositions||[]).length;
   const botOn  = S.botAutoMode||false;
   const capital= S.tradingAccount||0;
-  const stake  = S.stakeConfig?.defaultStake||S.stakeUsdt||20;
 
   el.innerHTML = `
     <div class="urg-section">
-      <div class="urg-section-title">🚨 Mode Urgence</div>
+      <div class="urg-section-title">🚨 Mode Urgence · ${_modeLab(S.tradingMode)}</div>
 
       <!-- Statut actuel -->
       <div style="background:var(--s2);border-radius:8px;padding:8px 10px;margin-bottom:10px;">
         <div style="display:flex;justify-content:space-between;font-size:10px;padding:3px 0;border-bottom:1px solid rgba(255,255,255,.04);">
-          <span style="color:var(--t2);">Positions ouvertes</span>
+          <span style="color:var(--t2);">Positions ouvertes (${_modeLab(S.tradingMode)})</span>
           <span style="font-weight:700;color:${pos>0?'var(--down)':'var(--up)'};">${pos}</span>
         </div>
         <div style="display:flex;justify-content:space-between;font-size:10px;padding:3px 0;border-bottom:1px solid rgba(255,255,255,.04);">
-          <span style="color:var(--t2);">Bot</span>
-          <span style="font-weight:700;color:${botOn?'var(--up)':'var(--t3)'};">${botOn?'✅ Actif':'⏸ Pause'}</span>
+          <span style="color:var(--t2);">Bot (AUTO / MANU, 3 modes)</span>
+          <span style="font-weight:700;color:${botOn?'var(--up)':'var(--t3)'};">${botOn?'🤖 AUTO':'🎛️ MANU'}</span>
         </div>
         <div style="display:flex;justify-content:space-between;font-size:10px;padding:3px 0;">
-          <span style="color:var(--t2);">Capital</span>
+          <span style="color:var(--t2);">Compte trading (libre)</span>
           <span style="font-weight:700;">$${capital.toFixed(2)}</span>
         </div>
       </div>
 
       <!-- Actions rapides inline -->
       ${[
-        {label:'🛑 Fermer toutes les positions',fn:'urgenceCloseAll()',dis:pos===0,col:'var(--down)'},
-        {label:'⏸ Pause bot immédiate',fn:'urgencePauseBot()',dis:!botOn,col:'var(--gold)'},
-        {label:'💾 Backup d\'urgence',fn:'urgenceSaveBackup()',dis:false,col:'var(--up)'},
+        {label:'🛑 Fermer les positions '+_modeLab(S.tradingMode)+'…',fn:'urgenceCloseAllConfirm()',dis:pos===0,col:'var(--down)'},
+        {label:'⏸ Passer en MANU…',fn:'urgencePauseBot()',dis:!botOn,col:'var(--gold)'},
+        {label:'💾 Backup complet maintenant',fn:'urgenceSaveBackup()',dis:false,col:'var(--up)'},
       ].map(a=>`<button onclick="${a.fn}"
         style="width:100%;margin-bottom:6px;padding:9px;border-radius:8px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;
                background:${a.col}12;border:1px solid ${a.col}40;color:${a.col};
@@ -2002,7 +2029,7 @@ const _CALC = {
   slPct:     1.5,    // % SL depuis l'entrée
   tpPct:     3.0,    // % TP depuis l'entrée
   leverage:  1,
-  feeRate:   0.1,    // % frais aller-retour
+  feeRate:   0.1,    // % frais PAR CÔTÉ (entrée, puis sortie) — [GO OUTILS · 18/10/2026] le calcul l'a toujours compté deux fois ; le libellé disait « A/R »
   pair:      'BTC/USDT',
   side:      'long',
 };
@@ -2037,16 +2064,19 @@ function _runCalc() {
   const ps      = S.pairStates?.[_CALC.pair]||{};
   const entry   = _CALC.entryPrice || ps.price || 50000;
 
-  // Montant risqué en $
+  // [GO OUTILS · 18/10/2026] ETAT n° 33 · avant (vm) : la « taille » = risque ÷ SL, puis × levier → au SL, la perte réelle était levier × le risque
+  // choisi (×3 : −60 $ réels, « Si SL » affichait −28 $) et le R/R était multiplié par le levier (6 au lieu de 2) ; frais « A/R » comptés deux fois ;
+  // Kelly 0 (espérance négative) affiché « ✅ dans les clous ». Désormais la position est dimensionnée pour que le SL coûte EXACTEMENT le risque
+  // choisi : exposition = risque ÷ SL, mise (marge) = exposition ÷ levier ; perte au SL = risque + frais, gain au TP = exposition × TP − frais ;
+  // R/R = TP ÷ SL (le levier ne change que la mise immobilisée).
+  // Montant risqué en $ (perte au SL, avant frais)
   const riskUsd = cap * riskPct;
 
-  // Taille de position (sans levier)
-  // riskUsd = stakeUsd * slPct (car si SL touché on perd slPct du stake)
-  const stakeUsd = slPct>0 ? riskUsd/slPct : riskUsd;
-  const stakeLev = stakeUsd * lev;
-
-  // Exposition totale
-  const exposure = stakeLev;
+  // Exposition : ce que le SL doit coûter exactement riskUsd
+  const exposure = slPct>0 ? riskUsd/slPct : riskUsd;
+  // Mise immobilisée (marge) : l'exposition divisée par le levier
+  const stakeUsd = exposure / lev;
+  const stakeLev = exposure;
 
   // Quantité de crypto
   const qty = entry>0 ? exposure/entry : 0;
@@ -2055,34 +2085,38 @@ function _runCalc() {
   const sl = _CALC.side==='long' ? entry*(1-slPct) : entry*(1+slPct);
   const tp = _CALC.side==='long' ? entry*(1+tpPct) : entry*(1-tpPct);
 
-  // P&L si TP atteint
-  const pnlTP  = stakeUsd * tpPct * lev;
-  // P&L si SL atteint
-  const pnlSL  = -(riskUsd);
+  // P&L si TP / SL atteint (sur l'exposition)
+  const pnlTP  = exposure * tpPct;
+  const pnlSL  = -(exposure * slPct);
 
-  // Frais (aller + retour)
+  // Frais : un côté à l'entrée, un à la sortie, sur l'exposition
   const feesUsd = exposure * fee * 2;
 
   // Net
   const netTP  = pnlTP - feesUsd;
   const netSL  = pnlSL - feesUsd;
 
-  // R/R ratio
-  const rr = riskUsd>0 ? Math.abs(pnlTP)/riskUsd : 0;
+  // R/R ratio (indépendant du levier)
+  const rr = slPct>0 ? tpPct/slPct : 0;
 
-  // % du capital
-  const capPct = stakeUsd/cap*100;
+  // Mise immobilisée en % du capital
+  const capPct = cap>0 ? stakeUsd/cap*100 : 0;
 
-  // Kelly Criterion
-  const wr = (S.totalTrades||0)>10?(S.winTrades||0)/(S.totalTrades||1):0.5;
-  const kelly = wr>0&&rr>0 ? Math.max(0, (wr - (1-wr)/rr)*100) : 0;
+  // Kelly Criterion — WR des trades du mode affiché ; 50 % tant qu'il y a 10 trades ou moins (dit à l'écran)
+  const _nT = Number(S.totalTrades)||0;
+  const wrReal = _nT>10;
+  const wr = wrReal?(Number(S.winTrades)||0)/_nT:0.5;
+  const kellyRaw = rr>0 ? (wr - (1-wr)/rr)*100 : 0;
+  const kelly = Math.max(0, kellyRaw);
+  // (relecture adverse du 18/10) S.winTrades compte les trades gagnants AVANT frais : on lit aussi le net réel du mode (02 recordFees)
+  const netMode = Number((S.fees||{}).totalPnlNet)||0;
 
   // Niveau de risque (feu de signalisation)
   const riskLevel = riskPct>=0.05?'danger':riskPct>=0.03?'warn':riskPct>=0.01?'ok':'safe';
   const riskCol   = riskLevel==='danger'?'var(--down)':riskLevel==='warn'?'var(--gold)':riskLevel==='ok'?'#84cc16':'var(--up)';
 
   return { cap, riskUsd, stakeUsd, stakeLev, exposure, qty, sl, tp,
-           pnlTP, pnlSL, netTP, netSL, feesUsd, rr, capPct, kelly,
+           pnlTP, pnlSL, netTP, netSL, feesUsd, rr, capPct, kelly, kellyRaw, wr, wrReal, nTrades:_nT, netMode,
            riskPct:_CALC.riskPct, slPct:_CALC.slPct, tpPct:_CALC.tpPct,
            lev, entry, riskLevel, riskCol, fee:_CALC.feeRate };
 }
@@ -2091,13 +2125,13 @@ function renderCalcSection() {
   const el = document.getElementById('calcSection');
   if(!el) return;
 
+  // Sync capital avec le compte réel — [GO OUTILS · 18/10/2026] AVANT le calcul (avant : après — le 1er affichage calculait sur 1 000 $)
+  if(_CALC.capital === 1000 && S.tradingAccount>0) _CALC.capital = Math.round(S.tradingAccount);
+
   const r    = _runCalc();
   const pairs= Object.keys(PAIRS||{});
   const dec  = PAIRS[_CALC.pair]?.dec>=4?PAIRS[_CALC.pair].dec:2;
   const col  = PAIRS[_CALC.pair]?.color||'var(--ice)';
-
-  // Sync capital avec le compte réel
-  if(_CALC.capital === 1000 && S.tradingAccount>0) _CALC.capital = Math.round(S.tradingAccount);
 
   el.innerHTML = `
     <div class="calc-section">
@@ -2158,7 +2192,7 @@ function renderCalcSection() {
         <span class="calc-unit">×</span>
       </div>
       <div class="calc-row">
-        <span class="calc-lbl">Frais A/R</span>
+        <span class="calc-lbl">Frais / côté</span>
         <input class="calc-inp" type="number" value="${_CALC.feeRate}" onchange="calcUpdate('feeRate',this.value)" min="0" step="0.01">
         <span class="calc-unit">%</span>
       </div>
@@ -2166,19 +2200,19 @@ function renderCalcSection() {
       <!-- Résultats -->
       <div class="calc-result-box">
         <div style="font-size:9px;color:var(--t3);margin-bottom:6px;">Résultats calculés</div>
-        <div class="calc-result-row"><span style="color:var(--t2);">Taille position</span><span class="calc-result-val" style="color:var(--ice);">$${r.stakeUsd.toFixed(2)}</span></div>
-        ${r.lev>1?`<div class="calc-result-row"><span style="color:var(--t2);">Avec levier ×${r.lev}</span><span class="calc-result-val">$${r.stakeLev.toFixed(2)}</span></div>`:''}
-        <div class="calc-result-row"><span style="color:var(--t2);">Montant risqué</span><span class="calc-result-val" style="color:${r.riskCol};">$${r.riskUsd.toFixed(2)} (${r.riskPct}%)</span></div>
+        <div class="calc-result-row"><span style="color:var(--t2);">Mise${r.lev>1?' (marge, levier ×'+r.lev+')':''}</span><span class="calc-result-val" style="color:var(--ice);">$${r.stakeUsd.toFixed(2)}</span></div>
+        <div class="calc-result-row"><span style="color:var(--t2);">Exposition</span><span class="calc-result-val">$${r.exposure.toFixed(2)}</span></div>
+        <div class="calc-result-row"><span style="color:var(--t2);">Perte au SL (avant frais)</span><span class="calc-result-val" style="color:${r.riskCol};">$${r.riskUsd.toFixed(2)} (${r.riskPct}%)</span></div>
         <div class="calc-result-row"><span style="color:var(--t2);">Prix SL</span><span class="calc-result-val" style="color:var(--down);">$${r.sl.toFixed(dec)}</span></div>
         <div class="calc-result-row"><span style="color:var(--t2);">Prix TP</span><span class="calc-result-val" style="color:var(--up);">$${r.tp.toFixed(dec)}</span></div>
-        <div class="calc-result-row"><span style="color:var(--t2);">Frais estimés</span><span class="calc-result-val" style="color:var(--t3);">-$${r.feesUsd.toFixed(2)}</span></div>
-        <div class="calc-result-row"><span style="color:var(--t2);">Si TP atteint</span><span class="calc-result-val" style="color:var(--up);">+$${r.netTP.toFixed(2)}</span></div>
-        <div class="calc-result-row"><span style="color:var(--t2);">Si SL atteint</span><span class="calc-result-val" style="color:var(--down);">$${r.netSL.toFixed(2)}</span></div>
+        <div class="calc-result-row"><span style="color:var(--t2);">Frais entrée + sortie</span><span class="calc-result-val" style="color:var(--t3);">-$${r.feesUsd.toFixed(2)}</span></div>
+        <div class="calc-result-row"><span style="color:var(--t2);">Si TP atteint (net)</span><span class="calc-result-val" style="color:${r.netTP>=0?'var(--up)':'var(--down)'};">${r.netTP>=0?'+':'−'}$${Math.abs(r.netTP).toFixed(2)}</span></div>
+        <div class="calc-result-row"><span style="color:var(--t2);">Si SL atteint (net)</span><span class="calc-result-val" style="color:var(--down);">−$${Math.abs(r.netSL).toFixed(2)}</span></div>
         <div class="calc-result-row"><span style="color:var(--t1);font-weight:700;">R/R Ratio</span><span class="calc-result-val" style="color:${r.rr>=2?'var(--up)':r.rr>=1?'var(--gold)':'var(--down)'};">${r.rr.toFixed(2)} ${r.rr>=2?'✅':r.rr>=1?'⚠️':'❌'}</span></div>
         <div class="calc-result-row"><span style="color:var(--t2);">Kelly sizing</span><span class="calc-result-val" style="color:var(--pur);">${r.kelly.toFixed(1)}%</span></div>
 
         <!-- Barre risque -->
-        <div style="font-size:8px;color:var(--t3);margin-top:6px;margin-bottom:2px;">Exposition vs capital (${r.capPct.toFixed(1)}%)</div>
+        <div style="font-size:8px;color:var(--t3);margin-top:6px;margin-bottom:2px;">Mise immobilisée vs capital (${r.capPct.toFixed(1)}%)</div>
         <div class="calc-risk-bar">
           <div class="calc-risk-fill" style="width:${Math.min(100,r.capPct)}%;background:${r.capPct>50?'var(--down)':r.capPct>30?'var(--gold)':'var(--up)'};"></div>
         </div>
@@ -2186,8 +2220,9 @@ function renderCalcSection() {
 
       <!-- Conseil Kelly -->
       <div style="font-size:9px;color:var(--t2);background:rgba(167,139,250,.06);border:1px solid rgba(167,139,250,.15);border-radius:8px;padding:8px 10px;line-height:1.5;">
-        💡 <strong>Kelly Criterion :</strong> basé sur ton WR réel (${Math.round((S.winTrades||0)/(S.totalTrades||1)*100)}%), risque optimal = <strong style="color:var(--pur);">${r.kelly.toFixed(1)}%</strong> du capital.
-        ${r.riskPct > r.kelly && r.kelly>0 ? `<br>⚠️ Tu risques ${(r.riskPct-r.kelly).toFixed(1)}% de plus que recommandé.`:`<br>✅ Ton risque est dans les clous Kelly.`}
+        💡 <strong>Kelly Criterion :</strong> ${r.wrReal?`WR ${_modeLab(S.tradingMode)} AVANT frais ${Math.round(r.wr*100)}% (${r.nTrades} trades)`:`WR supposé 50 % (${r.nTrades} trade(s) ${_modeLab(S.tradingMode)} : trop peu pour le WR réel)`} et R/R ${r.rr.toFixed(2)} → part optimale = <strong style="color:var(--pur);">${r.kelly.toFixed(1)}%</strong> du capital.
+        ${r.kellyRaw <= 0 ? `<br>⚠️ Espérance négative à ce WR et ce R/R : Kelly dit de ne PAS prendre ce trade.` : (r.netMode < 0 ? `<br>⚠️ Ce WR est compté AVANT frais ; après frais, le mode ${_modeLab(S.tradingMode)} perd (net ${r.netMode.toFixed(2)} $) : cette part Kelly est surestimée, ne t'y fie pas.` : (r.riskPct > r.kelly ? `<br>⚠️ Tu risques ${(r.riskPct-r.kelly).toFixed(1)}% de plus que Kelly.` : `<br>✅ Ton risque est sous la part Kelly (WR avant frais).`))}
+        ${r.stakeUsd > r.cap ? `<br>⚠️ Mise ($${r.stakeUsd.toFixed(2)}) supérieure au capital : réduis le risque, élargis le SL ou monte le levier.` : ''}
       </div>
     </div>`;
 }
@@ -2197,6 +2232,26 @@ window.renderCalcSection = renderCalcSection;
 // Affiche un diff visuel : portfolio, trades, WR, agents, frais
 
 let _diffSnapshot = null; // Le backup chargé pour comparaison
+
+// [GO OUTILS · 18/10/2026] ETAT n° 33 · le format que l'app produit (backup complet Guardian / Drive / pont / Backup complet de la section
+// Urgence : { _type:'aura_guardian_full', aura:{…} }, 09b3 _buildFullBackupFile) n'était pas déballé → lu comme vide (« Avant : $0.00, 0 trades,
+// 0 agents », vm). Désormais : aura_guardian_full → .aura ; { meta, state } → .state ; une sauvegarde exportée (09b3 exportState, buildSnapshot) telle
+// quelle. Rien n'est écrit dans S : la comparaison est en lecture seule.
+function _diffUnwrap(p) {
+  if(!p || typeof p !== 'object') return null;
+  if(p._type === 'aura_guardian_full' && p.aura && typeof p.aura === 'object') p = p.aura;
+  else if(p.state && p.meta && typeof p.state === 'object') p = p.state;
+  return (typeof p.cycle === 'number' || p.walletStore || typeof p.portfolio === 'number') ? p : null;
+}
+window._diffUnwrap = _diffUnwrap;
+// La comparaison se fait MODE CONTRE MODE (le mode affiché) : le backup garde les 3 portefeuilles (walletStore) ; ses champs « à plat » sont ceux
+// du mode qui était à l'écran au moment de la sauvegarde — les comparer à un autre mode mélangeait EV et AA sans le dire.
+function _diffWallet(snap, mode) {
+  const w = snap && snap.walletStore && snap.walletStore[mode];
+  if(w && typeof w === 'object') return { w, exact: true };
+  return { w: snap || {}, exact: !snap || !snap.tradingMode || _walletKey(snap.tradingMode) === mode };
+}
+window._diffWallet = _diffWallet;
 
 function loadDiffBackup() {
   const input = document.createElement('input');
@@ -2208,11 +2263,10 @@ function loadDiffBackup() {
     const reader = new FileReader();
     reader.onload = ev => {
       try {
-        let parsed = JSON.parse(ev.target.result);
-        // Support format enveloppé {meta, state}
-        if(parsed.state && parsed.meta) parsed = parsed.state;
+        let parsed = _diffUnwrap(JSON.parse(ev.target.result));
+        if(!parsed) { showToast('⚠ Fichier non reconnu : ni backup complet AURA, ni sauvegarde exportée', 3500, 'warn'); return; }
         _diffSnapshot = parsed;
-        showToast('📂 Backup chargé · '+new Date(parsed.savedAt||parsed.cycle||0).toLocaleString('fr-FR'), 2500, 'win');
+        showToast('📂 Backup chargé · '+(parsed.savedAt?new Date(parsed.savedAt).toLocaleString('fr-FR'):'date inconnue'), 2500, 'win');
         renderDiffSection();
       } catch(e) {
         showToast('⚠ Fichier invalide', 2000, 'warn');
@@ -2269,16 +2323,8 @@ function renderDiffSection() {
   const cur = S;
 
   if(!_diffSnapshot) {
-    // Trouver les slots auto-backup disponibles
-    const autoSlots = [0,1,2].map(i=>{
-      const raw = localStorage.getItem(`aura_autobackup_daily_${i}`);
-      if(!raw) return null;
-      try {
-        const p = JSON.parse(raw);
-        return {i, meta:p._abMeta, portfolio:p.portfolio||p.tradingAccount||0};
-      } catch(e) { return null; }
-    }).filter(Boolean);
-
+    // [GO OUTILS · 18/10/2026] les boutons « Aujourd'hui / Hier / Avant-hier » lisaient les emplacements aura_autobackup_daily_*, effacés à chaque
+    // démarrage (06 _abCheck) : jamais affichés ; à leur place, la phrase « Active le backup auto (v70) » renvoyait vers un outil qui n'écrit rien.
     el.innerHTML = `
       <div class="diff-section">
         <div class="diff-title">🔍 Comparaison Avant/Après</div>
@@ -2292,19 +2338,16 @@ function renderDiffSection() {
           <div style="font-size:8px;color:var(--t3);margin-top:2px;">Clique pour sélectionner un fichier</div>
         </div>
 
-        ${autoSlots.length>0?`
-        <div style="font-size:9px;color:var(--t3);margin-bottom:5px;">Ou comparer avec un auto-backup :</div>
-        ${autoSlots.map(s=>`<button onclick="loadDiffFromAutoSlot(${s.i})"
-          style="width:100%;margin-bottom:5px;padding:7px 10px;border-radius:7px;background:rgba(56,212,245,.06);border:1px solid rgba(56,212,245,.15);color:var(--ice);font-size:9px;font-weight:700;cursor:pointer;font-family:inherit;text-align:left;display:flex;justify-content:space-between;">
-          <span>💾 ${['Aujourd\'hui','Hier','Avant-hier'][s.i]}</span>
-          <span style="color:var(--t3);">$${(s.portfolio).toFixed(0)} · ${s.meta?.date?.split(' ')[0]||'—'}</span>
-        </button>`).join('')}`:'<div style="font-size:9px;color:var(--t3);">Aucun auto-backup disponible. Active le backup auto (v70).</div>'}
+        <div style="font-size:9px;color:var(--t3);line-height:1.5;">Fichiers lus : backup complet (aura_guardian_full_….json, dans Download/AURA) ou sauvegarde exportée (nexus_save_….json). La comparaison se fait sur le mode affiché (${_modeLab(S.tradingMode)}).</div>
       </div>`;
     return;
   }
 
-  const snap = _diffSnapshot;
-  const snapDate = snap._meta?.date || (snap.savedAt?new Date(snap.savedAt).toLocaleString('fr-FR'):'—');
+  const snapAll = _diffSnapshot;
+  const _m = _walletKey(S.tradingMode), _mLab = _modeLab(_m);
+  const _dw = _diffWallet(snapAll, _m), snap = _dw.w;
+  // (relecture adverse du 18/10) le texte vient du FICHIER chargé : échappé avant d'entrer dans la page
+  const snapDate = String(snapAll._meta?.date || (snapAll.savedAt?new Date(snapAll.savedAt).toLocaleString('fr-FR'):'—')).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 
   // Métriques à comparer
   const metrics = [
@@ -2313,9 +2356,9 @@ function renderDiffSection() {
     {name:'Total trades',  bef:snap.totalTrades||0,       aft:cur.totalTrades||0,       unit:'',  better:true},
     {name:'Win Rate %',    bef:snap.totalTrades>0?(snap.winTrades||0)/snap.totalTrades*100:0,
                            aft:cur.totalTrades>0?(cur.winTrades||0)/cur.totalTrades*100:0, unit:'%', better:true},
-    {name:'Agents actifs', bef:(snap.agents||[]).length,  aft:(cur.agents||[]).length,  unit:'',  better:true},
+    {name:'Agents actifs', bef:(snapAll.agents||[]).length,  aft:(cur.agents||[]).length,  unit:'',  better:true},
     {name:'Frais totaux',  bef:snap.fees?.totalGross||0,  aft:cur.fees?.totalGross||0,  unit:'$', better:false},
-    {name:'Fitness moy.',  bef:(snap.agents||[]).reduce((s,a)=>s+(a.fitness||0),0)/Math.max(1,(snap.agents||[]).length),
+    {name:'Fitness moy.',  bef:(snapAll.agents||[]).reduce((s,a)=>s+(a.fitness||0),0)/Math.max(1,(snapAll.agents||[]).length),
                            aft:(cur.agents||[]).reduce((s,a)=>s+(a.fitness||0),0)/Math.max(1,(cur.agents||[]).length), unit:'T$', better:true},
   ];
 
@@ -2323,14 +2366,14 @@ function renderDiffSection() {
 
   el.innerHTML = `
     <div class="diff-section">
-      <div class="diff-title">🔍 Comparaison Avant/Après
+      <div class="diff-title">🔍 Comparaison Avant/Après · ${_mLab}
         <button onclick="clearDiff()" style="font-size:8px;padding:2px 7px;border-radius:5px;background:rgba(255,255,255,.06);border:1px solid var(--border);color:var(--t3);cursor:pointer;font-family:inherit;">✕ Reset</button>
       </div>
 
       <!-- En-têtes colonnes -->
       <div class="diff-cols">
         <div class="diff-col" style="border-color:rgba(255,255,255,.1);">
-          <div class="diff-col-title" style="color:var(--t3);">📸 Avant (backup)</div>
+          <div class="diff-col-title" style="color:var(--t3);">📸 Avant (backup)${_dw.exact?'':' ⚠ autre mode'}</div>
           <div class="diff-row"><span class="diff-row-lbl">Date</span><span class="diff-row-val" style="font-size:8px;">${snapDate}</span></div>
           <div class="diff-row"><span class="diff-row-lbl">Portfolio</span><span class="diff-row-val">$${(snap.portfolio||0).toFixed(2)}</span></div>
           <div class="diff-row"><span class="diff-row-lbl">Trades</span><span class="diff-row-val">${snap.totalTrades||0}</span></div>
@@ -4346,27 +4389,33 @@ window.renderAntiRevengeSection = renderAntiRevengeSection;
 
 let _adnFilter = 'all';
 
-// Générer le code ADN d'un trade (séquence de bases)
+// [GO OUTILS · 18/10/2026] ETAT n° 33 · avant (vm, 240 trades EV du backup du 14/10) : 3 gènes sur 8 CONSTANTS — taille (ps.avgStake n'existe
+// pas : toujours « Mise normale »), régime (trade._regime jamais écrit : toujours « Calm »), durée (trade.closedAt jamais écrit : toujours
+// « Durée inconnue ») ; nom de paire vide (les lignes d'historique n'ont pas de champ pair) ; et l'ouverture de la section ÉCRIVAIT t.adn dans
+// chaque ligne de l'historique (+82 Ko EV, sauvegardé), sans le dire. Désormais : l'ADN est calculé à l'affichage, RIEN n'est écrit ;
+// taille = mise du trade / mise moyenne des trades gardés de la paire ; régime retiré (jamais enregistré à la clôture) ; durée = ts − entryTs ;
+// heure = heure d'OUVERTURE (entryTs) quand elle est connue ; paire jointe depuis S.pairStates ; « configurations » classées par P&L.
+// Générer le code ADN d'un trade (séquence de bases) — trade porte .pair (copie jointe par _adnTrades), ps = état de sa paire
 function _buildAdnSignature(trade, ps) {
-  // 8 "gènes" encodés en lettres + couleur
+  // 7 "gènes" encodés en lettres + couleur
   const genes = [];
 
-  // G1 : Heure du trade
-  const h = new Date(trade.ts||0).getHours();
+  // G1 : Heure d'ouverture (de clôture si l'ouverture n'est pas connue)
+  const _t0 = Number(trade.entryTs) || Number(trade.ts) || 0;
+  const h = new Date(_t0).getHours();
   const timeGene = h>=8&&h<12?{b:'M',c:'#00e87a',t:'Matin'}:h>=12&&h<16?{b:'A',c:'#38d4f5',t:'Après-midi'}:h>=16&&h<20?{b:'S',c:'#f5c842',t:'Soir'}:{b:'N',c:'#ff3d6b',t:'Nuit'};
   genes.push(timeGene);
 
   // G2 : Côté du trade
   genes.push(trade.side==='buy'?{b:'L',c:'#00e87a',t:'Long'}:{b:'S',c:'#ff3d6b',t:'Short'});
 
-  // G3 : Taille relative
-  const relSize = ps?((trade.stakeUsdt||0)/(ps.avgStake||trade.stakeUsdt||1)):1;
+  // G3 : Taille relative à la mise moyenne des trades gardés de la paire
+  const _stk = ((ps && ps.trades) || []).filter(t=>t && t.type==='position').map(t=>Number(t.stakeUsdt)||0).filter(v=>v>0);
+  const _avgStk = _stk.length ? _stk.reduce((a,b)=>a+b,0)/_stk.length : 0;
+  const relSize = _avgStk>0 ? (Number(trade.stakeUsdt)||0)/_avgStk : 1;
   genes.push(relSize>=1.5?{b:'X',c:'#a855f7',t:'Grosse mise'}:relSize<=0.7?{b:'m',c:'#38d4f5',t:'Petite mise'}:{b:'N',c:'#9ca3af',t:'Mise normale'});
 
-  // G4 : Régime marché au moment
-  const regime = trade._regime||'calm';
-  const regGene = {bull:{b:'B',c:'#00e87a',t:'Bull'},bear:{b:'b',c:'#ff3d6b',t:'Bear'},calm:{b:'C',c:'#38d4f5',t:'Calm'},volatile:{b:'V',c:'#f5c842',t:'Volatile'},volatile_bull:{b:'+',c:'#84cc16',t:'VBull'},volatile_bear:{b:'-',c:'#f97316',t:'VBear'}}[regime]||{b:'?',c:'#555',t:'Inconnu'};
-  genes.push(regGene);
+  // (G4 « régime » retiré : le régime n'est pas enregistré dans la ligne de clôture — il valait toujours « Calm »)
 
   // G5 : Résultat
   const pnl = trade.pnlUsdt||0;
@@ -4377,8 +4426,8 @@ function _buildAdnSignature(trade, ps) {
   const dayGene = {b:days[new Date(trade.ts||0).getDay()],c:'#9ca3af',t:['Dim','Lun','Mar','Mer','Jeu','Ven','Sam'][new Date(trade.ts||0).getDay()]};
   genes.push(dayGene);
 
-  // G7 : Durée de position (si disponible)
-  const dur = trade.closedAt?((trade.closedAt-trade.ts)/60000):null;
+  // G7 : Durée de position (clôture − ouverture, si l'ouverture est connue)
+  const dur = (Number(trade.entryTs)>0 && Number(trade.ts)>=Number(trade.entryTs)) ? ((Number(trade.ts)-Number(trade.entryTs))/60000) : null;
   genes.push(dur!==null?(dur<5?{b:'⚡',c:'#f5c842',t:'Scalp <5min'}:dur<60?{b:'H',c:'#38d4f5',t:'Court terme'}:dur<1440?{b:'D',c:'#a855f7',t:'Moyen terme'}:{b:'∞',c:'#9ca3af',t:'Long terme'}):{b:'?',c:'#555',t:'Durée inconnue'});
 
   // G8 : P&L% catégorie
@@ -4390,33 +4439,33 @@ function _buildAdnSignature(trade, ps) {
   return {genes, hash};
 }
 
-// Trouver les configurations ADN les plus gagnantes
-function _adnBestPatterns(trades) {
-  // Grouper par signature partielle (G1+G2+G4 = heure+côté+régime)
+// Trouver les configurations ADN les plus rentables (heure + côté + taille), classées par P&L brut — avant : par taux de réussite, affichées en
+// vert même à P&L négatif
+function _adnBestPatterns(items) {
   const groups = {};
-  trades.forEach(t=>{
-    if(!t.adn) return;
-    const key = t.adn.genes.slice(0,4).map(g=>g.b).join('');
-    if(!groups[key]) groups[key]={key,wins:0,total:0,pnl:0,label:t.adn.genes.slice(0,4).map(g=>g.t).join(' · ')};
+  items.forEach(({t, adn})=>{
+    const key = adn.genes.slice(0,3).map(g=>g.b).join('');
+    if(!groups[key]) groups[key]={key,wins:0,total:0,pnl:0,label:adn.genes.slice(0,3).map(g=>g.t).join(' · ')};
     groups[key].total++;
     if((t.pnlUsdt||0)>0) groups[key].wins++;
     groups[key].pnl+=(t.pnlUsdt||0);
   });
-  return Object.values(groups).filter(g=>g.total>=2).sort((a,b)=>b.wins/b.total-a.wins/a.total).slice(0,3);
+  return Object.values(groups).filter(g=>g.total>=2).sort((a,b)=>b.pnl-a.pnl).slice(0,3);
 }
 
-// Annoter les trades existants avec leur ADN
-function _adnAnnotateTrades() {
-  let count=0;
+// Les trades clos du mode affiché, COPIÉS avec leur paire et leur ADN — l'historique n'est pas touché
+function _adnTrades() {
+  const out = [];
   Object.entries(S.pairStates||{}).forEach(([pair,ps])=>{
-    (ps.trades||[]).filter(t=>t.type==='position'&&t.ts&&!t.adn).forEach(t=>{
-      t.adn = _buildAdnSignature(t, ps);
-      count++;
+    (ps.trades||[]).forEach(t=>{
+      if(!t || t.type!=='position' || !t.ts) return;
+      const c = Object.assign({}, t, { pair });
+      out.push({ t: c, adn: _buildAdnSignature(c, ps) });
     });
   });
-  return count;
+  return out;
 }
-window._adnAnnotateTrades = _adnAnnotateTrades;
+window._adnTrades = _adnTrades;
 
 function setAdnFilter(f) {
   _adnFilter = f;
@@ -4428,31 +4477,26 @@ function renderAdnSection() {
   const el = document.getElementById('adnSection');
   if(!el) return;
 
-  // Annoter les trades
-  const annotated = _adnAnnotateTrades();
-
-  // Récupérer tous les trades annotés
-  let allT = Object.entries(S.pairStates||{}).flatMap(([pair,ps])=>
-    (ps.trades||[]).filter(t=>t.type==='position'&&t.adn&&t.ts)
-  ).sort((a,b)=>(b.ts||0)-(a.ts||0));
+  // Les trades du mode affiché, ADN calculé à l'affichage (rien n'est écrit)
+  let allT = _adnTrades().sort((a,b)=>(b.t.ts||0)-(a.t.ts||0));
 
   // Filtrer
-  if(_adnFilter==='win')  allT = allT.filter(t=>(t.pnlUsdt||0)>0);
-  if(_adnFilter==='loss') allT = allT.filter(t=>(t.pnlUsdt||0)<=0);
+  if(_adnFilter==='win')  allT = allT.filter(x=>(x.t.pnlUsdt||0)>0);
+  if(_adnFilter==='loss') allT = allT.filter(x=>(x.t.pnlUsdt||0)<=0);
 
   const best = _adnBestPatterns(allT);
 
   el.innerHTML = `
     <div class="adn-section">
-      <div class="adn-title">🧬 ADN des Trades
-        <span style="font-size:8px;color:var(--t3);font-weight:400;">${allT.length} empreintes</span>
+      <div class="adn-title">🧬 ADN des Trades · ${_modeLab(S.tradingMode)}
+        <span style="font-size:8px;color:var(--t3);font-weight:400;">${allT.length} trades gardés · P&L brut</span>
       </div>
 
       <!-- Patterns gagnants -->
       ${best.length>0?`
-      <div style="font-size:9px;color:var(--t3);margin-bottom:5px;">🏆 Configurations les plus performantes</div>
-      ${best.map(g=>`<div style="background:rgba(0,232,122,.06);border:1px solid rgba(0,232,122,.15);border-radius:8px;padding:7px 10px;margin-bottom:5px;font-size:9px;">
-        <div style="font-weight:700;color:var(--up);margin-bottom:2px;">${g.label}</div>
+      <div style="font-size:9px;color:var(--t3);margin-bottom:5px;">🏆 Configurations les plus rentables (heure · côté · taille, P&L brut)</div>
+      ${best.map(g=>`<div style="background:${g.pnl>=0?'rgba(0,232,122,.06)':'rgba(255,61,107,.06)'};border:1px solid ${g.pnl>=0?'rgba(0,232,122,.15)':'rgba(255,61,107,.15)'};border-radius:8px;padding:7px 10px;margin-bottom:5px;font-size:9px;">
+        <div style="font-weight:700;color:${g.pnl>=0?'var(--up)':'var(--down)'};margin-bottom:2px;">${g.label}</div>
         <div style="color:var(--t3);">${g.total} trades · ${Math.round(g.wins/g.total*100)}% WR · P&L: ${g.pnl>=0?'+':''}$${g.pnl.toFixed(2)}</div>
       </div>`).join('')}`:''}
 
@@ -4463,13 +4507,13 @@ function renderAdnSection() {
 
       <!-- Légende -->
       <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px;font-size:8px;color:var(--t3);">
-        ${[{b:'M/A/S/N',c:'#9ca3af',t:'Heure'},{b:'L/S',c:'#38d4f5',t:'Côté'},{b:'B/C/V',c:'#9ca3af',t:'Régime'},{b:'W/L',c:'#9ca3af',t:'Résultat'}].map(g=>`<span style="background:rgba(255,255,255,.06);padding:1px 5px;border-radius:3px;">${g.b}=${g.t}</span>`).join('')}
+        ${[{b:'M/A/S/N',c:'#9ca3af',t:'Heure d\'ouverture'},{b:'L/S',c:'#38d4f5',t:'Côté'},{b:'X/N/m',c:'#9ca3af',t:'Taille'},{b:'W/L',c:'#9ca3af',t:'Résultat'}].map(g=>`<span style="background:rgba(255,255,255,.06);padding:1px 5px;border-radius:3px;">${g.b}=${g.t}</span>`).join('')}
       </div>
 
       <!-- Trades avec ADN -->
       ${allT.length===0?`<div style="text-align:center;padding:16px;font-size:10px;color:var(--t3);">Aucun trade avec ADN disponible.</div>`:''}
-      ${allT.slice(0,8).map(t=>{
-        const {genes,hash} = t.adn;
+      ${allT.slice(0,8).map(({t, adn})=>{
+        const {genes,hash} = adn;
         const pnlCol = (t.pnlUsdt||0)>=0?'var(--up)':'var(--down)';
         const pairCfg = PAIRS[t.pair]||{};
         return `<div class="adn-card">

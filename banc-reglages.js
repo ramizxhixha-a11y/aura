@@ -12,7 +12,7 @@
 //   E  n° 14  « Réduire les mises » (Bunker, Vacances, Urgence) : plus aucune promesse, et l'ouvreur 09c n'est pas touché
 //   F  n° 15  Hedge automatique : l'écran dit « non branché » et ne fait plus avancer le compteur BEAR à chaque affichage
 //   G  n° 16  « 🧪 Simuler un blocage » (anti-revenge) et « 🧪 Simuler un déclenchement » (Bunker) : retirés — ils agissaient pour de vrai
-//   H  n° 17  onglet « 🛠 Outils » : laissé sans bouton (14 outils sur 14 à corriger, rejeu/reglages-20261014/outils-audit.md)
+//   H  n° 17  onglet « 🛠 Outils » : laissé sans bouton (14 outils sur 14 à corriger, rejeu/reglages-20261014/outils-audit.md) — rouvert le 18/10 par go outils, avec banc-outils.js
 //   I  n° 18  « 📸 Snapshots internes » : bouton et fenêtre retirés (système supprimé en v125)
 //   J  n° 19  « 🚨 Ouvrir Mode Urgence » (#urgenceOverlay absent) : plus aucun bouton ne l'appelle ; la carte dit où agir
 'use strict';
@@ -302,8 +302,11 @@ function fakeOpenDB(ok, rec) {
 
   console.log('▶ H, I, J. Outils, Snapshots, Urgence — n° 17, 18, 19');
   const all = LOADED.map(f => code(rd(f))).join('\n') + '\n' + code(html);
-  await T('H1 · onglet « 🛠 Outils » : toujours sans bouton (choix : 14 outils sur 14 à corriger) ; l\'audit est versionné', () => {
-    assert.ok(!/switchOutilsTab\('outils'|openOutils\('outils'/.test(all)); assert.ok(fs.existsSync(path.join(ROOT, 'rejeu/reglages-20261014/outils-audit.md')), 'audit absent');
+  // [GO OUTILS · 18/10/2026] l'onglet est rouvert par « go outils » (ETAT n° 33) : il ne l'est que si son banc existe (banc-outils.js, 18 essais
+  // sur le vrai code, 0/18 sur le code d'avant) ; l'audit du 14/10 reste versionné
+  await T('H1 · onglet « 🛠 Outils » : rouvert seulement avec banc-outils.js (go outils, 18/10) ; l\'audit est versionné', () => {
+    const ouvert = /switchOutilsTab\('outils'|openOutils\('outils'/.test(all);
+    assert.ok(!ouvert || fs.existsSync(path.join(ROOT, 'banc-outils.js')), 'onglet ouvert sans son banc'); assert.ok(fs.existsSync(path.join(ROOT, 'rejeu/reglages-20261014/outils-audit.md')), 'audit absent');
   });
   await T('I1 · « 📸 Snapshots internes » : ni bouton, ni fenêtre, ni appel à listInternalSnapshots / _snapshotActionCreate dans le code chargé', () => {
     assert.ok(!/openSnapshotsModal|listInternalSnapshots\(|_snapshotActionCreate\(|SNAPSHOTS INTERNES/.test(all));

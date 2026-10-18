@@ -122,6 +122,10 @@ T('V7 · INVENTAIRE des boucles brutes sur S.pairStates / walletStore[m].pairSta
     // [GO DÉMO · 12/10/2026] sortis avec leur code : 05 switchAccount (Multi-compte) et 05 enterDemoMode (Mode Démo). Entrent, HISTOIRE : la réparation d'un compte
     // abîmé par le Mode Démo lit et réécrit l'historique de TOUTES les paires du portefeuille, paire retirée comprise (elle aussi avait reçu son faux trade).
     // [GO ALERTES · 15/10/2026] 06 sendHebdoTelegram → _tgHebdoText (même boucle, HISTOIRE : les trades fermés des 7 jours de chaque mode, paire retirée comprise)
+    // [GO OUTILS · 18/10/2026] entrent, HISTOIRE : 05 _outilsClosedTrades (rapport, Excel, hebdo, ADN : les trades clos de toutes les paires du mode
+    // affiché, COPIÉS avec leur paire, paire retirée comprise — c'est de l'historique) et 06 _adnTrades (même lecture pour l'ADN) ; sortent les
+    // boucles qu'elles remplacent (05 _getWeekTrades, renderPdfReportSection ; 06 _adnAnnotateTrades, renderAdnSection ; 04 initWhatIfSection ps.stake)
+    '05-v37-19-indicateur-de-fatigue-bot.js _outilsClosedTrades': 1, '06-v63-patterns-chartistes.js _adnTrades': 1,
     '18-reparation-demo.js trace': 1, '18-reparation-demo.js plan': 3,   // plan : les paires de l'état (historique rendu, totaux) et celles du BACKUP (est-il complet ? revue du 13/10)
   };
   const files = [...html.matchAll(/<script[^>]*\bsrc="([^"?]+)(?:\?[^"]*)?"/g)].map(m => m[1]).filter(f => f.startsWith('js/'));

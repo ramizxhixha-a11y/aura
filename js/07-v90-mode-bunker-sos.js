@@ -938,8 +938,12 @@ setTimeout(_updateTsMenu, 500);
 
 
 
+// [GO OUTILS · 18/10/2026] ETAT n° 33 · avant : ~100 lignes de DOM de l'APPLI collées dans le gabarit (widget compact, bannière vacances,
+// « Moment de grâce », écran anti-revenge, mode cinéma, bannière bunker avec des boutons vers des fonctions absentes de la fenêtre) s'imprimaient
+// sous le rapport ; « P&L Net » était brut ; table par paire « undefined » (corrigé à la source : 05 _getWeekTrades joint la paire) ; et
+// window.open + print() dans l'app Android. Désormais : gabarit seul, libellés vrais, écriture par 05 _outilsPrintable.
 function exportHebdoPdf(offset) {
-  const { trades, monday, sunday } = _getWeekTrades(offset);
+  const { trades, monday, sunday, oldest } = _getWeekTrades(offset);
   const stats = _analyzeWeek(trades, monday, sunday);
   const fmtDate = d => d.toLocaleDateString('fr-FR',{day:'2-digit',month:'long',year:'numeric'});
   const now = new Date();
@@ -966,11 +970,12 @@ tr:nth-child(even) td{background:#f8fafc;}
 </style></head><body>
 <h1>AURA ∞ — Résumé hebdomadaire</h1>
 <p style="color:#6b7280;font-size:9pt;margin-bottom:16px;">
-  Semaine du ${fmtDate(monday)} au ${fmtDate(sunday)} · Généré le ${now.toLocaleDateString('fr-FR')}
+  Semaine du ${fmtDate(monday)} au ${fmtDate(sunday)} · mode ${_outilsModeName(S.tradingMode)} · P&L BRUT (avant frais) · Généré le ${now.toLocaleDateString('fr-FR')}
+  ${isFinite(oldest) && oldest > monday.getTime() ? `<br>⚠ Semaine incomplète : l'historique est coupé paire par paire ; toutes les paires ne sont complètes qu'à partir du ${new Date(oldest).toLocaleDateString('fr-FR')}.` : ''}
 </p>
 <h2>📊 Performance de la semaine</h2>
 <div class="kpi-grid">
-  <div class="kpi"><span class="kpi-val" style="color:${stats.totalPnl>=0?'#16a34a':'#dc2626'};">${stats.totalPnl>=0?'+':''}$${stats.totalPnl.toFixed(2)}</span><span class="kpi-lbl">P&L Net</span></div>
+  <div class="kpi"><span class="kpi-val" style="color:${stats.totalPnl>=0?'#16a34a':'#dc2626'};">${stats.totalPnl>=0?'+':''}$${stats.totalPnl.toFixed(2)}</span><span class="kpi-lbl">P&L brut</span></div>
   <div class="kpi"><span class="kpi-val" style="color:${(stats.wr||0)>=0.55?'#16a34a':'#dc2626'};">${stats.wr!==null?Math.round(stats.wr*100)+'%':'—'}</span><span class="kpi-lbl">Win Rate</span></div>
   <div class="kpi"><span class="kpi-val">${stats.n}</span><span class="kpi-lbl">Trades</span></div>
   <div class="kpi"><span class="kpi-val" style="color:#16a34a;">+$${stats.avgWin.toFixed(2)}</span><span class="kpi-lbl">Gain moyen</span></div>
@@ -978,133 +983,19 @@ tr:nth-child(even) td{background:#f8fafc;}
   <div class="kpi"><span class="kpi-val">${stats.avgWin>0&&stats.avgLoss>0?(stats.avgWin/stats.avgLoss).toFixed(2):'—'}</span><span class="kpi-lbl">R/R Ratio</span></div>
 </div>
 <h2>₿ Par paire</h2>
-<table><tr><th>Paire</th><th>Trades</th><th>WR%</th><th>P&L $</th></tr>
+<table><tr><th>Paire</th><th>Trades</th><th>WR%</th><th>P&L brut $</th></tr>
 ${stats.pairRanked.map(([pair,p])=>`<tr><td><b>${pair}</b></td><td>${p.count}</td><td class="${p.count>0&&p.wins/p.count>=0.55?'win':'loss'}">${p.count>0?Math.round(p.wins/p.count*100)+'%':'—'}</td><td class="${p.pnl>=0?'win':'loss'}">${p.pnl>=0?'+':''}$${p.pnl.toFixed(2)}</td></tr>`).join('')}
 </table>
 <h2>💡 Insights automatiques</h2>
 <div class="insight">${stats.insights.map(i=>`<div>▸ ${i}</div>`).join('')}</div>
 <h2>📈 Détail des trades</h2>
-<table><tr><th>#</th><th>Date</th><th>Paire</th><th>Côté</th><th>P&L $</th><th>Résultat</th></tr>
-${trades.map((t,i)=>`<tr><td>${i+1}</td><td>${t.time||'—'}</td><td>${t.pair||'—'}</td><td>${t.side==='buy'?'LONG':'SHORT'}</td><td class="${(t.pnlUsdt||0)>=0?'win':'loss'}">${(t.pnlUsdt||0)>=0?'+':''}$${(t.pnlUsdt||0).toFixed(2)}</td><td class="${(t.pnlUsdt||0)>=0?'win':'loss'}">${(t.pnlUsdt||0)>=0?'✅ WIN':'❌ LOSS'}</td></tr>`).join('')}
+<table><tr><th>#</th><th>Date</th><th>Paire</th><th>Côté</th><th>P&L brut $</th><th>Résultat</th></tr>
+${trades.map((t,i)=>`<tr><td>${i+1}</td><td>${t.ts?new Date(t.ts).toLocaleString('fr-FR'):(t.time||'—')}</td><td>${t.pair||'—'}</td><td>${t.side==='buy'?'LONG':'SHORT'}</td><td class="${(t.pnlUsdt||0)>=0?'win':'loss'}">${(t.pnlUsdt||0)>=0?'+':''}$${(t.pnlUsdt||0).toFixed(2)}</td><td class="${(t.pnlUsdt||0)>=0?'win':'loss'}">${(t.pnlUsdt||0)>=0?'✅ WIN':'❌ LOSS'}</td></tr>`).join('')}
 </table>
 <div class="footer"><span>AURA ∞ — Adaptive Universal Risk Architect</span><span>Rapport automatique</span></div>
-
-<!-- v79 WIDGET COMPACT -->
-<div id="compactWidgetTab" onclick="toggleCompactWidget()" title="Widget compact">⊛</div>
-<div id="compactWidget">
-  <div class="cw-row">
-    <span class="cw-lbl">Capital</span>
-    <span class="cw-val" id="cwCapital" style="color:var(--ice);">$0</span>
-  </div>
-  <div class="cw-row">
-    <span class="cw-lbl">P&L 24h</span>
-    <span class="cw-val" id="cwPnl">$0</span>
-  </div>
-  <div class="cw-sep"></div>
-  <div class="cw-row">
-    <span class="cw-lbl">WR</span>
-    <span class="cw-val" id="cwWr">—</span>
-  </div>
-  <div class="cw-row">
-    <span class="cw-lbl">Trades</span>
-    <span class="cw-val" id="cwTrades">0</span>
-  </div>
-  <div class="cw-sep"></div>
-  <div id="cwPairs" style="display:flex;flex-wrap:wrap;gap:3px;margin-top:2px;"></div>
-  <div class="cw-row" style="margin-top:3px;">
-    <span class="cw-lbl" id="cwRegime" style="font-size:7px;letter-spacing:.05em;"></span>
-    <span id="cwPos" style="font-size:8px;font-weight:700;"></span>
-  </div>
-</div>
-
-<!-- v81 VACANCES BANNER -->
-<div id="vacancesBanner">
-  <span>🏖️ MODE VACANCES</span>
-  <span id="vacBannerInfo" style="opacity:.8;font-size:8px;"></span>
-  <button onclick="exitVacancesMode()" style="background:rgba(255,255,255,.2);border:none;border-radius:6px;color:#fff;font-size:9px;font-weight:700;padding:2px 8px;cursor:pointer;">✕ Quitter</button>
-</div>
-
-<!-- v83 MOMENT DE GRACE -->
-<div id="graceOverlay">
-  <div class="gr-stars" id="grStars">⭐⭐⭐</div>
-  <div class="gr-title">Moment de Grâce</div>
-  <div class="gr-label" id="grLabel">Alignement parfait</div>
-  <div class="gr-condition" id="grCondition"></div>
-  <div class="gr-metrics" id="grMetrics"></div>
-  <div class="gr-msg" id="grMsg"></div>
-  <div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:center;">
-    <button class="gr-action-btn" onclick="graceActNow()">⚡ Trader maintenant</button>
-    <button class="gr-action-btn" onclick="closeGrace()" style="background:rgba(255,255,255,.05);border-color:rgba(255,255,255,.15);color:rgba(255,255,255,.6);">Plus tard</button>
-  </div>
-  <div class="gr-dismiss" onclick="closeGrace()">Ignorer</div>
-</div>
-
-<!-- v84 ANTI-REVENGE -->
-<div id="revengeBlock">
-  <div class="rv-pulse">🛑</div>
-  <div class="rv-title">STOP — REVENGE TRADING</div>
-  <div class="rv-msg" id="rvMsg">Tu viens de perdre. Tes émotions veulent récupérer maintenant. Mais les données montrent que tes trades dans cet état finissent mal.</div>
-  <div class="rv-stat" id="rvStat"></div>
-  <div class="rv-breathe"></div>
-  <div class="rv-timer" id="rvTimer">15:00</div>
-  <div class="rv-timer-lbl">Temps de refroidissement</div>
-  <button class="rv-unlock-btn" id="rvUnlockBtn" onclick="unlockRevenge()" disabled style="opacity:.3;cursor:default;">
-    Continuer à trader (disponible dans <span id="rvUnlockIn">15:00</span>)
-  </button>
-  <div style="margin-top:10px;font-size:8px;color:rgba(255,255,255,.25);">Respire. Le marché sera encore là dans 15 minutes.</div>
-</div>
-
-<!-- v88 MODE CINÉMA -->
-<div id="cinemaOverlay" onclick="closeCinema()">
-  <!-- Top bar -->
-  <div class="cin-top-bar">
-    <span class="cin-logo">AURA ∞</span>
-    <span class="cin-time" id="cinTime">--:--</span>
-    <span class="cin-logo" id="cinRegime">CALM</span>
-  </div>
-
-  <!-- Centre -->
-  <div class="cin-center" onclick="event.stopPropagation()">
-    <div>
-      <div class="cin-portfolio">Portfolio</div>
-      <div class="cin-amount" id="cinAmount" style="color:#fff;">$0</div>
-    </div>
-    <div class="cin-pnl-row" id="cinPnlRow"></div>
-    <div class="cin-pairs-row" id="cinPairsRow"></div>
-  </div>
-
-  <!-- Ticker -->
-  <div class="cin-ticker">
-    <div class="cin-ticker-track" id="cinTickerTrack"></div>
-  </div>
-
-  <!-- Bottom bar -->
-  <div class="cin-bot-bar">
-    <div class="cin-stat"><span class="cin-stat-val" id="cinWr">—</span><span class="cin-stat-lbl">Win Rate</span></div>
-    <div class="cin-stat"><span class="cin-stat-val" id="cinTrades">0</span><span class="cin-stat-lbl">Trades</span></div>
-    <div class="cin-stat"><span class="cin-stat-val" id="cinPos">0</span><span class="cin-stat-lbl">Positions</span></div>
-    <div class="cin-stat"><span class="cin-stat-val" id="cinAgents">0</span><span class="cin-stat-lbl">Agents</span></div>
-    <div class="cin-stat"><span class="cin-stat-val" id="cinRisk">—</span><span class="cin-stat-lbl">Risque</span></div>
-  </div>
-
-  <span class="cin-close-hint">Tap pour quitter</span>
-</div>
-
-<!-- v90 BUNKER BANNER -->
-<div id="bunkerBanner">
-  <span>🚨 MODE BUNKER ACTIF</span>
-  <span id="bunkerInfo" style="opacity:.7;font-size:8px;"></span>
-  <button onclick="exitBunker()" style="background:rgba(255,255,255,.1);border:none;border-radius:5px;color:#ff6b6b;font-size:8px;font-weight:700;padding:2px 8px;cursor:pointer;">LEVER</button>
-</div>
 </body></html>`;
 
-  const win = window.open('','_blank','width=900,height=700');
-  if(!win) { showToast('⚠ Autoriser les popups', 2000, 'warn'); return; }
-  win.document.write(html);
-  win.document.close();
-  win.focus();
-  setTimeout(()=>win.print(), 800);
-  showToast('📄 Résumé hebdo ouvert — Enregistrer en PDF', 3000, 'user');
+  return _outilsPrintable(html, 'AURA_hebdo_' + _modeLab(S.tradingMode), 'Résumé hebdo');
 }
 window.exportHebdoPdf = exportHebdoPdf;
 
@@ -1194,6 +1085,15 @@ const _OUTILS_TABS = {
       { id:'fatigueBotSection',   render:'renderFatigueBotSection',   init:null },
     ]
   },
+  // [GO OUTILS · 18/10/2026] ETAT n° 33 · onglet rouvert (bouton dans AURA8_v118.html) après correction de ses outils (banc-outils.js,
+  // rejeu/sonde_outils.js). RETIRÉS de l'onglet, leur code reste en place sans appelant :
+  //  · « Paper Ultra » (paperUltraSection) : interrupteur absent, curseurs désactivés, frictions appliquées à AUCUN trade (seul appelant :
+  //    l'aperçu 06 simulateRealisticTrade). Les brancher sur les ouvertures changerait les trades → porte TALENT / SOURCE (CLAUDE.md règle 10) ;
+  //  · « Coffre » (vaultSection) : le chiffrement de l'état réel plante (RangeError dès ~200 Ko, l'état fait plusieurs Mo) et ses deux
+  //    restaurations faisaient Object.assign(S, …) — les 3 portefeuilles, AUTO / MANU, les agents remplacés sans la liste blanche des imports ;
+  //  · « Auto-backup » (autoBackupSection) : emplacements effacés à chaque rendu, interrupteur et heure lus par rien, « backup manuel » = la
+  //    sauvegarde ordinaire. Les vraies sauvegardes : Guardian (toutes les 3 h, Download/AURA) et Réglages › « 📦 Sauvegardes & Restauration » ;
+  //  · la 2e entrée « calcSection » (même id deux fois : la 1re div rendue deux fois, la 2e vide).
   outils: {
     label: '🛠 Outils',
     sections: [
@@ -1204,11 +1104,7 @@ const _OUTILS_TABS = {
       { id:'stressTestSection',    render:'renderStressTestSection',   init:null },
       { id:'adnSection',         render:'renderAdnSection',         init:null },
       { id:'calcSection',       render:'renderCalcSection',       init:null },
-      { id:'paperUltraSection',  render:'renderPaperUltraSection',  init:null },
       { id:'diffSection',       render:'renderDiffSection',       init:null },
-      { id:'calcSection',       render:'renderCalcSection',       init:null },
-      { id:'vaultSection',      render:'renderVaultSection',      init:null },
-      { id:'autoBackupSection',     render:'renderAutoBackupSection',    init:null },
       { id:'pdfReportSection2',   render:'renderPdfReportSection',    init:null },
       { id:'xlExportSection',      render:'renderXlExportSection',      init:null },
       { id:'hebdoSection',          render:'renderHebdoSection',          init:null },
@@ -1336,7 +1232,7 @@ function _updateReplayUI() {
   const cumPnl = _RP.events.slice(0,i).reduce((s,e)=>s+(e.pnlUsd||0),0);
   const pnlLbl = document.getElementById('rpPnlLbl');
   if(pnlLbl) {
-    pnlLbl.textContent = 'P&L: '+(cumPnl>=0?'+':'')+'$'+cumPnl.toFixed(2);
+    pnlLbl.textContent = 'P&L brut : '+(cumPnl>=0?'+':'−')+'$'+Math.abs(cumPnl).toFixed(2);
     pnlLbl.style.color = cumPnl>=0?'var(--up)':'var(--down)';
   }
 
@@ -1356,7 +1252,8 @@ function _updateReplayUI() {
     statsEl.innerHTML = [
       {val:trades.length, lbl:'Trades', col:'var(--t1)'},
       {val:wr+'%', lbl:'Win Rate', col:wr>=55?'var(--up)':'var(--down)'},
-      {val:(cumPnl>=0?'+':'')+'$'+Math.abs(cumPnl).toFixed(2), lbl:'P&L Net', col:cumPnl>=0?'var(--up)':'var(--down)'},
+      // [GO OUTILS · 18/10/2026] pnlUsdt est BRUT de frais (02 closePosition) : « P&L brut » ; et le signe moins s'affiche (avant : Math.abs sans « − »)
+      {val:(cumPnl>=0?'+':'−')+'$'+Math.abs(cumPnl).toFixed(2), lbl:'P&L brut', col:cumPnl>=0?'var(--up)':'var(--down)'},
     ].map(m=>`<div style="background:var(--s2);border:1px solid var(--border);border-radius:8px;padding:6px;text-align:center;">
       <span style="font-size:14px;font-weight:800;font-family:var(--font-mono);color:${m.col};display:block;">${m.val}</span>
       <span style="font-size:8px;color:var(--t3);">${m.lbl}</span>
