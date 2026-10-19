@@ -12,7 +12,8 @@
 //   E  n° 58  capacité « juste à temps » = base × index (règle du 15/08) ; baisser l'index n'emprunte jamais ; S.portfolio écrit après l'ajout de la position.
 //   F  n° 59  carte de paire : la mise et le levier ; « Prochain trade estimé » = la mise que 09c prendrait, frais aller-retour.
 //   G  n° 60  « Inverser » une position perdante d'un compte investi : rouverte avec ce que le trading tient, et dit.
-//   H  n° 51  recalage de l'AA (js/18-recalage-aa.js) : une fois, sur confirmation, −3 707,64 $ et les repères posés pendant l'écart ; rien d'autre.
+//   H  n° 51  recalage de l'AA (js/18-recalage-aa.js, fait sur la tablette le 19/10 puis retiré ; témoin banc-fixtures/recalage-aa-20261019.js) : une fois,
+//             sur confirmation, −3 707,64 $ et les repères posés pendant l'écart ; rien d'autre.
 'use strict';
 const fs = require('fs'), vm = require('vm'), assert = require('assert'), path = require('path');
 const ROOT = process.env.BANC_ROOT || __dirname, rd = f => fs.readFileSync(path.join(ROOT, f), 'utf8');
@@ -245,7 +246,9 @@ await T('G2 · VRAI manuInvert avec une AUTRE position ouverte : la mise rouvert
 });
 
 console.log('▶ H. n° 51 — recalage de l\'AA (js/18-recalage-aa.js)');
-const S18 = ex('js/18-recalage-aa.js') ? rd('js/18-recalage-aa.js') : null;
+// [GO NETTOYAGE · 19/10/2026, suite] le module a fait son travail sur la tablette (pont, 19/10 15:50) puis a été retiré de l'app : son texte, gardé en témoin
+// (banc-fixtures/recalage-aa-20261019.js), reste rejoué ici ; sur le code d'avant le retrait, c'est le fichier de js/.
+const S18 = ex('js/18-recalage-aa.js') ? rd('js/18-recalage-aa.js') : (ex('banc-fixtures/recalage-aa-20261019.js') ? rd('banc-fixtures/recalage-aa-20261019.js') : null);
 function aa(w) {
   const S = { walletStore: { sim: w, paperReal: { tradingAccount: 1074.06 }, real: { tradingAccount: 1145.42 } }, chainLog: [] };
   const c = { S, Date, Math, JSON, Number, String, Array, isFinite, console, _computePortfolio: x => x.cashAccount + x.tradingAccount + (x.openPositions || []).reduce((a, p) => a + p.stakeUsdt, 0), saveState() { c.sauve = 1; } };
@@ -270,8 +273,9 @@ await T('H2 · refus : état d\'avant l\'écart final (< 2 185 fermetures) → �
   const w1 = aaW(); w1.totalTrades = 2100; w1.fees.tradeCount = 2100; const c1 = aa(w1); assert.strictEqual(c1._recalageAA.etat(), 'avant'); assert.strictEqual(c1._recalageAA._appliquer().ok, false); assert.strictEqual(w1.tradingAccount, 4123.61);
   const w2 = aaW(); w2.tradingAccount = 3000; const c2 = aa(w2); assert.strictEqual(c2._recalageAA.etat(), 'manque'); assert.strictEqual(c2._recalageAA._appliquer().ok, false);
 });
-await T('H3 · le module est chargé par le HTML ; sans écart il reste inerte (aucun élément à l\'écran) ; contrôle au lancement puis une fois par minute (l\'AA peut tenir des positions au lancement), arrêté une fois fait ; la cause est dite « supposée »', () => {
-  assert.ok(/<script src="js\/18-recalage-aa\.js\?v=\d{8}[a-z]"><\/script>/.test(html));
+await T('H3 · (avant le retrait) le module était chargé par le HTML ; (après) il ne l\'est plus, le témoin existe ; sans écart il reste inerte (aucun élément à l\'écran) ; contrôle au lancement puis une fois par minute (l\'AA peut tenir des positions au lancement), arrêté une fois fait ; la cause est dite « supposée »', () => {
+  if (ex('js/18-recalage-aa.js')) assert.ok(/<script src="js\/18-recalage-aa\.js\?v=\d{8}[a-z]"><\/script>/.test(html));
+  else assert.ok(!/<script src="js\/18-recalage-aa\.js/.test(html) && ex('banc-fixtures/recalage-aa-20261019.js'), 'retiré du HTML, témoin gardé');
   assert.ok(/if \(e0 === 'porte' && !plusTard && !bandeau\) proposer\(\);/.test(S18) && /if \(e0 === 'fait'\) \{ clearInterval\(iv\); return; \}/.test(S18) && /essais % 60 !== 0/.test(S18));
   assert.ok(/Cause supposée \(non prouvée\)/.test(S18) && /680,12 \$ attendus/.test(S18) && /cause supposée : l’emprunt du levier/.test(S18), 'la cause est dite supposée, le montant mesuré');
 });

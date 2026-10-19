@@ -1,3 +1,4 @@
+// [TÉMOIN · 19/10/2026] texte de js/18-recalage-aa.js tel que livré (20261019a) et exécuté sur la tablette le 19/10 15:50 — retiré de l'app ensuite (go nettoyage, suite). Ne rien y retoucher : banc-nettoyage-argent.js (partie H) le rejoue.
 // ═══ [GO NETTOYAGE · 19/10/2026] VERSION 20261019a · recalage de l'AA (ETAT n° 51, décision de Rams du 18/10 : « retirer ce que les trades n'expliquent pas ») ═══
 // POURQUOI : le 18/10 entre 10:30 et 15:18 UTC (app en 20261018b, avant le correctif « go levier » n° 25), l'AA a fait des trades MANUELS de 1 000 à 30 000 $
 // de mise sur ~1 000 $ à soi, avec le levier. Son portefeuille porte depuis un écart que ses fermetures n'expliquent pas. Cause SUPPOSÉE (chemin exact non

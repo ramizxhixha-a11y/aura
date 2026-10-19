@@ -1,15 +1,15 @@
-# ÉTAT-AURA8 — 19/10/2026 — token `20261019a` — À LIRE EN PREMIER (≤ 20 Ko, banc-all le vérifie)
+# ÉTAT-AURA8 — 19/10/2026 — token `20261019b` — À LIRE EN PREMIER (≤ 20 Ko, banc-all le vérifie)
 
 Ce fichier dit OÙ EN EST AURA8 aujourd'hui. L'histoire de chaque livraison est dans `PASSATION-AURA8.md` (≈ 460 Ko) : on y CHERCHE (`grep -n`), on ne la lit pas en entier. Les règles de travail de Claude sont dans `CLAUDE.md`. Le détail de l'audit du 13/10 est dans `rejeu/audit-20261013/`.
 
-## 1. L'app (lue en direct par le pont, 19/10 ~12:00 UTC — dernier etat.json 11:22 UTC, relancée le 18/10 17:42 UTC, arrêt de 7 h le 19/10 05:40 heure de la tablette)
-- Version chargée `20261018c` (« go levier ») ; le token `20261019a` « go nettoyage » se charge à la prochaine relance avec réseau. 58 scripts, aucune erreur de page. `banc-all` : LIVRABLE.
-- Modes : AA, EV et RE en play ; EV à l'écran. RE n'envoie aucun ordre réel (aucun appel `/api/v3/order`).
-- EV : 1 067,14 $, 373 trades, aucune position. RE : 1 145,42 $, 0 trade. AA : 4 337,44 $, 2 233 trades, aucune position.
-- **AA porte 3 707,64 $ que ses fermetures n'expliquent pas** (n° 51, mesuré au centime : 999,48 $ le 18/10 10:30 UTC, 33 fermetures à −319,36 $ net de frais, 4 387,76 $ à 19:22 UTC sans position ni apport ni transfert). Cause supposée : l'emprunt du levier de trades manuels resté au trading (n° 25, corrigé le 18/10). Décision de Rams (19/10) : le retirer → `js/18-recalage-aa.js` : bandeau au lancement, « Recaler l'AA » + question chiffrée ; **à faire par Rams sur la tablette** (un appui).
+## 1. L'app (lue en direct par le pont, 19/10 16:58 UTC — relancée le 19/10 13:50 UTC, réseau présent, veille empêchée TENUE)
+- Version chargée `20261019a` (« go nettoyage ») ; le token `20261019b` (retrait du module de recalage) se charge à la prochaine relance avec réseau. 58 scripts, aucune erreur de page. `banc-all` : LIVRABLE.
+- Modes : AA, EV et RE en play ; AA à l'écran. RE n'envoie aucun ordre réel (aucun appel `/api/v3/order`).
+- EV : 1 067,14 $, 373 trades, aucune position. RE : 1 145,42 $, 0 trade. AA : 629,59 $, 2 234 trades, aucune position.
+- **n° 51 FAIT** : Rams a recalé l'AA sur la tablette le 19/10 15:50 (pont, `walletStore.sim._recalages`) : trading AA 4 290,04 → 582,40 $ (−3 707,64 $ au centime), portefeuille 4 337,44 → 629,80 $ ; la trace a survécu à la relance ; EV et RE inchangés. Module `js/18-recalage-aa.js` retiré ensuite (`20261019b`), texte gardé en témoin dans `banc-fixtures/recalage-aa-20261019.js`.
 - Poche tendance longue (`js/15`) : 11 positions tenues.
 - **La décision n'a aucune information** : sur 7 927 décisions (15/10 → 18/10, backup du 18/10 21:37), −0,274 % net à 15 min (t = −19,3). Ce qui est perdu, ce sont les frais. Six portes de recherche et TENDANCE n'ont trouvé aucune source qui change ça ; TENDANCE LONGUE est la seule entrée (fragile).
-- Arrêts : la tablette part avec Rams au travail, sans réseau loin du Wi-Fi et sur batterie (GO VEILLE). « Veille empêchée » demandée mais NON tenue. Remède côté Rams, pas dans le code.
+- Arrêts : la tablette part avec Rams au travail, sans réseau loin du Wi-Fi et sur batterie (GO VEILLE) ; arrêt de 7 h relevé le 19/10 05:40 (heure de la tablette). « Veille empêchée » TENUE au relevé du 19/10 16:58. Remède côté Rams, pas dans le code.
 
 ## 2. Règles de Rams en vigueur (ne pas les redemander)
 - AUTO / MANU : Rams seul. En MANU, le bot peut surveiller, préremplir, fermer — jamais ouvrir.
@@ -24,13 +24,12 @@ Ce fichier dit OÙ EN EST AURA8 aujourd'hui. L'histoire de chaque livraison est 
 - Part des gains vers la caisse : 0 % depuis le 11/10, réglée par Rams lui-même (confirmé le 15/10) — ce n'est pas un défaut.
 - Carte de paire : accord de Rams ; changée le 19/10 sur son « oui » (badge mise + levier, « Mise de base » du prochain trade).
 
-## 3. Défauts OUVERTS — registre (audit du 13/10 ; fermés : G1 n° 1–8, 20, 21 go argent 14/10 · G2 n° 10–19 go réglages 15/10 · n° 30–32 go alertes, 33 go outils, 25, 26, 29 go levier 18/10 · **go nettoyage 19/10 `20261019a` : n° 27, 28, 34–39, 51 (code ; geste de Rams en attente), 52–55, 58–60, G4 n° 21, 22, 42 et le code mort de go outils / go levier**)
+## 3. Défauts OUVERTS — registre (audit du 13/10 ; fermés : G1 n° 1–8, 20, 21 go argent 14/10 · G2 n° 10–19 go réglages 15/10 · n° 30–32 go alertes, 33 go outils, 25, 26, 29 go levier 18/10 · **go nettoyage 19/10 `20261019a` / `20261019b` : n° 27, 28, 34–39, 51 (fait par Rams, module retiré), 52–55, 58–60, G4 n° 21, 22, 42 et le code mort de go outils / go levier**)
 Preuve : **R** = revérifiée par la session principale · **vm** = vrai code exécuté · **c** = lu dans le code · **rel** = relecture adverse du 19/10 (`claude/RAPPORT-NETTOYAGE-20261019.md`). Taille du remède : S ≤ 20 lignes.
 
 ### G1 — argent ou données faux
 | n° | Défaut | Où | Preuve | Taille |
 |---|---|---|---|---|
-| 51 | Recalage de l'AA livré (`js/18-recalage-aa.js`) : reste le geste de Rams (bandeau → « Recaler l'AA » → OK). Vérifier ensuite `_recalageAA.etat()` = `fait` par le pont, puis retirer le module et sa ligne du HTML | 18 | test + sonde | S |
 | 61 | `validateInvestmentCapProvisioned` retire deux fois les mises engagées : avec plusieurs positions ouvertes le « disponible » est trop bas (inverser une position de 490 $ la rouvre à 27,65 $) — lu par l'ouverture du bot → porte TALENT | 09j:193 | rel vm | S |
 | 62 | « Inverser » ferme la position avant de savoir à combien elle sera rouverte (aucune question) ; avec 3 positions le message de non-réouverture est confus | 07 manuInvert | rel vm | S |
 | 63 | `_auraRotatePurge` coupe `antiNegReserveLog` en gardant les 50 lignes les PLUS ANCIENNES (backup 18/10 : rien entre le 13/09 et le 18/10 21:36) | 09b2:1145 | rel c | S |
@@ -60,10 +59,9 @@ Ajouté le 19/10 (G4, code sans appelant laissé en place) : 06 `openUrgence`, `
 27 points corrigés, 6 périmés, 7 énoncés faux rectifiés — `rejeu/audit-20261013/registre.md` §2–4. Go nettoyage : l'estimation « ≈ 3 160 $ » du n° 51 ne comptait que le résultat BRUT des fermetures ; avec leurs frais, l'écart est 3 707,64 $.
 
 ## 4. Missions proposées, dans l'ordre (aucune sans « go » de Rams)
-1. **Geste de Rams** : relancer l'app avec réseau (token `20261019a`), appuyer « Recaler l'AA » sur le bandeau ; Claude vérifie ensuite par le pont et retire le module 18.
-2. **Porte TALENT** pour n° 56, 57, 61, 65 (ils touchent la décision d'ouvrir).
-3. **go alertes 2** — n° 66, 67, 68, 69, 34b (écran et exports qui mentent encore).
+1. **Porte TALENT** pour n° 56, 57, 61, 65 (ils touchent la décision d'ouvrir).
+2. **go alertes 2** — n° 66, 67, 68, 69, 34b (écran et exports qui mentent encore).
 Hors code, à Rams : réseau de la tablette (GO VEILLE) ; additionnels communaux ; révoquer l'ancienne clé CoinStats et l'ancien PAT ; 2FA GitHub ; Telegram dans Outils Avancés › 🔔 Alertes ; essayer une fois un export de l'onglet 🛠 Outils et « Exporter backup » sur la tablette (écriture dans Download/AURA prouvée en vm seulement).
 
 ## 5. Outils (détail : PASSATION, points numérotés)
-App en direct : `node rejeu/pont.js etat | journal --heures 24 | backup | lire S <chemin>` (point 21 ; rattacher `aura-pont` en lecture SANS le cloner). Lecture d'un backup : `node rejeu/lecture_backup.js <fichier>`. Argent : `node banc-argent.js`, `node rejeu/sonde_argent.js --root . --backup <backup>`. Réglages : `node banc-reglages.js`, `node rejeu/sonde_reglages.js`. Alertes : `node banc-alertes.js`, `node rejeu/sonde_alertes.js`. Outils : `node banc-outils.js`, `node rejeu/sonde_outils.js`. Levier : `node banc-levier.js`, `node rejeu/sonde_levier.js`. **Nettoyage** : `node banc-nettoyage-argent.js` (vm, 26 : n° 51–55, 58–60), `banc-nettoyage-promesses.js` (13 : n° 34–39), `banc-nettoyage-reseau.js` (16 : n° 27, 28), `banc-nettoyage-mort.js` (7) et `node rejeu/sonde_nettoyage.js --root . --backup <backup>` (vraie page, 12 étapes : bandeau du recalage, remise à zéro, solvabilité sans levier, paliers, inverser, carte). Sonde navigateur : point 15. Sonde des modes : point 20. Portes de recherche : points 9 à 17. Fiscal : point 19. Enveloppe Android : point 23.
+App en direct : `node rejeu/pont.js etat | journal --heures 24 | backup | lire S <chemin>` (point 21 ; rattacher `aura-pont` en lecture SANS le cloner). Lecture d'un backup : `node rejeu/lecture_backup.js <fichier>`. Argent : `node banc-argent.js`, `node rejeu/sonde_argent.js --root . --backup <backup>`. Réglages : `node banc-reglages.js`, `node rejeu/sonde_reglages.js`. Alertes : `node banc-alertes.js`, `node rejeu/sonde_alertes.js`. Outils : `node banc-outils.js`, `node rejeu/sonde_outils.js`. Levier : `node banc-levier.js`, `node rejeu/sonde_levier.js`. **Nettoyage** : `node banc-nettoyage-argent.js` (vm, 26 : n° 51–55, 58–60), `banc-nettoyage-promesses.js` (13 : n° 34–39), `banc-nettoyage-reseau.js` (16 : n° 27, 28), `banc-nettoyage-mort.js` (7) et `node rejeu/sonde_nettoyage.js --root . --backup <backup>` (vraie page, 7 étapes depuis le retrait du module de recalage (12 avec lui) : remise à zéro, solvabilité sans levier, paliers, inverser, carte). Sonde navigateur : point 15. Sonde des modes : point 20. Portes de recherche : points 9 à 17. Fiscal : point 19. Enveloppe Android : point 23.

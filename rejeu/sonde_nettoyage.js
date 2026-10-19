@@ -49,6 +49,8 @@ const res = [], R = (nom, ok, detail) => { res.push({ nom, ok: !!ok, detail }); 
   await ev(() => { window.__toasts = []; const o = window.showToast; window.showToast = function (t, d, l) { window.__toasts.push([String(t), l || 'info']); return o.apply(this, arguments); }; try { showToast = window.showToast; } catch (e) {} });
 
   // ───────── 1. n° 51 · le bandeau du recalage de l'AA ─────────
+  // [GO NETTOYAGE · 19/10/2026, suite] le module est retiré de l'app une fois le recalage fait sur la tablette : ses étapes ne se jouent que s'il est chargé
+  if (/<script src="js\/18-recalage-aa\.js/.test(fs.readFileSync(path.join(ROOT, 'AURA8_v118.html'), 'utf8'))) {
   const A0 = await AA(), b0 = await bandeau();
   R('recalage · au lancement, le bandeau dit l\'écart de l\'AA (3 707,64 $)', !!b0 && /3707\.64/.test(b0), { b0, A0 });
   await bouton('Plus tard'); await page.waitForTimeout(300);
@@ -68,6 +70,7 @@ const res = [], R = (nom, ok, detail) => { res.push({ nom, ok: !!ok, detail }); 
   const A3 = await AA(), b3 = await bandeau();
   R('recalage · rechargement : gardé, plus de bandeau, une seule fois', !b3 && A3.trace && A3.trace.t === A2.trace.t && A3.start < A0.start - 3000 && A3.rec.length === 1 && await ev(() => window._recalageAA && window._recalageAA.etat()) === 'fait', A3);
   await ev(() => { window.__toasts = []; const o = window.showToast; window.showToast = function (t, d, l) { window.__toasts.push([String(t), l || 'info']); return o.apply(this, arguments); }; try { showToast = window.showToast; } catch (e) {} });
+  } else console.log('  ··  recalage · module retiré (recalage fait sur la tablette le 19/10) : étapes sautées');
 
   // ───────── 2. n° 53 · remise à zéro d'un compte (le geste de l'appui long) ─────────
   accepter = false; const nD2 = dialogs.length;
