@@ -1107,6 +1107,10 @@ window._evRetireDelisted = _evRetireDelisted;
 // l'intelligence vient de la PROFONDEUR (fitness, lecons, generations, gardees
 // integralement), pas du volume d'evenements. Rien de ce qui sert a apprendre
 // n'est touche : seuls les historiques rotatifs sont ramenes a une taille utile.
+// [GO NETTOYAGE · 18/10/2026] (ETAT n° 37) la coupe de l'historique de chaque paire, nommée : lue aussi par le résumé Telegram de la semaine (06 _tgHebdoText),
+// qui disait « 100 dernières lignes par paire » — avant : 40 écrit en dur ci-dessous, valeur inchangée
+var _TRADES_GARDES_PAR_PAIRE = 40;
+window._TRADES_GARDES_PAR_PAIRE = _TRADES_GARDES_PAR_PAIRE;
 function _auraRotatePurge() {
   try {
     if (typeof S === 'undefined' || !S) return;
@@ -1135,7 +1139,7 @@ function _auraRotatePurge() {
       var w = wsx[mk]; if (!w) return;
       var pst = w.pairStates || {};
       Object.keys(pst).forEach(function(pp){
-        if (pst[pp] && Array.isArray(pst[pp].trades)) pst[pp].trades = cutEnd(pst[pp].trades, 40);
+        if (pst[pp] && Array.isArray(pst[pp].trades)) pst[pp].trades = cutEnd(pst[pp].trades, _TRADES_GARDES_PAR_PAIRE);   // [GO NETTOYAGE · 18/10/2026] (ETAT n° 37) avant : 40 en dur
       });
       w.dreamJournal      = cutEnd(w.dreamJournal, 40);   // [1c-LITE]
       w.antiNegReserveLog = cutEnd(w.antiNegReserveLog, 50);   // [1c-LITE]
@@ -1183,6 +1187,7 @@ setTimeout(_auraRotatePurge, 20000);
     try {
       if (typeof S === 'undefined' || !S) return;
       if (localStorage.getItem(FLAG)) return;               // deja fait
+      if (typeof _oneShotEpargne === 'function' && _oneShotEpargne(FLAG, 'dette orpheline · 27/07')) return;   // [GO NETTOYAGE · 18/10/2026] (ETAT n° 27) état vécu (02) : la dette reste — avant : le drapeau seul l'effaçait
       var debt = Number(S.leverageBorrowed || 0);
       if (!(debt > 0)) { localStorage.setItem(FLAG, '1'); return; }
       // part reellement engagee dans des positions ouvertes (tous modes)
@@ -1305,6 +1310,7 @@ setTimeout(_auraRotatePurge, 20000);
     if (!ready) return;
     clearInterval(timer);
     try {
+      if (typeof _oneShotEpargne === 'function' && _oneShotEpargne(FLAG, 'fitness du 05/08')) return;   // [GO NETTOYAGE · 18/10/2026] (ETAT n° 27) état vécu (02) : les agents restent — avant : le drapeau seul (fitness réécrite par nom)
       var byName = {};
       TABLE.forEach(function(r){ byName[r.n] = r; });
       var hit = 0;

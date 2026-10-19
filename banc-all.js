@@ -40,7 +40,7 @@ const TOK = mDoc ? mDoc[1] : null;
 if (!TOK) ko('DOC_V introuvable dans ' + HTML); else ok('DOC_V = ' + TOK);
 const toks = html.match(/\?v=[0-9a-z]+/g) || [];
 const bad = toks.filter(t => t !== '?v=' + TOK);
-if (toks.length === 87 && !bad.length) ok('87 ?v= tous à ' + TOK);   // [GO DÉMO 12/10] +1 : js/18-reparation-demo.js · [PONT DIRECT 11/10] +2 : js/17-pont-lecture.js, js/17b-pont-direct.js · [GO FISCAL 07/10] +2 : js/16-fiscal.js, js/16b-fiscal-ecran.js · [VOIX TENDANCE LONGUE 07/10] +1 : js/15-voix-tendance.js (14 le 04/10, 11b le 23/09, 10i le 17/09)
+if (toks.length === 87 && !bad.length) ok('87 ?v= tous à ' + TOK);   // [GO NETTOYAGE 19/10] +1 : js/18-recalage-aa.js (n° 51) · [GO NETTOYAGE 18/10] −1 : js/18-reparation-demo.js retiré · [GO DÉMO 12/10] +1 : js/18-reparation-demo.js · [PONT DIRECT 11/10] +2 : js/17-pont-lecture.js, js/17b-pont-direct.js · [GO FISCAL 07/10] +2 : js/16-fiscal.js, js/16b-fiscal-ecran.js · [VOIX TENDANCE LONGUE 07/10] +1 : js/15-voix-tendance.js (14 le 04/10, 11b le 23/09, 10i le 17/09)
 else ko(toks.length + ' ?v= (attendu 87) · divergents : ' + (bad.slice(0, 5).join(' ') || 'aucun'));
 const scripts = [...html.matchAll(/<script[^>]*\bsrc="([^"?]+)(?:\?[^"]*)?"/g)].map(m => m[1]);
 const csss = [...html.matchAll(/<link[^>]*\bhref="([^"?]+\.css)(?:\?[^"]*)?"/g)].map(m => m[1]);

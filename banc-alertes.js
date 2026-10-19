@@ -92,7 +92,7 @@ const pause = ms => new Promise(r => setTimeout(r, ms));
   });
   await T('A2 · 02 closePosition appelle tgOnTrade (mode du trade, auto, urgence, raison) et notifTradeClose avec la raison et le mode — pour TOUTE fermeture, urgence comprise', () => {
     const cp = code(fnSrc(s02, 'closePosition'));
-    assert.ok(/tgOnTrade\(\{ pair: pos\.pair, side: pos\.side, pnlUsd: realisedUsd, pnlPct: realisedPct, mode: S\.tradingMode, auto: pos\.auto === true, urgence: _urg, sortie: _sortie \}\)/.test(cp), 'tgOnTrade');
+    assert.ok(/tgOnTrade\(\{ pair: pos\.pair, side: pos\.side, pnlUsd: realisedUsd, pnlPct: realisedPct, mode: S\.tradingMode, auto: pos\.auto === true, urgence: _urg && !_part, partiel: _part \|\| undefined, sortie: _sortie \}\)/.test(cp), 'tgOnTrade');   // [GO NETTOYAGE · 19/10/2026] (n° 55) une sortie par paliers n'est pas une urgence — avant : urgence: _urg
     assert.ok(/notifTradeClose\(pos\.pair, pos\.side, realisedUsd, realisedPct, _sortie, S\.tradingMode\)/.test(cp), 'notifTradeClose');
     assert.ok(/const _sortie = \(arguments\[2\] && arguments\[2\]\.sortie && \(arguments\[2\]\.sortie\.k === 'tp' \|\| arguments\[2\]\.sortie\.k === 'sl'\)\)/.test(cp), '3e argument sortie');
     // la raison n'est lue que par ces deux appels (aucune règle d'argent ni de décision)
@@ -222,7 +222,8 @@ const pause = ms => new Promise(r => setTimeout(r, ms));
     a.ctx.tgOnPnlGoal = t => goals.push(t); a.ctx.sendNotif = () => {}; a.ctx.notifDrawdown = () => {};
     a.ctx._computePnlByPeriod = () => ({ today: { hasData: true, usd: 12.5 } });
     a.S.pnl24h = 60; a.S.perf = { maxDrawdown: 0 }; a.S.totalTrades = 3;
-    vm.runInContext(fnSrc(s04, '_initAlerts') + '\n' + (has(s04, '_alertModeLab') ? fnSrc(s04, '_alertModeLab') : '') + '\n' + fnSrc(s04, 'checkPnlAlerts'), a.ctx);
+    // [GO NETTOYAGE · 18/10/2026] + _alertMode / _alertFired / _alertFire (04 : « déjà déclenchée » par mode, ETAT n° 35 — banc-nettoyage-promesses.js B1-B3)
+    vm.runInContext(fnSrc(s04, '_initAlerts') + '\n' + (has(s04, '_alertModeLab') ? fnSrc(s04, '_alertModeLab') : '') + '\n' + ['_alertMode', '_alertFired', '_alertFire'].map(f => has(s04, f) ? fnSrc(s04, f) + '\n' : '').join('') + fnSrc(s04, 'checkPnlAlerts'), a.ctx);
     a.ctx.checkPnlAlerts(); a.ctx.checkPnlAlerts();
     assert.strictEqual(goals.length, 2, 'objectifs : ' + goals.length);
     assert.ok(/^EV · Gain session ≥ \$10 : \+\$12\.50/.test(goals[0]) && /^EV · Gain journalier ≥ \$50 : \+\$60\.00/.test(goals[1]), goals.join(' / '));
@@ -399,7 +400,8 @@ const pause = ms => new Promise(r => setTimeout(r, ms));
   await T('B5 · Outils › 🔔 Alertes : un clic sur un seuil P&L re-rend la section VISIBLE (alertsSection2) — avant, le rendu allait au conteneur caché de l\'accueil et l\'interrupteur semblait mort', () => {
     const a = app({ document: fakeDoc(['alertsSection', 'alertsSection2']) });
     a.S.portfolio = 0; a.S.totalTrades = 0; a.S.perf = {};
-    vm.runInContext(fnSrc(s04, '_initAlerts') + '\n' + fnSrc(s04, '_getGoals') + '\n' + fnSrc(s04, 'renderAlertsSection') + '\n' + fnSrc(s04, 'toggleAlert'), a.ctx);
+    // [GO NETTOYAGE · 18/10/2026] + _alertMode / _alertFired (04, ETAT n° 35 : « ✅ Déclenchée » du mode affiché)
+    vm.runInContext(fnSrc(s04, '_initAlerts') + '\n' + ['_alertMode', '_alertFired'].map(f => has(s04, f) ? fnSrc(s04, f) + '\n' : '').join('') + fnSrc(s04, '_getGoals') + '\n' + fnSrc(s04, 'renderAlertsSection') + '\n' + fnSrc(s04, 'toggleAlert'), a.ctx);
     a.ctx.toggleAlert('tradeCount');
     assert.ok(a.ctx.document.els.alertsSection2.innerHTML.length > 100, 'section visible non re-rendue');
   });

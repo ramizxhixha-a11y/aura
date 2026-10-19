@@ -90,7 +90,7 @@ const grp = (res, g) => J(res).filter(r => r.group === g);
     const h = src('AURA8_v118.html');
     assert.ok(h.includes("DOC_V = '" + TOK + "'"));
     const toks = h.match(/\?v=[0-9a-z]+/g) || [];
-    assert.strictEqual(toks.length, 87);   // [GO DÉMO 12/10] +1 : js/18-reparation-demo.js · [PONT DIRECT 11/10] +2 · [GO FISCAL 07/10] +2 : js/16-fiscal.js, js/16b-fiscal-ecran.js · [VOIX TENDANCE LONGUE 07/10] +1 : js/15-voix-tendance.js (14 le 04/10, 11b le 23/09)
+    assert.strictEqual(toks.length, 87);   // [GO NETTOYAGE 19/10] +1 : js/18-recalage-aa.js (n° 51) · [GO NETTOYAGE 18/10] −1 : js/18-reparation-demo.js retiré · [GO DÉMO 12/10] +1 : js/18-reparation-demo.js · [PONT DIRECT 11/10] +2 · [GO FISCAL 07/10] +2 : js/16-fiscal.js, js/16b-fiscal-ecran.js · [VOIX TENDANCE LONGUE 07/10] +1 : js/15-voix-tendance.js (14 le 04/10, 11b le 23/09)
     assert.deepStrictEqual(toks.filter(t => t !== '?v=' + TOK), []);
     assert.ok(!h.includes('20260909a') && !h.includes('20260911a'));
   });

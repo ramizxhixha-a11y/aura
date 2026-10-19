@@ -47,6 +47,24 @@ const EMPREINTES_AVANT = { estimateStakes: '191de2e4cf018d53', borrowLeverage: '
   setLeverageByBot: 'cf91e0a8613d7ba7', validateAntiNegative: '2aa7c47155f4d4e3', estimateTradeReserve: '401d7c60b6941022' };
 const EMPREINTE_09C_AVANT = '246bff0cee30b335', EMPREINTE_OPEN_AVANT = '0edd3f867c63426c';
 
+// [GO NETTOYAGE · 19/10/2026] (ETAT n° 58) les seules retouches voulues du levier, rendues au texte d'avant pour les empreintes : capacité « juste à temps »
+// = base × index (02 ensureLeverageCoverForTrade), baisser l'index n'emprunte plus (02 applyAutoLeverageBorrow), S.portfolio écrit après l'ajout de la
+// position (02 openPosition). Morceaux EXACTS (avant / après, au caractère près, calculés contre le commit 6ee5844) : tout autre écart reste un échec
+// (relecture du 19/10 : une première version à motifs larges laissait passer du code inséré dans ces zones).
+const NE58 = [
+  ["ensureLeverageCoverForTrade", "  const base = _tradingCapitalBase();\n  // [GO NETTOYAGE · 19/10/2026] (ETAT n° 58, règle Rams du 15/08 : « ×N = emprunt de N× le capital propre ») la capacité est base × index — le ×10 caché\n  // que le 15/08 avait retiré de l'index (applyAutoLeverageBorrow) et le 18/08 de la réserve (syncLeverageReserve) restait ICI : à ×1, une mise pouvait\n  // emprunter 10× le capital (AA, 18/10 : mises de 30 000 $ sur ~1 000 $ à soi). L'emprunt de l'index (déjà au trading) est compté dans la dette retranchée.\n  // Le bot n'arrive pas ici dans les faits (09c borne sa mise au trading avant d'appeler — code relu) : c'est l'ouverture MANUELLE (02 openPosition).\n  const maxBorrow = base * Math.min(index, S.leverageMaxMult || 10) - (S.leverageBorrowed || 0);", "  const base = _tradingCapitalBase();\n  const maxBorrow = base * (S.leverageMaxMult || 10) * index - (S.leverageBorrowed || 0);"],
+  ["applyAutoLeverageBorrow", "  const targetBorrow = base * Math.min(newIndex, mult);   // [fix levier 15/08] N× le capital, plus ×10 caché\n  let delta = targetBorrow - (S._autoLevBorrowed || 0);\n  // [GO NETTOYAGE · 19/10/2026] (ETAT n° 58) BAISSER l'index n'emprunte jamais : la dette suivie a pu baisser (remboursements) ou la base monter depuis\n  // l'activation, et « ×3 → ×2 » versait alors de l'argent emprunté au trading. Avant : delta > 0 → emprunt, quel que soit le sens.\n  if (newIndex < prevIndex && delta > 0) delta = 0;", "  const targetBorrow = base * Math.min(newIndex, mult);   // [fix levier 15/08] N× le capital, plus ×10 caché\n  const delta = targetBorrow - (S._autoLevBorrowed || 0);"],
+  ["openPosition", "  // Déduire la mise propre du compte trading\n  // [GO NETTOYAGE · 19/10/2026] (ETAT n° 58) S.portfolio n'est plus écrit ICI, entre le débit de la mise et l'ajout de la position (la mise n'était comptée\n  // nulle part : portefeuille trop bas d'une mise jusqu'au calcul suivant) — il l'est juste après l'ajout, plus bas.", "  // Déduire la mise propre du compte trading"],
+  ["openPosition", "  S.tradingAccount = Math.max(0, S.tradingAccount - stakeUsdt);", "  S.tradingAccount = Math.max(0, S.tradingAccount - stakeUsdt);\n  S.portfolio      = _computePortfolio();   // [23/08] canonique"],
+  ["openPosition", "  });\n  S.portfolio = _computePortfolio();   // [23/08] canonique · [GO NETTOYAGE · 19/10/2026] (n° 58) après l'ajout de la position : sa mise y est comptée", "  });"],
+];
+function sansNettoyage(t, name) {
+  if (!/GO NETTOYAGE · 19\/10\/2026/.test(t)) return t;
+  NE58.filter(x => x[0] === name).forEach(([, nw, od]) => { assert.strictEqual(t.split(nw).length, 2, 'GO NETTOYAGE : morceau attendu absent de ' + name); t = t.split(nw).join(od); });   // split / join : « $$ » du texte n'est pas un motif
+  assert.ok(!/GO NETTOYAGE · 19\/10\/2026/.test(t), 'GO NETTOYAGE : retouche non répertoriée dans ' + name);
+  return t;
+}
+
 // ─── Le monde : comptes d'un mode à plat (EV), VRAIES fonctions d'argent et de levier ───
 // Ce qui juge (agents, bots, fiscal 16) est remplacé par des témoins : ce banc regarde l'ARGENT. Taux réels de l'app (pont, 18/10 : maker = taker = 0,10 %).
 // Le contrôle de capital de l'ouverture manuelle est le VRAI (09j) — o.capOk le remplace par « toujours ok » pour éprouver le refus de 02 seul.
@@ -57,7 +75,7 @@ class HORLOGE extends Date { constructor(...a) { super(...(a.length ? a : [TICK]
 const F02 = ['_computePortfolio', '_computePortfolioSans', '_tradingCapitalBase', 'syncLeverageReserve', 'applyAutoLeverageBorrow', 'ensureLeverageCoverForTrade', 'borrowLeverage',
   'repayLeverage', 'restoreLeverageAtCashout', 'applyLeverageBorrowFees', 'recordFees', 'releaseTradeReserve', '_manOpenWarnings', '_manConsigneOf', 'openPosition', 'closePosition',
   '_addToPosition', 'changeLeverage', 'confirmTransfer', '_leverageSolvency', '_forceCloseAllForSolvency', 'renderPositions', 'renderClosePositionsList', 'fmt$', 'fmt$2', 'fmtDT'];
-const F02NEW = ['_posLatent', '_posCloseFees', '_posMark', '_posLevCash', '_repayCashDebt', '_levFreeDebt', '_levCashDebt', '_levNormAuto'];   // GO LEVIER
+const F02NEW = ['_posLatent', '_posCloseFees', '_posMark', '_posLevCash', '_repayCashDebt', '_levFreeDebt', '_levCashDebt', '_levNormAuto', '_feesDueOf'];   // GO LEVIER · [GO NETTOYAGE · 19/10/2026] + _feesDueOf (n° 54)
 function world(o) {
   o = o || {};
   const seen = { toasts: [], confirms: [], learn: 0 };
@@ -86,7 +104,7 @@ function world(o) {
   src.push(o.capOk ? 'function validateTotalExposure() { return { ok: true, available: 1e9 }; }' : fnSrc(s9j, 'validateTotalExposure'), fnSrc(s9j, 'validateInvestmentCapProvisioned'));
   src.push('var _editModal = null;', fnSrc(s08, 'applyPosEdit'), fnSrc(s08, 'openPosEdit'), fnSrc(s08, 'flipPosition'), 'function closePosEditModal() { _editModal = null; }');
   src.push(fnSrc(s07, 'manuInvert'), fnSrc(s07, '_bkCapital'), fnSrc(s07, '_computeNetUsdParts'));
-  src.push(fnSrc(s05, '_spRemainingFactor'), (s05.match(/const _SP_PALIERS_DEF = \[[\s\S]*?\];/) || [''])[0], fnSrc(s05, 'closePartial'));
+  src.push(has(s05, '_spRemainingFactor') ? fnSrc(s05, '_spRemainingFactor') : '', (s05.match(/const _SP_PALIERS_DEF = \[[\s\S]*?\];/) || [''])[0], fnSrc(s05, 'closePartial'));   // [GO NETTOYAGE · 19/10/2026] (n° 55) _spRemainingFactor retirée de 05 : lue seulement sur le code d'avant
   vm.runInContext(src.join('\n') + '\nvar S = this.S;', c);
   return { c, S, seen, els, run: code => vm.runInContext(code, c) };
 }
@@ -120,18 +138,19 @@ console.log('▶ banc-levier · token ' + ((html.match(/DOC_V = '(\d{8}[a-z])'/)
 
 console.log('▶ L. n° 25 — l\'emprunt versé en argent est rendu au prêteur, sur le trading');
 await T('L1 · VRAIS changeLeverage ×3 (300 $ d\'index au trading) puis openPosition d\'une mise = trading + 30 $ : 30 $ « juste à temps » (_levCash 30) ; fermée au prix d\'entrée → fonds propres = avant − frais, l\'index reste dû (avant : +30 $ venus de nulle part)', () => {
-  const W = world({ trading: 100 }); const f0 = fonds(W.S); indexX(W, 3);
-  near(W.S.tradingAccount, 400, 1e-9, 'index'); near(fonds(W.S), f0, 1e-9, 'index neutre');
-  W.S.pairStates['ETH/USDT'].stake = 430; W.run("openPosition('ETH/USDT', 'long')"); const p = W.S.openPositions[0];
+  const W = world({ trading: 100 }); const f00 = fonds(W.S); indexX(W, 3);
+  near(W.S.tradingAccount, 400, 1e-9, 'index'); near(fonds(W.S), f00, 1e-9, 'index neutre');
+  W.S.tradingAccount += 40; /* [GO NETTOYAGE · 19/10/2026] (n° 58) capacité « juste à temps » = base × index − dette (règle du 15/08) : après l'index ×3, 40 $ GAGNÉS (argent à soi) ouvrent 120 $ de marge — avant : 10 × base × index */ const f0 = fonds(W.S);
+  W.S.pairStates['ETH/USDT'].stake = 470; W.run("openPosition('ETH/USDT', 'long')"); const p = W.S.openPositions[0];
   assert.ok(p, 'position ouverte : ' + JSON.stringify(W.seen.toasts.slice(-1))); near(p.levBorrowed, 30, 1e-9); assert.strictEqual(p._levCash, 30, '_levCash posé'); near(fonds(W.S), f0, 1e-9, 'ouverture neutre');
   W.run("closePosition('" + p.id + "')"); const fee = W.S.fees.feeLog[0].totalFee;
   near(fonds(W.S), f0 - fee, 1e-9, 'fonds propres'); near(W.S.leverageBorrowed, 300, 1e-9, 'index dû'); near(W.S._autoLevBorrowed, 300, 1e-9, 'suivi = index');
   assert.ok(W.S.chainLog.some(l => /\$30,00 empruntés pour la mise rendus au prêteur/.test(l.desc)), 'dit au journal');
 });
 await T('L2 · même ouverture, perte −80 % : l\'emprunt « juste à temps » rendu sur ce qui reste au trading ; fonds propres = avant + résultat − frais ; rien d\'effacé (le trading couvre)', () => {
-  const W = world({ trading: 100 }); const f0 = fonds(W.S); indexX(W, 3); W.S.pairStates['ETH/USDT'].stake = 430; W.run("openPosition('ETH/USDT', 'long')"); const p = W.S.openPositions[0];
+  const W = world({ trading: 100 }); indexX(W, 3); W.S.tradingAccount += 40; /* [GO NETTOYAGE · 19/10/2026] (n° 58) capacité « juste à temps » = base × index − dette (règle du 15/08) : après l'index ×3, 40 $ GAGNÉS (argent à soi) ouvrent 120 $ de marge — avant : 10 × base × index */ const f0 = fonds(W.S); W.S.pairStates['ETH/USDT'].stake = 470; W.run("openPosition('ETH/USDT', 'long')"); const p = W.S.openPositions[0];
   W.S.pairStates['ETH/USDT'].price = 20; W.run("closePosition('" + p.id + "')"); const fee = W.S.fees.feeLog[0].totalFee, r = lastTrade(W, 'ETH/USDT').pnlUsdt;
-  near(r, -344, 1e-9, 'résultat'); near(fonds(W.S), f0 + r - fee, 1e-9, 'fonds propres'); near(W.S.leverageBorrowed, 300, 1e-9);
+  near(r, -376, 1e-9, 'résultat'); near(fonds(W.S), f0 + r - fee, 1e-9, 'fonds propres'); near(W.S.leverageBorrowed, 300, 1e-9);
 });
 await T('L3 · le trading ne couvre plus (mise du bot prise à la réserve, compte vide, −90 %) : il rend tout ce qu\'il a, le reste RESTE DÛ (compteurs, journal ; jamais effacé, jamais pris sur la caisse) ; fonds propres = avant + résultat − frais ; puis une dette sans position : 50 contrôles de solvabilité ne font RIEN (avant : une « clôture » vide, toast et sauvegarde, à chaque prix)', () => {
   const W = world({ trading: 0, cash: 500, leverage: 1 }); poser(W, pos({ stakeUsdt: 25, totalExposure: 25, levBorrowed: 25, _levCash: 25, auto: true }), { fromReserve: 25 }); const f0 = fonds(W.S);
@@ -173,7 +192,7 @@ await T('L9 · transfert vers la caisse SANS levier : aucune question, le toast 
   near(W.S.cashAccount, 10, 1e-9); assert.strictEqual(W.seen.confirms.length, 0); assert.ok(W.seen.toasts.length && W.seen.toasts.every(([m]) => !/[Ll]evier/.test(m)), JSON.stringify(W.seen.toasts));
 });
 await T('L10 · VRAIE clôture de solvabilité (index ×3 + position « juste à temps » à −90 %) : fermée par closePosition, la dette rendue sur le trading, le reste dû et dit ; fonds propres = avant + résultat − frais ; ensuite plus rien ne se déclenche', () => {
-  const W = world({ trading: 100 }); const f0 = fonds(W.S); indexX(W, 3); W.S.pairStates['ETH/USDT'].stake = 430; W.run("openPosition('ETH/USDT', 'long')");
+  const W = world({ trading: 100 }); indexX(W, 3); W.S.tradingAccount += 40; /* [GO NETTOYAGE · 19/10/2026] (n° 58) capacité « juste à temps » = base × index − dette (règle du 15/08) : après l'index ×3, 40 $ GAGNÉS (argent à soi) ouvrent 120 $ de marge — avant : 10 × base × index */ const f0 = fonds(W.S); W.S.pairStates['ETH/USDT'].stake = 470; W.run("openPosition('ETH/USDT', 'long')");
   assert.strictEqual(W.S.openPositions.length, 1, JSON.stringify(W.seen.toasts.slice(-1)));
   W.S.pairStates['ETH/USDT'].price = 10; W.run("_forceCloseAllForSolvency('banc')"); const fee = W.S.fees.feeLog[0].totalFee, r = lastTrade(W, 'ETH/USDT').pnlUsdt;
   assert.strictEqual(W.S.openPositions.length, 0); near(fonds(W.S), f0 + r - fee, 1e-9, 'fonds propres'); near(W.S.tradingAccount, 0, 1e-12); assert.ok(W.S.leverageBorrowed > 0); assert.strictEqual(W.S.leverage, 0);
@@ -363,7 +382,7 @@ await T('N7 · 16 impôt latent : avec levier ×3 (mise 30, exposition 90), les 
   assert.ok(seen.length === 1, 'appelé'); near(seen[0], 90 * FEE.slippage * 2, 1e-12, 'glissement sur l\'exposition');
 });
 await T('N8 · « net en poche » (07 _computeNetUsdParts) avec levier (index ×3, une position « juste à temps » à +10 %, une position ×3 à −4 %) = ce que le compte tient VRAIMENT après tout fermer et rendre la dette (avant : dette ignorée, frais de sortie seuls sur la mise)', () => {
-  const W = world({ trading: 100 }); indexX(W, 3);
+  const W = world({ trading: 100 }); indexX(W, 3); W.S.tradingAccount += 40; /* [GO NETTOYAGE · 19/10/2026] (n° 58) capacité « juste à temps » = base × index − dette (règle du 15/08) : après l'index ×3, 40 $ GAGNÉS (argent à soi) ouvrent 120 $ de marge — avant : 10 × base × index */ 
   W.S.pairStates['SOL/USDT'].stake = 10; W.S.pairStates['SOL/USDT'].pairLeverage = 3; W.run("openPosition('SOL/USDT', 'short')");
   W.S.pairStates['ETH/USDT'].stake = Math.round(W.S.tradingAccount + 30); W.run("openPosition('ETH/USDT', 'long')");
   assert.strictEqual(W.S.openPositions.length, 2, JSON.stringify(W.seen.toasts.slice(-2)));
@@ -374,11 +393,12 @@ await T('N8 · « net en poche » (07 _computeNetUsdParts) avec levier (index ×
 });
 await T('N9 · capital du Bunker (07 _bkCapital) : l\'index ×3 et une ouverture « juste à temps » ne le font pas bouger ; la fermeture au prix d\'entrée ne lui retire que les frais (avant le correctif : le remboursement le faisait chuter, Bunker à −60 %) ; le portefeuille canonique (lu par la décision) est inchangé', () => {
   const W = world({ trading: 100 }); const b0 = W.run('_bkCapital()');
-  indexX(W, 3); W.S.pairStates['ETH/USDT'].stake = 430; W.run("openPosition('ETH/USDT', 'long')"); W.run('renderPositions()');
+  indexX(W, 3); near(W.run('_bkCapital()'), b0, 1e-9, 'Bunker après l\'index'); W.S.tradingAccount += 40; /* [GO NETTOYAGE · 19/10/2026] (n° 58) capacité « juste à temps » = base × index − dette (règle du 15/08) : après l'index ×3, 40 $ GAGNÉS (argent à soi) ouvrent 120 $ de marge — avant : 10 × base × index */ const b1 = W.run('_bkCapital()'); near(b1, b0 + 40, 1e-9, 'le gain compte');
+  W.S.pairStates['ETH/USDT'].stake = 470; W.run("openPosition('ETH/USDT', 'long')"); W.run('renderPositions()');
   assert.ok(W.S.openPositions[0] && W.S.openPositions[0]._levCash === 30, 'ouverture « juste à temps »');
-  near(W.run('_bkCapital()'), b0, 1e-9, 'Bunker');
+  near(W.run('_bkCapital()'), b1, 1e-9, 'Bunker');
   W.run("closePosition('" + W.S.openPositions[0].id + "')"); const fee = W.S.fees.feeLog[0].totalFee;
-  near(W.run('_bkCapital()'), b0 - fee, 1e-9, 'Bunker');
+  near(W.run('_bkCapital()'), b1 - fee, 1e-9, 'Bunker');
   assert.ok(/return \(o\.cashAccount \|\| 0\) \+ \(o\.tradingAccount \|\| 0\) \+ eng;\n\}/.test(fnSrc(s02, '_computePortfolio')), 'portefeuille canonique inchangé');
 });
 await T('N10 · fenêtre ⊗ « Fermer » (02 renderClosePositionsList) : SHORT ×5 perdant au-delà de sa mise → affiche −$30.00, ce que la fermeture réalisera (avant : −$52.50)', () => {
@@ -397,14 +417,14 @@ await T('S1 · ouvreurs et gardes du levier au texte d\'avant (empreintes du com
     let t = fnSrc(s02, n);
     if (n === 'borrowLeverage') t = t.replace(/  \/\/ \[GO LEVIER · 18\/10\/2026\] la part « exposition » n'entre plus dans _autoLevBorrowed[\s\S]*?n'ont aucun appelant\.\n/,
       '  // v7.12 · P10 · Tracker aussi dans _autoLevBorrowed pour que P4/P5 le voient\n  S._autoLevBorrowed = (S._autoLevBorrowed || 0) + available;\n');
-    got[n] = h16(t);
+    got[n] = h16(sansNettoyage(t, n));
   });
   assert.deepStrictEqual(got, EMPREINTES_AVANT, 'fonctions de 02 modifiées');
   const c9 = s9c.replace(/    \/\/ \[GO LEVIER · 18\/10\/2026\] \(ETAT n° 25\) la mise ne dépasse jamais ce que le trading tient[\s\S]*?\n      return;\n    \}\n/, '')
     .replace(/\n    currentVal:    baseStake, [^\n]*/, '\n    currentVal:    stakeUsdt,').split('\n').filter(l => !/^\s*_levCash:\s+_jitBorrowed,/.test(l)).join('\n');
   assert.strictEqual(h16(c9), EMPREINTE_09C_AVANT, '09c modifié hors GO LEVIER');
   assert.ok(/\n    _levCash:      _jitBorrowed, /.test(s9c), '09c pose _levCash');
-  const op = fnSrc(s02, 'openPosition').replace(/\n  \/\/ \[GO LEVIER · 18\/10\/2026\] \(ETAT n° 25\) la mise ne dépasse jamais[\s\S]*?\n    return null;\n  \}/, '')
+  const op = sansNettoyage(fnSrc(s02, 'openPosition'), 'openPosition').replace(/\n  \/\/ \[GO LEVIER · 18\/10\/2026\] \(ETAT n° 25\) la mise ne dépasse jamais[\s\S]*?\n    return null;\n  \}/, '')
     .replace(/\n    currentVal:   stakeUsdt, [^\n]*/, '\n    currentVal:   totalExposure,').split('\n').filter(l => !/^\s*_levCash:\s+_jitBorrowedManual,/.test(l)).join('\n');
   assert.strictEqual(h16(op), EMPREINTE_OPEN_AVANT, 'openPosition modifiée hors GO LEVIER');
 });

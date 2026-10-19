@@ -666,44 +666,50 @@ function closePartial(posId, palierIdx) {
   const cfg = PAIRS[pos.pair];
   const dec = cfg?.dec>=4 ? cfg.dec : 2;
 
-  // Calculer le PnL sur la portion fermée
-  const remainingStake = pos.stakeUsdt * _spRemainingFactor(pos._spPaliers, palierIdx);
+  // [GO NETTOYAGE · 19/10/2026] (ETAT n° 55, règle 9 de CLAUDE.md : toute fermeture passe par closePosition) la part fermée devient une position à part,
+  // fermée par closePosition(…, { partiel: true }) : frais sur l'exposition avec la réserve anti-négatif (recordFees), impôt au registre légal (16), ligne
+  // d'historique « partiel ». Avant : le trading était crédité ici de mise + résultat − frais (taker × 2 sur la mise, sans slippage ni réserve), sans impôt
+  // ni historique. Et la part fermée valait mise RESTANTE × part déjà fermée × taille : la mise restante était réduite deux fois (TP2 fermait 33 % du
+  // reste au lieu de 50 %, TP3 laissait 66 % ouverts au lieu de tout fermer). Désormais : taille × mise restante, TP3 ferme tout.
+  const remainingStake = Number(pos.stakeUsdt) || 0;
   const closingStake   = remainingStake * (pal.size / 100);
+  if (!(closingStake > 0)) { showToast('⚠ ' + pos.pair + ' : rien à fermer', 1500, 'warn'); return; }
+  let part = pos;
+  if (pal.size < 100) {
+    const frac = closingStake / remainingStake;
+    const expo = Number(pos.totalExposure) || remainingStake;
+    part = Object.assign({}, pos, {
+      id: pos.id + '~' + pal.label + Date.now().toString(36).slice(-4),
+      stakeUsdt: closingStake, totalExposure: expo * frac, currentVal: closingStake,
+      levBorrowed: 0, _levCash: 0, amount: undefined, _spEnabled: false, _spPaliers: undefined
+    });
+    if (typeof pos._reservedAmount === 'number') { part._reservedAmount = pos._reservedAmount * frac; pos._reservedAmount -= part._reservedAmount; }
+    pos.stakeUsdt     = remainingStake - closingStake;
+    pos.totalExposure = expo - part.totalExposure;
+    if (isFinite(Number(pos.amount))) pos.amount = Number(pos.amount) * (1 - frac);
+    S.openPositions.push(part);
+  }
+  // ce que closePosition réalisera (02 _posLatent / _posCloseFees : la même mesure, à l'octet) — pour le palier affiché
+  let netPnl = 0;
+  try { const _lt = _posLatent(part, cur); netPnl = _lt.usd - _posCloseFees(part, _lt.pct).total; } catch(e) {}
+  closePosition(part.id, false, { partiel: pal.size < 100, sortie: { k: 'tp', why: pal.label + ' · sortie par paliers' } });
+  if ((S.openPositions||[]).some(p => p && p.id === part.id)) { showToast('⚠ ' + pos.pair + ' : ' + pal.label + ' non exécuté', 2500, 'warn'); return; }
 
-  const rawPct = pos.side==='long'
-    ? (cur - pos.entryPrice) / pos.entryPrice * 100
-    : (pos.entryPrice - cur) / pos.entryPrice * 100;
-  const pnlUsd = closingStake * rawPct / 100;
-  const fee    = closingStake * (S.feeConfig?.takerRate||0.001) * 2;
-  const netPnl = pnlUsd - fee;
-
-  // Mettre à jour la position
   pal.hit       = true;
   pal.closedAt  = cur;
   pal.pnlUsd    = netPnl;
-  pos.stakeUsdt -= closingStake;
-  pos.totalExposure = pos.stakeUsdt;
-
-  // Créditer le compte
-  S.tradingAccount = (S.tradingAccount||0) + closingStake + netPnl;
-  S.portfolio      = (typeof _computePortfolio==='function') ? _computePortfolio() : ((S.cashAccount||0)+(S.tradingAccount||0));   // [23/08] canonique — le 13e site, attrapé par le grep exhaustif du repo
+  // le résultat de la part fermée, porté par la position jusqu'à sa fermeture finale (02 closePosition l'écrit sur sa ligne d'historique, champ « paliers »)
+  if (part !== pos) { if (!Array.isArray(pos._paliers)) pos._paliers = []; pos._paliers.push({ l: pal.label, stake: closingStake, pnlUsdt: netPnl, px: cur, ts: Date.now() }); }
 
   // Log
-  S.chainLog.push({ icon:'🎯', desc:`${pal.label} ${pos.pair} · fermé ${pal.size}% → +$${netPnl.toFixed(2)} net · prix ${cur.toFixed(dec)}`, hash:rndHash(), time:nowStr() });
-  showToast('🎯 '+pal.label+' exécuté · +$'+netPnl.toFixed(2), 2500, 'win');
+  S.chainLog.push({ icon:'🎯', desc:`${pal.label} ${pos.pair} · fermé ${pal.size}% (${fmt$2(closingStake)}) → ${netPnl>=0?'+':'−'}$${Math.abs(netPnl).toFixed(2)} net de frais · prix ${cur.toFixed(dec)}`, hash:rndHash(), time:nowStr() });
+  showToast('🎯 '+pal.label+' exécuté · '+(netPnl>=0?'+':'−')+'$'+Math.abs(netPnl).toFixed(2)+' net de frais', 2500, netPnl >= 0 ? 'win' : 'warn');
   renderSortiePartiSection();
   renderPyramideSection();
 }
 window.closePartial = closePartial;
 
-// Calculer le facteur de position restante avant le palier idx
-function _spRemainingFactor(paliers, upToIdx) {
-  let factor = 1.0;
-  for(let i=0; i<upToIdx; i++) {
-    if(paliers[i]?.hit) factor *= (1 - paliers[i].size/100);
-  }
-  return factor;
-}
+// [GO NETTOYAGE · 19/10/2026] (n° 55) _spRemainingFactor retirée : la mise restante (pos.stakeUsdt) est déjà réduite à chaque palier — elle la réduisait deux fois
 
 // Surveillance automatique — vérifie si un palier est atteint
 function checkSpPaliersAuto() {
@@ -806,7 +812,7 @@ function renderSortiePartiSection() {
                   <span style="color:var(--t2);flex:1;">+${pal.pct}% → fermer ${pal.size}%</span>
                   <div class="sp-palier-bar"><div class="sp-palier-fill" style="width:${progressPct.toFixed(0)}%;background:${palCol};"></div></div>
                   ${pal.hit
-                    ? `<span style="color:var(--up);font-weight:700;">+$${(pal.pnlUsd||0).toFixed(2)}</span>`
+                    ? `<span style="color:${(pal.pnlUsd||0)>=0?'var(--up)':'var(--down)'};font-weight:700;">${(pal.pnlUsd||0)>=0?'+':'−'}$${Math.abs(pal.pnlUsd||0).toFixed(2)}</span>`   // [GO NETTOYAGE · 19/10/2026] (n° 55) net de frais : peut être négatif
                     : `<button class="sp-close-btn" onclick="closePartial('${pos.id}',${i})"
                         style="background:rgba(0,232,122,.08);border-color:rgba(0,232,122,.25);color:var(--up);">
                         Exécuter
@@ -1018,7 +1024,9 @@ function _outilsClosedTrades() {
   const out = [];
   Object.entries(S.pairStates||{}).forEach(([pair, ps]) => {
     ((ps && ps.trades) || []).forEach(t => {
-      if(t && t.type === 'position' && t.pnlUsdt != null) out.push(Object.assign({}, t, { pair }));
+      // [GO NETTOYAGE · 18/10/2026] (ETAT n° 39) + les fermetures d'urgence (ligne « urgence » de 02 closePosition), marquées urgence:true, comptées comme le
+      // résumé Telegram (06 _tgHebdoText) — avant : « position » seulement : une urgence n'entrait ni dans le rapport, ni dans l'Excel, ni dans le résumé hebdo
+          if(t && (t.type === 'position' || t.type === 'urgence') && t.pnlUsdt != null) out.push(Object.assign({}, t, { pair, urgence: t.type === 'urgence' }));
     });
   });
   return out;
@@ -1097,6 +1105,7 @@ function _buildReportHTML() {
   const monthStr = n>0 ? `${_fd(allTrades[0].ts||0)} → ${_fd(allTrades[n-1].ts||0)}` : 'aucun trade gardé';
   const modeName = _outilsModeName(S.tradingMode);
   const netMode  = Number(fees.totalPnlNet)||0;
+  const nUrg     = allTrades.filter(t=>t.urgence).length;   // [GO NETTOYAGE · 18/10/2026] (ETAT n° 39) fermetures d'urgence comptées et dites
 
   // P&L par paire — compteurs de la paire (depuis le début) ; net = registre des frais par paire du mode (02 recordFees)
   const pairStats = Object.entries(S.pairStates||{}).map(([pair,ps])=>{
@@ -1165,23 +1174,7 @@ function _buildReportHTML() {
     table { break-inside:avoid; }
   }
 
-/* v70 AUTO-BACKUP */
-.ab-section{background:var(--s1);border:1px solid var(--border);border-radius:12px;padding:12px;margin-bottom:10px;}
-.ab-title{font-size:10px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:var(--t2);margin-bottom:10px;display:flex;justify-content:space-between;align-items:center;}
-.ab-slot{background:var(--s2);border:1px solid var(--border);border-radius:8px;padding:9px;margin-bottom:5px;display:flex;align-items:center;gap:10px;}
-.ab-slot:last-child{margin-bottom:0;}
-.ab-slot-icon{font-size:18px;flex-shrink:0;}
-.ab-slot-body{flex:1;}
-.ab-slot-name{font-size:10px;font-weight:700;color:var(--t1);}
-.ab-slot-meta{font-size:8px;color:var(--t3);margin-top:1px;}
-.ab-btn{width:100%;padding:9px;border-radius:8px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;border:1px solid;margin-bottom:6px;transition:all .15s;}
-.ab-toggle-row{display:flex;align-items:center;gap:10px;padding:8px 10px;background:var(--s2);border-radius:8px;margin-bottom:8px;}
-.ab-toggle{width:32px;height:18px;background:rgba(255,255,255,.1);border-radius:9px;position:relative;cursor:pointer;border:none;transition:background .2s;flex-shrink:0;}
-.ab-toggle.on{background:var(--up);}
-.ab-toggle::after{content:'';position:absolute;top:2px;left:2px;width:14px;height:14px;background:#fff;border-radius:50%;transition:left .2s;}
-.ab-toggle.on::after{left:16px;}
-.ab-progress{height:6px;background:rgba(255,255,255,.06);border-radius:100px;overflow:hidden;margin:4px 0;}
-.ab-progress-fill{height:100%;background:var(--ice);border-radius:100px;transition:width .4s;}
+/* [GO NETTOYAGE · 18/10/2026] styles v70 AUTO-BACKUP (.ab-section, .ab-slot…) retirés avec leur bloc (06) */
 
 
 /* v71 BTC IMPACT */
@@ -1277,17 +1270,7 @@ function _buildReportHTML() {
 .diff-upload-zone:hover{border-color:rgba(56,212,245,.4);}
 
 
-/* v76 MODE PAPIER ULTRA-RÉALISTE */
-.pr2-section{background:var(--s1);border:1px solid rgba(167,139,250,.2);border-radius:12px;padding:12px;margin-bottom:10px;}
-.pr2-title{font-size:10px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:var(--pur);margin-bottom:10px;display:flex;justify-content:space-between;align-items:center;}
-.pr2-badge{display:inline-block;font-size:9px;font-weight:700;padding:2px 8px;border-radius:8px;}
-.pr2-row{display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid rgba(255,255,255,.04);font-size:10px;}
-.pr2-row:last-child{border-bottom:none;}
-.pr2-slider-row{display:flex;align-items:center;gap:8px;padding:6px 0;font-size:10px;}
-.pr2-slider{-webkit-appearance:none;height:4px;border-radius:2px;background:var(--s3);outline:none;flex:1;}
-.pr2-slider::-webkit-slider-thumb{-webkit-appearance:none;width:14px;height:14px;border-radius:50%;background:var(--pur);cursor:pointer;}
-.pr2-scenario{background:var(--s2);border:1px solid var(--border);border-radius:8px;padding:8px 10px;margin-bottom:5px;}
-.pr2-toggle-row{display:flex;align-items:center;gap:10px;padding:7px 10px;background:var(--s2);border-radius:8px;margin-bottom:6px;}
+/* [GO NETTOYAGE · 18/10/2026] styles v76 MODE PAPIER ULTRA-RÉALISTE (.pr2-*) retirés avec leur bloc (06) */
 
 
 /* v77 WEBHOOK TELEGRAM */
@@ -1558,21 +1541,7 @@ function _buildReportHTML() {
 .cm-title{font-size:10px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:var(--t2);margin-bottom:10px;display:flex;justify-content:space-between;align-items:center;}
 
 
-/* v89 COFFRE-FORT */
-.vault-section{background:var(--s1);border:1px solid rgba(245,200,66,.2);border-radius:12px;padding:12px;margin-bottom:10px;}
-.vault-title{font-size:10px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:var(--gold);margin-bottom:10px;display:flex;justify-content:space-between;align-items:center;}
-.vault-door{background:linear-gradient(135deg,rgba(245,200,66,.08),rgba(245,200,66,.03));border:2px solid rgba(245,200,66,.3);border-radius:14px;padding:20px;text-align:center;margin-bottom:12px;}
-.vault-icon{font-size:48px;margin-bottom:8px;display:block;}
-.vault-lock-row{display:flex;gap:8px;align-items:center;margin-bottom:8px;}
-.vault-inp{flex:1;background:rgba(0,0,0,.4);border:1px solid rgba(245,200,66,.2);border-radius:7px;color:var(--gold);font-size:14px;padding:8px 12px;font-family:var(--font-mono);text-align:center;letter-spacing:.1em;}
-.vault-inp:focus{border-color:rgba(245,200,66,.5);outline:none;}
-.vault-btn{padding:8px 16px;border-radius:7px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;border:1px solid rgba(245,200,66,.4);background:rgba(245,200,66,.1);color:var(--gold);white-space:nowrap;}
-.vault-row{display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid rgba(255,255,255,.04);font-size:10px;}
-.vault-row:last-child{border-bottom:none;}
-.vault-slot{background:var(--s2);border:1px solid var(--border);border-radius:8px;padding:9px;margin-bottom:5px;display:flex;align-items:center;gap:10px;}
-.vault-slot.locked{border-color:rgba(245,200,66,.2);}
-.vault-strength{height:4px;border-radius:100px;overflow:hidden;background:rgba(255,255,255,.06);margin-top:4px;}
-.vault-strength-fill{height:100%;border-radius:100px;}
+/* [GO NETTOYAGE · 18/10/2026] styles v89 COFFRE-FORT (.vault-*) retirés avec leur bloc (06) */
 
 
 /* v90 MODE BUNKER */
@@ -1617,7 +1586,7 @@ function _buildReportHTML() {
   </div>
   <div class="kpi ${totalPnl>=0?'good':'bad'}">
     <span class="kpi-val">${totalPnl>=0?'+':''}$${totalPnl.toFixed(2)}</span>
-    <span class="kpi-lbl">P&L brut des ${n} trades gardés</span>
+    <span class="kpi-lbl">P&L brut des ${n} trades gardés${nUrg ? ` (dont ${nUrg} fermeture(s) d'urgence, hors compteurs par paire)` : ''}</span>
   </div>
   <div class="kpi ice">
     <span class="kpi-val">${wr}%</span>
@@ -1700,6 +1669,7 @@ function renderPdfReportSection() {
 
   const allTrades = _outilsClosedTrades();
   const n      = allTrades.length;
+  const nUrg   = allTrades.filter(t=>t.urgence).length;   // [GO NETTOYAGE · 18/10/2026] (ETAT n° 39)
   const totalPnl = allTrades.reduce((s,t)=>s+(t.pnlUsdt||0),0);
   const netMode  = Number((S.fees||{}).totalPnlNet)||0;
   const wr     = n>0 ? Math.round(allTrades.filter(t=>t.pnlUsdt>0).length/n*100) : 0;
@@ -1716,7 +1686,7 @@ function renderPdfReportSection() {
 
       <div class="rp-section-lbl">Aperçu du rapport</div>
       <div class="rp-preview-card">
-        <div class="rp-preview-row"><span style="color:var(--t3);">Trades gardés (dernières clôtures par paire)</span><span style="font-weight:700;">${n}</span></div>
+        <div class="rp-preview-row"><span style="color:var(--t3);">Trades gardés (dernières clôtures par paire)</span><span style="font-weight:700;">${n}${nUrg ? ` · dont ${nUrg} urgence` : ''}</span></div>
         <div class="rp-preview-row"><span style="color:var(--t3);">P&L net depuis le début</span><span style="font-weight:700;color:${netMode>=0?'var(--up)':'var(--down)'};">${netMode>=0?'+':''}$${netMode.toFixed(2)}</span></div>
         <div class="rp-preview-row"><span style="color:var(--t3);">P&L brut des trades gardés</span><span style="font-weight:700;color:${totalPnl>=0?'var(--up)':'var(--down)'};">${totalPnl>=0?'+':''}$${totalPnl.toFixed(2)}</span></div>
         <div class="rp-preview-row"><span style="color:var(--t3);">Win Rate</span><span style="font-weight:700;color:${wr>=55?'var(--up)':'var(--down)'};">${wr}%</span></div>
@@ -1793,7 +1763,7 @@ function buildExcelData() {
       ['Caisse libre', _xlCell(S.cashAccount,'usd'), ''],
       ['Mode', _outilsModeName(S.tradingMode), ''],
       ['','',''],
-      ['Trades gardés', n, "l'historique ne garde que les dernières clôtures de chaque paire"],
+      ['Trades gardés', n, "l'historique ne garde que les dernières clôtures de chaque paire" + (allTrades.some(t=>t.urgence) ? " · dont " + allTrades.filter(t=>t.urgence).length + " fermeture(s) d'urgence" : '')],   // [GO NETTOYAGE · 18/10/2026] (ETAT n° 39)
       ['Trades gagnants', wins.length, ''],
       ['Trades perdants', losses.length, ''],
       ['Win Rate', n>0?(wins.length/n*100).toFixed(1)+'%':'—', ''],
@@ -1832,7 +1802,7 @@ function buildExcelData() {
       isFinite(t.price) ? String(+t.price) : '',
       _xlCell(t.pnlUsdt,'num'),
       _xlCell(t.pnl,'num')+'%',
-      (t.pnlUsdt||0)>0?'WIN':'LOSS',
+      ((t.pnlUsdt||0)>0?'WIN':'LOSS') + (t.urgence ? ' · URGENCE' : ''),   // [GO NETTOYAGE · 18/10/2026] (ETAT n° 39) fermeture d'urgence marquée
     ])
   );
 
@@ -2042,7 +2012,7 @@ function _getWeekTrades(offset) {
   const allTrades = _outilsClosedTrades().filter(t => t.ts);
   let oldest = -Infinity;
   Object.entries(S.pairStates||{}).forEach(([pair, ps]) => {
-    const kept = ((ps && ps.trades) || []).filter(t => t && t.type === 'position' && t.ts);
+    const kept = ((ps && ps.trades) || []).filter(t => t && t.type === 'position' && t.ts);   // [GO NETTOYAGE · 18/10/2026] (n° 39) « position » seule : ps.totalTrades ne compte pas les urgences (02)
     if (kept.length && (Number(ps.totalTrades) || 0) > kept.length) oldest = Math.max(oldest, Math.min(...kept.map(t => t.ts)));
   });
 
@@ -2106,7 +2076,9 @@ function _analyzeWeek(trades, monday, sunday) {
     if(bestDay.pnl > 0) insights.push(`📅 Meilleur jour : ${dayNames[bestDay.idx]} (+$${bestDay.pnl.toFixed(2)})`);
   }
 
-  return { n, wins:wins.length, losses:losses.length, totalPnl, wr, avgWin, avgLoss,
+  const nUrg = trades.filter(t => t.urgence).length;   // [GO NETTOYAGE · 18/10/2026] (ETAT n° 39) fermetures d'urgence de la semaine, comptées et dites
+  if (nUrg) insights.push(`🆘 Dont ${nUrg} fermeture(s) d'urgence (comptées dans le P&L brut).`);
+  return { n, nUrg, wins:wins.length, losses:losses.length, totalPnl, wr, avgWin, avgLoss,
            fees, byPair, pairRanked, bestPair, worstPair, byDay, insights };
 }
 
@@ -2614,7 +2586,8 @@ window.renderBadgesSection = renderBadgesSection;
 // Il écrivait un compte fictif DANS le vrai état (compte du mode à l'écran, historique de chaque paire, fitness des 31 agents, régime forcé) et ne
 // gardait le vrai qu'en mémoire vive : le 11/10 à 18:33, un appui sur « Gestion de Crise » puis l'app passée en arrière-plan ont remplacé le compte EV
 // de Rams (1 085,46 $, 342 trades) par 880,20 $ et 47 trades. Le texte retiré est gardé hors de l'app comme témoin du banc
-// (banc-fixtures/mode-demo-retire-20261012.js) ; la réparation d'un compte qui porte encore ces faux chiffres : js/18-reparation-demo.js.
+// (banc-fixtures/mode-demo-retire-20261012.js). [GO NETTOYAGE · 18/10/2026] (ETAT G4 n° 22) la réparation de ces faux chiffres (module 18) est retirée :
+// plus aucun portefeuille ne les porte (backup du 18/10 21:37) — avant : « la réparation … : js/18-reparation-demo.js ».
 // ═══ v52 · DASHBOARD PUBLIC ═══
 // Génère une page HTML autonome partageble avec tes stats publiques
 // Champs visibles configurables (masquer portfolio réel, etc.)

@@ -124,7 +124,7 @@ T('S2e · textes 06 : plus aucune variable d\'état unique (_rvActive, _rvEndTim
   assert.strictEqual(codeStrict(fnSrc(s06, 'triggerAntiRevenge')).split(',m:_walletKey(S.tradingMode)});').length - 1, 2, 'la ligne du journal porte son mode aux deux sites');
   const cp = codeStrict(fnSrc(s02, 'closePosition'));
   assert.ok(/if \(!_urg && typeof checkAntiRevenge === 'function'\) \{\s*try \{ checkAntiRevenge\(realisedUsd, realisedPct, pos\.pair\); \} catch\(e\) \{\}\s*\}/.test(cp), 'closePosition : signal inconditionnel (sauf urgence, GO ARGENT 13/10 : 06 urgenceCloseAll ne juge rien, comme avant)');
-  assert.ok(/const _urg = !!\(arguments\[2\] && arguments\[2\]\.urgence\);/.test(cp), '_urg : seulement le 3e argument { urgence: true }');
+  assert.ok(/const _part = !!\(arguments\[2\] && arguments\[2\]\.partiel\);\s*const _urg = !!\(arguments\[2\] && arguments\[2\]\.urgence\) \|\| _part;/.test(cp), '_urg : seulement le 3e argument { urgence: true } ou { partiel: true }');   // [GO NETTOYAGE · 19/10/2026] (n° 55) + la sortie par paliers (05), qui ne juge rien non plus
   assert.ok(!cp.includes('_aaBehind') && !cp.includes('_behind && typeof checkAntiRevenge'), 'ancienne exception de l\'AA derrière');
 });
 

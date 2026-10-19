@@ -2278,7 +2278,13 @@ function _initAlerts() {
 
 // [GO ALERTES · 15/10/2026] « EV · » — le mode dont parlent ces alertes (celui à l'écran : checkPnlAlerts ne tourne que pour lui)
 function _alertModeLab() { return (({ sim: 'AA', paperReal: 'EV', real: 'RE' })[S.tradingMode] || '') + (S.tradingMode ? ' · ' : ''); }
-// Vérifier toutes les alertes (appelé après chaque trade et dans renderHome)
+// [GO NETTOYAGE · 18/10/2026] (ETAT n° 35) « déjà déclenchée » tenue PAR MODE : triggered = { sim, paperReal, real } — avant : un booléen commun aux 3 modes,
+// le premier mode au seuil consommait l'alerte des deux autres jusqu'à la remise à zéro de 24 h. Un ancien booléen true (mode inconnu) vaut pour les 3 ; false
+// (remise à zéro de 24 h, nouveau seuil, interrupteur) réarme les 3. Toujours affaire de la session : 09b1 n'écrit, 09b2 ne relit que « activée » et la valeur.
+function _alertMode() { return (typeof _walletKey === 'function') ? _walletKey(S.tradingMode) : (S.tradingMode || 'sim'); }
+function _alertFired(x) { return !!x && (x.triggered === true || (!!x.triggered && typeof x.triggered === 'object' && x.triggered[_alertMode()] === true)); }
+function _alertFire(x) { const t = (x.triggered && typeof x.triggered === 'object') ? x.triggered : (x.triggered === true ? { sim: true, paperReal: true, real: true } : {}); t[_alertMode()] = true; x.triggered = t; }
+// Vérifier toutes les alertes (appelé après chaque trade et dans renderHome) — [GO NETTOYAGE · 18/10/2026] (ETAT n° 35) drapeaux du mode à l'écran (_alertFired / _alertFire)
 function checkPnlAlerts() {
   _initAlerts();
   const a = S.pnlAlerts;
@@ -2295,35 +2301,35 @@ function checkPnlAlerts() {
   const totalT = S.totalTrades || 0;
 
   // Gain session
-  if(a.sessionGain.enabled && !a.sessionGain.triggered && pnlSession >= a.sessionGain.value) {
-    a.sessionGain.triggered = true;
+  if(a.sessionGain.enabled && !_alertFired(a.sessionGain) && pnlSession >= a.sessionGain.value) {
+    _alertFire(a.sessionGain);
     showMilestone('🎯', `Objectif session atteint ! +$${pnlSession.toFixed(2)}`, false, 4000);
     try { sendNotif('🎯 AURA — Objectif session !', `+$${pnlSession.toFixed(2)} en session`, '🎯', 'objectif-session'); } catch(e) {}
     try { if (typeof tgOnPnlGoal === 'function') tgOnPnlGoal(_alertModeLab() + 'Gain session ≥ $' + a.sessionGain.value + ' : +$' + pnlSession.toFixed(2) + ' depuis minuit'); } catch(e) {}   // [GO ALERTES · 15/10/2026]
   }
   // Perte session
-  if(a.sessionLoss.enabled && !a.sessionLoss.triggered && pnlSession <= a.sessionLoss.value) {
-    a.sessionLoss.triggered = true;
+  if(a.sessionLoss.enabled && !_alertFired(a.sessionLoss) && pnlSession <= a.sessionLoss.value) {
+    _alertFire(a.sessionLoss);
     showMilestone('⚠', `Alerte perte session : $${pnlSession.toFixed(2)}`, true, 4000);
     try { sendNotif('⚠️ AURA — Perte session', `$${pnlSession.toFixed(2)} — surveille tes positions`, '⚠️', 'perte-session'); } catch(e) {}
   }
   // Gain journalier
   const pnl24h = (S.pnl24h || 0);
-  if(a.dailyGain.enabled && !a.dailyGain.triggered && pnl24h >= a.dailyGain.value) {
-    a.dailyGain.triggered = true;
+  if(a.dailyGain.enabled && !_alertFired(a.dailyGain) && pnl24h >= a.dailyGain.value) {
+    _alertFire(a.dailyGain);
     showMilestone('💰', `Excellent ! +$${pnl24h.toFixed(2)} aujourd'hui !`, false, 4000);
     try { sendNotif('💰 AURA — Grande journée !', `+$${pnl24h.toFixed(2)} en 24h`, '💰', 'objectif-jour'); } catch(e) {}
     try { if (typeof tgOnPnlGoal === 'function') tgOnPnlGoal(_alertModeLab() + 'Gain journalier ≥ $' + a.dailyGain.value + ' : +$' + pnl24h.toFixed(2)); } catch(e) {}   // [GO ALERTES · 15/10/2026]
   }
   // Perte journalière
-  if(a.dailyLoss.enabled && !a.dailyLoss.triggered && pnl24h <= a.dailyLoss.value) {
-    a.dailyLoss.triggered = true;
+  if(a.dailyLoss.enabled && !_alertFired(a.dailyLoss) && pnl24h <= a.dailyLoss.value) {
+    _alertFire(a.dailyLoss);
     showMilestone('🚨', `Alerte : -$${Math.abs(pnl24h).toFixed(2)} aujourd'hui`, true, 4000);
     try { sendNotif('🚨 AURA — Pertes importantes', `-$${Math.abs(pnl24h).toFixed(2)} en 24h`, '🚨', 'perte-jour'); } catch(e) {}
   }
   // Drawdown
-  if(a.drawdown.enabled && !a.drawdown.triggered && Math.abs(dd*100) >= a.drawdown.value) {
-    a.drawdown.triggered = true;
+  if(a.drawdown.enabled && !_alertFired(a.drawdown) && Math.abs(dd*100) >= a.drawdown.value) {
+    _alertFire(a.drawdown);
     showMilestone('📉', `Drawdown ${(dd*100).toFixed(1)}% — attention`, true, 4000);
     try { notifDrawdown(dd*100); } catch(e) {}
   }
@@ -2332,13 +2338,13 @@ function checkPnlAlerts() {
     const streak = ps.streak || 0;
     return streak > max ? streak : max;
   }, 0);
-  if(a.winStreak.enabled && !a.winStreak.triggered && ws >= a.winStreak.value) {
-    a.winStreak.triggered = true;
+  if(a.winStreak.enabled && !_alertFired(a.winStreak) && ws >= a.winStreak.value) {
+    _alertFire(a.winStreak);
     showMilestone('🔥', `Série de ${ws} victoires ! En feu !`, false, 4000);
   }
   // Trades count
-  if(a.tradeCount.enabled && !a.tradeCount.triggered && totalT >= a.tradeCount.value) {
-    a.tradeCount.triggered = true;
+  if(a.tradeCount.enabled && !_alertFired(a.tradeCount) && totalT >= a.tradeCount.value) {
+    _alertFire(a.tradeCount);
     showMilestone('📊', `${totalT} trades atteints ! Expérimenté !`, false, 4000);
   }
 
@@ -2493,6 +2499,7 @@ function renderAlertsSection() {
     { key:'tradeCount',  emoji:'📊', label:'Nb Trades',       sub:'Alerte à N trades complétés',       loss:false },
   ];
 
+  // [GO NETTOYAGE · 18/10/2026] (ETAT n° 35) « ✅ Déclenchée » = pour le mode affiché (_alertFired) ; avant : cfg.triggered, commun aux 3 modes
   const _html = `
     <!-- Alertes P&L -->
     <div class="alert-card">
@@ -2505,7 +2512,7 @@ function renderAlertsSection() {
             <span>${d.emoji}</span>
             <div>
               <span class="alert-row-label">${d.label}</span>
-              <span class="alert-row-sub">${d.sub}${cfg.triggered?' · ✅ Déclenchée':''}</span>
+              <span class="alert-row-sub">${d.sub}${_alertFired(cfg)?' · ✅ Déclenchée':''}</span>
             </div>
           </div>
           <div class="alert-row-right">

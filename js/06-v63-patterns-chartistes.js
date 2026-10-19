@@ -770,18 +770,8 @@ function urgencePauseBot() {
 }
 window.urgencePauseBot = urgencePauseBot;
 
-function urgenceReduceStake() {
-  const prev = S.stakeConfig?.defaultStake || S.stakeUsdt || 20;
-  const reduced = Math.max(1, Math.floor(prev*0.1));
-  if(S.stakeConfig) S.stakeConfig.defaultStake = reduced;
-  S.stakeUsdt = reduced;
-  // Réduire aussi le stake de chaque agent
-  (S.agents||[]).forEach(a=>{ if(a.stake) a.stake = Math.max(1, a.stake*0.1); });
-  _urgAppendLog(`📉 Mises réduites: $${prev} → $${reduced}/trade`);
-  _urgAppendLog('🤖 Stakes agents réduits à 10%');
-  showToast(`📉 Mises réduites à $${reduced}/trade`, 3000, 'warn');
-}
-window.urgenceReduceStake = urgenceReduceStake;
+// [GO NETTOYAGE · 18/10/2026] (ETAT G4, go outils) urgenceReduceStake retiré : aucun appelant (bouton « Mises à 10 % » ôté le 14/10) — avant : S.stakeConfig.defaultStake,
+// S.stakeUsdt et a.stake ramenés à 10 % ici.
 
 // [GO OUTILS · 18/10/2026] ETAT n° 33 · « 💾 Backup d'urgence » : avant, JSON.stringify(S) ENTIER poussé par un lien blob — l'app Android (WebView)
 // ne télécharge pas un lien blob (09b3 _shareOrDownloadJSON, en-tête) et le panneau n'affichait AUCUN retour (#urgLog n'existe pas) : il annonçait
@@ -1184,310 +1174,9 @@ function renderPriceAlertSection() {
     </div>`;
 }
 window.renderPriceAlertSection = renderPriceAlertSection;
-// ═══ v70 · AUTO-BACKUP QUOTIDIEN ═══
-// Sauvegarde automatique du state à heure fixe
-// 3 slots rotatifs (J, J-1, J-2) + backup manuel immédiat
-// Notification toast quand le backup s'effectue
-
-const _AB_KEY_PREFIX = 'aura_autobackup_';
-const _AB_SLOTS      = ['daily_0','daily_1','daily_2'];
-let _abTimer         = null;
-
-function _abInit() {
-  if(!S.autoBackup) S.autoBackup = {
-    enabled:   true,
-    hour:      3,      // 3h du matin par défaut
-    lastRun:   null,
-    runCount:  0,
-  };
-  // Purge immédiate des anciens slots de backup localStorage (~1,8 Mo chacun) :
-  // ils saturaient le quota. Le backup complet vit dans l'IndexedDB + Guardian.
-  try { _AB_SLOTS.forEach(s => localStorage.removeItem(_AB_KEY_PREFIX + s)); } catch(_) {}
-}
-
-// Vérifier si un backup automatique doit s'exécuter
-function _abCheck() {
-  // Daily backups localStorage DÉSACTIVÉS : le backup est désormais géré par
-  // Guardian (IndexedDB toutes les 3h + Google Drive). Ces 3 slots LS pesaient
-  // ~4,5 Mo et causaient le QuotaExceededError + ralentissaient les saves.
-  // On purge les anciens une seule fois pour libérer le localStorage.
-  try {
-    ['daily_0','daily_1','daily_2'].forEach(s => localStorage.removeItem(_AB_KEY_PREFIX + s));
-  } catch(_) {}
-}
-
-// Exécuter le backup
-function _abExecute(mode) {
-  _abInit();
-  try {
-    // v117 FIX "Backup échoué" · cause : cette fonction clonait S EN ENTIER
-    // (...JSON.parse(JSON.stringify(S)) ≈ 2,3 Mo) et en gardait 3 copies dans
-    // localStorage (3 slots) ≈ 7 Mo → dépassement du quota (~5 Mo) → exception.
-    // Correctif : (1) on part de buildSnapshot() — version allégée + filtrée par
-    // mode (~1,5 Mo) quand elle est dispo ; (2) écriture tolérante au quota :
-    // si plein, on purge le slot le plus ancien et on réessaie, au lieu d'échouer.
-    // Le backup ne stocke PLUS de copies complètes en localStorage : 3 slots
-    // (~1,8 Mo chacun) saturaient le quota (~5 Mo) et causaient QuotaExceededError.
-    // La persistance complète est déjà assurée par saveState() (IndexedDB) + Guardian
-    // (IDB toutes les 3h) + Drive. On purge donc les anciens slots LS définitivement,
-    // et le backup déclenche simplement une sauvegarde IDB via saveState.
-    try { _AB_SLOTS.forEach(s => localStorage.removeItem(_AB_KEY_PREFIX + s)); } catch(_) {}
-    if (typeof saveState === 'function') { try { saveState(true); } catch(_) {} }
-
-    const _abSizeKo = (typeof buildSnapshot === 'function')
-      ? Math.round(JSON.stringify(buildSnapshot()).length / 1024) : 0;
-    S.autoBackup.lastRun = new Date().toDateString();
-    S.autoBackup.runCount = (S.autoBackup.runCount||0) + 1;
-    S.autoBackup.lastSize = _abSizeKo;
-
-    if(mode==='auto') {
-      showToast('💾 Auto-backup effectué · $'+((S.portfolio||0).toFixed(0)), 3000, 'win');
-    }
-    S.chainLog = S.chainLog||[];
-    S.chainLog.push({icon:'💾',desc:`Auto-backup ${mode} · $${(S.portfolio||0).toFixed(2)} · ${S.totalTrades||0} trades`,hash:Math.random().toString(36).slice(2,8),time:new Date().toLocaleTimeString()});
-    renderAutoBackupSection();
-  } catch(e) {
-    showToast('⚠ Backup échoué: '+e.message, 2000, 'warn');
-    // ════════════════════════════════════════════════════════════
-    // v117 DIAG TEMPORAIRE · on capture l'erreur dans une variable
-    // mémoire (fiable, pas de dépendance au quota). Un timer plus bas
-    // ré-affiche le panneau toutes les 3 s tant qu'il n'est pas visible
-    // — robuste même si le rendu de l'appli efface le panneau au démarrage.
-    // → à retirer une fois la vraie cause connue.
-    // ════════════════════════════════════════════════════════════
-    try {
-      var _d = '=== DIAGNOSTIC BACKUP ECHOUE ===\n';
-      _d += 'Type    : ' + (e && e.name ? e.name : '?') + '\n';
-      _d += 'Message : ' + (e && e.message ? e.message : String(e)) + '\n\n';
-      _d += 'Slots auto-backup :\n';
-      for (var _i = 0; _i < _AB_SLOTS.length; _i++) {
-        var _v = localStorage.getItem(_AB_KEY_PREFIX + _AB_SLOTS[_i]);
-        _d += '  ' + _AB_SLOTS[_i] + ' = ' + (_v ? Math.round(_v.length/1024) + ' Ko' : 'vide') + '\n';
-      }
-      var _tot = 0, _all = [];
-      for (var _j = 0; _j < localStorage.length; _j++) {
-        var _k = localStorage.key(_j);
-        var _sz = (localStorage.getItem(_k) || '').length;
-        _tot += _sz; _all.push([_k, _sz]);
-      }
-      _all.sort(function(a, b){ return b[1] - a[1]; });
-      _d += '\nlocalStorage total : ' + Math.round(_tot/1024) + ' Ko / ~5000 Ko max\n';
-      _d += 'Plus grosses cles :\n';
-      for (var _m = 0; _m < Math.min(8, _all.length); _m++) {
-        _d += '  ' + _all[_m][0] + ' : ' + Math.round(_all[_m][1]/1024) + ' Ko\n';
-      }
-      window._auraLastBackupError = _d;
-      try { localStorage.setItem('_aura_lastBackupError', _d); } catch(_) {}
-      if (typeof _abShowDiagOverlay === 'function') _abShowDiagOverlay();
-    } catch(_) {}
-  }
-}
-
-function runManualBackup() {
-  _abExecute('manual');
-  showToast('💾 Backup manuel effectué', 2000, 'win');
-}
-window.runManualBackup = runManualBackup;
-
-function restoreSlot(slotKey) {
-  const raw = localStorage.getItem(_AB_KEY_PREFIX + slotKey);
-  if(!raw) { showToast('⚠ Slot vide', 1500, 'warn'); return; }
-  try {
-    const snap = JSON.parse(raw);
-    const meta = snap._abMeta;
-    if(!confirm(`Restaurer le backup du ${meta?.date||'?'} ?\n$${(meta?.portfolio||0).toFixed(2)} · ${meta?.totalTrades||0} trades\n\nLes données actuelles seront écrasées.`)) return;
-    delete snap._abMeta;
-    Object.assign(S, snap);
-    showToast('✅ Backup restauré · $'+((S.portfolio||0).toFixed(2)), 3000, 'win');
-    try { renderHome(); } catch(e) {}
-    renderAutoBackupSection();
-  } catch(e) { showToast('⚠ Erreur restauration', 2000, 'warn'); }
-}
-window.restoreSlot = restoreSlot;
-
-function downloadSlot(slotKey) {
-  const raw = localStorage.getItem(_AB_KEY_PREFIX + slotKey);
-  if(!raw) { showToast('⚠ Slot vide', 1500, 'warn'); return; }
-  const meta = JSON.parse(raw)._abMeta;
-  const ts   = (meta?.date||'backup').replace(/[\/\s:]/g,'-');
-  const blob = new Blob([raw],{type:'application/json'});
-  const url  = URL.createObjectURL(blob);
-  const a    = document.createElement('a');
-  a.href=url; a.download=`aura_autobackup_${ts}.json`;
-  document.body.appendChild(a); a.click();
-  document.body.removeChild(a); URL.revokeObjectURL(url);
-  showToast('📥 Backup téléchargé', 2000, 'win');
-}
-window.downloadSlot = downloadSlot;
-
-function toggleAutoBackup() {
-  _abInit();
-  S.autoBackup.enabled = !S.autoBackup.enabled;
-  if(S.autoBackup.enabled) {
-    showToast('💾 Auto-backup activé', 1500, 'win');
-  } else {
-    showToast('⏸ Auto-backup désactivé', 1500, 'user');
-  }
-  renderAutoBackupSection();
-}
-window.toggleAutoBackup = toggleAutoBackup;
-
-function setAbHour(h) {
-  _abInit();
-  S.autoBackup.hour = parseInt(h);
-  renderAutoBackupSection();
-}
-window.setAbHour = setAbHour;
-
-// Purge unique des anciens daily backups localStorage au démarrage
-// (le backup est géré par Guardian : IDB toutes les 3h + Drive)
-if(_abTimer) clearInterval(_abTimer);
-_abCheck();
-
-// ════════════════════════════════════════════════════════════
-// v117 DIAG TEMPORAIRE · panneau de diagnostic robuste.
-// L'erreur backup est capturée dans window._auraLastBackupError ;
-// ce timer ré-affiche le panneau toutes les 3 s tant qu'il n'est pas
-// visible — même si le rendu de l'appli l'a effacé au démarrage.
-// Le panneau est attaché à <html> pour survivre aux reconstructions
-// de <body>. → à retirer entièrement une fois la vraie cause connue.
-// ════════════════════════════════════════════════════════════
-function _abShowDiagOverlay() {
-  try {
-    if (document.getElementById('_abDiagOverlay')) return;
-    var _d = window._auraLastBackupError;
-    if (!_d) { try { _d = localStorage.getItem('_aura_lastBackupError'); } catch(_) {} }
-    if (!_d) return;
-    var _root = document.documentElement || document.body;
-    if (!_root) return;
-    var _ov = document.createElement('div');
-    _ov.id = '_abDiagOverlay';
-    _ov.style.cssText = 'position:fixed;inset:0;z-index:2147483647;background:rgba(0,0,0,.95);display:flex;flex-direction:column;padding:16px;box-sizing:border-box;font-family:monospace';
-    var _ttl = document.createElement('div');
-    _ttl.style.cssText = 'color:#fff;font-size:15px;font-weight:bold;margin-bottom:8px;line-height:1.3';
-    _ttl.textContent = '🩺 DIAGNOSTIC — appuie sur COPIER puis colle le texte dans le chat';
-    var _ta = document.createElement('textarea');
-    _ta.readOnly = true; _ta.value = _d;
-    _ta.style.cssText = 'flex:1;width:100%;background:#0a0a0a;color:#3f6;border:1px solid #444;font-size:13px;padding:10px;box-sizing:border-box;border-radius:6px;resize:none';
-    var _row = document.createElement('div');
-    _row.style.cssText = 'display:flex;gap:8px;margin-top:10px';
-    var _cp = document.createElement('button');
-    _cp.textContent = '📋 COPIER';
-    _cp.style.cssText = 'flex:1;padding:14px;font-size:15px;background:#2563eb;color:#fff;border:none;border-radius:8px';
-    _cp.onclick = function() {
-      var _ok = false;
-      try { _ta.focus(); _ta.select(); _ok = document.execCommand('copy'); } catch(_) {}
-      try { if (navigator.clipboard) { navigator.clipboard.writeText(_d); _ok = true; } } catch(_) {}
-      _cp.textContent = _ok ? '✅ COPIÉ' : '⚠ sélectionne le texte à la main';
-    };
-    var _cl = document.createElement('button');
-    _cl.textContent = '✕';
-    _cl.style.cssText = 'padding:14px 18px;font-size:15px;background:#444;color:#fff;border:none;border-radius:8px';
-    _cl.onclick = function() {
-      _ov.remove();
-      window._auraLastBackupError = null;
-      try { localStorage.removeItem('_aura_lastBackupError'); } catch(_) {}
-      if (window._abDiagTimer) { clearInterval(window._abDiagTimer); window._abDiagTimer = null; }
-    };
-    _row.appendChild(_cp); _row.appendChild(_cl);
-    _ov.appendChild(_ttl); _ov.appendChild(_ta); _ov.appendChild(_row);
-    _root.appendChild(_ov);
-  } catch(_) {}
-}
-if (window._abDiagTimer) clearInterval(window._abDiagTimer);
-window._abDiagTimer = setInterval(function() {
-  try {
-    if (document.getElementById('_abDiagOverlay')) return;
-    var _has = window._auraLastBackupError;
-    if (!_has) { try { _has = localStorage.getItem('_aura_lastBackupError'); } catch(_) {} }
-    if (_has) _abShowDiagOverlay();
-  } catch(_) {}
-}, 3000);
-
-function renderAutoBackupSection() {
-  const el = document.getElementById('autoBackupSection');
-  if(!el) return;
-  _abInit();
-  const cfg  = S.autoBackup;
-  const slots = _AB_SLOTS.map(key=>{
-    const raw = localStorage.getItem(_AB_KEY_PREFIX+key);
-    if(!raw) return {key, empty:true};
-    try {
-      const meta = JSON.parse(raw)._abMeta;
-      return {key, empty:false, meta, size:Math.round(raw.length/1024)};
-    } catch(e) { return {key, empty:true}; }
-  });
-  const slotLabels = ['Aujourd\'hui','Hier','Avant-hier'];
-  const filled = slots.filter(s=>!s.empty).length;
-
-  // Prochaine heure de backup
-  const now  = new Date();
-  const nextH= new Date(); nextH.setHours(cfg.hour||3,0,0,0);
-  if(nextH<=now) nextH.setDate(nextH.getDate()+1);
-  const hoursLeft = Math.round((nextH-now)/3600000);
-
-  el.innerHTML = `
-    <div class="ab-section">
-      <div class="ab-title">💾 Auto-Backup Quotidien
-        <span style="font-size:8px;color:var(--t3);font-weight:400;">${filled}/3 slots</span>
-      </div>
-
-      <!-- Toggle auto -->
-      <div class="ab-toggle-row">
-        <div style="flex:1;">
-          <div style="font-size:11px;font-weight:700;color:var(--t1);">Backup automatique</div>
-          <div style="font-size:8px;color:var(--t3);margin-top:1px;">
-            ${cfg.enabled?`Prochain dans ~${hoursLeft}h · ${cfg.runCount||0} backups effectués`:'Désactivé'}
-          </div>
-        </div>
-        <button class="ab-toggle ${cfg.enabled?'on':''}" onclick="toggleAutoBackup()"></button>
-      </div>
-
-      <!-- Heure du backup -->
-      ${cfg.enabled?`
-      <div style="display:flex;align-items:center;gap:8px;padding:6px 10px;background:var(--s2);border-radius:7px;margin-bottom:8px;">
-        <span style="font-size:10px;color:var(--t2);">Heure quotidienne</span>
-        <select onchange="setAbHour(this.value)"
-          style="flex:1;background:var(--s3);border:1px solid var(--border);border-radius:5px;color:var(--t1);font-size:10px;padding:4px 6px;font-family:inherit;">
-          ${Array.from({length:24},(_,i)=>`<option value="${i}" ${i===(cfg.hour||3)?'selected':''}>${String(i).padStart(2,'0')}:00</option>`).join('')}
-        </select>
-      </div>`:''}
-
-      <!-- Slots -->
-      <div style="font-size:9px;color:var(--t3);margin-bottom:5px;">Historique des backups (3 derniers jours)</div>
-      ${slots.map((s,i)=>`
-        <div class="ab-slot">
-          <span class="ab-slot-icon">${s.empty?'🔲':'💾'}</span>
-          <div class="ab-slot-body">
-            <div class="ab-slot-name">${slotLabels[i]}</div>
-            <div class="ab-slot-meta">
-              ${s.empty?'Aucun backup':`${s.meta?.date||'—'} · $${(s.meta?.portfolio||0).toFixed(0)} · ${s.meta?.trades||s.meta?.totalTrades||0} trades · ${s.size||0} Ko`}
-            </div>
-            ${!s.empty?`
-            <div style="height:3px;background:rgba(255,255,255,.06);border-radius:100px;overflow:hidden;margin-top:4px;">
-              <div style="height:100%;width:${Math.min(100,((s.size||0)/500)*100)}%;background:var(--ice);border-radius:100px;"></div>
-            </div>`:''}
-          </div>
-          ${!s.empty?`
-          <div style="display:flex;flex-direction:column;gap:4px;">
-            <button onclick="restoreSlot('${s.key}')" style="font-size:8px;padding:3px 7px;border-radius:5px;background:rgba(0,232,122,.1);border:1px solid rgba(0,232,122,.2);color:var(--up);cursor:pointer;font-family:inherit;">↩ Restaurer</button>
-            <button onclick="downloadSlot('${s.key}')" style="font-size:8px;padding:3px 7px;border-radius:5px;background:rgba(56,212,245,.08);border:1px solid rgba(56,212,245,.2);color:var(--ice);cursor:pointer;font-family:inherit;">📥 DL</button>
-          </div>`:''}
-        </div>`).join('')}
-
-      <!-- Backup manuel -->
-      <button class="ab-btn" onclick="runManualBackup()"
-        style="margin-top:8px;background:rgba(56,212,245,.08);border-color:rgba(56,212,245,.25);color:var(--ice);">
-        💾 Backup manuel maintenant
-      </button>
-
-      <div style="font-size:8px;color:var(--t3);text-align:center;line-height:1.5;margin-top:6px;">
-        Stocké dans localStorage · 3 slots rotatifs · Téléchargeable en JSON<br>
-        Stockage ≈ ${Math.round(JSON.stringify(S).length/1024)} Ko actuellement
-      </div>
-    </div>`;
-}
-window.renderAutoBackupSection = renderAutoBackupSection;
+// [GO NETTOYAGE · 18/10/2026] (ETAT G4, go outils) v70 « Auto-backup » retiré en entier, sans appelant depuis go outils : renderAutoBackupSection, restoreSlot,
+// downloadSlot, runManualBackup, toggleAutoBackup, setAbHour, _abInit / _abCheck / _abExecute, et le minuteur « v117 DIAG TEMPORAIRE » (_abDiagTimer,
+// toutes les 3 s) avec son panneau _abShowDiagOverlay. Avant : au chargement, purge des clés aura_autobackup_daily_* (jamais écrites) et minuteur de 3 s.
 // ═══ v71 · CORRÉLATION LIVE BTC IMPACT ═══
 // Analyse en temps réel : si BTC bouge de X%, comment réagissent les autres paires ?
 // Calcule le beta de chaque paire par rapport à BTC
@@ -2113,13 +1802,24 @@ function _runCalc() {
   const kelly = Math.max(0, kellyRaw);
   // (relecture adverse du 18/10) S.winTrades compte les trades gagnants AVANT frais : on lit aussi le net réel du mode (02 recordFees)
   const netMode = Number((S.fees||{}).totalPnlNet)||0;
+  // [GO NETTOYAGE · 18/10/2026] (ETAT n° 39) Kelly APRÈS frais : WR net = clôtures gagnantes après frais et impôt provisionné du registre des frais du mode
+  // (02 recordFees, fees.feeLog : ses dernières clôtures), R/R net = gain net au TP ÷ perte nette au SL de ce calcul. Même règle que le WR avant frais (plus
+  // de 10 clôtures), sinon null = « non calculable ». Seul ce Kelly peut donner « ✅ » — avant : « ✅ » sur le WR AVANT frais dès que le net du mode était ≥ 0.
+  const _fl = (((S.fees||{}).feeLog)||[]).filter(f => f && isFinite(f.pnlNet));
+  const nNet = _fl.length;
+  const wrNet = nNet>10 ? _fl.filter(f => Number(f.pnlNet) > 0).length / nNet : null;
+  const rrNet = netSL < 0 ? netTP / Math.abs(netSL) : 0;
+  const kellyNet = wrNet === null ? null : (rrNet > 0 ? (wrNet - (1-wrNet)/rrNet)*100 : -Infinity);
+  // [GO NETTOYAGE · 19/10/2026] (relecture du 19/10) le risque comparé au Kelly APRÈS frais est la perte RÉELLE au SL (frais compris) en % du capital — avant :
+  // le risque saisi, avant frais (ex. Kelly net 1,00 %, perte réelle au SL 1,25 % → « ✅ »)
+  const riskNetPct = (cap > 0 && netSL < 0) ? Math.abs(netSL) / cap * 100 : _CALC.riskPct;
 
   // Niveau de risque (feu de signalisation)
   const riskLevel = riskPct>=0.05?'danger':riskPct>=0.03?'warn':riskPct>=0.01?'ok':'safe';
   const riskCol   = riskLevel==='danger'?'var(--down)':riskLevel==='warn'?'var(--gold)':riskLevel==='ok'?'#84cc16':'var(--up)';
 
   return { cap, riskUsd, stakeUsd, stakeLev, exposure, qty, sl, tp,
-           pnlTP, pnlSL, netTP, netSL, feesUsd, rr, capPct, kelly, kellyRaw, wr, wrReal, nTrades:_nT, netMode,
+           pnlTP, pnlSL, netTP, netSL, feesUsd, rr, capPct, kelly, kellyRaw, wr, wrReal, nTrades:_nT, netMode, wrNet, rrNet, kellyNet, nNet, riskNetPct,
            riskPct:_CALC.riskPct, slPct:_CALC.slPct, tpPct:_CALC.tpPct,
            lev, entry, riskLevel, riskCol, fee:_CALC.feeRate };
 }
@@ -2136,6 +1836,7 @@ function renderCalcSection() {
   const dec  = PAIRS[_CALC.pair]?.dec>=4?PAIRS[_CALC.pair].dec:2;
   const col  = PAIRS[_CALC.pair]?.color||'var(--ice)';
 
+  // [GO NETTOYAGE · 18/10/2026] (ETAT n° 39) conseil Kelly : « ✅ » seulement sur le Kelly APRÈS frais (_runCalc kellyNet), « non calculable » sinon — avant : « ✅ … (WR avant frais) »
   el.innerHTML = `
     <div class="calc-section">
       <div class="calc-title">📐 Calculateur de Position</div>
@@ -2212,7 +1913,7 @@ function renderCalcSection() {
         <div class="calc-result-row"><span style="color:var(--t2);">Si TP atteint (net)</span><span class="calc-result-val" style="color:${r.netTP>=0?'var(--up)':'var(--down)'};">${r.netTP>=0?'+':'−'}$${Math.abs(r.netTP).toFixed(2)}</span></div>
         <div class="calc-result-row"><span style="color:var(--t2);">Si SL atteint (net)</span><span class="calc-result-val" style="color:var(--down);">−$${Math.abs(r.netSL).toFixed(2)}</span></div>
         <div class="calc-result-row"><span style="color:var(--t1);font-weight:700;">R/R Ratio</span><span class="calc-result-val" style="color:${r.rr>=2?'var(--up)':r.rr>=1?'var(--gold)':'var(--down)'};">${r.rr.toFixed(2)} ${r.rr>=2?'✅':r.rr>=1?'⚠️':'❌'}</span></div>
-        <div class="calc-result-row"><span style="color:var(--t2);">Kelly sizing</span><span class="calc-result-val" style="color:var(--pur);">${r.kelly.toFixed(1)}%</span></div>
+        <div class="calc-result-row"><span style="color:var(--t2);">Kelly sizing (WR avant frais)</span><span class="calc-result-val" style="color:var(--pur);">${r.kelly.toFixed(1)}%</span></div>
 
         <!-- Barre risque -->
         <div style="font-size:8px;color:var(--t3);margin-top:6px;margin-bottom:2px;">Mise immobilisée vs capital (${r.capPct.toFixed(1)}%)</div>
@@ -2224,7 +1925,11 @@ function renderCalcSection() {
       <!-- Conseil Kelly -->
       <div style="font-size:9px;color:var(--t2);background:rgba(167,139,250,.06);border:1px solid rgba(167,139,250,.15);border-radius:8px;padding:8px 10px;line-height:1.5;">
         💡 <strong>Kelly Criterion :</strong> ${r.wrReal?`WR ${_modeLab(S.tradingMode)} AVANT frais ${Math.round(r.wr*100)}% (${r.nTrades} trades)`:`WR supposé 50 % (${r.nTrades} trade(s) ${_modeLab(S.tradingMode)} : trop peu pour le WR réel)`} et R/R ${r.rr.toFixed(2)} → part optimale = <strong style="color:var(--pur);">${r.kelly.toFixed(1)}%</strong> du capital.
-        ${r.kellyRaw <= 0 ? `<br>⚠️ Espérance négative à ce WR et ce R/R : Kelly dit de ne PAS prendre ce trade.` : (r.netMode < 0 ? `<br>⚠️ Ce WR est compté AVANT frais ; après frais, le mode ${_modeLab(S.tradingMode)} perd (net ${r.netMode.toFixed(2)} $) : cette part Kelly est surestimée, ne t'y fie pas.` : (r.riskPct > r.kelly ? `<br>⚠️ Tu risques ${(r.riskPct-r.kelly).toFixed(1)}% de plus que Kelly.` : `<br>✅ Ton risque est sous la part Kelly (WR avant frais).`))}
+        ${r.kellyRaw <= 0 ? `<br>⚠️ Espérance négative à ce WR et ce R/R : Kelly dit de ne PAS prendre ce trade.` : (r.netMode < 0 ? `<br>⚠️ Ce WR est compté AVANT frais ; après frais, le mode ${_modeLab(S.tradingMode)} perd (net ${r.netMode.toFixed(2)} $) : cette part Kelly est surestimée, ne t'y fie pas.`
+          : (r.kellyNet === null ? `<br>ℹ️ Kelly APRÈS frais non calculable (${r.nNet} clôture(s) au registre des frais du mode ${_modeLab(S.tradingMode)} : il en faut plus de 10) — pas de ✅ sur un WR avant frais.`
+          : (r.kellyNet <= 0 ? `<br>⚠️ APRÈS frais (WR net ${Math.round(r.wrNet*100)}% sur ${r.nNet} clôtures, R/R net ${r.rrNet.toFixed(2)}) l'espérance est négative : Kelly dit de ne PAS prendre ce trade.`
+          : (r.riskNetPct > r.kellyNet ? `<br>⚠️ Ta perte réelle au SL (${r.riskNetPct.toFixed(2)}% du capital, frais compris) dépasse Kelly APRÈS frais de ${(r.riskNetPct-r.kellyNet).toFixed(2)}% (${r.kellyNet.toFixed(2)}% : WR net ${Math.round(r.wrNet*100)}% sur ${r.nNet} clôtures hors urgences, R/R net ${r.rrNet.toFixed(2)}).`
+          : `<br>✅ Ta perte réelle au SL (${r.riskNetPct.toFixed(2)}%, frais compris) est sous la part Kelly APRÈS frais (${r.kellyNet.toFixed(2)}% : WR net ${Math.round(r.wrNet*100)}% sur ${r.nNet} clôtures hors urgences, R/R net ${r.rrNet.toFixed(2)}).`))))}
         ${r.stakeUsd > r.cap ? `<br>⚠️ Mise ($${r.stakeUsd.toFixed(2)}) supérieure au capital : réduis le risque, élargis le SL ou monte le levier.` : ''}
       </div>
     </div>`;
@@ -2281,19 +1986,7 @@ function loadDiffBackup() {
 }
 window.loadDiffBackup = loadDiffBackup;
 
-function loadDiffFromAutoSlot(slotIdx) {
-  const key = `aura_autobackup_${['daily_0','daily_1','daily_2'][slotIdx]}`;
-  const raw = localStorage.getItem(key);
-  if(!raw) { showToast('⚠ Slot vide', 1500, 'warn'); return; }
-  try {
-    let parsed = JSON.parse(raw);
-    if(parsed._abMeta) { const meta = parsed._abMeta; delete parsed._abMeta; parsed._meta = meta; }
-    _diffSnapshot = parsed;
-    showToast('📂 Auto-backup chargé · '+(_diffSnapshot._meta?.date||'—'), 2000, 'win');
-    renderDiffSection();
-  } catch(e) { showToast('⚠ Erreur lecture', 2000, 'warn'); }
-}
-window.loadDiffFromAutoSlot = loadDiffFromAutoSlot;
+// [GO NETTOYAGE · 18/10/2026] (ETAT G4, go outils) loadDiffFromAutoSlot retiré : aucun appelant (les boutons « Aujourd'hui / Hier » ôtés par go outils) — avant : lisait aura_autobackup_daily_*.
 
 function clearDiff() {
   _diffSnapshot = null;
@@ -2418,184 +2111,8 @@ function renderDiffSection() {
 }
 window.renderDiffSection = renderDiffSection;
 
-// Simule les frictions réelles du marché : slippage, spread, latence,
-// impact de marché, dépôt/retrait minimum, taxes retenues à la source
-// Active sur le mode sim pour rendre les backtests plus réalistes
-
-const _PR_CFG_KEY = 'aura_paper_realistic';
-
-function _prGet() {
-  if(!S.paperRealisticConfig) {
-    S.paperRealisticConfig = {
-      enabled:       false,
-      slippagePct:   0.08,   // % slippage moyen
-      spreadPct:     0.05,   // % spread bid/ask
-      latencyMs:     120,    // ms de latence simulée
-      mktImpactPct:  0.02,   // % impact de marché selon la taille
-      minOrderUsdt:  10,     // Ordre minimum en USDT
-      maxOrderUsdt:  5000,   // Ordre maximum en USDT
-      fillRatePct:   92,     // % de chance qu'un ordre soit exécuté
-      partialFill:   true,   // Fills partiels possibles
-      nightSpreadMult:1.5,   // Spread × 1.5 la nuit (faible liquidité)
-    };
-  }
-  return S.paperRealisticConfig;
-}
-
-function togglePaperRealistic() {
-  const cfg = _prGet();
-  cfg.enabled = !cfg.enabled;
-  showToast(cfg.enabled?'🎯 Mode réaliste activé — frictions simulées':'⏸ Mode réaliste désactivé', 2000, cfg.enabled?'win':'user');
-  renderPaperUltraSection();
-}
-window.togglePaperRealistic = togglePaperRealistic;
-
-function updatePrCfg(key, val) {
-  const cfg = _prGet();
-  cfg[key] = parseFloat(val)||0;
-  renderPaperUltraSection();
-}
-window.updatePrCfg = updatePrCfg;
-
-function togglePrBool(key) {
-  const cfg = _prGet();
-  cfg[key] = !cfg[key];
-  renderPaperUltraSection();
-}
-window.togglePrBool = togglePrBool;
-
-// Calculer le coût réel d'un trade avec frictions
-function applyRealisticFrictions(stakeUsdt, side, hour) {
-  const cfg = _prGet();
-  if(!cfg.enabled) return {finalStake:stakeUsdt, costs:0, filled:true};
-
-  const h = hour ?? new Date().getHours();
-  const isNight = h>=22||h<7;
-  const spreadMult = isNight ? (cfg.nightSpreadMult||1.5) : 1;
-
-  // 1. Vérifier ordre minimum/maximum
-  if(stakeUsdt < (cfg.minOrderUsdt||10)) return {finalStake:0, costs:0, filled:false, reason:'Ordre trop petit'};
-  if(stakeUsdt > (cfg.maxOrderUsdt||5000)) stakeUsdt = cfg.maxOrderUsdt||5000;
-
-  // 2. Probabilité de fill
-  const fillProb = (cfg.fillRatePct||92)/100;
-  if(Math.random() > fillProb) return {finalStake:0, costs:0, filled:false, reason:'Ordre non exécuté (liquidité)'};
-
-  // 3. Fill partiel possible
-  let effectiveStake = stakeUsdt;
-  if(cfg.partialFill && Math.random()<0.15) {
-    effectiveStake = stakeUsdt * (0.7 + Math.random()*0.3);
-  }
-
-  // 4. Slippage
-  const slipCost = effectiveStake * (cfg.slippagePct||0.08)/100;
-
-  // 5. Spread
-  const spreadCost = effectiveStake * (cfg.spreadPct||0.05)/100 * spreadMult;
-
-  // 6. Impact marché (proportionnel à la taille)
-  const impactCost = effectiveStake>500 ? effectiveStake * (cfg.mktImpactPct||0.02)/100 * (effectiveStake/500) : 0;
-
-  const totalCosts = slipCost + spreadCost + impactCost;
-  const finalStake = effectiveStake - totalCosts;
-
-  return {finalStake, costs:totalCosts, filled:true, slipCost, spreadCost, impactCost, effectiveStake};
-}
-window.applyRealisticFrictions = applyRealisticFrictions;
-
-
-function simulateRealisticTrade() {
-  const cfg    = _prGet();
-  const stake  = 100; // $100 test
-  const result = applyRealisticFrictions(stake, 'long');
-  return result;
-}
-
-function renderPaperUltraSection() {
-  const el  = document.getElementById('paperUltraSection');
-  if(!el) return;
-  const cfg = _prGet();
-
-  // Simuler un trade de $100 pour afficher l'impact
-  const sim = simulateRealisticTrade();
-  const totalCostPct = sim.costs>0?(sim.costs/100*100):0;
-
-  el.innerHTML = `
-    <div class="pr2-section">
-      <div class="pr2-title">🎯 Mode Papier Ultra-Réaliste
-        <span class="pr2-badge" style="background:${cfg.enabled?'rgba(167,139,250,.15)':'rgba(255,255,255,.06)'};color:${cfg.enabled?'var(--pur)':'var(--t3)'};">
-          ${cfg.enabled?'ACTIF':'INACTIF'}
-        </span>
-      </div>
-
-      <!-- Toggle principal -->
-      <div class="pr2-toggle-row">
-        <div style="flex:1;">
-          <div style="font-size:11px;font-weight:700;color:var(--t1);">Frictions réalistes</div>
-          <div style="font-size:8px;color:var(--t3);">Simule slippage, spread, latence, fill partiel</div>
-        </div>
-        
-      </div>
-
-      <!-- Simulation $100 -->
-      <div style="background:var(--s2);border-radius:8px;padding:10px;margin-bottom:10px;border:1px solid ${cfg.enabled?'rgba(167,139,250,.2)':'var(--border)'};">
-        <div style="font-size:9px;color:var(--t3);margin-bottom:5px;">Impact simulé sur un trade de $100</div>
-        <div class="pr2-row"><span style="color:var(--t2);">Stake initial</span><span style="font-weight:700;">$100.00</span></div>
-        <div class="pr2-row"><span style="color:var(--t2);">Slippage</span><span style="color:var(--down);">-$${(sim.slipCost||0).toFixed(3)}</span></div>
-        <div class="pr2-row"><span style="color:var(--t2);">Spread bid/ask</span><span style="color:var(--down);">-$${(sim.spreadCost||0).toFixed(3)}</span></div>
-        <div class="pr2-row"><span style="color:var(--t2);">Impact marché</span><span style="color:var(--down);">-$${(sim.impactCost||0).toFixed(3)}</span></div>
-        <div class="pr2-row" style="border-top:1px solid rgba(255,255,255,.08);margin-top:3px;padding-top:6px;">
-          <span style="font-weight:700;color:var(--t1);">Stake effectif</span>
-          <span style="font-weight:800;font-family:var(--font-mono);color:${cfg.enabled?'var(--down)':'var(--up)'};">$${(sim.finalStake||100).toFixed(3)}</span>
-        </div>
-        <div style="font-size:8px;color:var(--t3);text-align:right;margin-top:2px;">
-          ${cfg.enabled?`Coût frictions : ${totalCostPct.toFixed(3)}% du trade`:'Aucune friction (mode standard)'}
-        </div>
-      </div>
-
-      <!-- Paramètres -->
-      <div style="font-size:9px;color:var(--t3);margin-bottom:5px;">Paramètres des frictions</div>
-
-      ${[
-        {k:'slippagePct',   lbl:'Slippage',          unit:'%',    min:0,    max:2,    step:0.01},
-        {k:'spreadPct',     lbl:'Spread bid/ask',     unit:'%',    min:0,    max:1,    step:0.01},
-        {k:'latencyMs',     lbl:'Latence',            unit:'ms',   min:0,    max:5000, step:10},
-        {k:'mktImpactPct',  lbl:'Impact marché',      unit:'%',    min:0,    max:1,    step:0.01},
-        {k:'minOrderUsdt',  lbl:'Ordre min',          unit:'$',    min:1,    max:100,  step:1},
-        {k:'maxOrderUsdt',  lbl:'Ordre max',          unit:'$',    min:100,  max:10000,step:100},
-        {k:'fillRatePct',   lbl:'Taux de fill',       unit:'%',    min:50,   max:100,  step:1},
-        {k:'nightSpreadMult',lbl:'Spread nuit ×',     unit:'×',    min:1,    max:5,    step:0.1},
-      ].map(p=>`<div class="pr2-slider-row">
-        <span style="color:var(--t2);min-width:90px;">${p.lbl}</span>
-        <input type="range" class="pr2-slider" min="${p.min}" max="${p.max}" step="${p.step}"
-          value="${cfg[p.k]||0}" oninput="updatePrCfg('${p.k}',this.value);document.getElementById('prv_${p.k}').textContent=parseFloat(this.value).toFixed(2)+' ${p.unit}';"
-          ${!cfg.enabled?'disabled':''}
-          style="${!cfg.enabled?'opacity:.4;':''}"
-        >
-        <span id="prv_${p.k}" style="font-size:9px;font-family:var(--font-mono);min-width:52px;text-align:right;color:var(--pur);">${cfg[p.k]||0} ${p.unit}</span>
-      </div>`).join('')}
-
-      <!-- Toggles booléens -->
-      ${[
-        {k:'partialFill', lbl:'Fills partiels (ordre exécuté à ~70-100%)'},
-      ].map(t=>`<div class="pr2-toggle-row" style="${!cfg.enabled?'opacity:.5;pointer-events:none;':''}">
-        <span style="flex:1;font-size:10px;color:var(--t2);">${t.lbl}</span>
-        <button onclick="togglePrBool('${t.k}')"
-          style="padding:3px 10px;border-radius:6px;font-size:9px;font-weight:700;cursor:pointer;font-family:inherit;
-                 background:${cfg[t.k]?'rgba(167,139,250,.12)':'rgba(255,255,255,.06)'};
-                 border:1px solid ${cfg[t.k]?'rgba(167,139,250,.3)':'var(--border)'};
-                 color:${cfg[t.k]?'var(--pur)':'var(--t3)'};">
-          ${cfg[t.k]?'✅ ON':'OFF'}
-        </button>
-      </div>`).join('')}
-
-      <div style="font-size:8px;color:var(--t3);margin-top:8px;line-height:1.5;text-align:center;">
-        Les frictions sont appliquées à chaque ouverture de position en mode Simulation.<br>
-        Elles ne s'appliquent pas au mode Paper Real (données Binance réelles).
-      </div>
-    </div>`;
-}
-window.renderPaperUltraSection = renderPaperUltraSection;
+// [GO NETTOYAGE · 18/10/2026] (ETAT G4, go outils) v76 « Paper Ultra » retiré en entier, sans appelant depuis go outils : renderPaperUltraSection, _prGet,
+// togglePaperRealistic, updatePrCfg, togglePrBool, applyRealisticFrictions, simulateRealisticTrade — avant : frictions appliquées à aucun trade.
 // ═══ v77 · WEBHOOK TELEGRAM ═══
 // Envoie des notifications vers un bot Telegram via l'API Bot
 // Events : trades ouverts/fermés, alertes prix, résumé hebdo, urgences
@@ -2748,7 +2265,7 @@ window.testTelegram = testTelegram;
 // [GO ALERTES · 15/10/2026] l'interrupteur « 📅 Résumé hebdo » ne faisait qu'afficher ce bouton : rien ne partait jamais seul. Désormais il part
 // AUTOMATIQUEMENT tous les 7 jours (_tgHebdoTick, appelé au battement 08) et le bouton l'envoie tout de suite. Avant, le message disait « hebdomadaire »
 // mais donnait le cumul de toujours du seul mode à l'écran ; il donne maintenant, pour EV, RE et AA, les trades fermés des 7 derniers jours (historique
-// de chaque paire, 100 derniers par paire) et leur P&L brut (avant frais, comme l'historique), plus le portefeuille du moment.
+// gardé de chaque paire — [GO NETTOYAGE · 18/10/2026] (ETAT n° 37) avant : « 100 derniers par paire ») et leur P&L brut (avant frais, comme l'historique), plus le portefeuille du moment.
 const _TG_SEMAINE_MS = 7 * 86400000;
 function _tgHebdoText(now) {
   const t0 = (now || Date.now()) - _TG_SEMAINE_MS, lab = { paperReal: 'EV', real: 'RE', sim: 'AA' }, lignes = [];
@@ -2764,9 +2281,12 @@ function _tgHebdoText(now) {
     lignes.push(`<b>${lab[m]}</b> ${w.running ? '▶' : '⏸'} · portefeuille <code>$${(Number(pf) || 0).toFixed(2)}</code>\n   ${n} trade(s) fermé(s)` +
       (n ? ` · ${gagnants} gagnant(s) · P&L brut <code>${pnl >= 0 ? '+' : '−'}$${Math.abs(pnl).toFixed(2)}</code>` : ''));
   });
-  // [relecture adverse du 18/10/2026] l'historique d'une paire ne garde que ses 100 dernières lignes (02 closePosition) : sur une paire très active, les
-  // 7 jours peuvent être plus longs que ce qui reste. C'est dit, plutôt qu'un total faussement complet.
-  return `📅 <b>AURA ∞ — Les 7 derniers jours</b>\n\n${lignes.join('\n')}\n\n<i>P&L brut = avant frais, comme l'historique des trades · compté sur l'historique gardé (100 dernières lignes par paire)</i>`;
+  // [relecture adverse du 18/10/2026] l'historique d'une paire est coupé : sur une paire très active, les 7 jours peuvent être plus longs que ce qui reste.
+  // C'est dit, plutôt qu'un total faussement complet.
+  // [GO NETTOYAGE · 18/10/2026] (ETAT n° 37) le nombre dit est celui de la coupe (09b2 _TRADES_GARDES_PAR_PAIRE, _auraRotatePurge), ouvertures comprises —
+  // avant : « 100 dernières lignes par paire » (la coupe de 02 closePosition, que la purge de 09b2 ramène à 40 toutes les 2 min)
+  const _garde = (typeof _TRADES_GARDES_PAR_PAIRE === 'number') ? _TRADES_GARDES_PAR_PAIRE : null;
+  return `📅 <b>AURA ∞ — Les 7 derniers jours</b>\n\n${lignes.join('\n')}\n\n<i>P&L brut = avant frais, comme l'historique des trades · compté sur l'historique gardé (${_garde ? _garde + ' dernières lignes par paire, ouvertures comprises' : 'dernières lignes de chaque paire'})</i>`;
 }
 async function sendHebdoTelegram(auto) {
   const ok = await sendTelegram(_tgHebdoText(), true);
@@ -5068,248 +4588,5 @@ function renderCinemaSection() {
     </div>`;
 }
 window.renderCinemaSection = renderCinemaSection;
-// ═══ v89 · COFFRE-FORT CHIFFRÉ ═══
-// Chiffrement AES-GCM via Web Crypto API (natif, sans librairie)
-// Mot de passe → PBKDF2 → clé AES-256-GCM → chiffrement du state
-// 3 coffres distincts — export .vault / import .vault
-
-const _VAULT_SALT_KEY = 'aura_vault_salt_v89';
-const _VAULT_SLOTS    = ['vault_0','vault_1','vault_2'];
-
-// ── Crypto helpers ──
-async function _vaultDeriveKey(password, salt) {
-  const enc      = new TextEncoder();
-  const keyMat   = await crypto.subtle.importKey('raw', enc.encode(password), 'PBKDF2', false, ['deriveKey']);
-  return crypto.subtle.deriveKey(
-    {name:'PBKDF2', salt, iterations:100000, hash:'SHA-256'},
-    keyMat, {name:'AES-GCM', length:256}, false, ['encrypt','decrypt']
-  );
-}
-
-function _vaultGetSalt() {
-  let salt = localStorage.getItem(_VAULT_SALT_KEY);
-  if(!salt) {
-    salt = btoa(String.fromCharCode(...crypto.getRandomValues(new Uint8Array(16))));
-    localStorage.setItem(_VAULT_SALT_KEY, salt);
-  }
-  return Uint8Array.from(atob(salt), c=>c.charCodeAt(0));
-}
-
-async function _vaultEncrypt(data, password) {
-  const salt  = _vaultGetSalt();
-  const key   = await _vaultDeriveKey(password, salt);
-  const iv    = crypto.getRandomValues(new Uint8Array(12));
-  const enc   = new TextEncoder();
-  const ct    = await crypto.subtle.encrypt({name:'AES-GCM', iv}, key, enc.encode(data));
-  // Stocker iv + ciphertext en base64
-  const combined = new Uint8Array(iv.length + ct.byteLength);
-  combined.set(iv, 0);
-  combined.set(new Uint8Array(ct), iv.length);
-  return btoa(String.fromCharCode(...combined));
-}
-
-async function _vaultDecrypt(b64, password) {
-  const salt  = _vaultGetSalt();
-  const key   = await _vaultDeriveKey(password, salt);
-  const combined = Uint8Array.from(atob(b64), c=>c.charCodeAt(0));
-  const iv    = combined.slice(0,12);
-  const ct    = combined.slice(12);
-  const plain = await crypto.subtle.decrypt({name:'AES-GCM', iv}, key, ct);
-  return new TextDecoder().decode(plain);
-}
-
-// ── Évaluer la force du mot de passe ──
-function _vaultStrength(pwd) {
-  let score = 0;
-  if(pwd.length>=8)  score+=20;
-  if(pwd.length>=12) score+=15;
-  if(pwd.length>=16) score+=10;
-  if(/[A-Z]/.test(pwd)) score+=15;
-  if(/[a-z]/.test(pwd)) score+=10;
-  if(/[0-9]/.test(pwd)) score+=15;
-  if(/[^A-Za-z0-9]/.test(pwd)) score+=15;
-  return Math.min(100, score);
-}
-
-function _vaultStrengthLabel(s) {
-  return s>=80?{l:'Très fort',c:'var(--up)'}:s>=60?{l:'Fort',c:'#84cc16'}:s>=40?{l:'Moyen',c:'var(--gold)'}:{l:'Faible',c:'var(--down)'};
-}
-
-// ── Sauvegarder dans un coffre ──
-async function saveVault(slotIdx) {
-  const pwd = document.getElementById('vaultPwdInput')?.value||'';
-  if(!pwd||pwd.length<4) { showToast('⚠ Mot de passe trop court (min 4 car.)', 2000, 'warn'); return; }
-
-  const btn = document.getElementById('vaultSaveBtn');
-  if(btn) { btn.textContent='⏳ Chiffrement...'; btn.disabled=true; }
-
-  try {
-    const snapshot = JSON.parse(JSON.stringify(S));
-    snapshot._vaultMeta = {
-      ts:Date.now(), date:new Date().toLocaleString('fr-FR'),
-      portfolio:S.portfolio||0, totalTrades:S.totalTrades||0,
-    };
-    const json      = JSON.stringify(snapshot);
-    const encrypted = await _vaultEncrypt(json, pwd);
-    const stored    = JSON.stringify({v:1, data:encrypted, meta:snapshot._vaultMeta});
-    localStorage.setItem('aura_'+_VAULT_SLOTS[slotIdx||0], stored);
-    showToast('🔐 Coffre sauvegardé · $'+(S.tradingAccount||0).toFixed(0), 2500, 'win');
-    S.chainLog = S.chainLog||[];
-    S.chainLog.push({icon:'🔐',desc:`Coffre ${slotIdx} sauvegardé · AES-256-GCM`,hash:Math.random().toString(36).slice(2,8),time:new Date().toLocaleTimeString()});
-    renderVaultSection();
-  } catch(e) {
-    showToast('❌ Erreur chiffrement: '+e.message, 2500, 'warn');
-  } finally {
-    if(btn) { btn.textContent='🔐 Sauvegarder'; btn.disabled=false; }
-  }
-}
-window.saveVault = saveVault;
-
-// ── Restaurer depuis un coffre ──
-async function loadVault(slotIdx) {
-  const pwd = document.getElementById('vaultPwdInput')?.value||'';
-  if(!pwd) { showToast('⚠ Saisis le mot de passe', 1500, 'warn'); return; }
-
-  const raw = localStorage.getItem('aura_'+_VAULT_SLOTS[slotIdx||0]);
-  if(!raw) { showToast('⚠ Coffre vide', 1500, 'warn'); return; }
-
-  const btn = document.getElementById('vaultLoadBtn'+(slotIdx||0));
-  if(btn) { btn.textContent='⏳...'; btn.disabled=true; }
-
-  try {
-    const stored    = JSON.parse(raw);
-    const decrypted = await _vaultDecrypt(stored.data, pwd);
-    const snapshot  = JSON.parse(decrypted);
-    delete snapshot._vaultMeta;
-    if(!confirm(`Restaurer le coffre du ${stored.meta?.date||'?'} ?\n$${(stored.meta?.portfolio||0).toFixed(2)} · ${stored.meta?.totalTrades||0} trades\n\nLes données actuelles seront remplacées.`)) { if(btn){btn.textContent='↩ Restaurer';btn.disabled=false;} return; }
-    Object.assign(S, snapshot);
-    showToast('✅ Coffre ouvert et restauré !', 3000, 'win');
-    try { renderHome(); } catch(e) {}
-    renderVaultSection();
-  } catch(e) {
-    showToast('❌ Mot de passe incorrect ou coffre corrompu', 2500, 'warn');
-  } finally {
-    if(btn) { btn.textContent='↩ Restaurer'; btn.disabled=false; }
-  }
-}
-window.loadVault = loadVault;
-
-// ── Export .vault ──
-async function exportVault() {
-  const pwd = document.getElementById('vaultPwdInput')?.value||'';
-  if(!pwd||pwd.length<4) { showToast('⚠ Mot de passe requis', 1500, 'warn'); return; }
-
-  try {
-    const json      = JSON.stringify(S);
-    const encrypted = await _vaultEncrypt(json, pwd);
-    const ts        = new Date().toISOString().slice(0,10);
-    const out       = JSON.stringify({v:1, data:encrypted, ts, app:'AURA8', hint:'AES-256-GCM PBKDF2'});
-    const blob      = new Blob([out], {type:'application/json'});
-    const url       = URL.createObjectURL(blob);
-    const a         = document.createElement('a');
-    a.href=url; a.download=`aura_vault_${ts}.vault`;
-    document.body.appendChild(a); a.click();
-    document.body.removeChild(a); URL.revokeObjectURL(url);
-    showToast('📤 Fichier .vault exporté', 2000, 'win');
-  } catch(e) { showToast('❌ Erreur export: '+e.message, 2000, 'warn'); }
-}
-window.exportVault = exportVault;
-
-// ── Import .vault ──
-function importVault() {
-  const input = document.createElement('input');
-  input.type='file'; input.accept='.vault,.json';
-  input.onchange = async e => {
-    const file = e.target.files?.[0];
-    if(!file) return;
-    const pwd = document.getElementById('vaultPwdInput')?.value||'';
-    if(!pwd) { showToast('⚠ Saisis le mot de passe d\'abord', 1500, 'warn'); return; }
-    const reader = new FileReader();
-    reader.onload = async ev => {
-      try {
-        const stored    = JSON.parse(ev.target.result);
-        const decrypted = await _vaultDecrypt(stored.data, pwd);
-        const snapshot  = JSON.parse(decrypted);
-        if(!confirm('Importer ce fichier .vault ? Les données actuelles seront remplacées.')) return;
-        Object.assign(S, snapshot);
-        showToast('✅ .vault importé et déchiffré', 3000, 'win');
-        try { renderHome(); } catch(e) {}
-        renderVaultSection();
-      } catch(e) { showToast('❌ Mot de passe incorrect ou fichier invalide', 2500, 'warn'); }
-    };
-    reader.readAsText(file);
-  };
-  input.click();
-}
-window.importVault = importVault;
-
-function vaultPwdUpdate() {
-  const pwd = document.getElementById('vaultPwdInput')?.value||'';
-  const str = _vaultStrength(pwd);
-  const lbl = _vaultStrengthLabel(str);
-  const bar = document.getElementById('vaultStrengthBar');
-  const lbEl= document.getElementById('vaultStrengthLbl');
-  if(bar)  { bar.style.width=str+'%'; bar.style.background=lbl.c; }
-  if(lbEl) { lbEl.textContent=pwd.length>0?lbl.l:''; lbEl.style.color=lbl.c; }
-}
-window.vaultPwdUpdate = vaultPwdUpdate;
-
-function renderVaultSection() {
-  const el = document.getElementById('vaultSection');
-  if(!el) return;
-
-  const slots = _VAULT_SLOTS.map((key,i)=>{
-    const raw = localStorage.getItem('aura_'+key);
-    if(!raw) return {i, empty:true};
-    try { const p=JSON.parse(raw); return {i, empty:false, meta:p.meta}; } catch(e) { return {i,empty:true}; }
-  });
-  const hasCrypto = !!window.crypto?.subtle;
-
-  el.innerHTML = `
-    <div class="vault-section">
-      <div class="vault-title">🔐 Coffre-Fort Chiffré</div>
-
-      ${!hasCrypto?'<div style="background:rgba(255,61,107,.1);border:1px solid rgba(255,61,107,.3);border-radius:8px;padding:8px;font-size:9px;color:var(--down);margin-bottom:10px;">⚠️ Web Crypto API non disponible dans ce contexte.</div>':''}
-
-      <!-- Porte du coffre -->
-      <div class="vault-door">
-        <span class="vault-icon">🏦</span>
-        <div style="font-size:11px;color:var(--gold);font-weight:700;margin-bottom:12px;">AES-256-GCM · PBKDF2 · 100 000 itérations</div>
-        <div class="vault-lock-row">
-          <input class="vault-inp" id="vaultPwdInput" type="password"
-            placeholder="Mot de passe du coffre"
-            oninput="vaultPwdUpdate()"
-            onkeydown="if(event.key==='Enter') saveVault(0)">
-        </div>
-        <!-- Force MDP -->
-        <div class="vault-strength" style="margin-bottom:4px;">
-          <div class="vault-strength-fill" id="vaultStrengthBar" style="width:0%;transition:width .3s;"></div>
-        </div>
-        <div style="font-size:8px;text-align:right;min-height:10px;" id="vaultStrengthLbl"></div>
-      </div>
-
-      <!-- Coffres slots -->
-      <div style="font-size:9px;color:var(--t3);margin-bottom:5px;">3 coffres indépendants</div>
-      ${slots.map(s=>`<div class="vault-slot ${!s.empty?'locked':''}">
-        <span style="font-size:20px;">${s.empty?'🔓':'🔐'}</span>
-        <div style="flex:1;">
-          <div style="font-size:10px;font-weight:700;color:${s.empty?'var(--t3)':'var(--gold)'};">Coffre ${s.i+1}</div>
-          <div style="font-size:8px;color:var(--t3);">${s.empty?'Vide':`${s.meta?.date||'—'} · $${(s.meta?.portfolio||0).toFixed(0)} · ${s.meta?.totalTrades||0} trades`}</div>
-        </div>
-        <button onclick="saveVault(${s.i})" id="vaultSaveBtn" style="font-size:8px;padding:3px 7px;border-radius:5px;background:rgba(245,200,66,.1);border:1px solid rgba(245,200,66,.2);color:var(--gold);cursor:pointer;font-family:inherit;">🔐 Save</button>
-        ${!s.empty?`<button onclick="loadVault(${s.i})" id="vaultLoadBtn${s.i}" style="font-size:8px;padding:3px 7px;border-radius:5px;background:rgba(0,232,122,.1);border:1px solid rgba(0,232,122,.2);color:var(--up);cursor:pointer;font-family:inherit;">↩</button>`:''}
-      </div>`).join('')}
-
-      <!-- Export / Import -->
-      <div style="display:flex;gap:6px;margin-top:8px;">
-        <button onclick="exportVault()" class="vault-btn" style="flex:1;">📤 Export .vault</button>
-        <button onclick="importVault()" class="vault-btn" style="flex:1;background:rgba(56,212,245,.06);border-color:rgba(56,212,245,.2);color:var(--ice);">📥 Import .vault</button>
-      </div>
-
-      <div style="font-size:8px;color:var(--t3);margin-top:8px;text-align:center;line-height:1.5;">
-        Chiffrement local · Clé jamais stockée · Déchiffrable uniquement avec ton mot de passe<br>
-        <strong>Si tu oublies ton MDP, le coffre est irrécupérable.</strong>
-      </div>
-    </div>`;
-}
-window.renderVaultSection = renderVaultSection;
+// [GO NETTOYAGE · 18/10/2026] (ETAT G4, go outils) v89 « Coffre » retiré en entier, sans appelant depuis go outils : renderVaultSection, saveVault, loadVault,
+// exportVault, importVault, vaultPwdUpdate, _vault* — avant : chiffrement de S qui plantait dès ~200 Ko, restaurations par Object.assign(S, …).

@@ -344,7 +344,7 @@ await T('R2 · closePosition, fragments RÉELS exécutés : chaque fermeture sig
   assert.strictEqual(cc.split('_aaBehind').length - 1, 0, 'plus de _aaBehind');
   ['if(!_behind && typeof checkPnlAlerts', 'if(!_behind && typeof checkBadges', 'if (!_behind && typeof _updateCloseAllBadge', 'if (_behind) { /* un mode derrière', 'if (!_behind) {\n    updatePairBtnStates();\n    renderPositions();\n    if(S.currentPage===4) renderChain();\n  }'].forEach(k => assert.strictEqual(cc.split(k).length - 1, 1, k.slice(0, 40)));
   assert.ok(cc.indexOf('const _behind') < cc.indexOf("if (!_urg && typeof checkAntiRevenge === 'function') {")); assert.ok(!cc.includes('_behind && typeof checkAntiRevenge'), 'l\'anti-revenge est signalé pour tous (état par mode)');   // [GO ARGENT · 13/10/2026] seule l'urgence (06) le saute
-  assert.ok(cc.includes("  showToast('Fermé '+pos.pair+levTag+' · '+pnlStr+' · '+usdtStr);"), 'le toast de fermeture reste pour tous (08 showToast le marque)');
+  assert.ok(cc.includes("  showToast((_part ? 'Sortie partielle ' : 'Fermé ')+pos.pair+levTag+' · '+pnlStr+' · '+usdtStr);"), 'le toast de fermeture reste pour tous (08 showToast le marque)');   // [GO NETTOYAGE · 19/10/2026] (n° 55) « Sortie partielle » pour un palier
 });
 
 await T('M5 · [MODES SÉPARÉS] un mode en play DERRIÈRE l\'écran reçoit sa surveillance (08 _bgModeWatch RÉEL) à chaque passage : sorties, mises, portefeuille ; consignes un tick sur douze, financement et levier un tick sur trente ; dans SON contexte ; jamais pour le mode à l\'écran ni pour un mode en pause ; le mode de l\'écran est gardé pendant la bascule (window._bgFrom) et _screenMode le rend', () => {

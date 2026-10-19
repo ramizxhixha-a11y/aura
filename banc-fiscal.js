@@ -209,8 +209,9 @@ const run = (sb, code) => vm.runInContext(code, sb);
                 releaseTradeReserve: '5b861a59ead70c85', holdTradeReserve: '44b0edc14fe506b3', validateAntiNegative: '2aa7c47155f4d4e3' };
     const grab = (name) => { const i = S02.indexOf('function ' + name + '('); const j = S02.indexOf('\n}\n', i); return S02.slice(i, j + 2); };
     Object.keys(H).forEach(n => t(n + ' (02) inchangée', crypto.createHash('sha256').update(grab(n)).digest('hex').slice(0, 16) === H[n]));
-    const s10f = fs.readFileSync(path.join(ROOT, 'js/10f-resolveur-cycle.js'), 'utf8'), s10 = fs.readFileSync(path.join(ROOT, 'js/10-fin-bloc-restauration-v93.js'), 'utf8');
-    t('10f et 10 : la porte d\'ouverture lit toujours detectFiscalRegime + fiscalBotAdvicePerPair', [s10f, s10].every(s => /const _frBE = \(typeof detectFiscalRegime === 'function'\)/.test(s) && /fiscalBotAdvicePerPair\(pair, _tpGuess\)/.test(s)));
+    // [GO NETTOYAGE · 18/10/2026] (registre G4 n° 42) js/10-fin-bloc-restauration-v93.js (jamais chargé) est supprimé : seul 10f, chargé, est lu — avant : « 10f et 10 », [s10f, s10]
+    const s10f = fs.readFileSync(path.join(ROOT, 'js/10f-resolveur-cycle.js'), 'utf8');
+    t('10f : la porte d\'ouverture lit toujours detectFiscalRegime + fiscalBotAdvicePerPair', [s10f].every(s =>/const _frBE = \(typeof detectFiscalRegime === 'function'\)/.test(s) && /fiscalBotAdvicePerPair\(pair, _tpGuess\)/.test(s)));
     const code16 = (SRC + '\n' + SRCB).split('\n').filter(l => !/^\s*\/\//.test(l)).join('\n');
     for (const f of ['openPosition(', 'closePosition(', 'autoOpenPosition', 'S.agents', 'fitness', 'dcThreshold', 'detectFiscalRegime', 'fiscalBotAdvicePerPair', 'pendingActions'])
       t('16 : aucun « ' + f + ' »', !code16.includes(f));

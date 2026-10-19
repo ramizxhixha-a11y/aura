@@ -946,6 +946,7 @@ setTimeout(_updateTsMenu, 500);
 // « Moment de grâce », écran anti-revenge, mode cinéma, bannière bunker avec des boutons vers des fonctions absentes de la fenêtre) s'imprimaient
 // sous le rapport ; « P&L Net » était brut ; table par paire « undefined » (corrigé à la source : 05 _getWeekTrades joint la paire) ; et
 // window.open + print() dans l'app Android. Désormais : gabarit seul, libellés vrais, écriture par 05 _outilsPrintable.
+// [GO NETTOYAGE · 18/10/2026] (ETAT n° 39) une fermeture d'urgence est marquée « 🆘 URGENCE » au détail des trades (05 _outilsClosedTrades la compte) ; avant : absente
 function exportHebdoPdf(offset) {
   const { trades, monday, sunday, oldest } = _getWeekTrades(offset);
   const stats = _analyzeWeek(trades, monday, sunday);
@@ -994,7 +995,7 @@ ${stats.pairRanked.map(([pair,p])=>`<tr><td><b>${pair}</b></td><td>${p.count}</t
 <div class="insight">${stats.insights.map(i=>`<div>▸ ${i}</div>`).join('')}</div>
 <h2>📈 Détail des trades</h2>
 <table><tr><th>#</th><th>Date</th><th>Paire</th><th>Côté</th><th>P&L brut $</th><th>Résultat</th></tr>
-${trades.map((t,i)=>`<tr><td>${i+1}</td><td>${t.ts?new Date(t.ts).toLocaleString('fr-FR'):(t.time||'—')}</td><td>${t.pair||'—'}</td><td>${t.side==='buy'?'LONG':'SHORT'}</td><td class="${(t.pnlUsdt||0)>=0?'win':'loss'}">${(t.pnlUsdt||0)>=0?'+':''}$${(t.pnlUsdt||0).toFixed(2)}</td><td class="${(t.pnlUsdt||0)>=0?'win':'loss'}">${(t.pnlUsdt||0)>=0?'✅ WIN':'❌ LOSS'}</td></tr>`).join('')}
+${trades.map((t,i)=>`<tr><td>${i+1}</td><td>${t.ts?new Date(t.ts).toLocaleString('fr-FR'):(t.time||'—')}</td><td>${t.pair||'—'}</td><td>${t.side==='buy'?'LONG':'SHORT'}</td><td class="${(t.pnlUsdt||0)>=0?'win':'loss'}">${(t.pnlUsdt||0)>=0?'+':''}$${(t.pnlUsdt||0).toFixed(2)}</td><td class="${(t.pnlUsdt||0)>=0?'win':'loss'}">${(t.pnlUsdt||0)>=0?'✅ WIN':'❌ LOSS'}${t.urgence?' · 🆘 URGENCE':''}</td></tr>`).join('')}
 </table>
 <div class="footer"><span>AURA ∞ — Adaptive Universal Risk Architect</span><span>Rapport automatique</span></div>
 </body></html>`;
@@ -1040,7 +1041,7 @@ const _OUTILS_TABS = {
       { id:'conscienceSection',  render:'renderConscienceSection',  init:null },
       { id:'leaderboardSection', render:'renderLeaderboardSection', init:null },
       { id:'priceHistSection',  render:'renderPriceHistSection',  init:null },
-      { id:'riskScoreSection',  render:'renderRiskScoreSection',  init:null },
+      // [GO NETTOYAGE · 18/10/2026] (registre G4 n° 21) 2e entrée « riskScoreSection » retirée — avant : même id deux fois (1re div rendue deux fois, 2e vide)
       { id:'btcImpactSection',  render:'renderBtcImpactSection',  init:null },
       { id:'corrSection',         render:'renderCorrSection',         init:null },
       { id:'calSection',          render:'renderCalSection',          init:null },
@@ -1090,7 +1091,7 @@ const _OUTILS_TABS = {
     ]
   },
   // [GO OUTILS · 18/10/2026] ETAT n° 33 · onglet rouvert (bouton dans AURA8_v118.html) après correction de ses outils (banc-outils.js,
-  // rejeu/sonde_outils.js). RETIRÉS de l'onglet, leur code reste en place sans appelant :
+  // rejeu/sonde_outils.js). RETIRÉS de l'onglet (leur code, laissé sans appelant, est retiré à son tour par [GO NETTOYAGE · 18/10/2026] — avant : « leur code reste en place sans appelant ») :
   //  · « Paper Ultra » (paperUltraSection) : interrupteur absent, curseurs désactivés, frictions appliquées à AUCUN trade (seul appelant :
   //    l'aperçu 06 simulateRealisticTrade). Les brancher sur les ouvertures changerait les trades → porte TALENT / SOURCE (CLAUDE.md règle 10) ;
   //  · « Coffre » (vaultSection) : le chiffrement de l'état réel plante (RangeError dès ~200 Ko, l'état fait plusieurs Mo) et ses deux
@@ -1755,7 +1756,7 @@ function _initNotifConfig() {
     drawdownAlert:  true,   // drawdown > 10%
     twinAlert:      false,  // Twin Live alerte
     regimeChange:   false,  // changement de régime marché
-    lastNotifTs:    0,      // timestamp dernière notif (anti-spam 30s)
+    lastNotifTs:    0,      // [GO NETTOYAGE · 18/10/2026] (ETAT n° 36) champ mort, gardé pour la forme du réglage (snapshots, backups) : plus écrit ni lu — avant : « timestamp dernière notif »
   };
 }
 
@@ -1805,7 +1806,7 @@ function sendNotif(title, body, icon, genre) {
   const now = Date.now(), g = String(genre || 'autre');
   if(now - (_nfLast[g] || 0) < (g.indexOf('trade') === 0 ? _NF_FEN_TRADE : _NF_FEN)) return;
   _nfLast[g] = now;
-  S.notifConfig.lastNotifTs = now;   // gardé : l'écran et d'éventuels appelants externes le lisent
+  // [GO NETTOYAGE · 18/10/2026] (ETAT n° 36) plus d'écriture de S.notifConfig.lastNotifTs — avant : écrit ici, lu par rien (l'anti-spam est _nfLast, en mémoire)
   try {
     const n = new Notification(title, {
       body,
@@ -1965,7 +1966,7 @@ function renderNotifSettings() {
     { key:'tradeClose',    label:'Trade fermé',          emoji:'📤', sub:'Avec résultat P&L, en EV / RE · une au plus par salve de 3 s (urgence, Bunker)' },
     { key:'tpSl',          label:'TP / SL atteint',      emoji:'🎯', sub:'Objectif ou stop (TP, SL, trailing, perte max) — remplace « Trade fermé » pour cette fermeture' },
     { key:'drawdownAlert', label:'Drawdown critique',    emoji:'⚠️', sub:'Au seuil de l\'alerte « Drawdown » (Alertes P&L)' },
-    { key:'twinAlert',     label:'Twin Live alerte',     emoji:'👯', sub:'Quand le Twin passe devant le bot — il n\'avance qu\'à l\'ouverture de l\'accueil (défaut antérieur, n° 34 au registre)' },
+    { key:'twinAlert',     label:'Twin Live alerte',     emoji:'👯', sub:'Quand le Twin passe devant le bot — il avance au battement (toutes les ~4 s), quelle que soit la page' },   // [GO NETTOYAGE · 18/10/2026] (ETAT n° 34) avant : « il n'avance qu'à l'ouverture de l'accueil »
     { key:'regimeChange',  label:'Changement de régime', emoji:'📊', sub:'Régime du badge de l\'en-tête (mode à l\'écran)' },
   ];
 
@@ -2047,7 +2048,7 @@ function _initTwin() {
   };
 }
 
-// Appelé à chaque tick — le Twin "décide" en parallèle
+// Le Twin "décide" en parallèle — [GO NETTOYAGE · 18/10/2026] (ETAT n° 34) appelé par le battement (08 simTick, 1 tick sur 4), plus par l'ouverture de l'accueil
 function tickTwinLive() {
   _initTwin();
   if(!S.twin.active) return;
@@ -2443,16 +2444,38 @@ function manuInvert(pair) {
   if (S.openPositions.some(p => p && p.id === pos.id)) { showToast('⚠ '+pair+' : fermeture non aboutie · pas d\'inversion', 3000, 'warn'); return; }
   const ps = S.pairStates[pair];
   let np = null;
-  if (ps) {
+  // [GO NETTOYAGE · 19/10/2026] (ETAT n° 60) après la fermeture d'une position perdante d'un compte investi, le trading (emprunt « juste à temps » du levier
+  // compris, 02 ensureLeverageCoverForTrade) ne tient plus la mise d'origine : la nouvelle position s'ouvre avec ce qui est disponible, et c'est dit.
+  // Avant : openPosition refusait (« mise > trading ») — la position était fermée et pas rouverte.
+  let reStake = stake, why = '';
+  try {
+    const _ix = Number(S.leverage) || 0;
+    const _jit = _ix >= 1 ? Math.max(0, (typeof _tradingCapitalBase === 'function' ? _tradingCapitalBase() : 0) * Math.min(_ix, S.leverageMaxMult || 10) - (Number(S.leverageBorrowed) || 0)) : 0;
+    const _avail = Math.max(0, Number(S.tradingAccount) || 0) + _jit;
+    if (reStake > _avail) { reStake = Math.floor(_avail * 100) / 100; why = 'c\'est ce que le trading tient après la fermeture'; }
+    // le contrôle de capital de l'ouverture manuelle (09j validateTotalExposure, sans écriture), tel qu'openPosition (02) le lit : refus si !ok ET disponible
+    // < la moitié de la mise. La plus grande mise qu'il laisse passer est cherchée sur lui-même (relecture du 19/10 : avec plusieurs positions ouvertes, son
+    // « disponible » retire deux fois les mises engagées — défaut de 09j au registre, il touche la décision — et la mise rouverte tombait à 13,82 $ au lieu de 490 $).
+    if (typeof validateTotalExposure === 'function' && reStake > 0) {
+      const passe = (x) => { const r = validateTotalExposure(x, x * (lev - 1)); return !!(r && (r.ok || Number(r.available) >= x * 0.5)); };
+      if (!passe(reStake)) {
+        let lo = 0, hi = reStake;
+        for (let i = 0; i < 40; i++) { const mid = (lo + hi) / 2; if (passe(mid)) lo = mid; else hi = mid; }
+        reStake = Math.floor(lo * 100) / 100; why = 'c\'est ce que le contrôle de capital laisse ouvrir';
+      }
+    }
+  } catch(e) { try{window._decErr&&window._decErr(e)}catch(_e){} }
+  if (ps && reStake >= 0.01) {
     const prevStake = ps.stake, prevLev = ps.pairLeverage;
-    if (stake > 0) ps.stake = stake;
+    if (reStake > 0) ps.stake = reStake;
     ps.pairLeverage = lev;
     try { np = openPosition(pair, newSide, keep); }
     catch(e) { try{window._decErr&&window._decErr(e)}catch(_e){} }
     finally { ps.stake = prevStake; ps.pairLeverage = prevLev; }
   }
-  if (np) showToast('🔄 '+pair+' inversé → '+newSide.toUpperCase()+' · mise $'+stake, 2500, 'win');
-  else showToast('⚠ '+pair+' fermé, mais '+newSide.toUpperCase()+' non rouvert', 3000, 'warn');
+  if (np && reStake < stake - 0.005) showToast('🔄 '+pair+' inversé → '+newSide.toUpperCase()+' · mise $'+reStake.toFixed(2)+' (au lieu de $'+stake.toFixed(2)+' : '+why+')', 4500, 'warn');
+  else if (np) showToast('🔄 '+pair+' inversé → '+newSide.toUpperCase()+' · mise $'+stake, 2500, 'win');
+  else showToast('⚠ '+pair+' fermé, mais '+newSide.toUpperCase()+' non rouvert'+(reStake < 0.01 ? ' (' + (why || 'rien à remiser') + ')' : ''), 3500, 'warn');
   if(typeof renderActionsGrid === 'function') try { renderActionsGrid(); } catch(e) {}
 }
 window.manuInvert = manuInvert;
@@ -3563,8 +3586,11 @@ function renderPairPnl() {
     // sous le cumul réalisé (qui ne bouge pas) : le latent LIVE de la position, sans signe, la couleur dit le sens, point qui bat.
     if(badgeEl) {
       if(pos) {
-        const exp = pos.totalExposure || pos.stakeUsdt;
-        badgeEl.textContent = (pos.auto === true ? '\uD83E\uDD16' : '\uD83D\uDC64') + ' ' + (pos.side==='long'?'\u2191':'\u2193') + ' mise $' + Number(exp).toFixed(2);
+        // [GO NETTOYAGE · 19/10/2026] (ETAT n° 59, accord de Rams du 18/10) la MISE (ce qui est sorti du trading), le levier à côté s'il y en a un — avant :
+        // l'exposition (mise × levier) affichée comme « mise » (mise 30 $ ×5 → « mise $150.00 »).
+        const _st = Number(pos.stakeUsdt) || 0, exp = Number(pos.totalExposure) || _st;
+        const _lx = _st > 0 ? exp / _st : 1;
+        badgeEl.textContent = (pos.auto === true ? '\uD83E\uDD16' : '\uD83D\uDC64') + ' ' + (pos.side==='long'?'\u2191':'\u2193') + ' mise $' + _st.toFixed(2) + (_lx > 1.005 ? ' \u00b7 \u00d7' + (Math.round(_lx * 10) / 10) : '');
         badgeEl.style.display = '';
       } else { badgeEl.style.display = 'none'; }
     }
@@ -4731,8 +4757,9 @@ function _computeNetUsdParts() {
   // les 30 s directement du trading — le résidu couru est ≤30 s ≈ 0, le déduire encore
   // aurait été un double comptage. fundCum = compteur cumulé réel (informatif).
   const fundCum = ((S.fees&&S.fees.totalFunding)||0) + (S.leverageTotalFees||0);
-  const net = Math.max(0,(S.cashAccount||0)+(S.tradingAccount||0)+(S.antiNegReserve||0)+posVal-closeFees-taxAnt-levDebt);
-  return { trading:(S.tradingAccount||0), cash:(S.cashAccount||0), antiNeg:(S.antiNegReserve||0), posVal, latentPos, closeFees, taxAnt, fundCum, levDebt, net };
+  const feesDue = (typeof _feesDueOf === 'function') ? _feesDueOf(null) : 0;   // [GO NETTOYAGE · 19/10/2026] (n° 54) frais restés dus : une dette comme une autre
+  const net = Math.max(0,(S.cashAccount||0)+(S.tradingAccount||0)+(S.antiNegReserve||0)+posVal-closeFees-taxAnt-levDebt-feesDue);
+  return { trading:(S.tradingAccount||0), cash:(S.cashAccount||0), antiNeg:(S.antiNegReserve||0), posVal, latentPos, closeFees, taxAnt, fundCum, levDebt, feesDue, net };
 }
 function _computeNetUsd() { return _computeNetUsdParts().net; }
 // [TUILES · 23/08, maquette validée] composition dépliable des deux portefeuilles,
@@ -4774,6 +4801,7 @@ window._toggleHeroBk = function(which){
        +_tile('\ud83c\udfdb\ufe0f','Impôt anticipé',(p.taxAnt>=0?'\u2212':'+')+fmt$2(Math.abs(p.taxAnt)),'si tout fermait maintenant · registre fiscal',p.taxAnt>=0?'neg':'')
        +_tile('\u23f3','Funding payé (cumul)',fmt$2(p.fundCum),'prélevé en continu du trading','cy')
        +(p.levDebt > 0.005 ? _tile('\u26a1','Dette du levier','\u2212'+fmt$2(p.levDebt),'emprunt versé au trading ou dans une mise','neg') : '')   // [GO LEVIER · 18/10/2026]
+       +(p.feesDue > 0.005 ? _tile('\u26a0\ufe0f','Frais restés dus','\u2212'+fmt$2(p.feesDue),'repris sur le trading à la prochaine fermeture','neg') : '')   // [GO NETTOYAGE · 19/10/2026] (n° 54)
        +_tile('\u03a3','En $',fmt$2(p.net),'','sum');
     }
     tgt.style.display='grid';
@@ -5154,7 +5182,7 @@ function renderHome() {
 
   const tl = document.getElementById('mobileTradeList');
   if (tl) try { tl.innerHTML = allTShown.map(t => {
-    const isClose = t.type === 'position' || t.type === 'urgence';   // [GO ARGENT · 13/10/2026] fermeture d'urgence (06) : ligne à part, affichée comme une clôture
+    const isClose = t.type === 'position' || t.type === 'urgence';   // [GO ARGENT · 13/10/2026] fermeture d'urgence (06) : ligne à part, affichée comme une clôture   // [GO ARGENT · 13/10/2026] fermeture d'urgence (06) : ligne à part, affichée comme une clôture
     const isOpen  = t.type === 'open';
     const isPos   = isClose || isOpen;
     const cfg     = PAIRS[t.pair];

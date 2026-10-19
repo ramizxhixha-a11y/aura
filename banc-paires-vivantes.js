@@ -101,7 +101,8 @@ T('V6 · affichages du marché RÉELS : humeur du marché (03 updateMarketMood) 
   assert.strictEqual(els.moodIndicatorFill.style.left, '50%', 'l\'humeur comptait la paire retirée');
   const hp = fnSrc(s07, 'renderHomePrices'); assert.ok(hp.includes('_livePairStates().forEach(psx => {'), '07 renderHomePrices');
   [[s07, 'const _lvH = _livePairStates();'], [s07, 'const _lvQ = _livePairStates();'], [s08, 'const pairs   = _livePairs();'], [s08, '_livePairs().some(pair => {'], [s08, '_livePairEntries().forEach(([pair, ps]) => {'], [s08, '_livePairs().forEach(pair => {'],
-   [s03, 'const pairs = _livePairs();'], [s02, '_livePairs().forEach(pair => {'], [s02, 'const pairs   = _livePairs();'], [s09g, "const _nLive = (typeof _livePairs === 'function') ? _livePairs().length : Object.keys(pairStates).length;"]].forEach(([s, k]) => assert.ok(s.includes(k), 'texte absent : ' + k));
+   [s03, 'const pairs = _livePairs();'], [s02, 'const pairs   = _livePairs();'],   // [GO NETTOYAGE · 18/10/2026] (ETAT n° 28) [s02, '_livePairs().forEach(pair => {'] retiré : c'était l'amorce de openRealCandlesModal (ps.price de chaque paire dans le filtre des prix réels), retirée — plus aucune boucle à classer là
+ [s09g, "const _nLive = (typeof _livePairs === 'function') ? _livePairs().length : Object.keys(pairStates).length;"]].forEach(([s, k]) => assert.ok(s.includes(k), 'texte absent : ' + k));
   assert.ok(!codeStrict(fnSrc(s07, 'renderHome')).includes('/ Object.keys(PAIRS).length'), '07 renderHome : plus de somme sur toutes les paires divisée par les vivantes');
 });
 T('V7 · INVENTAIRE des boucles brutes sur S.pairStates / walletStore[m].pairStates qui restent (histoire, sauvegarde, rapports, remises à zéro, générateur gardé par cfg) : aucune nouvelle sans classement — les alias locaux (04 detectAnomalies, 05 computeBotFatigue, 08 renderChain : histoire / affichage, relus à la main le 10/10) ne sont pas vus par cet inventaire', () => {
@@ -126,7 +127,7 @@ T('V7 · INVENTAIRE des boucles brutes sur S.pairStates / walletStore[m].pairSta
     // affiché, COPIÉS avec leur paire, paire retirée comprise — c'est de l'historique) et 06 _adnTrades (même lecture pour l'ADN) ; sortent les
     // boucles qu'elles remplacent (05 _getWeekTrades, renderPdfReportSection ; 06 _adnAnnotateTrades, renderAdnSection ; 04 initWhatIfSection ps.stake)
     '05-v37-19-indicateur-de-fatigue-bot.js _outilsClosedTrades': 1, '06-v63-patterns-chartistes.js _adnTrades': 1,
-    '18-reparation-demo.js trace': 1, '18-reparation-demo.js plan': 3,   // plan : les paires de l'état (historique rendu, totaux) et celles du BACKUP (est-il complet ? revue du 13/10)
+    // [GO NETTOYAGE · 18/10/2026] (ETAT G4 n° 22) sortent avec le module 18 : '18-reparation-demo.js trace' ×1 et '18-reparation-demo.js plan' ×3
   };
   const files = [...html.matchAll(/<script[^>]*\bsrc="([^"?]+)(?:\?[^"]*)?"/g)].map(m => m[1]).filter(f => f.startsWith('js/'));
   const RE = /Object\.(values|keys|entries)\(\s*[^()]*pairStates[^()]*\)|\bin\s+[A-Za-z_$.\[\]'"]*pairStates\b/;
@@ -147,7 +148,7 @@ T('V7 · INVENTAIRE des boucles brutes sur S.pairStates / walletStore[m].pairSta
   }
   const nouvelles = Object.keys(found).filter(k => !(k in ALLOW) || found[k] > ALLOW[k]);
   assert.deepStrictEqual(nouvelles, [], 'boucle(s) brute(s) sur S.pairStates à CLASSER (marché / décision → _livePairs… ; histoire → ajouter à la liste) : ' + nouvelles.map(k => k + ' ×' + found[k]).join(' ; '));
-  const total = Object.values(found).reduce((a, b) => a + b, 0); assert.ok(total <= 106, 'total ' + total);   // [GO DÉMO · 12/10/2026] 104 − 2 (05 switchAccount, enterDemoMode) + 4 (18 trace ×1, plan ×3)
+  const total = Object.values(found).reduce((a, b) => a + b, 0); assert.ok(total <= 102, 'total ' + total);   // [GO DÉMO · 12/10/2026] 104 − 2 (05 switchAccount, enterDemoMode) + 4 (18 trace ×1, plan ×3) · [GO NETTOYAGE · 18/10/2026] − 4 (18 retiré) — avant : <= 106
   ['02-state-init.js detectMarketRegime', '02-state-init.js estimateStakes', '08-learning-history-render.js simTick', '10f-resolveur-cycle.js _resolvePairCycleCore'].forEach(k => assert.ok(!(k in found) || k === '10f-resolveur-cycle.js _resolvePairCycleCore', 'converti puis revenu : ' + k));
   assert.strictEqual(found['10f-resolveur-cycle.js _resolvePairCycleCore'], 4, '10f : les 4 totaux d\'histoire (totalTrades / winTrades), plus les emplacements');
   console.log('       ' + total + ' boucles brutes dans ' + Object.keys(found).length + ' fonctions, toutes classées');

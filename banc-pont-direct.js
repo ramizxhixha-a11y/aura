@@ -748,13 +748,13 @@ T('P35 · textes : ni eval, ni Function, ni Math.random, showToast, _decErr, XML
   assert.ok(M.PONT.startsWith('// ═══ [PONT DIRECT · 11/10/2026] VERSION ' + PONT_TOK + ' · « go pont »')); assert.ok(M.LECT.startsWith('// ═══ [PONT DIRECT · 11/10/2026] VERSION ' + PONT_TOK + ' · LECTURE'));
   assert.ok(p.includes("var PONT_V = '" + PONT_TOK + "'") && l.includes("var LECT_V = '" + PONT_TOK + "'"));
 });
-T('P36 · HTML : 17-pont-lecture puis 17b-pont-direct, une fois chacun, juste après 16b, au jeton courant ; aucun autre fichier chargé ne connaît aura_pont_pat ; les énumérations de localStorage du dépôt sont celles relues le 11/10 (03 et 06 : noms et tailles ; Guardian : seulement un JSON d\'état — le PAT n\'en est pas un)', () => {
+T('P36 · HTML : 17-pont-lecture puis 17b-pont-direct, une fois chacun, juste après 16b, au jeton courant ; aucun autre fichier chargé ne connaît aura_pont_pat ; les énumérations de localStorage du dépôt sont celles relues le 11/10 (03 : noms et tailles ; 06 n\'en a plus depuis le 18/10 ; Guardian : seulement un JSON d\'état — le PAT n\'en est pas un)', () => {
   assert.ok(HTML.includes('<script src="js/16b-fiscal-ecran.js?v=' + TOK + '"></script>\n<script src="' + F17 + '?v=' + TOK + '"></script>\n<script src="' + F17B + '?v=' + TOK + '"></script>\n'));
   assert.strictEqual(HTML.split('src="' + F17 + '?').length, 2); assert.strictEqual(HTML.split('src="' + F17B + '?').length, 2);
   const charges = [...HTML.matchAll(/<script[^>]*\bsrc="([^"?]+)/g)].map(m => m[1]), autres = charges.concat(['aura-guardian.html', 'AURA8_v118.html', 'sw.js']).filter(f => f !== F17B);
   assert.deepStrictEqual(autres.filter(f => /aura_pont_(pat|mem)/.test(rd(f))), []);
   const enumere = /localStorage\.key\(|Object\.(?:keys|entries|values)\(\s*(?:window\.)?localStorage|localStorage\.length|JSON\.stringify\(\s*(?:window\.)?localStorage|\.\.\.\s*(?:window\.)?localStorage|localStorage\.clear\(/;
-  assert.deepStrictEqual(charges.concat(['aura-guardian.html', 'sw-reset.html']).filter(f => enumere.test(rd(f))).sort(), ['aura-guardian.html', 'guardian-core.js', 'js/03-per-pair-position-buttons-controls-buid.js', 'js/06-v63-patterns-chartistes.js'],
+  assert.deepStrictEqual(charges.concat(['aura-guardian.html', 'sw-reset.html']).filter(f => enumere.test(rd(f))).sort(), ['aura-guardian.html', 'guardian-core.js', 'js/03-per-pair-position-buttons-controls-buid.js'],   // [GO NETTOYAGE · 18/10/2026] 06 n'énumère plus localStorage (son seul site, le panneau « v117 DIAG TEMPORAIRE » de l'auto-backup, est retiré) — avant : + 'js/06-v63-patterns-chartistes.js'
     'un fichier de plus énumère localStorage : relire ce qu\'il fait des VALEURS avant de livrer (le PAT y vit)');
 });
 T('P37 · erreurs de la page : écoutées seulement quand le pont est actif (30 gardées, texte borné), dites dans etat.json ; un message de GitHub hostile reste du TEXTE à l\'écran ; 17 absent : l\'état part quand même et le DIT, les demandes qui lisent l\'app sont refusées proprement (relecture)', async () => {

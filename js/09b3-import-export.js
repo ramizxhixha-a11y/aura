@@ -328,7 +328,20 @@ function exportState(silent) {
                   String(d.getMinutes()).padStart(2, '0');
     const fname = 'nexus_save_' + stamp + '_cycle' + S.cycle + '.json';
 
-    // Partage natif (WebView Android) ou telechargement (navigateur).
+    // [GO NETTOYAGE · 18/10/2026] (ETAT n° 38) app Android : écriture native par le chemin des backups Guardian (05 _outilsSaveText → _fsWriteBackup, comme
+    // l'Urgence de GO OUTILS), toast selon le résultat RÉEL et le vrai dossier — avant : _shareOrDownloadJSON, écriture refusée, retombait sur un lien blob
+    // qui n'écrit rien et le toast disait « 💾 Sauvegarde exportée » ; une écriture réussie était dite « Documents/AURA_Backups » quel que soit le dossier.
+    if (window.Capacitor || window.cordova) {
+      const _w = (typeof _outilsSaveText === 'function') ? _outilsSaveText(json, fname, 'application/json')
+        : Promise.resolve({ ok: false, diag: 'écriture native indisponible (05 _outilsSaveText absent)' });
+      Promise.resolve(_w).then(r => {
+        if (typeof showToast !== 'function') return;
+        if (r && r.ok) showToast('💾 Sauvegarde écrite : ' + r.where, 5000, 'win');
+        else showToast('❌ Sauvegarde non écrite : ' + String((r && r.diag) || 'écriture native refusée').split('\n')[0], 6000, 'warn');
+      }).catch(e => { if (typeof showToast === 'function') showToast('❌ Sauvegarde non écrite : ' + ((e && e.message) || e), 6000, 'warn'); });
+      return true;
+    }
+    // Navigateur : partage natif ou telechargement (inchangé).
     _shareOrDownloadJSON(json, fname).then(res => {
       if (typeof showToast !== 'function') return;
       if (res === 'fs-written')      showToast('💾 Sauvegardé dans Documents/AURA_Backups', 4000, 'user');

@@ -885,8 +885,26 @@ function renderFiscalPairs() {
     const pnlNetUp  = bp.pnlNet >= 0;
     const pnlGrossUp= bp.pnlGross >= 0;
     const totalCost = bp.gross + bp.tax;
-    const estFeeNext= (S.pairStates[pair]?.stake||0) * (S.feeConfig.takerRate + S.feeConfig.slippage);
-    const estTaxNext= (S.pairStates[pair]?.stake||0) * S.feeConfig.takerRate * reg.rate * reg.inclusion;
+    // [GO NETTOYAGE · 19/10/2026] (ETAT n° 59) « Prochain trade estimé » : la mise DE BASE que le bot prendrait (10f, « engagement quasi-total ») — la part du
+    // capital libre (trading moins 2 % moins les mises engagées) qui revient à cette paire (÷ les paires vivantes sans position, 2 au moins), avec la mise de
+    // la paire comme plancher, bornée comme 09c la borne (95 % du trading) ; ensuite la conviction, la qualité de la paire et les gardes (09c) la modulent. Frais = l'aller-retour que recordFees prendra.
+    // Avant : min(mise, 10 % du trading) — un 10 % qui n'existe nulle part —, frais d'un seul côté, et un « impôt » calculé sur les frais (l'impôt ne porte
+    // que sur un gain, inconnu avant le trade). Relecture du 19/10 : ps.stake vaut 0 en EV et RE, la mise vient de 10f.
+    const _stNext = (() => {
+      const acc = Math.max(0, Number(S.tradingAccount) || 0), capT = Math.max(0, acc - Math.max(1, acc * 0.02));
+      const eng = (S.openPositions || []).reduce((a, p) => a + (Number(p.stakeUsdt) || 0), 0), held = {};
+      (S.openPositions || []).forEach(p => { if (p && p.pair) held[p.pair] = 1; });
+      const live = (typeof _livePairs === 'function') ? _livePairs() : [];   // les paires VIVANTES, comme 10f
+      const slots = live.filter(k => !held[k]).length, floor = Math.max(0, Number(S.pairStates[pair]?.stake) || 0);
+      let st = Math.max(floor, Math.max(0, capT - eng) / Math.max(2, slots));
+      if (st > acc * 0.95) {   // la borne de 09c : le disponible moins 2 %, partagé entre les emplacements libres
+        const slotsMax = (S.tradingMode === 'real') ? 1 : ((S.paperRealConfig && S.paperRealConfig.maxConcurrentPos) || 1);
+        const free = Math.max(1, slotsMax - ((S.openPositions && S.openPositions.length) || 0));
+        st = Math.max((typeof _stakeFloor === 'function') ? _stakeFloor() : 0, ((typeof _stakeRound === 'function') ? _stakeRound : (x => x))((acc - Math.max(1, acc * 0.02)) / free));
+      }
+      return st;
+    })();
+    const estFeeNext= _stNext * ((S.feeConfig.takerRate || 0) * 2 + (S.feeConfig.slippage || 0) * 2);
     // Ratio frais/P&L brut (plus bas = plus efficace)
     const costRatio = bp.pnlGross !== 0 ? (totalCost / Math.abs(bp.pnlGross) * 100) : 0;
     const effBadge  = costRatio < 5 ? {col:'var(--up)', lbl:'Efficace'} :
@@ -950,9 +968,9 @@ function renderFiscalPairs() {
       <div style="margin-top:8px;background:var(--s3);border-radius:9px;padding:8px 10px;">
         <div style="font-size:8px;color:var(--t3);text-transform:uppercase;letter-spacing:.07em;margin-bottom:4px;">Prochain trade estimé</div>
         <div style="display:flex;justify-content:space-between;font-size:10px;">
-          <span style="color:var(--t2);">Mise bot: <strong style="color:var(--gold);">$${Math.round(Math.min(S.pairStates[pair]?.stake||0, S.tradingAccount*0.10))}</strong></span>
-          <span style="color:var(--down);">Frais: −$${estFeeNext.toFixed(2)}</span>
-          <span style="color:var(--gold);">Tax: −$${estTaxNext.toFixed(2)}</span>
+          <span style="color:var(--t2);">Mise de base: <strong style="color:var(--gold);">$${_stNext.toFixed(2)}</strong></span>
+          <span style="color:var(--down);">Frais A/R: −$${estFeeNext.toFixed(2)}</span>
+          <span style="color:var(--gold);">Impôt: sur le gain seulement</span>
         </div>
       </div>
 
@@ -2945,6 +2963,10 @@ function _bgModeWatch(tk) {
     if (!ps || !(Number(ps.price) > 0) || !(Number(pos.entryPrice) > 0)) return;
     _posMark(pos, ps.price);   // [GO LEVIER · 18/10/2026] ce que closePosition réaliserait (02) — avant : exposition × % sans borne, valeur = exposition + résultat
   }); });
+  // [GO NETTOYAGE · 19/10/2026] (ETAT n° 52 et registre n° 18) le contrôle de solvabilité (02 _leverageMarginCheck : fermer AVANT que les pertes, frais,
+  // impôt et dettes dépassent ce que le trading tient) pour CE mode, à chaque passage (ses prix viennent d'être relus) — avant : seulement pour le mode
+  // à l'écran, un mode en play derrière l'écran pouvait passer sous zéro sans que personne ne ferme.
+  g(() => { if (window._leverageMarginCheck) window._leverageMarginCheck(); });
   g(() => { if (typeof learnFromOpenPositions === 'function') learnFromOpenPositions(); });
   g(() => { if (typeof estimateStakes === 'function') estimateStakes(); });
   if (tk % 4 === 0) g(() => { if (typeof _manConsignesWatchdog === 'function') _manConsignesWatchdog(); });
@@ -3097,8 +3119,11 @@ function simTick() {
   // (audit 14/09 : _lossCapSweep sans appelant depuis le 26/07, DOT/DOGE sous leur SL 2 jours). Plafond inchangé :
   // 2 × SL prévu, borné 1,5-3 %, tous modes en play, positions manuelles comprises (10f).
   // La protection de solvabilité du levier reste le filet si le flux venait à s'interrompre.
+  // [GO NETTOYAGE · 19/10/2026] (ETAT n° 52, règle Rams du 18/10 : « la réserve anti-négatif calcule en permanence, à chaque seconde ») le contrôle de
+  // solvabilité du mode à l'écran tourne À CHAQUE battement (1 s) — avant : 1 tick sur 3 ; sans position ouverte il sort aussitôt. Les modes en play
+  // derrière l'écran ont le leur dans _bgModeWatch, après leurs prix.
+  try { if (window._leverageMarginCheck) window._leverageMarginCheck(); } catch(e) {}
   if (tick % 3 === 0) {
-    try { if (window._leverageMarginCheck) window._leverageMarginCheck(); } catch(e) {}
     try { if (window._lossCapSweep) window._lossCapSweep(); } catch(e) {}
   }
   _mRun.forEach(function(_m){
@@ -3408,6 +3433,9 @@ function simTick() {
   // Résumé Telegram de la semaine (06) : n'agit que si son interrupteur est mis et que 7 jours sont passés.
   try { if (typeof checkPriceAlerts === 'function') checkPriceAlerts(); } catch(e) {}
   try { if (typeof _tgHebdoTick === 'function') _tgHebdoTick(); } catch(e) {}
+  // [GO NETTOYAGE · 18/10/2026] (ETAT n° 34) Twin Live au battement, 1 tick sur 4 (la cadence du rendu de l'accueil), quelle que soit la page, écran éteint
+  // compris — avant : seulement à l'ouverture de l'accueil (02 goPage). Il n'écrit que S.twin (positions et P&L VIRTUELS) : ni argent, ni décision.
+  if (tick % 4 === 0) { try { if (typeof tickTwinLive === 'function') tickTwinLive(); } catch(e) {} }
   // ── Render active page (throttled) · SAUTÉ si l'écran est masqué : inutile de peindre une
   //    interface invisible, et ça évite un rattrapage brutal au retour. Le trading et
   //    l'apprentissage (au-dessus) continuent normalement — aucune donnée n'est affectée. ──

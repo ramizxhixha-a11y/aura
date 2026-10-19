@@ -41,10 +41,10 @@ T('en-têtes : 03/12 « [PHASE 1 · 12/09/2026] VERSION 20260912c », 02/08 reli
   assert.ok(s02.startsWith('// [DÉGEL DES VOIX · 02/10/2026] VERSION 20261002a') && s02.split('\n').slice(0, 26).some(l => l.startsWith('// [1b-a · 14/09/2026] VERSION 20260914a')), F02);   // [DÉGEL DES VOIX · 02/10/2026] 02 relivré   // [SONDE RÉSEAU] 02 relivré, en-tête 1b-a en 2e ligne
   assert.ok(s10f.startsWith('// [MARCHÉ RÉPARÉ · 30/09/2026] VERSION 20260930a') && s10f.split('\n').slice(0, 7).some(l => l.startsWith('// ▓▓▓ VERSION 20260926g ▓▓▓')));   // [BILAN AUX HORIZONS · 27/09] 10f relivré, en-tête ▓▓▓ en 6e ligne   // [SENS CONTRAIRE · 27/09] 10f relivré, en-tête ▓▓▓ en 5e ligne   // [HORIZONS APPRIS · 27/09] 10f relivré, en-tête ▓▓▓ en 4e ligne   // [DÉCISION COMMUNE · 27/09/2026] 10f relivré
 });
-T('HTML : DOC_V + 87 ?v= au token ' + TOK + ' (88 occurrences, 10i le 17/09, 11b le 23/09, 14 le 04/10, 15, 16 et 16b le 07/10, 17 et 17b le 11/10, 18 le 12/10), aucun autre token, archive/ non chargé', () => {
-  assert.strictEqual(count(html, TOK), 88);
-  assert.strictEqual(count(html, '?v=' + TOK), 87);   // [GO DÉMO 12/10] +1 : js/18-reparation-demo.js · [PONT DIRECT 11/10] +2 · [GO FISCAL 07/10] +2 : js/16-fiscal.js, js/16b-fiscal-ecran.js
-  assert.strictEqual((html.match(/\?v=\d{8}[a-z]/g) || []).length, 87);
+T('HTML : DOC_V + 87 ?v= au token ' + TOK + ' (88 occurrences, 10i le 17/09, 11b le 23/09, 14 le 04/10, 15, 16 et 16b le 07/10, 17 et 17b le 11/10, 18 le 12/10, retiré le 18/10, 18-recalage-aa le 19/10), aucun autre token, archive/ non chargé', () => {
+  assert.strictEqual(count(html, TOK), 88);   // [GO NETTOYAGE 19/10] +1 : js/18-recalage-aa.js · [GO NETTOYAGE 18/10] 18 retiré — avant : 88
+  assert.strictEqual(count(html, '?v=' + TOK), 87);   // [GO NETTOYAGE 19/10] +1 : js/18-recalage-aa.js (n° 51) · [GO NETTOYAGE 18/10] −1 : js/18-reparation-demo.js retiré · [GO DÉMO 12/10] +1 : js/18-reparation-demo.js · [PONT DIRECT 11/10] +2 · [GO FISCAL 07/10] +2 : js/16-fiscal.js, js/16b-fiscal-ecran.js
+  assert.strictEqual((html.match(/\?v=\d{8}[a-z]/g) || []).length, 87);   // [GO NETTOYAGE 19/10] +1 : js/18-recalage-aa.js
   assert.strictEqual(html.indexOf('archive/'), -1);
 });
 T('syntaxe : 02, 03, 08, 10f, 12 et l\'archive compilent (vm.Script)', () => {

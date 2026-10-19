@@ -89,11 +89,13 @@ T('J4 · [MODES SÉPARÉS] la même fermeture pour un mode DERRIÈRE l\'écran :
   assert.deepStrictEqual(w.seen.alerts, []); assert.deepStrictEqual(w.seen.badges, []); assert.deepStrictEqual(w.seen.ms, []); assert.strictEqual(w.seen.renders, 0); assert.strictEqual(w.seen.closeAll, 0);
   assert.ok(w.seen.toasts.some(t => t.startsWith('Fermé BTC/USDT'))); assert.ok(w.S.chainLog.some(l => l.desc.startsWith('Fermé BTC/USDT LONG | +10.00%')));
 });
-T('J5 · textes : les deux écritures de closePosition et celle de recordFees lisent _computePortfolioSans(pos) ; 10e (dette orpheline) lit la formule canonique ; plus aucune écriture « caisse + trading » nue dans le code chargé', () => {
+T('J5 · textes : les deux écritures de closePosition et celle de recordFees lisent _computePortfolioSans(pos) ; 10e (dette orpheline) : retiré le 18/10, sans appelant ; plus aucune écriture « caisse + trading » nue dans le code chargé', () => {
   const cp = codeStrict(fnSrc(s02, 'closePosition')), rf = codeStrict(fnSrc(s02, 'recordFees'));
   assert.strictEqual(cp.split('_computePortfolioSans(pos)').length - 1, 2, 'closePosition : deux écritures'); assert.strictEqual(cp.split('_computePortfolio()').length - 1, 0, 'closePosition : plus d\'écriture avec la position comptée deux fois');
   assert.ok(rf.includes('S.portfolio = pos ? _computePortfolioSans(pos) : _computePortfolio();'), 'recordFees');
-  assert.strictEqual((codeStrict(s10e).match(/S\.portfolio\s*=\s*\(typeof _computePortfolio === 'function'\) \? _computePortfolio\(\)/g) || []).length, 2, '10e : deux sites canoniques');
+  // [GO NETTOYAGE · 18/10/2026] (ETAT G4, go levier) les deux sites de 10e étaient dans _p4AntiDetteWatchdog, sans appelant, retiré avec _p5InvariantCheck — avant : 2 sites attendus
+  assert.strictEqual((codeStrict(s10e).match(/S\.portfolio\s*=\s*\(typeof _computePortfolio === 'function'\) \? _computePortfolio\(\)/g) || []).length, 0, '10e : plus de remboursement de dette orpheline');
+  assert.ok(!/function _p4AntiDetteWatchdog\s*\(/.test(s10e), '10e : _p4AntiDetteWatchdog retiré');
   const files = [...html.matchAll(/<script[^>]*\bsrc="([^"?]+)(?:\?[^"]*)?"/g)].map(m => m[1]).filter(f => f.startsWith('js/'));
   const nus = []; files.forEach(f => { codeStrict(rd(f)).split('\n').forEach(l => { if (/S\.portfolio\s*=\s*\(S\.cashAccount \|\| 0\) \+ \(S\.tradingAccount \|\| 0\);/.test(l)) nus.push(f); }); });
   assert.deepStrictEqual(nus, [], 'écritures nues : ' + nus.join(', '));

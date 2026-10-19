@@ -244,7 +244,7 @@ const V1_NOMETA = (cycle) => ({ _type: 'aura_guardian_full', savedAt: '2026-08-0
     const h = src('AURA8_v118.html');
     assert.ok(h.includes("DOC_V = '" + TOK + "'"));
     const toks = h.match(/\?v=[0-9a-z]+/g) || [];
-    assert.strictEqual(toks.length, 87);   // [GO DÉMO 12/10] +1 : js/18-reparation-demo.js · [PONT DIRECT 11/10] +2 · [GO FISCAL 07/10] +2 : js/16-fiscal.js, js/16b-fiscal-ecran.js · [VOIX TENDANCE LONGUE 07/10] +1 : js/15-voix-tendance.js (14 le 04/10, 11b le 23/09)
+    assert.strictEqual(toks.length, 87);   // [GO NETTOYAGE 19/10] +1 : js/18-recalage-aa.js (n° 51) · [GO NETTOYAGE 18/10] −1 : js/18-reparation-demo.js retiré · [GO DÉMO 12/10] +1 : js/18-reparation-demo.js · [PONT DIRECT 11/10] +2 · [GO FISCAL 07/10] +2 : js/16-fiscal.js, js/16b-fiscal-ecran.js · [VOIX TENDANCE LONGUE 07/10] +1 : js/15-voix-tendance.js (14 le 04/10, 11b le 23/09)
     assert.deepStrictEqual(toks.filter(t => t !== '?v=' + TOK), []);
     assert.ok(!h.includes('20260911a') && !h.includes('20260911b'));
     for (const b of ['banc-p0b-newskey.js', 'banc-gel-guardian.js', 'banc-gel-boot.js']) assert.ok(src(b).includes("match(/DOC_V = '(\\d{8}[a-z])'/)") && !/const TOK = '\d{8}[a-z]'/.test(src(b)), b + ' : token figé au lieu d\'être lu dans le HTML');   // [12/09] plus aucun banc ne fige le token

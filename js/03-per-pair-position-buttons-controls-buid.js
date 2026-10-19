@@ -4661,6 +4661,7 @@ if(typeof S !== 'undefined') initBotFleet();
     try {
       if (typeof S === 'undefined' || !S || !S.botFleet) return;
       if (localStorage.getItem(FLAG)) return;
+      if (typeof _oneShotEpargne === 'function' && _oneShotEpargne(FLAG, 'compteurs de la flotte · 09/08')) return;   // [GO NETTOYAGE · 18/10/2026] (ETAT n° 27) état vécu (02) : rien — avant : le drapeau seul
       ['exec_bot_v1','scalper_bot_v1'].forEach(function(id){
         if(S.botFleet[id]) { S.botFleet[id].contributions = 0; S.botFleet[id].pnlContrib = 0; }
       });
@@ -5629,6 +5630,46 @@ window._longPressEnd = _longPressEnd;
 
 function _executeAccountReset(accId) {
   if (typeof S === 'undefined' || !S) return;
+  // [GO NETTOYAGE · 19/10/2026] (ETAT n° 53 et règle 9 de CLAUDE.md : rien ne remet un compte à zéro sans une question qui dise exactement ce qui change)
+  // l'appui long de 2 s ne suffit plus : une question nomme le compte, le montant exact et ce qu'il devient ; « Annuler » = rien ne change. Avant : la
+  // remise à zéro partait au bout de 2 s — pour la dette du levier, l'emprunt resté au trading ou dans une mise devenait de l'argent sans que ce soit dit.
+  const _m2 = (v) => (Number(v) || 0).toFixed(2) + ' $';
+  const _modeNom = ({ sim: 'AA', paperReal: 'EV', real: 'RE' })[S.tradingMode] || S.tradingMode;
+  let _q = '';
+  switch (accId) {
+    case 'caisse':         _q = 'Remettre la CAISSE (' + _modeNom + ') à 0 ?\n\n' + _m2(S.cashAccount) + ' disparaissent du portefeuille : ils ne vont nulle part (ni au trading, ni ailleurs).'; break;
+    case 'trading': {
+      // [relecture du 19/10] avec une dette en argent (levier) ou des frais restés dus, le contrôle « jamais sous zéro » (02) solde les positions ouvertes à la seconde suivante
+      const _dues = ((typeof _levCashDebt === 'function') ? _levCashDebt(S, null) : 0) + ((typeof _feesDueOf === 'function') ? _feesDueOf(null) : 0);
+      // ce que le contrôle « jamais sous zéro » (02 _leverageMarginCheck) verrait avec le trading à 0 — mesuré, pas supposé (2e relecture du 19/10)
+      let _solde = false;
+      if ((S.openPositions || []).length && _dues > 0.005 && typeof _leverageSolvency === 'function') {
+        const _t0 = S.tradingAccount;
+        try { S.tradingAccount = 0; const _sv = _leverageSolvency(); _solde = !!(_sv.ok && (_sv.equity - _sv.debt - Math.max(0, _sv.fees + _sv.tax - Math.max(0, Number(S.antiNegReserve) || 0))) <= 0); }
+        finally { S.tradingAccount = _t0; }
+      }
+      _q = 'Remettre le compte TRADING (' + _modeNom + ') à 0 ?\n\n' + _m2(S.tradingAccount) + ' disparaissent du portefeuille : ils ne vont nulle part.'
+        + (_solde ? '\n\nATTENTION : ' + _m2(_dues) + ' sont dus (levier, frais) : sans trading pour les couvrir, le contrôle « jamais sous zéro » soldera les ' + S.openPositions.length + ' position(s) ouverte(s) aussitôt.'
+          : ((S.openPositions || []).length && _dues > 0.005) ? '\n\n' + _m2(_dues) + ' restent dus (levier, frais) : les positions ouvertes ne sont pas touchées, mais si elles perdent, le contrôle « jamais sous zéro » les soldera plus tôt.'
+          : ' Les positions ouvertes ne sont pas touchées.');
+      break;
+    }
+    case 'fondsPropres':   _q = 'Remettre le compteur des FONDS PROPRES (' + _modeNom + ') à 0 ?\n\nIl passe de ' + _m2(S.ownFundsInjected) + ' à 0. Aucun argent ne bouge : seul le compteur de ce que tu as apporté est effacé. Il est lu par l\'estimateur fiscal de la décision (mise moyenne comparée au capital apporté et à la caisse).'; break;
+    case 'reserveFiscale': _q = 'Remettre la RÉSERVE FISCALE (' + _modeNom + ') à 0 ?\n\n' + _m2(S.fiscalReserveAccount) + ' mis de côté pour l\'impôt disparaissent (ils ne reviennent pas au trading) et l\'historique de la réserve est effacé.'
+      + ((S.taxConfig && S.taxConfig.region === 'BE') ? '\n\nLe registre fiscal garde l\'impôt dû de l\'année : il reprendra ce qui manque sur le TRADING à la prochaine fermeture ou à la passe du bot fiscal (10 min au plus).' : ''); break;   // [relecture du 19/10] 16 _fiscReconcile / _fiscRebalance
+    case 'dette': {
+      const _cash = (typeof _levCashDebt === 'function') ? _levCashDebt(S, null) : (Number(S.leverageBorrowed) || 0);
+      _q = 'EFFACER la DETTE DU LEVIER (' + _modeNom + ') ?\n\nDette totale ' + _m2(S.leverageBorrowed) + ', dont ' + _m2(_cash) + ' empruntés en ARGENT (au trading ou dans une mise).\n\nElle est effacée SANS être rendue au prêteur : ces ' + _m2(_cash) + ' restent dans tes comptes et deviennent à toi — c\'est de l\'argent créé. Les positions ouvertes ne rendront plus leur emprunt à la fermeture.';
+      break;
+    }
+    default: return;
+  }
+  let _ok = false;
+  try { _ok = (typeof confirm === 'function') && confirm(_q); } catch (e) { _ok = false; }
+  if (!_ok) {
+    if (typeof showToast === 'function') showToast('Remise à zéro annulée · rien n\'a changé', 2500, 'user');
+    return;
+  }
   let msg = '';
   switch (accId) {
     case 'caisse':

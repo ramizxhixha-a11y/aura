@@ -57,8 +57,12 @@
 // (02 borrowLeverage) est rendue par la position elle-même à sa fermeture. Avant : résultat et frais sur la MISE, et TOUTE la dette retranchée
 // d'une valeur où la part « exposition » n'était pas comptée : avec un levier ×3 (mise 30, exposition 90, compte trading vide) le reste net
 // tombait sous zéro dès l'ouverture et tout était soldé. Ne tourne que s'il y a une dette (02 _leverageMarginCheck) : sans levier, rien ne change.
+// [GO NETTOYAGE · 19/10/2026] (ETAT n° 52, règle Rams du 18/10 : « le trade est clôturé avant de perdre plus que la capacité du compte trading — frais,
+// taxes, dettes ») l'impôt est celui que le registre légal (16 _fiscLatentTaxUsd) verserait si tout fermait maintenant — avant : gains × taux de base
+// de la région (10 % en Belgique, alors qu'un trade AUTO ou à levier est spéculatif, 33 %) ; et les frais restés dus (n° 54, w._feesDue) comptent
+// comme une dette. Il tourne désormais dès qu'une position est ouverte, avec ou sans levier, dans chaque mode en play.
 function _leverageSolvency() {
-  var out = { equity: 0, debt: 0, debtTotal: 0, fees: 0, tax: 0, net: 0, hasLev: false };
+  var out = { equity: 0, debt: 0, debtTotal: 0, fees: 0, tax: 0, net: 0, hasLev: false, feesDue: 0 };
   try {
     var taxReg   = (S.taxConfig && S.taxConfig.regions && S.taxConfig.regions[S.taxConfig.region]) || null;
     var taxRate  = taxReg ? ((taxReg.inclusion || 0) * (taxReg.rate || 0)) : 0;
@@ -71,14 +75,32 @@ function _leverageSolvency() {
       fees += _posCloseFees(pos, lt.pct).total;         // aller-retour que recordFees prendra
       if (lt.usd > 0) gains += lt.usd;                  // seuls les gains sont imposés
     });
-    var debt = _levCashDebt(S, null);                   // la part « exposition » est rendue par la position elle-même
+    var feesDue = (typeof _feesDueOf === 'function') ? _feesDueOf(null) : 0;   // [GO NETTOYAGE · 19/10/2026] (n° 54) frais d'une fermeture que le trading n'a pas pu payer
+    var debt = _levCashDebt(S, null) + feesDue;          // la part « exposition » est rendue par la position elle-même
     out.debtTotal = debtTotal;
     out.debt   = debt;
+    out.feesDue = feesDue;
     out.hasLev = debtTotal > 0;
     out.equity = (S.tradingAccount || 0) + liq;
     out.fees   = fees;
     out.tax    = gains * taxRate;
+    if (gains > 0 && S.taxConfig && S.taxConfig.region === 'BE' && typeof _fiscLatentTaxUsd === 'function' && typeof _walletKey === 'function') {
+      // ce qui irait au dépôt fiscal (un impôt rendu sur une perte n'est pas compté : prudence). Son propre essai : une erreur du registre garde l'estimation
+      // ci-dessus (relecture du 19/10 : sinon la mesure entière échouait et la position n'était plus protégée). Gardé 1 s par mode tant que les positions et le
+      // registre ne changent pas (clé : identifiants des positions + révision du registre) : ce contrôle part à chaque prix reçu, le registre coûte ~0,2 ms ;
+      // une fermeture (impôt versé, position partie) vide la clé — sinon l'impôt déjà versé était retranché une 2e fois (2e relecture du 19/10).
+      try {
+        var _mk = _walletKey(), _nowT = Date.now(), _c = window._solvTaxCache || (window._solvTaxCache = {});
+        var _L = (typeof _fiscLedger === 'function') ? _fiscLedger(_mk, false) : null;
+        var _key = (S.openPositions || []).map(function (p) { return p.id; }).join(',') + '|' + (_L ? _L.rev : '');
+        var _hit = _c[_mk] && _c[_mk].k === _key && _nowT - _c[_mk].t < 1000;
+        var _lt = _hit ? _c[_mk].v : Number(_fiscLatentTaxUsd(_mk));
+        if (!_hit) _c[_mk] = { t: _nowT, k: _key, v: _lt };
+        if (isFinite(_lt)) out.tax = Math.max(0, _lt);
+      } catch (_e) {}
+    }
     out.net    = out.equity - out.fees - out.tax - debt;
+    out.ok     = true;   // [GO NETTOYAGE · 19/10/2026] (n° 52) mesure complète : un calcul qui échoue ne vaut plus « reste net 0 » (qui soldait tout)
   } catch(e) {}
   return out;
 }
@@ -87,6 +109,7 @@ function _leverageSolvency() {
 function _forceCloseAllForSolvency(reason) {
   try {
     var ids = (S.openPositions || []).map(function(p){ return p.id; });
+    var _hadLev = Number(S.leverageBorrowed || 0) > 0;   // [GO NETTOYAGE · 19/10/2026] (n° 52) le journal ne parle du levier que s'il y en avait un
     ids.forEach(function(id){
       try { closePosition(id, false); } catch(e) {}
     });
@@ -96,14 +119,15 @@ function _forceCloseAllForSolvency(reason) {
     try { _rc = _repayCashDebt(_levFreeDebt()); } catch(e) {}
     // le compte ne descend jamais sous zero
     if ((S.tradingAccount || 0) < 0) S.tradingAccount = 0;
-    if (typeof S.leverage !== 'undefined') S.leverage = 0;
+    if (_hadLev && typeof S.leverage !== 'undefined') S.leverage = 0;   // [GO NETTOYAGE · 19/10/2026] (n° 52) l'index n'est rabattu que s'il y avait une dette du levier
     try {
       if (S.chainLog) {
-        S.chainLog.push({ icon:'\uD83D\uDED1', desc:'Cl\u00f4ture de solvabilit\u00e9 \u00b7 ' + reason + ' \u2014 ' + ids.length + ' position(s) sold\u00e9e(s), frais et imp\u00f4ts r\u00e9gl\u00e9s, levier rendu au pr\u00eateur' + (_rc.paid > 0.005 ? ' (' + _rc.paid.toFixed(2) + ' $ pris au trading)' : '') + (_rc.left > 0.005 ? ' \u00b7 reste d\u00fb ' + _rc.left.toFixed(2) + ' $' : ''), hash: Math.random().toString(36).slice(2,8), time: new Date().toLocaleTimeString() });
+        S.chainLog.push({ icon:'\uD83D\uDED1', desc:'Cl\u00f4ture de solvabilit\u00e9 \u00b7 ' + reason + ' \u2014 ' + ids.length + ' position(s) sold\u00e9e(s), frais et imp\u00f4ts r\u00e9gl\u00e9s' + (_hadLev ? ', levier rendu au pr\u00eateur' : '') + (_rc.paid > 0.005 ? ' (' + _rc.paid.toFixed(2) + ' $ pris au trading)' : '') + (_rc.left > 0.005 ? ' \u00b7 reste d\u00fb ' + _rc.left.toFixed(2) + ' $' : ''), hash: Math.random().toString(36).slice(2,8), time: new Date().toLocaleTimeString() });
         if (S.chainLog.length > 100) S.chainLog.splice(0, S.chainLog.length - 100);
       }
     } catch(e) {}
-    try { if (typeof showToast === 'function') showToast('\uD83D\uDED1 Levier cl\u00f4tur\u00e9 \u2014 solde prot\u00e9g\u00e9', 6000, 'warn'); } catch(e) {}
+    // [GO NETTOYAGE · 19/10/2026] (n° 52) le contrôle tourne aussi sans levier : le message ne parle plus seulement du levier
+    try { if (typeof showToast === 'function') showToast('\uD83D\uDED1 Positions cl\u00f4tur\u00e9es \u2014 le compte ne passe pas sous z\u00e9ro (frais, imp\u00f4t, dettes couverts)', 6000, 'warn'); } catch(e) {}
     try { if (typeof saveState === 'function') saveState(true); } catch(e) {}
   } catch(e) {}
 }
@@ -111,8 +135,9 @@ function _forceCloseAllForSolvency(reason) {
 // Controle appele par le battement (aucune minuterie supplementaire).
 window._leverageMarginCheck = function _leverageMarginCheck() {
   try {
-    // sortie immediate sans dette : le controle ne coute rien au flux de prix
-    if (!S || !(Number(S.leverageBorrowed || 0) > 0)) return;
+    // [GO NETTOYAGE · 19/10/2026] (ETAT n° 52, règle Rams du 18/10) plus seulement avec une dette du levier : dès qu'une position est ouverte, avec ou
+    // sans levier — une position perdante sans levier peut aussi laisser des frais que le trading ne paie plus (n° 54). Avant : sortie immédiate sans dette.
+    if (!S) return;
     // [GO LEVIER · 18/10/2026] rien à solder sans position ouverte : ce contrôle ferme des positions AVANT que le compte passe sous zéro. Une dette
     // sans position (index du levier) se rend au transfert vers la caisse ou à la baisse du levier. Avant : une dette restée sans position (et le
     // trading à 0) relançait une « clôture » vide — journal, toast et sauvegarde — à CHAQUE prix reçu (relecture adverse du 18/10).
@@ -121,6 +146,7 @@ window._leverageMarginCheck = function _leverageMarginCheck() {
     // des mises a jour de prix — on ne veut pas la declencher deux fois.
     if (window._solvencyClosing) return;
     var sv = _leverageSolvency();
+    if (!sv.ok) return;   // [GO NETTOYAGE · 19/10/2026] (n° 52) mesure qui a échoué (état abîmé) : on ne solde pas sur des zéros — le contrôle tourne désormais sans levier aussi
     // ★ LA DECISION APPARTIENT AU BOT (regle Rams 27/07) · plus aucun seuil
     // en pourcentage, plus aucun plafond choisi a sa place : tant que le compte
     // est solvable, c'est le bot qui juge s'il ferme ou s'il laisse courir,
@@ -169,6 +195,15 @@ function _levCashDebt(o, exceptPos) {
   return Math.max(0, (Number(o.leverageBorrowed) || 0) - expo);
 }
 window._levCashDebt = _levCashDebt;
+// [GO NETTOYAGE · 19/10/2026] (ETAT n° 54) Les frais d'une fermeture que le trading n'a pas pu payer (il ne passe jamais sous zéro) : avant, la part
+// manquante DISPARAISSAIT (argent créé). Elle est désormais gardée DUE dans le portefeuille du mode (w._feesDue, sauvegardé avec walletStore), dite au
+// journal, comptée comme une dette par le contrôle de solvabilité (_leverageSolvency) et le « net en poche » (07), et reprise sur le trading à la
+// fermeture suivante (recordFees). Elle n'arrive qu'après un saut de prix que le contrôle de solvabilité n'a pas pu devancer (coupure, tablette hors réseau).
+function _feesDueOf(w) {
+  const o = w || ((typeof _activeWallet === 'function') ? _activeWallet() : null);
+  return o ? Math.max(0, Number(o._feesDue) || 0) : 0;
+}
+window._feesDueOf = _feesDueOf;
 // [PORTEFEUILLE JUSTE · 10/10/2026] Le même, SANS une position en cours de fermeture. closePosition rend la mise au trading, règle les frais, partage le gain,
 // et ne retire la position de S.openPositions qu'à la toute fin (les juges ont besoin d'elle entre-temps) : pendant ce temps _computePortfolio() comptait sa
 // mise DEUX fois — rendue au trading ET encore « engagée ». Ce portefeuille gonflé d'une mise était écrit dans S.portfolio, poussé sur la courbe, lu par les
@@ -1065,22 +1100,9 @@ let _realCandlesState = {
 function openRealCandlesModal() {
   _ensureRealCandlesStruct();
 
-  // ═══ AMORCE IMMÉDIATE ═══
-  // Pour que tu voies la bougie en cours dès l'ouverture du modal sans attendre
-  // un nouveau fetch (qui n'arrive que toutes les ~15s), on injecte le prix
-  // courant connu (S.pairStates[pair].price) dans toutes les paires/intervalles
-  // qui n'ont pas encore de bougie en cours. La bougie sera ensuite mise à jour
-  // normalement quand un nouveau prix réel arrive.
-  try {
-    if (S && S.pairStates) {
-      _livePairs().forEach(pair => {   // [PAIRES VIVANTES · 10/10/2026] pas de bougie « réelle » fabriquée avec le prix figé d'une paire retirée
-        const ps = S.pairStates[pair];
-        if (ps && isFinite(ps.price) && ps.price > 0) {
-          _aggregateRealPrice(pair, ps.price);
-        }
-      });
-    }
-  } catch(e) { /* silent */ }
+  // [GO NETTOYAGE · 18/10/2026] (ETAT n° 28) AMORCE RETIRÉE — avant : à l'ouverture, ps.price de CHAQUE paire (figé hors réseau, prix de l'école en AA)
+  // passait par _aggregateRealPrice : l'âge du prix réel (_rcPriceAge / _rcSeenAge, lu par les gardes « prix figé » 07, 10f, 10i), le témoin réseau
+  // (markRealPriceReceived) et les bougies réelles en sortaient « frais ». La fenêtre montre les vraies bougies ; seul un vrai prix Binance / CoinGecko les nourrit.
 
   // Construire le modal
   const existing = document.getElementById('realCandlesModal');
@@ -1212,22 +1234,12 @@ function openRealCandlesModal() {
   // v7.12 LIVRAISON 2 · Connexion WebSocket Binance pour prix temps réel
   _rcConnectWS(_realCandlesState.selectedPair);
 
-  // Fallback polling 1s : utilise ps.price si le WS ne répond pas (synchro avec la simu)
-  // Si le WS est connecté et reçoit des trades < 3s, ce polling ne fait rien
+  // [GO NETTOYAGE · 18/10/2026] (ETAT n° 28) « Fallback polling 1s » RETIRÉ — avant : sans trade WS depuis 3 s, _aggregateRealPrice(paire affichée, ps.price)
+  // chaque seconde : hors réseau l'âge du prix retombait à 0 chaque seconde (la garde « prix figé » voyait un prix frais) et une bougie « réelle » se
+  // fabriquait sur le prix figé (ou celui de l'école en AA). Les vrais prix (WS de la fenêtre, collecteur, REST Binance / CoinGecko) passent par leur
+  // propre chemin ; le dessin suit déjà à chaque image (_rcAnimateLive).
   if (_realCandlesState.refreshTimer) clearInterval(_realCandlesState.refreshTimer);
-  _realCandlesState.refreshTimer = setInterval(() => {
-    try {
-      const pair = _realCandlesState.selectedPair;
-      const wsAge = Date.now() - (_realCandlesState.wsLastTradeTs || 0);
-      // Si le WS pousse des trades récents (< 3s), on le laisse faire
-      if (_realCandlesState.wsConnected && wsAge < 3000) return;
-      // Sinon, fallback sur ps.price
-      const ps = (S && S.pairStates) ? S.pairStates[pair] : null;
-      if (ps && isFinite(ps.price) && ps.price > 0) {
-        _aggregateRealPrice(pair, ps.price);
-      }
-    } catch(e) { /* silent */ }
-  }, 1000);
+  _realCandlesState.refreshTimer = null;
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -1440,14 +1452,7 @@ function _selectRealCandlesPair(pair) {
   _realCandlesState.scrollOffset = 0;
   // v7.12 LIVRAISON 2 · changer la souscription WebSocket vers la nouvelle paire
   _rcConnectWS(pair);
-  // Amorce immédiate : si pas encore de bougie pour cette paire, on en crée une
-  // avec le prix courant connu pour que tu voies tout de suite quelque chose
-  try {
-    const ps = (S && S.pairStates) ? S.pairStates[pair] : null;
-    if (ps && isFinite(ps.price) && ps.price > 0) {
-      _aggregateRealPrice(pair, ps.price);
-    }
-  } catch(e) { /* silent */ }
+  // [GO NETTOYAGE · 18/10/2026] (ETAT n° 28) amorce retirée — avant : _aggregateRealPrice(pair, ps.price) remettait à 0 l'âge du prix réel de la paire choisie
   // v7.12 LIVRAISON 2 · backfill historique Binance si moins de 5 bougies
   try {
     const iv = _realCandlesState.selectedInterval;
@@ -1475,15 +1480,7 @@ function _selectRealCandlesInterval(interval) {
   _realCandlesState.scrollOffset = 0;
   // v7.12 LIVRAISON 6 · re-souscrire le WS sur la nouvelle timeframe (stream kline)
   try { _rcConnectWS(_realCandlesState.selectedPair); } catch(e) {}
-  // Amorce immédiate : si pas encore de bougie pour cette paire/intervalle,
-  // on en crée une avec le prix courant
-  try {
-    const pair = _realCandlesState.selectedPair;
-    const ps = (S && S.pairStates) ? S.pairStates[pair] : null;
-    if (ps && isFinite(ps.price) && ps.price > 0) {
-      _aggregateRealPrice(pair, ps.price);
-    }
-  } catch(e) { /* silent */ }
+  // [GO NETTOYAGE · 18/10/2026] (ETAT n° 28) amorce retirée — avant : _aggregateRealPrice(paire, ps.price) remettait à 0 l'âge du prix réel à chaque intervalle choisi
   // v7.12 LIVRAISON 2 · backfill historique si moins de 5 bougies pour cet intervalle
   try {
     const pair = _realCandlesState.selectedPair;
@@ -3213,14 +3210,16 @@ const EVENT_KINDS = [
   ['argent',           /B\u00e9n\u00e9fice|Perte nette|Caisse|D\u00e9p\u00f4t|Retrait|Injection|R\u00e9serve fiscale/i],
   ['evolution',        /G\u00e9nome|\u00c9volueur|Evolueur|H\u00e9ritage|revigoration|R\u00eave|recalibr\u00e9/i],
   ['reseau',           /Connexion|R\u00e9seau|hors ligne|reconnect|\uD83D\uDCF5|\uD83D\uDCF6/i],
-  ['bunker',           /Bunker|SOS|Mode d\u00e9mo|sauvegarde suspendue/i]
+  // [GO NETTOYAGE · 18/10/2026] (ETAT G4 n° 22) motif « Mode démo » retiré avec le module 18 (sa ligne « Compte … rendu · faux chiffres du Mode démo
+  // effacés ») — avant : /Bunker|SOS|Mode d\u00e9mo|sauvegarde suspendue/i
+  ['bunker',           /Bunker|SOS|sauvegarde suspendue/i]
 ];
 const EVENT_KEEP = 400, EVENT_SAVE = 250, EVENT_DAYS = 7;
 // [MODES SÉPARÉS · 10/10/2026] La ligne du journal porte le mode qui l'a écrite (m : 'sim' / 'paperReal' / 'real') quand ce mode n'est pas à l'écran, ou quand
 // elle parle d'un trade (ouverture, fermeture, sortie, refus, argent, bunker) : 08 renderChain l'affiche avec son nom (AA / EV / RE) dès que ce mode n'est pas
 // celui de l'écran. Avant, rien ne distinguait « Fermé PEPE/USDT … » de l'école de la même ligne de l'EV (sonde du 10/10 : 17 lignes de l'AA en une heure sous
 // l'écran EV, aucune marquée). desc n'est PAS retouché : les natures ci-dessus se lisent sur son début. La poche « tendance longue » (15) n'est pas marquée
-// par sa nature : elle dit son nom et bat sur sa propre minuterie, hors de tout mode. Ni « bunker » (SOS, mode démo, sauvegarde suspendue : l'app entière).
+// par sa nature : elle dit son nom et bat sur sa propre minuterie, hors de tout mode. Ni « bunker » (SOS, sauvegarde suspendue : l'app entière).
 const EVENT_MODE_KINDS = { sortie_trailing: 1, sortie_zombie: 1, sortie_consensus: 1, sortie_tp: 1, sortie_sl: 1, fermeture: 1, veto: 1, ouverture: 1, argent: 1 };
 function _chainStamp(entry) {
   if (!entry || typeof entry !== 'object' || entry.m) return;
@@ -4178,7 +4177,10 @@ function applyAutoLeverageBorrow(newIndex, prevIndex) {
   // Cas ajustement (N>0 → M>0) : diff par rapport à la base initiale
   const base = _tradingCapitalBase();
   const targetBorrow = base * Math.min(newIndex, mult);   // [fix levier 15/08] N× le capital, plus ×10 caché
-  const delta = targetBorrow - (S._autoLevBorrowed || 0);
+  let delta = targetBorrow - (S._autoLevBorrowed || 0);
+  // [GO NETTOYAGE · 19/10/2026] (ETAT n° 58) BAISSER l'index n'emprunte jamais : la dette suivie a pu baisser (remboursements) ou la base monter depuis
+  // l'activation, et « ×3 → ×2 » versait alors de l'argent emprunté au trading. Avant : delta > 0 → emprunt, quel que soit le sens.
+  if (newIndex < prevIndex && delta > 0) delta = 0;
 
   if(delta > 0) {
     // Monter d'un cran → transférer delta supplémentaire
@@ -4287,7 +4289,11 @@ function ensureLeverageCoverForTrade(neededStake, pair) {
   // sinon après un trade qui vide trading, maxBorrow deviendrait ≤ 0 à cause du recalcul.
   // Si pas encore de base (1er emprunt), on prend le trading courant (qui sera figé en snapshot).
   const base = _tradingCapitalBase();
-  const maxBorrow = base * (S.leverageMaxMult || 10) * index - (S.leverageBorrowed || 0);
+  // [GO NETTOYAGE · 19/10/2026] (ETAT n° 58, règle Rams du 15/08 : « ×N = emprunt de N× le capital propre ») la capacité est base × index — le ×10 caché
+  // que le 15/08 avait retiré de l'index (applyAutoLeverageBorrow) et le 18/08 de la réserve (syncLeverageReserve) restait ICI : à ×1, une mise pouvait
+  // emprunter 10× le capital (AA, 18/10 : mises de 30 000 $ sur ~1 000 $ à soi). L'emprunt de l'index (déjà au trading) est compté dans la dette retranchée.
+  // Le bot n'arrive pas ici dans les faits (09c borne sa mise au trading avant d'appeler — code relu) : c'est l'ouverture MANUELLE (02 openPosition).
+  const maxBorrow = base * Math.min(index, S.leverageMaxMult || 10) - (S.leverageBorrowed || 0);
   if(maxBorrow <= 0) return { ok:false, action:'capped', shortfall, reason:'reserve_empty' };
 
   // ═══ v7.12 · PROTECTION P9 · Q1:D · Auto-stop emprunt si capacité > 95% ═══
@@ -4604,7 +4610,25 @@ function recordFees(pair, notionalUsdt, pnlUsd, tradeType, reservedAmount, pos, 
     const _rel = releaseTradeReserve(_reservedForThis, totalFee, pair);
     _feeShortfall = _rel.shortfall;  // part des frais non couverte par la réserve
   }
-  S.tradingAccount = Math.max(0, (S.tradingAccount || 0) - _feeShortfall);
+  // [GO NETTOYAGE · 19/10/2026] (ETAT n° 54) la part des frais que le trading ne couvre pas reste DUE (w._feesDue), elle ne disparaît plus ; des frais
+  // restés dus d'une fermeture précédente sont repris d'abord sur ce que le trading tient maintenant. Avant : Math.max(0, trading − manque), le reste perdu.
+  const _w54 = (typeof _activeWallet === 'function') ? _activeWallet() : null;
+  const _tr54 = Math.max(0, Number(S.tradingAccount) || 0);
+  const _unpaid54 = Math.max(0, _feeShortfall - _tr54);
+  S.tradingAccount = Math.max(0, _tr54 - _feeShortfall);
+  if (_w54) {
+    const _due0 = Math.max(0, Number(_w54._feesDue) || 0), _pay54 = Math.min(_due0, Math.max(0, Number(S.tradingAccount) || 0));
+    if (_pay54 > 0) {
+      S.tradingAccount = Math.max(0, (S.tradingAccount || 0) - _pay54);
+      _w54._feesDue = _due0 - _pay54;
+      S.chainLog.push({ icon: '\u21A9', desc: `Frais restés dus repris sur le trading : ${fmt$2(_pay54)}${_w54._feesDue > 0.005 ? ' · reste dû ' + fmt$2(_w54._feesDue) : ''}`, hash: rndHash(), time: nowStr() });
+    }
+    if (_unpaid54 > 1e-9) {
+      _w54._feesDue = Math.max(0, Number(_w54._feesDue) || 0) + _unpaid54;
+      S.chainLog.push({ icon: '\u26A0', desc: `Frais ${pair} non couverts par le trading : ${fmt$2(_unpaid54)} restent dus (repris à la prochaine fermeture)`, hash: rndHash(), time: nowStr() });
+    }
+    if (S.chainLog.length > 100) S.chainLog.splice(0, S.chainLog.length - 100);
+  }
 
   // ── Impôt : registre légal belge (16). Mouvement signé : + versé au dépôt fiscal, − rendu (perte du même régime) ──
   const netGain    = pnlUsd - totalFee;
@@ -4681,7 +4705,7 @@ function recordFees(pair, notionalUsdt, pnlUsd, tradeType, reservedAmount, pos, 
 
   // Auto-persist to IndexedDB
   // [GO FISCAL · 07/10/2026] + mode, régime, gain légal en € : la base IndexedDB garde CHAQUE fermeture sans limite (le registre en garde 1 500 en RE)
-  saveFeeRecord({ pair, notional: _miseJ, exposure: notionalUsdt, urgence: _urgF || undefined, pnlGross: pnlUsd,
+  saveFeeRecord({ pair, notional: _miseJ, exposure: notionalUsdt, urgence: (_urgF && !(pos && pos._partiel)) || undefined, partiel: (pos && pos._partiel) || undefined, pnlGross: pnlUsd,   // [GO NETTOYAGE · 19/10/2026] (n° 55)
     tradingFee, slipFee, totalFee, taxAmount, pnlNet, time: nowStr(), cycle: S.cycle,
     mode: S.tradingMode, regime: fisc ? fisc.regime : null, gainEur: fisc ? fisc.gainEur : null, ts: Date.now() });
   return { tradingFee, slipFee, totalFee, taxAmount, pnlNet, feeShortfall: _feeShortfall, fisc };
@@ -5025,8 +5049,8 @@ function goPage(idx, tabEl, navEl) {
       if (typeof _updateAutoBarCounters === 'function') _updateAutoBarCounters();
       if (typeof _attachLongPressToBricks === 'function') setTimeout(_attachLongPressToBricks, 50); updatePairAnalysisPanels(); updateIntelBanner(); updateStreakBadge(); startBrainAnim(); updateMarketMood(); updateBotThoughts(); updateFiscalMini(); renderAnalyticsPanel(); if(typeof renderPendingActions === 'function') renderPendingActions(); } catch(e) { console.warn('page 0 render:', e); }
     // [SURVEILLANCE PERMANENTE · 27/09/2026] plus de runBotFleet('tick') à l'ouverture de l'accueil : la flotte tourne au battement (03 _fleetHeartbeat)
-    // v18 · Twin Live tick
-    try { if(typeof tickTwinLive === 'function') tickTwinLive(); } catch(e) {}
+    // v18 · Twin Live — [GO NETTOYAGE · 18/10/2026] (ETAT n° 34) l'accueil l'AFFICHE seulement : il avance au battement (08 simTick) — avant : tickTwinLive() ici, seul appelant
+    try { if(typeof renderTwinLive === 'function') renderTwinLive(); } catch(e) {}
   // v6.2 · Expire stale pending actions (older than 10 minutes)
   if(S.pendingActions && S.pendingActions.length > 0) {
     const now = Date.now();
@@ -6182,8 +6206,9 @@ function openPosition(pair, side, opts) {
   }
 
   // Déduire la mise propre du compte trading
+  // [GO NETTOYAGE · 19/10/2026] (ETAT n° 58) S.portfolio n'est plus écrit ICI, entre le débit de la mise et l'ajout de la position (la mise n'était comptée
+  // nulle part : portefeuille trop bas d'une mise jusqu'au calcul suivant) — il l'est juste après l'ajout, plus bas.
   S.tradingAccount = Math.max(0, S.tradingAccount - stakeUsdt);
-  S.portfolio      = _computePortfolio();   // [23/08] canonique
   syncLeverageReserve();
 
   const amount  = (totalExposure / Math.max(0.0001, ps.price)).toFixed(cfg.dec>=4?4:6);
@@ -6228,6 +6253,7 @@ function openPosition(pair, side, opts) {
                     .slice(0,5)
                     .map(a => ({ emoji:a.emoji, name:a.name.split(' ')[0].split('·')[0].trim(), score:a.score||0 }))
   });
+  S.portfolio = _computePortfolio();   // [23/08] canonique · [GO NETTOYAGE · 19/10/2026] (n° 58) après l'ajout de la position : sa mise y est comptée
   if (typeof _updateCloseAllBadge === 'function') _updateCloseAllBadge();
 
   ps.trades.push({
@@ -6278,7 +6304,13 @@ function openPosition(pair, side, opts) {
 // pertes / blacklist, ni heatmap, ni attribution : une fermeture d'urgence n'est la décision de personne (même règle que la sortie de page, ETAT
 // n° 8). Avant « go argent », l'urgence ne passait par rien de tout cela non plus : la décision d'ouvrir reste celle d'avant après une urgence.
 function closePosition(id, botClose = false) {
-  const _urg = !!(arguments[2] && arguments[2].urgence);   // [GO ARGENT · 13/10/2026] 3e argument { urgence: true } (06), voir ci-dessus
+  // [GO NETTOYAGE · 19/10/2026] (ETAT n° 55) 3e argument { partiel: true } : la part fermée d'une sortie par paliers (05 closePartial, découpée en une
+  // position à part) passe par ICI — frais sur l'exposition et réserve anti-négatif (recordFees), impôt au registre légal (16) —, mais comme une urgence
+  // pour tout ce qui nourrit la décision (statistiques, juges, apprentissage, journal des frais lu par la décision) et SANS ligne d'historique (voir plus
+  // bas) : la sortie par paliers n'y touchait pas avant, elle n'y touche toujours pas. Avant : 05 créditait le trading lui-même (frais sur la mise, sans
+  // slippage, ni réserve, ni impôt).
+  const _part = !!(arguments[2] && arguments[2].partiel);
+  const _urg = !!(arguments[2] && arguments[2].urgence) || _part;   // [GO ARGENT · 13/10/2026] 3e argument { urgence: true } (06), voir ci-dessus
   // [GO ALERTES · 15/10/2026] 3e argument { sortie: { k: 'tp' | 'sl', why } } : posé par les sorties « objectif » ou « stop » (07 TP / SL / trailing /
   // garde-fou −90 %, 05 trailing, 09e perte max de tes consignes, 10f niveaux ATR, gain et stop appris, stop sur coupure, perte max) — lu SEULEMENT par
   // les notifications (« 🎯 TP / SL atteint ») et le message Telegram du trade. Aucune règle d'argent ni de décision ne le lit.
@@ -6461,7 +6493,10 @@ function closePosition(id, botClose = false) {
     // qui nourrissent la décision ne lisent que « position » (10e4 refroidissement après perte, 06 pertes consécutives, 10e6 espérance nette, 09e…) :
     // ils voient ce qu'ils voyaient avant, quand l'urgence ne laissait aucune ligne (revue du 13/10, 2e passage). Les compteurs de la paire non plus.
     const amount = pos.amount || (pos.stakeUsdt / Math.max(0.0001, pos.entryPrice)).toFixed(cfg.dec>=4?4:6);
-    ps.trades.push({
+    // [GO NETTOYAGE · 19/10/2026] (n° 55) la part fermée d'une sortie par paliers n'écrit AUCUNE ligne ici : l'historique est coupé à 40 lignes par paire
+    // (09b2) et les lecteurs de la décision (10e6 espérance nette, 10e4, 06…) y comptent leurs clôtures — des lignes en plus les privaient des plus anciennes
+    // (relecture du 19/10 : 10 clôtures lues au lieu de 20, veto de la porte des frais en RE). Son résultat va sur la ligne de la fermeture finale (« paliers »).
+    if (!_part) ps.trades.push({
       side:      pos.side === 'long' ? 'buy' : 'sell',
       type:      _urg ? 'urgence' : 'position',
       amount:    String(amount),
@@ -6473,7 +6508,8 @@ function closePosition(id, botClose = false) {
       entryTs:   pos.entryTs || pos.openedAt || null,
       entryTime: pos.entryTime || null,
       ts:        Date.now(),
-      time:      nowStr()
+      time:      nowStr(),
+      paliers:   Array.isArray(pos._paliers) && pos._paliers.length ? pos._paliers : undefined   // [GO NETTOYAGE · 19/10/2026] (n° 55) parts déjà fermées par paliers (05)
     });
     if(ps.trades.length > 100) ps.trades.splice(0, ps.trades.length - 100);
     if (!_urg) {
@@ -6588,6 +6624,7 @@ function closePosition(id, botClose = false) {
     S._lastTradeHoldMs = (pos.entryTs && Date.now() > pos.entryTs) ? (Date.now() - pos.entryTs) : 0;
     // [GO ARGENT · 13/10/2026] frais et glissement sur l'EXPOSITION (ce que l'exchange achète et revend), plus sur la seule mise : avec levier ×N
     // ils étaient sous-comptés d'un facteur N (ETAT n° 21). Sans levier, exposition = mise : rien ne change.
+    if (_part) pos._partiel = true;   // [GO NETTOYAGE · 19/10/2026] (n° 55) recordFees l'écrit au registre des frais sous son nom
     if (_urg) pos._urgence = true;   // lu par recordFees : ni journal des frais lu par la décision, ni cumul de l'estimateur fiscal de la décision
     const _rf = recordFees(pos.pair, totalExp, realisedUsd, exitType, pos._reservedAmount, pos, cur) || {};
     // [GO LEVIER · 18/10/2026] (ETAT n° 25) l'emprunt versé en ARGENT pour cette mise est rendu au prêteur SUR le trading, après les frais (un frais
@@ -6679,7 +6716,7 @@ function closePosition(id, botClose = false) {
       // v19 · #38 Notification trade fermé — [GO ALERTES · 15/10/2026] avec la raison (« 🎯 TP / SL atteint ») et le mode
       try { if(typeof notifTradeClose === 'function') notifTradeClose(pos.pair, pos.side, realisedUsd, realisedPct, _sortie, S.tradingMode); } catch(e) {}
       // [GO ALERTES · 15/10/2026] Telegram « 📊 Chaque trade » (06 tgOnTrade : EV et RE seulement) — avant, rien ne l'appelait
-      try { if(typeof tgOnTrade === 'function') tgOnTrade({ pair: pos.pair, side: pos.side, pnlUsd: realisedUsd, pnlPct: realisedPct, mode: S.tradingMode, auto: pos.auto === true, urgence: _urg, sortie: _sortie }); } catch(e) {}
+      try { if(typeof tgOnTrade === 'function') tgOnTrade({ pair: pos.pair, side: pos.side, pnlUsd: realisedUsd, pnlPct: realisedPct, mode: S.tradingMode, auto: pos.auto === true, urgence: _urg && !_part, partiel: _part || undefined, sortie: _sortie }); } catch(e) {}
       // v23 · #5 Vérifier alertes après chaque trade
       // [ÉCOLE VIVANTE · 10/10/2026] pas pour l'AA derrière un autre écran : ces alertes et ces badges s'affichent devant l'utilisateur et leurs drapeaux
       // (S.pnlAlerts, une fois par session) sont communs aux modes — l'écran les vérifie lui-même pour le mode affiché (renderHome)
@@ -6717,11 +6754,11 @@ function closePosition(id, botClose = false) {
   if(S.chainLog.length > 100) S.chainLog.splice(0, S.chainLog.length - 100);
   S.chainLog.push({
     icon: realisedPct>=0?'✅':'❌',
-    desc: `Fermé ${pos.pair} ${pos.side.toUpperCase()} | ${pnlStr} (${usdtStr} USDT)`,
+    desc: `${_part ? 'Sortie partielle' : 'Fermé'} ${pos.pair} ${pos.side.toUpperCase()} | ${pnlStr} (${usdtStr} USDT)`,   // [GO NETTOYAGE · 19/10/2026] (n° 55)
     hash: rndHash(), time: nowStr()
   });
   const levTag = pos.levBorrowed > 0 ? ` ⚡$${pos.levBorrowed}` : '';
-  showToast('Fermé '+pos.pair+levTag+' · '+pnlStr+' · '+usdtStr);
+  showToast((_part ? 'Sortie partielle ' : 'Fermé ')+pos.pair+levTag+' · '+pnlStr+' · '+usdtStr);   // [GO NETTOYAGE · 19/10/2026] (n° 55)
 
   // ═══ v5.1 — Milestones & Particles ═══
   // [ÉCOLE VIVANTE · 10/10/2026] rien de tout cela pour une fermeture de l'AA derrière un autre écran : un jalon « VICTOIRE » ou « Perte » en plein écran EV
@@ -7525,6 +7562,38 @@ function _dispatchSessionTaxes() {
 // DE JOUR : le verifier 1 440 fois par jour n'avait aucun sens.
 setInterval(_dispatchSessionTaxes, 600000);
 
+// [GO NETTOYAGE · 18/10/2026] (ETAT n° 27) GARDE SUR L'ÉTAT des migrations « une fois » qui écrivent l'argent, l'historique ou les agents (02 ci-dessous,
+// 03 _fleetTruthPurge, 09b2 _clearOrphanDebt et _fitnessRestore20260805). Avant : leur seul drapeau localStorage ; un localStorage perdu avec l'IndexedDB
+// gardée → au démarrage elles tournaient sur le VRAI état relu (backup du 18/10 en vm : AA, EV et RE à 0 $, frais, journal et 10 fitness de bots réécrits).
+// Désormais elles ne tournent que sur un état NEUF. État vécu = (1) relu du stockage : S._restoredSavedAt n'est posé que par loadState (09b2), après le choix
+// d'un snapshot — une installation neuve sort avant (rien en IDB ni en LS, ou remise à zéro d'usine) ; ou (2) des données réelles : un trade clos, une
+// position, un apport, de l'argent dans l'un des 3 portefeuilles, ou un agent jugé — tout est à zéro dans S (plus haut) et _freshWallet, moteur en pause.
+function _oneShotEtatVecu() {
+  try {
+    if (typeof S === 'undefined' || !S) return '';
+    if (S._restoredSavedAt !== undefined) return 'état relu du stockage' + (S._restoredSavedAt ? ' (sauvegardé le ' + String(S._restoredSavedAt).slice(0, 16).replace('T', ' ') + ')' : '');
+    var ws = S.walletStore || {}, m, w, i, MODES = ['sim', 'paperReal', 'real'], NOM = { sim: 'AA', paperReal: 'EV', real: 'RE' };
+    for (i = 0; i < MODES.length; i++) {
+      m = MODES[i]; w = ws[m]; if (!w) continue;
+      if ((Number(w.totalTrades) || 0) > 0 || (w.fees && (Number(w.fees.tradeCount) || 0) > 0)) return NOM[m] + ' a des trades';
+      if ((w.openPositions || []).length) return NOM[m] + ' a une position';
+      if ((Number(w.ownFundsInjected) || 0) > 0 || (w.ownFundsLog || []).length) return NOM[m] + ' a des apports';
+      if ((Number(w.tradingAccount) || 0) > 0 || (Number(w.cashAccount) || 0) > 0) return NOM[m] + ' a de l\'argent';
+    }
+    if ((S.agents || []).some(function (a) { return a && Array.isArray(a._judgments) && a._judgments.length; })) return 'des agents ont déjà été jugés';
+  } catch (e) {}
+  return '';
+}
+// Vrai = la migration NE tourne PAS : l'état est vécu (drapeau posé, une ligne au journal). Faux = installation neuve : la migration fait ce qu'elle faisait.
+function _oneShotEpargne(flag, nom) {
+  var why = _oneShotEtatVecu();
+  if (!why) return false;
+  try { localStorage.setItem(flag, '1'); } catch (e) {}
+  try { if (S.chainLog) { S.chainLog.push({ icon: '🛡', desc: 'Migration unique « ' + nom + ' » non rejouée : ' + why + ' — rien n\'est touché', hash: rndHash(), time: nowStr() }); if (S.chainLog.length > 100) S.chainLog.splice(0, S.chainLog.length - 100); } } catch (e) {}
+  return true;
+}
+window._oneShotEtatVecu = _oneShotEtatVecu; window._oneShotEpargne = _oneShotEpargne;
+
 
 // ════════════════════════════════════════════════════════════════════════
 // [MIGRATION ÉTAGE 1 · 13/08/2026] Le backup du 13/08 a prouvé (ligne « 📊 Position
@@ -7574,7 +7643,7 @@ setInterval(_dispatchSessionTaxes, 600000);
     if (!ready && _t < 240) return;
     clearInterval(_iv);
     try {
-      if (localStorage.getItem(FLAG)) return;
+      if (localStorage.getItem(FLAG) || _oneShotEpargne(FLAG, 'réalignement du levier · 15/08')) return;   // [GO NETTOYAGE · 18/10/2026] (ETAT n° 27) état vécu : rien — avant : le drapeau seul
       localStorage.setItem(FLAG, '1');
       var idx = S.leverage || 0;
       var borrowed = S._autoLevBorrowed || 0;
@@ -7603,7 +7672,7 @@ setInterval(_dispatchSessionTaxes, 600000);
 (function _delev1808v2(){var F='aura_delev_20260818_v2',t=0;var iv=setInterval(function(){t++;
  var r=false;try{r=!!window._stateReady;}catch(e){}
  if(!r&&t<240)return;clearInterval(iv);
- try{if(localStorage.getItem(F))return;localStorage.setItem(F,'1');
+ try{if(localStorage.getItem(F)||_oneShotEpargne(F,'déleveraging v2 · 18/08'))return;localStorage.setItem(F,'1');   // [GO NETTOYAGE · 18/10/2026] (ETAT n° 27) état vécu : rien — avant : le drapeau seul
   function fix(w,nom){if(!w)return null;var deb=w.leverageBorrowed||0;if(!(deb>0))return null;
    var pay=Math.min(deb,w.tradingAccount||0);
    w.tradingAccount=Math.max(0,(w.tradingAccount||0)-pay);
@@ -7628,7 +7697,7 @@ setInterval(_dispatchSessionTaxes, 600000);
 (function _seed2308v4(){var F='aura_seed_20260823_v4',t=0;var iv=setInterval(function(){t++;
  var r=false;try{r=!!window._stateReady;}catch(e){}
  if(!r&&t<240)return;clearInterval(iv);
- try{if(localStorage.getItem(F))return;localStorage.setItem(F,'1');
+ try{if(localStorage.getItem(F)||_oneShotEpargne(F,'SEED v4 · zéro absolu · 23/08'))return;localStorage.setItem(F,'1');   // [GO NETTOYAGE · 18/10/2026] (ETAT n° 27) état vécu : rien — avant : le drapeau seul (les 3 portefeuilles à 0)
   function zero(w,nom){if(!w)return null;
    w.openPositions=[];w.cashAccount=0;w.tradingAccount=0;w.portfolio=0;w._startPortfolio=0;
    w.leverageBorrowed=0;w._autoLevBorrowed=0;w.leverage=0;w._autoLevBase=0;w.leverageReserve=0;
@@ -7652,7 +7721,7 @@ setInterval(_dispatchSessionTaxes, 600000);
 (function _resetFees2308(){var F='aura_resetfees_20260823',t=0;var iv=setInterval(function(){t++;
  var r=false;try{r=!!window._stateReady;}catch(e){}
  if(!r&&t<240)return;clearInterval(iv);
- try{if(localStorage.getItem(F))return;localStorage.setItem(F,'1');
+ try{if(localStorage.getItem(F)||_oneShotEpargne(F,'remise à zéro des frais · 23/08'))return;localStorage.setItem(F,'1');   // [GO NETTOYAGE · 18/10/2026] (ETAT n° 27) état vécu : rien — avant : le drapeau seul
   function zap(o,depth){if(!o||typeof o!=='object'||depth>3)return;
    Object.keys(o).forEach(function(k){var v=o[k];
     if(typeof v==='number')o[k]=0;
@@ -7673,7 +7742,7 @@ setInterval(_dispatchSessionTaxes, 600000);
 (function _rebase2308(){var F='aura_rebase_20260823',t=0;var iv=setInterval(function(){t++;
  var r=false;try{r=!!window._stateReady;}catch(e){}
  if(!r&&t<240)return;clearInterval(iv);
- try{if(localStorage.getItem(F))return;localStorage.setItem(F,'1');
+ try{if(localStorage.getItem(F)||_oneShotEpargne(F,'recalage des points de départ · 23/08'))return;localStorage.setItem(F,'1');   // [GO NETTOYAGE · 18/10/2026] (ETAT n° 27) état vécu : rien — avant : le drapeau seul
   function rb(w){if(!w)return;var v=_computePortfolio(w);
    w._startPortfolio=v;if(w.pnlPeriod){w.pnlPeriod.todayStartPortfolio=v;w.pnlPeriod.weekStartPortfolio=v;}}
   Object.keys(S.walletStore||{}).forEach(function(m){rb(S.walletStore[m]);});
@@ -7689,7 +7758,7 @@ setInterval(_dispatchSessionTaxes, 600000);
 (function _purgeJournal2308(){var F='aura_purgejournal_20260823',t=0;var iv=setInterval(function(){t++;
  var r=false;try{r=!!window._stateReady;}catch(e){}
  if(!r&&t<240)return;clearInterval(iv);
- try{if(localStorage.getItem(F))return;localStorage.setItem(F,'1');
+ try{if(localStorage.getItem(F)||_oneShotEpargne(F,'purge du journal de bord · 23/08'))return;localStorage.setItem(F,'1');   // [GO NETTOYAGE · 18/10/2026] (ETAT n° 27) état vécu : rien — avant : le drapeau seul
   var n=0;
   Object.keys(S.walletStore||{}).forEach(function(m){var w=S.walletStore[m];
    if(w&&w.dreamJournal&&w.dreamJournal.length){n+=w.dreamJournal.length;w.dreamJournal=[];}});

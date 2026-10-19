@@ -388,69 +388,8 @@ function _openManTrade(pair, side) {
 window._openManTrade = _openManTrade;
 if(typeof _openManTrade==='function') window._openManTrade = _openManTrade;
 
-function _p4AntiDetteWatchdog() {
-  if (typeof S === 'undefined' || !S) return;
-  
-  const leverage = S.leverage || 0;
-  const debtAuto = S._autoLevBorrowed || 0;
-  const debtTotal = S.leverageBorrowed || 0;
-  const trading  = S.tradingAccount || 0;
-  
-  const debtInPositions = (S.openPositions || []).reduce((s, p) => s + (p.levBorrowed || 0), 0);
-  const orphanDebt = Math.max(0, debtTotal - debtInPositions);
-  
-  if (leverage === 0 && orphanDebt > 0 && trading > 0) {
-    const committedInPositions = (S.openPositions || []).reduce((s, p) => s + (p.stakeUsdt || 0), 0);
-    const freeInTrading = Math.max(0, trading - committedInPositions);
-    const repay = Math.min(orphanDebt, freeInTrading);
-    
-    if (repay > 0) {
-      S.tradingAccount   = Math.max(0, trading - repay);
-      S.leverageBorrowed = Math.max(0, debtTotal - repay);
-      S._autoLevBorrowed = Math.max(0, debtAuto - repay);
-      S.portfolio        = (typeof _computePortfolio === 'function') ? _computePortfolio() : ((S.cashAccount || 0) + (S.tradingAccount || 0));   // [PORTEFEUILLE JUSTE · 10/10/2026] canonique : cette branche tourne AVEC des positions ouvertes, leurs mises étaient oubliées jusqu'au recalcul suivant
-      if (typeof syncLeverageReserve === 'function') syncLeverageReserve();
-      S.chainLog.push({ icon: '🔧', desc: `P12 Watchdog · remboursement dette orpheline $${repay.toFixed(2)} (reste $${(S.leverageBorrowed||0).toFixed(2)})`, hash: (typeof rndHash === 'function' ? rndHash() : Math.random().toString(36).slice(2,10)), time: (typeof nowStr === 'function' ? nowStr() : new Date().toLocaleTimeString()) });
-      if (S.chainLog.length > 100) S.chainLog.splice(0, S.chainLog.length - 100);
-    }
-  }
-  
-  if ((S.openPositions || []).length === 0 && debtTotal > 0 && trading > 0) {
-    const repay = Math.min(debtTotal, trading);
-    if (repay > 0) {
-      S.tradingAccount   = Math.max(0, trading - repay);
-      S.leverageBorrowed = Math.max(0, debtTotal - repay);
-      S._autoLevBorrowed = Math.max(0, debtAuto - repay);
-      S.portfolio        = (typeof _computePortfolio === 'function') ? _computePortfolio() : ((S.cashAccount || 0) + (S.tradingAccount || 0));   // [PORTEFEUILLE JUSTE · 10/10/2026] canonique (ici sans position : même valeur qu'avant)
-      if (typeof syncLeverageReserve === 'function') syncLeverageReserve();
-      S.chainLog.push({ icon: '🔧', desc: `P12 · Aucune position ouverte · remboursement total $${repay.toFixed(2)}`, hash: rndHash(), time: nowStr() });
-      if (S.chainLog.length > 100) S.chainLog.splice(0, S.chainLog.length - 100);
-    }
-  }
-}
-if(typeof _p4AntiDetteWatchdog==='function') window._p4AntiDetteWatchdog = _p4AntiDetteWatchdog;
-
-function _p5InvariantCheck() {
-  if (typeof S === 'undefined' || !S) return;
-  
-  const posLevSum = (S.openPositions || []).reduce((s, p) => s + (p.levBorrowed || 0), 0);
-  const totalBorrow = S.leverageBorrowed || 0;
-  const autoBorrow = S._autoLevBorrowed || 0;
-  
-  if ((S.leverage || 0) === 0 && autoBorrow > 0 && posLevSum === 0) {
-    if (!S._p5LastWarn || Date.now() - S._p5LastWarn > 5 * 60 * 1000) {
-      S._p5LastWarn = Date.now();
-      console.warn('[P5 INVARIANT] Dette orpheline détectée: $' + autoBorrow.toFixed(2) + ' sans position · P4 sera déclenché');
-    }
-    _p4AntiDetteWatchdog();
-  }
-  
-  if (totalBorrow < posLevSum - 0.01) {
-    console.error('[P5 INVARIANT] leverageBorrowed (' + totalBorrow.toFixed(2) + ') < somme pos.levBorrowed (' + posLevSum.toFixed(2) + ')');
-    S.leverageBorrowed = posLevSum;
-  }
-}
-if(typeof _p5InvariantCheck==='function') window._p5InvariantCheck = _p5InvariantCheck;
+// [GO NETTOYAGE · 18/10/2026] (ETAT G4, go levier) _p4AntiDetteWatchdog et _p5InvariantCheck retirés (et leurs window.X) : aucun appelant — avant : _p5 appelait
+// _p4 (remboursement de la « dette orpheline » sur le trading) mais rien n'appelait _p5. La dette du levier est traitée ailleurs (02 closePosition, ETAT n° 52).
 
 function _pearsonCorrelation(returnsA, returnsB) {
   const n = Math.min(returnsA.length, returnsB.length);
