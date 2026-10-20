@@ -7612,7 +7612,9 @@ window._oneShotEtatVecu = _oneShotEtatVecu; window._oneShotEpargne = _oneShotEpa
     if (!ready && _t < 240) return;
     clearInterval(_iv);
     try {
-      if (localStorage.getItem(FLAG)) return;
+      // [GO TALENT · 20/10/2026] (ETAT n° 65) garde sur l'état comme les autres migrations « une fois » (n° 27) : un localStorage perdu avec l'IndexedDB
+      // gardée ne réécrit plus un réglage VÉCU (un « 1 » choisi par Rams repassait à 3). État neuf : inchangé.
+      if (localStorage.getItem(FLAG) || _oneShotEpargne(FLAG, 'étage 1 · positions simultanées · 13/08')) return;
       if (S && S.paperRealConfig && (S.paperRealConfig.maxConcurrentPos || 1) <= 1) {
         S.paperRealConfig.maxConcurrentPos = 3;
         if (S.chainLog) {

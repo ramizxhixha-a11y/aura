@@ -71,7 +71,9 @@ window.exportForClaude = exportForClaude;
 function enableFullPowerMode() {
   if (!S || !S.agents) return;
   
-  const initCap = (S.cashAccount || 0) + (S.tradingAccount || 0) + (S.fiscalReserveAccount || 0);
+  // [GO TALENT · 20/10/2026] (ETAT n° 57) la même mesure que le stop d'urgence (09e _fpEquity : mises engagées et P&L latent compris, dette en argent
+  // retirée) — avant : sans les mises, une position ouverte à l'activation était comptée comme perdue.
+  const initCap = (typeof _fpEquity === 'function') ? _fpEquity() : ((S.cashAccount || 0) + (S.tradingAccount || 0) + (S.fiscalReserveAccount || 0));
   S._fpInitialCapital = initCap;
   S._fpStopTriggered = false;
   

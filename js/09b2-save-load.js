@@ -1249,6 +1249,8 @@ setTimeout(_auraRotatePurge, 20000);
     try {
       if (typeof S === 'undefined' || !S) return;
       if (localStorage.getItem(FLAG)) return;               // deja fait
+      // [GO TALENT · 20/10/2026] (ETAT n° 65) état vécu (02 _oneShotEpargne, comme n° 27) : un localStorage perdu ne réécrit plus les frais réglés
+      if (typeof _oneShotEpargne === 'function' && _oneShotEpargne(FLAG, 'frais Binance · 28/07')) return;
       if (!S.feeConfig) S.feeConfig = {};
       var fc = S.feeConfig;
       var oldMaker = Number(fc.makerRate);

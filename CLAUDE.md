@@ -14,7 +14,7 @@ Rams ne code pas : Claude lit, modifie, prouve et livre. Ces règles existent pa
 7. **Avant d'écrire « rien ne fait X » ou « X n'existe pas »** : `grep` sur TOUS les scripts chargés par le HTML, le HTML lui-même (scripts en ligne) et `js/native-bridge.js`. Panne : 12/10, « rien ne lance le service natif » — faux, `native-bridge.js` le lance.
 8. **Au plus 3 sous-agents à la fois, jamais deux navigateurs en même temps** (machine à 2 cœurs). Chaque agent écrit ses résultats dans un fichier au fil de l'eau. Panne : l'audit du 10/10 a lancé 9 agents en parallèle et n'a jamais rendu de résultat.
 9. **Argent et données** : toute fermeture passe par `closePosition` ; aucune action ne remplace ou ne remet à zéro un portefeuille, l'historique, les agents ou AUTO/MANU sans une confirmation qui dit exactement ce qui change. Pannes : Mode Démo (11/10), imports, fermeture d'urgence (registre G1).
-10. La décision d'ouvrir : rien ne change sans la porte TALENT ou SOURCE (points 9–10 de la passation). AUTO / MANU : Rams seul. Aucun seuil chiffré posé à la main.
+10. La décision d'ouvrir : rien ne change sans la porte TALENT ou SOURCE (points 9–10 de la passation). AUTO / MANU : Rams seul. Aucun seuil chiffré posé à la main. **Une porte qui conclut « identique » doit d'abord montrer qu'elle VOIT une différence** (un état réel où la correction agit, mesuré avant / après) ; sans ce témoin, « identique » n'est pas une preuve. Panne : GO TALENT (20/10), porte aveugle — n° 56 et 61 seraient entrés sans la relecture adverse.
 
 ## Fin de mission
 11. `ETAT-AURA8.md` mis à jour dans le même commit : 1re ligne au token courant, état du § 1 relu par le pont, registre (défauts fermés retirés, nouveaux ajoutés avec fichier:ligne), ≤ 20 Ko. `banc-all` BLOQUE sinon.

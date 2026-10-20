@@ -42,11 +42,12 @@ const TOUT = SCRIPTS.map(f => [f, rd(f)]).concat([['AURA8_v118.html (en ligne)',
 
 // ══ A · n° 27 ═══════════════════════════════════════════════════════════════════════════════════════════════════════
 // les 11 migrations « une fois » à drapeau localStorage seul, dans l'ordre de chargement (02, 03, 09b2) ; GARDEES = celles qui écrivent l'argent,
-// l'historique, les agents (règle 9). Non gardées, dites au rapport : _etage1Migration (réglage de la décision d'ouvrir, maxConcurrentPos 1 → 3 : porte
+// l'historique, les agents (règle 9). Non gardées par go nettoyage, dites au rapport : _etage1Migration (réglage de la décision d'ouvrir, maxConcurrentPos 1 → 3 : porte
 // TALENT, pas ce go) et _upgradeFeeRates (relève le taux de frais au plancher Binance 0,10 %, ne le baisse jamais) ; 01 aura_permode_reset_v2 (play → pause).
+// [GO TALENT · 20/10/2026] (ETAT n° 65) ces deux-là sont gardées à leur tour, après la porte (rejeu/porte_registre.js) : les 11 demandent _oneShotEpargne.
 const MIG = [['_etage1Migration', s02], ['_levRealign', s02], ['_delev1808v2', s02], ['_seed2308v4', s02], ['_resetFees2308', s02], ['_rebase2308', s02], ['_purgeJournal2308', s02],
   ['_fleetTruthPurge', s03], ['_clearOrphanDebt', s9b2], ['_upgradeFeeRates', s9b2], ['_fitnessRestore20260805', s9b2]];
-const GARDEES = ['_levRealign', '_delev1808v2', '_seed2308v4', '_resetFees2308', '_rebase2308', '_purgeJournal2308', '_fleetTruthPurge', '_clearOrphanDebt', '_fitnessRestore20260805'];
+const GARDEES = ['_etage1Migration', '_levRealign', '_delev1808v2', '_seed2308v4', '_resetFees2308', '_rebase2308', '_purgeJournal2308', '_fleetTruthPurge', '_clearOrphanDebt', '_upgradeFeeRates', '_fitnessRestore20260805'];
 const r2 = x => Math.round((Number(x) || 0) * 100) / 100;
 // le monde : S donné (état réel relu, ou installation neuve), accesseurs de portefeuille RÉELS de 02, localStorage donné, état prêt
 function monde27(S0, o) {
@@ -147,14 +148,14 @@ function monde28(o) {
   console.log('▶ banc-nettoyage-reseau · code ' + ROOT);
 
   console.log('▶ A. n° 27 — migrations « une fois » : la garde se fonde sur l\'état');
-  await T('A1 · inventaire : les migrations qui lisent un drapeau localStorage (getItem(F) / getItem(FLAG)) dans les scripts du HTML sont exactement les 11 connues ; les 9 qui écrivent l\'argent, l\'historique ou les agents demandent _oneShotEpargne AVANT d\'écrire', () => {
+  await T('A1 · inventaire : les migrations qui lisent un drapeau localStorage (getItem(F) / getItem(FLAG)) dans les scripts du HTML sont exactement les 11 connues ; toutes demandent _oneShotEpargne AVANT d\'écrire (les 9 de l\'argent, de l\'historique et des agents depuis go nettoyage ; étage 1 et frais depuis GO TALENT, n° 65)', () => {
     const found = [];
     TOUT.forEach(([f, s]) => { const re = /\(function (\w+)\s*\(/g; let m; while ((m = re.exec(s))) { let e; try { e = matchBody(s, s.indexOf(')', m.index)); } catch (x) { continue; } const body = s.slice(m.index, e + 1);
       if (/localStorage\.getItem\((F|FLAG)\)/.test(body)) found.push(m[1]); } });
     assert.deepStrictEqual(found.slice().sort(), MIG.map(x => x[0]).sort(), 'migration à drapeau à CLASSER (argent / historique / agents → _oneShotEpargne ; sinon la nommer ici) : ' + found.join(', '));
     GARDEES.forEach(n => { const b = codeStrict(iife(MIG.find(x => x[0] === n)[1], n)), g = b.search(/_oneShotEpargne\((F|FLAG),/);
       assert.ok(g > 0, n + ' : pas de garde sur l\'état');
-      const w = b.search(/\b(S|w|fc)\.[A-Za-z_]+\s*=[^=]|\.forEach\(function\(a\)\{|zap\(|a\.fitness = /); assert.ok(w < 0 || g < w, n + ' : la garde vient après une écriture'); });
+      const w = b.search(/\b(S|w|fc)\.[A-Za-z_.]+\s*=[^=]|\.forEach\(function\(a\)\{|zap\(|a\.fitness = /); assert.ok(w < 0 || g < w, n + ' : la garde vient après une écriture'); });   // [GO TALENT · 20/10/2026] chemin pointé compris (S.paperRealConfig.maxConcurrentPos = …, relecture)
     assert.ok(has(s02, '_oneShotEtatVecu') && has(s02, '_oneShotEpargne'), '02 : la garde commune');
   });
   await T('A2 · état VÉCU relu du stockage (chiffres du backup réel du 18/10), drapeaux ABSENTS : après les 11 migrations, AA / EV / RE, fonds propres, position, réserve de frais, P&L, points de départ, journal de bord, fitness des bots, flotte inchangés ; drapeaux posés ; une ligne « non rejouée » par migration gardée (avant : les 3 portefeuilles à 0 $)', () => {

@@ -24,12 +24,24 @@
 // désactivation du mode, fermeture de toutes les positions ouvertes,
 // reset du snapshot pour permettre une réactivation manuelle propre.
 // ──────────────────────────────────────────────────────────────────────
+// [GO TALENT · 20/10/2026] (ETAT n° 57) Le capital mesuré ici comptait caisse + trading + réserve fiscale SANS les mises engagées. Or openPosition (02)
+// sort la mise du trading : toute ouverture ≥ 5 % du capital passait pour une perte de 5 % → « STOP D'URGENCE », les positions du bot fermées (une
+// position manuelle, jamais : 02 closePosition refuse au bot), Plein Régime éteint. Une seule mesure, à l'activation (10h enableFullPowerMode) comme à
+// la vérification : _fpEquity = caisse + trading + réserve fiscale + réserve anti-négatif (sortie du trading à chaque ouverture, 09c holdTradeReserve) +
+// mises engagées + P&L latent − dette du levier versée en argent (02 _levCashDebt : rendue au prêteur à la fermeture — la compter ferait une fausse
+// perte au remboursement). Sans levier, sans position et sans réserve anti-négatif : le même nombre qu'avant.
+function _fpEquity() {
+  const eng    = (S.openPositions || []).reduce((s, p) => s + (Number(p && p.stakeUsdt) || 0), 0);
+  const latent = (S.openPositions || []).reduce((s, p) => s + (Number(p && p.pnlUsdt) || 0), 0);
+  const debt   = (typeof _levCashDebt === 'function') ? _levCashDebt(S) : 0;
+  return (S.cashAccount || 0) + (S.tradingAccount || 0) + (S.fiscalReserveAccount || 0) + Math.max(0, Number(S.antiNegReserve) || 0) + eng + latent - debt;
+}
+window._fpEquity = _fpEquity;
+
 function _fpEmergencyCheck() {
   if (!S.fullPowerMode || !S._fpInitialCapital || S._fpStopTriggered) return;
 
-  const curCap       = (S.cashAccount || 0) + (S.tradingAccount || 0) + (S.fiscalReserveAccount || 0);
-  const latentPnl    = (S.openPositions || []).reduce((s, p) => s + (p.pnlUsdt || 0), 0);
-  const effectiveCap = curCap + latentPnl;
+  const effectiveCap = _fpEquity();
   const drawdown     = (S._fpInitialCapital - effectiveCap) / S._fpInitialCapital;
 
   if (drawdown >= 0.05) {  // seuil critique : -5%
