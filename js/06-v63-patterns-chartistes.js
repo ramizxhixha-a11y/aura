@@ -133,9 +133,13 @@ function _detectPatterns(prices) {
 // ═══ [GO FIGURES · 26/10/2026] LES FIGURES SUR LES VRAIES BOUGIES (Rams 26/10 20:25 : « Corrige les figures ») ═══
 // _detectPatterns (au-dessus) ne lit que des clôtures : son « marteau » (longue mèche basse) ne regarde jamais une mèche, ses englobantes comparent des
 // clôtures entre elles, son double sommet est « deux prix à moins de 2 % l'un de l'autre » — à 15 min presque tous le sont (mouvement médian 0,19 %).
-// Ici, chaque figure lit l'ouverture, le haut, le bas et la clôture des bougies CLOSES :
-//  · EV / RE : la dernière bougie de ps.candles est celle qui se forme (10g:55 et 08 : arr[len − 2] = dernière close) — écartée si ts + durée > maintenant ;
-//    l'école (AA) ne fabrique que des bougies complètes ; une bougie marquée « trou » (_gap) dans la fenêtre lue : aucune figure (rien d'inventé).
+// Ici, chaque figure lit l'ouverture, le haut, le bas et la clôture des bougies CLOSES (_ptClosedSeries, juste dessous) :
+//  · EV / RE (bougies datées) : la dernière de ps.candles est celle qui se forme (10g:55 et 08 : arr[len − 2] = dernière close) — écartée si ts + durée
+//    > maintenant, la durée étant celle de la série elle-même (écart des bougies), pas une marque du tableau (« _real » se perd au rechargement JSON) ;
+//  · AA (bougies de l'école, sans date) : la dernière suit le prix vivant (02 blendRealPrices réécrit sa clôture à chaque battement) — toujours écartée ;
+//  · une clôture ou une ouverture hors [bas, haut] (l'école en garde : clôture réécrite, haut / bas non — backup du 26/10 : 60 bougies AA sur 780,
+//    0 en EV / RE) : le haut et le bas sont ceux que ce prix a forcément touchés (max / min avec ouverture et clôture) ;
+//  · une bougie marquée « trou » (_gap) dans la fenêtre lue : aucune figure (rien d'inventé).
 //  · Les tailles sont celles de la paire : ATR = moyenne du vrai range des 14 dernières bougies closes — aucun pourcentage du prix posé à la main
 //    (avant : 0,1 %, 0,5 %, 0,8 %, 2 %, les mêmes pour BTC et PEPE).
 //  · Les rapports qui DÉFINISSENT une figure sont ceux des manuels (Nison, Bulkowski) : doji = corps ≤ 10 % du range ; marteau / étoile filante = mèche
@@ -145,18 +149,29 @@ function _detectPatterns(prices) {
 //    au-delà du plus haut (plus bas) des 10 bougies d'avant ; tendance = 5 clôtures de suite en hausse (en baisse).
 //  · Mêmes noms, icônes, sens et confiances qu'avant : seule la lecture change.
 // DÉCISION : 08 getTechSignals lit toujours _detectPatterns(closes). Ces figures-ci n'y entrent que si la porte rejeu/porte_figures.js le dit.
-function _detectCandlePatterns(candles) {
-  if (!Array.isArray(candles) || candles.length < 2) return [];
-  let C = candles;
-  const lastK = C[C.length - 1];
-  if (candles._real && lastK && isFinite(lastK.ts)) {
-    let tfMs = 900000;
-    try {
-      const tf = (typeof _getActiveRealTimeframe === 'function') ? _getActiveRealTimeframe() : '15m';
-      if (typeof REAL_CANDLE_INTERVALS !== 'undefined' && REAL_CANDLE_INTERVALS[tf] > 0) tfMs = REAL_CANDLE_INTERVALS[tf];
-    } catch (e) {}
-    if (lastK.ts + tfMs > Date.now()) C = C.slice(0, -1);   // la bougie qui se forme
+function _ptClosedSeries(candles) {
+  if (!Array.isArray(candles) || !candles.length) return [];
+  const N = candles.length, last = candles[N - 1];
+  let n = N;
+  if (last && isFinite(last.ts)) {
+    let tfMs = 0;   // la durée d'une bougie : le plus petit écart entre bougies datées voisines (10 derniers), à défaut celle du mode
+    for (let i = Math.max(1, N - 10); i < N; i++) { const a = candles[i - 1], b = candles[i], d = (a && b) ? b.ts - a.ts : 0; if (d > 0 && (!tfMs || d < tfMs)) tfMs = d; }
+    if (!(tfMs > 0)) {
+      try {
+        const tf = (typeof _getActiveRealTimeframe === 'function') ? _getActiveRealTimeframe() : '15m';
+        if (typeof REAL_CANDLE_INTERVALS !== 'undefined' && REAL_CANDLE_INTERVALS[tf] > 0) tfMs = REAL_CANDLE_INTERVALS[tf];
+      } catch (e) {}
+    }
+    if (!(tfMs > 0)) tfMs = 900000;
+    if (last.ts + tfMs > Date.now()) n--;   // la bougie qui se forme
+  } else {
+    n--;                                     // l'école : la dernière suit le prix vivant
   }
+  return candles.slice(0, Math.max(0, n)).map(k => (k && isFinite(k.o) && isFinite(k.h) && isFinite(k.l) && isFinite(k.c))
+    ? Object.assign({}, k, { h: Math.max(k.h, k.o, k.c), l: Math.min(k.l, k.o, k.c) }) : k);
+}
+function _detectCandlePatterns(candles) {
+  const C = _ptClosedSeries(candles);
   const n = C.length;
   if (n < 15) return [];
   for (let i = n - 15; i < n; i++) {
@@ -181,12 +196,12 @@ function _detectCandlePatterns(candles) {
   // ── Marteau ──
   if (rx > 0 && preDown && lower(x) > 0 && lower(x) >= 2 * bx && upper(x) <= 0.1 * rx) {
     out.push({name:'Marteau',icon:'🔨',signal:'bull',conf:0.72,
-      desc:'Mèche basse ≥ 2 × le corps, presque pas de mèche haute, après une baisse. Retournement haussier possible.'});
+      desc:'Mèche basse ≥ 2 × le corps, presque pas de mèche haute, après une baisse. Lue par les manuels comme un retournement haussier.'});
   }
   // ── Étoile filante ──
   if (rx > 0 && preUp && upper(x) > 0 && upper(x) >= 2 * bx && lower(x) <= 0.1 * rx) {
     out.push({name:'Étoile filante',icon:'⭐',signal:'bear',conf:0.70,
-      desc:'Mèche haute ≥ 2 × le corps, presque pas de mèche basse, après une hausse. Retournement baissier possible.'});
+      desc:'Mèche haute ≥ 2 × le corps, presque pas de mèche basse, après une hausse. Lue par les manuels comme un retournement baissier.'});
   }
   // ── Double Top / Double Bottom (15 dernières bougies closes) ──
   const W = C.slice(-15), last = W.length - 1;
@@ -209,7 +224,7 @@ function _detectCandlePatterns(candles) {
     let valley = Infinity; for (let k = i + 1; k < j; k++) valley = Math.min(valley, W[k].l);
     if (Math.abs(h1 - h2) <= atr / 2 && Math.min(h1, h2) - valley >= atr && W[last].c < valley) {
       out.push({name:'Double Top',icon:'🏔️',signal:'bear',conf:0.78,
-        desc:'Deux sommets au même niveau, puis clôture sous le creux qui les sépare. Retournement baissier.'});
+        desc:'Deux sommets au même niveau, puis clôture sous le creux qui les sépare. Lu par les manuels comme un retournement baissier.'});
     }
   }
   const db = pairOf(bots, 'l', (u, v) => u < v);
@@ -218,7 +233,7 @@ function _detectCandlePatterns(candles) {
     let peak = -Infinity; for (let k = i + 1; k < j; k++) peak = Math.max(peak, W[k].h);
     if (Math.abs(l1 - l2) <= atr / 2 && peak - Math.max(l1, l2) >= atr && W[last].c > peak) {
       out.push({name:'Double Bottom',icon:'🏞️',signal:'bull',conf:0.77,
-        desc:'Deux creux au même niveau, puis clôture au-dessus du sommet qui les sépare. Retournement haussier.'});
+        desc:'Deux creux au même niveau, puis clôture au-dessus du sommet qui les sépare. Lu par les manuels comme un retournement haussier.'});
     }
   }
   // ── Englobantes ──
@@ -241,16 +256,16 @@ function _detectCandlePatterns(candles) {
     out.push({name:'Tendance baissière',icon:'📉',signal:'bear',conf:0.65,
       desc:'5 clôtures de suite plus basses que la précédente.'});
   }
-  // ── Consolidation ──
+  // ── Consolidation (pas le jour d'une cassure : celle-ci la termine) ──
+  const P10 = C.slice(n - 11, n - 1);
+  const hiP = Math.max(...P10.map(k => k.h)), loP = Math.min(...P10.map(k => k.l));
   const W10 = C.slice(-10);
   const hi10 = Math.max(...W10.map(k => k.h)), lo10 = Math.min(...W10.map(k => k.l));
-  if (hi10 - lo10 <= 2 * atr && !up5 && !down5) {
+  if (hi10 - lo10 <= 2 * atr && !up5 && !down5 && !(x.c > hiP) && !(x.c < loP)) {
     out.push({name:'Consolidation',icon:'➡️',signal:'neu',conf:0.60,
       desc:'10 bougies dans une plage de 2 ATR. Cassure à attendre — sans direction.'});
   }
   // ── Cassures : clôture au-delà des 10 bougies d'avant ──
-  const P10 = C.slice(n - 11, n - 1);
-  const hiP = Math.max(...P10.map(k => k.h)), loP = Math.min(...P10.map(k => k.l));
   if (x.c > hiP) {
     out.push({name:'Breakout haussier',icon:'🚀',signal:'bull',conf:0.80,
       desc:'Clôture au-dessus du plus haut des 10 bougies d\'avant.'});
@@ -263,21 +278,10 @@ function _detectCandlePatterns(candles) {
 }
 window._detectCandlePatterns = _detectCandlePatterns;
 
-// [GO FIGURES · 26/10/2026] Les bougies closes que l'écran montre et lit (même règle que _detectCandlePatterns : la bougie qui se forme est écartée).
+// [GO FIGURES · 26/10/2026] Les bougies closes que l'écran montre : celles que lit _detectCandlePatterns (même fonction, _ptClosedSeries).
 function _ptClosedCandles(pair) {
   const ps = S.pairStates?.[pair] || {};
-  const arr = Array.isArray(ps.candles) ? ps.candles : [];
-  if (!arr.length) return [];
-  const lastK = arr[arr.length - 1];
-  if (arr._real && lastK && isFinite(lastK.ts)) {
-    let tfMs = 900000;
-    try {
-      const tf = (typeof _getActiveRealTimeframe === 'function') ? _getActiveRealTimeframe() : '15m';
-      if (typeof REAL_CANDLE_INTERVALS !== 'undefined' && REAL_CANDLE_INTERVALS[tf] > 0) tfMs = REAL_CANDLE_INTERVALS[tf];
-    } catch (e) {}
-    if (lastK.ts + tfMs > Date.now()) return arr.slice(0, -1);
-  }
-  return arr.slice();
+  return _ptClosedSeries(Array.isArray(ps.candles) ? ps.candles : []);
 }
 
 // Mini graphique : les 20 dernières bougies closes, avec leurs mèches (avant : des barres de prix de trades, sans ouverture ni mèche)
@@ -302,6 +306,7 @@ function _ptMiniChart(candles, w, h) {
 
 // [GO FIGURES · 26/10/2026] Ce que l'écran dit de la décision — selon le verdict de la porte (rejeu/porte_figures.js).
 const _PT_DECISION_NOTE = 'La décision du bot lit encore les figures d\'avant (clôtures seules) : la porte des figures (26/10) ne les a pas laissées entrer.';
+const _PT_MESURE_NOTE = 'Mesuré (porte du 26/10, 24 mois, 12 paires, après frais) : ces figures ne prévoient pas le prix — « haussier » / « baissier » est la lecture des manuels, pas une prévision.';
 
 function renderPatternSection() {
   const el = document.getElementById('patternSection');
@@ -314,10 +319,13 @@ function renderPatternSection() {
   const cur      = ps.price||0;
   const cfg      = PAIRS[_ptPair]||{};
   const dec      = cfg.dec>=4?cfg.dec:2;
-  const _real    = !!(ps.candles && ps.candles._real);
-  const _tfLbl   = _real ? ((typeof _getActiveRealTimeframe === 'function') ? _getActiveRealTimeframe() : '15m') : '';
-  const _srcLbl  = _real ? `bougies Binance ${_tfLbl}` : `bougies de l'école (fabriquées, AA)`;
-  const _stale   = _real && ps._candlesStale === true;
+  const _lastC   = closed[closed.length - 1];
+  const _dated   = !!(_lastC && isFinite(_lastC.ts));                       // bougies Binance datées (EV / RE) ; l'école n'en date aucune
+  const _tfMs    = (_dated && closed.length >= 2 && closed[closed.length - 1].ts > closed[closed.length - 2].ts) ? closed[closed.length - 1].ts - closed[closed.length - 2].ts : 0;
+  const _tfLbl   = _tfMs >= 3600000 ? (_tfMs / 3600000) + ' h' : _tfMs > 0 ? (_tfMs / 60000) + ' min' : '';
+  const _srcLbl  = _dated ? `bougies Binance ${_tfLbl}` : `bougies de l'école (fabriquées, AA ; la dernière, vivante, écartée)`;
+  const _stale   = _dated && (ps._candlesStale === true || (_tfMs > 0 && _lastC.ts + 3 * _tfMs < Date.now()));
+  const _trou    = closed.slice(-15).some(k => k && k._gap === true);
 
   const bullCount= patterns.filter(p=>p.signal==='bull').length;
   const bearCount= patterns.filter(p=>p.signal==='bear').length;
@@ -362,7 +370,7 @@ function renderPatternSection() {
       </div>
 
       <!-- Patterns détectés -->
-      ${patterns.length===0?`<div style="text-align:center;padding:12px;font-size:10px;color:var(--t3);">${closed.length < 15 ? `Pas assez de bougies closes (${closed.length} sur 15) pour lire une figure.` : 'Aucune figure sur les dernières bougies closes.'}</div>`:''}
+      ${patterns.length===0?`<div style="text-align:center;padding:12px;font-size:10px;color:var(--t3);">${closed.length < 15 ? `Pas assez de bougies closes (${closed.length} sur 15) pour lire une figure.` : _trou ? 'Un trou dans les 15 dernières bougies : aucune figure lue (rien d\'inventé).' : 'Aucune figure sur les dernières bougies closes.'}</div>`:''}
       ${patterns.map(p=>{
         const sigClass = p.signal==='bull'?'pt-signal-bull':p.signal==='bear'?'pt-signal-bear':'pt-signal-neu';
         const confCol  = p.conf>=0.75?'var(--up)':p.conf>=0.65?'var(--gold)':'var(--t3)';
@@ -384,6 +392,7 @@ function renderPatternSection() {
 
       <div style="font-size:8px;color:var(--t3);margin-top:8px;text-align:center;">
         Lu sur les bougies closes : ouverture, haut, bas, clôture (la bougie en cours est écartée).<br>
+        ${_PT_MESURE_NOTE}<br>
         ${_PT_DECISION_NOTE}<br>
         ⚠️ Signal indicatif uniquement — pas un conseil financier.
       </div>

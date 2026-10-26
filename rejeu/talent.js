@@ -51,7 +51,7 @@ const CODE = [
   between(s03, 'const ROSTER_TIERS = {', '\n};', true), between(s03, 'const COUNCIL_ADVISORS = {', '\n};', true),
   between(s03, 'function scoutAnalysis(agentId, pair) {', '\n// ── COUNCIL ANALYZERS', false),
   between(s03, 'function councilVote(councilId, pair, scoutResults) {', '\n// ── GUARDIAN CHECKS', false),
-  fnAt(s06, 'function _detectPatterns(prices) {'), fnAt(s06, 'function _detectCandlePatterns(candles) {'),
+  fnAt(s06, 'function _detectPatterns(prices) {'), fnAt(s06, 'function _ptClosedSeries(candles) {'), fnAt(s06, 'function _detectCandlePatterns(candles) {'),
   between(s08, 'function _closes(candles){', '\nconst _fundCache = {};', false),
   between(s10e, 'const CORR_CACHE_TTL_MS = ', 'window._refreshCorrelationMatrix = _refreshCorrelationMatrix;', false),
   fnAt(s10e, 'function _getPairCorrelation(pairA, pairB) {'), fnAt(s10e, 'function _getPairReturns(pair) {'), fnAt(s10e, 'function _pearsonCorrelation(returnsA, returnsB) {')

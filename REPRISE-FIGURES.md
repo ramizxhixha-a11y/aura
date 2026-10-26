@@ -14,9 +14,10 @@ Si une conversation coupe : en ouvrir une neuve, dire « reprends go figures »,
 - [x] 2. `_detectCandlePatterns(candles)` dans 06 + affichage sur les vraies bougies ; `banc-figures.js` 6/6 (2/6 sur 57d1864 : D1 et R seuls).
       À FAIRE au verdict : `_PT_DECISION_NOTE` (06) dit « la porte ne les a pas laissées entrer » — à corriger si la porte dit ENTRE.
 - [ ] 3. Porte : `rejeu/talent.js --figures 1` (voix figures seules) et `--figures-decision 1` (voix de l'app avec les figures corrigées), 2 lectures.
-      EN COURS (26/10 19:40 UTC) : 4 rejeux r2c, r2e (avec --figures 1), r3c, r3e (--figures-decision 1), moitiés 961–35520 et 35520–70080, deux à la fois
-      (~6 min par moitié seule). Code rejoué : `node rejeu/talent.js --sha 1` = 7f0fb42c606313d2. Puis `node rejeu/porte_figures.js --runs <O> --data <D>/paires`.
-      Essai 300 bougies : anciennes figures parlent 95 % du temps (Double Top −0,78 sur 60 % des bougies), corrigées 43 %.
+      Rejeux 1 (code 7f0fb42c606313d2) faits ; relecture adverse (agent séparé, `scratchpad/relecture.md`) : 1 BLOQUANT (sha en clair → banc-p0b-newskey),
+      3 MAJEURS (porte (b) comptait un gain comme une perte ; AA : dernière bougie vivante + clôture hors [bas, haut] ; textes « Retournement » affirmatifs),
+      5 MINEURS — tous corrigés. Son rejeu de la porte : N'ENTRE PAS (figures_ohlc z −3,1 à −0,8).
+      Rejeux 2, OFFICIELS (code c6e02dbf439ec63f, 26/10 23:06 UTC) : `scratchpad/run_figures2.sh` → `scratchpad/fig2`.
 - [ ] 4. Verdict appliqué, relecture adverse, banc-all, ETAT + PASSATION, UN commit sur main (squash), push, DOC_V raw + Pages, branche supprimée.
 
 ## Données (hors dépôt, à refaire dans une session neuve)

@@ -40,6 +40,8 @@ if (crypto.createHash('sha256').update(head).digest('hex') !== REGLES_SHA) { con
 if (!A.runs || !A.data) { console.error('usage : --runs DIR --data DIR'); process.exit(2); }
 const R = A.runs, rel = [];
 const SHA = cp.execFileSync('node', [path.join(ROOT, 'rejeu/talent.js'), '--sha', '1']).toString().trim();
+// les données : celles des rejeux (première bougie de chaque tranche) — la grille 15 min de BTC, comme talent.js et talent_ana.py
+const DATA_TS = (() => { const k = JSON.parse(fs.readFileSync(path.join(A.data, 'BTC.json'), 'utf8')).k; const t = {}; [961, 35520].forEach(i => { t[i] = k[i] && k[i][0]; }); if (k.length !== 70080) rel.push('données : ' + k.length + ' bougies au lieu de 70 080'); return t; })();
 const RUNS = { r2c: { enc: false, fd: false }, r2e: { enc: true, fd: false }, r3c: { enc: false, fd: true }, r3e: { enc: true, fd: true } };
 const meta = f => JSON.parse(fs.readFileSync(path.join(R, f), 'utf8'));
 const f32 = f => { const b = fs.readFileSync(path.join(R, f)); return new Float32Array(b.buffer, b.byteOffset, b.length / 4); };
@@ -50,8 +52,11 @@ for (const [n, o] of Object.entries(RUNS)) {
     try {
       const a = meta(n + '_a' + e + '.json'), b = meta(n + '_b' + e + '.json');
       if (a.from !== 961 || a.to !== 35520 || b.from !== 35520 || b.to !== 70080) rel.push(`${n}${e} : tranches ${a.from}–${a.to} / ${b.from}–${b.to}`);
-      [a, b].forEach(m => {
+      [a, b].forEach((m, h) => {
         if (m.codeSha !== SHA) rel.push(`${n}${e} : code ${m.codeSha} ≠ code livré ${SHA}`);
+        const nV = m.voices.length, nP = m.pairs.length, f = path.join(R, n + (h ? '_b' : '_a') + e);
+        if (!fs.existsSync(f) || fs.statSync(f).size !== (m.to - m.from) * nP * nV * 4) rel.push(`${n}${e} : binaire absent ou incomplet (${f})`);
+        if (m.ts0 !== DATA_TS[m.from]) rel.push(`${n}${e} : données d'un autre rejeu (ts0 ${m.ts0} ≠ ${DATA_TS[m.from]})`);
         if (m.encours !== o.enc || m.figuresDecision !== o.fd || m.genome !== 'départ' || m.carnet) rel.push(`${n}${e} : options ${JSON.stringify({ enc: m.encours, fd: m.figuresDecision, g: m.genome, c: m.carnet })}`);
       });
     } catch (err) { rel.push(`${n}${e} : absent ou illisible (${err.message})`); }
@@ -81,7 +86,8 @@ for (const L of ['c', 'e']) {
 }
 // 4. verdict
 const passe = (rec) => Object.entries((rec && rec.h) || {}).filter(([, x]) => x.talent && x.rentable).map(([h]) => h);
-const acquis = (rec) => Object.entries((rec && rec.h) || {}).filter(([, x]) => x.talent || x.rentable).map(([h, x]) => h + (x.talent ? 'T' : '') + (x.rentable ? 'R' : ''));
+// (b) : une qualité (talent, rentable) par horizon, comptées SÉPARÉMENT — une qualité gagnée n'est pas une perte (relecture adverse du 26/10)
+const acquis = (rec) => Object.entries((rec && rec.h) || {}).flatMap(([h, x]) => [x.talent ? h + ' talent' : null, x.rentable ? h + ' rentable' : null]).filter(Boolean);
 for (const L of ['c', 'e']) {
   const a = passe(out.ana['R1' + L].voix.figures_ohlc), perdus = [];
   for (const [v, rec] of Object.entries(out.ana['R2' + L].voix)) {
