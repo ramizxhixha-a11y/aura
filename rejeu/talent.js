@@ -16,7 +16,11 @@
 // --carnet DIR (porte CARNET, 04/10/2026) : S.flowStats = les VRAIS seaux d'une minute rejoués trade par trade (rejeu/carnet_prep.py, vue « v »,
 //   seaux complets avant la clôture) et S.orderBook = la dernière photo du carnet des futures avant la clôture (imb ±1 %, sans murs) — les
 //   conseils qui écoutent whale_v1 / flow_v1 (scalper_v2, trend_v2, momentum_v1) les entendent alors. Sans l'option : rien ne change.
-// usage : node rejeu/talent.js --data DIR --out FICHIER [--from i --to j] [--genome backup.json] [--encours 1] [--carnet DIR]
+// --figures 1 (porte FIGURES, 26/10/2026) : écrit AUSSI FICHIER.fig (+ .fig.json) — deux voix seules, la meilleure figure telle que getTechSignals la lit
+//   (±conf si haussière / baissière, 0 si neutre ou rien) : « figures_avant » = _detectPatterns(_closes(candles)) ; « figures_ohlc » = _detectCandlePatterns(candles).
+//   Les voix de FICHIER ne changent pas.
+// --figures-decision 1 (porte FIGURES) : getTechSignals lit _detectCandlePatterns(candles) à la place de _detectPatterns(closes) (une seule ancre, sinon arrêt).
+// usage : node rejeu/talent.js --data DIR --out FICHIER [--from i --to j] [--genome backup.json] [--encours 1] [--carnet DIR] [--figures 1] [--figures-decision 1]
 'use strict';
 const fs = require('fs'), vm = require('vm'), path = require('path');
 const A = {}; for (let i = 2; i < process.argv.length; i += 2) A[process.argv[i].replace(/^--/, '')] = process.argv[i + 1];
@@ -47,12 +51,24 @@ const CODE = [
   between(s03, 'const ROSTER_TIERS = {', '\n};', true), between(s03, 'const COUNCIL_ADVISORS = {', '\n};', true),
   between(s03, 'function scoutAnalysis(agentId, pair) {', '\n// ── COUNCIL ANALYZERS', false),
   between(s03, 'function councilVote(councilId, pair, scoutResults) {', '\n// ── GUARDIAN CHECKS', false),
-  fnAt(s06, 'function _detectPatterns(prices) {'),
+  fnAt(s06, 'function _detectPatterns(prices) {'), fnAt(s06, 'function _ptClosedSeries(candles) {'), fnAt(s06, 'function _detectCandlePatterns(candles) {'),
   between(s08, 'function _closes(candles){', '\nconst _fundCache = {};', false),
   between(s10e, 'const CORR_CACHE_TTL_MS = ', 'window._refreshCorrelationMatrix = _refreshCorrelationMatrix;', false),
   fnAt(s10e, 'function _getPairCorrelation(pairA, pairB) {'), fnAt(s10e, 'function _getPairReturns(pair) {'), fnAt(s10e, 'function _pearsonCorrelation(returnsA, returnsB) {')
 ].join('\n;\n');
+// porte FIGURES : la décision lit les figures corrigées — l'ancre doit exister une fois, dans getTechSignals, sinon le rejeu ne tourne pas
+let CODE_RUN = CODE;
+if (A['figures-decision'] === '1') {
+  const anc = 'const _pats = _detectPatterns(closes);';
+  if (CODE.split(anc).length !== 2) throw new Error('ancre figures-decision : ' + (CODE.split(anc).length - 1) + ' occurrence(s)');
+  const gi = CODE.indexOf('function getTechSignals(pair) {'), ai = CODE.indexOf(anc), ge = CODE.indexOf('\n}\n', gi);
+  if (!(gi >= 0 && ai > gi && ai < ge)) throw new Error('ancre figures-decision hors de getTechSignals');
+  CODE_RUN = CODE.replace(anc, 'const _pats = _detectCandlePatterns(candles);');
+}
 
+// empreinte du code de l'app lu par ce rejeu (porte FIGURES : un rejeu d'un autre code est dit, pas compté) ; --sha 1 l'écrit et s'arrête
+const CODE_SHA = require('crypto').createHash('sha256').update(CODE).digest('hex').slice(0, 16);
+if (A.sha === '1') { console.log(CODE_SHA); process.exit(0); }
 // ── données ──
 const DATA = A.data; if (!DATA || !A.out) { console.error('usage : --data DIR --out FICHIER'); process.exit(2); }
 const P = PAIRS.map(p => JSON.parse(fs.readFileSync(path.join(DATA, p.split('/')[0] + '.json'), 'utf8')));
@@ -70,7 +86,7 @@ if (A.genome) { const b = JSON.parse(fs.readFileSync(A.genome, 'utf8')); const a
 const ctx = { S, window: {}, Date: FDate, Math, JSON, Number, String, Array, Object, isFinite, isNaN, parseFloat, parseInt, console,
   PAIRS: Object.fromEntries(PAIRS.map(p => [p, {}])), lmsrP: () => 0.5, getFundamentalSignals: () => null };
 vm.createContext(ctx);
-vm.runInContext(CODE, ctx, { filename: 'app-extraits.js' });
+vm.runInContext(CODE_RUN, ctx, { filename: 'app-extraits.js' });
 // getTechSignals : son cache ne touche jamais (clé rangée ≠ clé cherchée) — le harnais le mémorise par bougie et par paire, sans changer ce qu'il rend
 vm.runInContext('var __gts = getTechSignals, __gtsMemo = {}; getTechSignals = function (p) { var k = p + "@" + Date.now(); if (!(k in __gtsMemo)) { __gtsMemo = (__gtsMemo.__t === Date.now()) ? __gtsMemo : { __t: Date.now() }; __gtsMemo[k] = __gts(p); } return __gtsMemo[k]; };', ctx);
 const VOICES = [...vm.runInContext('ROSTER_TIERS.scouts', ctx), ...vm.runInContext('ROSTER_TIERS.council', ctx)];
@@ -101,6 +117,9 @@ if (A.carnet) {
 let fi = 0;
 const nV = VOICES.length, nP = PAIRS.length, rows = TO - FROM;
 const buf = new Float32Array(rows * nP * nV);
+const FIG = A.figures === '1', figBuf = FIG ? new Float32Array(rows * nP * 2) : null;
+const dp = vm.runInContext('_detectPatterns', ctx), dcp = vm.runInContext('_detectCandlePatterns', ctx), cl = vm.runInContext('_closes', ctx);
+const best = r => (r && r.length && r[0].signal !== 'neu') ? (r[0].signal === 'bull' ? r[0].conf : -r[0].conf) : 0;   // comme getTechSignals (08 signals.pattern)
 const t0 = Date.now();
 for (let i = FROM; i < TO; i++) {
   NOW = P[0].k[i][0] + M15 + 1000;                        // une seconde après la clôture
@@ -129,6 +148,7 @@ for (let i = FROM; i < TO; i++) {
   PAIRS.forEach((p, j) => {
     const sr = {}, base = ((i - FROM) * nP + j) * nV;
     vm.runInContext('ROSTER_TIERS.scouts', ctx).forEach(id => { sr[id] = scoutAnalysis(id, p); });
+    if (FIG) { const cs = S.pairStates[p].candles, fb = ((i - FROM) * nP + j) * 2; figBuf[fb] = best(dp(cl(cs))); figBuf[fb + 1] = best(dcp(cs)); }
     VOICES.forEach((id, v) => {
       let val;
       if (id in sr) val = (sr[id] && typeof sr[id].score === 'number') ? sr[id].score : 0;
@@ -139,5 +159,10 @@ for (let i = FROM; i < TO; i++) {
   if ((i - FROM) % 5000 === 0) process.stderr.write(`  ${new Date(NOW).toISOString().slice(0, 10)} · ${i - FROM}/${rows} · ${((Date.now() - t0) / 1000).toFixed(0)} s\n`);
 }
 fs.writeFileSync(A.out, Buffer.from(buf.buffer));
-fs.writeFileSync(A.out + '.json', JSON.stringify({ token: TOK, from: FROM, to: TO, pairs: PAIRS, voices: VOICES, ts0: P[0].k[FROM][0], genome: A.genome ? path.basename(A.genome) : 'départ', encours: ENC, carnet: !!A.carnet }));
+const FD = A['figures-decision'] === '1';
+fs.writeFileSync(A.out + '.json', JSON.stringify({ token: TOK, from: FROM, to: TO, pairs: PAIRS, voices: VOICES, ts0: P[0].k[FROM][0], genome: A.genome ? path.basename(A.genome) : 'départ', encours: ENC, carnet: !!A.carnet, figuresDecision: FD, codeSha: CODE_SHA }));
+if (FIG) {
+  fs.writeFileSync(A.out + '.fig', Buffer.from(figBuf.buffer));
+  fs.writeFileSync(A.out + '.fig.json', JSON.stringify({ token: TOK, from: FROM, to: TO, pairs: PAIRS, voices: ['figures_avant', 'figures_ohlc'], ts0: P[0].k[FROM][0], genome: A.genome ? path.basename(A.genome) : 'départ', encours: ENC, carnet: !!A.carnet, figuresDecision: FD, codeSha: CODE_SHA }));
+}
 console.log(`talent · ${TOK} · ${rows} bougies × ${nP} paires × ${nV} voix · ${((Date.now() - t0) / 1000).toFixed(0)} s`);
