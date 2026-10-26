@@ -10,7 +10,7 @@ Si une conversation coupe : en ouvrir une neuve, dire « reprends go figures »,
 - [x] 0. Code lu : 06:37 `_detectPatterns(prices)`, 06:19 `_ptPrices` (prix de trades, sinon série sinus + hasard), 08:2071 décision (`_detectPatterns(closes)`).
       Bougies : AA = fabriquées complètes (08 `_simCandleStep`) ; EV / RE = klines Binance, la DERNIÈRE est celle qui se forme (10g:55, 08:3657 `arr[len-2]` = dernière close).
       banc-all sur le dépôt brut (57d1864) : LIVRABLE.
-- [ ] 1. Règles de la porte écrites AVANT toute donnée : `rejeu/porte_figures.js` (en-tête figé + sha-256).
+- [x] 1. Règles de la porte écrites AVANT toute donnée : `rejeu/porte_figures.js` lignes 1–30, sha-256 10d5d0a8…59ff, 26/10 19:34:01 UTC.
 - [ ] 2. `_detectCandlePatterns(candles)` dans 06 + affichage sur les vraies bougies ; `banc-figures.js` (échoue sur le code d'avant).
 - [ ] 3. Porte : `rejeu/talent.js --figures 1` (voix figures seules) et `--figures-decision 1` (voix de l'app avec les figures corrigées), 2 lectures.
 - [ ] 4. Verdict appliqué, relecture adverse, banc-all, ETAT + PASSATION, UN commit sur main (squash), push, DOC_V raw + Pages, branche supprimée.
