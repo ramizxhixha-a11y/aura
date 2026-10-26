@@ -1,7 +1,7 @@
 // banc-figures.js — [GO FIGURES · 26/10/2026] les figures de bougies lisent les VRAIES bougies (Rams 26/10 20:25 : « Corrige les figures »).
 // Avant : 06 _detectPatterns ne lit que des clôtures (le « marteau » ne voit jamais de mèche), et l'écran « Patterns chartistes » lisait les prix des
 // trades de la paire, ou une série INVENTÉE (sinus + hasard) sous moins de 4 trades, en écrivant « Basé sur les prix réels des trades ».
-// Ce banc fait tourner le VRAI texte des fonctions de 06 en vm et ÉCHOUE sur le code d'avant (BANC_ROOT=<copie du commit 57d1864>) sauf D1 et R :
+// Ce banc fait tourner le VRAI texte des fonctions de 06 en vm et ÉCHOUE sur le code d'avant (BANC_ROOT=<copie du commit 57d1864>), sauf D1 (la décision n'a pas bougé) :
 //   F1 mèches : mêmes clôtures, mèche basse ou mèche haute → l'ancienne lecture rend la même chose (elle ne voit pas la mèche) ; la nouvelle voit
 //      un marteau dans un cas seulement
 //   F2 la bougie qui se forme est écartée : EV / RE (datée, ts + durée de la série > maintenant), école AA (sans date : la dernière suit le prix vivant) ;
