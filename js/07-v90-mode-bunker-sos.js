@@ -3670,7 +3670,7 @@ function _confirmFullCoherentReset() {
       w.dreamJournal = [];   // [23/08 · Rams] le journal de bord aussi — ses récits de l'ère boucle avaient survécu à tous les resets
       const _now = (typeof _computePortfolio==='function') ? _computePortfolio(w) : ((w.cashAccount||0)+(w.tradingAccount||0));   // [23/08] baseline CANONIQUE (ma v1 reproduisait le bug : start sans l'engagé → % du jour faux)
       w._startPortfolio = _now;
-      if (w.pnlPeriod) { w.pnlPeriod.todayStartPortfolio = _now; w.pnlPeriod.weekStartPortfolio = _now; }
+      if (w.pnlPeriod) { const _b = (typeof _pnlBasis === 'function') ? _pnlBasis(w) : _now; w.pnlPeriod.todayStartPortfolio = _b; w.pnlPeriod.weekStartPortfolio = _b; }   // [GO LEVIER 56 · 27/10/2026] l'argent à Rams
       Object.keys(w.pairStates || {}).forEach(function(pair) {
         const ps = w.pairStates[pair];
         if (ps.trades) ps.trades = [];
@@ -4762,6 +4762,23 @@ function _computeNetUsdParts() {
   return { trading:(S.tradingAccount||0), cash:(S.cashAccount||0), antiNeg:(S.antiNegReserve||0), posVal, latentPos, closeFees, taxAnt, fundCum, levDebt, feesDue, net };
 }
 function _computeNetUsd() { return _computeNetUsdParts().net; }
+// [GO LEVIER 56 · 27/10/2026] « Portefeuille Total » compte l'argent emprunté par le levier (règle de Rams du 27/10 : les mises du bot se calculent sur son
+// argent + l'emprunt) ; l'écran le DIT : « dont X $ empruntés » sous le total, et deux tuiles dans son détail (« Dont emprunté », « À toi »). Avant : AA du
+// 27/10 18:01, « Portefeuille Total 7 703,66 $ » sans un mot des 6 282,96 $ empruntés (414,23 $ étaient à Rams). « À toi » = caisse + trading + mises
+// − emprunt − frais dus (02 _pnlBasis, la base du P&L) : la « réserve frais » du total (le cumul des frais déjà payés, n° 77) n'y entre pas.
+// Rien ici n'est lu par la décision.
+function _heroDebtParts() {
+  let debt = 0, due = 0;
+  try { debt = ((Number(S.leverageBorrowed) || 0) > 0) ? _levCashDebt(S, null) : 0; } catch (e) {}
+  try { due = (typeof _feesDueOf === 'function') ? _feesDueOf(null) : 0; } catch (e) {}
+  return { debt, due };
+}
+function _heroDebtNote() {
+  const el = document.getElementById('heroDebtNote'); if (!el) return;
+  const d = _heroDebtParts();
+  if (d.debt > 0.005) { el.textContent = 'dont ' + fmt$2(d.debt) + ' empruntés (levier)'; el.style.display = ''; }
+  else { el.textContent = ''; el.style.display = 'none'; }
+}
 // [TUILES · 23/08, maquette validée] composition dépliable des deux portefeuilles,
 // style des cartes du HOME, valeurs recalculées à CHAQUE ouverture.
 function _tile(ic,lb,val,sub,cls){
@@ -4789,6 +4806,9 @@ window._toggleHeroBk = function(which){
        +_tile('\ud83e\uddfe','Provisions taxes',fmt$2(S.antiNegTaxPart||0),'')
        +_tile('\ud83e\ude99','Réserve frais',fmt$2((S.fees&&S.fees.feeReserveAccount)||0),'')
        +_tile('\u23f3','Funding payé (info)',fmt$2(((S.fees&&S.fees.totalFunding)||0)+(S.leverageTotalFees||0)),'déjà provisionné : réserves fiscale+frais')
+       +((()=>{ const d=_heroDebtParts(); if(!(d.debt>0.005)) return '';   // [GO LEVIER 56 · 27/10/2026]
+           return _tile('\u26a1','Dont emprunté',fmt$2(d.debt),'levier : compté dans le total, à rendre','neg')
+                 +_tile('\ud83d\ude4b','À toi',fmt$2(_pnlBasis()),'caisse + trading + mises − emprunt'+(d.due>0.005?' − frais dus':''),'cy'); })())
        +_tile('\u03a3','Total',fmt$2(computePortfolioTotal()),'','sum');
     } else {
       const p=_computeNetUsdParts();
@@ -4821,6 +4841,7 @@ function renderHomePrices() {
   // v7.1 P1: affichage = (caisse + réserve fiscale) × USD/EUR. S.portfolio reste interne = cash+trading.
   computePortfolioTotal();
   setEl('heroVal', fmt$2(computePortfolioTotal()));   // [23/08] la formule inline oubliée hier — le hero lit désormais LA fonction canonique, aux 2 sites
+  try { _heroDebtNote(); } catch (e) {}   // [GO LEVIER 56 · 27/10/2026] « dont X $ empruntés »
   setEl('heroUsd', fmt$2(_computeNetUsd()));   // [23/08 · Rams] Portefeuille en $ = net liquidatif (_computeNetUsd)
   // v5 · hero beat + tone on significant change
   // FIX flash boot : au tout premier rendu, l'écart entre le portfolio sauvegardé et le
@@ -5005,6 +5026,7 @@ function renderHome() {
   // v7.1 P1: hero value = portfolioTotal EUR (cash + fiscal × USD/EUR). S.portfolio reste interne.
   computePortfolioTotal();
   setEl('heroVal', fmt$2(computePortfolioTotal()));   // [23/08] la formule inline oubliée hier — le hero lit désormais LA fonction canonique, aux 2 sites
+  try { _heroDebtNote(); } catch (e) {}   // [GO LEVIER 56 · 27/10/2026] « dont X $ empruntés »
   setEl('heroUsd', fmt$2(_computeNetUsd()));   // [23/08 · Rams] Portefeuille en $ = net liquidatif (_computeNetUsd)
   // v8.0 LIVRAISON 26 · Affichage P&L par période — COHÉRENT avec P&L NET et P&L SESSION
   // On utilise periods.today qui est calibré à minuit, basé sur S.portfolio (équivaut au P&L SESSION du dashboard)

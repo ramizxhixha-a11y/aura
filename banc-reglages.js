@@ -292,7 +292,8 @@ function fakeOpenDB(ok, rec) {
     ["closePosition", "  const levTag = pos.levBorrowed > 0 ? ` ⚡$${pos.levBorrowed}` : '';\n  showToast((_part ? 'Sortie partielle ' : 'Fermé ')+pos.pair+levTag+' · '+pnlStr+' · '+usdtStr);   // [GO NETTOYAGE · 19/10/2026] (n° 55)", "  const levTag = pos.levBorrowed > 0 ? ` ⚡$${pos.levBorrowed}` : '';\n  showToast('Fermé '+pos.pair+levTag+' · '+pnlStr+' · '+usdtStr);"],
     ];
     const unNE = (t, name) => { if (!/GO NETTOYAGE · 19\/10\/2026/.test(t)) return t; NE.filter(x => x[0] === name).forEach(([, nw, od]) => { assert.strictEqual(t.split(nw).length, 2, 'GO NETTOYAGE : morceau attendu absent de ' + name); t = t.split(nw).join(od); }); assert.ok(!/GO NETTOYAGE · 19\/10\/2026/.test(t), 'GO NETTOYAGE : retouche non répertoriée dans ' + name); return t; };
-    let cp = unLV('closePosition', unNE(fnSrc(s02, 'closePosition'), 'closePosition'));
+    const _un56 = t => t.replace(/\n {6}\/\/ \[GO LEVIER 56[^\n]*\n {6}\/\/[^\n]*\n {6}try \{ window\._pnlSansPos = pos; (if\(!_behind && typeof checkPnlAlerts === 'function'\) checkPnlAlerts\(\);) \} catch\(e\) \{\} finally \{ window\._pnlSansPos = null; \}/, '\n      try { $1 } catch(e) {}');   // [GO LEVIER 56 · 27/10/2026] la ligne des alertes P&L de closePosition ramenée au texte d'avant (banc-levier-56.js vérifie ce qu'elle fait)
+    let cp = unLV('closePosition', unNE(_un56(fnSrc(s02, 'closePosition')), 'closePosition'));
     if (/GO ALERTES/.test(cp)) AL.forEach(([re, by]) => { assert.ok(re.test(cp), 'GO ALERTES : ligne attendue absente de closePosition'); cp = cp.replace(re, by); });
     assert.strictEqual(h(unLV('openPosition', unNE(fnSrc(s02, 'openPosition'), 'openPosition')) + cp), '774d37994384441d', '02 open/close modifiés');
   });

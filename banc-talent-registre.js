@@ -98,7 +98,8 @@ T('S · TEXTE des ouvreurs, des gardes, du levier, du portefeuille (02 _computeP
     disableFullPowerMode: '78f8bd660385db42', recordFees: 'f2b897580fc692af', validateInvestmentCapProvisioned: '3229d70744efd7a8',
     _computePortfolio: '257f2a1047dbc64b', _computePortfolioSans: 'af9d6d3e24a71b80', _tradingCapitalBase: '8f78e89a034783a4' };
   const src = [s02, s9c, s9j, s10g, rd('js/10f-resolveur-cycle.js')].join('\n');
-  Object.keys(E).forEach(n => assert.strictEqual(h16(fnSrc(src, n) || ''), E[n], n + ' a changé'));
+  const _un56 = t => t.replace(/\n {6}\/\/ \[GO LEVIER 56[^\n]*\n {6}\/\/[^\n]*\n {6}try \{ window\._pnlSansPos = pos; (if\(!_behind && typeof checkPnlAlerts === 'function'\) checkPnlAlerts\(\);) \} catch\(e\) \{\} finally \{ window\._pnlSansPos = null; \}/, '\n      try { $1 } catch(e) {}');   // [GO LEVIER 56 · 27/10/2026] la ligne des alertes P&L de closePosition ramenée au texte d'avant (banc-levier-56.js vérifie ce qu'elle fait)
+  Object.keys(E).forEach(n => assert.strictEqual(h16((n === 'closePosition' ? _un56 : (x => x))(fnSrc(src, n) || '')), E[n], n + ' a changé'));
   assert.strictEqual(h16(s9c), 'a761a7770da5e2b1', '09c-auto-open.js a changé');
 });
 T('R · les règles de la porte (rejeu/porte_registre.js, 31 premières lignes, écrites le 19/10 23:18 UTC avant toute mesure) n\'ont pas bougé', () => {
