@@ -12,7 +12,9 @@ Si une conversation coupe : conversation neuve, « reprends go levier 56 », clo
 - `_startPortfolio` : lu par le Rescue Bot (03:4962) → NE PAS TOUCHER.
 
 ## Étapes
-- [ ] 1. `_pnlBasis(w)` (02) = portefeuille − dette du levier versée en argent − frais restés dus ; bases et lecture des périodes dessus (09d1, 10c, 09b2:853, 09j:151, 07:3673).
-- [ ] 2. Hero : sous « Portefeuille Total », « dont X $ empruntés » ; tuiles « Dont emprunté » / « À toi » ; commentaire 02:5621 corrigé.
-- [ ] 3. `banc-levier-56.js` (échoue sur 6f4cd12) + empreintes des fonctions de décision inchangées.
+- [x] 1. `_pnlBasis(w)` (02) = portefeuille − dette du levier versée en argent − frais restés dus ; bases et lecture des périodes dessus (09d1, 10c, 09b2:853, 09j:151, 07:3673).
+- [x] 2. Hero : sous « Portefeuille Total », « dont X $ empruntés » ; tuiles « Dont emprunté » / « À toi » ; commentaire 02:5621 corrigé.
+- [x] 3. `banc-levier-56.js` 7/7 (sur 6f4cd12 : L1 L2 L3 L5 G échouent, L4 D passent) + empreintes des fonctions de décision inchangées.
 - [ ] 4. Relecture adverse, banc-all, ETAT (règle § 2, n° 56 fermé / reste au registre), PASSATION, UN commit sur main, push, DOC_V.
+
+Notes : closePosition nomme la position qui ferme (window._pnlSansPos) le temps de checkPnlAlerts (sinon faux gain = sa part « exposition »). AA réel : mois avant +5 620 $ (+522 %) → après −662,83 $ (414,23 − 1 077,06).

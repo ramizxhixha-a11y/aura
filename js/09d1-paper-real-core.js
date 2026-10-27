@@ -240,7 +240,8 @@ window._combineMultiModeStats = _combineMultiModeStats;
 // ──────────────────────────────────────────────────────────────────────
 function _computePnlByPeriod() {
   _checkAndRotatePeriods();
-  const current = S.portfolio || 0;
+  // [GO LEVIER 56 · 27/10/2026] sur l'argent à Rams (02 _pnlBasis : portefeuille − dette du levier en argent − frais dus) : un emprunt n'est plus un gain
+  const current = (typeof _pnlBasis === 'function') ? _pnlBasis() : (S.portfolio || 0);
   const period  = S.pnlPeriod || {};
 
   function compute(startVal) {

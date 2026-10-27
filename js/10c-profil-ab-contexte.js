@@ -239,7 +239,7 @@ function _checkAndRotatePeriods() {
   const todayKey = _getTodayKey();
   const weekKey = _getWeekKey();
   const monthKey = _getMonthKey();
-  const currentPortfolio = S.portfolio || 0;
+  const currentPortfolio = (typeof _pnlBasis === 'function') ? _pnlBasis() : (S.portfolio || 0);   // [GO LEVIER 56 · 27/10/2026] l'argent à Rams (02 _pnlBasis)
   
   if (S.pnlPeriod.todayDate !== todayKey) {
     if (S.pnlPeriod.todayDate && S.pnlPeriod.todayStartPortfolio !== null) {

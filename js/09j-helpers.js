@@ -148,7 +148,7 @@ function resetPnlSession() {
 
   // Reset journalier
   if (!S.pnlPeriod) S.pnlPeriod = { history: [] };
-  S.pnlPeriod.todayStartPortfolio = current;
+  S.pnlPeriod.todayStartPortfolio = (typeof _pnlBasis === 'function') ? _pnlBasis() : current;   // [GO LEVIER 56 · 27/10/2026] l'argent à Rams (02 _pnlBasis)
   S.pnlPeriod.todayDate           = _getTodayKey();
 
   if (typeof showToast === 'function') {

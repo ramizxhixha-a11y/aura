@@ -204,6 +204,23 @@ function _feesDueOf(w) {
   return o ? Math.max(0, Number(o._feesDue) || 0) : 0;
 }
 window._feesDueOf = _feesDueOf;
+// [GO LEVIER 56 · 27/10/2026] L'ARGENT À TOI d'un portefeuille (w, sinon le mode à l'écran) : le portefeuille canonique moins la dette du levier versée en
+// argent (_levCashDebt) et les frais restés dus (_feesDueOf). C'est la base du P&L jour / semaine / mois (09d1 _computePnlByPeriod, 10c, 09b2, 09j, 07) :
+// avant, ces P&L lisaient le portefeuille canonique, qui compte l'argent emprunté — un emprunt du levier y était un GAIN, un remboursement une PERTE (AA du
+// 27/10 : levier ×10, 6 282,96 $ empruntés, semaine « +5 694 $ », mois « +522 % »). Ici emprunter et rembourser ne changent rien ; les intérêts, les frais et
+// les pertes, si. LA DÉCISION N'EN LIT RIEN : règle de Rams (27/10 « Mon argent plus l'emprunt ») — les mises du bot restent calculées sur le portefeuille
+// canonique, argent emprunté compris (_computePortfolio, _tradingCapitalBase, gardien de risque, plafond 5 %, Rescue Bot et _startPortfolio inchangés).
+// Pendant une fermeture (02 closePosition), la position qui ferme est encore dans la liste, sa mise déjà rendue et sa dette déjà remboursée : closePosition
+// la nomme dans window._pnlSansPos le temps des alertes P&L, et elle est retirée des deux comptes (comme _computePortfolioSans).
+function _pnlBasis(w) {
+  const o = w || S;
+  const sans = (typeof window !== 'undefined' && window._pnlSansPos && (o.openPositions || []).indexOf(window._pnlSansPos) >= 0) ? window._pnlSansPos : null;
+  const pf = sans ? _computePortfolioSans(sans, o) : (w ? _computePortfolio(w) : ((typeof S.portfolio === 'number' && isFinite(S.portfolio)) ? S.portfolio : _computePortfolio()));
+  const debt = ((Number(o.leverageBorrowed) || 0) > 0) ? _levCashDebt(o, sans) : 0;
+  const due = _feesDueOf(w || null);
+  return pf - debt - due;
+}
+window._pnlBasis = _pnlBasis;
 // [PORTEFEUILLE JUSTE · 10/10/2026] Le même, SANS une position en cours de fermeture. closePosition rend la mise au trading, règle les frais, partage le gain,
 // et ne retire la position de S.openPositions qu'à la toute fin (les juges ont besoin d'elle entre-temps) : pendant ce temps _computePortfolio() comptait sa
 // mise DEUX fois — rendue au trading ET encore « engagée ». Ce portefeuille gonflé d'une mise était écrit dans S.portfolio, poussé sur la courbe, lu par les
@@ -5618,7 +5635,9 @@ function fmtEUR(n){
 }
 function computePortfolioTotal(){
   // v7.5 · Formule mise à jour: (caisse + trading + réserve fiscale) × USD/EUR
-  // Le levier emprunté reste exclu (c'est une dette, pas un actif).
+  // [GO LEVIER 56 · 27/10/2026] FAUX depuis le levier en argent (go levier 18/10) : « le levier emprunté reste exclu » — l'argent emprunté est versé au trading
+  // ou dans une mise, il est donc COMPTÉ ici (AA du 27/10 : 6 697 $ dont 6 283 $ empruntés). Valeur inchangée (règle de Rams du 27/10 : les mises du bot se
+  // calculent sur son argent + l'emprunt) ; l'écran dit maintenant « dont X $ empruntés » (07 _heroDebtNote) et le P&L se mesure sur l'argent à Rams (_pnlBasis).
   // [23/08] canonique + fiscale : l'engagé des positions COMPTE (le hero affichait
   // trading seul dès qu'une position ouvrait — la faute du grand chiffre 86$ vs 111$)
   const baseUSD = ((typeof _computePortfolio==='function') ? _computePortfolio() : ((S.cashAccount||0)+(S.tradingAccount||0))) + (S.fiscalReserveAccount || 0) + (S.antiNegTaxPart || 0) + ((S.fees&&S.fees.feeReserveAccount)||0);   // [23/08 · Rams] + provisions taxes + réserve frais (le funding y est déjà provisionné : intérêts→fiscale, funding positions→frais — S1 25/08)
@@ -6720,7 +6739,9 @@ function closePosition(id, botClose = false) {
       // v23 · #5 Vérifier alertes après chaque trade
       // [ÉCOLE VIVANTE · 10/10/2026] pas pour l'AA derrière un autre écran : ces alertes et ces badges s'affichent devant l'utilisateur et leurs drapeaux
       // (S.pnlAlerts, une fois par session) sont communs aux modes — l'écran les vérifie lui-même pour le mode affiché (renderHome)
-      try { if(!_behind && typeof checkPnlAlerts === 'function') checkPnlAlerts(); } catch(e) {}   // [MODES SÉPARÉS · 10/10/2026] tout mode derrière l'écran, plus seulement l'AA
+      // [GO LEVIER 56 · 27/10/2026] le P&L des alertes se mesure sur l'argent à Rams (_pnlBasis) : la position qui ferme est encore dans la liste, sa dette déjà
+      // remboursée — elle est nommée le temps des alertes pour sortir de la dette comme du portefeuille (sinon : faux gain = sa part « exposition »).
+      try { window._pnlSansPos = pos; if(!_behind && typeof checkPnlAlerts === 'function') checkPnlAlerts(); } catch(e) {} finally { window._pnlSansPos = null; }   // [MODES SÉPARÉS · 10/10/2026] tout mode derrière l'écran, plus seulement l'AA
       try { if(!_behind && typeof checkBadges === 'function') checkBadges(); } catch(e) {}
       if(!_urg && typeof closeDecisionCascade  === 'function') closeDecisionCascade(pos.pair, pos.side, pos.currentPrice || pos.entryPrice, realisedUsd, realisedPct);
       if(!_urg && typeof runBotFleet           === 'function') runBotFleet('post_trade', { pnlUsd: realisedUsd, sizerMult: pos._sizerMult });

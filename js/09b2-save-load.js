@@ -850,7 +850,7 @@ async function loadState() {
         }
         _w.portfolio = _wpf;
         _w._startPortfolio = _wpf;
-        if (_w.pnlPeriod && typeof _w.pnlPeriod === 'object') _w.pnlPeriod.todayStartPortfolio = _wpf;
+        if (_w.pnlPeriod && typeof _w.pnlPeriod === 'object') _w.pnlPeriod.todayStartPortfolio = (typeof _pnlBasis === 'function') ? _pnlBasis(_w) : _wpf;   // [GO LEVIER 56 · 27/10/2026] l'argent à Rams ; _startPortfolio (lu par le Rescue Bot) reste le portefeuille canonique
       });
     }
   } catch(e) { dbg.push('startPf-recal:err'); }
