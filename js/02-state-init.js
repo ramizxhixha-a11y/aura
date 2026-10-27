@@ -212,12 +212,15 @@ window._feesDueOf = _feesDueOf;
 // canonique, argent emprunté compris (_computePortfolio, _tradingCapitalBase, gardien de risque, plafond 5 %, Rescue Bot et _startPortfolio inchangés).
 // Pendant une fermeture (02 closePosition), la position qui ferme est encore dans la liste, sa mise déjà rendue et sa dette déjà remboursée : closePosition
 // la nomme dans window._pnlSansPos le temps des alertes P&L, et elle est retirée des deux comptes (comme _computePortfolioSans).
+// Portefeuille et dette sont lus EN MÊME TEMPS, en direct (relecture adverse du 27/10 : S.portfolio, mis en cache, avec la dette lue en direct, donnait
+// « Perte session −1 062 $ » sur Telegram quand le bot montait le levier — 02 setLeverageByBot emprunte puis rend l'accueil sans recalculer S.portfolio).
+// Les frais dus : ceux du portefeuille donné ; pour S (mode à l'écran, w absent ou S lui-même), ceux de _activeWallet() — _feesDue n'a pas d'accesseur.
 function _pnlBasis(w) {
   const o = w || S;
   const sans = (typeof window !== 'undefined' && window._pnlSansPos && (o.openPositions || []).indexOf(window._pnlSansPos) >= 0) ? window._pnlSansPos : null;
-  const pf = sans ? _computePortfolioSans(sans, o) : (w ? _computePortfolio(w) : ((typeof S.portfolio === 'number' && isFinite(S.portfolio)) ? S.portfolio : _computePortfolio()));
+  const pf = sans ? _computePortfolioSans(sans, o) : _computePortfolio(o);
   const debt = ((Number(o.leverageBorrowed) || 0) > 0) ? _levCashDebt(o, sans) : 0;
-  const due = _feesDueOf(w || null);
+  const due = _feesDueOf((w && w !== S) ? w : null);
   return pf - debt - due;
 }
 window._pnlBasis = _pnlBasis;
@@ -5636,7 +5639,8 @@ function fmtEUR(n){
 function computePortfolioTotal(){
   // v7.5 · Formule mise à jour: (caisse + trading + réserve fiscale) × USD/EUR
   // [GO LEVIER 56 · 27/10/2026] FAUX depuis le levier en argent (go levier 18/10) : « le levier emprunté reste exclu » — l'argent emprunté est versé au trading
-  // ou dans une mise, il est donc COMPTÉ ici (AA du 27/10 : 6 697 $ dont 6 283 $ empruntés). Valeur inchangée (règle de Rams du 27/10 : les mises du bot se
+  // ou dans une mise, il est donc COMPTÉ ici (AA du 27/10 18:01 : « Portefeuille Total » 7 703,66 $, dont 6 282,96 $ empruntés et 1 006,47 $ de « réserve
+// frais » — le cumul des frais déjà payés, registre n° 77 ; 414,23 $ à Rams). Valeur inchangée (règle de Rams du 27/10 : les mises du bot se
   // calculent sur son argent + l'emprunt) ; l'écran dit maintenant « dont X $ empruntés » (07 _heroDebtNote) et le P&L se mesure sur l'argent à Rams (_pnlBasis).
   // [23/08] canonique + fiscale : l'engagé des positions COMPTE (le hero affichait
   // trading seul dès qu'une position ouvrait — la faute du grand chiffre 86$ vs 111$)

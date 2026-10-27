@@ -4764,7 +4764,9 @@ function _computeNetUsdParts() {
 function _computeNetUsd() { return _computeNetUsdParts().net; }
 // [GO LEVIER 56 · 27/10/2026] « Portefeuille Total » compte l'argent emprunté par le levier (règle de Rams du 27/10 : les mises du bot se calculent sur son
 // argent + l'emprunt) ; l'écran le DIT : « dont X $ empruntés » sous le total, et deux tuiles dans son détail (« Dont emprunté », « À toi »). Avant : AA du
-// 27/10, « Portefeuille Total 6 697 $ » sans un mot des 6 283 $ empruntés (2 % de ce total était à Rams). Rien ici n'est lu par la décision.
+// 27/10 18:01, « Portefeuille Total 7 703,66 $ » sans un mot des 6 282,96 $ empruntés (414,23 $ étaient à Rams). « À toi » = caisse + trading + mises
+// − emprunt − frais dus (02 _pnlBasis, la base du P&L) : la « réserve frais » du total (le cumul des frais déjà payés, n° 77) n'y entre pas.
+// Rien ici n'est lu par la décision.
 function _heroDebtParts() {
   let debt = 0, due = 0;
   try { debt = ((Number(S.leverageBorrowed) || 0) > 0) ? _levCashDebt(S, null) : 0; } catch (e) {}
@@ -4806,7 +4808,7 @@ window._toggleHeroBk = function(which){
        +_tile('\u23f3','Funding payé (info)',fmt$2(((S.fees&&S.fees.totalFunding)||0)+(S.leverageTotalFees||0)),'déjà provisionné : réserves fiscale+frais')
        +((()=>{ const d=_heroDebtParts(); if(!(d.debt>0.005)) return '';   // [GO LEVIER 56 · 27/10/2026]
            return _tile('\u26a1','Dont emprunté',fmt$2(d.debt),'levier : compté dans le total, à rendre','neg')
-                 +_tile('\ud83d\ude4b','À toi',fmt$2(computePortfolioTotal()-d.debt-d.due),'total − emprunt'+(d.due>0.005?' − frais dus':''),'cy'); })())
+                 +_tile('\ud83d\ude4b','À toi',fmt$2(_pnlBasis()),'caisse + trading + mises − emprunt'+(d.due>0.005?' − frais dus':''),'cy'); })())
        +_tile('\u03a3','Total',fmt$2(computePortfolioTotal()),'','sum');
     } else {
       const p=_computeNetUsdParts();

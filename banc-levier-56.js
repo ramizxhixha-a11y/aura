@@ -2,15 +2,21 @@
 // Règle de Rams (27/10 18:05, « Mon argent plus l'emprunt ») : avec le levier, les mises du bot se calculent sur son argent + l'emprunt — c'est ce que fait
 // déjà la décision (02 _computePortfolio, _tradingCapitalBase, gardien de risque, plafond 5 %, Rescue Bot) : RIEN de ce qu'elle lit ne change.
 // Ce qui change, l'écran : (1) le P&L jour / semaine / mois (09d1 _computePnlByPeriod, bases de S.pnlPeriod) comptait un emprunt comme un GAIN — AA du
-// 27/10 18:01 (backup Drive) : levier ×10, 6 282,96 $ empruntés, semaine « +5 694 $ », mois « +522 % » ; (2) « Portefeuille Total » compte l'emprunt sans le
-// dire (2 % de ce total était à Rams).
-// Ce banc fait tourner le VRAI texte des fonctions de l'app en vm. Sur le code d'avant (BANC_ROOT=<copie du commit 6f4cd12>) : L1, L2, L3, L5 et G
-// ÉCHOUENT (L1 : « jour +4 142,30 $ » après l'emprunt) ; L4 et D PASSENT — ce sont les gardes (rien ne change sans dette ; la décision n'a pas bougé) :
+// 27/10 18:01 (backup Drive) : levier ×10, 6 282,96 $ empruntés, semaine « +5 694 $ », mois « +522 % » ; (2) « Portefeuille Total » (7 703,66 $) compte
+// l'emprunt sans le dire (414,23 $ étaient à Rams).
+// Ce banc fait tourner le VRAI texte des fonctions de l'app en vm. Sur le code d'avant (BANC_ROOT=<copie du commit 6f4cd12>) : L1, L2, L3, L5, L7, L8 et G
+// ÉCHOUENT (L1 : « jour +4 142,30 $ » après l'emprunt) ; L4, L6 et D PASSENT — ce sont des gardes (rien ne change sans dette ; pas de faux P&L avec
+// S.portfolio en cache, défaut de ma 1re version trouvé par la relecture ; la décision n'a pas bougé) :
 //   L1 emprunter puis rendre le levier (02 applyAutoLeverageBorrow) : P&L jour / semaine / mois à 0 (avant : + puis − l'emprunt)
 //   L2 les intérêts du levier (02 applyLeverageBorrowFees) et une vraie perte restent des pertes, au centime
 //   L3 une fermeture sous levier, la position encore dans la liste (02 closePosition l'y laisse pendant les alertes) : aucun faux gain
 //   L4 sans dette (EV, RE) : la base du P&L EST le portefeuille d'avant — rien ne change, au centime
-//   L5 l'écran : « dont 6 282,96 $ empruntés (levier) », tuiles « Dont emprunté » et « À toi » ; rien sans dette
+//   L5 l'écran : « dont 6 282,96 $ empruntés (levier) » (dette en argent seule, pas la part « exposition »), tuiles « Dont emprunté » et « À toi »
+//      (caisse + trading + mises − emprunt − frais dus : ni la réserve fiscale ni la « réserve frais ») ; rien sans dette
+//   L6 S.portfolio pas recalculé après un emprunt du bot (02 setLeverageByBot → renderHome) : aucun faux P&L (relecture adverse du 27/10 : « −1 062 $ »)
+//   L7 frais restés dus : une perte tout de suite, leur paiement plus tard ne change rien ; pour S comme pour un portefeuille du walletStore
+//   L8 la relance (09b2, vrai texte) : la base du jour = l'argent de Rams, _startPortfolio (lu par le Rescue Bot) = le portefeuille canonique ; la remise à
+//      zéro d'un portefeuille (07) pose aussi les bases sur l'argent de Rams
 //   D  la DÉCISION n'a pas bougé : 19 fonctions qu'elle lit identiques au commit 6f4cd12 ; closePosition ne change que par la ligne des alertes P&L
 //   G  aucun lecteur du P&L des périodes ni de _pnlBasis hors de l'écran et des alertes (grep de tous les scripts du HTML, du HTML, native-bridge, Guardian)
 'use strict';
@@ -105,7 +111,7 @@ T('L3 une fermeture sous levier, la position encore dans la liste : aucun faux g
   S.tradingAccount += 300; c.repayLeverage(2700); c._repayCashDebt(300);
   S.portfolio = c._computePortfolioSans(pos);
   c._pnlSansPos = null;
-  near(c._computePnlByPeriod().today.usd, 2700, 'témoin : sans le marqueur, la part « exposition » de la position qui ferme serait un faux gain');
+  near(c._computePnlByPeriod().today.usd, 3000, 'témoin : sans le marqueur, la position qui ferme ferait un faux gain de 3 000 $ (sa mise déjà rendue, 300 $, et sa part « exposition », 2 700 $)');
   c._pnlSansPos = pos;
   near(c._computePnlByPeriod().today.usd, 0, 'pendant la fermeture');
   c._pnlSansPos = null;
@@ -136,6 +142,7 @@ T('L4 sans dette (EV, RE) : la base du P&L est le portefeuille d\'avant, au cent
 T('L5 l\'écran : « dont X $ empruntés », tuiles « Dont emprunté » et « À toi » ; rien sans dette', () => {
   assert.ok(/<div id="heroDebtNote"/.test(html), 'heroDebtNote absent du HTML');
   const S = aaNu(); S.leverageBorrowed = 6282.96; S._autoLevBorrowed = 6282.96; S.tradingAccount += 6282.96; S.leverage = 10;   // l'AA du 27/10 18:01
+  S.fees.feeReserveAccount = 1006.47; S.fiscalReserveAccount = 50;   // la « réserve frais » (cumul des frais payés) et une réserve fiscale : dans le total, pas à Rams
   const c = monde(S);
   assert.ok(typeof c._heroDebtNote === 'function', '_heroDebtNote absente');
   c._heroDebtNote();
@@ -144,12 +151,54 @@ T('L5 l\'écran : « dont X $ empruntés », tuiles « Dont emprunté » et « �
   c._toggleHeroBk('total');
   const t = c.__el.heroBkTotal.innerHTML;
   assert.ok(t.includes('Dont emprunté') && t.includes(c.fmt$2(6282.96)), 'tuile « Dont emprunté » absente');
-  assert.ok(t.includes('À toi') && t.includes(c.fmt$2(c.computePortfolioTotal() - 6282.96)), 'tuile « À toi » absente ou fausse');
+  assert.ok(t.includes('À toi') && t.includes(c.fmt$2(47.39 + 366.84)), 'tuile « À toi » absente ou fausse (attendu ' + c.fmt$2(414.23) + ')');
+  // une position avec une part « exposition » : la note ne compte que la dette versée en argent
+  S.openPositions.push({ id: 'x', stakeUsdt: 300, totalExposure: 3000, levBorrowed: 3000, _levCash: 300 }); S.leverageBorrowed += 3000; S.tradingAccount -= 0;
+  c._heroDebtNote();
+  assert.strictEqual(c.__el.heroDebtNote.textContent, 'dont ' + c.fmt$2(6282.96 + 300) + ' empruntés (levier)', 'la part « exposition » comptée comme argent emprunté');
   // EV sans dette : rien
   const E = aaNu(); E.cashAccount = 6.58; E.tradingAccount = 1055.91; const e = monde(E);
   e._heroDebtNote(); assert.strictEqual(e.__el.heroDebtNote.style.display, 'none');
   e.__el.heroBkTotal = { innerHTML: '', style: { display: 'none' } }; e.__el.heroBkUsd = { innerHTML: '', style: { display: 'none' } };
   e._toggleHeroBk('total'); assert.ok(!e.__el.heroBkTotal.innerHTML.includes('Dont emprunté'));
+});
+
+T('L6 S.portfolio pas recalculé après un emprunt du bot : aucun faux P&L', () => {
+  const S = aaNu(); S.cashAccount = 6.58; S.tradingAccount = 1055.91; S.portfolio = 1062.49;   // l'EV du 27/10 18:01
+  const c = monde(S); demarrer(c);
+  S.leverage = 10; c.applyAutoLeverageBorrow(10, 0);   // S.portfolio laissé à 1 062,49 (02 setLeverageByBot ne le recalcule pas avant renderHome)
+  assert.strictEqual(S.portfolio, 1062.49);
+  const p = c._computePnlByPeriod();
+  ['today', 'week', 'month'].forEach(k => near(p[k].usd, 0, k + ' (S.portfolio en cache)'));
+});
+
+T('L7 frais restés dus : une perte tout de suite, leur paiement plus tard ne change rien', () => {
+  const S = aaNu(); const c = monde(S); demarrer(c);
+  S._feesDue = 12;                                   // une fermeture n'a pas pu payer 12 $ de frais (02 recordFees, n° 54)
+  near(c._computePnlByPeriod().today.usd, -12, 'frais dus');
+  near(c._pnlBasis(S), 414.23 - 12, '_pnlBasis(S) : S lui-même');
+  S.tradingAccount -= 12; S._feesDue = 0;            // repris sur le trading à la fermeture suivante
+  near(c._computePnlByPeriod().today.usd, -12, 'après paiement');
+  // un portefeuille du walletStore : ses propres frais dus
+  const W = aaNu(); W._feesDue = 5; near(c._pnlBasis(W), 414.23 - 5, '_pnlBasis(w)');
+});
+
+T('L8 la relance (09b2) et la remise à zéro (07) posent les bases sur l\'argent de Rams ; _startPortfolio reste le portefeuille', () => {
+  const s9b2 = rd('js/09b2-save-load.js');
+  const a = "['sim','paperReal','real'].forEach(function(_mk){", i = s9b2.indexOf(a), j = s9b2.indexOf('\n      });', i);
+  assert.ok(i >= 0 && j > i, 'recalage de 09b2 introuvable');
+  const AA = aaNu(); AA.tradingAccount += 6282.96; AA.leverageBorrowed = 6282.96; AA._autoLevBorrowed = 6282.96; AA.leverage = 10;
+  AA._startPortfolio = 6697.19; AA.pnlPeriod = { history: [], todayDate: '2026-10-20', todayStartPortfolio: 6697.19 };   // l'AA du backup du 27/10 18:01
+  const EV = aaNu(); EV.cashAccount = 6.58; EV.tradingAccount = 1055.91; EV.pnlPeriod = { history: [], todayStartPortfolio: 1067.14 };
+  const S = { walletStore: { sim: AA, paperReal: EV, real: null } };
+  const c = monde(S);
+  vm.runInContext(s9b2.slice(i, j + 10), c);
+  near(AA.pnlPeriod.todayStartPortfolio, 414.23, 'AA : base du jour', 1e-6);
+  near(AA._startPortfolio, 47.39 + 366.84 + 6282.96, 'AA : _startPortfolio (Rescue Bot) = portefeuille canonique', 1e-6);
+  near(EV.pnlPeriod.todayStartPortfolio, 1062.49, 'EV : base du jour', 1e-6);
+  const s07 = rd('js/07-v90-mode-bunker-sos.js');
+  assert.ok(/const _b = \(typeof _pnlBasis === 'function'\) \? _pnlBasis\(w\) : _now; w\.pnlPeriod\.todayStartPortfolio = _b; w\.pnlPeriod\.weekStartPortfolio = _b;/.test(s07), '07 : remise à zéro hors de l\'argent de Rams');
+  assert.ok(/w\._startPortfolio = _now;/.test(s07), '07 : _startPortfolio n\'est plus le portefeuille canonique');
 });
 
 T('D la DÉCISION n\'a pas bougé : 19 fonctions identiques au commit 6f4cd12 ; closePosition ne change que par la ligne des alertes P&L', () => {

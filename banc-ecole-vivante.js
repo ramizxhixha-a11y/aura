@@ -111,7 +111,7 @@ function world(o) {
     BN + '\n' + LIVE + '\n' + BLEND + '\n' + GEN + '\n' + FUND + '\nfunction __mx(tick) {\n' + MX + '\n}\nfunction __oracle() {\n' + ORACLE.generateur + '\n}' +
     '\nfunction __rv(realisedUsd, realisedPct, pos) {\n  var _urg = false;   // [GO ARGENT · 13/10/2026] fermeture ordinaire (02 : vrai seulement pour l\'urgence, 06)\n' + CP_RV + '\n  return (typeof _behind === "undefined") ? null : _behind;\n}' +
     '\nfunction __ms(realisedPct, pos, _behind) { const pnlStr = "p", usdtStr = "u";\n' + CP_MS + '\n}' +
-    '\nfunction __al(_behind) {\n' + CP_AL + '\n}', c);
+    '\nfunction __al(_behind, pos) {\n' + CP_AL + '\n}', c);   // [GO LEVIER 56 · 27/10/2026] la ligne des alertes nomme la position qui ferme (window._pnlSansPos)
   S.agents = [];
   return { c, S, PAIRS, log, sim: () => S.walletStore.sim.pairStates, ev: () => S.walletStore.paperReal.pairStates, re: () => S.walletStore.real.pairStates, run: code => vm.runInContext(code, c) };
 }
