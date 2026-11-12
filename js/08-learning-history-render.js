@@ -1548,6 +1548,7 @@ function applyPosEdit() {
   if(!_editModal) return;
   const pos = S.openPositions.find(p => p.id === _editModal.posId);
   if(!pos) { closePosEditModal(); return; }
+  if (pos._voix === 'tendance') { showToast('📈 ' + pos.pair + ' : position de la voix tendance — ni TP, ni SL, ni inversion (elle se retourne seule) ; ✕ pour la fermer', 3500, 'warn'); closePosEditModal(); return; }   // [GO TENDANCE RÉELLE · 12/11/2026]
 
   const entry = parseFloat(document.getElementById('peEntryInput').value);
   const tp    = parseFloat(document.getElementById('peTpInput').value);

@@ -849,7 +849,7 @@ function updateManualSuggestion(pair, pairKey) {
         <button onclick="openPosEdit('${pos.id}')"
           style="background:rgba(245,200,66,.1);color:var(--gold);border:1px solid rgba(245,200,66,.25);
                  border-radius:6px;padding:2px 7px;font-size:9px;cursor:pointer;">✏️</button>
-        <button onclick="closePosition('${pos.id}',${pos.auto?'true':'false'})"
+        <button onclick="closePosition('${pos.id}',${pos.auto?'true':'false'},{main:true})"
           style="background:rgba(255,61,107,.18);color:var(--down);border:1.5px solid rgba(255,61,107,.55);
                  border-radius:8px;padding:5px 12px;font-size:11px;font-weight:700;cursor:pointer;
                  min-width:44px;min-height:32px;display:flex;align-items:center;gap:4px;">
@@ -4962,12 +4962,14 @@ function botRescue() {
   const startP = (_rr && _rr.base === S._startPortfolio && _rr.ref > 0) ? _rr.ref : (S._startPortfolio || S.portfolio || 1);
   const curP = S.portfolio || 1;
   const ddPct = startP > 0 ? (startP - curP) / startP * 100 : 0;
-  const hasPositions = (S.openPositions || []).length > 0;
+  // [GO TENDANCE RÉELLE · 12/11/2026] les positions de la voix tendance longue ne sont jamais aplaties par le Rescue (closePosition les lui refuse) : ni comptées, ni annoncées
+  const _rescuable = (S.openPositions || []).filter(p => p && p._voix !== 'tendance');
+  const hasPositions = _rescuable.length > 0;
 
   if(ddPct > 12 && hasPositions) {
     // v6.0 · VRAIE ACTION — flatten all positions
-    const countBefore = S.openPositions.length;
-    const snapshot = S.openPositions.map(p => ({ id: p.id, pair: p.pair, side: p.side }));
+    const countBefore = _rescuable.length;
+    const snapshot = _rescuable.map(p => ({ id: p.id, pair: p.pair, side: p.side }));
     snapshot.forEach(p => {
       try {
         if(typeof closePosition === 'function') closePosition(p.id, true);

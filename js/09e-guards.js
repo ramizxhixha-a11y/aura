@@ -101,7 +101,7 @@ function _manConsignesWatchdog() {
   // et rien n'est annoncé sans fermeture vérifiée (1 essai / 60 s sinon, dit une fois). (2) Seules les positions qui PORTENT des consignes
   // sont surveillées. [CONSIGNES · 06/10/2026] Depuis go consignes, TOUTE ouverture manuelle en porte (02 openPosition : tes consignes de la
   // paire, sinon 2 % / 60 min) ; seule une manuelle ouverte avant cette version peut encore n'en avoir aucune (la fiche le dit).
-  const positions = (S.openPositions || []).filter(p => p.auto !== true && (p._manMaxLossPct > 0 || p._manTimeoutMin > 0));
+  const positions = (S.openPositions || []).filter(p => p.auto !== true && p._voix !== 'tendance' && (p._manMaxLossPct > 0 || p._manTimeoutMin > 0));   // [GO TENDANCE RÉELLE · 12/11/2026] la voix n'a pas de consignes
 
   positions.forEach(pos => {
     const pnlUsd     = pos.pnlUsdt || 0;

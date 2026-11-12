@@ -106,6 +106,7 @@ function _fiscRegimeOf(pos) {
   if (!pos) return { regime: 'spec', why: ['trade inconnu'] };
   var why = [];
   if (pos.auto === true) why.push('AUTO (bot)');
+  if (pos._voix === 'tendance') why.push('voix tendance longue (décision automatique)');   // [GO TENDANCE RÉELLE · 12/11/2026] ouverte par la voix, pas par toi : spéculatif (règle de Rams, AUTO = 33 %)
   if (pos.side !== 'long') why.push('SHORT (vente à découvert = crypto empruntée)');
   var lev = _fiscNum(pos.levBorrowed), st = _fiscNum(pos.stakeUsdt), ex = _fiscNum(pos.totalExposure);
   if (lev > 0 || ex > st + 1e-9) why.push('levier (emprunt ' + Math.max(lev, ex - st).toFixed(2) + ' $)');

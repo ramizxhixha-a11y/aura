@@ -2434,6 +2434,7 @@ window.manuReinforce = manuReinforce;
 function manuInvert(pair) {
   const pos = S.openPositions.find(p => p.pair === pair);
   if(!pos) { showToast('⚠ Pas de position ouverte sur '+pair, 2000, 'warn'); return; }
+  if (pos._voix === 'tendance') { showToast('📈 ' + pos.pair + ' : position de la voix tendance — ni TP, ni SL, ni inversion (elle se retourne seule) ; ✕ pour la fermer', 3500, 'warn'); return; }   // [GO TENDANCE RÉELLE · 12/11/2026]
   const newSide = pos.side === 'long' ? 'short' : 'long';
   const e0 = Number(pos.entryPrice);
   const dist = (x) => (Number(x) > 0 && e0 > 0) ? Math.abs(Number(x) / e0 - 1) * 100 : null;
@@ -2484,7 +2485,8 @@ window.manuInvert = manuInvert;
 function manuClose(pair) {
   const pos = S.openPositions.find(p => p.pair === pair);
   if(!pos) { showToast('⚠ Pas de position ouverte sur '+pair, 2000, 'warn'); return; }
-  closePosition(pos.id);
+  closePosition(pos.id, false, { main: true });   // [GO TENDANCE RÉELLE · 12/11/2026] ton geste ferme aussi la voix
+  if ((S.openPositions || []).some(p => p.id === pos.id)) return;   // [GO TENDANCE RÉELLE · 12/11/2026] « fermée » n'est dit que si elle l'est
   showToast('✅ '+pair+' — position fermée', 2000, 'win');
 }
 window.manuClose = manuClose;
@@ -2493,6 +2495,7 @@ window.manuClose = manuClose;
 function manuEditTp(pair) {
   const pos = S.openPositions.find(p => p.pair === pair);
   if(!pos) return;
+  if (pos._voix === 'tendance') { showToast('📈 ' + pos.pair + ' : position de la voix tendance — ni TP, ni SL, ni inversion (elle se retourne seule) ; ✕ pour la fermer', 3500, 'warn'); return; }   // [GO TENDANCE RÉELLE · 12/11/2026]
   const ps  = S.pairStates[pair];
   const cfg = PAIRS[pair];
   if(!ps || !cfg) return;
@@ -2512,6 +2515,7 @@ window.manuEditTp = manuEditTp;
 function manuEditSl(pair) {
   const pos = S.openPositions.find(p => p.pair === pair);
   if(!pos) return;
+  if (pos._voix === 'tendance') { showToast('📈 ' + pos.pair + ' : position de la voix tendance — ni TP, ni SL, ni inversion (elle se retourne seule) ; ✕ pour la fermer', 3500, 'warn'); return; }   // [GO TENDANCE RÉELLE · 12/11/2026]
   const ps  = S.pairStates[pair];
   const cfg = PAIRS[pair];
   if(!ps || !cfg) return;
@@ -2531,6 +2535,7 @@ window.manuEditSl = manuEditSl;
 function manuResetTpSl(pair) {
   const pos = S.openPositions.find(p => p.pair === pair);
   if(!pos) return;
+  if (pos._voix === 'tendance') { showToast('📈 ' + pos.pair + ' : position de la voix tendance — ni TP, ni SL, ni inversion (elle se retourne seule) ; ✕ pour la fermer', 3500, 'warn'); return; }   // [GO TENDANCE RÉELLE · 12/11/2026]
   const proposal = _calcBotTpSl(pair, pos.side);
   pos.tp = proposal.tp;
   pos.sl = proposal.sl;
@@ -3307,6 +3312,7 @@ window._trailStopHit = _trailStopHit;
 function learnFromOpenPositions() {
   if(S.openPositions.length === 0) return;
   S.openPositions.forEach(pos => {
+    if (pos && pos._voix === 'tendance') return;   // [GO TENDANCE RÉELLE · 12/11/2026] aucune de ces sorties (trailing, anti-zombie, bascule, TP / SL, −90 %) sur la voix
     const ps  = S.pairStates[pos.pair];
     if(!ps) return;
     // [GO ARGENT · 13/10/2026] EV / RE : aucune sortie (trailing, anti-zombie, bascule du consensus, TP / SL manuels) sur un prix réel vieux de plus
@@ -4473,7 +4479,9 @@ function renderInlinePosForPair(pair, pairKey, cfg, ps) {
       ? ((ps.price - pos.sl) / ps.price * 100)
       : ((pos.sl - ps.price) / ps.price * 100)) : null;
 
-    const manualBadge = isManual
+    const manualBadge = pos._voix === 'tendance'   // [GO TENDANCE RÉELLE · 12/11/2026] la voix tendance longue : ni manuelle, ni bot
+      ? `<span style="font-size:8px;font-weight:600;background:rgba(0,232,122,.1);color:var(--up);border:1px solid rgba(0,232,122,.3);padding:2px 7px;border-radius:5px;margin-left:4px;">📈 Tendance</span>`
+      : isManual
       ? `<span style="font-size:8px;font-weight:600;background:rgba(245,200,66,.15);color:var(--gold);border:1px solid rgba(245,200,66,.3);padding:2px 7px;border-radius:5px;margin-left:4px;">🔒 Manuel</span>`
       : `<span style="font-size:8px;font-weight:600;background:rgba(56,212,245,.1);color:var(--ice);border:1px solid rgba(56,212,245,.25);padding:2px 7px;border-radius:5px;margin-left:4px;">🤖 Bot IA</span>`;
 
@@ -4491,7 +4499,7 @@ function renderInlinePosForPair(pair, pairKey, cfg, ps) {
     // Bot positions: close button visible but shows warning; manual: full edit
     const editBtn = isManual
       ? `<button onclick="openPosEdit('${pos.id}')" style="background:rgba(245,200,66,.1);color:var(--gold);border:1px solid rgba(245,200,66,.25);border-radius:6px;padding:3px 8px;font-size:9px;cursor:pointer;margin-left:4px;">✏️</button>`
-      : `<button onclick="if(confirm('Forcer la clôture du bot sur ${pair}?'))closePosition('${pos.id}',false)" style="background:rgba(56,212,245,.07);color:var(--ice);border:1px solid rgba(56,212,245,.2);border-radius:6px;padding:3px 7px;font-size:8px;cursor:pointer;margin-left:3px;">⏹</button>`;
+      : `<button onclick="if(confirm('Forcer la clôture du bot sur ${pair}?'))closePosition('${pos.id}',false,{main:true})" style="background:rgba(56,212,245,.07);color:var(--ice);border:1px solid rgba(56,212,245,.2);border-radius:6px;padding:3px 7px;font-size:8px;cursor:pointer;margin-left:3px;">⏹</button>`;
     // v16 · #25 Bouton Pourquoi ?
     const whyBtn = `<button onclick="openWhyModal('${pos.id}')" title="Pourquoi cette position ?" style="background:rgba(167,139,250,.1);color:var(--pur);border:1px solid rgba(167,139,250,.3);border-radius:6px;padding:3px 7px;font-size:9px;cursor:pointer;margin-left:3px;font-weight:700;">?</button>`;
     return `
@@ -4504,7 +4512,7 @@ function renderInlinePosForPair(pair, pairKey, cfg, ps) {
           ${editBtn}
           ${whyBtn}
         </div>
-        <button class="ac-pos-close" onclick="closePosition('${pos.id}')">✕</button>
+        <button class="ac-pos-close" onclick="closePosition('${pos.id}',false,{main:true})">✕</button>
       </div>
       ${(tpLine||slLine) ? `<div style="display:flex;gap:2px;margin-top:3px;flex-wrap:wrap;">${tpLine}${slLine}</div>` : ''}
       <div class="ac-pos-row2">
@@ -4723,7 +4731,7 @@ function renderOpenPosSummary() {
         <div class="ops-cycle-mode">
           ${ps.userCycleSet?'🔒 Cycle manuel':'🤖 Cycle auto'} · ${fmtDur(ps.cycleMax)}
         </div>
-        <button class="ops-close" onclick="closePosition('${pos.id}')">✕ Fermer</button>
+        <button class="ops-close" onclick="closePosition('${pos.id}',false,{main:true})">✕ Fermer</button>
       </div>
     </div>`;
   }).join('');
@@ -5204,7 +5212,7 @@ function renderHome() {
 
   const tl = document.getElementById('mobileTradeList');
   if (tl) try { tl.innerHTML = allTShown.map(t => {
-    const isClose = t.type === 'position' || t.type === 'urgence';   // [GO ARGENT · 13/10/2026] fermeture d'urgence (06) : ligne à part, affichée comme une clôture   // [GO ARGENT · 13/10/2026] fermeture d'urgence (06) : ligne à part, affichée comme une clôture
+    const isClose = t.type === 'position' || t.type === 'urgence' || t.type === 'tendance';   // [GO TENDANCE RÉELLE · 12/11/2026] fermeture de la voix   // [GO ARGENT · 13/10/2026] fermeture d'urgence (06) : ligne à part, affichée comme une clôture   // [GO ARGENT · 13/10/2026] fermeture d'urgence (06) : ligne à part, affichée comme une clôture
     const isOpen  = t.type === 'open';
     const isPos   = isClose || isOpen;
     const cfg     = PAIRS[t.pair];
@@ -5221,7 +5229,7 @@ function renderHome() {
       ? (cfg.dec>=4 ? parseFloat(t.entryPrice).toFixed(cfg.dec) : '$'+Math.floor(t.entryPrice).toLocaleString())
       : null;
 
-    const badgeHtml = isClose ? ' <span style="font-size:8px;background:rgba(167,139,250,.15);color:var(--pur);padding:1px 4px;border-radius:4px;">' + (t.type === 'urgence' ? 'URGENCE' : 'CLOSE') + '</span>'
+    const badgeHtml = isClose ? ' <span style="font-size:8px;background:rgba(167,139,250,.15);color:var(--pur);padding:1px 4px;border-radius:4px;">' + (t.type === 'urgence' ? 'URGENCE' : t.type === 'tendance' ? 'TENDANCE' : 'CLOSE') + '</span>'
                     : isOpen  ? ' <span style="font-size:8px;background:rgba(56,212,245,.12);color:var(--ice);padding:1px 4px;border-radius:4px;">OPEN</span>'
                     : '';
 

@@ -92,7 +92,7 @@ const pause = ms => new Promise(r => setTimeout(r, ms));
   });
   await T('A2 · 02 closePosition appelle tgOnTrade (mode du trade, auto, urgence, raison) et notifTradeClose avec la raison et le mode — pour TOUTE fermeture, urgence comprise', () => {
     const cp = code(fnSrc(s02, 'closePosition'));
-    assert.ok(/tgOnTrade\(\{ pair: pos\.pair, side: pos\.side, pnlUsd: realisedUsd, pnlPct: realisedPct, mode: S\.tradingMode, auto: pos\.auto === true, urgence: _urg && !_part, partiel: _part \|\| undefined, sortie: _sortie \}\)/.test(cp), 'tgOnTrade');   // [GO NETTOYAGE · 19/10/2026] (n° 55) une sortie par paliers n'est pas une urgence — avant : urgence: _urg
+    assert.ok(/tgOnTrade\(\{ pair: pos\.pair, side: pos\.side, pnlUsd: realisedUsd, pnlPct: realisedPct, mode: S\.tradingMode, auto: pos\.auto === true, urgence: _urg && !_part && !_vxPos, voix: _vxPos \|\| undefined, partiel: _part \|\| undefined, sortie: _sortie \}\)/.test(cp), 'tgOnTrade');   // [GO TENDANCE RÉELLE · 12/11/2026] la voix n'est pas une « urgence » : Telegram dit « tendance longue »   // [GO NETTOYAGE · 19/10/2026] (n° 55) une sortie par paliers n'est pas une urgence — avant : urgence: _urg
     assert.ok(/notifTradeClose\(pos\.pair, pos\.side, realisedUsd, realisedPct, _sortie, S\.tradingMode\)/.test(cp), 'notifTradeClose');
     assert.ok(/const _sortie = \(arguments\[2\] && arguments\[2\]\.sortie && \(arguments\[2\]\.sortie\.k === 'tp' \|\| arguments\[2\]\.sortie\.k === 'sl'\)\)/.test(cp), '3e argument sortie');
     // la raison n'est lue que par ces deux appels (aucune règle d'argent ni de décision)

@@ -41,6 +41,7 @@ const h16 = s => crypto.createHash('sha256').update(s).digest('hex').slice(0, 16
 const s02 = rd('js/02-state-init.js'), s03 = rd('js/03-per-pair-position-buttons-controls-buid.js'), s05 = rd('js/05-v37-19-indicateur-de-fatigue-bot.js'), s06 = rd('js/06-v63-patterns-chartistes.js'),
       s07 = rd('js/07-v90-mode-bunker-sos.js'), s08 = rd('js/08-learning-history-render.js'), s9c = rd('js/09c-auto-open.js'), s9f1 = rd('js/09f1-bricks-action.js'),
       s9g = rd('js/09g-modals.js'), s9j = rd('js/09j-helpers.js'), s10f = rd('js/10f-resolveur-cycle.js'), s16 = rd('js/16-fiscal.js'), html = rd('AURA8_v118.html');
+const _TR = require('./banc-fixtures/sans-tendance-reelle.js');   // [GO TENDANCE RÉELLE · 12/11/2026] retire les retouches de go tendance réelle avant d'épingler le texte (voir le fichier)
 
 // empreintes (sha-256, 16 car.) du texte au commit a82841b (token 20261018b), juste avant GO LEVIER
 const EMPREINTES_AVANT = { estimateStakes: '191de2e4cf018d53', borrowLeverage: 'f4ddc794f667473e', ensureLeverageCoverForTrade: 'a6f142883b38357d', applyAutoLeverageBorrow: '1ede99649e526761',
@@ -414,17 +415,17 @@ await T('N11 · sortie partielle (05 closePartial) d\'une position à levier : r
 console.log('▶ S. La décision d\'ouvrir n\'est pas touchée');
 await T('S1 · ouvreurs et gardes du levier au texte d\'avant (empreintes du commit a82841b) : estimateStakes, ensureLeverageCoverForTrade, applyAutoLeverageBorrow, setLeverageByBot, validateAntiNegative, estimateTradeReserve ; borrowLeverage hors son suivi _autoLevBorrowed ; 09c entier et openPosition hors leurs lignes d\'argent GO LEVIER', () => {
   const got = {}; Object.keys(EMPREINTES_AVANT).forEach(n => {
-    let t = fnSrc(s02, n);
+    let t = fnSrc(_TR(s02, 'js/02-state-init.js'), n);
     if (n === 'borrowLeverage') t = t.replace(/  \/\/ \[GO LEVIER · 18\/10\/2026\] la part « exposition » n'entre plus dans _autoLevBorrowed[\s\S]*?n'ont aucun appelant\.\n/,
       '  // v7.12 · P10 · Tracker aussi dans _autoLevBorrowed pour que P4/P5 le voient\n  S._autoLevBorrowed = (S._autoLevBorrowed || 0) + available;\n');
     got[n] = h16(sansNettoyage(t, n));
   });
   assert.deepStrictEqual(got, EMPREINTES_AVANT, 'fonctions de 02 modifiées');
-  const c9 = s9c.replace(/    \/\/ \[GO LEVIER · 18\/10\/2026\] \(ETAT n° 25\) la mise ne dépasse jamais ce que le trading tient[\s\S]*?\n      return;\n    \}\n/, '')
+  const c9 = _TR(s9c, 'js/09c-auto-open.js').replace(/    \/\/ \[GO LEVIER · 18\/10\/2026\] \(ETAT n° 25\) la mise ne dépasse jamais ce que le trading tient[\s\S]*?\n      return;\n    \}\n/, '')
     .replace(/\n    currentVal:    baseStake, [^\n]*/, '\n    currentVal:    stakeUsdt,').split('\n').filter(l => !/^\s*_levCash:\s+_jitBorrowed,/.test(l)).join('\n');
   assert.strictEqual(h16(c9), EMPREINTE_09C_AVANT, '09c modifié hors GO LEVIER');
   assert.ok(/\n    _levCash:      _jitBorrowed, /.test(s9c), '09c pose _levCash');
-  const op = sansNettoyage(fnSrc(s02, 'openPosition'), 'openPosition').replace(/\n  \/\/ \[GO LEVIER · 18\/10\/2026\] \(ETAT n° 25\) la mise ne dépasse jamais[\s\S]*?\n    return null;\n  \}/, '')
+  const op = sansNettoyage(fnSrc(_TR(s02, 'js/02-state-init.js'), 'openPosition'), 'openPosition').replace(/\n  \/\/ \[GO LEVIER · 18\/10\/2026\] \(ETAT n° 25\) la mise ne dépasse jamais[\s\S]*?\n    return null;\n  \}/, '')
     .replace(/\n    currentVal:   stakeUsdt, [^\n]*/, '\n    currentVal:   totalExposure,').split('\n').filter(l => !/^\s*_levCash:\s+_jitBorrowedManual,/.test(l)).join('\n');
   assert.strictEqual(h16(op), EMPREINTE_OPEN_AVANT, 'openPosition modifiée hors GO LEVIER');
 });
