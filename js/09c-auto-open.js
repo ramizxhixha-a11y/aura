@@ -69,6 +69,11 @@ function autoOpenPosition(pair, side, stakeOverride) {
   // Gate global : le bot n'agit que si AUTO est activé
   if (S.botAutoMode === false) return;
 
+  // [GO TENDANCE RÉELLE · 12/11/2026] décision de Rams (12/11 19:49, « Go tendances réelle tout ») : TOUT l'argent de l'EV est à la voix tendance
+  // longue (15b suit la poche de 15). Les bots à 15 min n'ouvrent plus rien en EV (seuil appris, hedges, propositions : tout passe par ici) ; ils
+  // continuent dans l'AA, et le RE ne change pas. Ils ne reviendront en EV qu'en passant la porte TALENT.
+  if (S.tradingMode === 'paperReal' && typeof window !== 'undefined' && typeof window._tlrTientEV === 'function' && window._tlrTientEV()) return;
+
   // Sauvegarde de sécurité avant action bot
   try {
     if (typeof _p5PreActionSave === 'function') _p5PreActionSave('open_bot');

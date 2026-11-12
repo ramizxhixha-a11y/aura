@@ -19,6 +19,7 @@
 //     la sortie ; pas de financement (l'EV n'en facture pas).
 // UNE POCHE À PART — ce module :
 //   • n'ouvre ni ne ferme JAMAIS rien dans S.openPositions ; n'appelle ni openPosition, ni closePosition, ni autoOpenPosition ;
+//     [GO TENDANCE RÉELLE · 12/11/2026] c'est js/15b-tendance-reelle.js qui fait suivre la poche par le compte EV (vraies positions) ; ce module reste la mesure ;
 //     ne touche à aucun compte (caisse, trading, levier, frais), à aucun agent, bot, fitness, seuil appris, ni à la décision commune :
 //     les bots à 15 min tournent exactement comme avant, sur les mêmes paires, et ne voient pas cette voix.
 //   • garde SON état dans S.tendance (snapshot 09b1 → 09b2 applySnap + _APPLYSNAP_MANIFEST, donc aussi dans les backups) :
@@ -310,7 +311,7 @@
     var usd = function (x) { return s.eqEV > 0 ? ' ≈ ' + (x >= 0 ? '+' : '−') + Math.abs(x * s.eqEV).toFixed(2).replace('.', ',') + ' $' : ''; };
     var h = '<div style="padding:8px 14px 4px;font-size:var(--fs-12);color:var(--t2);line-height:1.5">' +
       '<div style="font-size:var(--fs-14);color:var(--t1)">Poche <b style="color:' + col(s.total) + '">' + pc(s.total) + '</b>' + usd(s.total) +
-      ' <span style="color:var(--t3)">(à la taille de ton compte EV)</span></div>' +
+      ' <span style="color:var(--t3)">(mesure de la poche, à la taille de ton compte EV)</span></div>' +
       '<div>réalisé ' + pc(s.real) + ' · latent ' + pc(s.lat) + ' · ' + s.trades + ' trade' + (s.trades > 1 ? 's' : '') + ' fermé' + (s.trades > 1 ? 's' : '') +
       (s.trades ? ' (' + s.win + ' gagnant' + (s.win > 1 ? 's' : '') + (s.liq ? ', ' + s.liq + ' liquidé' + (s.liq > 1 ? 's' : '') : '') + ')' : '') + '</div>' +
       '<div>« LONG ou rien » (le comptant) : ' + pc(s.totalL) + ' · depuis le ' + dt(s.depuis) + '</div>' +
@@ -344,7 +345,7 @@
     }
     h += '<div style="padding:4px 14px 10px;font-size:var(--fs-10);color:var(--t3);line-height:1.45">Règle figée par la porte TENDANCE LONGUE (06/10) : ' +
       'signe du prix du lundi 00:00 UTC contre 28 jours avant, tenu jusqu\'au retournement ; pas de stop, pas d\'objectif ; un SHORT est liquidé si le prix double. ' +
-      'Une mise = 1/' + (s.nU || '—') + ' de la poche, non composée. Ne touche ni ton compte EV ni les bots. Preuve fragile : sans 2020-21, la porte ne passait plus.</div>';
+      'Une mise = 1/' + (s.nU || '—') + ' de la poche, non composée : c\'est la mesure de la porte. Depuis le 12/11, ton argent EV la suit avec de vraies positions (cadre ci-dessous, js/15b). Preuve fragile : sans 2020-21, la porte ne passait plus.</div>';   // [GO TENDANCE RÉELLE · 12/11/2026]
     if (lastHtml !== h || !g.firstChild) { g.innerHTML = h; lastHtml = h; }
   }
   function toggle() {

@@ -289,7 +289,7 @@ function _confirmForceClose() {
   const pos = (S.openPositions || []).find(p => p.pair === pair);
   if (pos && typeof closePosition === 'function') {
     try {
-      closePosition(pos.id, false);
+      closePosition(pos.id, false, { main: true });   // [GO TENDANCE RÉELLE · 12/11/2026] ta confirmation : ferme aussi une position de la voix
       // [MANU · 05/10/2026] « fermée » n'est dit que si la position a vraiment disparu
       const gone = !(S.openPositions || []).some(p => p && p.id === pos.id);
       if (gone) {

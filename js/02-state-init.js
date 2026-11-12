@@ -111,7 +111,7 @@ function _forceCloseAllForSolvency(reason) {
     var ids = (S.openPositions || []).map(function(p){ return p.id; });
     var _hadLev = Number(S.leverageBorrowed || 0) > 0;   // [GO NETTOYAGE · 19/10/2026] (n° 52) le journal ne parle du levier que s'il y en avait un
     ids.forEach(function(id){
-      try { closePosition(id, false); } catch(e) {}
+      try { closePosition(id, false, { solvabilite: true }); } catch(e) {}   // [GO TENDANCE RÉELLE · 12/11/2026] « jamais sous zéro » ferme aussi la voix
     });
     // [GO LEVIER · 18/10/2026] (ETAT n° 25) la dette qui reste (index du levier, reste d'une fermeture) a été versée en ARGENT au trading : elle
     // est rendue au prêteur SUR le trading. Avant : repayLeverage effaçait la dette sans rien prendre — l'emprunt devenait de l'argent.
@@ -6165,8 +6165,13 @@ window._manConsigneOf = _manConsigneOf;
 // CE sens (07 _calcBotTpSl → 10h _manPlan). La fiche MAN (10e) les remplace ensuite par ses champs, comme avant. Rien ne change pour les bots
 // (ils n'ouvrent jamais par openPosition).
 function openPosition(pair, side, opts) {
-  const _warn = _manOpenWarnings(pair, side);   // [MANU · 05/10/2026] dits, plus jamais un refus muet
   const _o = (opts && typeof opts === 'object') ? opts : {};
+  // [GO TENDANCE RÉELLE · 12/11/2026] { voix: true, stakeUsdt, voixT0 } : ouverture de la voix tendance longue (15b, l'EV suit la poche de 15) — mise donnée
+  // par 15b (règle de la porte POIDS : 1/n de la valeur de l'EV, jamais plus que le trading), SANS levier, sans TP / SL ni consignes (la voix
+  // n'a ni stop, ni objectif, ni durée : seul le retournement la ferme), sans avis des bots ni toast par position. Le reste (1 position par
+  // paire, mise ≤ trading, débit, historique, notification) comme toute ouverture.
+  const _vx = _o.voix === true;
+  const _warn = _vx ? [] : _manOpenWarnings(pair, side);   // [MANU · 05/10/2026] dits, plus jamais un refus muet
 
   const ps  = S.pairStates[pair];
   const cfg = PAIRS[pair];
@@ -6182,9 +6187,10 @@ function openPosition(pair, side, opts) {
     return null;
   }
 
-  const id        = 'p'+Date.now().toString(36);
-  const stakeUsdt = ps.stake || 10;
-  const pairLev   = ps.pairLeverage || 1;
+  const id        = 'p'+Date.now().toString(36) + (_vx ? pair.split('/')[0].toLowerCase() : '');   // [GO TENDANCE RÉELLE · 12/11/2026] 11 ouvertures dans la même milliseconde : ids distincts
+  const stakeUsdt = _vx ? Number(_o.stakeUsdt) : (ps.stake || 10);
+  if (_vx && !(isFinite(stakeUsdt) && stakeUsdt > 0)) return null;
+  const pairLev   = _vx ? 1 : (ps.pairLeverage || 1);   // [GO TENDANCE RÉELLE · 12/11/2026] la voix ne prend jamais de levier
 
   // Levier manuel : emprunter la part leveragée de la réserve
   const leverageBonus = stakeUsdt * (pairLev - 1);
@@ -6192,7 +6198,8 @@ function openPosition(pair, side, opts) {
   const totalExposure = stakeUsdt + levBorrowed;
 
   // ── Validation capital avant ouverture manuelle ──────────
-  const capCheck = validateTotalExposure(stakeUsdt, levBorrowed);
+  // [GO TENDANCE RÉELLE · 12/11/2026] la voix : exposition = mise ≤ trading (contrôlé plus bas) — le plafond « conviction » des bots ne la concerne pas
+  const capCheck = _vx ? { ok: true, available: Infinity } : validateTotalExposure(stakeUsdt, levBorrowed);
   if(!capCheck.ok && capCheck.available < stakeUsdt * 0.5) {
     showToast('⚠ Capital max atteint · ' + fmt$(Math.max(0,capCheck.available)) + ' libre', 2800, 'critical');
     if(levBorrowed > 0) repayLeverage(levBorrowed);
@@ -6203,7 +6210,7 @@ function openPosition(pair, side, opts) {
   // S'applique en mode manuel, auto, et semi-auto (bot pré-remplit, user valide).
   let _jitBorrowedManual = 0;  // v7.12 · P7 · track JIT borrow for manual trade
   try {
-    if((S.leverage || 0) >= 1 && stakeUsdt > (S.tradingAccount || 0)) {
+    if(!_vx && (S.leverage || 0) >= 1 && stakeUsdt > (S.tradingAccount || 0)) {   // [GO TENDANCE RÉELLE · 12/11/2026] jamais d'emprunt pour la voix
       const r = ensureLeverageCoverForTrade(stakeUsdt, pair);
       if(!r.ok) {
         showToast('⚠ Trading insuffisant · levier ' + (r.reason==='leverage_off'?'désactivé':'réserve vide') + ' · '+fmt$2(r.shortfall)+' manquant', 3200, 'critical');
@@ -6214,7 +6221,7 @@ function openPosition(pair, side, opts) {
     }
   } catch(e) { console.warn('auto-leverage cover:', e); }
   // v7.12 · P7 · Consommer le pending
-  if (S._pendingPositionBorrow) {
+  if (!_vx && S._pendingPositionBorrow) {
     _jitBorrowedManual = Math.max(_jitBorrowedManual, S._pendingPositionBorrow);
     S._pendingPositionBorrow = 0;
   }
@@ -6242,7 +6249,7 @@ function openPosition(pair, side, opts) {
   const _okPct = (v) => isFinite(v) && v > 0 && v < 100;
   let _tp = (_okPct(Number(_o.tpPct)) && _px > 0) ? _px * (1 + _d * Number(_o.tpPct) / 100) : null;
   let _sl = (_okPct(Number(_o.slPct)) && _px > 0) ? _px * (1 - _d * Number(_o.slPct) / 100) : null;
-  if (_tp === null || _sl === null) {
+  if (!_vx && (_tp === null || _sl === null)) {   // [GO TENDANCE RÉELLE · 12/11/2026] la voix : ni TP ni SL
     let _b = null; try { _b = (typeof _calcBotTpSl === 'function') ? _calcBotTpSl(pair, side) : null; } catch(e){ try{window._decErr&&window._decErr(e)}catch(_e){} }
     if (_tp === null && _b && _b.tp > 0) _tp = _b.tp;
     if (_sl === null && _b && _b.sl > 0) _sl = _b.sl;
@@ -6276,6 +6283,12 @@ function openPosition(pair, side, opts) {
                     .slice(0,5)
                     .map(a => ({ emoji:a.emoji, name:a.name.split(' ')[0].split('·')[0].trim(), score:a.score||0 }))
   });
+  if (_vx) {   // [GO TENDANCE RÉELLE · 12/11/2026] marque de la voix (lue par closePosition, les sorties automatiques, l'écran, le fiscal) ; consignes MAN effacées
+    const _vp = S.openPositions[S.openPositions.length - 1];
+    _vp._voix = 'tendance'; _vp._voixT0 = Number(_o.voixT0) || null;
+    _vp._manMaxLossPct = null; _vp._manTimeoutMin = null; _vp._openAgents = [];
+    _vp._openReason = 'Voix tendance longue · ' + String(side).toUpperCase() + ' tenu jusqu\'au retournement';
+  }
   S.portfolio = _computePortfolio();   // [23/08] canonique · [GO NETTOYAGE · 19/10/2026] (n° 58) après l'ajout de la position : sa mise y est comptée
   if (typeof _updateCloseAllBadge === 'function') _updateCloseAllBadge();
 
@@ -6300,7 +6313,7 @@ function openPosition(pair, side, opts) {
     desc: `Position ${side.toUpperCase()} ${pair} | $${stakeUsdt}${levStr} @${priceTag}`,
     hash: rndHash(), time: nowStr()
   });
-  if(!existing) showToast('📈 '+side.toUpperCase()+' '+pair+' — $'+totalExposure+' USDT'+levStr);
+  if(!existing && !_vx) showToast('📈 '+side.toUpperCase()+' '+pair+' — $'+totalExposure+' USDT'+levStr);   // [GO TENDANCE RÉELLE · 12/11/2026] la voix dit ses ouvertures en un seul toast (15b)
   // v19 · #38 Notification trade ouvert
   try { if(typeof notifTradeOpen === 'function') notifTradeOpen(pair, side, totalExposure); } catch(e) {}
   // [MANU · 05/10/2026] l'avis du système est dit, le trade est le tien
@@ -6333,7 +6346,7 @@ function closePosition(id, botClose = false) {
   // bas) : la sortie par paliers n'y touchait pas avant, elle n'y touche toujours pas. Avant : 05 créditait le trading lui-même (frais sur la mise, sans
   // slippage, ni réserve, ni impôt).
   const _part = !!(arguments[2] && arguments[2].partiel);
-  const _urg = !!(arguments[2] && arguments[2].urgence) || _part;   // [GO ARGENT · 13/10/2026] 3e argument { urgence: true } (06), voir ci-dessus
+  let _urg = !!(arguments[2] && arguments[2].urgence) || _part;   // [GO ARGENT · 13/10/2026] 3e argument { urgence: true } (06), voir ci-dessus
   // [GO ALERTES · 15/10/2026] 3e argument { sortie: { k: 'tp' | 'sl', why } } : posé par les sorties « objectif » ou « stop » (07 TP / SL / trailing /
   // garde-fou −90 %, 05 trailing, 09e perte max de tes consignes, 10f niveaux ATR, gain et stop appris, stop sur coupure, perte max) — lu SEULEMENT par
   // les notifications (« 🎯 TP / SL atteint ») et le message Telegram du trade. Aucune règle d'argent ni de décision ne le lit.
@@ -6351,6 +6364,16 @@ function closePosition(id, botClose = false) {
     if (typeof showToast === 'function') showToast('❌ Position introuvable: ' + id, 4000, 'critical');
     return;
   }
+
+  // [GO TENDANCE RÉELLE · 12/11/2026] une position de la voix tendance longue (15b) n'est fermée QUE par : la voix ({ voix }, retournement / liquidation),
+  // l'Urgence et le Bunker ({ urgence }), la règle de Rams « jamais sous zéro » ({ solvabilite }) et TON geste (✕, fiche, « tout fermer » :
+  // { main }). Aucune sortie automatique des bots (perte max, trailing, TP / SL appris, anti-zombie, consignes, rescue, plein régime…) : la voix
+  // n'a ni stop, ni objectif, ni durée. Refus muet ici (filet) : chaque sortie automatique saute déjà ces positions avant d'écrire quoi que ce soit.
+  // Sa fermeture se fait sans juge (comme l'urgence) : ni agents, ni bots, ni seuil appris, ni statistiques de la décision ne la notent.
+  const _a3 = arguments[2] || {};
+  const _vxPos = pos._voix === 'tendance';
+  if (_vxPos && !(_a3.voix === true || _a3.urgence === true || _a3.solvabilite === true || _a3.main === true)) return;
+  if (_vxPos) _urg = true;
 
   // ABSOLUTE RULE: bot cannot close a manual position
   if(botClose && pos.auto !== true) return;
@@ -6521,7 +6544,7 @@ function closePosition(id, botClose = false) {
     // (relecture du 19/10 : 10 clôtures lues au lieu de 20, veto de la porte des frais en RE). Son résultat va sur la ligne de la fermeture finale (« paliers »).
     if (!_part) ps.trades.push({
       side:      pos.side === 'long' ? 'buy' : 'sell',
-      type:      _urg ? 'urgence' : 'position',
+      type:      _vxPos ? 'tendance' : (_urg ? 'urgence' : 'position'),   // [GO TENDANCE RÉELLE · 12/11/2026] ligne « tendance » : lue par les rapports, l'historique et l'hebdo, par aucun juge
       amount:    String(amount),
       price:     cur,
       pnl:       realisedPct,
@@ -6739,7 +6762,7 @@ function closePosition(id, botClose = false) {
       // v19 · #38 Notification trade fermé — [GO ALERTES · 15/10/2026] avec la raison (« 🎯 TP / SL atteint ») et le mode
       try { if(typeof notifTradeClose === 'function') notifTradeClose(pos.pair, pos.side, realisedUsd, realisedPct, _sortie, S.tradingMode); } catch(e) {}
       // [GO ALERTES · 15/10/2026] Telegram « 📊 Chaque trade » (06 tgOnTrade : EV et RE seulement) — avant, rien ne l'appelait
-      try { if(typeof tgOnTrade === 'function') tgOnTrade({ pair: pos.pair, side: pos.side, pnlUsd: realisedUsd, pnlPct: realisedPct, mode: S.tradingMode, auto: pos.auto === true, urgence: _urg && !_part, partiel: _part || undefined, sortie: _sortie }); } catch(e) {}
+      try { if(typeof tgOnTrade === 'function') tgOnTrade({ pair: pos.pair, side: pos.side, pnlUsd: realisedUsd, pnlPct: realisedPct, mode: S.tradingMode, auto: pos.auto === true, urgence: _urg && !_part && !_vxPos, voix: _vxPos || undefined, partiel: _part || undefined, sortie: _sortie }); } catch(e) {}
       // v23 · #5 Vérifier alertes après chaque trade
       // [ÉCOLE VIVANTE · 10/10/2026] pas pour l'AA derrière un autre écran : ces alertes et ces badges s'affichent devant l'utilisateur et leurs drapeaux
       // (S.pnlAlerts, une fois par session) sont communs aux modes — l'écran les vérifie lui-même pour le mode affiché (renderHome)
@@ -6820,6 +6843,7 @@ function closePosition(id, botClose = false) {
 function _addToPosition(pos, addStake, price) {
   const add = Number(addStake), px = Number(price);
   if (!pos || !(add > 0) || !isFinite(px) || !(px > 0)) return null;
+  if (pos._voix === 'tendance') { try { showToast('📈 ' + pos.pair + ' : position de la voix tendance — sa mise ne change pas (ferme-la avec ✕)', 3500, 'warn'); } catch(e) {} return null; }   // [GO TENDANCE RÉELLE · 12/11/2026]
   const e0 = Number(pos.entryPrice), exp0 = Number(pos.totalExposure) || Number(pos.stakeUsdt) || 0;
   if (!isFinite(e0) || !(e0 > 0) || !(exp0 > 0)) return null;
   // un remplissage TWAP en cours (09c _twapSweep) réécrit pos.entryPrice à chaque morceau : un ajout pendant ce temps serait écrasé — refusé
@@ -7492,7 +7516,7 @@ function confirmCloseOne(id) {
     : ((pos.entryPrice - cur) / pos.entryPrice) * 100;
   const pnlUsd = _posLatent(pos, cur).usd;   // [GO LEVIER · 18/10/2026] (ETAT n° 29) ce que closePosition réaliserait (perte bornée à la mise)
   // Appeler closePosition — botClose=false donc l'utilisateur peut fermer aussi les positions bot
-  closePosition(id, false);
+  closePosition(id, false, { main: true });   // [GO TENDANCE RÉELLE · 12/11/2026] ton geste ferme aussi une position de la voix
   showToast(`⊗ ${pos.pair} ${pos.side.toUpperCase()} fermé · ${pnlUsd >= 0 ? '+' : ''}${fmt$(pnlUsd)}`, 2800, 'user');
   renderClosePositionsList();
   _updateCloseAllBadge();
@@ -7510,7 +7534,7 @@ function confirmCloseAll() {
       ? ((cur - pos.entryPrice) / pos.entryPrice) * 100
       : ((pos.entryPrice - cur) / pos.entryPrice) * 100;
     totalPnl += _posLatent(pos, cur).usd;   // [GO LEVIER · 18/10/2026] (ETAT n° 29) ce que closePosition réaliserait
-    closePosition(pos.id, false);
+    closePosition(pos.id, false, { main: true });   // [GO TENDANCE RÉELLE · 12/11/2026]
   });
   showToast(`⊗ ${positions.length} position(s) fermée(s) · ${totalPnl >= 0 ? '+' : ''}${fmt$(totalPnl)}`, 3500, 'user');
   S.chainLog.unshift({ icon:'⊗', desc:`Fermeture manuelle globale · ${positions.length} position(s) · ${totalPnl >= 0 ? '+' : ''}${fmt$(totalPnl)}`, hash:rndHash(), time:nowStr() });

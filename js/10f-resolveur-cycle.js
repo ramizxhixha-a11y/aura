@@ -834,6 +834,7 @@ window._lossCapSweep = function _lossCapSweep() {
       if (_sw) { window._bgFrom = _disp; S.tradingMode = _m; window._bgResolve = true; }
       try {
         (S.openPositions || []).slice().forEach(function(pos){
+          if (pos && pos._voix === 'tendance') return;   // [GO TENDANCE RÉELLE · 12/11/2026] la voix tendance longue n'a pas de perte max (ni stop, ni objectif, ni durée)
           var ps = S.pairStates && S.pairStates[pos.pair];
           var px = ps ? Number(ps.price) : 0;
           var entry = Number(pos.entryPrice);

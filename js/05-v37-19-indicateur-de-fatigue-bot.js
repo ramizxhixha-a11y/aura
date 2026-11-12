@@ -653,6 +653,7 @@ const _SP_PALIERS_DEF = [
 function closePartial(posId, palierIdx) {
   const pos = (S.openPositions||[]).find(p=>p.id===posId);
   if(!pos) { showToast('⚠ Position introuvable', 1500, 'warn'); return; }
+  if (pos._voix === 'tendance') return;   // [GO TENDANCE RÉELLE · 12/11/2026] la voix sort d'un bloc, au retournement : pas de paliers
   // [GO LEVIER · 18/10/2026] pas de sortie partielle d'une position à levier : ce calcul compte le résultat sur la MISE et remet l'exposition à la mise
   // (le levier de ce qui reste disparaît, son emprunt reste) — relecture du 18/10 : −59,72 $ sur un palier à +1 %. Refusé et dit (registre).
   if ((Number(pos.levBorrowed) || 0) > 0) { showToast('⚠ ' + pos.pair + ' : sortie partielle indisponible pour une position à levier — ferme-la entière (✕)', 3500, 'warn'); return; }
@@ -871,6 +872,7 @@ window.updatePosTsCfg = updatePosTsCfg;
 function checkTrailingStops() {
   (S.openPositions||[]).forEach(pos=>{
     if(!pos._tsEnabled) return;
+    if(pos._voix === 'tendance') return;   // [GO TENDANCE RÉELLE · 12/11/2026] pas de trailing sur la voix
     const ps  = S.pairStates[pos.pair];
     if(!ps) return;
     const cur = ps.price;
@@ -1026,7 +1028,7 @@ function _outilsClosedTrades() {
     ((ps && ps.trades) || []).forEach(t => {
       // [GO NETTOYAGE · 18/10/2026] (ETAT n° 39) + les fermetures d'urgence (ligne « urgence » de 02 closePosition), marquées urgence:true, comptées comme le
       // résumé Telegram (06 _tgHebdoText) — avant : « position » seulement : une urgence n'entrait ni dans le rapport, ni dans l'Excel, ni dans le résumé hebdo
-          if(t && (t.type === 'position' || t.type === 'urgence') && t.pnlUsdt != null) out.push(Object.assign({}, t, { pair, urgence: t.type === 'urgence' }));
+          if(t && (t.type === 'position' || t.type === 'urgence' || t.type === 'tendance') && t.pnlUsdt != null) out.push(Object.assign({}, t, { pair, urgence: t.type === 'urgence', tendance: t.type === 'tendance' || undefined }));   // [GO TENDANCE RÉELLE · 12/11/2026] + les fermetures de la voix (argent réel de l'EV)
     });
   });
   return out;

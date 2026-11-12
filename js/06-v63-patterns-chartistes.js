@@ -2418,7 +2418,7 @@ function _tgHebdoText(now) {
     if (!w || typeof w !== 'object') return;
     let n = 0, gagnants = 0, pnl = 0;
     Object.values(w.pairStates || {}).forEach(ps => (ps && Array.isArray(ps.trades) ? ps.trades : []).forEach(t => {
-      if (!t || !(Number(t.ts) >= t0) || (t.type !== 'position' && t.type !== 'urgence')) return;
+      if (!t || !(Number(t.ts) >= t0) || (t.type !== 'position' && t.type !== 'urgence' && t.type !== 'tendance')) return;   // [GO TENDANCE RÉELLE · 12/11/2026]
       n++; pnl += Number(t.pnlUsdt) || 0; if (Number(t.pnl) > 0) gagnants++;
     }));
     let pf = 0; try { pf = (typeof _computePortfolio === 'function') ? _computePortfolio(w) : (Number(w.portfolio) || 0); } catch(e) { pf = Number(w.portfolio) || 0; }
@@ -2468,7 +2468,7 @@ function tgOnTrade(info) {
   const usd = Number(i.pnlUsd) || 0, pct = Number(i.pnlPct) || 0, win = pct > 0, nul = pct === 0;
   const lab = i.mode === 'real' ? 'RE' : 'EV';
   const sortie = (i.sortie && (i.sortie.k === 'tp' || i.sortie.k === 'sl')) ? (i.sortie.k === 'tp' ? '🎯 ' : '🛑 ') + _tgEsc(i.sortie.why || (i.sortie.k === 'tp' ? 'objectif' : 'stop')) : '';
-  const msg = `${win?'🟢':nul?'⚪':'🔴'} <b>${win?'WIN':nul?'NUL':'LOSS'} — ${_tgEsc(i.pair || '?')}</b> · ${lab} · ${i.auto ? '🤖 bot' : '👤 manuel'}${i.urgence ? ' · fermeture d\'urgence' : ''}
+  const msg = `${win?'🟢':nul?'⚪':'🔴'} <b>${win?'WIN':nul?'NUL':'LOSS'} — ${_tgEsc(i.pair || '?')}</b> · ${lab} · ${i.voix ? '📈 tendance longue' : i.auto ? '🤖 bot' : '👤 manuel'}${i.urgence ? ' · fermeture d\'urgence' : ''}
 ${i.side==='long'?'↑ LONG':'↓ SHORT'} · P&L : <code>${usd>=0?'+':'−'}$${Math.abs(usd).toFixed(2)}</code> (${pct>=0?'+':''}${pct.toFixed(2)} %)${sortie ? '\n' + sortie : ''}
 <i>AURA ∞</i>`;
   sendTelegram(msg, true);
