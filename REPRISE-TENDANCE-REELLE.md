@@ -24,7 +24,10 @@ poche : 10 SHORT depuis le 19/10 + BTC SHORT 26/10 + PEPE LONG 05/11 ; seuil app
 - Lancer : `python3 -I rejeu/porte_poids.py <données>` → choix E / F / V = règle de mise du module 15b.
 
 ## Étapes
-- [ ] 0. Porte POIDS (règles commitées, passage à faire)
+- [x] 0. Porte POIDS passée 12/11 ~19:05 UTC → **E (égal) reste** : F ×25,15 contre E ×68,66 (jugement L1), pire baisse −65 / −53 %, contrôle −1 / +102 %, z −1,07 / −1,14 ;
+       V ×86,80, contrôle +126 %, z +0,53 / +0,83, années 3/6 (L1) → non prouvé. Rééquilibrées chaque lundi : F ×1,57 (−96 %), V ×3,41.
+       RÈGLE DE MISE du module 15b = celle mesurée : à chaque entrée, mise = min(trading, (trading + valeur des positions de la voix) / n),
+       n = paires tenues par la poche (≥ 1) ; une position tenue n'est jamais retaillée.
 - [ ] 1. Code : guard closePosition + openPosition({voix}) + refus 09c en EV + module 15b + boutons ✕ {main} ; banc vm `banc-tendance-reelle.js`
 - [ ] 2. Preuve : sonde vraie page sur le backup du 12/11 ; relecture adverse (agent séparé)
 - [ ] 3. Livraison : ETAT, PASSATION, token, banc-all LIVRABLE, squash sur main, push, DOC_V raw + Pages
