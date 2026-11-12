@@ -75,8 +75,11 @@ const vpos = (o) => Object.assign({ id: 'pV', pair: 'BTC/USDT', side: 'short', e
 function poche(W, sides, t0) {   // la poche de js/15 (S.tendance) : une position par paire
   const pos = {};
   Object.keys(sides).forEach(p => { pos[p] = { side: sides[p], w: 0, pW: 1, pL: 1, x0: 1, t0: t0 || 5, n: 11, cIn: 0.0013, liqChk: 0 }; });
-  W.S.tendance = { v: 1, depuis: 1, pos, dec: {}, hist: [], tot: { net: 0, netL: 0, n: 0, win: 0, liq: 0 } };
+  const w = 4 * 86400000 + Math.floor((W.run('Date.now()') - 4 * 86400000) / (7 * 86400000)) * 7 * 86400000;   // la poche a décidé la semaine en cours
+  const dec = Object.fromEntries(Object.keys(sides).map(p => [p, { w, s: sides[p] === 'long' ? 1 : -1, why: 'tenue' }]));
+  W.S.tendance = { v: 1, depuis: 1, pos, dec, hist: [], tot: { net: 0, netL: 0, n: 0, win: 0, liq: 0 } };
 }
+const decideSemaine = (W) => { const w = 4 * 86400000 + Math.floor((W.run('Date.now()') - 4 * 86400000) / (7 * 86400000)) * 7 * 86400000; Object.values(W.S.tendance.dec).forEach(d => { d.w = w; }); };
 const all11 = (side) => Object.fromEntries(PAIRS11.map(p => [p, p === 'PEPE/USDT' ? 'long' : side]));
 const voix = W => W.S.openPositions.filter(p => p._voix === 'tendance');
 
@@ -185,7 +188,8 @@ await T('C4 · ton ✕ ferme une position de la voix : pas rouverte cette semain
   const id = voix(W).find(p => p.pair === 'XRP/USDT').id; W.run("closePosition('" + id + "', false, { main: true })");
   W.run('_tlr.sync()'); W.run('_tlr.sync()'); assert.ok(!voix(W).some(p => p.pair === 'XRP/USDT'), 'pas cette semaine');
   assert.strictEqual(W.S.chainLog.filter(x => /XRP\/USDT fermée hors de la voix/.test(x.desc)).length, 1);
-  W.setT(Date.UTC(2026, 10, 16, 0, 5, 0)); W.run('_tlr.sync()'); assert.ok(voix(W).some(p => p.pair === 'XRP/USDT'), 'rouverte lundi 16/11');
+  W.setT(Date.UTC(2026, 10, 16, 0, 5, 0)); W.run('_tlr.sync()'); assert.ok(!voix(W).some(p => p.pair === 'XRP/USDT'), 'lundi 16/11 : la poche n\'a pas encore décidé la semaine → rien');
+  decideSemaine(W); W.run('_tlr.sync()'); assert.ok(voix(W).some(p => p.pair === 'XRP/USDT'), 'rouverte lundi 16/11, une fois la semaine décidée par la poche');
 });
 await T('C5 · une autre position (la tienne, un bot) sur la paire : la voix ne l\'ouvre pas, ne touche pas l\'autre, le dit UNE fois — aucun toast de refus en boucle', () => {
   const W = world(); poche(W, all11('short')); W.S.openPositions.push({ id: 'm', pair: 'SOL/USDT', side: 'long', entryPrice: 19, stakeUsdt: 20, auto: false }); W.S.tradingAccount -= 20;
@@ -209,6 +213,13 @@ await T('C8 · contexte : depuis l\'écran AA, la voix agit dans l\'EV puis rend
   const W = world(); poche(W, all11('short')); W.S.tradingMode = 'sim'; let seenMode = null;
   W.c.openPosition = new Proxy(W.c.openPosition, { apply: (f, t, a) => { seenMode = W.S.tradingMode + '/' + W.c._bgResolve; return f.apply(t, a); } });
   W.run('_tlr.sync()'); assert.strictEqual(seenMode, 'paperReal/true'); assert.strictEqual(W.S.tradingMode, 'sim'); assert.notStrictEqual(W.c._bgResolve, true);
+});
+
+await T('C9 · une sauvegarde plus ancienne (positions de la voix sans suivi) : le suivi est repris, un ✕ est reconnu (pas rouverte aussitôt)', () => {
+  const W = world(); poche(W, all11('short')); W.run('_tlr.sync()'); W.S.tendance.reel.suivi = {};
+  W.run('_tlr.sync()'); assert.strictEqual(Object.keys(W.S.tendance.reel.suivi).length, 11);
+  const id = voix(W).find(p => p.pair === 'ADA/USDT').id; W.run("closePosition('" + id + "', false, { main: true })"); W.run('_tlr.sync()');
+  assert.ok(!voix(W).some(p => p.pair === 'ADA/USDT'), 'pas rouverte');
 });
 
 console.log('▶ D. Le reste de l\'app');

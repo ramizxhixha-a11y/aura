@@ -116,6 +116,8 @@
         var tNow = now(), w = mondayOf(tNow);
         var M = mine(), ids = {};
         M.forEach(function (p) { ids[p.id] = 1; });
+        // positions de la voix sans suivi (sauvegarde plus ancienne restaurée) : reprises, sinon un ✕ ne serait pas reconnu et la paire rouverte aussitôt
+        M.forEach(function (p) { if (!r.suivi[p.pair]) r.suivi[p.pair] = { id: p.id, t0: num(p._voixT0) }; });
         // (a) fermée hors de la voix (ton ✕, urgence, solvabilité) : rouverte au lundi suivant si la poche la tient encore
         Object.keys(r.suivi).forEach(function (pair) {
           var s = r.suivi[pair];
@@ -171,6 +173,10 @@
             }
             return false;
           }
+          // la poche doit avoir pris la décision de CETTE semaine (lundi 00:00 UTC) : tablette éteinte le lundi, elle la prend au premier battement —
+          // ouvrir avant, ce serait ouvrir le sens de la semaine passée et risquer de le retourner une minute plus tard (frais deux fois)
+          var d = t.dec && t.dec[pair];
+          if (!(d && num(d.w) === w)) return false;
           var ps = S.pairStates && S.pairStates[pair];
           return !!(ps && Number(ps.price) > 0 && fresh(pair));
         });
