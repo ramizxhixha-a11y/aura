@@ -1,6 +1,6 @@
 // [GO SENTRY · 12/11/2026] VERSION 20261112b · chaque erreur de l'app part à Sentry (projet aura8/aura8-app, Europe), filtrée
 // ════════════════════════════════════════════════════════════════════════════════════════════════
-// ▓▓▓ AURA8 — 00s-sentry.js ▓▓▓  chargé juste après 00 (avant 02), avec js/vendor/sentry-aura.min.js
+// ▓▓▓ AURA8 — 00s-sentry.js ▓▓▓  chargé juste après 00 (avant 02), avec js/00r-sentry-sdk.min.js
 //
 // POURQUOI : une erreur sur la tablette était avalée en silence (00 _decErr : un compteur + une ligne
 // « ⚠ Erreur avalée » au journal) et Claude ne la voyait qu'au backup suivant. Désormais elle arrive
@@ -18,9 +18,9 @@
 //   • aucun état de l'app (S, portefeuilles, positions), aucun localStorage, aucun cookie, aucune IP
 //     (dataCollection.userInfo = false → Sentry n'infère pas l'IP) ; seuls les champs listés plus haut
 //     sont recopiés, tout le reste de l'événement est jeté ;
-//   • les secrets : PAT du pont, clé CoinStats, jeton Telegram (valeurs lues au moment de l'envoi),
-//     valeurs des champs de S au nom de secret (17 _pontLecture.secrets), toute forme de jeton GitHub
-//     ou Telegram, « Bearer … », « clé=… » dans une adresse, toute chaîne de 32 caractères et plus ;
+//   • les secrets : clé CoinStats, jeton et chat Telegram (valeurs lues au moment de l'envoi), valeurs
+//     des champs de S au nom de secret (17 _pontLecture.secrets), toute forme de jeton GitHub (le PAT du
+//     pont, github_pat_…, sans que ce fichier connaisse sa clé de stockage) ou Telegram, « Bearer … », « clé=… » dans une adresse, toute chaîne de 32 caractères et plus ;
 //   • les montants : tout nombre à virgule, tout nombre collé à $, €, USD, USDT, EUR, et tout nombre de
 //     4 chiffres ou plus sont remplacés par « # » dans les textes (message, valeurs des étiquettes).
 //   • les paramètres d'adresse (sauf ?v=<token> des fichiers de l'app).
@@ -77,7 +77,7 @@
   function secretsConnus() {
     var L = [];
     var pousse = function (v) { v = (v == null) ? '' : String(v); if (v.length >= 6 && L.indexOf(v) < 0) L.push(v); };
-    pousse(lsLit('aura_pont_pat')); pousse(lsLit('aura_news_key'));
+    pousse(lsLit('aura_news_key'));   // le PAT du pont : jamais lu ici (seul 17b connaît sa clé de stockage) — RE_JETON masque toute forme github_pat_…
     try { var tg = JSON.parse(lsLit('aura_tg_cfg') || 'null'); if (tg && typeof tg === 'object') { pousse(tg.botToken); pousse(tg.chatId); } } catch (e) {}
     try { var P = window._pontLecture; if (P && typeof P.secrets === 'function') { var s = P.secrets(); for (var i = 0; i < s.length; i++) pousse(s[i]); } } catch (e) {}
     return L;
@@ -251,8 +251,14 @@
   }
 
   // erreur avalée par 00 _decErr : même filtre, niveau warning, étiquette avalee=oui
+  var vuesAvalees = {};   // tri AVANT de bâtir l'événement : une erreur avalée à chaque battement ne coûte qu'une lecture de clé
   function avalee(e) {
     if (!st.actif || !SDK) return;
+    try {
+      var cle = String((e && e.message) || e).slice(0, 120) + '|' + ((e && typeof e.stack === 'string') ? (e.stack.split('\n')[1] || '') : '');
+      if (vuesAvalees[cle]) { st.refuses.doublon++; return; }
+      vuesAvalees[cle] = 1;
+    } catch (x) { return; }
     try {
       SDK.withScope(function (scope) {
         etiquettes(scope, true);

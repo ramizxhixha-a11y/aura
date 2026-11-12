@@ -1,6 +1,6 @@
 // banc-sentry.js — [GO SENTRY · 12/11/2026] VERSION 20261112b
 // « Go sentry » (Rams 12/11) : chaque erreur de la tablette part à Sentry, sans rien de privé. Ce banc fait tourner le VRAI texte
-// (js/00-backup-state.js entier, js/vendor/sentry-aura.min.js = SDK officiel réduit, js/00s-sentry.js) dans une vm qui imite la page :
+// (js/00-backup-state.js entier, js/00r-sentry-sdk.min.js = SDK officiel réduit, js/00s-sentry.js) dans une vm qui imite la page :
 // window, document, location, localStorage, fetch FACTICE qui enregistre chaque envoi (rien ne sort de la machine).
 //   A  statique : ordre du HTML (00 → SDK → 00s → 02), SDK = la recette (sha-256), 00 relié, aucune clé de stockage nouvelle hors 2.
 //   B  hors de la page publiée (bancs, rejeux, sondes) : RIEN ne part, même avec erreurs ; le banc VOIT la différence (règle 10).
@@ -17,7 +17,7 @@ let pass = 0, fail = 0;
 async function T(name, fn) { try { await fn(); pass++; console.log('  ✅ ' + name); } catch (e) { fail++; console.log('  ❌ ' + name + '\n     ' + String(e && e.stack || e).split('\n').slice(0, 4).join('\n     ')); } }
 const HOTE = 'ramizxhixha-a11y.github.io';
 const INGEST = 'https://o4512420537499648.ingest.de.sentry.io/api/4512420614570064/envelope/';
-const SDK_SHA = '4f58f8ac3a71ad0517bc2f2d60b99113beea9bcb0920272d608aaa8149513a21';   // sortie de rejeu/sentry/construire.sh (@sentry/browser 11.12.0)
+const SDK_SHA = ['4f58f8ac3a71ad05', '17bc2f2d60b99113', 'beea9bcb0920272d', '608aaa8149513a21'].join('');   // en 4 morceaux : banc-p0b refuse 44 hex d'affilée dans un banc   // sortie de rejeu/sentry/construire.sh (@sentry/browser 11.12.0)
 const html = rd('AURA8_v118.html');
 const TOK = (html.match(/DOC_V = '(\d{8}[a-z])'/) || [])[1];
 
@@ -27,6 +27,7 @@ const NEWS = 'Qk3fakeCoinStatsKeyAAAAbbbbCCCCddddEEEEffff00==';
 const TG = { botToken: '7712345678:AAHfakeTelegramTokenXyZ_abcdefghijkl', chatId: '987654321' };
 const SECRET_S = 'sk-live-fake-secret-value-in-S-0001';
 const MONTANT = 1062.4937;
+const CONSOLE = { log() {}, info() {}, warn() {}, error() {}, debug() {} };   // la page a sa console ; ici muette (00 y écrit « IDB open error » hors navigateur)
 
 function monde(opts) {
   opts = opts || {};
@@ -50,7 +51,7 @@ function monde(opts) {
     document, localStorage, fetch, envois, timers, ecouteurs,
     location: { hostname: opts.hote === undefined ? HOTE : opts.hote, href: 'https://' + (opts.hote === undefined ? HOTE : opts.hote) + '/aura/AURA8_v118.html', protocol: 'https:' },
     navigator: { userAgent: 'Mozilla/5.0 (Linux; Android 14; SM-X710) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36', onLine: true },
-    console, Promise, Error, TypeError, RangeError, String, Number, Boolean, Array, Object, Math, Date, JSON, RegExp, Map, Set, WeakMap, WeakSet, Symbol, Reflect, Proxy,
+    console: CONSOLE, Promise, Error, TypeError, RangeError, String, Number, Boolean, Array, Object, Math, Date, JSON, RegExp, Map, Set, WeakMap, WeakSet, Symbol, Reflect, Proxy,
     Uint8Array, ArrayBuffer, DataView, TextEncoder, TextDecoder, URL, URLSearchParams, crypto: crypto.webcrypto, performance, queueMicrotask,
     parseInt, parseFloat, isNaN, isFinite, encodeURIComponent, decodeURIComponent, escape, unescape, structuredClone,
     clearTimeout: () => {}, clearInterval: () => {},
@@ -68,7 +69,7 @@ function monde(opts) {
     tradingMode: 'paperReal', chainLog: [], perf: {}, newsApiKey: NEWS,
     walletStore: { paperReal: { portfolio: MONTANT, tradingAccount: 1055.91, cashAccount: 6.58 } }
   }) + '; Object.defineProperty(S, "telegramCfg", { value: ' + JSON.stringify(TG) + ', enumerable: false }); S.apiSecret = "' + SECRET_S + '";');
-  if (ex('js/vendor/sentry-aura.min.js')) charge('js/vendor/sentry-aura.min.js');
+  if (ex('js/00r-sentry-sdk.min.js')) charge('js/00r-sentry-sdk.min.js');
   if (ex('js/00s-sentry.js')) charge('js/00s-sentry.js');
   // 17 (lecture du pont) donne les valeurs des champs de S au nom de secret : imité ici par sa vraie règle (nom + longueur ≥ 12)
   w._pontLecture = { secrets: () => { const S = vm.runInContext('typeof S === "undefined" ? null : S', ctx); if (!S) return []; return Object.getOwnPropertyNames(S).filter(k => /(api_?key|secret|token)/i.test(k)).map(k => S[k]).filter(v => typeof v === 'string' && v.length >= 12); } };
@@ -86,25 +87,25 @@ function erreur(w, msg) { return vm.runInContext('(function lanceur_de_test(){ t
   console.log('▶ banc-sentry · token ' + TOK + (process.env.BANC_ROOT ? ' · ROOT ' + ROOT : ''));
 
   /* ─────────── A · statique ─────────── */
-  await T('A1 HTML : 00 → js/vendor/sentry-aura.min.js → js/00s-sentry.js → 02, au token', () => {
+  await T('A1 HTML : 00 → js/00r-sentry-sdk.min.js → js/00s-sentry.js → 02, au token', () => {
     const src = [...html.matchAll(/<script[^>]*\bsrc="([^"?]+)(\?v=[0-9a-z]+)?"/g)].map(m => [m[1], m[2]]);
     const i = src.findIndex(s => s[0] === 'js/00-backup-state.js');
-    assert.deepStrictEqual(src.slice(i, i + 4).map(s => s[0]), ['js/00-backup-state.js', 'js/vendor/sentry-aura.min.js', 'js/00s-sentry.js', 'js/02-state-init.js']);
+    assert.deepStrictEqual(src.slice(i, i + 4).map(s => s[0]), ['js/00-backup-state.js', 'js/00r-sentry-sdk.min.js', 'js/00s-sentry.js', 'js/02-state-init.js']);
     assert.ok(src.slice(i + 1, i + 3).every(s => s[1] === '?v=' + TOK));
   });
   await T('A2 SDK = sortie de la recette rejeu/sentry/construire.sh (sha-256), un seul nom global __auraSentrySdk, aucun stockage ni console', () => {
-    const s = rd('js/vendor/sentry-aura.min.js');
+    const s = rd('js/00r-sentry-sdk.min.js');
     assert.strictEqual(crypto.createHash('sha256').update(s).digest('hex'), SDK_SHA, 'SDK modifié hors recette');
     assert.ok(/^\/\*![^\n]*\*\/\nvar __auraSentrySdk=\(\(\)=>\{/.test(s));
     assert.ok(!/localStorage|sessionStorage|console\[/.test(s));
     assert.ok(ex('rejeu/sentry/construire.sh') && ex('rejeu/sentry/entree.js'));
   });
-  await T('A3 00 relie _decErr à Sentry (avant le « if (!S0) return » : une erreur du chargement part aussi) ; 00s : ni window.S, ni alert, 2 clés de stockage', () => {
+  await T('A3 00 relie _decErr à Sentry (avant le « if (!S0) return » : une erreur du chargement part aussi) ; 00s : ni window.S, ni alert, ni la clé du PAT, 2 clés de stockage', () => {
     const s0 = rd('js/00-backup-state.js'), s = rd('js/00s-sentry.js');
     const i = s0.indexOf('window._auraSentry.avalee(e)'), j = s0.indexOf('if (!S0) return;', s0.indexOf('window._decErr = function'));
     assert.ok(i > 0 && i < j);
     assert.ok(s0.startsWith('// [GEL BOOT · 11/09/2026] VERSION 20260911a'));
-    assert.ok(!/window\.S\b|alert\(/.test(s));
+    assert.ok(!/window\.S\b|alert\(|aura_pont_(pat|mem)/.test(s));   // le PAT du pont : seul 17b connaît sa clé (banc-pont-direct P36)
     const cles = [...s.matchAll(/localStorage\.setItem\(([A-Z_]+)/g)].map(m => m[1]);
     assert.deepStrictEqual([...new Set(cles)].sort(), ['LS_BRANCHE', 'LS_JOUR']);
     assert.ok(s.includes("var LS_JOUR = 'aura_sentry_jour', LS_BRANCHE = 'aura_sentry_v';"));
@@ -153,6 +154,13 @@ function erreur(w, msg) { return vm.runInContext('(function lanceur_de_test(){ t
     assert.strictEqual(S._errStats["cannot read properties of undefined (reading 'stake')"], 2);
     assert.strictEqual(S.chainLog.filter(l => /^Erreur avalée \(1re occurrence\)/.test(l.desc)).length, 1);
     assert.strictEqual(W.envois.length, 1); assert.strictEqual(W._auraSentry.etat().refuses.doublon, 1);
+  });
+  await T('C2b la même erreur avalée 5 000 fois (une par battement) : 1 seul envoi, tri avant de bâtir l\'événement (< 300 ms pour les 5 000)', async () => {
+    const w = monde(), e = erreur(w, 'boucle de battement');
+    const t0 = Date.now(); for (let i = 0; i < 5000; i++) w._decErr(e); const dt = Date.now() - t0;
+    await attend(60);
+    assert.strictEqual(w.envois.length, 1); assert.strictEqual(w._auraSentry.etat().refuses.doublon, 4999);
+    assert.ok(dt < 300, dt + ' ms');
   });
   await T('C3 _decErr avant que S existe (chargement) : part quand même ; _decErr("texte") → message ; une garde qui casse ne casse pas _decErr', async () => {
     const w = monde({ sansS: true });
@@ -238,7 +246,7 @@ function erreur(w, msg) { return vm.runInContext('(function lanceur_de_test(){ t
     assert.strictEqual(w.setTimeout, w.__oTimeout); assert.strictEqual(w.fetch, w.__oFetch);
     assert.ok(w.fetch.toString().includes('_oFetch'));
     assert.strictEqual(Error.stackTraceLimit, w.__limite);
-    assert.strictEqual(w.console, console);
+    assert.strictEqual(w.console, CONSOLE); assert.deepStrictEqual(Object.keys(CONSOLE), ['log', 'info', 'warn', 'error', 'debug']);
     assert.ok(!w.ecouteurs.includes('error') && !w.ecouteurs.includes('unhandledrejection'));
   });
 

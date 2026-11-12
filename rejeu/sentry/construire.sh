@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Reconstruit js/vendor/sentry-aura.min.js depuis le SDK officiel (GO SENTRY · 12/11/2026).
+# Reconstruit js/00r-sentry-sdk.min.js depuis le SDK officiel (GO SENTRY · 12/11/2026).
 # Usage : bash rejeu/sentry/construire.sh   (depuis la racine du dépôt)
 set -euo pipefail
 VER=11.12.0
@@ -15,6 +15,6 @@ npx esbuild entree.js --bundle --format=iife --global-name=__auraSentrySdk --min
 {
   echo "/*! @sentry/browser $VER (MIT, Functional Software, Inc. dba Sentry) — sous-ensemble construit par rejeu/sentry/construire.sh pour AURA8 (GO SENTRY 12/11/2026). Ne pas éditer à la main. */"
   cat out.js
-} > "$RACINE/js/vendor/sentry-aura.min.js"
-sha256sum "$RACINE/js/vendor/sentry-aura.min.js"
-wc -c "$RACINE/js/vendor/sentry-aura.min.js"
+} > "$RACINE/js/00r-sentry-sdk.min.js"
+sha256sum "$RACINE/js/00r-sentry-sdk.min.js"
+wc -c "$RACINE/js/00r-sentry-sdk.min.js"

@@ -1,5 +1,5 @@
 // Entrée de construction du SDK Sentry réduit pour AURA8 (GO SENTRY · 12/11/2026).
-// Seules ces pièces du SDK officiel @sentry/browser entrent dans js/vendor/sentry-aura.min.js :
+// Seules ces pièces du SDK officiel @sentry/browser entrent dans js/00r-sentry-sdk.min.js :
 // un client navigateur, l'envoi par fetch, le lecteur de piles Chrome/V8, et quatre intégrations
 // (erreurs globales, erreurs liées, doublons, contexte HTTP). AUCUNE intégration par défaut :
 // rien n'enveloppe setTimeout / rAF / fetch / console / addEventListener (00 les chronomètre déjà),
