@@ -28,6 +28,10 @@ poche : 10 SHORT depuis le 19/10 + BTC SHORT 26/10 + PEPE LONG 05/11 ; seuil app
        V ×86,80, contrôle +126 %, z +0,53 / +0,83, années 3/6 (L1) → non prouvé. Rééquilibrées chaque lundi : F ×1,57 (−96 %), V ×3,41.
        RÈGLE DE MISE du module 15b = celle mesurée : à chaque entrée, mise = min(trading, (trading + valeur des positions de la voix) / n),
        n = paires tenues par la poche (≥ 1) ; une position tenue n'est jamais retaillée.
-- [ ] 1. Code : guard closePosition + openPosition({voix}) + refus 09c en EV + module 15b + boutons ✕ {main} ; banc vm `banc-tendance-reelle.js`
+- [x] 1. Code : guard closePosition + openPosition({voix}) + refus 09c en EV + module 15b + boutons ✕ {main} ; `banc-tendance-reelle.js` 20/20 (3/20 sur dcbd4ad)
+       témoin : banc-fixtures/tendance-reelle-avant-20261027b.js (open/close au commit dcbd4ad)
+- [ ] 1b. Bancs épinglés à remettre (banc-all BLOQUÉ, 20 échecs au 1er passage) : jeton + nombre de ?v= (87 → 88 avec 15b), empreintes de
+       openPosition / closePosition / 09c (levier S1, levier-56 D, reglages E2, talent-registre S, consignes K10, alertes A2, p4 02, p6, modes-separes S2e,
+       skill-borne, verite D4/S9, net-expectancy 10f lignes) — chacun avec la raison datée
 - [ ] 2. Preuve : sonde vraie page sur le backup du 12/11 ; relecture adverse (agent séparé)
 - [ ] 3. Livraison : ETAT, PASSATION, token, banc-all LIVRABLE, squash sur main, push, DOC_V raw + Pages
