@@ -44,6 +44,7 @@ const h16 = s => crypto.createHash('sha256').update(s).digest('hex').slice(0, 16
 const near = (a, b, quoi, tol) => assert.ok(typeof a === 'number' && Math.abs(a - b) <= (tol || 1e-6), (quoi || 'valeur') + ' : ' + a + ' ≠ ' + b);
 const s02 = rd('js/02-state-init.js'), s07 = rd('js/07-v90-mode-bunker-sos.js'), s09d1 = rd('js/09d1-paper-real-core.js'), s10c = rd('js/10c-profil-ab-contexte.js'),
       s10e = rd('js/10e-helpers-adaptatifs.js'), html = rd('AURA8_v118.html');
+const _TR = require('./banc-fixtures/sans-tendance-reelle.js');   // [GO TENDANCE RÉELLE · 12/11/2026] retire les retouches de go tendance réelle avant d'épingler le texte (voir le fichier)
 const toggle = (() => { const i = s07.indexOf('window._toggleHeroBk = function(which){'); return i < 0 ? '' : s07.slice(i, s07.indexOf('\n};', i) + 3); })();
 
 // le monde : un S plat (le portefeuille du mode à l'écran, comme les accesseurs de 02) et le vrai texte des fonctions
@@ -203,7 +204,7 @@ T('L8 la relance (09b2) et la remise à zéro (07) posent les bases sur l\'argen
 
 T('D la DÉCISION n\'a pas bougé : 19 fonctions identiques au commit 6f4cd12 ; closePosition ne change que par la ligne des alertes P&L', () => {
   const TOUT = ['js/02-state-init.js', 'js/03-per-pair-position-buttons-controls-buid.js', 'js/09j-helpers.js', 'js/09c-auto-open.js', 'js/09e-guards.js',
-    'js/10f-resolveur-cycle.js', 'js/10h-pont-fullpower-bricks.js', 'js/08-learning-history-render.js'].map(rd).join('\n');
+    'js/10f-resolveur-cycle.js', 'js/10h-pont-fullpower-bricks.js', 'js/08-learning-history-render.js'].map(f => _TR(rd(f), f)).join('\n');
   const AV = { _computePortfolio: '257f2a1047dbc64b', _computePortfolioSans: 'af9d6d3e24a71b80', _tradingCapitalBase: '8f78e89a034783a4', _levCashDebt: '6c289b7680c5651a',
     _posLevCash: '2a29ce45dce38032', _feesDueOf: '06f247aa7097ee98', estimateStakes: '191de2e4cf018d53', _checkPaperRealStakeLimit: '31c0b71e7147fa7a',
     guardianCheck: '09a759da6045c358', botRescue: 'd41aca153b4299f8', validateInvestmentCapProvisioned: '3229d70744efd7a8', validateTotalExposure: '9ff782139655cb22',
@@ -214,7 +215,7 @@ T('D la DÉCISION n\'a pas bougé : 19 fonctions identiques au commit 6f4cd12 ; 
   const strip = s => s.split('\n').filter(l => !/^\s*\/\//.test(l)).join('\n');
   assert.strictEqual(h16(strip(fnSrc(s02, 'computePortfolioTotal'))), '57dd0dacad455aed', 'computePortfolioTotal : le code a changé');
   // closePosition : le texte d'avant, où la ligne des alertes P&L est remplacée par la nouvelle (et son commentaire), est le texte d'après
-  const cp = fnSrc(s02, 'closePosition');
+  const cp = fnSrc(_TR(s02, 'js/02-state-init.js'), 'closePosition');
   const neu = cp.replace(/\n {6}\/\/ \[GO LEVIER 56[^\n]*\n {6}\/\/[^\n]*\n {6}try \{ window\._pnlSansPos = pos; if\(!_behind && typeof checkPnlAlerts === 'function'\) checkPnlAlerts\(\); \} catch\(e\) \{\} finally \{ window\._pnlSansPos = null; \}/,
     "\n      try { if(!_behind && typeof checkPnlAlerts === 'function') checkPnlAlerts(); } catch(e) {}");
   assert.strictEqual(h16(neu), '952c22e233568bea', 'closePosition a changé ailleurs que sur la ligne des alertes P&L');

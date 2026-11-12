@@ -1,0 +1,210 @@
+{
+"js/02-state-init.js": [
+[
+"    ids.forEach(function(id){\n      try { closePosition(id, false, { solvabilite: true }); } catch(e) {}   // [GO TENDANCE RÉELLE · 12/11/2026] « jamais sous zéro » ferme aussi la voix\n    });",
+"    ids.forEach(function(id){\n      try { closePosition(id, false); } catch(e) {}\n    });"
+],
+[
+"function openPosition(pair, side, opts) {\n  const _o = (opts && typeof opts === 'object') ? opts : {};",
+"function openPosition(pair, side, opts) {\n  const _warn = _manOpenWarnings(pair, side);   // [MANU · 05/10/2026] dits, plus jamais un refus muet\n  const _o = (opts && typeof opts === 'object') ? opts : {};"
+],
+[
+"  const _o = (opts && typeof opts === 'object') ? opts : {};\n  // [GO TENDANCE RÉELLE · 12/11/2026] { voix: true, stakeUsdt, voixT0 } : ouverture de la voix tendance longue (15b, l'EV suit la poche de 15) — mise donnée\n  // par 15b (règle de la porte POIDS : 1/n de la valeur de l'EV, jamais plus que le trading), SANS levier, sans TP / SL ni consignes (la voix\n  // n'a ni stop, ni objectif, ni durée : seul le retournement la ferme), sans avis des bots ni toast par position. Le reste (1 position par\n  // paire, mise ≤ trading, débit, historique, notification) comme toute ouverture.\n  const _vx = _o.voix === true;\n  const _warn = _vx ? [] : _manOpenWarnings(pair, side);   // [MANU · 05/10/2026] dits, plus jamais un refus muet\n",
+"  const _o = (opts && typeof opts === 'object') ? opts : {};\n"
+],
+[
+"\n  const id        = 'p'+Date.now().toString(36) + (_vx ? pair.split('/')[0].toLowerCase() : '');   // [GO TENDANCE RÉELLE · 12/11/2026] 11 ouvertures dans la même milliseconde : ids distincts\n  const stakeUsdt = _vx ? Number(_o.stakeUsdt) : (ps.stake || 10);\n  if (_vx && !(isFinite(stakeUsdt) && stakeUsdt > 0)) return null;\n  const pairLev   = _vx ? 1 : (ps.pairLeverage || 1);   // [GO TENDANCE RÉELLE · 12/11/2026] la voix ne prend jamais de levier\n",
+"\n  const id        = 'p'+Date.now().toString(36);\n  const stakeUsdt = ps.stake || 10;\n  const pairLev   = ps.pairLeverage || 1;\n"
+],
+[
+"  // ── Validation capital avant ouverture manuelle ──────────\n  // [GO TENDANCE RÉELLE · 12/11/2026] la voix : exposition = mise ≤ trading (contrôlé plus bas) — le plafond « conviction » des bots ne la concerne pas\n  const capCheck = _vx ? { ok: true, available: Infinity } : validateTotalExposure(stakeUsdt, levBorrowed);\n  if(!capCheck.ok && capCheck.available < stakeUsdt * 0.5) {",
+"  // ── Validation capital avant ouverture manuelle ──────────\n  const capCheck = validateTotalExposure(stakeUsdt, levBorrowed);\n  if(!capCheck.ok && capCheck.available < stakeUsdt * 0.5) {"
+],
+[
+"  try {\n    if(!_vx && (S.leverage || 0) >= 1 && stakeUsdt > (S.tradingAccount || 0)) {   // [GO TENDANCE RÉELLE · 12/11/2026] jamais d'emprunt pour la voix\n      const r = ensureLeverageCoverForTrade(stakeUsdt, pair);",
+"  try {\n    if((S.leverage || 0) >= 1 && stakeUsdt > (S.tradingAccount || 0)) {\n      const r = ensureLeverageCoverForTrade(stakeUsdt, pair);"
+],
+[
+"  // v7.12 · P7 · Consommer le pending\n  if (!_vx && S._pendingPositionBorrow) {\n    _jitBorrowedManual = Math.max(_jitBorrowedManual, S._pendingPositionBorrow);",
+"  // v7.12 · P7 · Consommer le pending\n  if (S._pendingPositionBorrow) {\n    _jitBorrowedManual = Math.max(_jitBorrowedManual, S._pendingPositionBorrow);"
+],
+[
+"  let _sl = (_okPct(Number(_o.slPct)) && _px > 0) ? _px * (1 - _d * Number(_o.slPct) / 100) : null;\n  if (!_vx && (_tp === null || _sl === null)) {   // [GO TENDANCE RÉELLE · 12/11/2026] la voix : ni TP ni SL\n    let _b = null; try { _b = (typeof _calcBotTpSl === 'function') ? _calcBotTpSl(pair, side) : null; } catch(e){ try{window._decErr&&window._decErr(e)}catch(_e){} }",
+"  let _sl = (_okPct(Number(_o.slPct)) && _px > 0) ? _px * (1 - _d * Number(_o.slPct) / 100) : null;\n  if (_tp === null || _sl === null) {\n    let _b = null; try { _b = (typeof _calcBotTpSl === 'function') ? _calcBotTpSl(pair, side) : null; } catch(e){ try{window._decErr&&window._decErr(e)}catch(_e){} }"
+],
+[
+"  });\n  if (_vx) {   // [GO TENDANCE RÉELLE · 12/11/2026] marque de la voix (lue par closePosition, les sorties automatiques, l'écran, le fiscal) ; consignes MAN effacées\n    const _vp = S.openPositions[S.openPositions.length - 1];\n    _vp._voix = 'tendance'; _vp._voixT0 = Number(_o.voixT0) || null;\n    _vp._manMaxLossPct = null; _vp._manTimeoutMin = null; _vp._openAgents = [];\n    _vp._openReason = 'Voix tendance longue · ' + String(side).toUpperCase() + ' tenu jusqu\\'au retournement';\n  }\n  S.portfolio = _computePortfolio();   // [23/08] canonique · [GO NETTOYAGE · 19/10/2026] (n° 58) après l'ajout de la position : sa mise y est comptée",
+"  });\n  S.portfolio = _computePortfolio();   // [23/08] canonique · [GO NETTOYAGE · 19/10/2026] (n° 58) après l'ajout de la position : sa mise y est comptée"
+],
+[
+"  });\n  if(!existing && !_vx) showToast('📈 '+side.toUpperCase()+' '+pair+' — $'+totalExposure+' USDT'+levStr);   // [GO TENDANCE RÉELLE · 12/11/2026] la voix dit ses ouvertures en un seul toast (15b)\n  // v19 · #38 Notification trade ouvert",
+"  });\n  if(!existing) showToast('📈 '+side.toUpperCase()+' '+pair+' — $'+totalExposure+' USDT'+levStr);\n  // v19 · #38 Notification trade ouvert"
+],
+[
+"  const _part = !!(arguments[2] && arguments[2].partiel);\n  let _urg = !!(arguments[2] && arguments[2].urgence) || _part;   // [GO ARGENT · 13/10/2026] 3e argument { urgence: true } (06), voir ci-dessus\n  // [GO ALERTES · 15/10/2026] 3e argument { sortie: { k: 'tp' | 'sl', why } } : posé par les sorties « objectif » ou « stop » (07 TP / SL / trailing /",
+"  const _part = !!(arguments[2] && arguments[2].partiel);\n  const _urg = !!(arguments[2] && arguments[2].urgence) || _part;   // [GO ARGENT · 13/10/2026] 3e argument { urgence: true } (06), voir ci-dessus\n  // [GO ALERTES · 15/10/2026] 3e argument { sortie: { k: 'tp' | 'sl', why } } : posé par les sorties « objectif » ou « stop » (07 TP / SL / trailing /"
+],
+[
+"  }\n\n  // [GO TENDANCE RÉELLE · 12/11/2026] une position de la voix tendance longue (15b) n'est fermée QUE par : la voix ({ voix }, retournement / liquidation),\n  // l'Urgence et le Bunker ({ urgence }), la règle de Rams « jamais sous zéro » ({ solvabilite }) et TON geste (✕, fiche, « tout fermer » :\n  // { main }). Aucune sortie automatique des bots (perte max, trailing, TP / SL appris, anti-zombie, consignes, rescue, plein régime…) : la voix\n  // n'a ni stop, ni objectif, ni durée. Refus muet ici (filet) : chaque sortie automatique saute déjà ces positions avant d'écrire quoi que ce soit.\n  // Sa fermeture se fait sans juge (comme l'urgence) : ni agents, ni bots, ni seuil appris, ni statistiques de la décision ne la notent.\n  const _a3 = arguments[2] || {};\n  const _vxPos = pos._voix === 'tendance';\n  if (_vxPos && !(_a3.voix === true || _a3.urgence === true || _a3.solvabilite === true || _a3.main === true)) return;\n  if (_vxPos) _urg = true;\n",
+"  }\n"
+],
+[
+"      side:      pos.side === 'long' ? 'buy' : 'sell',\n      type:      _vxPos ? 'tendance' : (_urg ? 'urgence' : 'position'),   // [GO TENDANCE RÉELLE · 12/11/2026] ligne « tendance » : lue par les rapports, l'historique et l'hebdo, par aucun juge\n      amount:    String(amount),",
+"      side:      pos.side === 'long' ? 'buy' : 'sell',\n      type:      _urg ? 'urgence' : 'position',\n      amount:    String(amount),"
+],
+[
+"      // [GO ALERTES · 15/10/2026] Telegram « 📊 Chaque trade » (06 tgOnTrade : EV et RE seulement) — avant, rien ne l'appelait\n      try { if(typeof tgOnTrade === 'function') tgOnTrade({ pair: pos.pair, side: pos.side, pnlUsd: realisedUsd, pnlPct: realisedPct, mode: S.tradingMode, auto: pos.auto === true, urgence: _urg && !_part && !_vxPos, voix: _vxPos || undefined, partiel: _part || undefined, sortie: _sortie }); } catch(e) {}\n      // v23 · #5 Vérifier alertes après chaque trade",
+"      // [GO ALERTES · 15/10/2026] Telegram « 📊 Chaque trade » (06 tgOnTrade : EV et RE seulement) — avant, rien ne l'appelait\n      try { if(typeof tgOnTrade === 'function') tgOnTrade({ pair: pos.pair, side: pos.side, pnlUsd: realisedUsd, pnlPct: realisedPct, mode: S.tradingMode, auto: pos.auto === true, urgence: _urg && !_part, partiel: _part || undefined, sortie: _sortie }); } catch(e) {}\n      // v23 · #5 Vérifier alertes après chaque trade"
+],
+[
+"  if (!pos || !(add > 0) || !isFinite(px) || !(px > 0)) return null;\n  if (pos._voix === 'tendance') { try { showToast('📈 ' + pos.pair + ' : position de la voix tendance — sa mise ne change pas (ferme-la avec ✕)', 3500, 'warn'); } catch(e) {} return null; }   // [GO TENDANCE RÉELLE · 12/11/2026]\n  const e0 = Number(pos.entryPrice), exp0 = Number(pos.totalExposure) || Number(pos.stakeUsdt) || 0;",
+"  if (!pos || !(add > 0) || !isFinite(px) || !(px > 0)) return null;\n  const e0 = Number(pos.entryPrice), exp0 = Number(pos.totalExposure) || Number(pos.stakeUsdt) || 0;"
+],
+[
+"  // Appeler closePosition — botClose=false donc l'utilisateur peut fermer aussi les positions bot\n  closePosition(id, false, { main: true });   // [GO TENDANCE RÉELLE · 12/11/2026] ton geste ferme aussi une position de la voix\n  showToast(`⊗ ${pos.pair} ${pos.side.toUpperCase()} fermé · ${pnlUsd >= 0 ? '+' : ''}${fmt$(pnlUsd)}`, 2800, 'user');",
+"  // Appeler closePosition — botClose=false donc l'utilisateur peut fermer aussi les positions bot\n  closePosition(id, false);\n  showToast(`⊗ ${pos.pair} ${pos.side.toUpperCase()} fermé · ${pnlUsd >= 0 ? '+' : ''}${fmt$(pnlUsd)}`, 2800, 'user');"
+],
+[
+"    totalPnl += _posLatent(pos, cur).usd;   // [GO LEVIER · 18/10/2026] (ETAT n° 29) ce que closePosition réaliserait\n    closePosition(pos.id, false, { main: true });   // [GO TENDANCE RÉELLE · 12/11/2026]\n  });",
+"    totalPnl += _posLatent(pos, cur).usd;   // [GO LEVIER · 18/10/2026] (ETAT n° 29) ce que closePosition réaliserait\n    closePosition(pos.id, false);\n  });"
+]
+],
+"js/03-per-pair-position-buttons-controls-buid.js": [
+[
+"                 border-radius:6px;padding:2px 7px;font-size:9px;cursor:pointer;\">✏️</button>\n        <button onclick=\"closePosition('${pos.id}',${pos.auto?'true':'false'},{main:true})\"\n          style=\"background:rgba(255,61,107,.18);color:var(--down);border:1.5px solid rgba(255,61,107,.55);",
+"                 border-radius:6px;padding:2px 7px;font-size:9px;cursor:pointer;\">✏️</button>\n        <button onclick=\"closePosition('${pos.id}',${pos.auto?'true':'false'})\"\n          style=\"background:rgba(255,61,107,.18);color:var(--down);border:1.5px solid rgba(255,61,107,.55);"
+],
+[
+"  const ddPct = startP > 0 ? (startP - curP) / startP * 100 : 0;\n  // [GO TENDANCE RÉELLE · 12/11/2026] les positions de la voix tendance longue ne sont jamais aplaties par le Rescue (closePosition les lui refuse) : ni comptées, ni annoncées\n  const _rescuable = (S.openPositions || []).filter(p => p && p._voix !== 'tendance');\n  const hasPositions = _rescuable.length > 0;\n",
+"  const ddPct = startP > 0 ? (startP - curP) / startP * 100 : 0;\n  const hasPositions = (S.openPositions || []).length > 0;\n"
+],
+[
+"    // v6.0 · VRAIE ACTION — flatten all positions\n    const countBefore = _rescuable.length;\n    const snapshot = _rescuable.map(p => ({ id: p.id, pair: p.pair, side: p.side }));\n    snapshot.forEach(p => {",
+"    // v6.0 · VRAIE ACTION — flatten all positions\n    const countBefore = S.openPositions.length;\n    const snapshot = S.openPositions.map(p => ({ id: p.id, pair: p.pair, side: p.side }));\n    snapshot.forEach(p => {"
+]
+],
+"js/05-v37-19-indicateur-de-fatigue-bot.js": [
+[
+"  if(!pos) { showToast('⚠ Position introuvable', 1500, 'warn'); return; }\n  if (pos._voix === 'tendance') return;   // [GO TENDANCE RÉELLE · 12/11/2026] la voix sort d'un bloc, au retournement : pas de paliers\n  // [GO LEVIER · 18/10/2026] pas de sortie partielle d'une position à levier : ce calcul compte le résultat sur la MISE et remet l'exposition à la mise",
+"  if(!pos) { showToast('⚠ Position introuvable', 1500, 'warn'); return; }\n  // [GO LEVIER · 18/10/2026] pas de sortie partielle d'une position à levier : ce calcul compte le résultat sur la MISE et remet l'exposition à la mise"
+],
+[
+"    if(!pos._tsEnabled) return;\n    if(pos._voix === 'tendance') return;   // [GO TENDANCE RÉELLE · 12/11/2026] pas de trailing sur la voix\n    const ps  = S.pairStates[pos.pair];",
+"    if(!pos._tsEnabled) return;\n    const ps  = S.pairStates[pos.pair];"
+],
+[
+"      // résumé Telegram (06 _tgHebdoText) — avant : « position » seulement : une urgence n'entrait ni dans le rapport, ni dans l'Excel, ni dans le résumé hebdo\n          if(t && (t.type === 'position' || t.type === 'urgence' || t.type === 'tendance') && t.pnlUsdt != null) out.push(Object.assign({}, t, { pair, urgence: t.type === 'urgence', tendance: t.type === 'tendance' || undefined }));   // [GO TENDANCE RÉELLE · 12/11/2026] + les fermetures de la voix (argent réel de l'EV)\n    });",
+"      // résumé Telegram (06 _tgHebdoText) — avant : « position » seulement : une urgence n'entrait ni dans le rapport, ni dans l'Excel, ni dans le résumé hebdo\n          if(t && (t.type === 'position' || t.type === 'urgence') && t.pnlUsdt != null) out.push(Object.assign({}, t, { pair, urgence: t.type === 'urgence' }));\n    });"
+]
+],
+"js/06-v63-patterns-chartistes.js": [
+[
+"    Object.values(w.pairStates || {}).forEach(ps => (ps && Array.isArray(ps.trades) ? ps.trades : []).forEach(t => {\n      if (!t || !(Number(t.ts) >= t0) || (t.type !== 'position' && t.type !== 'urgence' && t.type !== 'tendance')) return;   // [GO TENDANCE RÉELLE · 12/11/2026]\n      n++; pnl += Number(t.pnlUsdt) || 0; if (Number(t.pnl) > 0) gagnants++;",
+"    Object.values(w.pairStates || {}).forEach(ps => (ps && Array.isArray(ps.trades) ? ps.trades : []).forEach(t => {\n      if (!t || !(Number(t.ts) >= t0) || (t.type !== 'position' && t.type !== 'urgence')) return;\n      n++; pnl += Number(t.pnlUsdt) || 0; if (Number(t.pnl) > 0) gagnants++;"
+],
+[
+"  const sortie = (i.sortie && (i.sortie.k === 'tp' || i.sortie.k === 'sl')) ? (i.sortie.k === 'tp' ? '🎯 ' : '🛑 ') + _tgEsc(i.sortie.why || (i.sortie.k === 'tp' ? 'objectif' : 'stop')) : '';\n  const msg = `${win?'🟢':nul?'⚪':'🔴'} <b>${win?'WIN':nul?'NUL':'LOSS'} — ${_tgEsc(i.pair || '?')}</b> · ${lab} · ${i.voix ? '📈 tendance longue' : i.auto ? '🤖 bot' : '👤 manuel'}${i.urgence ? ' · fermeture d\\'urgence' : ''}\n${i.side==='long'?'↑ LONG':'↓ SHORT'} · P&L : <code>${usd>=0?'+':'−'}$${Math.abs(usd).toFixed(2)}</code> (${pct>=0?'+':''}${pct.toFixed(2)} %)${sortie ? '\\n' + sortie : ''}",
+"  const sortie = (i.sortie && (i.sortie.k === 'tp' || i.sortie.k === 'sl')) ? (i.sortie.k === 'tp' ? '🎯 ' : '🛑 ') + _tgEsc(i.sortie.why || (i.sortie.k === 'tp' ? 'objectif' : 'stop')) : '';\n  const msg = `${win?'🟢':nul?'⚪':'🔴'} <b>${win?'WIN':nul?'NUL':'LOSS'} — ${_tgEsc(i.pair || '?')}</b> · ${lab} · ${i.auto ? '🤖 bot' : '👤 manuel'}${i.urgence ? ' · fermeture d\\'urgence' : ''}\n${i.side==='long'?'↑ LONG':'↓ SHORT'} · P&L : <code>${usd>=0?'+':'−'}$${Math.abs(usd).toFixed(2)}</code> (${pct>=0?'+':''}${pct.toFixed(2)} %)${sortie ? '\\n' + sortie : ''}"
+]
+],
+"js/07-v90-mode-bunker-sos.js": [
+[
+"  if(!pos) { showToast('⚠ Pas de position ouverte sur '+pair, 2000, 'warn'); return; }\n  if (pos._voix === 'tendance') { showToast('📈 ' + pos.pair + ' : position de la voix tendance — ni TP, ni SL, ni inversion (elle se retourne seule) ; ✕ pour la fermer', 3500, 'warn'); return; }   // [GO TENDANCE RÉELLE · 12/11/2026]\n  const newSide = pos.side === 'long' ? 'short' : 'long';",
+"  if(!pos) { showToast('⚠ Pas de position ouverte sur '+pair, 2000, 'warn'); return; }\n  const newSide = pos.side === 'long' ? 'short' : 'long';"
+],
+[
+"  if(!pos) { showToast('⚠ Pas de position ouverte sur '+pair, 2000, 'warn'); return; }\n  closePosition(pos.id, false, { main: true });   // [GO TENDANCE RÉELLE · 12/11/2026] ton geste ferme aussi la voix\n  if ((S.openPositions || []).some(p => p.id === pos.id)) return;   // [GO TENDANCE RÉELLE · 12/11/2026] « fermée » n'est dit que si elle l'est\n  showToast('✅ '+pair+' — position fermée', 2000, 'win');",
+"  if(!pos) { showToast('⚠ Pas de position ouverte sur '+pair, 2000, 'warn'); return; }\n  closePosition(pos.id);\n  showToast('✅ '+pair+' — position fermée', 2000, 'win');"
+],
+[
+"function manuEditTp(pair) {\n  const pos = S.openPositions.find(p => p.pair === pair);\n  if(!pos) return;\n  if (pos._voix === 'tendance') { showToast('📈 ' + pos.pair + ' : position de la voix tendance — ni TP, ni SL, ni inversion (elle se retourne seule) ; ✕ pour la fermer', 3500, 'warn'); return; }   // [GO TENDANCE RÉELLE · 12/11/2026]\n  const ps  = S.pairStates[pair];\n  const cfg = PAIRS[pair];\n  if(!ps || !cfg) return;",
+"function manuEditTp(pair) {\n  const pos = S.openPositions.find(p => p.pair === pair);\n  if(!pos) return;\n  const ps  = S.pairStates[pair];\n  const cfg = PAIRS[pair];\n  if(!ps || !cfg) return;"
+],
+[
+"function manuEditSl(pair) {\n  const pos = S.openPositions.find(p => p.pair === pair);\n  if(!pos) return;\n  if (pos._voix === 'tendance') { showToast('📈 ' + pos.pair + ' : position de la voix tendance — ni TP, ni SL, ni inversion (elle se retourne seule) ; ✕ pour la fermer', 3500, 'warn'); return; }   // [GO TENDANCE RÉELLE · 12/11/2026]\n  const ps  = S.pairStates[pair];\n  const cfg = PAIRS[pair];\n  if(!ps || !cfg) return;",
+"function manuEditSl(pair) {\n  const pos = S.openPositions.find(p => p.pair === pair);\n  if(!pos) return;\n  const ps  = S.pairStates[pair];\n  const cfg = PAIRS[pair];\n  if(!ps || !cfg) return;"
+],
+[
+"  if(!pos) return;\n  if (pos._voix === 'tendance') { showToast('📈 ' + pos.pair + ' : position de la voix tendance — ni TP, ni SL, ni inversion (elle se retourne seule) ; ✕ pour la fermer', 3500, 'warn'); return; }   // [GO TENDANCE RÉELLE · 12/11/2026]\n  const proposal = _calcBotTpSl(pair, pos.side);",
+"  if(!pos) return;\n  const proposal = _calcBotTpSl(pair, pos.side);"
+],
+[
+"  S.openPositions.forEach(pos => {\n    if (pos && pos._voix === 'tendance') return;   // [GO TENDANCE RÉELLE · 12/11/2026] aucune de ces sorties (trailing, anti-zombie, bascule, TP / SL, −90 %) sur la voix\n    const ps  = S.pairStates[pos.pair];",
+"  S.openPositions.forEach(pos => {\n    const ps  = S.pairStates[pos.pair];"
+],
+[
+"\n    const manualBadge = pos._voix === 'tendance'   // [GO TENDANCE RÉELLE · 12/11/2026] la voix tendance longue : ni manuelle, ni bot\n      ? `<span style=\"font-size:8px;font-weight:600;background:rgba(0,232,122,.1);color:var(--up);border:1px solid rgba(0,232,122,.3);padding:2px 7px;border-radius:5px;margin-left:4px;\">📈 Tendance</span>`\n      : isManual\n      ? `<span style=\"font-size:8px;font-weight:600;background:rgba(245,200,66,.15);color:var(--gold);border:1px solid rgba(245,200,66,.3);padding:2px 7px;border-radius:5px;margin-left:4px;\">🔒 Manuel</span>`",
+"\n    const manualBadge = isManual\n      ? `<span style=\"font-size:8px;font-weight:600;background:rgba(245,200,66,.15);color:var(--gold);border:1px solid rgba(245,200,66,.3);padding:2px 7px;border-radius:5px;margin-left:4px;\">🔒 Manuel</span>`"
+],
+[
+"      ? `<button onclick=\"openPosEdit('${pos.id}')\" style=\"background:rgba(245,200,66,.1);color:var(--gold);border:1px solid rgba(245,200,66,.25);border-radius:6px;padding:3px 8px;font-size:9px;cursor:pointer;margin-left:4px;\">✏️</button>`\n      : `<button onclick=\"if(confirm('Forcer la clôture du bot sur ${pair}?'))closePosition('${pos.id}',false,{main:true})\" style=\"background:rgba(56,212,245,.07);color:var(--ice);border:1px solid rgba(56,212,245,.2);border-radius:6px;padding:3px 7px;font-size:8px;cursor:pointer;margin-left:3px;\">⏹</button>`;\n    // v16 · #25 Bouton Pourquoi ?",
+"      ? `<button onclick=\"openPosEdit('${pos.id}')\" style=\"background:rgba(245,200,66,.1);color:var(--gold);border:1px solid rgba(245,200,66,.25);border-radius:6px;padding:3px 8px;font-size:9px;cursor:pointer;margin-left:4px;\">✏️</button>`\n      : `<button onclick=\"if(confirm('Forcer la clôture du bot sur ${pair}?'))closePosition('${pos.id}',false)\" style=\"background:rgba(56,212,245,.07);color:var(--ice);border:1px solid rgba(56,212,245,.2);border-radius:6px;padding:3px 7px;font-size:8px;cursor:pointer;margin-left:3px;\">⏹</button>`;\n    // v16 · #25 Bouton Pourquoi ?"
+],
+[
+"        </div>\n        <button class=\"ac-pos-close\" onclick=\"closePosition('${pos.id}',false,{main:true})\">✕</button>\n      </div>",
+"        </div>\n        <button class=\"ac-pos-close\" onclick=\"closePosition('${pos.id}')\">✕</button>\n      </div>"
+],
+[
+"        </div>\n        <button class=\"ops-close\" onclick=\"closePosition('${pos.id}',false,{main:true})\">✕ Fermer</button>\n      </div>",
+"        </div>\n        <button class=\"ops-close\" onclick=\"closePosition('${pos.id}')\">✕ Fermer</button>\n      </div>"
+],
+[
+"  if (tl) try { tl.innerHTML = allTShown.map(t => {\n    const isClose = t.type === 'position' || t.type === 'urgence' || t.type === 'tendance';   // [GO TENDANCE RÉELLE · 12/11/2026] fermeture de la voix   // [GO ARGENT · 13/10/2026] fermeture d'urgence (06) : ligne à part, affichée comme une clôture   // [GO ARGENT · 13/10/2026] fermeture d'urgence (06) : ligne à part, affichée comme une clôture\n    const isOpen  = t.type === 'open';",
+"  if (tl) try { tl.innerHTML = allTShown.map(t => {\n    const isClose = t.type === 'position' || t.type === 'urgence';   // [GO ARGENT · 13/10/2026] fermeture d'urgence (06) : ligne à part, affichée comme une clôture   // [GO ARGENT · 13/10/2026] fermeture d'urgence (06) : ligne à part, affichée comme une clôture\n    const isOpen  = t.type === 'open';"
+],
+[
+"\n    const badgeHtml = isClose ? ' <span style=\"font-size:8px;background:rgba(167,139,250,.15);color:var(--pur);padding:1px 4px;border-radius:4px;\">' + (t.type === 'urgence' ? 'URGENCE' : t.type === 'tendance' ? 'TENDANCE' : 'CLOSE') + '</span>'\n                    : isOpen  ? ' <span style=\"font-size:8px;background:rgba(56,212,245,.12);color:var(--ice);padding:1px 4px;border-radius:4px;\">OPEN</span>'",
+"\n    const badgeHtml = isClose ? ' <span style=\"font-size:8px;background:rgba(167,139,250,.15);color:var(--pur);padding:1px 4px;border-radius:4px;\">' + (t.type === 'urgence' ? 'URGENCE' : 'CLOSE') + '</span>'\n                    : isOpen  ? ' <span style=\"font-size:8px;background:rgba(56,212,245,.12);color:var(--ice);padding:1px 4px;border-radius:4px;\">OPEN</span>'"
+]
+],
+"js/08-learning-history-render.js": [
+[
+"  if(!pos) { closePosEditModal(); return; }\n  if (pos._voix === 'tendance') { showToast('📈 ' + pos.pair + ' : position de la voix tendance — ni TP, ni SL, ni inversion (elle se retourne seule) ; ✕ pour la fermer', 3500, 'warn'); closePosEditModal(); return; }   // [GO TENDANCE RÉELLE · 12/11/2026]\n",
+"  if(!pos) { closePosEditModal(); return; }\n"
+]
+],
+"js/09c-auto-open.js": [
+[
+"  if (S.botAutoMode === false) return;\n\n  // [GO TENDANCE RÉELLE · 12/11/2026] décision de Rams (12/11 19:49, « Go tendances réelle tout ») : TOUT l'argent de l'EV est à la voix tendance\n  // longue (15b suit la poche de 15). Les bots à 15 min n'ouvrent plus rien en EV (seuil appris, hedges, propositions : tout passe par ici) ; ils\n  // continuent dans l'AA, et le RE ne change pas. Ils ne reviendront en EV qu'en passant la porte TALENT.\n  if (S.tradingMode === 'paperReal' && typeof window !== 'undefined' && typeof window._tlrTientEV === 'function' && window._tlrTientEV()) return;\n",
+"  if (S.botAutoMode === false) return;\n"
+]
+],
+"js/09e-guards.js": [
+[
+"  // paire, sinon 2 % / 60 min) ; seule une manuelle ouverte avant cette version peut encore n'en avoir aucune (la fiche le dit).\n  const positions = (S.openPositions || []).filter(p => p.auto !== true && p._voix !== 'tendance' && (p._manMaxLossPct > 0 || p._manTimeoutMin > 0));   // [GO TENDANCE RÉELLE · 12/11/2026] la voix n'a pas de consignes\n",
+"  // paire, sinon 2 % / 60 min) ; seule une manuelle ouverte avant cette version peut encore n'en avoir aucune (la fiche le dit).\n  const positions = (S.openPositions || []).filter(p => p.auto !== true && (p._manMaxLossPct > 0 || p._manTimeoutMin > 0));\n"
+]
+],
+"js/10d-protections-indicateurs.js": [
+[
+"    try {\n      closePosition(pos.id, false, { main: true });   // [GO TENDANCE RÉELLE · 12/11/2026] ta confirmation : ferme aussi une position de la voix\n      // [MANU · 05/10/2026] « fermée » n'est dit que si la position a vraiment disparu",
+"    try {\n      closePosition(pos.id, false);\n      // [MANU · 05/10/2026] « fermée » n'est dit que si la position a vraiment disparu"
+]
+],
+"js/10f-resolveur-cycle.js": [
+[
+"        (S.openPositions || []).slice().forEach(function(pos){\n          if (pos && pos._voix === 'tendance') return;   // [GO TENDANCE RÉELLE · 12/11/2026] la voix tendance longue n'a pas de perte max (ni stop, ni objectif, ni durée)\n          var ps = S.pairStates && S.pairStates[pos.pair];",
+"        (S.openPositions || []).slice().forEach(function(pos){\n          var ps = S.pairStates && S.pairStates[pos.pair];"
+]
+],
+"js/15-voix-tendance.js": [
+[
+"//   • n'ouvre ni ne ferme JAMAIS rien dans S.openPositions ; n'appelle ni openPosition, ni closePosition, ni autoOpenPosition ;\n//     [GO TENDANCE RÉELLE · 12/11/2026] c'est js/15b-tendance-reelle.js qui fait suivre la poche par le compte EV (vraies positions) ; ce module reste la mesure ;\n//     ne touche à aucun compte (caisse, trading, levier, frais), à aucun agent, bot, fitness, seuil appris, ni à la décision commune :",
+"//   • n'ouvre ni ne ferme JAMAIS rien dans S.openPositions ; n'appelle ni openPosition, ni closePosition, ni autoOpenPosition ;\n//     ne touche à aucun compte (caisse, trading, levier, frais), à aucun agent, bot, fitness, seuil appris, ni à la décision commune :"
+],
+[
+"      '<div style=\"font-size:var(--fs-14);color:var(--t1)\">Poche <b style=\"color:' + col(s.total) + '\">' + pc(s.total) + '</b>' + usd(s.total) +\n      ' <span style=\"color:var(--t3)\">(mesure de la poche, à la taille de ton compte EV)</span></div>' +\n      '<div>réalisé ' + pc(s.real) + ' · latent ' + pc(s.lat) + ' · ' + s.trades + ' trade' + (s.trades > 1 ? 's' : '') + ' fermé' + (s.trades > 1 ? 's' : '') +",
+"      '<div style=\"font-size:var(--fs-14);color:var(--t1)\">Poche <b style=\"color:' + col(s.total) + '\">' + pc(s.total) + '</b>' + usd(s.total) +\n      ' <span style=\"color:var(--t3)\">(à la taille de ton compte EV)</span></div>' +\n      '<div>réalisé ' + pc(s.real) + ' · latent ' + pc(s.lat) + ' · ' + s.trades + ' trade' + (s.trades > 1 ? 's' : '') + ' fermé' + (s.trades > 1 ? 's' : '') +"
+],
+[
+"      'signe du prix du lundi 00:00 UTC contre 28 jours avant, tenu jusqu\\'au retournement ; pas de stop, pas d\\'objectif ; un SHORT est liquidé si le prix double. ' +\n      'Une mise = 1/' + (s.nU || '—') + ' de la poche, non composée : c\\'est la mesure de la porte. Depuis le 12/11, ton argent EV la suit avec de vraies positions (cadre ci-dessous, js/15b). Preuve fragile : sans 2020-21, la porte ne passait plus.</div>';   // [GO TENDANCE RÉELLE · 12/11/2026]\n    if (lastHtml !== h || !g.firstChild) { g.innerHTML = h; lastHtml = h; }",
+"      'signe du prix du lundi 00:00 UTC contre 28 jours avant, tenu jusqu\\'au retournement ; pas de stop, pas d\\'objectif ; un SHORT est liquidé si le prix double. ' +\n      'Une mise = 1/' + (s.nU || '—') + ' de la poche, non composée. Ne touche ni ton compte EV ni les bots. Preuve fragile : sans 2020-21, la porte ne passait plus.</div>';\n    if (lastHtml !== h || !g.firstChild) { g.innerHTML = h; lastHtml = h; }"
+]
+],
+"js/16-fiscal.js": [
+[
+"  if (pos.auto === true) why.push('AUTO (bot)');\n  if (pos._voix === 'tendance') why.push('voix tendance longue (décision automatique)');   // [GO TENDANCE RÉELLE · 12/11/2026] ouverte par la voix, pas par toi : spéculatif (règle de Rams, AUTO = 33 %)\n  if (pos.side !== 'long') why.push('SHORT (vente à découvert = crypto empruntée)');",
+"  if (pos.auto === true) why.push('AUTO (bot)');\n  if (pos.side !== 'long') why.push('SHORT (vente à découvert = crypto empruntée)');"
+]
+]
+}

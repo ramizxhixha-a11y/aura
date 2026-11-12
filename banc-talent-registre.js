@@ -39,6 +39,7 @@ const h16 = s => crypto.createHash('sha256').update(s).digest('hex').slice(0, 16
 const near = (a, b, tol, quoi) => assert.ok(typeof a === 'number' && Math.abs(a - b) <= (tol || 1e-9), (quoi || 'valeur') + ' : ' + a + ' ≠ ' + b);
 const s03 = rd('js/03-per-pair-position-buttons-controls-buid.js'), s02 = rd('js/02-state-init.js'), s9b2 = rd('js/09b2-save-load.js'), s9c = rd('js/09c-auto-open.js'), s9e = rd('js/09e-guards.js'), s9j = rd('js/09j-helpers.js'),
       s10g = rd('js/10g-resolveur-ev-csv.js'), s10h = rd('js/10h-pont-fullpower-bricks.js'), html = rd('AURA8_v118.html');
+const _TR = require('./banc-fixtures/sans-tendance-reelle.js');   // [GO TENDANCE RÉELLE · 12/11/2026] retire les retouches de go tendance réelle avant d'épingler le texte (voir le fichier)
 const TOUT = [s02, s03, s9b2, s9e, s9j, s10g, s10h].join('\n');
 const FN = ['_posLevCash', '_levCashDebt', '_computePortfolio', '_computePortfolioSans', '_tradingCapitalBase', '_checkPaperRealStakeLimit', 'guardianCheck', 'botRescue',
   'validateInvestmentCapProvisioned', 'validateTotalExposure',
@@ -97,10 +98,10 @@ T('S · TEXTE des ouvreurs, des gardes, du levier, du portefeuille (02 _computeP
     setLeverageByBot: 'cf91e0a8613d7ba7', ensureLeverageCoverForTrade: 'ec6b46c0bbbc4155', _repayCashDebt: 'b39eb2a687ac37bb', _leverageSolvency: 'f9f68f3666e374c7',
     disableFullPowerMode: '78f8bd660385db42', recordFees: 'f2b897580fc692af', validateInvestmentCapProvisioned: '3229d70744efd7a8',
     _computePortfolio: '257f2a1047dbc64b', _computePortfolioSans: 'af9d6d3e24a71b80', _tradingCapitalBase: '8f78e89a034783a4' };
-  const src = [s02, s9c, s9j, s10g, rd('js/10f-resolveur-cycle.js')].join('\n');
+  const src = [_TR(s02, 'js/02-state-init.js'), _TR(s9c, 'js/09c-auto-open.js'), s9j, s10g, _TR(rd('js/10f-resolveur-cycle.js'), 'js/10f-resolveur-cycle.js')].join('\n');
   const _un56 = t => t.replace(/\n {6}\/\/ \[GO LEVIER 56[^\n]*\n {6}\/\/[^\n]*\n {6}try \{ window\._pnlSansPos = pos; (if\(!_behind && typeof checkPnlAlerts === 'function'\) checkPnlAlerts\(\);) \} catch\(e\) \{\} finally \{ window\._pnlSansPos = null; \}/, '\n      try { $1 } catch(e) {}');   // [GO LEVIER 56 · 27/10/2026] la ligne des alertes P&L de closePosition ramenée au texte d'avant (banc-levier-56.js vérifie ce qu'elle fait)
   Object.keys(E).forEach(n => assert.strictEqual(h16((n === 'closePosition' ? _un56 : (x => x))(fnSrc(src, n) || '')), E[n], n + ' a changé'));
-  assert.strictEqual(h16(s9c), 'a761a7770da5e2b1', '09c-auto-open.js a changé');
+  assert.strictEqual(h16(_TR(s9c, 'js/09c-auto-open.js')), 'a761a7770da5e2b1', '09c-auto-open.js a changé');
 });
 T('R · les règles de la porte (rejeu/porte_registre.js, 31 premières lignes, écrites le 19/10 23:18 UTC avant toute mesure) n\'ont pas bougé', () => {
   const f = path.join(ROOT, 'rejeu/porte_registre.js'); if (!fs.existsSync(f)) return;   // code d'avant : la porte n'existe pas encore
