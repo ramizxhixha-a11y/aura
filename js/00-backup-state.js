@@ -229,6 +229,7 @@
     window._decErr = function (e) {
       try {
         var msg = String((e && e.message) || e || 'erreur inconnue').slice(0, 90);
+        try { if (window._auraSentry) window._auraSentry.avalee(e); } catch (x) {}   // [GO SENTRY · 12/11/2026] part aussi à Sentry (00s : filtrée, 1 fois par chargement)
         var S0 = null;
         try { S0 = (0, eval)('S'); } catch (err) {}
         if (!S0) return;
