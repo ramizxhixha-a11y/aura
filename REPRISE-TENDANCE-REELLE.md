@@ -17,7 +17,14 @@ poche : 10 SHORT depuis le 19/10 + BTC SHORT 26/10 + PEPE LONG 05/11 ; seuil app
 - Bots à 15 min : plus aucune ouverture en EV tant que la voix tient l'EV (ils restent dans l'AA). RE inchangé.
 - AUTO / MANU (Rams seul) : en MANU la voix ferme mais n'ouvre pas.
 
+## Porte POIDS (Rams 12/11 19:56 : « diviser par 11 n'est pas stratège, prendre les plus favorables et les favoriser »)
+- `rejeu/porte_poids.py` : règles lignes 1–45 figées 12/11/2026 18:58:48 UTC, SHA-256 f14655967424a8b8a983e94acd6c18354112daff259cc5c90f76a5a9e6ca38bf,
+  commitées AVANT le premier passage. E égal / F force |ln 28 j| / V risque égal 1/σ ; portefeuille composé, entrée seule.
+- Données : `sh rejeu/portage_get.sh <scratchpad>/donnees 2018-08 2026-09` (1013 spot1h, 821 fund — comme la porte du 06/10).
+- Lancer : `python3 -I rejeu/porte_poids.py <données>` → choix E / F / V = règle de mise du module 15b.
+
 ## Étapes
+- [ ] 0. Porte POIDS (règles commitées, passage à faire)
 - [ ] 1. Code : guard closePosition + openPosition({voix}) + refus 09c en EV + module 15b + boutons ✕ {main} ; banc vm `banc-tendance-reelle.js`
 - [ ] 2. Preuve : sonde vraie page sur le backup du 12/11 ; relecture adverse (agent séparé)
 - [ ] 3. Livraison : ETAT, PASSATION, token, banc-all LIVRABLE, squash sur main, push, DOC_V raw + Pages
