@@ -5081,7 +5081,7 @@ function goPage(idx, tabEl, navEl) {
     }
   }
   }, 20); }
-  if(idx === 1) { setTimeout(()=>{ renderAgentHeatmap(); }, 30); }
+  if(idx === 1) { setTimeout(()=>{ renderAgentHeatmap(); try { if (typeof _agBrefRender === 'function') _agBrefRender(); } catch(e) {} }, 30); }   // [GO CSS · écran 2 · 14/11/2026] En bref dès l'arrivée sur Agents (09i)
 }
 
 // ============================================================

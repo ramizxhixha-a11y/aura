@@ -166,3 +166,79 @@ window._accFold = _accFold;
 window._accGo = _accGo;
 if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', _accRestoreFolds);
 else _accRestoreFolds();
+
+// ──────────────────────────────────────────────────────────────────────
+// [GO CSS · écran 2 · 14/11/2026] Écran Agents par priorité — En bref, nombre par famille, cartes compactes, matrice en volet.
+// Rams 13/11 23:48 « Go css » (suite de l'accueil), maquette montrée puis « Ok » (14/11 00:17). Affichage seul : rien n'est lu
+// ni écrit dans S, aucune décision touchée.
+//  · _agBrefRender : En bref (bots = rôle 'execution', les maîtres ; analystes = les autres, comme les groupes de 07) — nombre, 1er au T$,
+//    moyenne ; nombre de chaque famille sur son bouton de filtre (famille vide cachée) ; sous-titre de la matrice. Appelée par 08 renderAgents
+//    (toutes les 5 s sur l'écran Agents) et par 02 goPage(1).
+//  · cartes : compactes ; un appui ouvre la carte entière (courbe, score, série, mémoire), un 2e la referme ; le bandeau mémoire garde son
+//    propre appui (showMemoryOverlay). Les cartes ouvertes le restent quand 07 reconstruit la liste (≤ 1/h, _agReopenCards).
+//  · volet de la matrice : fermé par défaut, état gardé dans localStorage 'aura_agents_volets' (préférence d'affichage, hors snapshot) ;
+//    à l'ouverture la matrice est redessinée (08 renderAgentHeatmap).
+// ──────────────────────────────────────────────────────────────────────
+const AG_FOLDS_KEY = 'aura_agents_volets';
+const _agOpenCards = new Set();
+function _agFoldState() {
+  try { const o = JSON.parse(localStorage.getItem(AG_FOLDS_KEY) || '{}'); return (o && typeof o === 'object') ? o : {}; } catch (e) { return {}; }
+}
+function _agFold(name, force, silent) {
+  const el = document.querySelector('#page1 .ag-fold[data-fold="' + name + '"]');
+  if (!el) return false;
+  const open = (typeof force === 'boolean') ? force : !el.classList.contains('open');
+  el.classList.toggle('open', open);
+  if (!silent) {
+    const st = _agFoldState();
+    if (open) st[name] = 1; else delete st[name];
+    try { localStorage.setItem(AG_FOLDS_KEY, JSON.stringify(st)); } catch (e) {}
+    if (open && name === 'matrice') { try { if (typeof renderAgentHeatmap === 'function') renderAgentHeatmap(); } catch (e) {} }
+  }
+  return open;
+}
+function _agRestoreFolds() {
+  const st = _agFoldState();
+  Object.keys(st).forEach(n => _agFold(n, true, true));
+}
+function _agBrefRender() {
+  if (typeof S === 'undefined' || !S || !Array.isArray(S.agents)) return;
+  const set = (id, t) => { const e = document.getElementById(id); if (e && e.textContent !== t) e.textContent = t; };
+  const fit = a => Math.round(Number(a.fitness) || 0);
+  const role = a => a.role || 'fundamental';
+  const bots = S.agents.filter(a => role(a) === 'execution'), ana = S.agents.filter(a => role(a) !== 'execution');
+  const tuile = (arr, k) => {
+    let best = null; arr.forEach(a => { if (!best || fit(a) > fit(best)) best = a; });
+    const moy = arr.length ? Math.round(arr.reduce((s, a) => s + fit(a), 0) / arr.length) : 0;
+    set('agBref' + k, String(arr.length));
+    set('agBref' + k + 'Best', best ? '1er : ' + best.name : '—');
+    set('agBref' + k + 'Sub', best ? fit(best) + ' T$ · moy. ' + moy : '—');
+  };
+  tuile(bots, 'Bots'); tuile(ana, 'Ana');
+  const n = {}; S.agents.forEach(a => { n[role(a)] = (n[role(a)] || 0) + 1; });
+  document.querySelectorAll('#agentFilterRow .agent-filter-btn').forEach(b => {
+    const r = b.dataset.role, c = r === 'all' ? S.agents.length : (n[r] || 0);
+    set('agFam_' + r, String(c));
+    const vide = r !== 'all' && !c && !b.classList.contains('active');
+    if (b.style.display !== (vide ? 'none' : '')) b.style.display = vide ? 'none' : '';
+  });
+  set('agMatriceSub', S.agents.filter(a => !a.isBot).length + ' analystes · score appris');
+}
+function _agCardTap(e) {
+  const c = e.target && e.target.closest ? e.target.closest('.agent-card') : null;
+  if (!c || e.target.closest('.memory-strip')) return;
+  const open = c.classList.toggle('ag-open');
+  if (open) _agOpenCards.add(c.id); else _agOpenCards.delete(c.id);
+}
+function _agReopenCards() {
+  _agOpenCards.forEach(id => { const c = document.getElementById(id); if (c) c.classList.add('ag-open'); else _agOpenCards.delete(id); });
+}
+function _agInit() {
+  const l = document.getElementById('mobileAgentList');
+  if (l && !l.dataset.agTap) { l.dataset.agTap = '1'; l.addEventListener('click', _agCardTap); }
+  _agRestoreFolds();
+}
+window._agFold = _agFold;
+window._agBrefRender = _agBrefRender;
+if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', _agInit);
+else _agInit();
