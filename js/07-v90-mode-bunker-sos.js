@@ -5499,27 +5499,32 @@ function buildAgentCards() {
   for (let el = list.parentElement; el; el = el.parentElement) { if (el.scrollTop > 0) _scrolls.push([el, el.scrollTop]); }
 
   const roleColor = { fundamental:'var(--ice)', technical:'var(--up)', sentiment:'var(--pur)',
-                      context:'var(--gold)', execution:'var(--down)', meta:'var(--pur)', hybrid:'var(--up)' };
+                      context:'var(--gold)', execution:'var(--down)', meta:'var(--pur)', hybrid:'var(--up)',
+                      scout:'var(--ice)', council:'var(--gold)' };
   const roleLabel = { fundamental:'FONDAMENTAL', technical:'TECHNIQUE', sentiment:'SENTIMENT',
-                      context:'CONTEXTE', execution:'BOT EXÉ.', meta:'META·IA', hybrid:'HYBRIDE' };
+                      context:'CONTEXTE', execution:'BOT EXÉ.', meta:'META·IA', hybrid:'HYBRIDE',
+                      scout:'ÉCLAIREUR', council:'CONSEIL' };
 
-  // Group agents by role
+  // [GO CSS · écran 2 · 14/11/2026] groupes par priorité : les bots (les maîtres) d'abord, puis les familles d'analystes.
+  // Les éclaireurs (scout) et le conseil (council) n'avaient AUCUN groupe : 11 agents sur 31 sans carte (sonde du 13/11 : 20 cartes).
+  // L'ordre reste FIXE (pas de tri par T$ : les cartes sauteraient — PAGE AGENTS STABLE, 26/09). Chaque rôle de _SEAT_DEF (02) a son groupe.
   const groups = [
-    { key:'fundamental', label:'📊 Analyse Fondamentale' },
-    { key:'technical',   label:'📈 Analyse Technique' },
-    { key:'sentiment',   label:'💬 Sentiment & NLP' },
-    { key:'context',     label:'🌍 Contexte Global' },
-    { key:'execution',   label:'⚡ Bots d\'Exécution' },
-    { key:'meta',        label:'🧬 Méta-Évolueur' },
-    { key:'hybrid',      label:'🔀 Hybrides Évolutifs' },
+    { key:'execution',   label:'⚡ Bots · les maîtres', sub:'ils mènent la danse' },
+    { key:'meta',        label:'🧬 Méta-évolueur' },
+    { key:'council',     label:'🏛 Conseil', sub:'stratégies' },
+    { key:'scout',       label:'🔭 Éclaireurs', sub:'signaux rares' },
+    { key:'fundamental', label:'📊 Fondamental' },
+    { key:'technical',   label:'📈 Technique' },
+    { key:'context',     label:'🌍 Contexte' },
+    { key:'sentiment',   label:'💬 Sentiment' },
+    { key:'hybrid',      label:'🔀 Hybrides' },
   ];
 
   let html = '';
   groups.forEach(g => {
     const groupAgents = S.agents.filter(a => (a.role||'fundamental') === g.key);
     if(!groupAgents.length) return;
-    html += `<div style="font-size:8px;font-weight:700;color:var(--t3);letter-spacing:.1em;text-transform:uppercase;
-               padding:6px 0 3px;margin-top:4px;border-top:1px solid var(--border);">${g.label}</div>`;
+    html += `<div class="ag-grp-h" data-grp="${g.key}"><span>${g.label}</span><em>${groupAgents.length}${g.sub ? ' · ' + g.sub : ''}</em></div>`;
     groupAgents.forEach((a,i) => {
       const rCol  = roleColor[a.role||'fundamental'] || 'var(--t3)';
       const rLbl  = roleLabel[a.role||'fundamental'] || a.role?.toUpperCase();
@@ -5579,6 +5584,7 @@ function buildAgentCards() {
           <span style="color:var(--t3)">Tap pour voir tout</span>
         </div>
       </div>
+      <div class="ag-tap">appuyer pour tout voir ›</div>
     </div>
   </div>`;
     });
@@ -5588,7 +5594,10 @@ function buildAgentCards() {
   try {
     if (typeof _agentFilter !== 'undefined' && _agentFilter && _agentFilter !== 'all')
       list.querySelectorAll('[data-agent-role]').forEach(c => { if ((c.dataset.agentRole || 'fundamental') !== _agentFilter) c.style.display = 'none'; });
+    if (typeof _agentFilter !== 'undefined' && _agentFilter && _agentFilter !== 'all')   // [GO CSS · écran 2] les titres de groupe suivent le filtre
+      list.querySelectorAll('.ag-grp-h').forEach(h => { if (h.dataset.grp !== _agentFilter) h.style.display = 'none'; });
   } catch(e) {}
+  try { if (typeof _agReopenCards === 'function') _agReopenCards(); } catch(e) {}   // [GO CSS · écran 2] les cartes ouvertes au doigt le restent
   _scrolls.forEach(p => { try { p[0].scrollTop = p[1]; } catch(e) {} });
 }
 

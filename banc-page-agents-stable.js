@@ -62,7 +62,9 @@ T('D1b · reconstruction : le défilement de la page est restauré (le remplacem
   const page = { scrollTop: 480, parentElement: null };
   const cards = [{ dataset: { agentRole: 'hybrid' }, style: {} }, { dataset: { agentRole: 'execution' }, style: {} }];
   let html = '';
-  const list = { parentElement: page, querySelectorAll: () => cards, querySelector: () => html.includes('agent-card') ? {} : null };
+  // [GO CSS · écran 2 · 14/11/2026] le faux répond selon le sélecteur : 07 réapplique aussi le filtre aux titres de groupe (.ag-grp-h), qui ne sont pas des cartes
+  const heads = [{ dataset: { grp: 'hybrid' }, style: {} }, { dataset: { grp: 'execution' }, style: {} }];
+  const list = { parentElement: page, querySelectorAll: q => (q === '.ag-grp-h' ? heads : cards), querySelector: () => html.includes('agent-card') ? {} : null };
   Object.defineProperty(list, 'innerHTML', { get: () => html, set: v => { html = v; page.scrollTop = 0; } });   // le navigateur raccourcit / ramène en haut
   document.getElementById = id => id === 'mobileAgentList' ? list : null;
   const c = { S: { agents: agents(), botFleet: {} }, document, Math, Number, Array, Object, String, window: {}, _agentFilter: 'execution' };
@@ -70,6 +72,7 @@ T('D1b · reconstruction : le défilement de la page est restauré (le remplacem
   vm.runInContext('buildAgentCards()', c);
   assert.strictEqual(page.scrollTop, 480, 'défilement restauré');
   assert.strictEqual(cards[0].style.display, 'none', 'carte hors filtre masquée'); assert.strictEqual(cards[1].style.display, undefined, 'carte du filtre intacte');
+  assert.strictEqual(heads[0].style.display, 'none', 'titre hors filtre masqué'); assert.strictEqual(heads[1].style.display, undefined, 'titre du filtre intact');
 });
 function patchCtx(opts) {
   const d = mkDoc(opts);

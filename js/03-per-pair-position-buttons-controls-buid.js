@@ -307,6 +307,8 @@ function filterAgents(role, btn) {
       card.style.display = 'none';
     }
   });
+  // [GO CSS · écran 2 · 14/11/2026] le titre d'un groupe suit ses cartes (avant : les titres des autres familles restaient, vides)
+  list.querySelectorAll('.ag-grp-h').forEach(h => { h.style.display = (role === 'all' || h.dataset.grp === role) ? '' : 'none'; });
 }
 
 

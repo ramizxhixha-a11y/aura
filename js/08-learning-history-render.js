@@ -102,6 +102,7 @@ function renderAgents() {
   const list = document.getElementById('mobileAgentList');
   if(list && list.children.length !== S.agents.length) buildAgentCards();
   patchAgentCards();
+  try { if (typeof _agBrefRender === 'function') _agBrefRender(); } catch(e) {}   // [GO CSS · écran 2 · 14/11/2026] En bref + nombre par famille (09i)
   // Only render active tab
   const evoPanel = document.getElementById('agentPanel-evo');
   if(evoPanel && evoPanel.style.display !== 'none') renderAgentsEvo();
@@ -1267,6 +1268,7 @@ function renderAgentHeatmap() {
     grid.style.gridTemplateColumns = `repeat(${Math.min(5, analysisAgents.length)}, 1fr)`;
     grid.innerHTML = analysisAgents.map(a => `
       <div class="heatmap-cell" id="hc_${a.id}" onclick="showMemoryOverlay('${a.id}')" title="${a.name}">
+        <div class="hc-lbl">${a.type || a.name}</div>
         <div class="hc-emoji">${a.emoji}</div>
         <div class="hc-score" id="hcs_${a.id}">+0.00</div>
         <div class="hc-fit"  id="hcf_${a.id}">0T$</div>

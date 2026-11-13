@@ -1,0 +1,98 @@
+/* ═══════════════════════════════════════════════════════════
+   AURA8 · 29-agents-zones.css — [GO CSS · écran 2 · 14/11/2026]
+   Écran Agents (#page1) par priorité : En bref · familles avec leur nombre · les bots (les maîtres) d'abord, puis les
+   familles d'analystes · cartes compactes sur 2 colonnes, un appui ouvre la carte entière · matrice des signaux en volet.
+   Rams 13/11 23:48 « Go css » (suite de l'accueil, css/28) ; maquette montrée, « Ok » 14/11 00:17. Chargé en dernier.
+   Chaque règle est visée à #page1 : les autres écrans ne bougent pas.
+   1. lecture : plancher 11 px, chiffres alignés, sans halo
+   2. onglets collants, En bref, familles
+   3. cartes compactes / ouvertes
+   4. volet de la matrice
+   5. téléphone
+   ═══════════════════════════════════════════════════════════ */
+
+/* ── 1. LECTURE ─────────────────────────────────────────── */
+#page1 {
+  --fs-6: 11px; --fs-7: 11px; --fs-8: 11px; --fs-9: 11.5px; --fs-10: 12px; --fs-11: 12.5px;
+  font-variant-numeric: tabular-nums;
+}
+/* Tailles écrites en dur (6–10 px) dans le HTML et dans les rendus JS de l'écran (07 cartes, 07 évolution, 08 apprentissage). */
+#page1 [style*="font-size:6px"], #page1 [style*="font-size:7px"], #page1 [style*="font-size:8px"],
+#page1 [style*="font-size:9px"], #page1 [style*="font-size:10px"],
+#page1 [style*="font-size: 6px"], #page1 [style*="font-size: 7px"], #page1 [style*="font-size: 8px"],
+#page1 [style*="font-size: 9px"], #page1 [style*="font-size: 10px"],
+#page1 [style*="font-size:6.5px"], #page1 [style*="font-size:7.5px"], #page1 [style*="font-size:8.5px"], #page1 [style*="font-size:9.5px"], #page1 [style*="font-size:10.5px"] { font-size: 11px !important; }
+/* Classes de l'écran sous 11 px. */
+#page1 .pill, #page1 .agent-type-row, #page1 .agent-fitness-label, #page1 .fit-val, #page1 .memory-strip-label, #page1 .memory-metaphor,
+#page1 .memory-meta, #page1 .memory-meta *, #page1 .hc-score, #page1 .hc-fit, #page1 .agent-filter-btn,
+/* onglet Évolution : naissances / retraites et rêve en cours (07 renderAgentsEvo ; sonde du 14/11 : 58 textes de 8 à 10 px) */
+#page1 .evo-sub, #page1 .evo-time, #page1 .dream-card-badge, #page1 .dream-status, #page1 .dream-scenario-name, #page1 .dream-scenario-sub,
+#page1 .dream-scenario-vote { font-size: 11px !important; }
+/* Reposant : plus de halos ni d'ombres portées. */
+#page1 * { text-shadow: none !important; }
+#page1 .agent-card, #page1 .heatmap-cell, #page1 .agent-avatar { box-shadow: none !important; }
+
+/* ── 2. ONGLETS, EN BREF, FAMILLES ──────────────────────── */
+#page1 .agent-tabs { position: sticky; top: 0; z-index: 30; margin: 0 16px !important; padding: 4px !important; background: var(--bg) !important; border: 1px solid rgba(255,255,255,.08) !important; border-radius: 14px !important; }
+#page1 .agent-tab { font-size: 13px !important; padding: 10px 0 !important; }
+
+#page1 #agBref { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin: 4px 16px 0; }
+#page1 #agBref .agb { background: var(--s1); border: 1px solid rgba(255,255,255,.06); border-radius: 16px; padding: 12px 14px; min-width: 0; }
+#page1 #agBref .agb-l { font: 600 11px/1.2 var(--font-mono); letter-spacing: .1em; text-transform: uppercase; color: var(--t3); }
+#page1 #agBref .agb-v { font: 700 22px/1.1 var(--font-display, inherit); color: var(--t1); margin-top: 8px; }
+#page1 #agBref .agb-v strong { font: inherit; color: inherit; }
+#page1 #agBref .agb-s { font: 500 12px/1.35 var(--font-mono); color: var(--t2); margin-top: 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#page1 #agBref .agb-s strong { font-weight: 600; }
+#page1 #agBrefBotsSub, #page1 #agBrefAnaSub { color: var(--gold); }
+
+#page1 #agentFilterRow { display: flex; flex-wrap: wrap; gap: 8px; padding: 12px 16px 0; }
+#page1 #agentFilterRow .agent-filter-btn { font-size: 12px !important; padding: 7px 12px !important; border-radius: 999px !important; }
+#page1 #agentFilterRow .agent-filter-btn i { font-style: normal; color: var(--t3); margin-left: 5px; }
+#page1 #agentFilterRow .agent-filter-btn.active i { color: inherit; opacity: .7; }
+
+/* ── 3. CARTES ──────────────────────────────────────────── */
+#page1 #mobileAgentList { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; padding: 0 16px; align-items: start; }
+#page1 #mobileAgentList > :not(.agent-card) { grid-column: 1 / -1; }
+#page1 .ag-grp-h { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-top: 16px; padding: 0 2px 8px; border-bottom: 1px solid rgba(255,255,255,.06); }
+#page1 .ag-grp-h span { font: 700 13px/1.2 var(--font-mono); letter-spacing: .16em; text-transform: uppercase; color: var(--t2); }
+#page1 .ag-grp-h em { font: 500 11px/1.2 var(--font-mono); font-style: normal; color: var(--t3); letter-spacing: .06em; white-space: nowrap; }
+#page1 #mobileAgentList .agent-card { margin: 0 !important; padding: 12px 14px !important; border-radius: 16px !important; min-width: 0; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+#page1 #mobileAgentList .agent-avatar { width: 34px !important; height: 34px !important; min-width: 34px; font-size: 17px !important; }
+#page1 #mobileAgentList .agent-name { font-size: 14px !important; }
+#page1 #mobileAgentList .agent-fitness-wrap { margin-top: 8px; }
+/* compacte : nom, famille, spécialité, maître / disciples, T$ et confiance ; le reste à l'appui */
+#page1 #mobileAgentList .agent-card:not(.ag-open) canvas[id^="aspk_"],
+#page1 #mobileAgentList .agent-card:not(.ag-open) .agent-meta-row,
+#page1 #mobileAgentList .agent-card:not(.ag-open) .agent-meta-row + div,
+#page1 #mobileAgentList .agent-card:not(.ag-open) .memory-strip { display: none !important; }
+#page1 #mobileAgentList .agent-card.ag-open { grid-column: 1 / -1; border-color: rgba(56,212,245,.25) !important; }
+#page1 .ag-tap { font: 500 11px/1 var(--font-mono); color: var(--t3); margin-top: 8px; text-align: right; }
+#page1 .agent-card.ag-open .ag-tap { display: none; }
+
+/* ── 4. VOLET DE LA MATRICE ─────────────────────────────── */
+#page1 .ag-fold { margin: 18px 16px 0; background: var(--s1); border: 1px solid rgba(255,255,255,.06); border-radius: 16px; overflow: hidden; }
+#page1 .ag-fold-h { all: unset; box-sizing: border-box; width: 100%; display: flex; align-items: center; gap: 10px; padding: 14px 16px; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+#page1 .ag-fold-h:active { background: var(--s2); }
+#page1 .ag-chev { font-size: 11px; color: var(--t3); transition: transform .2s; }
+#page1 .ag-fold.open .ag-chev { transform: rotate(90deg); }
+#page1 .ag-fold-t { font: 700 14px/1.2 var(--font-display, inherit); color: var(--t1); }
+#page1 .ag-fold-r { margin-left: auto; font: 500 11px/1 var(--font-mono); color: var(--t3); text-align: right; }
+#page1 .ag-fold-b { display: none; padding: 0 12px 12px; }
+#page1 .ag-fold.open .ag-fold-b { display: block; }
+#page1 #agentHeatmapGrid { grid-template-columns: repeat(6, 1fr) !important; gap: 6px !important; margin: 0 !important; padding: 0 !important; }
+#page1 #agentHeatmapGrid .heatmap-cell { aspect-ratio: auto !important; min-height: 0 !important; height: auto !important; padding: 8px 4px !important; border-radius: 10px !important; }
+#page1 #agentHeatmapGrid .hc-emoji { display: none; }
+#page1 #agentHeatmapGrid .hc-lbl { font: 600 11px/1.2 var(--font-mono); color: var(--t2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+#page1 #agentHeatmapGrid .hc-score { font-size: 13px !important; font-weight: 700; margin-top: 3px; }
+
+/* ── 5. TÉLÉPHONE ───────────────────────────────────────── */
+@media (max-width: 560px) {
+  #page1 #mobileAgentList { grid-template-columns: 1fr; }
+  #page1 #agBref { grid-template-columns: 1fr 1fr; }
+  #page1 #agBref .agb:last-child { grid-column: 1 / -1; }
+  #page1 #agentHeatmapGrid { grid-template-columns: repeat(4, 1fr) !important; }
+  #page1 .ag-grp-h span { letter-spacing: .08em; font-size: 12px; }
+  #page1 .agent-tabs { margin: 0 10px !important; }
+  #page1 #agBref, #page1 .ag-fold { margin-left: 10px; margin-right: 10px; }
+  #page1 #mobileAgentList, #page1 #agentFilterRow { padding-left: 10px; padding-right: 10px; }
+}

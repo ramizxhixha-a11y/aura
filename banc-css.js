@@ -74,9 +74,12 @@ T('Z3 chaque bloc dans sa zone ; volets : techniques, Brain, Intelligence, journ
   assert.strictEqual((p0.match(/data-fold="/g) || []).length, 5);
 });
 
-T('Z4 css/28-accueil-zones.css chargé en dernier au token ' + TOK + ' ; toutes ses règles visent #page0 ou #statusBar ; plancher 11 px (urgences, onglets compris) ; latent coloré ; téléphone 2 colonnes', () => {
+T('Z4 css/28-accueil-zones.css chargé après tous les styles d\'avant au token ' + TOK + ' (après lui : seuls les écrans suivants du go css, css/29+) ; toutes ses règles visent #page0 ou #statusBar ; plancher 11 px (urgences, onglets compris) ; latent coloré ; téléphone 2 colonnes', () => {
   const links = [...html.matchAll(/<link[^>]*href="(css\/[^"?]+)\?v=([^"]+)"/g)];
-  const last = links[links.length - 1]; assert.ok(last && last[1] === 'css/28-accueil-zones.css' && last[2] === TOK, 'dernier : ' + (last && last[1]));
+  // [GO CSS · écran 2 · 14/11/2026] css/29-agents-zones.css (écran Agents, visé à #page1) se charge désormais après lui
+  const i28 = links.findIndex(l => l[1] === 'css/28-accueil-zones.css');
+  assert.ok(i28 >= 0 && links[i28][2] === TOK, 'css/28 au token');
+  assert.deepStrictEqual(links.slice(i28 + 1).filter(l => !/^css\/(29|[3-9]\d)-/.test(l[1])).map(l => l[1]), [], 'après css/28 : seuls css/29+');
   const css = rd('css/28-accueil-zones.css').replace(/\/\*[\s\S]*?\*\//g, '');
   const sels = []; css.replace(/([^{}]+)\{/g, (m, s) => { s = s.trim(); if (!s.startsWith('@')) sels.push(...s.split(',').map(x => x.trim())); return m; });
   assert.ok(sels.length > 50, sels.length + ' sélecteurs');
