@@ -1,0 +1,41 @@
+function toggleBar(barName) {
+  const autoBar  = document.getElementById('autoBar');
+  const manBar   = document.getElementById('manBar');
+  const paramBar = document.getElementById('paramBar');
+  if (!autoBar || !manBar) return;
+
+  const closeAll = () => {
+    autoBar.classList.remove('open');
+    manBar.classList.remove('open');
+    if (paramBar) paramBar.classList.remove('open');
+  };
+
+  if (barName === 'auto') {
+    if (autoBar.classList.contains('open')) {
+      autoBar.classList.remove('open');
+      try { localStorage.setItem(RT.BARS_KEY, 'closed'); } catch (e) {}
+    } else {
+      closeAll();
+      autoBar.classList.add('open');
+      try { localStorage.setItem(RT.BARS_KEY, 'auto'); } catch (e) {}
+    }
+  } else if (barName === 'man') {
+    if (manBar.classList.contains('open')) {
+      manBar.classList.remove('open');
+      try { localStorage.setItem(RT.BARS_KEY, 'closed'); } catch (e) {}
+    } else {
+      closeAll();
+      manBar.classList.add('open');
+      try { localStorage.setItem(RT.BARS_KEY, 'man'); } catch (e) {}
+    }
+  } else if (barName === 'param') {
+    if (paramBar && paramBar.classList.contains('open')) {
+      paramBar.classList.remove('open');
+      try { localStorage.setItem(RT.BARS_KEY, 'closed'); } catch (e) {}
+    } else if (paramBar) {
+      closeAll();
+      paramBar.classList.add('open');
+      try { localStorage.setItem(RT.BARS_KEY, 'param'); } catch (e) {}
+    }
+  }
+}
