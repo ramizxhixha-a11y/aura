@@ -11,5 +11,6 @@ Backup : Drive `aura_guardian_full_20261113-192213.json` → `rejeu/backups/` (h
 - [x] banc-css.js 7/7 (6 en échec sur 81ede33, G passe)
 - [x] rejeu/sonde_css.js 15/15 (a trouvé : Brain 0 × 0 px à l'ouverture — taille figée en style par 03 initBrainNodes → 09i efface le style ; corrigé, banc Z6 le couvre)
   commande : node rejeu/sonde_css.js --root . --avant /tmp/aura-avant --backup rejeu/backups/aura_guardian_full_20261113-192213.json --out <d>  (/tmp/aura-avant = git archive 81ede33)
-- [ ] relecture adverse (agent séparé)
+- [ ] relecture adverse (agent séparé, lancée 23:00 ; rapport /home/claude/css-work/relecture.md)
+- [x] ETAT (19 987 o) + PASSATION rédigées — VERDICT_RELECTURE à remplir dans la section GO CSS
 - [ ] ETAT + PASSATION, banc-all LIVRABLE, squash sur main sans cette note, push, DOC_V raw + Pages
