@@ -1073,9 +1073,10 @@
 .rh-nav-btn.active{background:rgba(167,139,250,.15);border-color:rgba(167,139,250,.3);color:var(--pur);}
 
 /* v46 THÈMES & MODE NUIT */
-body.theme-aube{--bg:#08060f;--s1:#100d1a;--s2:#181428;--s3:#201b35;--border:rgba(167,139,250,.15);--t1:#f0ecff;--t2:#b8a8e8;--t3:#7a6aaa;--ice:#c084fc;--pur:#a855f7;}
-body.theme-jour{--bg:#f0f4f8;--s1:#ffffff;--s2:#e8edf3;--s3:#d8dfe9;--border:rgba(0,0,0,.1);--t1:#0a0a1a;--t2:#2d3748;--t3:#718096;--up:#16a34a;--down:#dc2626;--ice:#0891b2;--pur:#7c3aed;--gold:#d97706;}
-body.theme-deep{--bg:#000000;--s1:#060608;--s2:#0a0b0f;--s3:#0f1015;--border:rgba(255,255,255,.05);--t1:#e0e0e0;--t2:#909090;--t3:#505050;}
+/* [GO ÉCRAN · 13/11/2026] --t4 = --t3 du thème ; --mag plus sombre en jour (2,97 : 1 sur blanc → ≈ 5,6 : 1) */
+body.theme-aube{--bg:#08060f;--s1:#100d1a;--s2:#181428;--s3:#201b35;--border:rgba(167,139,250,.15);--t1:#f0ecff;--t2:#b8a8e8;--t3:#7a6aaa;--t4:#7a6aaa;--ice:#c084fc;--pur:#a855f7;}
+body.theme-jour{--bg:#f0f4f8;--s1:#ffffff;--s2:#e8edf3;--s3:#d8dfe9;--border:rgba(0,0,0,.1);--t1:#0a0a1a;--t2:#2d3748;--t3:#718096;--t4:#718096;--mag:#b5207a;--up:#16a34a;--down:#dc2626;--ice:#0891b2;--pur:#7c3aed;--gold:#d97706;}
+body.theme-deep{--bg:#000000;--s1:#060608;--s2:#0a0b0f;--s3:#0f1015;--border:rgba(255,255,255,.05);--t1:#e0e0e0;--t2:#909090;--t3:#505050;--t4:#505050;}
 body{transition:background .4s,color .3s;}
 .nt-section{background:var(--s1);border:1px solid var(--border);border-radius:12px;padding:12px;margin-bottom:10px;}
 .nt-title{font-size:10px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:var(--t2);margin-bottom:10px;display:flex;justify-content:space-between;align-items:center;}

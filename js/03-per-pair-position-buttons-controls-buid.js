@@ -1056,10 +1056,14 @@ function updateAllPairCtrlLabels() {
 // [GO ÉCRAN · 13/11/2026] (ETAT n° 82) Texte du prix d'une mini-carte Marché : « $ » + les décimales de la paire
 // (PAIRS[p].dec, celles de 02 ou de 11 gestion des paires), format fr comme fmt$2. Écrit par drawMiniCharts (ici)
 // et par le pousseur 3×/s de 11 : le même texte des deux côtés, plus de clignotement entre deux formats.
+// Relecture du 13/11 : `dec` borné à 0–8 (un dec corrompu levait une RangeError) ; un formateur par dec, gardé (le pousseur écrit 3×/s).
+const _mcPxFmt = {};
 function _mcPxText(pair, price) {
   const cfg = (typeof PAIRS !== 'undefined' && PAIRS) ? PAIRS[pair] : null;
-  const d = (cfg && cfg.dec != null) ? cfg.dec : (price >= 100 ? 0 : 4);
-  return '$' + Number(price || 0).toLocaleString('fr-FR', { minimumFractionDigits: d, maximumFractionDigits: d });
+  let d = (cfg && cfg.dec != null) ? Math.round(Number(cfg.dec)) : (price >= 100 ? 0 : 4);
+  if (!(d >= 0)) d = 4; if (d > 8) d = 8;
+  const f = _mcPxFmt[d] || (_mcPxFmt[d] = new Intl.NumberFormat('fr-FR', { minimumFractionDigits: d, maximumFractionDigits: d }));
+  return '$' + f.format(Number(price) || 0);
 }
 window._mcPxText = _mcPxText;
 
@@ -1102,7 +1106,7 @@ function drawMiniCharts() {
           </div>
         </div>
         <canvas id="${canvasId}" style="width:100%;height:54px;display:block;"></canvas>
-        <div style="font-size:7px;color:var(--t4);text-align:center;margin-top:2px;opacity:.5;">Tap pour détails</div>`;
+        <div style="font-size:7px;color:var(--t4);text-align:center;margin-top:2px;">Tap pour détails</div>`;
       grid.appendChild(card);
     } else {
       card.className = 'mini-chart-card'+(pair===S.activePair?' selected':'');

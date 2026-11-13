@@ -40,9 +40,11 @@ const PX = { 'BTC/USDT': 68890.41, 'XRP/USDT': 1.0253, 'AVAX/USDT': 8.396, 'DOT/
 const NB = '\u202f';   // espace fine insécable des milliers (fr-FR)
 
 console.log('▶ banc-ecran — go écran (n° 82–85), affichage seul');
-T('E1 (82) · _mcPxText : DOT « $0,83 », AVAX « $8,40 », XRP « $1,0253 », BTC « $68 890 », EUR « $1,104 »', () => {
+T('E1 (82) · _mcPxText : DOT « $0,83 », AVAX « $8,40 », XRP « $1,0253 », BTC « $68 890 », EUR « $1,104 » ; dec corrompu sans erreur', () => {
   const f = fnSrc(s03, '_mcPxText'); assert.ok(f, '_mcPxText absente de 03');
-  const c = { PAIRS, Number }; vm.createContext(c); vm.runInContext(f, c);
+  const c = { PAIRS: Object.assign({}, PAIRS, { 'BAD/USDT': { dec: 'abc' }, 'BIG/USDT': { dec: 500 } }), Number, Math, Intl }; vm.createContext(c);
+  vm.runInContext(s03.slice(s03.indexOf('const _mcPxFmt'), s03.indexOf('const _mcPxFmt') + 40).split('\n')[0] + '\n' + f, c);
+  assert.strictEqual(c._mcPxText('BAD/USDT', 1.5), '$1,5000', 'dec corrompu'); assert.strictEqual(c._mcPxText('BIG/USDT', 1.5), '$1,50000000', 'dec > 8 borné');
   assert.strictEqual(c._mcPxText('DOT/USDT', 0.83), '$0,83'); assert.strictEqual(c._mcPxText('AVAX/USDT', 8.396), '$8,40');
   assert.strictEqual(c._mcPxText('XRP/USDT', 1.0253), '$1,0253'); assert.strictEqual(c._mcPxText('BTC/USDT', 68890.41), '$68' + NB + '890');
   assert.strictEqual(c._mcPxText('EUR/USDT', 1.1036), '$1,104');
@@ -52,7 +54,7 @@ T('E2 (82) · pousseur 3×/s de 11 : écrit dans mc_px_DOT_USDT, le même texte 
   const el = {}; Object.keys(PAIRS).forEach(p => { el['mc_px_' + p.replace('/', '_')] = { textContent: '$0' }; });
   const c = { PAIRS, Number, Object, S: { pairStates: Object.fromEntries(Object.entries(PX).map(([p, v]) => [p, { price: v }])) },
     document: { hidden: false, getElementById: id => el[id] || null } };
-  vm.createContext(c); const g = fnSrc(s03, '_mcPxText'); if (g) vm.runInContext(g, c);
+  c.Math = Math; c.Intl = Intl; vm.createContext(c); const g = fnSrc(s03, '_mcPxText'); if (g) vm.runInContext('const _mcPxFmt = {};\n' + g, c);
   vm.runInContext('(' + f + ')()', c);
   assert.strictEqual(el.mc_px_DOT_USDT.textContent, '$0,83', 'DOT : ' + el.mc_px_DOT_USDT.textContent);
   Object.keys(PAIRS).forEach(p => assert.strictEqual(el['mc_px_' + p.replace('/', '_')].textContent, c._mcPxText(p, PX[p]), p));
