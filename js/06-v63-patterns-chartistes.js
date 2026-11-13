@@ -1354,7 +1354,10 @@ function btcImpactTick() {
     const oldest  = recent[0].price;
     const latest  = recent[recent.length-1].price;
     const pct     = (latest-oldest)/oldest*100;
-    if(pct < -3 && !_btcLastAlertTs || (Date.now()-(_btcLastAlertTs||0)) > 600000) {
+    // [GO ÉCRAN · 13/11/2026] (ETAT n° 84) Parenthèses : « pct < -3 && !last || écoulé > 10 min » se lisait
+    // (chute ET jamais alerté) OU 10 min écoulées → « BTC chute de 0.0 % » toutes les 10 min sans chute.
+    // Maintenant : une chute de plus de 3 % (le seuil d'origine de cette alerte, inchangé), au plus une fois par 10 min.
+    if(pct < -3 && (Date.now()-(_btcLastAlertTs||0)) > 600000) {
       _btcLastAlertTs = Date.now();
       showToast(`⚠️ BTC chute de ${pct.toFixed(1)}% — surveille les alts !`, 5000, 'warn');
     }

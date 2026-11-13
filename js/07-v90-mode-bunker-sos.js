@@ -4970,7 +4970,12 @@ function renderHomePrices() {
     staked:     _capEng,
     maxAllowed: _capMaxA,
     usedPct:    ((S.tradingAccount||0)+_capEng)>0 ? Math.min(100, _capEng/((S.tradingAccount||0)+_capEng)*100) : 0,   // [23/08 · Rams] % = part de MON capital trading (trading+engagé), plus le % du MAX levier
-    free:       Math.max(0, (S.cashAccount||0)+(S.tradingAccount||0)-_capEng)   // [23/08 · Rams] LIBRE = caisse+trading−trades en cours
+    // [GO ÉCRAN · 13/11/2026] (ETAT n° 83) LIBRE = caisse + trading. Le trading est DÉJÀ débité de la mise à l'ouverture
+    // (02 openPosition « S.tradingAccount − stakeUsdt ») : retrancher encore les trades en cours les comptait deux fois
+    // (backup 13/11 19:22 : « $59,63 » pour 1 115,52 $ libres). La règle de Rams du 23/08 (caisse + trading − trades en cours,
+    // sur un argent qui les contient) reste vraie. Affichage seul : 09j getCapitalSummary().free (même formule, lue par
+    // 02 applyBotSuggestion et 03 suggestStake) n'est PAS changé ici — registre.
+    free:       Math.max(0, (S.cashAccount||0)+(S.tradingAccount||0))
   };
   const capFill = document.getElementById('capBarFill');
   if(capFill) {
@@ -4991,7 +4996,7 @@ function renderHomePrices() {
   const _capPctStr = cap.usedPct.toFixed(2)+'%';  // v15 · 2 décimales
   const capPctEl = document.getElementById('capBarPct');
   if (capPctEl && capPctEl.textContent !== _capPctStr) capPctEl.textContent = _capPctStr;
-  const _capStakedStr = '$'+Number(cap.staked).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
+  const _capStakedStr = fmt$2(cap.staked);   // [GO ÉCRAN · 13/11/2026] (ETAT n° 85) était en-US (« $1,055.89 ») à côté de LIBRE / MAX en fr (« $59,63 »)
   const capStakedEl = document.getElementById('capStaked');
   if (capStakedEl && capStakedEl.textContent !== _capStakedStr) capStakedEl.textContent = _capStakedStr;
   const _capMaxStr = fmt$2(cap.maxAllowed);   // [23/08 · banc d'essai] fmt$ affichait « $1,105 » (virgule US ambiguë)

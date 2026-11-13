@@ -23,6 +23,11 @@
   --t1: #f0f4ff;
   --t2: #a4b2d4;
   --t3: #8090b0;
+  /* [GO ÉCRAN · 13/11/2026] (ETAT n° 85) utilisées par 03, 07, 08 (--t4 : texte d'appoint) et 04 (--mag : le magenta du bouton
+     « Reset complet », rgba(255,77,191)) mais jamais définies → couleur héritée. --t4 = --t3 de chaque thème (22 body.theme-*) :
+     un --t4 plus sombre tombait à 1,75 : 1 de contraste sur « Tap pour détails » (relecture du 13/11) — illisible. */
+  --t4: #8090b0;
+  --mag: #ff4dbf;
 
   --font-display: 'Clash Display', sans-serif;
   --font-mono: 'DM Mono', monospace;
