@@ -175,7 +175,8 @@ else _accRestoreFolds();
 //    moyenne ; nombre de chaque famille sur son bouton de filtre (famille vide cachée) ; sous-titre de la matrice. Appelée par 08 renderAgents
 //    (toutes les 5 s sur l'écran Agents) et par 02 goPage(1).
 //  · cartes : compactes ; un appui ouvre la carte entière (courbe, score, série, mémoire), un 2e la referme ; le bandeau mémoire garde son
-//    propre appui (showMemoryOverlay). Les cartes ouvertes le restent quand 07 reconstruit la liste (≤ 1/h, _agReopenCards).
+//    propre appui (showMemoryOverlay). À l'ouverture la courbe est redessinée à la vraie largeur (07 _agSpkResize). Les cartes ouvertes
+//    le restent quand 07 reconstruit la liste (≤ 1/h, _agReopenCards).
 //  · volet de la matrice : fermé par défaut, état gardé dans localStorage 'aura_agents_volets' (préférence d'affichage, hors snapshot) ;
 //    à l'ouverture la matrice est redessinée (08 renderAgentHeatmap).
 // ──────────────────────────────────────────────────────────────────────
@@ -204,7 +205,7 @@ function _agRestoreFolds() {
 function _agBrefRender() {
   if (typeof S === 'undefined' || !S || !Array.isArray(S.agents)) return;
   const set = (id, t) => { const e = document.getElementById(id); if (e && e.textContent !== t) e.textContent = t; };
-  const fit = a => Math.round(Number(a.fitness) || 0);
+  const fit = a => Math.floor(Number(a.fitness) || 0);   // comme la carte (07) et la matrice (08) : T$ tronqué
   const role = a => a.role || 'fundamental';
   const bots = S.agents.filter(a => role(a) === 'execution'), ana = S.agents.filter(a => role(a) !== 'execution');
   const tuile = (arr, k) => {
@@ -229,6 +230,11 @@ function _agCardTap(e) {
   if (!c || e.target.closest('.memory-strip')) return;
   const open = c.classList.toggle('ag-open');
   if (open) _agOpenCards.add(c.id); else _agOpenCards.delete(c.id);
+  if (open) {
+    // la courbe était dessinée à la largeur de la carte compacte : 07 la redessine à la vraie largeur au prochain patch (≤ 1 s)
+    if (typeof _agSpkResize !== 'undefined') _agSpkResize = true;
+    try { c.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); } catch (x) {}   // ouverte sur toute la largeur, elle peut passer à la ligne suivante : on la garde sous le doigt
+  }
 }
 function _agReopenCards() {
   _agOpenCards.forEach(id => { const c = document.getElementById(id); if (c) c.classList.add('ag-open'); else _agOpenCards.delete(id); });

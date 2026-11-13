@@ -104,7 +104,7 @@ const capture = async (o, f) => { if (!OUT) return; await o.ev(() => { [...docum
   await ev(() => { goPage(1, null, document.getElementById('nav1')); document.getElementById('page1').scrollTop = 0; }); await page.waitForTimeout(1500);
   await capture(ap, 'apres-agents.png');
   // En bref : recalculé ici, indépendamment de 09i
-  const bref = await ev(() => { const fit = a => Math.round(Number(a.fitness) || 0), b = S.agents.filter(a => a.role === 'execution'), n = S.agents.filter(a => a.role !== 'execution');
+  const bref = await ev(() => { const fit = a => Math.floor(Number(a.fitness) || 0), b = S.agents.filter(a => a.role === 'execution'), n = S.agents.filter(a => a.role !== 'execution');
     const top = arr => arr.slice().sort((x, y) => fit(y) - fit(x))[0];
     const att = [String(b.length), '1er : ' + top(b).name, fit(top(b)) + ' T$ · moy. ' + Math.round(b.reduce((s, a) => s + fit(a), 0) / b.length),
       String(n.length), '1er : ' + top(n).name, fit(top(n)) + ' T$ · moy. ' + Math.round(n.reduce((s, a) => s + fit(a), 0) / n.length)];
@@ -140,6 +140,9 @@ const capture = async (o, f) => { if (!OUT) return; await o.ev(() => { [...docum
   const ouv = await ev(() => { const c = document.getElementById('agcard_arb_bot_v1'), s = document.getElementById('aspk_arb_bot_v1'), l = document.getElementById('mobileAgentList');
     return { open: c.classList.contains('ag-open'), w: Math.round(c.getBoundingClientRect().width), lw: Math.round(l.clientWidth), courbe: getComputedStyle(s).display, mem: getComputedStyle(document.getElementById('amstrip_arb_bot_v1')).display }; });
   R('appui sur Bot Arbitrage : carte compacte (' + ferme.w + ' px, courbe ' + ferme.courbe + ') → ouverte sur toute la largeur (' + ouv.w + ' px), courbe et mémoire visibles', ferme.courbe === 'none' && ferme.mem === 'none' && ouv.open && ouv.w > ferme.w * 1.8 && ouv.courbe !== 'none' && ouv.mem !== 'none', { ferme, ouv });
+  await page.waitForTimeout(2500);   // 07 patchAgentCards redessine la courbe à la vraie largeur (relecture du 14/11 : étirée 2,29× sans cela)
+  const spk = await ev(() => { const s = document.getElementById('aspk_arb_bot_v1'), dpr = window.devicePixelRatio || 1; return { bitmap: Math.round(s.width / dpr), vu: Math.round(s.getBoundingClientRect().width) }; });
+  R('carte ouverte : la courbe est dessinée à sa largeur affichée (' + spk.bitmap + ' / ' + spk.vu + ' px)', spk.vu > 500 && Math.abs(spk.bitmap - spk.vu) <= Math.max(4, spk.vu * 0.03), spk);
   await capture(ap, 'apres-carte-ouverte.png');
   await page.waitForTimeout(6500);   // un battement de renderAgents (toutes les 5 s) passe
   const stable = await ev(() => { const c = document.getElementById('agcard_arb_bot_v1'); return { open: c.classList.contains('ag-open'), meme: c === window.__agNode }; });

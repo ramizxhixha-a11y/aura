@@ -34,7 +34,7 @@ const GRP = ['execution', 'meta', 'council', 'scout', 'fundamental', 'technical'
 
 // agents réels : la liste par défaut de 02 (id, rôle, nom, emoji) — 31 agents, 8 rôles
 const src02 = rd('js/02-state-init.js');
-const AG = [...src02.matchAll(/\{\s*id:\s*'(\w+)'[^{}]*?name:\s*'([^']+)'[^{}]*?role:\s*'(\w+)'/g)].map((m, i) => ({ id: m[1], name: m[2], role: m[3], emoji: '·', type: 'T' + i, source: 'src', fitness: 100 + 37 * i, color: '#fff', isBot: m[3] === 'execution' }));
+const AG = [...src02.matchAll(/\{\s*id:\s*'(\w+)'[^{}]*?name:\s*'([^']+)'[^{}]*?role:\s*'(\w+)'/g)].map((m, i) => ({ id: m[1], name: m[2], role: m[3], emoji: '·', type: 'T' + i, source: 'src', fitness: 100.7 + 37 * i, color: '#fff', isBot: m[3] === 'execution' }));   // fitness en .7 : le T$ affiché est tronqué, comme la carte (07) et la matrice (08)
 
 T('A1 #page1 : onglets · En bref (bots, analystes, mémoire) · familles · cartes · matrice en volet, dans cet ordre', () => {
   const ordre = ['tab-agents', 'agentCountMobile', 'agBref', 'agentFilterRow', 'mobileAgentList', 'agentHeatmapGrid', 'agentPanel-learn'];
@@ -141,7 +141,7 @@ T('A5 css/29-agents-zones.css chargé en dernier au token ' + TOK + ' ; toutes s
 const src09i = rd('js/09i-sim-control.js'), K = src09i.indexOf('[GO CSS · écran 2 · 14/11/2026]');
 function ctx09i(store, agents) {
   const mkCls = () => { const s = new Set(); return { contains: c => s.has(c), toggle: (c, on) => { if (on === undefined) on = !s.has(c); on ? s.add(c) : s.delete(c); return on; }, add: c => s.add(c), remove: c => s.delete(c) }; };
-  const el = {}; const get = id => (el[id] = el[id] || { id, textContent: '', style: {}, dataset: {}, classList: mkCls() });
+  const el = {}; const get = id => (id.startsWith('agcard_') ? (el[id] || null) : (el[id] = el[id] || { id, textContent: '', style: {}, dataset: {}, classList: mkCls() }));   // une carte n'existe que si le banc la pose
   const fold = { classList: mkCls() }, log = [];
   const btns = FAM.map(r => ({ dataset: { role: r }, style: {}, classList: mkCls() })); btns[0].classList.add('active');
   const list = get('mobileAgentList'); list.addEventListener = (t, f) => log.push(['listen', t, f]);
@@ -160,7 +160,7 @@ function ctx09i(store, agents) {
 
 T('A6 09i _agBrefRender : En bref et nombres de familles justes (recalculés ici), famille vide cachée sauf si filtrée, sous-titre de la matrice', () => {
   const c = ctx09i({}, AG); vm.runInContext('_agBrefRender()', c);
-  const fit = a => Math.round(a.fitness), b = AG.filter(a => a.role === 'execution'), n = AG.filter(a => a.role !== 'execution');
+  const fit = a => Math.floor(a.fitness), b = AG.filter(a => a.role === 'execution'), n = AG.filter(a => a.role !== 'execution');
   const top = arr => arr.slice().sort((x, y) => fit(y) - fit(x))[0], moy = arr => Math.round(arr.reduce((s, a) => s + fit(a), 0) / arr.length);
   const t = id => c.el[id].textContent;
   assert.deepStrictEqual([t('agBrefBots'), t('agBrefBotsBest'), t('agBrefBotsSub')], [String(b.length), '1er : ' + top(b).name, fit(top(b)) + ' T$ · moy. ' + moy(b)]);
@@ -189,7 +189,10 @@ T('A7 09i : matrice fermée par défaut, un appui ouvre (redessinée) et mémori
   const ev = inStrip => ({ target: { closest: q => (q === '.agent-card' ? card : q === '.memory-strip' ? (inStrip ? {} : null) : null) } });
   tap(ev(false)); assert.ok(card.classList.contains('ag-open'), 'ouverte');
   tap(ev(true)); assert.ok(card.classList.contains('ag-open'), 'appui sur le bandeau mémoire : la carte ne se referme pas');
-  c.el.agcard_x = card; vm.runInContext('_agReopenCards()', c); assert.ok(card.classList.contains('ag-open'));
+  const cl = new Set(); c.el.agcard_x = { id: 'agcard_x', classList: { add: k => cl.add(k), contains: k => cl.has(k) } };   // 07 a reconstruit la liste : carte NEUVE, fermée
+  vm.runInContext('_agReopenCards()', c); assert.ok(cl.has('ag-open'), 'la carte ouverte au doigt est rouverte après reconstruction');
+  delete c.el.agcard_x; vm.runInContext('_agReopenCards()', c); assert.ok(!vm.runInContext('_agOpenCards.has("agcard_x")', c), 'carte disparue (évolution) : oubliée');
+  c.el.agcard_x = card;
   tap(ev(false)); assert.ok(!card.classList.contains('ag-open'), '2e appui : fermée');
   tap({ target: { closest: () => null } });   // appui hors carte : rien
 });
