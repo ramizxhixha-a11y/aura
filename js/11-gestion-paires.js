@@ -244,12 +244,13 @@ setInterval(function _tickPricePush() {
   try {
     if (typeof S === 'undefined' || !S || !S.pairStates || document.hidden) return;
     Object.keys(PAIRS || {}).forEach(function (p) {
-      var el = document.getElementById('mc_px_' + p);
+      // [GO ÉCRAN · 13/11/2026] (ETAT n° 82) L'id de la carte est mc_px_DOT_USDT (03 : pair.replace('/','_')) ; ce pousseur
+      // cherchait mc_px_DOT/USDT et n'écrivait donc rien depuis le 16/08. Même texte que la carte (03 _mcPxText).
+      var el = document.getElementById('mc_px_' + p.replace('/', '_'));
       var ps = S.pairStates[p];
       if (!el || !ps || !ps.price) return;
-      var d = (PAIRS[p] && PAIRS[p].dec != null) ? PAIRS[p].dec : (ps.price >= 100 ? 0 : 4);
-      var txt = '$' + ps.price.toLocaleString('fr-BE', { minimumFractionDigits: d > 2 ? d : 0, maximumFractionDigits: d });
-      if (el.textContent !== txt) el.textContent = txt;
+      var txt = (typeof _mcPxText === 'function') ? _mcPxText(p, ps.price) : null;
+      if (txt && el.textContent !== txt) el.textContent = txt;
     });
   } catch (e) {}
 }, 333);
