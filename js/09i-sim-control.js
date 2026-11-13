@@ -119,8 +119,8 @@ window.toggleBar = toggleBar;
 // Rams 13/11 « Go css » (chaque écran par priorité, défilement pensé), maquette validée « Ok » (22:23).
 // Volets : Détails techniques, Brain Network, Intelligence, Journal de bord, Twin Live — fermés par défaut,
 // l'état ouvert est gardé dans localStorage 'aura_accueil_volets' (préférence d'affichage, hors snapshot).
-// À l'ouverture : le Brain se redessine à la vraie taille (dessiné à 0 px tant qu'il est replié,
-// 03 startBrainAnim ne dessine qu'une fois), l'Intelligence et le journal se rafraîchissent.
+// À l'ouverture : le Brain se redessine à la vraie taille (dessiné à 0 px tant qu'il est replié, taille figée en style par 03
+// initBrainNodes, et 03 startBrainAnim ne dessine qu'une fois), l'Intelligence et le journal se rafraîchissent.
 // ──────────────────────────────────────────────────────────────────────
 const ACC_FOLDS_KEY = 'aura_accueil_volets';
 function _accFoldState() {
@@ -141,6 +141,8 @@ function _accFold(name, force, silent) {
 }
 function _accFoldOpened(name) {
   if (name === 'brain') {
+    // 03 initBrainNodes fige la taille du canevas en style (largeur mesurée : 0 px tant que le volet est fermé) → on rend la taille au CSS (100 %) avant de redessiner
+    try { const c = document.getElementById('brainCanvas'); if (c) { c.style.width = ''; c.style.height = ''; } } catch (e) {}
     try { if (typeof stopBrainAnim === 'function') stopBrainAnim(); _brainStaticDrawn = false; if (typeof startBrainAnim === 'function') startBrainAnim(); } catch (e) {}
   } else if (name === 'intel') {
     try { if (typeof renderAnalyticsPanel === 'function') renderAnalyticsPanel(); } catch (e) {}

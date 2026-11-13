@@ -9,6 +9,7 @@ Backup : Drive `aura_guardian_full_20261113-192213.json` → `rejeu/backups/` (h
 - [x] HTML : #page0 réécrit en zones (script /home/claude/css-work/build_html.py, repères ligne par ligne) — 158 id gardés, 0 doublon
 - [x] css/28-accueil-zones.css (chargé en dernier) ; 09i _accFold / _accRestoreFolds / _accGo ; token 20261113b ; bancs ?v= 89 → 90
 - [x] banc-css.js 7/7 (6 en échec sur 81ede33, G passe)
-- [ ] rejeu/sonde_css.js (vraie page, avant / après)
+- [x] rejeu/sonde_css.js 15/15 (a trouvé : Brain 0 × 0 px à l'ouverture — taille figée en style par 03 initBrainNodes → 09i efface le style ; corrigé, banc Z6 le couvre)
+  commande : node rejeu/sonde_css.js --root . --avant /tmp/aura-avant --backup rejeu/backups/aura_guardian_full_20261113-192213.json --out <d>  (/tmp/aura-avant = git archive 81ede33)
 - [ ] relecture adverse (agent séparé)
 - [ ] ETAT + PASSATION, banc-all LIVRABLE, squash sur main sans cette note, push, DOC_V raw + Pages

@@ -6,7 +6,7 @@
 //   Z3 chaque bloc dans sa zone (argent, positions, paires, comptes, réglages rapides, santé, volets techniques / Brain / Intelligence / journal / Twin)
 //   Z4 css/28-accueil-zones.css chargé en DERNIER au token ; chaque règle visée à #page0 ou #statusBar (les autres écrans ne bougent pas) ; plancher 11 px
 //   Z5 09i volets : fermés par défaut, un appui ouvre et mémorise, un 2e referme et oublie ; au démarrage les volets mémorisés rouvrent SANS redessiner
-//   Z6 09i Brain : ouvrir son volet le redessine à sa vraie taille (stop, _brainStaticDrawn = false, start) ; _accGo place la zone sous le sommaire
+//   Z6 09i Brain : ouvrir son volet le redessine à sa vraie taille (taille figée à 0 px par 03 effacée, stop, _brainStaticDrawn = false, start) ; _accGo place la zone sous le sommaire
 //   G  #qPortfolio (lu par 10g _updateBotPauseBadge) et les 9 tuiles .wc-account (délégation de 09m) sont toujours dans #page0 ; toggleBar inchangée
 'use strict';
 const fs = require('fs'), vm = require('vm'), assert = require('assert'), path = require('path');
@@ -91,12 +91,12 @@ function ctx09i(store) {
   const mk = name => { const cls = new Set(); return { name, classList: { contains: c => cls.has(c), toggle: (c, on) => { if (on === undefined) on = !cls.has(c); on ? cls.add(c) : cls.delete(c); return on; }, add: c => cls.add(c), remove: c => cls.delete(c) } }; };
   const folds = Object.fromEntries(['tech', 'brain', 'intel', 'journal', 'twin'].map(n => [n, mk(n)]));
   const log = [];
-  const pg = { scrollTo: o => log.push(['scroll', o.top]) }, zone = { offsetTop: 2043 }, nav = { offsetHeight: 50 };
+  const pg = { scrollTo: o => log.push(['scroll', o.top]) }, zone = { offsetTop: 2043 }, nav = { offsetHeight: 50 }, canvas = { style: { width: '0px', height: '0px' } };   // 03 initBrainNodes fige 0 px quand replié
   const c = {
-    log, folds, JSON, Object,
+    log, folds, canvas, JSON, Object,
     localStorage: { getItem: k => (k in store ? store[k] : null), setItem: (k, v) => { store[k] = String(v); } },
     document: { readyState: 'complete', addEventListener: () => {}, querySelector: q => { const m = q.match(/data-fold="(\w+)"/); return m ? folds[m[1]] || null : null; },
-      getElementById: id => ({ page0: pg, accComptes: zone, accNav: nav }[id] || null) },
+      getElementById: id => ({ page0: pg, accComptes: zone, accNav: nav, brainCanvas: canvas }[id] || null) },
     window: {}, stopBrainAnim: () => log.push(['stop']), startBrainAnim: () => log.push(['start', c._brainStaticDrawn]),
     renderAnalyticsPanel: () => log.push(['intel']), renderJournal: () => log.push(['journal']),
   };
@@ -121,10 +121,11 @@ T('Z5 09i volets : fermés par défaut ; un appui ouvre et mémorise, un 2e refe
   const c3 = ctx09i({ aura_accueil_volets: '{pas du json' }); assert.ok(Object.values(c3.folds).every(f => !f.classList.contains('open')), 'stockage illisible → tout fermé');
 });
 
-T('Z6 09i : ouvrir le Brain le redessine (stop, _brainStaticDrawn = false, start) ; _accGo met la zone sous le sommaire', () => {
+T('Z6 09i : ouvrir le Brain le redessine à sa taille (style 0 px effacé, stop, _brainStaticDrawn = false, start) ; _accGo met la zone sous le sommaire', () => {
   const c = ctx09i({});
   vm.runInContext("_accFold('brain')", c);
   assert.deepStrictEqual(c.log, [['stop'], ['start', false]]);
+  assert.deepStrictEqual([c.canvas.style.width, c.canvas.style.height], ['', ''], 'taille du canevas rendue au CSS (figée à 0 px quand replié)');
   c.log.length = 0; vm.runInContext("_accFold('brain')", c); assert.deepStrictEqual(c.log, [], 'refermer ne dessine rien');
   vm.runInContext("_accGo('accComptes')", c); assert.deepStrictEqual(c.log, [['scroll', 2043 - 50]]);
   c.log.length = 0; vm.runInContext("_accGo('zoneInconnue')", c); assert.deepStrictEqual(c.log, []);
