@@ -113,3 +113,54 @@ function toggleBar(barName) {
   }
 }
 window.toggleBar = toggleBar;
+
+// ──────────────────────────────────────────────────────────────────────
+// [GO CSS · 13/11/2026] Accueil en zones — volets repliables mémorisés + sommaire collant.
+// Rams 13/11 « Go css » (chaque écran par priorité, défilement pensé), maquette validée « Ok » (22:23).
+// Volets : Détails techniques, Brain Network, Intelligence, Journal de bord, Twin Live — fermés par défaut,
+// l'état ouvert est gardé dans localStorage 'aura_accueil_volets' (préférence d'affichage, hors snapshot).
+// À l'ouverture : le Brain se redessine à la vraie taille (dessiné à 0 px tant qu'il est replié,
+// 03 startBrainAnim ne dessine qu'une fois), l'Intelligence et le journal se rafraîchissent.
+// ──────────────────────────────────────────────────────────────────────
+const ACC_FOLDS_KEY = 'aura_accueil_volets';
+function _accFoldState() {
+  try { const o = JSON.parse(localStorage.getItem(ACC_FOLDS_KEY) || '{}'); return (o && typeof o === 'object') ? o : {}; } catch (e) { return {}; }
+}
+function _accFold(name, force, silent) {
+  const el = document.querySelector('#page0 .acc-fold[data-fold="' + name + '"]');
+  if (!el) return false;
+  const open = (typeof force === 'boolean') ? force : !el.classList.contains('open');
+  el.classList.toggle('open', open);
+  if (!silent) {
+    const st = _accFoldState();
+    if (open) st[name] = 1; else delete st[name];
+    try { localStorage.setItem(ACC_FOLDS_KEY, JSON.stringify(st)); } catch (e) {}
+    if (open) _accFoldOpened(name);
+  }
+  return open;
+}
+function _accFoldOpened(name) {
+  if (name === 'brain') {
+    try { if (typeof stopBrainAnim === 'function') stopBrainAnim(); _brainStaticDrawn = false; if (typeof startBrainAnim === 'function') startBrainAnim(); } catch (e) {}
+  } else if (name === 'intel') {
+    try { if (typeof renderAnalyticsPanel === 'function') renderAnalyticsPanel(); } catch (e) {}
+  } else if (name === 'journal') {
+    try { if (typeof renderJournal === 'function') renderJournal(); } catch (e) {}
+  }
+}
+// Au démarrage : rouvre (sans redessiner) les volets laissés ouverts ; le premier dessin du Brain (09k) se fait alors à la vraie taille.
+function _accRestoreFolds() {
+  const st = _accFoldState();
+  Object.keys(st).forEach(n => _accFold(n, true, true));
+}
+// Sommaire : amène la zone sous le sommaire collant.
+function _accGo(zoneId) {
+  const pg = document.getElementById('page0'), z = document.getElementById(zoneId), nav = document.getElementById('accNav');
+  if (!pg || !z) return;
+  const top = Math.max(0, z.offsetTop - (nav ? nav.offsetHeight : 0));
+  try { pg.scrollTo({ top, behavior: 'smooth' }); } catch (e) { pg.scrollTop = top; }
+}
+window._accFold = _accFold;
+window._accGo = _accGo;
+if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', _accRestoreFolds);
+else _accRestoreFolds();

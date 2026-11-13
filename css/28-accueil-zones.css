@@ -1,0 +1,127 @@
+/* ═══════════════════════════════════════════════════════════
+   AURA8 · 28-accueil-zones.css — [GO CSS · 13/11/2026]
+   Accueil (#page0) en 6 zones par priorité : Mon argent · Mes paires · Comptes & réglages · Santé · Cerveau · Historique.
+   Rams 13/11 « Go css » : écrans organisés par priorité, boutons groupés par usage, lecture facile et reposante,
+   défilement pensé ; maquette validée « Ok » (22:23). Chargé en dernier.
+   1. lecture : plancher 11 px sur l'accueil, chiffres alignés, sans halo
+   2. zones, cartes, volets, sommaire collant
+   3. en-tête : outils · état · actions séparés
+   ═══════════════════════════════════════════════════════════ */
+
+/* ── 1. LECTURE ─────────────────────────────────────────── */
+/* Les tailles écrites en var(--fs-6…11) dans le HTML et le JS montent au plancher sur l'accueil seulement. */
+#page0 {
+  --fs-6: 11px; --fs-7: 11px; --fs-8: 11px; --fs-9: 11.5px; --fs-10: 12px; --fs-11: 12.5px;
+  font-variant-numeric: tabular-nums;
+}
+/* Tailles écrites en dur (6–10 px) dans le HTML et dans les rendus JS de l'accueil. */
+#page0 [style*="font-size:6px"], #page0 [style*="font-size:7px"], #page0 [style*="font-size:8px"],
+#page0 [style*="font-size:9px"], #page0 [style*="font-size:10px"],
+#page0 [style*="font-size: 6px"], #page0 [style*="font-size: 7px"], #page0 [style*="font-size: 8px"],
+#page0 [style*="font-size: 9px"], #page0 [style*="font-size: 10px"] { font-size: 11px !important; }
+/* Classes de l'accueil sous 11 px (sonde du 13/11 : 209 textes). */
+#page0 .ac-xind-lbl, #page0 .advisor-chip, #page0 .journal-agent-tag, #page0 .mb-badge, #page0 .ac-sparkline-tag,
+#page0 .ac-volbar-lbl, #page0 .ac-volbar-val, #page0 .pill, #page0 .analytics-tab, #page0 .ac-pos-close, #page0 .ac-pos-usd,
+#page0 .ab-pos, #page0 .ab-sep, #page0 .ab-lmsr, #page0 .ab-wr, #page0 .wc-acc-label, #page0 .wc-acc-sub, #page0 .wc-label,
+#page0 .persona-name, #page0 .persona-quote, #page0 .persona-vote, #page0 .brainlog-time, #page0 .brainlog-event,
+#page0 .brainlog-reason, #page0 .brain-legend-item, #page0 .brain-title, #page0 .brain-consensus, #page0 .brain-consensus *,
+#page0 .force-btn, #page0 .journal-stat-lbl, #page0 .journal-entry-meta, #page0 .journal-entry-meta *,
+#page0 .twin-card-label, #page0 .twin-card-sub, #page0 .twin-badge, #page0 .twin-toggle, #page0 .twin-insight,
+#page0 .streak-badge, #page0 .wc-cycle, #page0 .intel-banner-badge, #page0 .intel-banner-text, #page0 .intel-banner-text *,
+#page0 .stat-chip-label, #page0 .trade-detail, #page0 .trade-time, #page0 .wc-alloc-legend, #page0 .ac-pnl-label,
+#page0 .ac-agent-dot, #page0 .ac-agents-bar-label, #page0 .ac-cum-lbl, #page0 .mood-label, #page0 .thoughts-text,
+#page0 .thoughts-text *, #page0 .dialogue-verdict-label { font-size: 11px !important; }
+/* Reposant : plus de halos ni d'ombres portées sur les cartes de l'accueil. */
+#page0 * { text-shadow: none !important; }
+#page0 .wallet-card, #page0 .auto-bar, #page0 .brain-section, #page0 .market-mood-wrap, #page0 .thoughts-ticker,
+#page0 .intel-banner, #page0 .fiscal-mini, #page0 .stat-chip, #page0 .wc-account, #page0 .twin-wrap { box-shadow: none !important; }
+
+/* ── 2. ZONES ───────────────────────────────────────────── */
+#page0 .acc-zone { margin: 0 16px; padding-top: 22px; }
+#page0 .acc-zone > * + * { margin-top: 10px !important; }
+#page0 .acc-zone > * { margin-left: 0 !important; margin-right: 0 !important; }
+#page0 .acc-zone-h {
+  display: flex; align-items: baseline; justify-content: space-between; gap: 12px;
+  padding: 0 2px 8px; margin-bottom: 2px; border-bottom: 1px solid rgba(255,255,255,.06);
+}
+#page0 .acc-zone-h span { font: 700 13px/1 var(--font-mono); letter-spacing: .16em; text-transform: uppercase; color: var(--t2); }
+#page0 .acc-zone-h em { font: 500 11px/1 var(--font-mono); font-style: normal; color: var(--t3); letter-spacing: .06em; }
+#page0 .acc-card, #page0 .acc-hero, #page0 #openPnlBanner > div {
+  background: var(--s1) !important; border: 1px solid rgba(255,255,255,.06) !important; border-radius: 16px !important; padding: 14px 16px !important;
+}
+#page0 .acc-card-t { font: 700 11px/1 var(--font-mono); letter-spacing: .14em; text-transform: uppercase; color: var(--t3); margin-bottom: 10px; }
+
+/* Mon argent : le total en grand, le capital engagé dessous, la courbe en pied. */
+#page0 .acc-hero { margin: 0 !important; }
+#page0 .acc-hero .wc-top { padding: 0 !important; margin: 0 0 12px !important; }
+#page0 .acc-hero .wc-total { font-size: 34px !important; letter-spacing: -.01em; }
+#page0 .acc-hero .wc-label { color: var(--t3) !important; letter-spacing: .12em; }
+#page0 .acc-hero .acc-cap { background: transparent !important; border: 0 !important; border-top: 1px solid rgba(255,255,255,.06) !important; border-radius: 0 !important; padding: 12px 0 0 !important; }
+#page0 .acc-hero #sparkline { margin-top: 12px !important; opacity: .7 !important; }
+#page0 #openPnlBanner span { font-size: 12.5px !important; line-height: 1.55; }
+#page0 #openPnlBanner > div > div:first-child span:first-child { font-size: 13px !important; font-weight: 700; letter-spacing: .04em; }
+
+/* Mes paires : barres plus aérées, nom + mise sur deux lignes nettes, mini-cartes en 3 colonnes. */
+#page0 .acc-pnl { margin: 0 !important; }
+#page0 #pairPnlBars { gap: 9px !important; }
+#page0 #pairPnlBars [data-pairbar] { grid-template-columns: 132px 1fr 84px !important; }
+#page0 #pairPnlBars .pb-open-badge { white-space: nowrap; }
+#page0 #actionBrickGrid { grid-template-columns: repeat(3, 1fr) !important; gap: 10px !important; }
+
+/* Comptes : 7 cases à lire (4 + 3, régime fiscal sur 2 colonnes), les réglages à part. */
+#page0 .acc-acc-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 12px; }
+#page0 .acc-acc-grid .acc-wide { grid-column: span 2; }
+#page0 .acc-acc .wc-account, #page0 .acc-reg .wc-account { background: var(--s2) !important; border: 1px solid rgba(255,255,255,.05) !important; min-height: 74px; padding: 10px 11px !important; }
+#page0 .acc-acc .wc-acc-value { font-size: 15px !important; }
+#page0 .acc-acc .wc-alloc-legend { gap: 16px; margin-top: 2px; }
+#page0 .acc-reg-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; align-items: stretch; }
+#page0 .acc-reg .wc-controls { display: flex; margin: 0 !important; padding: 0 !important; border: 0 !important; }
+#page0 .acc-reg .wc-ctrl-btn { flex: 1; min-height: 74px; border-radius: 13px !important; font-size: 13px !important; }
+#page0 .acc-reg .step-btn { width: 30px !important; height: 30px !important; }
+
+/* Santé : 6 chiffres visibles, les compteurs techniques dans un volet. */
+#page0 .acc-stats { margin: 0 !important; display: grid !important; gap: 8px !important; }
+#page0 .acc-key { grid-template-columns: repeat(3, 1fr) !important; }
+#page0 .acc-tech { grid-template-columns: repeat(5, 1fr) !important; }
+#page0 .acc-stats .stat-chip { background: var(--s1) !important; border: 1px solid rgba(255,255,255,.06) !important; border-radius: 14px !important; padding: 12px 8px !important; min-height: 64px; }
+#page0 .acc-key .stat-chip-val { font-size: 20px !important; }
+#page0 .acc-trust #trustScoreWrap { border: 0 !important; margin: 0 !important; padding: 0 !important; }
+
+/* Volets repliables (09i _accFold) */
+#page0 .acc-fold { background: var(--s1); border: 1px solid rgba(255,255,255,.06); border-radius: 16px; overflow: hidden; }
+#page0 .acc-fold-h { all: unset; box-sizing: border-box; width: 100%; display: flex; align-items: center; gap: 10px; padding: 14px 16px; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+#page0 .acc-fold-h:active { background: var(--s2); }
+#page0 .acc-chev { color: var(--t3); font-size: 11px; transition: transform .2s; }
+#page0 .acc-fold.open .acc-chev { transform: rotate(90deg); }
+#page0 .acc-fold-t { font: 700 14px/1.2 var(--font-display, inherit); color: var(--t1); }
+#page0 .acc-fold-r { margin-left: auto; font: 500 11px/1 var(--font-mono); color: var(--t3); text-align: right; }
+#page0 .acc-fold-b { display: none; padding: 0 12px 12px; }
+#page0 .acc-fold.open .acc-fold-b { display: block; }
+#page0 .acc-fold-b > * { margin-left: 0 !important; margin-right: 0 !important; }
+#page0 .acc-fold-b .brain-section { margin-top: 0 !important; }
+
+/* Sommaire collant : on saute d'une zone à l'autre (09i _accGo). */
+#page0 .acc-nav {
+  position: sticky; top: 0; z-index: 15; display: flex; gap: 6px; padding: 10px 16px;
+  background: linear-gradient(var(--bg) 78%, transparent); overflow-x: auto; scrollbar-width: none;
+}
+#page0 .acc-nav::-webkit-scrollbar { display: none; }
+#page0 .acc-nav button {
+  all: unset; flex: 1; text-align: center; padding: 8px 4px; border-radius: 10px; cursor: pointer;
+  font: 600 12px/1 var(--font-mono); color: var(--t2); background: var(--s1); border: 1px solid rgba(255,255,255,.07); white-space: nowrap;
+  -webkit-tap-highlight-color: transparent;
+}
+#page0 .acc-nav button:active { background: var(--s2); color: var(--t1); }
+#page0 #pendingBanner { margin-left: 16px; margin-right: 16px; }
+
+/* ── 3. EN-TÊTE : outils (☾ ⚡ 🩺) · état (régime, AUTO/MANU, AA/EV/RE) · actions (⚙ ▶ ⊗) ─── */
+#statusBar .header-buttons { gap: 6px !important; }
+#statusBar #wakeLockBtn, #statusBar #fpBtn, #statusBar #diagBtn { opacity: .72; transform: scale(.9); }
+#statusBar #diagBtn { margin-right: 14px !important; }
+#statusBar #tradeModeBtn { margin-right: 14px !important; }
+#statusBar .mode-label { font-size: 11px !important; }
+@media (max-width: 420px) {
+  #statusBar #diagBtn, #statusBar #tradeModeBtn { margin-right: 4px !important; }
+}
+#page0 .acc-fold-b > *:first-child { margin-top: 0 !important; }
+#statusBar .mode-badge { font-size: 11px !important; }
