@@ -2,7 +2,8 @@
 // Usage : node rejeu/sonde_css.js --root . --avant <copie du code d'avant> --backup <backup.json> [--out <dossier>]
 //   (un seul navigateur, les deux versions l'une après l'autre — CLAUDE.md règle 8 ; rien n'est écrit sur la tablette : page locale, réseau coupé)
 // Étapes (APRÈS) : rien de perdu (chaque id visible avant l'est après, volets ouverts) · zones dans l'ordre · 1er écran = l'argent ·
-// textes < 11 px sur l'accueil (avant : 209 attendus) → 0 · défilement plus court · écrans 1 à 5 inchangés · volets fermés par défaut,
+// textes < 11 px sur l'accueil TOUT révélé (volets, détail du total, une urgence factice, les 12 onglets de l'Intelligence) → 0 · défilement plus court ·
+// bordure du latent gardée · 390 × 844 et 1 280 × 800 sans débordement en largeur · écrans 1 à 5 inchangés · volets fermés par défaut,
 // mémorisés à la relance (seul l'état des volets est jugé après la relance : sur ce banc local, une relance repart d'un état vide, ancien code
 // compris — vérifié le 13/11 : trading 1 115,52 $ → 0, 11 positions → 0, à l'identique sur 81ede33) · Brain dessiné à l'ouverture de son volet · sommaire · boutons de l'en-tête atteignables · tuile → détail · toggleBar · 0 erreur.
 'use strict';
@@ -27,17 +28,26 @@ const init = `(() => { try { if (!sessionStorage.getItem('__c')) { localStorage.
   localStorage.setItem('aura_highwater_cycle', '${Number(st.cycle) || 0}'); localStorage.setItem('aura_current_trade_mode', 'paperReal');
   ${JSON.stringify(FLAGS)}.forEach(k => localStorage.setItem(k, '1')); sessionStorage.setItem('__c', '1'); } } catch (e) {} })();`;
 
-// mesures communes aux deux versions (dans la page)
-const MESURE = () => {
+// mesures communes aux deux versions (dans la page) : TOUT révélé — volets ouverts, détail du total, une urgence factice
+// (rendue puis retirée dans le même instant : S.pendingActions restauré avant tout battement), chacun des 12 onglets de l'Intelligence
+const MESURE = async () => {
   const vis = e => { const cs = getComputedStyle(e); const r = e.getBoundingClientRect(); return cs.display !== 'none' && cs.visibility !== 'hidden' && r.height > 0 && r.width > 0; };
   const F = [...document.querySelectorAll('#page0 .acc-fold')].map(f => f.dataset.fold);   // ouverts comme au doigt (_accFold : Brain redessiné), refermés à la fin
   F.forEach(n => _accFold(n, true));
   const ids = [...document.querySelectorAll('#page0 [id]')].filter(vis).map(e => e.id);
-  let petits = 0; const ex = [];
-  document.querySelectorAll('#page0 *').forEach(e => { if (!vis(e) || ![...e.childNodes].some(x => x.nodeType === 3 && x.textContent.trim())) return;
-    const f = parseFloat(getComputedStyle(e).fontSize); if (f < 11) { petits++; if (ex.length < 6) ex.push((e.className || e.tagName) + ' ' + f + 'px'); } });
+  let petits = 0; const g = {};
+  const scan = (root, ou) => { if (!root) return; root.querySelectorAll('*').forEach(e => { if (!vis(e) || ![...e.childNodes].some(x => x.nodeType === 3 && x.textContent.trim())) return;
+    const f = parseFloat(getComputedStyle(e).fontSize); if (f < 11) { petits++; const k = ou + ' · ' + ((typeof e.className === 'string' && e.className) ? '.' + e.className.split(' ')[0] : e.tagName) + ' ' + f + 'px'; g[k] = (g[k] || 0) + 1; } }); };
+  scan(document.getElementById('page0'), 'accueil');
+  if (typeof _toggleHeroBk === 'function') { _toggleHeroBk('total'); scan(document.getElementById('heroBkTotal'), 'total'); _toggleHeroBk('total'); }
+  if (typeof renderPendingActions === 'function') { const sv = S.pendingActions;
+    S.pendingActions = [{ id: 'sonde', type: 'arb', title: 'Sonde · titre', detail: 'Sonde · détail de la proposition', source: 'bot_sonde', ts: Date.now() }];
+    try { renderPendingActions(); scan(document.getElementById('pendingBanner'), 'urgence'); } finally { S.pendingActions = sv; renderPendingActions(); } }
+  for (const b of document.querySelectorAll('#page0 .analytics-tab')) { const t = (b.getAttribute('onclick') || '').match(/'(\w+)'/); if (!t) continue;
+    try { switchAnalyticsTab(t[1], b); } catch (e) {} await new Promise(r => setTimeout(r, 300)); scan(document.getElementById('apanel-' + t[1]), 'onglet ' + t[1]); }
+  try { switchAnalyticsTab('debate', document.getElementById('atab-debate')); } catch (e) {}
   F.forEach(n => _accFold(n, false));
-  return { ids, petits, ex };
+  return { ids, petits, ex: Object.entries(g).sort((a, b) => b[1] - a[1]) };
 };
 
 async function ouvrir(browser, ROOT, PORT) {
@@ -81,7 +91,7 @@ const hauteurs = ev => ev(async () => { const h = {}; for (let i = 0; i <= 5; i+
   const mAp = await ev(MESURE); const hAp = await hauteurs(ev);
   const perdus = mAv.ids.filter(i => !mAp.ids.includes(i));
   R('rien de perdu : ' + mAv.ids.length + ' id visibles avant, tous visibles après (volets ouverts : ' + mAp.ids.length + ')', perdus.length === 0, perdus.slice(0, 20));
-  R('textes < 11 px sur l\'accueil : ' + mAv.petits + ' avant → ' + mAp.petits + ' (volets ouverts)', mAp.petits === 0 && mAv.petits > 100, mAp.ex);
+  R('textes < 11 px sur l\'accueil, tout révélé (volets, total détaillé, urgence, 12 onglets) : ' + mAv.petits + ' avant → ' + mAp.petits, mAp.petits === 0 && mAv.petits > 100, mAp.ex.slice(0, 40));
   R('défilement de l\'accueil, volets fermés : ' + hAv[0] + ' → ' + hAp[0] + ' px', hAp[0] < hAv[0] * 0.8, { hAv, hAp });
   const autres = [1, 2, 3, 4, 5].filter(i => Math.abs(hAp[i] - hAv[i]) > Math.max(20, hAv[i] * 0.01));
   R('écrans 1 à 5 inchangés (hauteurs ' + [1, 2, 3, 4, 5].map(i => hAv[i] + '→' + hAp[i]).join(' · ') + ')', autres.length === 0, { autres, hAv, hAp });
@@ -97,6 +107,8 @@ const hauteurs = ev => ev(async () => { const h = {}; for (let i = 0; i <= 5; i+
   R('zones dans l\'ordre : ' + z.zones.join(' < '), z.zones.every((p, i) => p >= 0 && (!i || p > z.zones[i - 1])), z.zones);
   R('1er écran sans défiler : total ' + z.texte[0] + ', LIBRE ' + z.texte[1] + ' et le début des positions ouvertes', z.heroVal < z.vue && z.capFree < z.vue && z.positions.length === 2 && z.positions[1] < z.vue, z);
 
+  const bord = await ev(() => { const d = document.querySelector('#openPnlBanner > div'); return d ? [getComputedStyle(d).borderTopColor, d.style.borderColor || d.getAttribute('style').match(/border:1px solid ([^;]+);/)[1]] : null; });
+  R('positions ouvertes : la bordure verte / rouge du latent est gardée (' + (bord && bord[0]) + ')', bord && !/255, 255, 255/.test(bord[0]), bord);
   // volets : mémorisés à la relance
   await ev(() => _accFold('journal')); await ap.page.waitForTimeout(500);
   const mem = await ev(() => localStorage.getItem('aura_accueil_volets'));
@@ -135,6 +147,14 @@ const hauteurs = ev => ev(async () => { const h = {}; for (let i = 0; i <= 5; i+
   R('tuile Caisse → fiche détail ouverte', fiche, fiche);
   const bar = await ev(() => { const m = document.getElementById('manBar'), was = m.classList.contains('open'); toggleBar('man'); const now = m.classList.contains('open'); toggleBar('man'); return [was, now]; });
   R('toggleBar(\'man\') ouvre la barre Positions Man', bar[0] === false && bar[1] === true, bar);
+  for (const [w, h] of [[390, 844], [1280, 800]]) {
+    await ap.page.setViewportSize({ width: w, height: h }); await ap.page.waitForTimeout(1500);
+    const lar = await ev(() => { const pg = document.getElementById('page0'); document.querySelectorAll('#page0 .acc-fold').forEach(f => f.classList.add('open'));
+      const r = { scroll: pg.scrollWidth, client: pg.clientWidth }; document.querySelectorAll('#page0 .acc-fold').forEach(f => f.classList.remove('open')); return r; });
+    R(w + ' × ' + h + ' : rien ne sort de l\'écran en largeur (' + lar.scroll + ' / ' + lar.client + ' px)', lar.scroll <= lar.client + 1, lar);
+    if (OUT) { await ev(id => { document.getElementById('page0').scrollTop = document.getElementById('accComptes').offsetTop - 50; }); await ap.page.waitForTimeout(500); await ap.page.screenshot({ path: path.join(OUT, 'apres-' + w + '-comptes.png') }); }
+  }
+  await ap.page.setViewportSize({ width: 800, height: 1280 }); await ap.page.waitForTimeout(800);
   R('aucune erreur de page (avant ' + av.perr.length + ', après ' + ap.perr.length + ')', ap.perr.length === 0, ap.perr);
   await ap.close(); await browser.close();
   const ko = res.filter(r => !r.ok).length;

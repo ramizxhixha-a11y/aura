@@ -74,7 +74,7 @@ T('Z3 chaque bloc dans sa zone ; volets : techniques, Brain, Intelligence, journ
   assert.strictEqual((p0.match(/data-fold="/g) || []).length, 5);
 });
 
-T('Z4 css/28-accueil-zones.css chargé en dernier au token ' + TOK + ' ; toutes ses règles visent #page0 ou #statusBar ; plancher 11 px', () => {
+T('Z4 css/28-accueil-zones.css chargé en dernier au token ' + TOK + ' ; toutes ses règles visent #page0 ou #statusBar ; plancher 11 px (urgences, onglets compris) ; latent coloré ; téléphone 2 colonnes', () => {
   const links = [...html.matchAll(/<link[^>]*href="(css\/[^"?]+)\?v=([^"]+)"/g)];
   const last = links[links.length - 1]; assert.ok(last && last[1] === 'css/28-accueil-zones.css' && last[2] === TOK, 'dernier : ' + (last && last[1]));
   const css = rd('css/28-accueil-zones.css').replace(/\/\*[\s\S]*?\*\//g, '');
@@ -83,6 +83,11 @@ T('Z4 css/28-accueil-zones.css chargé en dernier au token ' + TOK + ' ; toutes 
   const hors = sels.filter(s => !/^#page0\b|^#statusBar\b/.test(s)); assert.deepStrictEqual(hors, [], 'règles hors accueil / en-tête');
   assert.ok(/#page0\s*\{[^}]*--fs-6:\s*11px[^}]*--fs-8:\s*11px/.test(css), 'variables --fs au plancher');
   assert.ok(/\[style\*="font-size:7px"\][\s\S]*font-size:\s*11px !important/.test(css), 'tailles en dur au plancher');
+  ['.pending-btn', '.pending-source', '.horizon-label', '.swarm-reason', '.cascade-time', '.heatmap-hours-labels', '.fleet-name-role'].forEach(c =>
+    assert.ok(css.includes('#page0 ' + c), c + ' au plancher (relecture du 13/11 : urgences et onglets de l\'Intelligence)'));
+  assert.ok(!/#openPnlBanner > div \{[^}]*border:/.test(css), 'la bordure verte / rouge du latent (08) n\'est pas écrasée');
+  assert.ok(!/#(wakeLockBtn|fpBtn|diagBtn)[^{]*\{[^}]*(transform|opacity)/.test(css), 'boutons ☾ ⚡ 🩺 : ni opacité ni transform (retour visuel à l\'appui gardé)');
+  assert.ok(/@media \(max-width: 420px\)[\s\S]*\.acc-acc-grid[^{]*\{[^}]*repeat\(2, 1fr\)/.test(css), 'téléphone : 2 colonnes');
 });
 
 // ── vm : le vrai texte de 09i (bloc GO CSS) ──
@@ -91,9 +96,9 @@ function ctx09i(store) {
   const mk = name => { const cls = new Set(); return { name, classList: { contains: c => cls.has(c), toggle: (c, on) => { if (on === undefined) on = !cls.has(c); on ? cls.add(c) : cls.delete(c); return on; }, add: c => cls.add(c), remove: c => cls.delete(c) } }; };
   const folds = Object.fromEntries(['tech', 'brain', 'intel', 'journal', 'twin'].map(n => [n, mk(n)]));
   const log = [];
-  const pg = { scrollTo: o => log.push(['scroll', o.top]) }, zone = { offsetTop: 2043 }, nav = { offsetHeight: 50 }, canvas = { style: { width: '0px', height: '0px' } };   // 03 initBrainNodes fige 0 px quand replié
+  const pg = { active: true, classList: { contains: c => c === 'active' && pg.active }, scrollTo: o => log.push(['scroll', o.top]) }, zone = { offsetTop: 2043 }, nav = { offsetHeight: 50 }, canvas = { style: { width: '0px', height: '0px' } };   // 03 initBrainNodes fige 0 px quand replié
   const c = {
-    log, folds, canvas, JSON, Object,
+    log, folds, canvas, pg, JSON, Object,
     localStorage: { getItem: k => (k in store ? store[k] : null), setItem: (k, v) => { store[k] = String(v); } },
     document: { readyState: 'complete', addEventListener: () => {}, querySelector: q => { const m = q.match(/data-fold="(\w+)"/); return m ? folds[m[1]] || null : null; },
       getElementById: id => ({ page0: pg, accComptes: zone, accNav: nav, brainCanvas: canvas }[id] || null) },
@@ -121,7 +126,7 @@ T('Z5 09i volets : fermés par défaut ; un appui ouvre et mémorise, un 2e refe
   const c3 = ctx09i({ aura_accueil_volets: '{pas du json' }); assert.ok(Object.values(c3.folds).every(f => !f.classList.contains('open')), 'stockage illisible → tout fermé');
 });
 
-T('Z6 09i : ouvrir le Brain le redessine à sa taille (style 0 px effacé, stop, _brainStaticDrawn = false, start) ; _accGo met la zone sous le sommaire', () => {
+T('Z6 09i : ouvrir le Brain le redessine à sa taille (style 0 px effacé, stop, _brainStaticDrawn = false, start) ; _accGo met la zone sous le sommaire, accueil affiché seulement', () => {
   const c = ctx09i({});
   vm.runInContext("_accFold('brain')", c);
   assert.deepStrictEqual(c.log, [['stop'], ['start', false]]);
@@ -129,6 +134,7 @@ T('Z6 09i : ouvrir le Brain le redessine à sa taille (style 0 px effacé, stop,
   c.log.length = 0; vm.runInContext("_accFold('brain')", c); assert.deepStrictEqual(c.log, [], 'refermer ne dessine rien');
   vm.runInContext("_accGo('accComptes')", c); assert.deepStrictEqual(c.log, [['scroll', 2043 - 50]]);
   c.log.length = 0; vm.runInContext("_accGo('zoneInconnue')", c); assert.deepStrictEqual(c.log, []);
+  c.pg.active = false; vm.runInContext("_accGo('accComptes')", c); assert.deepStrictEqual(c.log, [], 'accueil pas affiché : rien ne défile');
 });
 
 T('G #qPortfolio (10g _updateBotPauseBadge) et les 9 tuiles .wc-account (09m) dans #page0 ; toggleBar de 09i inchangée', () => {
@@ -137,7 +143,7 @@ T('G #qPortfolio (10g _updateBotPauseBadge) et les 9 tuiles .wc-account (09m) da
   assert.strictEqual((p0.match(/class="wc-account[ "]/g) || []).length, 9);
   assert.ok(rd('js/09m-wallet-detail.js').includes("e.target.closest('.wc-account')"));
   const tb = src09i.slice(src09i.indexOf('function toggleBar('), src09i.indexOf('window.toggleBar = toggleBar;'));
-  assert.strictEqual(require('crypto').createHash('sha256').update(tb).digest('hex'), 'b7c5b443277c81052be1d1cdab2d389f9b6e3ad80198611c4252e49fa74d0873', 'toggleBar identique au commit 81ede33');
+  assert.strictEqual(tb, fs.readFileSync(path.join(__dirname, 'banc-fixtures/togglebar-81ede33.txt'), 'utf8'), 'toggleBar identique au commit 81ede33');   // texte, pas d'empreinte (banc-p0b refuse 44+ hex dans un banc)
 });
 
 console.log('\n' + (fail ? '❌ ' + fail + ' échec(s)' : '✅ ' + pass + '/' + pass + ' tests passés'));

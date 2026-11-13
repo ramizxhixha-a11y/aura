@@ -158,7 +158,7 @@ function _accRestoreFolds() {
 // Sommaire : amène la zone sous le sommaire collant.
 function _accGo(zoneId) {
   const pg = document.getElementById('page0'), z = document.getElementById(zoneId), nav = document.getElementById('accNav');
-  if (!pg || !z) return;
+  if (!pg || !z || !pg.classList.contains('active')) return;   // seulement sur l'accueil affiché
   const top = Math.max(0, z.offsetTop - (nav ? nav.offsetHeight : 0));
   try { pg.scrollTo({ top, behavior: 'smooth' }); } catch (e) { pg.scrollTop = top; }
 }
