@@ -134,6 +134,10 @@ function renderMarket() {
   }
 
   // ── Pair selector (build once) ──
+  // [GO CSS · écran 3 · 14/11/2026] une puce par paire : la barre était bâtie UNE fois, avant que 11 ne recharge les paires ajoutées
+  // (sonde du 14/11 : 10 puces pour 12 paires, PEPE et EUR absentes) → rebâtie quand les paires changent ; elle va dans la barre de la paire (#mkPairBar)
+  { const _ps = document.getElementById('pairSelWrap');
+    if (_ps && _ps.children.length !== Object.keys(PAIRS).length) _ps.remove(); }
   if(!document.getElementById('pairSelWrap')){
     const wrap = document.getElementById('candle-wrap-top');
     if(wrap){
@@ -150,7 +154,8 @@ function renderMarket() {
         btn.innerHTML=`<span style="color:${c.color};margin-right:3px">●</span>${pair}`;
         sel.appendChild(btn);
       });
-      wrap.insertAdjacentElement('afterend',sel);
+      const _bar = document.getElementById('mkPairBar');
+      if (_bar) _bar.insertBefore(sel, _bar.firstChild); else wrap.insertAdjacentElement('afterend',sel);
     }
   }
   Object.keys(PAIRS).forEach(pair=>{
@@ -168,7 +173,7 @@ function renderMarket() {
     const _bull=_topA.filter(a=>(a.score||0)>0.05).length, _bear=_topA.filter(a=>(a.score||0)<-0.05).length;
     const _dir=_bull>_bear?'↑ HAUSSIER':_bear>_bull?'↓ BAISSIER':'→ NEUTRE';
     const _col=_bull>_bear?'var(--up)':_bear>_bull?'var(--down)':'var(--gold)';
-    const _chips=_topA.map(a=>{const cc=(a.score||0)>0.05?'var(--up)':(a.score||0)<-0.05?'var(--down)':'var(--gold)';return `<span style="background:var(--s2);border:1px solid ${cc}33;border-radius:6px;padding:3px 7px;font-size:9px;color:${cc};">${a.emoji} ${((a.score||0)>=0?'+':'')+((a.score||0).toFixed(2))}</span>`;}).join('');
+    const _chips=_topA.map(a=>{const cc=(a.score||0)>0.05?'var(--up)':(a.score||0)<-0.05?'var(--down)':'var(--gold)';return `<span style="background:var(--s2);border:1px solid ${cc}33;border-radius:6px;padding:3px 7px;font-size:9px;color:${cc};">${a.type || a.name} ${((a.score||0)>=0?'+':'')+((a.score||0).toFixed(2))}</span>`;}).join('');   // [GO CSS · écran 3] la spécialité, pas 🧬 (tous les sièges portent 🧬)
     _consMkt.innerHTML=`<div style="display:flex;align-items:center;gap:5px;flex-wrap:wrap;padding:4px 0;"><span style="font-size:9px;font-weight:700;color:${_col};background:${_col}22;padding:3px 8px;border-radius:6px;white-space:nowrap;">${_dir}</span>${_chips}</div>`;
   }
 }

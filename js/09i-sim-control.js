@@ -248,3 +248,48 @@ window._agFold = _agFold;
 window._agBrefRender = _agBrefRender;
 if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', _agInit);
 else _agInit();
+
+// ──────────────────────────────────────────────────────────────────────
+// [GO CSS · écran 3 · 14/11/2026] Écran Marché par priorité — analyse de la paire au doigt, volets Agents et Veille.
+// Rams 14/11 11:49 « Go css », maquette montrée puis « Go » (12:01). Affichage seul : rien n'est lu ni écrit dans S, aucune décision touchée,
+// aucun rendu de 08 n'est appelé plus ou moins souvent (la matrice est seulement redessinée à l'ouverture de son volet).
+//  · analyse : Technique et Fondamentale montrent leur verdict et leur score ; un appui sur l'une ouvre le détail de ses indicateurs (classe
+//    mk-open sur le conteneur #technicalPanel / #fundamentalPanel, qui survit aux rendus de 08 toutes les 5 s), un 2e le referme.
+//  · volets : fermés par défaut, état gardé dans localStorage 'aura_marche_volets' (préférence d'affichage, hors snapshot) ; à l'ouverture du
+//    volet Agents, la matrice de corrélation est redessinée à sa vraie largeur (08 renderCorrMatrix la dessine sur 300 px tant qu'elle est cachée).
+// ──────────────────────────────────────────────────────────────────────
+const MK_FOLDS_KEY = 'aura_marche_volets';
+function _mkFoldState() {
+  try { const o = JSON.parse(localStorage.getItem(MK_FOLDS_KEY) || '{}'); return (o && typeof o === 'object') ? o : {}; } catch (e) { return {}; }
+}
+function _mkFold(name, force, silent) {
+  const el = document.querySelector('#page2 .mk-fold[data-fold="' + name + '"]');
+  if (!el) return false;
+  const open = (typeof force === 'boolean') ? force : !el.classList.contains('open');
+  el.classList.toggle('open', open);
+  if (!silent) {
+    const st = _mkFoldState();
+    if (open) st[name] = 1; else delete st[name];
+    try { localStorage.setItem(MK_FOLDS_KEY, JSON.stringify(st)); } catch (e) {}
+    if (open && name === 'agents') {
+      try { if (typeof _corrLastTick !== 'undefined') _corrLastTick = -10; if (typeof renderCorrMatrix === 'function') renderCorrMatrix(); } catch (e) {}
+    }
+  }
+  return open;
+}
+function _mkRestoreFolds() {
+  const st = _mkFoldState();
+  Object.keys(st).forEach(n => _mkFold(n, true, true));
+}
+function _mkAnaTap(e) {
+  const p = e.target && e.target.closest ? e.target.closest('.mk-ana') : null;
+  if (p) p.classList.toggle('mk-open');
+}
+function _mkInit() {
+  const d = document.getElementById('mkDuo');
+  if (d && !d.dataset.mkTap) { d.dataset.mkTap = '1'; d.addEventListener('click', _mkAnaTap); }
+  _mkRestoreFolds();
+}
+window._mkFold = _mkFold;
+if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', _mkInit);
+else _mkInit();

@@ -121,9 +121,12 @@ T('A4 03 filterAgents : les titres suivent le filtre ; 08 : chaque case de la ma
   assert.ok(/if\(idx === 1\) \{ setTimeout\(\(\)=>\{ renderAgentHeatmap\(\); try \{ if \(typeof _agBrefRender === 'function'\) _agBrefRender\(\);/.test(src02), '02 goPage(1) → _agBrefRender');
 });
 
-T('A5 css/29-agents-zones.css chargé en dernier au token ' + TOK + ' ; toutes ses règles visent #page1 ; plancher 11 px (Évolution comprise) ; compacte / ouverte ; téléphone 1 colonne', () => {
+T('A5 css/29-agents-zones.css chargé après tous les styles d\'avant au token ' + TOK + ' (après lui : seuls les écrans suivants du go css, css/30+) ; toutes ses règles visent #page1 ; plancher 11 px (Évolution comprise) ; compacte / ouverte ; téléphone 1 colonne', () => {
   const links = [...html.matchAll(/<link[^>]*href="(css\/[^"?]+)\?v=([^"]+)"/g)];
-  const last = links[links.length - 1]; assert.ok(last && last[1] === 'css/29-agents-zones.css' && last[2] === TOK, 'dernier : ' + (last && last[1]));
+  // [GO CSS · écran 3 · 14/11/2026] css/30-marche-zones.css (écran Marché, visé à #page2) se charge désormais après lui
+  const i29 = links.findIndex(l => l[1] === 'css/29-agents-zones.css');
+  assert.ok(i29 >= 0 && links[i29][2] === TOK, 'css/29 au token');
+  assert.deepStrictEqual(links.slice(i29 + 1).filter(l => !/^css\/([3-9]\d)-/.test(l[1])).map(l => l[1]), [], 'après css/29 : seuls css/30+');
   const css = rd('css/29-agents-zones.css').replace(/\/\*[\s\S]*?\*\//g, '');
   const sels = []; css.replace(/([^{}]+)\{/g, (m, s) => { s = s.trim(); if (!s.startsWith('@')) sels.push(...s.split(',').map(x => x.trim())); return m; });
   assert.ok(sels.length > 40, sels.length + ' sélecteurs');
@@ -154,7 +157,9 @@ function ctx09i(store, agents) {
     window: {}, renderAgentHeatmap: () => log.push(['heatmap']) };
   vm.createContext(c);
   if (K < 0) throw new Error('bloc écran 2 absent de 09i');
-  vm.runInContext(src09i.slice(src09i.lastIndexOf('\n// ───', K)), c);
+  // le bloc écran 2 seul : de son en-tête au bloc suivant (écran 3, [GO CSS · écran 3 · 14/11/2026]) ou à la fin du fichier
+  const d0 = src09i.lastIndexOf('\n// ───', K), d1 = src09i.indexOf('\n// ───', src09i.indexOf('\n// ───', K) + 5);
+  vm.runInContext(src09i.slice(d0, d1 < 0 ? undefined : d1), c);
   return c;
 }
 
