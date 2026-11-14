@@ -98,7 +98,9 @@ const _LIGHT_KEYS = [
   // GO ALERTES · 18/10/2026 (sans crochets : banc-p0b-newskey lit cette liste jusqu'au premier crochet fermant) — tes alertes et les seuils des alertes
   // P&L : petits, et l'écran promet qu'ils sont gardés d'une relance à l'autre ; sans eux ici, un chargement où l'IDB n'a rien rendu (LS allégé seul,
   // plus bas) les perdait quand même (relecture adverse du 18/10, 2e passage)
-  'priceAlerts','pnlAlerts'
+  'priceAlerts','pnlAlerts',
+  // GO ALERTES 2 · 14/11/2026 (n° 34b) — le Twin de chaque mode : 50 trades virtuels au plus par mode, petit
+  'twinByMode'
 ];
 
 // Copie allegee pour le LS : UNIQUEMENT les cles de la liste blanche.
@@ -597,6 +599,7 @@ async function loadState() {
     if (snap.capRules && typeof snap.capRules === 'object')                   S.capRules          = snap.capRules;          // [PLAFONDS APPRIS · 22/09/2026]
     if (snap._manConsignes && typeof snap._manConsignes === 'object')         S._manConsignes     = snap._manConsignes;     // [CONSIGNES · 06/10/2026] tes consignes par paire
     if (snap.tendance && typeof snap.tendance === 'object')                   S.tendance          = snap.tendance;          // [VOIX TENDANCE LONGUE · 07/10/2026] poche de la voix (15)
+    if (snap.twinByMode && typeof snap.twinByMode === 'object') { try { const f = (typeof window !== 'undefined') ? window._twinSane : null; if (typeof f === 'function') S.twinByMode = f(snap.twinByMode); } catch(e) {} }   // [GO ALERTES 2 · 14/11/2026] (n° 34b) Twin par mode, relu champ par champ (07 _twinSane)
     if (snap.fiscalCfg && typeof snap.fiscalCfg === 'object')                 S.fiscalCfg         = snap.fiscalCfg;         // [GO FISCAL · 07/10/2026] réglages du registre fiscal (16)
     try { _reglagesRelus(snap); } catch(e) { dbg.push('reglages:err'); }                                                   // [GO RÉGLAGES · 14/10/2026] réglages de l'écran (ETAT n° 13)
     if (snap._gbpToBnbDone) S._gbpToBnbDone = true;
@@ -850,7 +853,14 @@ async function loadState() {
         }
         _w.portfolio = _wpf;
         _w._startPortfolio = _wpf;
-        if (_w.pnlPeriod && typeof _w.pnlPeriod === 'object') _w.pnlPeriod.todayStartPortfolio = (typeof _pnlBasis === 'function') ? _pnlBasis(_w) : _wpf;   // [GO LEVIER 56 · 27/10/2026] l'argent à Rams ; _startPortfolio (lu par le Rescue Bot) reste le portefeuille canonique
+        // [GO ALERTES 2 · 14/11/2026] (ETAT n° 67, relecture adverse du 14/11) la base du JOUR sauvée aujourd'hui est gardée : c'est celle de minuit (10c
+        // _checkAndRotatePeriods). Avant : remise à l'argent du moment à CHAQUE chargement — « aujourd'hui » (accueil, panneau des périodes, alerte « du jour ») voulait
+        // dire « depuis la relance », et la perte faite entre minuit et la relance n'était comptée nulle part. Une base d'un autre jour, absente ou non finie : recalée
+        // comme avant. Lue par l'affichage et les alertes seulement ; _startPortfolio (lu par le Rescue Bot) est recalé comme avant.
+        var _tk = (typeof _getTodayKey === 'function') ? _getTodayKey() : null;
+        var _tsp = _w.pnlPeriod && _w.pnlPeriod.todayStartPortfolio;
+        var _garde = !!(_tk && _w.pnlPeriod && _w.pnlPeriod.todayDate === _tk && typeof _tsp === 'number' && isFinite(_tsp));
+        if (_w.pnlPeriod && typeof _w.pnlPeriod === 'object' && !_garde) _w.pnlPeriod.todayStartPortfolio = (typeof _pnlBasis === 'function') ? _pnlBasis(_w) : _wpf;   // [GO LEVIER 56 · 27/10/2026] l'argent à Rams ; _startPortfolio (lu par le Rescue Bot) reste le portefeuille canonique
       });
     }
   } catch(e) { dbg.push('startPf-recal:err'); }
@@ -1339,4 +1349,4 @@ setTimeout(_auraRotatePurge, 20000);
 // relue » — le bug du 16/08 (7 clés perdues à chaque boot) devient structurellement
 // détectable. RÈGLE : toute clé ajoutée à 09b1 s'ajoute à applySnap ET ici.
 window._WALLET_MIRRORS = ['portfolio','totalTrades','winTrades','leverageReserve','leverageTotalFees','fiscalReserveLog','cashLog','ownFundsInjected','_ownFundsLegacyEUR','ownFundsLog','_autoLevBase','dreamJournal'];
-window._APPLYSNAP_MANIFEST = ['genome','genomeHistory','pairGenome','pairGenomeHistory','_pairGenomeDay','attribution','horizonRules','capRules','_manConsignes','tendance','fiscalCfg','antiRevengeCfg','bunkerCfg','vacancesCfg','soundCfg','notifConfig','toastVerbose','priceAlerts','pnlAlerts','_gbpToBnbDone','_realJudgments','_lossStreaks','gainRules','stopRules','fitWindowRule','botMerit','dcVoices','dcThreshold','_botPredictions','_botMeritMigrated','evoTrials','evoMerit','_metaMeritMigrated','_lastEvolutionAt','_lastDreamAt','_abstMigrated','_degelMigrated','eventLog','eventStats','feeConfig','vMinor','pairBestWorst','profitSplitCaissePct','vMajor','fiatConvFeePct','agentMemories','globalMemoryPool','dreams','dynamicPairKeys','pairCandidates','proposals','decisionCascade','resonanceHistory','mutedAgents','agentLessons','realTimeframe','realActivePairs','agentLessonsReal','realKillSwitch','realModeStartedAt','preRealSnapshot','agentLessonsPaperReal','paperRealTimeframe','paperRealStartedAt','paperRealKillSwitch','paperRealLastClose','paperRealConsecLosses','paperRealGlobalPauseUntil','_genCount','key','cycle','cycleMax','chainLog','learningHistory','evoLog','agents','pairStates','walletStore','openPositions','pendingActions','botFleet','paperRealConfig','adaptiveState','abTesting','taxConfig','realCandles','preRealSnapshotPaperReal','heatmap','shadow','archives','paperRealStats','realStatsByPair','paperRealActivePairs','fees','tradeContextMemory','agentPairSkill','customPairs','removedPairs','botDisciples','discipleTasks','discipleAngles','discipleTaskSkill','savedAt','version','tradingMode','botAutoMode','fullPowerMode','leverage','_autoLevBorrowed','leverageBorrowed','cashAccount','tradingAccount','fiscalReserveAccount','antiNegReserve','_startPortfolio','_fleetTruthReset0908','_totalCompounded','brainLog','_errStats','_riskVetoes','_botSurplusCarry','evoRule','mktLog','mktStats','_fpByBot','perfLog'];
+window._APPLYSNAP_MANIFEST = ['genome','genomeHistory','pairGenome','pairGenomeHistory','_pairGenomeDay','attribution','horizonRules','capRules','_manConsignes','tendance','fiscalCfg','twinByMode','antiRevengeCfg','bunkerCfg','vacancesCfg','soundCfg','notifConfig','toastVerbose','priceAlerts','pnlAlerts','_gbpToBnbDone','_realJudgments','_lossStreaks','gainRules','stopRules','fitWindowRule','botMerit','dcVoices','dcThreshold','_botPredictions','_botMeritMigrated','evoTrials','evoMerit','_metaMeritMigrated','_lastEvolutionAt','_lastDreamAt','_abstMigrated','_degelMigrated','eventLog','eventStats','feeConfig','vMinor','pairBestWorst','profitSplitCaissePct','vMajor','fiatConvFeePct','agentMemories','globalMemoryPool','dreams','dynamicPairKeys','pairCandidates','proposals','decisionCascade','resonanceHistory','mutedAgents','agentLessons','realTimeframe','realActivePairs','agentLessonsReal','realKillSwitch','realModeStartedAt','preRealSnapshot','agentLessonsPaperReal','paperRealTimeframe','paperRealStartedAt','paperRealKillSwitch','paperRealLastClose','paperRealConsecLosses','paperRealGlobalPauseUntil','_genCount','key','cycle','cycleMax','chainLog','learningHistory','evoLog','agents','pairStates','walletStore','openPositions','pendingActions','botFleet','paperRealConfig','adaptiveState','abTesting','taxConfig','realCandles','preRealSnapshotPaperReal','heatmap','shadow','archives','paperRealStats','realStatsByPair','paperRealActivePairs','fees','tradeContextMemory','agentPairSkill','customPairs','removedPairs','botDisciples','discipleTasks','discipleAngles','discipleTaskSkill','savedAt','version','tradingMode','botAutoMode','fullPowerMode','leverage','_autoLevBorrowed','leverageBorrowed','cashAccount','tradingAccount','fiscalReserveAccount','antiNegReserve','_startPortfolio','_fleetTruthReset0908','_totalCompounded','brainLog','_errStats','_riskVetoes','_botSurplusCarry','evoRule','mktLog','mktStats','_fpByBot','perfLog'];

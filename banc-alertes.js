@@ -169,7 +169,8 @@ const pause = ms => new Promise(r => setTimeout(r, ms));
     vm.runInContext(NOTIF + '\n' + TWIN, a.ctx); a.ctx.sendNotif = (t, b) => got.push(b);
     a.S.notifConfig = { enabled: true, twinAlert: true, lastNotifTs: 0 };
     a.S.portfolio = 105; a.S._startPortfolio = 100; a.S.currentPage = 1;
-    a.ctx._initTwin(); Object.assign(a.S.twin, { active: true, virtualPnl: 4, trades: [{}, {}, {}] });
+    // [GO ALERTES 2 · 14/11/2026] le bot se mesure depuis l'activation du Twin (07 _twinBotPnl, base botBase posée à l'activation) : ici activé à 100 $
+    a.ctx._initTwin(); Object.assign(a.S.twin, { active: true, virtualPnl: 4, trades: [{}, {}, {}], botBase: 100, botInj: 0 });
     a.ctx.tickTwinLive(); assert.strictEqual(got.length, 0, 'bot devant');
     a.S.twin.virtualPnl = 7.5; a.ctx.tickTwinLive(); a.ctx.tickTwinLive();
     assert.strictEqual(got.length, 1, 'notifié ' + got.length + ' fois'); assert.ok(/Twin \+\$2\.50 devant le bot sur 3 trades/.test(got[0]), got[0]);
@@ -217,16 +218,19 @@ const pause = ms => new Promise(r => setTimeout(r, ms));
     assert.ok(i > b && i < r, 'appel hors du rendu, après les modes d\'arrière-plan'); assert.ok(/_tgHebdoTick\(\)/.test(s08.slice(b, r)), 'résumé');
     assert.ok(!/checkPriceAlerts\(\)/.test(code(fnSrc(s07, 'renderHome'))), 'renderHome');
   });
-  await T('A10 · « 💰 Objectif P&L » (04 checkPnlAlerts RÉEL) : « Gain session » et « Gain journalier » déclenchés → Telegram ; une fois par période comme l\'écran ; pertes → rien sur cet interrupteur', () => {
-    const a = app(), goals = [];
+  // [GO ALERTES 2 · 14/11/2026] (ETAT n° 67) « session » = depuis le lancement de l'app (base au 1er contrôle, sur l'argent à Rams _pnlBasis) ; « du jour » = depuis
+  // minuit en $ (today.usd) — avant : session = le jour, et « journalier » lisait S.pnl24h, un POURCENTAGE (ici 60, qui ne doit plus rien déclencher)
+  await T('A10 · « 💰 Objectif P&L » (04 checkPnlAlerts RÉEL) : « Gain session » et « Gain du jour » déclenchés → Telegram ; une fois par période comme l\'écran ; pertes → rien sur cet interrupteur', () => {
+    const a = app(), goals = []; let basis = 1000;
     a.ctx.tgOnPnlGoal = t => goals.push(t); a.ctx.sendNotif = () => {}; a.ctx.notifDrawdown = () => {};
-    a.ctx._computePnlByPeriod = () => ({ today: { hasData: true, usd: 12.5 } });
+    a.ctx._pnlBasis = () => basis; a.ctx._computePnlByPeriod = () => ({ today: { hasData: true, usd: 55 } });
     a.S.pnl24h = 60; a.S.perf = { maxDrawdown: 0 }; a.S.totalTrades = 3;
     // [GO NETTOYAGE · 18/10/2026] + _alertMode / _alertFired / _alertFire (04 : « déjà déclenchée » par mode, ETAT n° 35 — banc-nettoyage-promesses.js B1-B3)
     vm.runInContext(fnSrc(s04, '_initAlerts') + '\n' + (has(s04, '_alertModeLab') ? fnSrc(s04, '_alertModeLab') : '') + '\n' + ['_alertMode', '_alertFired', '_alertFire'].map(f => has(s04, f) ? fnSrc(s04, f) + '\n' : '').join('') + fnSrc(s04, 'checkPnlAlerts'), a.ctx);
-    a.ctx.checkPnlAlerts(); a.ctx.checkPnlAlerts();
-    assert.strictEqual(goals.length, 2, 'objectifs : ' + goals.length);
-    assert.ok(/^EV · Gain session ≥ \$10 : \+\$12\.50/.test(goals[0]) && /^EV · Gain journalier ≥ \$50 : \+\$60\.00/.test(goals[1]), goals.join(' / '));
+    a.ctx.checkPnlAlerts();   // 1er contrôle : base de la session = 1 000 $ ; le jour (+55 $) passe le seuil de 50 $
+    basis = 1012.5; a.ctx.checkPnlAlerts(); a.ctx.checkPnlAlerts();
+    assert.strictEqual(goals.length, 2, 'objectifs : ' + goals.join(' / '));
+    assert.ok(/^EV · Gain du jour ≥ \$50 : \+\$55\.00 depuis minuit/.test(goals[0]) && /^EV · Gain session ≥ \$10 : \+\$12\.50 depuis le lancement/.test(goals[1]), goals.join(' / '));
   });
   await T('A11 · « 📅 Résumé de la semaine » (06 RÉEL) : part SEUL tous les 7 jours (premier envoi 7 jours après la mise en route), pas avant ; trades fermés et P&L brut des 7 jours d\'EV / RE / AA ; échec réseau → nouvel essai dans 1 h', async () => {
     const a = app(); const ls = a.ctx.localStorage; const J7 = 7 * 86400000;
@@ -401,7 +405,8 @@ const pause = ms => new Promise(r => setTimeout(r, ms));
     const a = app({ document: fakeDoc(['alertsSection', 'alertsSection2']) });
     a.S.portfolio = 0; a.S.totalTrades = 0; a.S.perf = {};
     // [GO NETTOYAGE · 18/10/2026] + _alertMode / _alertFired (04, ETAT n° 35 : « ✅ Déclenchée » du mode affiché)
-    vm.runInContext(fnSrc(s04, '_initAlerts') + '\n' + ['_alertMode', '_alertFired'].map(f => has(s04, f) ? fnSrc(s04, f) + '\n' : '').join('') + fnSrc(s04, '_getGoals') + '\n' + fnSrc(s04, 'renderAlertsSection') + '\n' + fnSrc(s04, 'toggleAlert'), a.ctx);
+    // [GO ALERTES 2 · 14/11/2026] + _alertWinStreak (04 : le jalon « Série de 5 » lit la série du mode, ETAT n° 67)
+    vm.runInContext(fnSrc(s04, '_initAlerts') + '\n' + ['_alertMode', '_alertFired', '_alertWinStreak'].map(f => has(s04, f) ? fnSrc(s04, f) + '\n' : '').join('') + fnSrc(s04, '_getGoals') + '\n' + fnSrc(s04, 'renderAlertsSection') + '\n' + fnSrc(s04, 'toggleAlert'), a.ctx);
     a.ctx.toggleAlert('tradeCount');
     assert.ok(a.ctx.document.els.alertsSection2.innerHTML.length > 100, 'section visible non re-rendue');
   });

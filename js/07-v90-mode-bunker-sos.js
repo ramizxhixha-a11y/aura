@@ -735,7 +735,7 @@ function _citContextual() {
   const n  = S.totalTrades||0;
   const wr = n>0?Math.round((S.winTrades||0)/n*100):0;
   const lastTrades = Object.values(S.pairStates||{}).flatMap(ps=>
-    (ps.trades||[]).filter(t=>t.type==='position'&&t.ts).sort((a,b)=>b.ts-a.ts).slice(0,3)
+    (ps.trades||[]).filter(t=>_isCloseRow(t)&&t.ts).sort((a,b)=>b.ts-a.ts).slice(0,3)   // [GO ALERTES 2 · 14/11/2026] (n° 81) toutes les fermetures, voix et urgence comprises (02 _isCloseRow)
   );
   const recentLoss = lastTrades.filter(t=>(t.pnlUsdt||0)<0).length;
 
@@ -2033,8 +2033,20 @@ window.renderNotifSettings = renderNotifSettings;
 // Aucun capital réel engagé — observation pure
 // ═══════════════════════════════════════════════════════════════════
 
+// [GO ALERTES 2 · 14/11/2026] (ETAT n° 34b) un Twin PAR MODE : S.twinByMode = { sim, paperReal, real }, S.twin = celui du mode traité (chaque fonction du Twin
+// appelle _initTwin d'abord). Avant : un seul S.twin pour les 3 modes — une position virtuelle ouverte sur les prix fabriqués de l'AA était fermée sur ceux de
+// l'EV après une bascule d'écran, et son P&L comparé à celui d'un autre portefeuille. Sauvé (09b1 twinByMode → 09b2 _twinSane) : avant, jamais sauvegardé,
+// le Twin redevenait inactif et vide à chaque relance.
 function _initTwin() {
-  if(!S.twin) S.twin = {
+  if (!S.twinByMode || typeof S.twinByMode !== 'object' || Array.isArray(S.twinByMode)) S.twinByMode = {};
+  const m = (typeof _walletKey === 'function') ? _walletKey(S.tradingMode) : (S.tradingMode || 'sim');
+  const t0 = S.twinByMode[m];
+  // un Twin mal formé (import « MAX permissif » qui copie le champ brut, relecture adverse du 14/11) est relu par _twinSane — sinon chaque tick levait
+  if (!t0 || typeof t0 !== 'object' || !Array.isArray(t0.trades) || !t0.openPos || typeof t0.openPos !== 'object' || Array.isArray(t0.openPos)) S.twinByMode[m] = _twinSane({ [m]: t0 })[m] || _twinFresh();
+  S.twin = S.twinByMode[m];
+}
+function _twinFresh() {
+  return {
     active:     false,
     virtualPnl: 0,
     wins:       0,
@@ -2047,6 +2059,44 @@ function _initTwin() {
     maxConcurrent: 3,      // max 3 positions simultanées
   };
 }
+// Relecture d'un Twin venu d'un fichier (09b2) : champs connus, du bon type ; 50 trades au plus ; positions virtuelles sur des paires connues seulement
+function _twinSane(src) {
+  const out = {};
+  if (!src || typeof src !== 'object' || Array.isArray(src)) return out;
+  const num = (v, d) => (typeof v === 'number' && isFinite(v)) ? v : d;
+  ['sim', 'paperReal', 'real'].forEach(m => {
+    const t = src[m]; if (!t || typeof t !== 'object' || Array.isArray(t)) return;
+    const f = _twinFresh();
+    f.active = t.active === true;
+    f.virtualPnl = num(t.virtualPnl, 0); f.wins = Math.max(0, Math.round(num(t.wins, 0))); f.losses = Math.max(0, Math.round(num(t.losses, 0)));
+    f.lmsrThreshold = num(t.lmsrThreshold, f.lmsrThreshold); f.stakeMultiplier = num(t.stakeMultiplier, f.stakeMultiplier); f.maxConcurrent = Math.max(0, Math.round(num(t.maxConcurrent, f.maxConcurrent)));
+    if (t._devant === true) f._devant = true;
+    if (typeof t.botBase === 'number' && isFinite(t.botBase)) { f.botBase = t.botBase; f.botInj = num(t.botInj, 0); }
+    f.trades = (Array.isArray(t.trades) ? t.trades : []).filter(x => x && typeof x === 'object' && typeof x.pair === 'string' && isFinite(Number(x.virtualPnl))).slice(-50)
+      .map(x => ({ ts: num(x.ts, 0), pair: x.pair, side: x.side === 'short' ? 'short' : 'long', virtualPnl: Number(x.virtualPnl), realPnl: null, stake: num(x.stake, 0), pnlPct: num(x.pnlPct, 0) }));
+    const op = (t.openPos && typeof t.openPos === 'object' && !Array.isArray(t.openPos)) ? t.openPos : {};
+    Object.keys(op).forEach(p => {
+      const o = op[p];
+      if (typeof PAIRS === 'undefined' || !PAIRS[p] || !o || typeof o !== 'object' || !(Number(o.entryPrice) > 0)) return;
+      f.openPos[p] = { side: o.side === 'short' ? 'short' : 'long', entryPrice: Number(o.entryPrice), stake: num(o.stake, 0), ts: num(o.ts, 0) };
+    });
+    out[m] = f;
+  });
+  return out;
+}
+// [GO ALERTES 2 · 14/11/2026] (relecture adverse du 14/11) le P&L du BOT comparé au Twin se mesure depuis l'ACTIVATION du Twin (base posée par toggleTwinLive,
+// sauvée avec lui), sur l'argent à Rams (02 _pnlBasis), injection retranchée. Avant : S.portfolio − S._startPortfolio, recalé à chaque chargement (09b2) —
+// un Twin sauvé et relu aurait comparé son cumul depuis l'activation à un bot remis à 0 par la relance (« Twin devant » faux, notifié).
+function _twinBotPnl(tw) {
+  tw = tw || S.twin;
+  const now = (typeof _pnlBasis === 'function') ? Number(_pnlBasis()) : (Number(S.portfolio) || 0);
+  const inj = Number(S.ownFundsInjected) || 0;
+  if (!tw || !isFinite(now)) return 0;
+  if (!(typeof tw.botBase === 'number' && isFinite(tw.botBase))) { tw.botBase = now; tw.botInj = inj; }
+  if (inj < (Number(tw.botInj) || 0)) tw.botInj = inj;
+  return (now - tw.botBase) - (inj - (Number(tw.botInj) || 0));
+}
+window._initTwin = _initTwin; window._twinSane = _twinSane; window._twinBotPnl = _twinBotPnl;
 
 // Le Twin "décide" en parallèle — [GO NETTOYAGE · 18/10/2026] (ETAT n° 34) appelé par le battement (08 simTick, 1 tick sur 4), plus par l'ouverture de l'accueil
 function tickTwinLive() {
@@ -2114,14 +2164,18 @@ function tickTwinLive() {
 
   // [GO ALERTES · 15/10/2026] « 👯 Twin Live alerte · quand le Twin passe devant le bot » : notifTwinAlert n'avait aucun appelant. Même lecture que
   // l'encart (_twinVerdict, aussi utilisé par renderTwinLive) : une notification quand le verdict DEVIENT « Twin devant », pas à chaque tick.
+  // [GO ALERTES 2 · 14/11/2026] (ETAT n° 34b) hystérésis : l'alerte n'est réarmée que quand le BOT repasse devant (ou Twin coupé / moins de 3 trades) — avant,
+  // un écart qui oscillait autour de 1 $ (« Twin devant » ↔ « égal ») renvoyait la notification à chaque passage. Le message dit le mode (« EV · Twin … »).
+  const _behindTw = (typeof _modeBehind === 'function') && _modeBehind() === true;
   try {
     const v = _twinVerdict();
-    if (v.etat === 'twin' && S.twin._devant !== true) { S.twin._devant = true; notifTwinAlert(`Twin +$${v.delta.toFixed(2)} devant le bot sur ${v.n} trades`); }
-    else if (v.etat !== 'twin') S.twin._devant = false;
+    const lab = (typeof _modeLab === 'function') ? _modeLab(S.tradingMode) + ' · ' : '';
+    if (v.etat === 'twin' && S.twin._devant !== true) { S.twin._devant = true; if (!(_behindTw && S.tradingMode === 'sim')) notifTwinAlert(lab + `Twin +$${v.delta.toFixed(2)} devant le bot sur ${v.n} trades`); }
+    else if (v.etat === 'bot' || v.etat === 'attente' || v.etat === 'inactif') S.twin._devant = false;
   } catch(e) {}
 
-  // Rafraîchir UI si sur la page HOME
-  if(S.currentPage === 0) {
+  // Rafraîchir UI si sur la page HOME — [GO ALERTES 2] seulement pour le mode à l'écran (un mode derrière l'écran fait avancer SON Twin, 08 _bgModeWatch)
+  if(S.currentPage === 0 && !_behindTw) {
     try { renderTwinLive(); } catch(e) {}
   }
 }
@@ -2130,7 +2184,7 @@ window.tickTwinLive = tickTwinLive;
 function _twinVerdict() {
   _initTwin();
   const twin = S.twin, n = twin.trades.length;
-  const mainPnl = (S.portfolio && S._startPortfolio ? (S.portfolio - S._startPortfolio) : 0);
+  const mainPnl = _twinBotPnl(twin);   // [GO ALERTES 2 · 14/11/2026] depuis l'activation du Twin — avant : portefeuille − _startPortfolio (recalé à chaque chargement)
   const delta = twin.virtualPnl - mainPnl;
   if (!twin.active && n === 0) return { etat: 'inactif', n: n, delta: delta, mainPnl: mainPnl };
   if (n < 3) return { etat: 'attente', n: n, delta: delta, mainPnl: mainPnl };
@@ -2142,6 +2196,11 @@ window._twinVerdict = _twinVerdict;
 function toggleTwinLive() {
   _initTwin();
   S.twin.active = !S.twin.active;
+  // [GO ALERTES 2 · 14/11/2026] une activation ouvre une observation neuve : le Twin et le bot partent du même instant (base du bot posée ici, réglages gardés)
+  if (S.twin.active) {
+    const k = _twinFresh(); ['virtualPnl', 'wins', 'losses', 'trades', 'openPos'].forEach(f => { S.twin[f] = k[f]; });
+    delete S.twin._devant; delete S.twin.botBase; _twinBotPnl(S.twin);
+  }
   renderTwinLive();
   const btn = document.querySelector('.twin-toggle');
   if(btn) btn.textContent = S.twin.active ? 'Désactiver' : 'Activer';
@@ -2168,7 +2227,7 @@ function renderTwinLive() {
   if(toggleBtn) toggleBtn.textContent = twin.active ? 'Désactiver' : 'Activer';
 
   // P&L bot principal
-  const mainPnl = (S.portfolio && S._startPortfolio ? (S.portfolio - S._startPortfolio) : 0);   // [MÉNAGE · 23/09/2026] idem Miroir : sans _totalCompounded
+  const mainPnl = _twinBotPnl(twin);   // [GO ALERTES 2 · 14/11/2026] depuis l'activation du Twin (avant : portefeuille − _startPortfolio, recalé à chaque chargement)
   const mainWr  = S.totalTrades > 0 ? Math.round(S.winTrades / S.totalTrades * 100) : 0;
   const twinWr  = (twin.wins + twin.losses) > 0 ? Math.round(twin.wins / (twin.wins + twin.losses) * 100) : 0;
 
@@ -2261,7 +2320,7 @@ function computeTrustScore() {
   else if (sharpe < 0.5) { score -= 3; }
 
   // 4. P&L net (max -15 pts)
-  const pnlNet = S.fees?.totalPnlNet || 0;
+  const pnlNet = (typeof _feesNetTotal === 'function') ? _feesNetTotal() : (S.fees?.totalPnlNet || 0);   // [GO ALERTES 2 · 14/11/2026] (n° 96) le net de l'écran Fiscal
   const portfolio = S.portfolio || 0;
   if (portfolio > 0 && pnlNet < 0) {
     const pnlPct = Math.abs(pnlNet) / portfolio;
@@ -4814,8 +4873,9 @@ window._toggleHeroBk = function(which){
        +_tile('\ud83c\udfe6','Caisse',fmt$2(S.cashAccount||0),'')
        +_tile('\ud83c\udfdb\ufe0f','Réserve fiscale',fmt$2(S.fiscalReserveAccount||0),'')
        +_tile('\ud83e\uddfe','Provisions taxes',fmt$2(S.antiNegTaxPart||0),'')
-       +_tile('\ud83e\ude99','Réserve frais',fmt$2((S.fees&&S.fees.feeReserveAccount)||0),'')
-       +_tile('\u23f3','Funding payé (info)',fmt$2(((S.fees&&S.fees.totalFunding)||0)+(S.leverageTotalFees||0)),'déjà provisionné : réserves fiscale+frais')
+       // [GO ALERTES 2 · 14/11/2026] (ETAT n° 77) la « réserve frais » est le cumul des frais déjà payés : affichée pour info, HORS total (02 computePortfolioTotal)
+       +_tile('\ud83e\ude99','Frais payés (info)',fmt$2((S.fees&&S.fees.feeReserveAccount)||0),'cumul · déjà sortis du trading, hors total')
+       +_tile('\u23f3','Funding payé (info)',fmt$2(((S.fees&&S.fees.totalFunding)||0)+(S.leverageTotalFees||0)),'déjà sorti du trading, hors total')
        +((()=>{ const d=_heroDebtParts(); if(!(d.debt>0.005)) return '';   // [GO LEVIER 56 · 27/10/2026]
            return _tile('\u26a1','Dont emprunté',fmt$2(d.debt),'levier : compté dans le total, à rendre','neg')
                  +_tile('\ud83d\ude4b','À toi',fmt$2(_pnlBasis()),'caisse + trading + mises − emprunt'+(d.due>0.005?' − frais dus':''),'cy'); })())
@@ -4873,27 +4933,24 @@ function renderHomePrices() {
   // ═══ v8.0 LIVRAISON 25 · P&L de la JOURNÉE (recalibrage minuit) ═══
   // Plus de calcul "depuis injection" qui donnait des % absurdes.
   // On utilise les périodes recalibrées : aujourd'hui par défaut.
+  // [GO ALERTES 2 · 14/11/2026] (ETAT n° 78) le jour sur ton argent (09d1) ; base ≤ 0 → le $ sans % ; plus de repli sur total − _startPortfolio (emprunt compté)
   let pnl = 0;
   let sessionGain = 0;
+  let _pnlOk = false;
   if (typeof _computePnlByPeriod === 'function') {
     const periods = _computePnlByPeriod();
     if (periods.today.hasData) {
       pnl = periods.today.pct;
       sessionGain = periods.today.usd;
-    } else {
-      // Fallback : session start
-      sessionGain = total - S._startPortfolio;
-      pnl = S._startPortfolio > 0 ? (sessionGain / S._startPortfolio * 100) : 0;
+      _pnlOk = true;
     }
-  } else {
-    // Fallback ancien comportement si pas de période
-    sessionGain = total - S._startPortfolio;
-    pnl = S._startPortfolio > 0 ? (sessionGain / S._startPortfolio * 100) : 0;
   }
   const pb = document.getElementById('heroPnlBadge');
   if(pb) {
-    pb.textContent = (pnl>=0?'↑ +':'↓ ')+Math.abs(pnl).toFixed(2)+'%'+(sessionGain!==0?' ('+fmt$2(sessionGain)+')':'');
-    pb.className = 'pnl-badge '+(pnl>=0?'up':'down');
+    const _up = (pnl === null ? sessionGain : pnl) >= 0;
+    pb.textContent = !_pnlOk ? '— pas de donnée'
+      : (pnl === null ? (_up ? '↑ ' : '↓ ') + '— %' : (_up ? '↑ +' : '↓ ') + Math.abs(pnl).toFixed(2) + '%') + (sessionGain !== 0 ? ' (' + fmt$2(sessionGain) + ')' : '');
+    pb.className = 'pnl-badge '+(_up?'up':'down');
     pb.title = 'P&L aujourd\'hui · reset auto à minuit · voir Réglages pour Semaine/Mois';
   }
 
@@ -5045,31 +5102,30 @@ function renderHome() {
   setEl('heroUsd', fmt$2(_computeNetUsd()));   // [23/08 · Rams] Portefeuille en $ = net liquidatif (_computeNetUsd)
   // v8.0 LIVRAISON 26 · Affichage P&L par période — COHÉRENT avec P&L NET et P&L SESSION
   // On utilise periods.today qui est calibré à minuit, basé sur S.portfolio (équivaut au P&L SESSION du dashboard)
+  // [GO ALERTES 2 · 14/11/2026] (ETAT n° 78) le jour sur ton argent (09d1) ; base ≤ 0 → le $ sans % ; plus de repli sur S.portfolio − _startPortfolio (la mesure
+  // qui compte l'argent emprunté comme le tien)
   let pnlForDisplay = 0;
   let gainForDisplay = 0;
   let periodLabel = '';
+  let _pnlOk = false;
   if (typeof _computePnlByPeriod === 'function') {
     const periods = _computePnlByPeriod();
     if (periods.today.hasData) {
       pnlForDisplay = periods.today.pct;
       gainForDisplay = periods.today.usd;
       periodLabel = ' aujourd\'hui';
-    } else if (S._startPortfolio) {
-      gainForDisplay = S.portfolio - S._startPortfolio;
-      pnlForDisplay = S._startPortfolio > 0 ? (gainForDisplay / S._startPortfolio * 100) : 0;
-      periodLabel = ' session';
+      _pnlOk = true;
     }
-  } else if (S._startPortfolio) {
-    gainForDisplay = S.portfolio - S._startPortfolio;
-    pnlForDisplay = S._startPortfolio > 0 ? (gainForDisplay / S._startPortfolio * 100) : 0;
   }
   const pb = document.getElementById('heroPnlBadge');
   if(pb) {
     const gainStr = gainForDisplay !== 0
       ? ` (${gainForDisplay>=0?'+':''}${fmt$2(gainForDisplay)})`
       : '';
-    pb.textContent = (pnlForDisplay>=0?'↑ +':'↓ ')+Math.abs(pnlForDisplay).toFixed(2)+'%'+gainStr;
-    pb.className = 'pnl-badge '+(pnlForDisplay>=0?'up':'down');
+    const _up = (pnlForDisplay === null ? gainForDisplay : pnlForDisplay) >= 0;
+    pb.textContent = !_pnlOk ? '— pas de donnée'
+      : (pnlForDisplay === null ? (_up ? '↑ ' : '↓ ') + '— %' : (_up ? '↑ +' : '↓ ') + Math.abs(pnlForDisplay).toFixed(2) + '%') + gainStr;
+    pb.className = 'pnl-badge '+(_up?'up':'down');
     pb.title = 'P&L' + periodLabel + ' · ce % inclut les positions ouvertes (latentes). P&L NET en bas montre les trades clos uniquement.';
   }
   // Global cycle counter (kept for chain log)

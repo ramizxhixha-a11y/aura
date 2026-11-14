@@ -244,12 +244,15 @@ function _computePnlByPeriod() {
   const current = (typeof _pnlBasis === 'function') ? _pnlBasis() : (S.portfolio || 0);
   const period  = S.pnlPeriod || {};
 
+  // [GO ALERTES 2 · 14/11/2026] (ETAT n° 78) une base ≤ 0 (ton argent à zéro ou sous zéro sous levier au début de la période) donne encore le résultat en $ ;
+  // seul le % n'existe pas (pct: null, l'écran écrit « — »). Avant : « pas de donnée », et l'accueil retombait sur portefeuille − _startPortfolio, la mesure
+  // qui compte l'argent emprunté comme le tien.
   function compute(startVal) {
-    if (startVal === null || startVal === undefined || startVal <= 0) {
+    if (startVal === null || startVal === undefined || typeof startVal !== 'number' || !isFinite(startVal) || !isFinite(current)) {
       return { usd: 0, pct: 0, hasData: false };
     }
     const usd = current - startVal;
-    const pct = (usd / startVal) * 100;
+    const pct = startVal > 0 ? (usd / startVal) * 100 : null;
     return { usd: usd, pct: pct, hasData: true };
   }
 

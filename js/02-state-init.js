@@ -4784,6 +4784,22 @@ function calcTaxProvision() {
   catch(e) { try{window._decErr&&window._decErr(e)}catch(_e){} return 0; }
 }
 
+// [GO ALERTES 2 · 14/11/2026] (ETAT n° 96) LE résultat net du mode, celui de l'écran Fiscal (08 renderFiscalGlobal / _fzBref : brut − tous les frais − impôt du
+// registre) : S.fees.totalPnlNet n'a pas le funding ni les intérêts du levier (02 applyFundingFees / applyLeverageBorrowFees écrivent totalGross et totalFunding,
+// pas le net) — les rapports, l'Excel, le CSV, le calculateur et l'indice de confiance disaient un net plus haut que l'écran (EV : −79,85 $ contre −80,20 $).
+// Par paire : brut − frais de la paire (exchange + glissement + funding pris pendant la tenue) − impôt versé au dépôt pour elle. Lecteurs : affichage seul.
+function _feesNetTotal() {
+  const f = S.fees || {}, n = v => (typeof v === 'number' && isFinite(v)) ? v : 0;
+  let tax = 0; try { tax = n(calcTaxProvision()); } catch (e) {}
+  return n(f.totalPnlGross) - n(f.totalGross) - tax;
+}
+function _feesNetPair(bp) {
+  if (!bp || typeof bp !== 'object') return null;
+  const n = v => (typeof v === 'number' && isFinite(v)) ? v : 0;
+  return n(bp.pnlGross) - n(bp.gross) - n(bp.tax);
+}
+window._feesNetTotal = _feesNetTotal; window._feesNetPair = _feesNetPair;
+
 // ════════════════════════════════════════════════════════════════════════
 // RÉSERVE ANTI-NÉGATIF + OPTIMISATION FISCALE (livraison trading · juin 2026)
 // ════════════════════════════════════════════════════════════════════════
@@ -5664,7 +5680,10 @@ function computePortfolioTotal(){
   // calculent sur son argent + l'emprunt) ; l'écran dit maintenant « dont X $ empruntés » (07 _heroDebtNote) et le P&L se mesure sur l'argent à Rams (_pnlBasis).
   // [23/08] canonique + fiscale : l'engagé des positions COMPTE (le hero affichait
   // trading seul dès qu'une position ouvrait — la faute du grand chiffre 86$ vs 111$)
-  const baseUSD = ((typeof _computePortfolio==='function') ? _computePortfolio() : ((S.cashAccount||0)+(S.tradingAccount||0))) + (S.fiscalReserveAccount || 0) + (S.antiNegTaxPart || 0) + ((S.fees&&S.fees.feeReserveAccount)||0);   // [23/08 · Rams] + provisions taxes + réserve frais (le funding y est déjà provisionné : intérêts→fiscale, funding positions→frais — S1 25/08)
+  // [GO ALERTES 2 · 14/11/2026] (ETAT n° 77) SANS la « réserve frais » (S.fees.feeReserveAccount) : c'est le CUMUL des frais déjà payés (02 recordFees l'augmente
+  // de chaque frais pris au trading, rien ne la débite jamais) — de l'argent parti, compté une seconde fois (AA du 27/10 : 1 006,47 $ sur 7 703,66 $). Lu par
+  // l'accueil (« Portefeuille Total », détail Σ Total) seulement ; aucun lecteur dans la décision.
+  const baseUSD = ((typeof _computePortfolio==='function') ? _computePortfolio() : ((S.cashAccount||0)+(S.tradingAccount||0))) + (S.fiscalReserveAccount || 0) + (S.antiNegTaxPart || 0);   // [23/08 · Rams] + provisions taxes
   S.portfolioTotal = baseUSD;  // v8 · USD (tout en $) — l'affichage € est géré séparément (ownFundsEUR)
   return S.portfolioTotal;
 }
@@ -5848,6 +5867,22 @@ async function fetchUsdEurRate(){
   } catch(e) { /* silencieux — fallback à la dernière valeur connue */ }
 }
 
+// [GO ALERTES 2 · 14/11/2026] (ETAT n° 81) une ligne de l'historique d'une paire est-elle une FERMETURE ? Pour l'AFFICHAGE des résultats : la fermeture d'une
+// position (« position » : bot ou toi), d'urgence (« urgence ») ou de la voix tendance (« tendance », 02 closePosition). Les lecteurs de la DÉCISION (gardes,
+// mises, refroidissements, espérance — 03, 06, 09e, 10e4, 10e6…) gardent « position » seul, exprès : ils ne passent pas par ici.
+function _isCloseRow(t) { return !!t && (t.type === 'position' || t.type === 'urgence' || t.type === 'tendance'); }
+window._isCloseRow = _isCloseRow;
+
+// [GO ALERTES 2 · 14/11/2026] (ETAT n° 76) une injection n'est pas un gain : les bases du P&L jour / semaine / mois (09d1 _computePnlByPeriod, lues par
+// l'accueil, le panneau « P&L par période » et les alertes P&L) montent du montant injecté. Avant : l'injection en devises ne déplaçait que le jour (la semaine
+// et le mois la comptaient comme un gain) ; l'injection en USD ne déplaçait RIEN. Affichage seul : _startPortfolio (lu par le Rescue Bot) n'est pas touché ici.
+function _injShiftPeriods(net) {
+  const n = Number(net);
+  if (!(n > 0) || !S.pnlPeriod || typeof S.pnlPeriod !== 'object') return;
+  ['todayStartPortfolio', 'weekStartPortfolio', 'monthStartPortfolio'].forEach(k => { if (typeof S.pnlPeriod[k] === 'number' && isFinite(S.pnlPeriod[k])) S.pnlPeriod[k] += n; });
+}
+window._injShiftPeriods = _injShiftPeriods;
+
 // ── v7.1 PHASE 9 · Conversion Fiat → USDT (fonds propres réels injectés) ──
 // Spec utilisateur: "les sommes convertie de tout types de Fiat en USDT sont indexées
 // avec le cours et frais réels du moment réel d'échange déduit directement de la somme
@@ -5895,7 +5930,7 @@ function injectFundsFromFiat(fiatType, fiatAmount){
   // boot suivant comptait l'injection comme un benefice de session (preuve backup :
   // cumul EV +32.50 = l'injection de 30 EUR, cumul RE +44.11 = les transferts).
   if (typeof S._startPortfolio === 'number' && S._startPortfolio > 0) S._startPortfolio += p.netUSDT;
-  if (S.pnlPeriod && typeof S.pnlPeriod === 'object' && typeof S.pnlPeriod.todayStartPortfolio === 'number') S.pnlPeriod.todayStartPortfolio += p.netUSDT;
+  _injShiftPeriods(p.netUSDT);   // [GO ALERTES 2 · 14/11/2026] (ETAT n° 76) jour, semaine ET mois — avant : le jour seulement, la semaine et le mois la comptaient comme un gain
   if(!S.ownFundsLog) S.ownFundsLog = [];
   S.ownFundsLog.unshift({
     amount:    p.netUSDT,
@@ -6023,6 +6058,7 @@ function confirmFiatInject(){
     S.cashAccount = (S.cashAccount||0) + netUSDT;
     S.portfolio = _computePortfolio();   // [23/08] canonique : engagé inclus
     S.ownFundsInjected = (S.ownFundsInjected||0) + netUSDT;
+    _injShiftPeriods(netUSDT);   // [GO ALERTES 2 · 14/11/2026] (ETAT n° 76) avant : aucune base déplacée, l'injection en USD était un gain du jour, de la semaine et du mois
     if(!S.ownFundsLog) S.ownFundsLog = [];
     S.ownFundsLog.unshift({ amount:netUSDT, fiatType:'USD', fiatAmount, rate:1, fee, feePct, ts:Date.now(), time:nowStr() });
     if(S.ownFundsLog.length > 200) S.ownFundsLog.pop();

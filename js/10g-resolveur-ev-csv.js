@@ -260,7 +260,7 @@ function buildSummaryCSV() {
     ['Funding total',   '-$'+f.totalFunding.toFixed(4)],
     ['Total Frais',     '-$'+f.totalGross.toFixed(4)],
     ['Provision Impôt', '-$'+tax.toFixed(4)],
-    ['P&L Net',         f.totalPnlNet.toFixed(2)+'$'],
+    ['P&L Net',         _feesNetTotal().toFixed(2)+'$'],   // [GO ALERTES 2 · 14/11/2026] (n° 96) brut − total frais − provision impôt (lignes au-dessus) : avant, sans le funding
     ['Réserve Fiscale', '$'+(S.fiscalReserveAccount||0).toFixed(2)],
     [''],
     ['=== PAR PAIRE ==='],
@@ -270,8 +270,12 @@ function buildSummaryCSV() {
       bp.pnlGross.toFixed(2)+'$',
       '-$'+bp.gross.toFixed(4),
       '-$'+bp.tax.toFixed(4),
-      bp.pnlNet.toFixed(2)+'$'
-    ])
+      _feesNetPair(bp).toFixed(2)+'$'   // [GO ALERTES 2] (n° 96) brut − frais (funding compris) − impôt de la paire
+    ]),
+    // [GO ALERTES 2 · 14/11/2026] (relecture adverse du 14/11) ce qui sépare le total des paires : intérêts du levier (sans paire) et impôt de l'année du registre
+    // au lieu des versements par paire — sans cette ligne, « P&L Net » ≠ somme des paires sans explication
+    ['Hors paires (intérêts du levier, impôt de l\'année)', '', '', '', '',
+      (_feesNetTotal() - Object.values(f.byPair).reduce((a, bp) => a + _feesNetPair(bp), 0)).toFixed(2)+'$']
   ];
   return lines.map(r => Array.isArray(r) ? r.join(',') : r).join('\n');
 }
@@ -323,13 +327,9 @@ function disableFullPowerMode() {
 window.disableFullPowerMode = disableFullPowerMode;
 if(typeof disableFullPowerMode==='function') window.disableFullPowerMode = disableFullPowerMode;
 
-function downloadFile(content, filename, mime) {
-  const blob = new Blob([content], { type: mime });
-  const url  = URL.createObjectURL(blob);
-  const a    = document.createElement('a');
-  a.href = url; a.download = filename;
-  document.body.appendChild(a); a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
+// [GO ALERTES 2 · 14/11/2026] (ETAT n° 68) par 05 _exportFile : écriture native dans Download/AURA dans l'app Android, sinon téléchargement ; le message dit le
+// résultat réel (label = ce qui est exporté). Avant : lien blob seul — rien n'était écrit dans l'app Android, et les appelants (09h, registre fiscal) disaient « exporté ».
+function downloadFile(content, filename, mime, label) {
+  return _exportFile(content, filename, mime, label || filename);
 }
 if(typeof downloadFile==='function') window.downloadFile = downloadFile;

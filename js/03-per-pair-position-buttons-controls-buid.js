@@ -2535,7 +2535,7 @@ let _analyticsTab = 'perf';
 // ════════════════════════════════════════════════════════════
 function computeAdvancedMetrics() {
   const allTrades = Object.values(S.pairStates).flatMap(ps => 
-    (ps.trades||[]).filter(t => t.type === 'position' && t.pnlUsdt != null)
+    (ps.trades||[]).filter(t => _isCloseRow(t) && t.pnlUsdt != null)   // [GO ALERTES 2 · 14/11/2026] (n° 81) toutes les fermetures, voix et urgence comprises (02 _isCloseRow)
   );
   if(allTrades.length < 2) return null;
 
@@ -2875,7 +2875,7 @@ function computeWhatIfScenarios() {
   // Session summary
   const sessionGain = (S._startPortfolio && S.portfolio) ? (S.portfolio - S._startPortfolio) : 0;
   const botTrades = Object.values(S.pairStates)
-    .flatMap(ps => (ps.trades||[]).filter(t => t.type === 'position'))
+    .flatMap(ps => (ps.trades||[]).filter(t => _isCloseRow(t)))   // [GO ALERTES 2 · 14/11/2026] (n° 81) toutes les fermetures, voix et urgence comprises (02 _isCloseRow)
     .length;
   out.session = {
     actualGain:  sessionGain,
@@ -6274,26 +6274,13 @@ function exportBackup(format) {
     const dateStr = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
     const filename = 'aura_backup_' + dateStr + '.' + (format || 'json');
     const content = JSON.stringify(backup, null, 2);
-    const blob = new Blob([content], { type: format === 'txt' ? 'text/plain' : 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = filename;
-    document.body.appendChild(a);
-    a.click();
-    setTimeout(() => {
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-    }, 100);
-    
     // Sauvegarder aussi en IndexedDB (manuel)
     _saveBackupToDB(backup).then(() => {
       if (typeof renderSettingsPanel === 'function') renderSettingsPanel();
     });
-    
-    if (typeof showToast === 'function') {
-      showToast('📦 Backup exporté · ' + (backup.meta.sizeChars / 1024 | 0) + ' Ko', 3000, 'win');
-    }
+    // [GO ALERTES 2 · 14/11/2026] (ETAT n° 68) écriture native dans Download/AURA dans l'app Android (05 _exportFile), le message dit le résultat réel et la
+    // taille — avant : lien blob (rien d'écrit dans l'app Android) et « 📦 Backup exporté » dans tous les cas
+    return _exportFile(content, filename, format === 'txt' ? 'text/plain' : 'application/json', 'Backup (' + (backup.meta.sizeChars / 1024 | 0) + ' Ko)');
   } catch(e) {
     console.error('Erreur export backup:', e);
     if (typeof showToast === 'function') showToast('❌ Erreur export : ' + e.message, 4000, 'loss');

@@ -38,7 +38,7 @@ function openDiagnostic() {
 
   Object.entries(pairStates).forEach(([pair, ps]) => {
     (ps.trades || []).forEach(t => {
-      if (t.type === 'position' && typeof t.pnlUsdt === 'number') {
+      if (_isCloseRow(t) && typeof t.pnlUsdt === 'number') {   // [GO ALERTES 2 · 14/11/2026] (n° 81) toutes les fermetures, voix et urgence comprises (02 _isCloseRow)
         closedTotal++;
         if      (t.pnlUsdt > 0) closedWin++;
         else if (t.pnlUsdt < 0) closedLoss++;

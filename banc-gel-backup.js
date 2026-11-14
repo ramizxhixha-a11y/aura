@@ -24,6 +24,7 @@
 'use strict';
 const fs = require('fs'), vm = require('vm'), assert = require('assert'), path = require('path');
 const ROOT = __dirname;
+const ROOT_GB = process.env.BANC_ROOT || __dirname;   // [GO ALERTES 2 · 14/11/2026] racine du code lu (05 _exportFile)
 const TOK = (function(){ const m = require('fs').readFileSync(require('path').join(__dirname, 'AURA8_v118.html'), 'utf8').match(/DOC_V = '(\d{8}[a-z])'/); if (!m) { console.error('DOC_V introuvable dans AURA8_v118.html'); process.exit(2); } return m[1]; })();   // [12/09/2026] token lu dans le HTML (source unique) : plus jamais figé dans un banc
 const VER03 = '20260911c';   // [12/09] version de la livraison qui a touché 03/04/09b3 en dernier — indépendante du token courant du HTML
 const HEAD = '// [GEL BOOT · 11/09/2026] VERSION ' + VER03;
@@ -346,13 +347,18 @@ const V1_NOMETA = (cycle) => ({ _type: 'aura_guardian_full', savedAt: '2026-08-0
   });
   await T('exportBackup (bouton 📦 .json) : backup manuel avec meta, ligne d\'index, toast « Ko » (plus de TypeError meta.sizeChars)', async () => {
     const { ctx, idb, toasts } = mkCtx();
+    // [GO ALERTES 2 · 14/11/2026] (ETAT n° 68) le fichier part par 05 _exportFile (écriture native dans l'app Android, sinon téléchargement) : le toast dit le
+    // résultat réel — ici un navigateur (pas de plugin natif) : « 📥 Backup (N Ko) téléchargé : aura_backup_….json »
+    const s05 = require('fs').readFileSync(require('path').join(ROOT_GB, 'js/05-v37-19-indicateur-de-fatigue-bot.js'), 'utf8');
+    ['_outilsIsNative', '_outilsSaveText', '_exportFile'].forEach(n => { const i = s05.search(new RegExp('(^|\\n)(async )?function ' + n + '\\s*\\(')); if (i >= 0) { const j = s05.indexOf('\nwindow.' + n + ' = ', i); vm.runInContext(s05.slice(i, j > i ? j : s05.indexOf('\n}\n', i) + 3), ctx); } });
+    ctx._fsWriteBackup = async () => null;
     ctx.exportBackup('json');
     await tick(60);
     const rows = idb.rows('aura_backups', 'backups');
     assert.strictEqual(rows.length, 1); assert.strictEqual(rows[0].meta.type, 'manual');
     assert.strictEqual(idb.rows('aura_backups', 'backups_meta').length, 1);
-    assert.ok(toasts.some(t => /Backup exporté · \d+ Ko/.test(t)), toasts.join(' | '));
-    assert.ok(!toasts.some(t => /Erreur/.test(t)));
+    assert.ok(toasts.some(t => /Backup \(\d+ Ko\) téléchargé : aura_backup_/.test(t)), toasts.join(' | '));
+    assert.ok(!toasts.some(t => /Erreur|non écrit/.test(t)));
   });
   await T('04 · restoreBackup(id) : 1 seule désérialisation (l\'enregistrement choisi), backup de sécurité pré-import, S remplacé par backup.state, état écrit par _writeChosenState (pas saveState) + reload', async () => {
     const { ctx, stats, idb, S, toasts, timers } = mkCtx({ confirm: true });

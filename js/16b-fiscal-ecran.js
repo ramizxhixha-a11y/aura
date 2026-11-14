@@ -320,7 +320,7 @@ function _fiscExportCsv() {
             e.x0, e.x1, e.N.toFixed(4), e.st.toFixed(4), e.pu.toFixed(6), e.sl.toFixed(6), e.fe.toFixed(6), e.fi, e.fo, e.g.toFixed(6), e.fE.toFixed(6), e.d0.toFixed(6), e.d1.toFixed(6), e.mv.toFixed(6)].map(q).join(';');
   });
   var csv = head.join(';') + '\n' + rows.join('\n');
-  try { downloadFile(csv, 'aura_registre_fiscal_' + (_FISC_MODE_LBL[mode] || mode) + '_' + new Date().toISOString().slice(0, 10) + '.csv', 'text/csv'); } catch (e) { try { window._decErr && window._decErr(e); } catch (_e) {} }
+  try { return downloadFile(csv, 'aura_registre_fiscal_' + (_FISC_MODE_LBL[mode] || mode) + '_' + new Date().toISOString().slice(0, 10) + '.csv', 'text/csv', 'Registre fiscal'); } catch (e) { try { window._decErr && window._decErr(e); } catch (_e) {} }   // [GO ALERTES 2 · 14/11/2026] (n° 68) le message dit le résultat réel
 }
 
 try {

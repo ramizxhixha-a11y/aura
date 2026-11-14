@@ -56,8 +56,10 @@ const REPORT = bloc(s05, '// ═══ v43 · #13 EXPORT RAPPORT PDF MENSUEL ═
 const EXCEL = bloc(s05, '// ═══ v44 · #42 EXPORT EXCEL MULTI-ONGLETS ═══', 'window.renderXlExportSection = renderXlExportSection;');
 const HEBDO = bloc(s05, '// ═══ v45 · #6 RÉSUMÉ HEBDOMADAIRE AUTO ═══', 'window.renderHebdoSection = renderHebdoSection;') + '\n' + fnSrc(s07, 'exportHebdoPdf');
 const CALC = bloc(s06, '// ═══ v74 · CALCULATEUR DE POSITION ═══', 'window.renderCalcSection = renderCalcSection;');
-const BASE = fnSrc(s02, '_walletKey') + '\n' + fnSrc(s02, '_modeLab') + '\n';
-const ALERTS = fnSrc(s04, '_initAlerts') + '\n' + fnSi(s04, '_alertModeLab') + fnSi(s04, '_alertMode') + fnSi(s04, '_alertFired') + fnSi(s04, '_alertFire') + fnSrc(s04, 'checkPnlAlerts') + '\n';
+// [GO ALERTES 2 · 14/11/2026] + _isCloseRow / _feesNetTotal / _feesNetPair (02 : n° 81 et 96, lus par les rapports) et _alertWinStreak (04 : n° 67, lu par checkPnlAlerts
+// et le jalon « Série de 5 ») — présents seulement dans le code qui les a
+const BASE = fnSrc(s02, '_walletKey') + '\n' + fnSrc(s02, '_modeLab') + '\n' + fnSi(s02, '_isCloseRow') + fnSi(s02, '_feesNetTotal') + fnSi(s02, '_feesNetPair');
+const ALERTS = fnSrc(s04, '_initAlerts') + '\n' + fnSi(s04, '_alertModeLab') + fnSi(s04, '_alertMode') + fnSi(s04, '_alertFired') + fnSi(s04, '_alertFire') + fnSi(s04, '_alertWinStreak') + fnSrc(s04, 'checkPnlAlerts') + '\n';
 const GARDE = (s9b2.match(/^var _TRADES_GARDES_PAR_PAIRE = [^\n]*;/m) || [''])[0];   // la constante de la coupe (absente du code d'avant)
 
 function storage(o) { o = o || {}; return { getItem: k => (k in o ? o[k] : null), setItem: (k, v) => { o[k] = String(v); }, removeItem: k => { delete o[k]; } }; }
@@ -116,7 +118,9 @@ function app(o) {
   });
   await T('A2 · un seul appelant de tickTwinLive dans tout ce que charge le HTML (scripts, en ligne, onclick) : le battement 08 ; l\'accueil (02 goPage) l\'affiche seulement ; l\'écran ne dit plus « il n\'avance qu\'à l\'ouverture de l\'accueil »', () => {
     const calls = []; ALLCODE.forEach(({ f, c }) => { const n = (c.match(/(?<!function\s)\btickTwinLive\s*\(/g) || []).length; if (n) calls.push(f + ' ×' + n); });
-    assert.deepStrictEqual(calls, ['js/08-learning-history-render.js ×1'], 'appelants : ' + calls.join(', '));
+    // [GO ALERTES 2 · 14/11/2026] (ETAT n° 34b) ×2 dans 08 : le battement (mode à l'écran) ET _bgModeWatch (chaque mode en play derrière l'écran fait avancer SON Twin)
+    const _bg = /tickTwinLive\(\)/.test(code(fnSrc(s08, '_bgModeWatch') || ''));
+    assert.deepStrictEqual(calls, ['js/08-learning-history-render.js ×' + (_bg ? 2 : 1)], 'appelants : ' + calls.join(', '));
     const gp = code(fnSrc(s02, 'goPage'));
     assert.ok(!/tickTwinLive\s*\(/.test(gp) && /renderTwinLive\(\)/.test(gp), '02 goPage');
     assert.ok(/if \(tick % 4 === 0\) \{ try \{ if \(typeof tickTwinLive === 'function'\) tickTwinLive\(\); \} catch\(e\) \{\} \}/.test(code(fnSrc(s08, 'simTick'))), '08 simTick');
@@ -131,19 +135,22 @@ function app(o) {
     vm.runInContext(ALERTS + fnSrc(s04, 'toggleAlert') + '\nfunction renderAlertsSection() {}', a.ctx);
     return { a, per, run: (m, v) => { a.S.tradingMode = m; per[m] = v; a.ctx.checkPnlAlerts(); } };
   };
-  await T('B1 · checkPnlAlerts RÉEL : « Gain session » atteint en EV puis en RE puis en AA → trois alertes (avant : la 1re consommait les deux autres) ; EV de nouveau → rien ; remise à zéro de 24 h → les trois réarmées', () => {
-    const { a, run } = alertsApp();
-    run('paperReal', 12); run('real', 15); run('paperReal', 13); run('sim', 11);
+  // [GO ALERTES 2 · 14/11/2026] (ETAT n° 67) B1–B2 jouent l'alerte « Gain du jour » (today.usd, seuil 50 $) : « Gain session » se mesure désormais depuis le
+  // lancement de l'app (banc-alertes-2) — les drapeaux par mode (n° 35) sont les mêmes pour toutes les alertes
+  await T('B1 · checkPnlAlerts RÉEL : « Gain du jour » atteint en EV puis en RE puis en AA → trois alertes (avant : la 1re consommait les deux autres) ; EV de nouveau → rien ; jour suivant → réarmées', () => {
+    const { a, run } = alertsApp(); a.S.pnlPeriod = { todayDate: 'J1', history: [] };
+    run('paperReal', 52); run('real', 55); run('paperReal', 53); run('sim', 51);
     assert.deepStrictEqual(a.rec.goals.map(g => g.slice(0, 2)), ['EV', 'RE', 'AA'], 'alertes : ' + J(a.rec.goals));
-    a.S._lastAlertReset = Date.now() - 86400001; run('paperReal', 12);   // ce passage fait la remise à zéro (en fin de fonction)
-    run('paperReal', 12); run('real', 15);
+    // [GO ALERTES 2 · 14/11/2026] le jour se réarme au CHANGEMENT DE JOUR (S.pnlPeriod.todayDate), plus « 24 h après le premier contrôle » (relecture du 14/11)
+    a.S.pnlPeriod = { todayDate: 'J2', history: [] }; run('paperReal', 52);
+    run('paperReal', 52); run('real', 55);
     assert.deepStrictEqual(a.rec.goals.map(g => g.slice(0, 2)), ['EV', 'RE', 'AA', 'EV', 'RE'], 'après 24 h : ' + J(a.rec.goals));
   });
   await T('B2 · ancien drapeau relu sans casse : « déjà déclenchée » = true (mode inconnu) vaut pour les 3 modes ; l\'interrupteur le réarme ; « ✅ Déclenchée » à l\'écran pour le mode AFFICHÉ seulement', () => {
     const { a, run } = alertsApp();
-    vm.runInContext('_initAlerts(); S.pnlAlerts.sessionGain.triggered = true;', a.ctx);
-    run('paperReal', 20); run('real', 20); assert.strictEqual(a.rec.goals.length, 0, 'un ancien drapeau ne vaut plus : ' + J(a.rec.goals));
-    a.ctx.toggleAlert('sessionGain'); a.ctx.toggleAlert('sessionGain'); run('paperReal', 20);
+    vm.runInContext('_initAlerts(); S.pnlAlerts.dailyGain.triggered = true;', a.ctx);
+    run('paperReal', 60); run('real', 60); assert.strictEqual(a.rec.goals.length, 0, 'un ancien drapeau ne vaut plus : ' + J(a.rec.goals));
+    a.ctx.toggleAlert('dailyGain'); a.ctx.toggleAlert('dailyGain'); run('paperReal', 60);
     assert.deepStrictEqual(a.rec.goals.map(g => g.slice(0, 2)), ['EV'], 'interrupteur');
     const b = app(); b.ctx.document = { els: {}, getElementById(id) { return id === 'alertsSection2' ? (this.els[id] = this.els[id] || el(id)) : null; } };
     Object.assign(b.S, { portfolio: 0, perf: {}, twin: null });

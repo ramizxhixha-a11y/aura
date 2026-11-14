@@ -428,7 +428,7 @@ function _fxIppCalc(revenu) {
 
 function _fxAnalyze() {
   const allT = Object.values(S.pairStates||{}).flatMap(ps=>
-    (ps.trades||[]).filter(t=>t.type==='position'&&t.pnlUsdt!=null)
+    (ps.trades||[]).filter(t=>_isCloseRow(t)&&t.pnlUsdt!=null)   // [GO ALERTES 2 · 14/11/2026] (n° 81) toutes les fermetures, voix et urgence comprises (02 _isCloseRow)
   );
   const n      = allT.length;
   const gains  = allT.filter(t=>(t.pnlUsdt||0)>0).reduce((s,t)=>s+(t.pnlUsdt||0),0);
@@ -1546,7 +1546,7 @@ function computeRiskScore() {
   const fees   = S.fees||{};
   const m      = typeof computeAdvancedMetrics==='function'?computeAdvancedMetrics():null;
   const regime = (typeof detectMarketRegime==='function'?detectMarketRegime():'calm');
-  const allT   = Object.values(S.pairStates||{}).flatMap(ps=>(ps.trades||[]).filter(t=>t.type==='position'));
+  const allT   = Object.values(S.pairStates||{}).flatMap(ps=>(ps.trades||[]).filter(t=>_isCloseRow(t)));   // [GO ALERTES 2 · 14/11/2026] (n° 81) toutes les fermetures, voix et urgence comprises (02 _isCloseRow)
 
   const factors = [];
 
@@ -1948,7 +1948,7 @@ function _runCalc() {
   const kellyRaw = rr>0 ? (wr - (1-wr)/rr)*100 : 0;
   const kelly = Math.max(0, kellyRaw);
   // (relecture adverse du 18/10) S.winTrades compte les trades gagnants AVANT frais : on lit aussi le net réel du mode (02 recordFees)
-  const netMode = Number((S.fees||{}).totalPnlNet)||0;
+  const netMode = (typeof _feesNetTotal === 'function') ? _feesNetTotal() : (Number((S.fees||{}).totalPnlNet)||0);   // [GO ALERTES 2 · 14/11/2026] (n° 96) le net de l'écran Fiscal
   // [GO NETTOYAGE · 18/10/2026] (ETAT n° 39) Kelly APRÈS frais : WR net = clôtures gagnantes après frais et impôt provisionné du registre des frais du mode
   // (02 recordFees, fees.feeLog : ses dernières clôtures), R/R net = gain net au TP ÷ perte nette au SL de ce calcul. Même règle que le WR avant frais (plus
   // de 10 clôtures), sinon null = « non calculable ». Seul ce Kelly peut donner « ✅ » — avant : « ✅ » sur le WR AVANT frais dès que le net du mode était ≥ 0.
@@ -1984,6 +1984,8 @@ function renderCalcSection() {
   const col  = PAIRS[_CALC.pair]?.color||'var(--ice)';
 
   // [GO NETTOYAGE · 18/10/2026] (ETAT n° 39) conseil Kelly : « ✅ » seulement sur le Kelly APRÈS frais (_runCalc kellyNet), « non calculable » sinon — avant : « ✅ … (WR avant frais) »
+  // [GO ALERTES 2 · 14/11/2026] (ETAT n° 69) le R/R jugé (✅ / ⚠️ / ❌) est celui APRÈS frais (gain net au TP ÷ perte nette au SL, _runCalc rrNet) ; l'avant-frais en
+  // petit dessous. Avant : « R/R 2.00 ✅ » sur TP % ÷ SL %, avant frais — aux réglages d'usine 1,65 après frais, « ⚠️ » par la règle de l'écran.
   el.innerHTML = `
     <div class="calc-section">
       <div class="calc-title">📐 Calculateur de Position</div>
@@ -2059,7 +2061,8 @@ function renderCalcSection() {
         <div class="calc-result-row"><span style="color:var(--t2);">Frais entrée + sortie</span><span class="calc-result-val" style="color:var(--t3);">-$${r.feesUsd.toFixed(2)}</span></div>
         <div class="calc-result-row"><span style="color:var(--t2);">Si TP atteint (net)</span><span class="calc-result-val" style="color:${r.netTP>=0?'var(--up)':'var(--down)'};">${r.netTP>=0?'+':'−'}$${Math.abs(r.netTP).toFixed(2)}</span></div>
         <div class="calc-result-row"><span style="color:var(--t2);">Si SL atteint (net)</span><span class="calc-result-val" style="color:var(--down);">−$${Math.abs(r.netSL).toFixed(2)}</span></div>
-        <div class="calc-result-row"><span style="color:var(--t1);font-weight:700;">R/R Ratio</span><span class="calc-result-val" style="color:${r.rr>=2?'var(--up)':r.rr>=1?'var(--gold)':'var(--down)'};">${r.rr.toFixed(2)} ${r.rr>=2?'✅':r.rr>=1?'⚠️':'❌'}</span></div>
+        <div class="calc-result-row"><span style="color:var(--t1);font-weight:700;">R/R après frais</span><span class="calc-result-val" style="color:${r.rrNet>=2?'var(--up)':r.rrNet>=1?'var(--gold)':'var(--down)'};">${r.rrNet.toFixed(2)} ${r.rrNet>=2?'✅':r.rrNet>=1?'⚠️':'❌'}</span></div>
+        <div class="calc-result-row"><span style="color:var(--t3);">R/R avant frais (TP % ÷ SL %)</span><span class="calc-result-val" style="color:var(--t3);">${r.rr.toFixed(2)}</span></div>
         <div class="calc-result-row"><span style="color:var(--t2);">Kelly sizing (WR avant frais)</span><span class="calc-result-val" style="color:var(--pur);">${r.kelly.toFixed(1)}%</span></div>
 
         <!-- Barre risque -->
@@ -3390,7 +3393,7 @@ window.renderVacancesSection = renderVacancesSection;
 
 function _acAnalyze() {
   const allT   = Object.values(S.pairStates||{}).flatMap(ps=>
-    (ps.trades||[]).filter(t=>t.type==='position'&&t.ts)
+    (ps.trades||[]).filter(t=>_isCloseRow(t)&&t.ts)   // [GO ALERTES 2 · 14/11/2026] (n° 81) toutes les fermetures, voix et urgence comprises (02 _isCloseRow)
   ).sort((a,b)=>a.ts-b.ts);
   const n = allT.length;
   if(n<3) return null;

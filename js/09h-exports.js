@@ -24,12 +24,12 @@
 // Export des frais en CSV
 // ──────────────────────────────────────────────────────────────────────
 function exportFeesCSV() {
-  downloadFile(
+  // [GO ALERTES 2 · 14/11/2026] (ETAT n° 68) le message vient de downloadFile (10g → 05 _exportFile) : résultat réel — avant : « 📥 Frais exportés » quoi qu'il arrive
+  return downloadFile(
     buildFeeLogCSV(),
     `nexus_fees_${new Date().toISOString().slice(0, 10)}.csv`,
-    'text/csv'
+    'text/csv', 'Journal des frais'
   );
-  showToast('📥 Frais exportés', 2800, 'user');
 }
 window.exportFeesCSV = exportFeesCSV;
 
@@ -41,12 +41,11 @@ window.exportFeesCSV = exportFeesCSV;
 async function exportTradesCSV() {
   const trades = await loadAllTrades();
   const all    = [...trades, ...S.fees.feeLog.map(e => ({ ...e }))];
-  downloadFile(
+  return downloadFile(   // [GO ALERTES 2 · 14/11/2026] (ETAT n° 68)
     buildTradeCSV(all),
     `nexus_trades_${new Date().toISOString().slice(0, 10)}.csv`,
-    'text/csv'
+    'text/csv', 'Trades (' + all.length + ' lignes)'
   );
-  showToast('📥 Trades exportés — ' + all.length + ' lignes', 2800, 'user');
 }
 window.exportTradesCSV = exportTradesCSV;
 
@@ -55,12 +54,11 @@ window.exportTradesCSV = exportTradesCSV;
 // Export du résumé fiscal en CSV
 // ──────────────────────────────────────────────────────────────────────
 function exportSummaryCSV() {
-  downloadFile(
+  return downloadFile(   // [GO ALERTES 2 · 14/11/2026] (ETAT n° 68)
     buildSummaryCSV(),
     `nexus_resume_fiscal_${new Date().toISOString().slice(0, 10)}.csv`,
-    'text/csv'
+    'text/csv', 'Résumé fiscal'
   );
-  showToast('📥 Résumé fiscal exporté', 2800, 'user');
 }
 window.exportSummaryCSV = exportSummaryCSV;
 
@@ -87,11 +85,10 @@ function exportFullJSON() {
     }
   };
 
-  downloadFile(
+  return downloadFile(   // [GO ALERTES 2 · 14/11/2026] (ETAT n° 68)
     JSON.stringify(data, null, 2),
     `nexus_backup_${new Date().toISOString().slice(0, 10)}.json`,
-    'application/json'
+    'application/json', 'Backup fiscal JSON'
   );
-  showToast('📥 Backup JSON exporté');
 }
 window.exportFullJSON = exportFullJSON;

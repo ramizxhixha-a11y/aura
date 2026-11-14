@@ -135,6 +135,7 @@ function buildSnapshot() {
       _realJudgments: S._realJudgments || 0,          // [COMPTEURS RÉGLAGES · 24/09/2026]
       _manConsignes: S._manConsignes || {},           // [CONSIGNES · 06/10/2026] tes consignes par paire (perte max %, durée min) : perdues à chaque relance avant
       tendance: S.tendance || null,                   // [VOIX TENDANCE LONGUE · 07/10/2026] poche de la voix (15) : positions tenues des semaines, décisions du lundi, trades fermés, cumul
+      twinByMode: (S.twinByMode && typeof S.twinByMode === 'object') ? S.twinByMode : null,   // [GO ALERTES 2 · 14/11/2026] (ETAT n° 34b) le Twin de chaque mode (07) : jamais sauvé avant
       fiscalCfg: S.fiscalCfg || null,                 // [GO FISCAL · 07/10/2026] réglages du registre fiscal (16) : additionnels communaux %, plus-values hors AURA par année (€) — les registres eux-mêmes sont dans walletStore[mode].fiscal
       // [GO RÉGLAGES · 14/10/2026] réglages de l'écran (ETAT n° 13) — aucun n'était sauvegardé : retour aux valeurs d'usine à chaque relance (un Bunker
       // désactivé se réactivait, un blocage anti-revenge réglé à 5 min revenait à 15, un Mode Vacances en cours était oublié alors que la pause du bot,

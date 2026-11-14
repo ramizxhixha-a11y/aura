@@ -127,6 +127,9 @@ T('V7 · INVENTAIRE des boucles brutes sur S.pairStates / walletStore[m].pairSta
     // affiché, COPIÉS avec leur paire, paire retirée comprise — c'est de l'historique) et 06 _adnTrades (même lecture pour l'ADN) ; sortent les
     // boucles qu'elles remplacent (05 _getWeekTrades, renderPdfReportSection ; 06 _adnAnnotateTrades, renderAdnSection ; 04 initWhatIfSection ps.stake)
     '05-v37-19-indicateur-de-fatigue-bot.js _outilsClosedTrades': 1, '06-v63-patterns-chartistes.js _adnTrades': 1,
+    // [GO ALERTES 2 · 14/11/2026] entre, HISTOIRE : 04 _alertWinStreak (série de clôtures gagnantes du mode, toutes les paires de l'historique, paire retirée
+    // comprise) ; elle remplace les boucles sur ps.streak (champ jamais écrit) de checkPnlAlerts et _getGoals
+    '04-v8-0-livraison-35-mode-max-permissif-v.js _alertWinStreak': 1,
     // [GO NETTOYAGE · 18/10/2026] (ETAT G4 n° 22) sortent avec le module 18 : '18-reparation-demo.js trace' ×1 et '18-reparation-demo.js plan' ×3
   };
   const files = [...html.matchAll(/<script[^>]*\bsrc="([^"?]+)(?:\?[^"]*)?"/g)].map(m => m[1]).filter(f => f.startsWith('js/'));

@@ -50,7 +50,10 @@ const REPLAY = bloc(s04, '// ═══ v28 · #18 REPLAY DE SESSION ═══', 
 const REPORT = bloc(s05, '// ═══ v43 · #13 EXPORT RAPPORT PDF MENSUEL ═══', 'window.renderPdfReportSection = renderPdfReportSection;');
 const EXCEL = bloc(s05, '// ═══ v44 · #42 EXPORT EXCEL MULTI-ONGLETS ═══', 'window.renderXlExportSection = renderXlExportSection;');
 const HEBDO = bloc(s05, '// ═══ v45 · #6 RÉSUMÉ HEBDOMADAIRE AUTO ═══', 'window.renderHebdoSection = renderHebdoSection;') + '\n' + fnSrc(s07, 'exportHebdoPdf');
-const BASE = fnSrc(s02, '_walletKey') + '\n' + fnSrc(s02, '_modeLab') + '\n';
+// [GO ALERTES 2 · 14/11/2026] + les aides de 02 qu'appellent désormais les écrans de résultats et les rapports : _isCloseRow (n° 81 : toutes les fermetures),
+// _feesNetTotal / _feesNetPair (n° 96 : le net de l'écran Fiscal, funding compris) — présentes seulement dans le code qui les a (BANC_ROOT d'avant : rien)
+const _has02 = n => new RegExp('(^|\\n)function ' + n + '\\s*\\(').test(s02);
+const BASE = fnSrc(s02, '_walletKey') + '\n' + fnSrc(s02, '_modeLab') + '\n' + ['_isCloseRow', '_feesNetTotal', '_feesNetPair'].filter(_has02).map(n => fnSrc(s02, n)).join('\n') + '\n';
 
 function el(id) { return { id, innerHTML: '', textContent: '', value: '', disabled: false, style: {}, children: [], className: '', classList: { add() {}, remove() {} },
   insertBefore(c) { this.children.unshift(c); }, removeChild(c) { this.children.splice(this.children.indexOf(c), 1); }, get firstChild() { return this.children[0]; }, get lastChild() { return this.children[this.children.length - 1]; },
@@ -195,7 +198,8 @@ const tick = () => new Promise(r => setImmediate(r));
     const h = a.ctx.document.els.calcSection.innerHTML;
     assert.ok(/ne PAS prendre/.test(h) && !/dans les clous/.test(h), 'Kelly négatif mal dit');
     // WR avant frais positif mais le mode perd après frais (relecture adverse du 18/10 : EV 50 % avant frais, net −61,72 $) → pas de « ✅ »
-    const b = app({ ws: { paperReal: { totalTrades: 100, winTrades: 50, fees: { totalPnlNet: -61.72, byPair: {} } } } });
+    // [GO ALERTES 2 · 14/11/2026] (n° 96) le net du mode est celui de l'écran Fiscal : brut − frais − impôt (02 _feesNetTotal) — même −61,72 $
+    const b = app({ ws: { paperReal: { totalTrades: 100, winTrades: 50, fees: { totalPnlGross: -40, totalGross: 21.72, totalPnlNet: -61.72, byPair: {} } } } });
     vm.runInContext(CALC, b.ctx); vm.runInContext('renderCalcSection()', b.ctx);
     const h2 = b.ctx.document.els.calcSection.innerHTML;
     assert.ok(/AVANT frais/.test(h2) && /surestimée/.test(h2) && !/✅ Ton risque/.test(h2), 'Kelly sur le WR brut présenté comme sûr');
@@ -255,7 +259,9 @@ const tick = () => new Promise(r => setImmediate(r));
     // trades datés dans la semaine en cours quel que soit le jour où le banc tourne (lundi de 05 _getWeekTrades)
     const d = new Date(), lun = new Date(d); lun.setDate(d.getDate() + (d.getDay() === 0 ? -6 : 1 - d.getDay())); lun.setHours(0, 0, 0, 0); const L0 = lun.getTime();
     a.ws.real.pairStates = { 'BTC/USDT': { totalTrades: 2, winTrades: 1, totalPnlUsd: -5, trades: [tr({ pnlUsdt: -2, ts: L0 + 3600e3 }), tr({ pnlUsdt: 1, ts: L0 + 7200e3 })] }, 'ETH/USDT': { totalTrades: 3, winTrades: 1, totalPnlUsd: 1, trades: [tr({ pnlUsdt: 0.5, ts: L0 + 10800e3 })] } };
-    a.ws.real.fees = { totalGross: 9, totalPnlNet: -60.09, byPair: { 'BTC/USDT': { pnlNet: -8, tradingFees: 3, slippage: 1, funding: 0 } } };
+    // [GO ALERTES 2 · 14/11/2026] (n° 96) le net vrai du mode = brut − TOUS les frais − impôt (écran Fiscal, 02 _feesNetTotal) : −51,09 − 9 = −60,09 $. totalPnlNet
+    // (−59,74 $) n'a pas les 0,35 $ de funding : le code d'avant écrivait −59,74 — ce banc échoue donc sur lui.
+    a.ws.real.fees = { totalPnlGross: -51.09, totalGross: 9, totalFunding: 0.35, totalPnlNet: -59.74, byPair: { 'BTC/USDT': { pnlNet: -8, tradingFees: 3, slippage: 1, funding: 0 } } };
     vm.runInContext(AIDES + '\n' + REPORT + '\n' + EXCEL + '\n' + HEBDO, a.ctx);
     return a;
   };

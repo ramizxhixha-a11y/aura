@@ -933,9 +933,11 @@ function renderSettingsPanel() {
 
         const formatPnl = function(p) {
           if (!p.hasData) return '<span style="color:var(--t3);">— pas de donnée</span>';
-          const cls = p.pct >= 0 ? 'var(--up)' : 'var(--down)';
-          const sign = p.pct >= 0 ? '+' : '';
-          return '<span style="color:' + cls + ';font-weight:700;">' + sign + p.pct.toFixed(2) + '% · ' + sign + '$' + p.usd.toFixed(2) + '</span>';
+          // [GO ALERTES 2 · 14/11/2026] (ETAT n° 78) base ≤ 0 : pct null → « — % », le $ reste
+          const _v = (p.pct === null) ? p.usd : p.pct;
+          const cls = _v >= 0 ? 'var(--up)' : 'var(--down)';
+          const sign = _v >= 0 ? '+' : '';
+          return '<span style="color:' + cls + ';font-weight:700;">' + (p.pct === null ? '— %' : sign + p.pct.toFixed(2) + '%') + ' · ' + (p.usd >= 0 ? '+' : '−') + '$' + Math.abs(p.usd).toFixed(2) + '</span>';
         };
 
         // Stats sur l'historique (jours suivis)
@@ -2284,78 +2286,125 @@ function _alertModeLab() { return (({ sim: 'AA', paperReal: 'EV', real: 'RE' })[
 function _alertMode() { return (typeof _walletKey === 'function') ? _walletKey(S.tradingMode) : (S.tradingMode || 'sim'); }
 function _alertFired(x) { return !!x && (x.triggered === true || (!!x.triggered && typeof x.triggered === 'object' && x.triggered[_alertMode()] === true)); }
 function _alertFire(x) { const t = (x.triggered && typeof x.triggered === 'object') ? x.triggered : (x.triggered === true ? { sim: true, paperReal: true, real: true } : {}); t[_alertMode()] = true; x.triggered = t; }
-// Vérifier toutes les alertes (appelé après chaque trade et dans renderHome) — [GO NETTOYAGE · 18/10/2026] (ETAT n° 35) drapeaux du mode à l'écran (_alertFired / _alertFire)
+// [GO ALERTES 2 · 14/11/2026] (ETAT n° 67) ce que mesure chaque alerte, en $ sur l'argent à Rams (02 _pnlBasis : portefeuille − emprunt − frais dus), PAR MODE.
+// Avant : « Gain / Perte journalière ($) » comparait S.pnl24h — un POURCENTAGE depuis la relance, qui comptait l'emprunt comme un gain — à des dollars (AA : « +$338.85
+// aujourd'hui », aussi sur Telegram) ; « session » était en fait la journée (deux alertes pour le même chiffre) ; « Drawdown » lisait S.perf.maxDrawdown et « Win
+// Streak » ps.streak, qu'AUCUN code n'écrit : elles ne partaient jamais. Désormais :
+//  · session = depuis le lancement de l'app (base prise au premier contrôle du mode, en mémoire ; une injection n'est pas un gain : ownFundsInjected retranché) ;
+//  · jour    = depuis minuit (09d1 _computePnlByPeriod().today, la base que l'accueil montre) ; drapeaux réarmés au changement de jour ;
+//  · baisse  = depuis le plus haut du jour vu (au moins la base de minuit), en % ;
+//  · série   = clôtures gagnantes d'affilée du mode, toutes les fermetures (bot, toi, voix, urgence) — _alertWinStreak, aussi lu par le jalon « Série de 5 ».
+function _alertWinStreak() {
+  const all = [];
+  Object.values(S.pairStates || {}).forEach(ps => ((ps && ps.trades) || []).forEach(t => {
+    if (t && (t.type === 'position' || t.type === 'urgence' || t.type === 'tendance') && isFinite(Number(t.pnlUsdt)) && Number(t.ts) > 0) all.push(t);
+  }));
+  all.sort((x, y) => Number(y.ts) - Number(x.ts));
+  let n = 0;
+  for (let i = 0; i < all.length; i++) { if (Number(all[i].pnlUsdt) > 0) n++; else break; }
+  return n;
+}
+window._alertWinStreak = _alertWinStreak;
+// Vérifier toutes les alertes — [GO NETTOYAGE · 18/10/2026] (ETAT n° 35) drapeaux PAR MODE (_alertFired / _alertFire).
+// [GO ALERTES 2 · 14/11/2026] (ETAT n° 66) appelée pour CHAQUE mode en play : le mode à l'écran au battement (08, et après chaque fermeture), un mode EV / RE
+// derrière l'écran dans sa propre bascule (08 _bgModeWatch : S est alors SON portefeuille). Avant : renderHome et closePosition de l'écran seulement — un mode
+// en play derrière l'écran ne recevait aucune alerte. Derrière l'écran : pas de bandeau (il appartient à l'écran), un message étiqueté « [EV] » (08 showToast),
+// Telegram « EV · … ». L'AA derrière un autre écran ne dit rien (bougies fabriquées — même règle que les notifications de trade, 07).
 function checkPnlAlerts() {
   _initAlerts();
-  const a = S.pnlAlerts;
-  // FIX P&L session : meme source que le hero badge et les quick-stats —
-  // la periode recalibree a minuit (today.usd), et non le _startPortfolio
-  // fige d'il y a longtemps qui donnait de fausses alertes (-$14.67 sur un
-  // portefeuille pourtant plat).
-  let pnlSession = 0;
-  if (typeof _computePnlByPeriod === 'function') {
-    const _pp = _computePnlByPeriod();
-    if (_pp && _pp.today && _pp.today.hasData) pnlSession = _pp.today.usd;
+  const a = S.pnlAlerts, m = _alertMode();
+  // bases de la session, plus haut du jour, jour des drapeaux : par mode, en mémoire (window._pnlAlertState — une « session » ne survit pas à une relance)
+  const W = (typeof window !== 'undefined') ? window : {};
+  const stA = W._pnlAlertState || (W._pnlAlertState = { sess: {}, peak: {}, day: {} });
+  const _alertRearm = (x) => { if (!x || !x.triggered) return; if (x.triggered === true) x.triggered = { sim: true, paperReal: true, real: true }; if (typeof x.triggered === 'object') delete x.triggered[m]; };
+  const _alertUsd = v => { const r = Math.round(v * 100) / 100; return (r >= 0 ? '+' : '−') + '$' + Math.abs(r).toFixed(2); };   // arrondi d'abord : jamais « −$0.00 »
+  const behind = (typeof _modeBehind === 'function') && _modeBehind() === true;
+  if (behind && m === 'sim') return;
+  // pas pendant le démarrage ni l'écriture d'un état choisi (mêmes gardes que les alertes prix, 06) : la base de la session serait prise sur un état provisoire
+  if (W._stateReady === false || W._auraChosenStateWriting === true) return;
+  const basis = (typeof _pnlBasis === 'function') ? Number(_pnlBasis()) : (Number(S.portfolio) || 0);
+  if (!isFinite(basis)) return;
+  // (relecture adverse du 14/11) la base « session » des TROIS portefeuilles au premier contrôle — avant : au premier contrôle de CHAQUE mode, si bien qu'un
+  // mode en pause au lancement partait de son premier affichage
+  if (!stA.init && S.walletStore && typeof S.walletStore === 'object') {
+    ['sim', 'paperReal', 'real'].forEach(k => { const w = S.walletStore[k]; if (!w || typeof w !== 'object' || stA.sess[k]) return;
+      let v = NaN; try { v = (typeof _pnlBasis === 'function') ? Number(_pnlBasis(w)) : Number(w.portfolio); } catch(e) {}
+      if (isFinite(v)) stA.sess[k] = { v: v, inj: Number(w.ownFundsInjected) || 0 }; });
+    stA.init = true;
   }
-  const dd = S.perf?.maxDrawdown || 0;
+  const pp = (typeof _computePnlByPeriod === 'function') ? _computePnlByPeriod() : null;
+  const pnlDay = (pp && pp.today && pp.today.hasData && isFinite(Number(pp.today.usd))) ? Number(pp.today.usd) : null;
+  const inj = Number(S.ownFundsInjected) || 0;
+  const dayKey = (S.pnlPeriod && S.pnlPeriod.todayDate) || null;
+  if (dayKey && stA.day[m] !== dayKey) {
+    if (stA.day[m]) ['dailyGain', 'dailyLoss', 'drawdown'].forEach(k => _alertRearm(a[k]));
+    stA.day[m] = dayKey;
+  }
+  if (!stA.sess[m]) stA.sess[m] = { v: basis, inj: inj };
+  // une injection n'est pas un gain ; une remise à zéro des « fonds propres » (03 resetAccount : ownFundsInjected = 0, aucun argent ne bouge) n'en est pas un non plus
+  if (inj < stA.sess[m].inj) stA.sess[m].inj = inj;
+  const pnlSession = (basis - stA.sess[m].v) - (inj - stA.sess[m].inj);
+  const st = Number(S.pnlPeriod && S.pnlPeriod.todayStartPortfolio);
+  let pk = stA.peak[m];
+  if (!pk || pk.d !== dayKey) pk = stA.peak[m] = { d: dayKey, v: (isFinite(st) && st > 0) ? Math.max(st, basis) : basis, inj: inj };
+  if (inj > pk.inj) pk.v += inj - pk.inj;
+  pk.inj = inj;
+  if (basis > pk.v) pk.v = basis;
+  const ddPct = pk.v > 0 ? (pk.v - basis) / pk.v * 100 : 0;
   const totalT = S.totalTrades || 0;
+  const lab = _alertModeLab();
+  const say = (icon, text, loss) => {
+    if (behind) { try { showToast(icon + ' ' + text, 5000, loss ? 'warn' : 'win'); } catch(e) {} }
+    else { try { showMilestone(icon, text, loss, 4000); } catch(e) {} }
+  };
 
-  // Gain session
+  // Gain session (depuis le lancement de l'app)
   if(a.sessionGain.enabled && !_alertFired(a.sessionGain) && pnlSession >= a.sessionGain.value) {
     _alertFire(a.sessionGain);
-    showMilestone('🎯', `Objectif session atteint ! +$${pnlSession.toFixed(2)}`, false, 4000);
-    try { sendNotif('🎯 AURA — Objectif session !', `+$${pnlSession.toFixed(2)} en session`, '🎯', 'objectif-session'); } catch(e) {}
-    try { if (typeof tgOnPnlGoal === 'function') tgOnPnlGoal(_alertModeLab() + 'Gain session ≥ $' + a.sessionGain.value + ' : +$' + pnlSession.toFixed(2) + ' depuis minuit'); } catch(e) {}   // [GO ALERTES · 15/10/2026]
+    say('🎯', `Objectif session atteint ! ${_alertUsd(pnlSession)} depuis le lancement`, false);
+    try { sendNotif('🎯 AURA — Objectif session !', `${lab}${_alertUsd(pnlSession)} depuis le lancement de l'app`, '🎯', 'objectif-session'); } catch(e) {}
+    try { if (typeof tgOnPnlGoal === 'function') tgOnPnlGoal(lab + 'Gain session ≥ $' + a.sessionGain.value + ' : ' + _alertUsd(pnlSession) + ' depuis le lancement de l\'app'); } catch(e) {}   // [GO ALERTES · 15/10/2026]
   }
   // Perte session
   if(a.sessionLoss.enabled && !_alertFired(a.sessionLoss) && pnlSession <= a.sessionLoss.value) {
     _alertFire(a.sessionLoss);
-    showMilestone('⚠', `Alerte perte session : $${pnlSession.toFixed(2)}`, true, 4000);
-    try { sendNotif('⚠️ AURA — Perte session', `$${pnlSession.toFixed(2)} — surveille tes positions`, '⚠️', 'perte-session'); } catch(e) {}
+    say('⚠', `Alerte perte session : ${_alertUsd(pnlSession)} depuis le lancement`, true);
+    try { sendNotif('⚠️ AURA — Perte session', `${lab}${_alertUsd(pnlSession)} depuis le lancement — surveille tes positions`, '⚠️', 'perte-session'); } catch(e) {}
   }
-  // Gain journalier
-  const pnl24h = (S.pnl24h || 0);
-  if(a.dailyGain.enabled && !_alertFired(a.dailyGain) && pnl24h >= a.dailyGain.value) {
+  // Gain du jour (depuis minuit, en $)
+  if(pnlDay !== null && a.dailyGain.enabled && !_alertFired(a.dailyGain) && pnlDay >= a.dailyGain.value) {
     _alertFire(a.dailyGain);
-    showMilestone('💰', `Excellent ! +$${pnl24h.toFixed(2)} aujourd'hui !`, false, 4000);
-    try { sendNotif('💰 AURA — Grande journée !', `+$${pnl24h.toFixed(2)} en 24h`, '💰', 'objectif-jour'); } catch(e) {}
-    try { if (typeof tgOnPnlGoal === 'function') tgOnPnlGoal(_alertModeLab() + 'Gain journalier ≥ $' + a.dailyGain.value + ' : +$' + pnl24h.toFixed(2)); } catch(e) {}   // [GO ALERTES · 15/10/2026]
+    say('💰', `Excellent ! ${_alertUsd(pnlDay)} aujourd'hui !`, false);
+    try { sendNotif('💰 AURA — Grande journée !', `${lab}${_alertUsd(pnlDay)} depuis minuit`, '💰', 'objectif-jour'); } catch(e) {}
+    try { if (typeof tgOnPnlGoal === 'function') tgOnPnlGoal(lab + 'Gain du jour ≥ $' + a.dailyGain.value + ' : ' + _alertUsd(pnlDay) + ' depuis minuit'); } catch(e) {}   // [GO ALERTES · 15/10/2026]
   }
-  // Perte journalière
-  if(a.dailyLoss.enabled && !_alertFired(a.dailyLoss) && pnl24h <= a.dailyLoss.value) {
+  // Perte du jour
+  if(pnlDay !== null && a.dailyLoss.enabled && !_alertFired(a.dailyLoss) && pnlDay <= a.dailyLoss.value) {
     _alertFire(a.dailyLoss);
-    showMilestone('🚨', `Alerte : -$${Math.abs(pnl24h).toFixed(2)} aujourd'hui`, true, 4000);
-    try { sendNotif('🚨 AURA — Pertes importantes', `-$${Math.abs(pnl24h).toFixed(2)} en 24h`, '🚨', 'perte-jour'); } catch(e) {}
+    say('🚨', `Alerte : ${_alertUsd(pnlDay)} aujourd'hui`, true);
+    try { sendNotif('🚨 AURA — Pertes importantes', `${lab}${_alertUsd(pnlDay)} depuis minuit`, '🚨', 'perte-jour'); } catch(e) {}
   }
-  // Drawdown
-  if(a.drawdown.enabled && !_alertFired(a.drawdown) && Math.abs(dd*100) >= a.drawdown.value) {
+  // Baisse depuis le plus haut du jour (%)
+  if(a.drawdown.enabled && !_alertFired(a.drawdown) && ddPct >= a.drawdown.value) {
     _alertFire(a.drawdown);
-    showMilestone('📉', `Drawdown ${(dd*100).toFixed(1)}% — attention`, true, 4000);
-    try { notifDrawdown(dd*100); } catch(e) {}
+    say('📉', `Baisse de ${ddPct.toFixed(1).replace('.', ',')} % depuis le plus haut du jour — attention`, true);
+    try { notifDrawdown(-ddPct); } catch(e) {}
   }
-  // Win streak
-  const ws = Object.values(S.pairStates || {}).reduce((max, ps) => {
-    const streak = ps.streak || 0;
-    return streak > max ? streak : max;
-  }, 0);
+  // Série de clôtures gagnantes du mode
+  const ws = (a.winStreak.enabled && !_alertFired(a.winStreak) && typeof _alertWinStreak === 'function') ? _alertWinStreak() : 0;   // compté seulement quand l'alerte peut partir (contrôle à chaque battement)
   if(a.winStreak.enabled && !_alertFired(a.winStreak) && ws >= a.winStreak.value) {
     _alertFire(a.winStreak);
-    showMilestone('🔥', `Série de ${ws} victoires ! En feu !`, false, 4000);
+    say('🔥', `Série de ${ws} clôtures gagnantes ! En feu !`, false);
   }
   // Trades count
   if(a.tradeCount.enabled && !_alertFired(a.tradeCount) && totalT >= a.tradeCount.value) {
     _alertFire(a.tradeCount);
-    showMilestone('📊', `${totalT} trades atteints ! Expérimenté !`, false, 4000);
+    say('📊', `${totalT} trades atteints ! Expérimenté !`, false);
   }
 
-  // Reset triggers quotidien (si nouvelle session)
-  if(S._lastAlertReset && (Date.now() - S._lastAlertReset) > 86400000) {
-    ['sessionGain','sessionLoss','dailyGain','dailyLoss','drawdown'].forEach(k => {
-      if(a[k]) a[k].triggered = false;
-    });
-    S._lastAlertReset = Date.now();
-  }
-  if(!S._lastAlertReset) S._lastAlertReset = Date.now();
+  // [GO ALERTES 2 · 14/11/2026] (relecture adverse du 14/11) plus de remise à zéro « 24 h après le premier contrôle » : elle réarmait le jour et la baisse à
+  // n'importe quelle heure (deux « +$60 aujourd'hui » le même jour) et la session sur une base qui ne bouge pas (même cumul renvoyé). Le jour et la baisse se
+  // réarment au changement de jour (plus haut) ; la session part une fois par lancement de l'app ; l'interrupteur et un nouveau seuil réarment tout, comme avant.
 }
 window.checkPnlAlerts = checkPnlAlerts;
 
@@ -2365,12 +2414,12 @@ function editAlertValue(key) {
   const a = S.pnlAlerts[key];
   if(!a) return;
   const labels = {
-    sessionGain:  'Gain session minimum ($)',
-    sessionLoss:  'Perte session maximum ($, négatif)',
-    dailyGain:    'Gain journalier minimum ($)',
-    dailyLoss:    'Perte journalière maximum ($, négatif)',
-    drawdown:     'Drawdown maximum (%)',
-    winStreak:    'Série de victoires minimum',
+    sessionGain:  'Gain session minimum ($, depuis le lancement de l\'app)',
+    sessionLoss:  'Perte session maximum ($, négatif, depuis le lancement de l\'app)',
+    dailyGain:    'Gain du jour minimum ($, depuis minuit)',
+    dailyLoss:    'Perte du jour maximum ($, négatif, depuis minuit)',
+    drawdown:     'Baisse maximum depuis le plus haut du jour (%)',
+    winStreak:    'Série de clôtures gagnantes minimum',
     tradeCount:   'Nombre de trades cible',
   };
   const val = prompt(`${labels[key] || key}\nValeur actuelle: ${a.value}`, a.value);
@@ -2399,6 +2448,7 @@ window.toggleAlert = toggleAlert;
 // ═══════════════════════════════════════════════════════════════════
 
 function _getGoals() {
+  try { if (typeof _initTwin === 'function') _initTwin(); } catch(e) {}   // [GO ALERTES 2 · 14/11/2026] (n° 34b) S.twin = le Twin du mode affiché
   const portfolio = S.portfolio || 0;
   const startPortfolio = S._startPortfolio || portfolio;
   const totalGain = portfolio - (S.ownFundsInjected || startPortfolio);
@@ -2463,9 +2513,10 @@ function _getGoals() {
     {
       icon: '🔥', name: 'Série de 5',
       desc: '5 trades gagnants de suite',
-      current: Math.min(5, Object.values(S.pairStates||{}).reduce((m,ps)=>Math.max(m,ps.streak||0),0)),
+      // [GO ALERTES 2 · 14/11/2026] (ETAT n° 67) la série du mode (_alertWinStreak) — avant : ps.streak, qu'aucun code n'écrit (toujours 0)
+      current: Math.min(5, _alertWinStreak()),
       target: 5, unit: 'wins',
-      done: Object.values(S.pairStates||{}).some(ps=>(ps.streak||0)>=5)
+      done: _alertWinStreak() >= 5
     },
     {
       icon: '🌟', name: 'Maître du Twin',
@@ -2490,12 +2541,13 @@ function renderAlertsSection() {
   const doneCount = goals.filter(g => g.done).length;
 
   const alertDefs = [
-    { key:'sessionGain', emoji:'🎯', label:'Gain session',    sub:'Alerte quand P&L session ≥ seuil', loss:false },
-    { key:'sessionLoss', emoji:'🚨', label:'Perte session',   sub:'Alerte quand P&L session ≤ seuil', loss:true  },
-    { key:'dailyGain',   emoji:'💰', label:'Gain journalier', sub:'Alerte quand P&L 24h ≥ seuil',     loss:false },
-    { key:'dailyLoss',   emoji:'📉', label:'Perte journalière',sub:'Alerte quand P&L 24h ≤ seuil',    loss:true  },
-    { key:'drawdown',    emoji:'⚠️', label:'Drawdown (%)',    sub:'Alerte si drawdown ≥ seuil',        loss:true  },
-    { key:'winStreak',   emoji:'🔥', label:'Win Streak',      sub:'Alerte à N victoires consécutives', loss:false },
+    // [GO ALERTES 2 · 14/11/2026] (ETAT n° 67) chaque ligne dit ce qu'elle mesure (checkPnlAlerts) — en $ de ton argent, pour chaque mode en play
+    { key:'sessionGain', emoji:'🎯', label:'Gain session',    sub:'P&L depuis le lancement de l\'app ≥ seuil', loss:false },
+    { key:'sessionLoss', emoji:'🚨', label:'Perte session',   sub:'P&L depuis le lancement de l\'app ≤ seuil', loss:true  },
+    { key:'dailyGain',   emoji:'💰', label:'Gain du jour',    sub:'P&L depuis minuit ≥ seuil',     loss:false },
+    { key:'dailyLoss',   emoji:'📉', label:'Perte du jour',   sub:'P&L depuis minuit ≤ seuil',    loss:true  },
+    { key:'drawdown',    emoji:'⚠️', label:'Baisse (%)',      sub:'Baisse depuis le plus haut du jour ≥ seuil', loss:true  },
+    { key:'winStreak',   emoji:'🔥', label:'Série gagnante',  sub:'N clôtures gagnantes d\'affilée', loss:false },
     { key:'tradeCount',  emoji:'📊', label:'Nb Trades',       sub:'Alerte à N trades complétés',       loss:false },
   ];
 
@@ -2636,7 +2688,7 @@ function renderDrawdownSection() {
   if(!el) return;
 
   const allTrades = Object.values(S.pairStates||{}).flatMap(ps=>
-    (ps.trades||[]).filter(t=>t.type==='position'&&t.pnlUsdt!=null)
+    (ps.trades||[]).filter(t=>_isCloseRow(t)&&t.pnlUsdt!=null)   // [GO ALERTES 2 · 14/11/2026] (n° 81) toutes les fermetures, voix et urgence comprises (02 _isCloseRow)
   );
 
   if(allTrades.length < 3) {
@@ -2760,7 +2812,7 @@ function initWhatIfSection() {
 
   // Lire valeurs actuelles depuis S pour pré-remplir
   const allTrades = Object.values(S.pairStates||{}).flatMap(ps=>
-    (ps.trades||[]).filter(t=>t.type==='position'&&t.pnlUsdt!=null)
+    (ps.trades||[]).filter(t=>_isCloseRow(t)&&t.pnlUsdt!=null)   // [GO ALERTES 2 · 14/11/2026] (n° 81) toutes les fermetures, voix et urgence comprises (02 _isCloseRow)
   );
   if(allTrades.length >= 5) {
     const wins  = allTrades.filter(t=>(t.pnlUsdt||0)>0);
@@ -2884,7 +2936,7 @@ function updateWhatIf() {
 
   // Comparaison avec les données réelles
   if(cmpEl) {
-    const allT = Object.values(S.pairStates||{}).flatMap(ps=>(ps.trades||[]).filter(t=>t.type==='position'&&t.pnlUsdt!=null));
+    const allT = Object.values(S.pairStates||{}).flatMap(ps=>(ps.trades||[]).filter(t=>_isCloseRow(t)&&t.pnlUsdt!=null));   // [GO ALERTES 2 · 14/11/2026] (n° 81) toutes les fermetures, voix et urgence comprises (02 _isCloseRow)
     if(allT.length >= 5) {
       // [GO OUTILS · 18/10/2026] pnlUsdt est BRUT de frais (02 closePosition, 10e6 en-tête) : le réel est dit « brut », le simulé « net »
       const realPnl = allT.reduce((s,t)=>s+(t.pnlUsdt||0),0);
@@ -3167,7 +3219,7 @@ function _buildReplayEvents() {
 
   // 1. Trades depuis pairStates
   Object.entries(S.pairStates||{}).forEach(([pair, ps]) => {
-    (ps.trades||[]).filter(t=>t.type==='position'&&t.ts).forEach(t=>{
+    (ps.trades||[]).filter(t=>_isCloseRow(t)&&t.ts).forEach(t=>{   // [GO ALERTES 2 · 14/11/2026] (n° 81) toutes les fermetures, voix et urgence comprises (02 _isCloseRow)
       events.push({
         ts:    t.ts,
         type:  t.pnlUsdt>=0 ? 'trade-win' : 'trade-loss',
@@ -3281,7 +3333,7 @@ window.replayReset = replayReset;
 function generateCoachTips() {
   const tips = [];
   const allTrades = Object.values(S.pairStates||{}).flatMap(ps=>
-    (ps.trades||[]).filter(t=>t.type==='position'&&t.pnlUsdt!=null)
+    (ps.trades||[]).filter(t=>_isCloseRow(t)&&t.pnlUsdt!=null)   // [GO ALERTES 2 · 14/11/2026] (n° 81) toutes les fermetures, voix et urgence comprises (02 _isCloseRow)
   );
   const n = allTrades.length;
   if(n === 0) return [{ type:'info', icon:'🤖', title:'Pas encore de données', text:'Lance quelques trades pour que le Coach puisse analyser tes performances.', action:null }];
@@ -4256,7 +4308,7 @@ function detectAnomalies() {
   const pairs  = Object.keys(PAIRS || {});
   const agents = S.agents || [];
   const openPos= S.openPositions || [];
-  const allTrades = Object.values(ps).flatMap(p=>(p.trades||[]).filter(t=>t.type==='position'&&t.pnlUsdt!=null));
+  const allTrades = Object.values(ps).flatMap(p=>(p.trades||[]).filter(t=>_isCloseRow(t)&&t.pnlUsdt!=null));   // [GO ALERTES 2 · 14/11/2026] (n° 81) toutes les fermetures, voix et urgence comprises (02 _isCloseRow)
   const n = allTrades.length;
 
   // ── 1. Prix : variation brutale (pump/dump) ──

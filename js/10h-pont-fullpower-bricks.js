@@ -36,6 +36,11 @@ function exportForClaude() {
       guardian: null
     };
     var cyc = payload.auraCycle || '?';
+    // [GO ALERTES 2 · 14/11/2026] (ETAT n° 68) app Android : écriture native par le chemin des exports (05 _exportFile → Download/AURA), message selon le
+    // résultat RÉEL — avant : _shareOrDownloadJSON, qui retombait sur un lien blob quand l'écriture native échouait et disait « dans Téléchargements ».
+    if ((window.Capacitor || window.cordova) && typeof _exportFile === 'function') {
+      return _exportFile(JSON.stringify(payload), 'aura_live.json', 'application/json', '[' + _PONT_V + '] aura_live.json · cycle ' + cyc + ' (à joindre à Claude)');
+    }
     _shareOrDownloadJSON(JSON.stringify(payload), 'aura_live.json').then(function(res){
       var m;
       if (res === 'fs-written')      m = '\u2705 [' + _PONT_V + '] aura_live.json \u00b7 cycle ' + cyc + ' \u2014 Download/AURA \u00b7 joins-le \u00e0 Claude';
@@ -60,7 +65,7 @@ window.exportForClaude = exportForClaude;
       bar.id = 'claudeExportBar';
       bar.style.cssText = 'padding:8px 14px;display:flex;align-items:center;gap:10px;border-bottom:1px solid rgba(120,180,255,.12);';
       bar.innerHTML = '<button onclick="exportForClaude()" style="flex:0 0 auto;padding:7px 12px;border-radius:9px;border:1.5px solid rgba(56,212,245,.5);background:rgba(56,212,245,.10);color:#38d4f5;font-weight:800;font-size:12px;">\uD83D\uDCE4 Export pour Claude</button>'
-        + '<span style="font-size:10px;color:var(--t3,#8899aa);line-height:1.35;"><b style="color:#38d4f5;">Pont ' + _PONT_V + '</b> \u00b7 aura_live.json \u00b7 \u00e9tat VIVANT \u00b7 \u00e9crit dans Download/AURA (natif), sinon partage / t\u00e9l\u00e9chargement</span>';
+        + '<span style="font-size:10px;color:var(--t3,#8899aa);line-height:1.35;"><b style="color:#38d4f5;">Pont ' + _PONT_V + '</b> \u00b7 aura_live.json \u00b7 \u00e9tat VIVANT \u00b7 \u00e9crit dans Download/AURA dans l\u2019app (sinon le message le dit) ; navigateur : partage / t\u00e9l\u00e9chargement</span>';   // [GO ALERTES 2 · 14/11/2026] (n° 68)
       tabs.insertAdjacentElement('afterend', bar);
       return true;
     } catch(e) { return false; }
@@ -397,7 +402,7 @@ function openManDetail(pair) {
   }
   body.appendChild(actionsSection);
   
-  const pairTrades = (ps.trades || []).filter(t => t.type === 'position' && typeof t.pnlUsdt === 'number');
+  const pairTrades = (ps.trades || []).filter(t => _isCloseRow(t) && typeof t.pnlUsdt === 'number');   // [GO ALERTES 2 · 14/11/2026] (n° 81) toutes les fermetures, voix et urgence comprises (02 _isCloseRow)
   const wins = pairTrades.filter(t => t.pnlUsdt > 0).length;
   const totalTrades = pairTrades.length;
   const winRate = totalTrades > 0 ? (wins / totalTrades * 100).toFixed(1) : '—';

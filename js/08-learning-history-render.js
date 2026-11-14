@@ -2805,6 +2805,11 @@ function _bgModeWatch(tk) {
   if (tk % 4 === 0) g(() => { if (typeof _manConsignesWatchdog === 'function') _manConsignesWatchdog(); });
   if (tk % 30 === 0) g(() => { if (typeof applyFundingFees === 'function') applyFundingFees(); if (typeof applyLeverageBorrowFees === 'function') applyLeverageBorrowFees(); });
   g(() => { if (typeof _computePortfolio === 'function') S.portfolio = _computePortfolio(); });
+  // [GO ALERTES 2 · 14/11/2026] (ETAT n° 66) les alertes P&L de CE mode (04 checkPnlAlerts : EV / RE seulement derrière l'écran, message étiqueté, pas de
+  // bandeau) — avant : seuls renderHome et une fermeture du mode à l'écran les vérifiaient, un mode en play derrière l'écran n'en recevait aucune.
+  g(() => { if (typeof checkPnlAlerts === 'function') checkPnlAlerts(); });
+  // (ETAT n° 34b) le Twin de CE mode avance sur SES prix (07 tickTwinLive, un Twin par mode) à chaque passage (3 s ; à l'écran : 4 s)
+  g(() => { if (typeof tickTwinLive === 'function') tickTwinLive(); });
 }
 window._bgModeWatch = _bgModeWatch;
 
@@ -3269,6 +3274,9 @@ function simTick() {
   // [GO NETTOYAGE · 18/10/2026] (ETAT n° 34) Twin Live au battement, 1 tick sur 4 (la cadence du rendu de l'accueil), quelle que soit la page, écran éteint
   // compris — avant : seulement à l'ouverture de l'accueil (02 goPage). Il n'écrit que S.twin (positions et P&L VIRTUELS) : ni argent, ni décision.
   if (tick % 4 === 0) { try { if (typeof tickTwinLive === 'function') tickTwinLive(); } catch(e) {} }
+  // [GO ALERTES 2 · 14/11/2026] (ETAT n° 66) alertes P&L du mode à l'écran au battement, quelle que soit la page, écran éteint compris (04 checkPnlAlerts) —
+  // avant : seulement au rendu de l'accueil (accueil affiché, écran allumé) et après une fermeture. Les modes derrière l'écran : _bgModeWatch, plus haut.
+  try { if (typeof checkPnlAlerts === 'function') checkPnlAlerts(); } catch(e) {}
   // ── Render active page (throttled) · SAUTÉ si l'écran est masqué : inutile de peindre une
   //    interface invisible, et ça évite un rattrapage brutal au retour. Le trading et
   //    l'apprentissage (au-dessus) continuent normalement — aucune donnée n'est affectée. ──

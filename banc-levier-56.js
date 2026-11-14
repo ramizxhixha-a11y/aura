@@ -212,8 +212,10 @@ T('D la DÉCISION n\'a pas bougé : 19 fonctions identiques au commit 6f4cd12 ; 
     applyLeverageBorrowFees: 'e364c8a77e5c72ad', syncLeverageReserve: '77805e0810c80b7b', getTechSignals: '0c8a8a273d52421d' };
   Object.entries(AV).forEach(([n, h]) => assert.strictEqual(h16(fnSrc(TOUT, n) || ''), h, n + ' a changé'));
   // computePortfolioTotal : seul son commentaire change (la valeur, lue par l'écran, reste la même)
+  // [GO ALERTES 2 · 14/11/2026] (ETAT n° 77) la valeur change exprès : la « réserve frais » (cumul des frais déjà payés) sort du total. Lu par l'accueil seul
+  // (heroVal, détail Σ Total, 09b2 sauvegarde, 09k) — aucun lecteur dans la décision (banc-alertes-2 V2 le vérifie). Empreinte d'avant : 57dd0dacad455aed.
   const strip = s => s.split('\n').filter(l => !/^\s*\/\//.test(l)).join('\n');
-  assert.strictEqual(h16(strip(fnSrc(s02, 'computePortfolioTotal'))), '57dd0dacad455aed', 'computePortfolioTotal : le code a changé');
+  assert.strictEqual(h16(strip(fnSrc(s02, 'computePortfolioTotal'))), '8343d7a0b3fd05f6', 'computePortfolioTotal : le code a changé');
   // closePosition : le texte d'avant, où la ligne des alertes P&L est remplacée par la nouvelle (et son commentaire), est le texte d'après
   const cp = fnSrc(_TR(s02, 'js/02-state-init.js'), 'closePosition');
   const neu = cp.replace(/\n {6}\/\/ \[GO LEVIER 56[^\n]*\n {6}\/\/[^\n]*\n {6}try \{ window\._pnlSansPos = pos; if\(!_behind && typeof checkPnlAlerts === 'function'\) checkPnlAlerts\(\); \} catch\(e\) \{\} finally \{ window\._pnlSansPos = null; \}/,
@@ -224,7 +226,8 @@ T('D la DÉCISION n\'a pas bougé : 19 fonctions identiques au commit 6f4cd12 ; 
 T('G aucun lecteur du P&L des périodes ni de _pnlBasis hors de l\'écran et des alertes', () => {
   const files = fs.readdirSync(path.join(ROOT, 'js')).filter(f => f.endsWith('.js')).map(f => 'js/' + f).concat(['AURA8_v118.html', 'aura-guardian.html', 'guardian-core.js', 'guardian-embed.js', 'guardian-config.js']);
   const permis = { _computePnlByPeriod: ['js/09d1-paper-real-core.js', 'js/04-v8-0-livraison-35-mode-max-permissif-v.js', 'js/07-v90-mode-bunker-sos.js'],
-    _pnlBasis: ['js/02-state-init.js', 'js/09d1-paper-real-core.js', 'js/10c-profil-ab-contexte.js', 'js/09b2-save-load.js', 'js/09j-helpers.js', 'js/07-v90-mode-bunker-sos.js'],
+    // [GO ALERTES 2 · 14/11/2026] + 04 : checkPnlAlerts (les ALERTES) mesure la session et la baisse du jour sur l'argent à Rams (ETAT n° 67)
+    _pnlBasis: ['js/02-state-init.js', 'js/09d1-paper-real-core.js', 'js/10c-profil-ab-contexte.js', 'js/09b2-save-load.js', 'js/09j-helpers.js', 'js/07-v90-mode-bunker-sos.js', 'js/04-v8-0-livraison-35-mode-max-permissif-v.js'],
     _pnlSansPos: ['js/02-state-init.js'] };
   Object.entries(permis).forEach(([n, ok]) => {
     const vus = files.filter(f => fs.existsSync(path.join(ROOT, f)) && rd(f).split('\n').some(l => l.includes(n) && !/^\s*\/\//.test(l)));

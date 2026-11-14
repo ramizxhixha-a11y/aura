@@ -13,7 +13,8 @@ console.log('▶ banc-menage');
 T('1 · _totalCompounded : plus jamais écrit, plus jamais lu dans un P&L affiché ; le champ reste sauvegardé (manifest)', () => {
   assert.strictEqual(/_totalCompounded\s*=\s*\(/.test(c02), false, 'incrément retiré');
   assert.strictEqual(c03.includes('(S._totalCompounded || 0) +'), false); assert.strictEqual(c07.includes('(S._totalCompounded || 0) +'), false);
-  assert.ok(c03.includes('const mainPnl = (S.portfolio && S._startPortfolio ? (S.portfolio - S._startPortfolio) : 0);') && c07.includes('const mainPnl = (S.portfolio && S._startPortfolio ? (S.portfolio - S._startPortfolio) : 0);'), 'P&L de session, le même qu\'à l\'accueil');
+  // [GO ALERTES 2 · 14/11/2026] 07 Twin : le bot se mesure depuis l'activation du Twin (07 _twinBotPnl, sur l'argent à Rams) — toujours sans _totalCompounded
+  assert.ok(c03.includes('const mainPnl = (S.portfolio && S._startPortfolio ? (S.portfolio - S._startPortfolio) : 0);') && (c07.includes('const mainPnl = (S.portfolio && S._startPortfolio ? (S.portfolio - S._startPortfolio) : 0);') || (c07.includes('const mainPnl = _twinBotPnl(twin);') && !/_totalCompounded/.test(c07.slice(c07.indexOf('function _twinBotPnl'), c07.indexOf('function _twinBotPnl') + 900)))), 'P&L de session, le même qu\'à l\'accueil');
   assert.ok(codeStrict(rd('js/09b1-build-snapshot.js')).includes('_totalCompounded: S._totalCompounded || 0,') && c02.includes("'_totalCompounded'"), 'champ conservé dans les sauvegardes');
 });
 T('2 · reset des portefeuilles : un reset EV ou RE vide aussi S._lossStreaks (la blacklist repart de zéro avec le portefeuille)', () => {

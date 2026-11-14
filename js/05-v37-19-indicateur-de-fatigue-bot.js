@@ -1059,6 +1059,23 @@ async function _outilsSaveText(text, filename, mime) {
   } catch (e) { return { ok: false, how: 'download', diag: (e && e.message) || String(e) }; }
 }
 window._outilsSaveText = _outilsSaveText;
+// [GO ALERTES 2 · 14/11/2026] (ETAT n° 68) LE chemin de tous les exports de fichier : écriture native dans Download/AURA (app Android, par _outilsSaveText →
+// _fsWriteBackup, comme les backups), sinon téléchargement du navigateur ; le message dit le résultat RÉEL et l'endroit. Avant, 9 exports au moins (CSV trades /
+// frais / résumé fiscal / JSON fiscal de 09h, registre fiscal, 4 CSV Google Sheets, « Export pour Claude », backup .json / .txt, dashboard, widget, script, API)
+// passaient par un lien blob — qui n'écrit rien dans l'app Android — et disaient « exporté » / « téléchargé » quoi qu'il arrive.
+async function _exportFile(text, filename, mime, label) {
+  const lab = label || filename;
+  let r;
+  try { r = await _outilsSaveText(text, filename, mime); } catch (e) { r = { ok: false, diag: (e && e.message) || String(e) }; }
+  try {
+    if (typeof showToast === 'function') {
+      if (r && r.ok) showToast('📥 ' + lab + (r.how === 'fs' ? ' écrit : ' + r.where : ' téléchargé' + (label ? ' : ' + filename : '')), 5000, 'win');
+      else showToast('❌ ' + lab + ' non écrit : ' + String((r && r.diag) || 'écriture refusée').split('\n')[0], 6000, 'warn');
+    }
+  } catch (e) {}
+  return r;
+}
+window._exportFile = _exportFile;
 // Un rapport HTML imprimable : app Android → fichier .html écrit dans Download/AURA (à ouvrir dans Chrome, puis Imprimer › PDF) ; navigateur →
 // nouvel onglet + boîte d'impression, comme avant.
 async function _outilsPrintable(html, base, label) {
@@ -1106,14 +1123,14 @@ function _buildReportHTML() {
   const _fd = ts => new Date(ts).toLocaleDateString('fr-FR');
   const monthStr = n>0 ? `${_fd(allTrades[0].ts||0)} → ${_fd(allTrades[n-1].ts||0)}` : 'aucun trade gardé';
   const modeName = _outilsModeName(S.tradingMode);
-  const netMode  = Number(fees.totalPnlNet)||0;
+  const netMode  = _feesNetTotal();   // [GO ALERTES 2 · 14/11/2026] (n° 96) le net de l'écran Fiscal — avant : totalPnlNet, sans le funding
   const nUrg     = allTrades.filter(t=>t.urgence).length;   // [GO NETTOYAGE · 18/10/2026] (ETAT n° 39) fermetures d'urgence comptées et dites
 
   // P&L par paire — compteurs de la paire (depuis le début) ; net = registre des frais par paire du mode (02 recordFees)
   const pairStats = Object.entries(S.pairStates||{}).map(([pair,ps])=>{
     const bp = (fees.byPair||{})[pair];
     return { pair, trades:ps.totalTrades||0, wins:ps.winTrades||0,
-      pnl:ps.totalPnlUsd||0, net: bp && isFinite(bp.pnlNet) ? Number(bp.pnlNet) : null,
+      pnl:ps.totalPnlUsd||0, net: _feesNetPair(bp),   // [GO ALERTES 2] (n° 96) funding de la paire déduit
       wr: ps.totalTrades>0?Math.round((ps.winTrades||0)/ps.totalTrades*100):null };
   }).filter(p=>p.trades>0).sort((a,b)=>b.pnl-a.pnl);
 
@@ -1584,7 +1601,7 @@ function _buildReportHTML() {
 <div class="kpi-grid" style="grid-template-columns:repeat(5,1fr);">
   <div class="kpi ${netMode>=0?'good':'bad'}">
     <span class="kpi-val">${netMode>=0?'+':''}$${netMode.toFixed(2)}</span>
-    <span class="kpi-lbl">P&L net depuis le début (frais et impôt déduits)</span>
+    <span class="kpi-lbl">P&L net depuis le début (frais déduits, impôt de l'année — comme l'écran Fiscal)</span>
   </div>
   <div class="kpi ${totalPnl>=0?'good':'bad'}">
     <span class="kpi-val">${totalPnl>=0?'+':''}$${totalPnl.toFixed(2)}</span>
@@ -1673,7 +1690,7 @@ function renderPdfReportSection() {
   const n      = allTrades.length;
   const nUrg   = allTrades.filter(t=>t.urgence).length;   // [GO NETTOYAGE · 18/10/2026] (ETAT n° 39)
   const totalPnl = allTrades.reduce((s,t)=>s+(t.pnlUsdt||0),0);
-  const netMode  = Number((S.fees||{}).totalPnlNet)||0;
+  const netMode  = _feesNetTotal();   // [GO ALERTES 2 · 14/11/2026] (n° 96)
   const wr     = n>0 ? Math.round(allTrades.filter(t=>t.pnlUsdt>0).length/n*100) : 0;
   const fees   = S.fees || {};
   const now    = new Date();
@@ -1689,7 +1706,7 @@ function renderPdfReportSection() {
       <div class="rp-section-lbl">Aperçu du rapport</div>
       <div class="rp-preview-card">
         <div class="rp-preview-row"><span style="color:var(--t3);">Trades gardés (dernières clôtures par paire)</span><span style="font-weight:700;">${n}${nUrg ? ` · dont ${nUrg} urgence` : ''}</span></div>
-        <div class="rp-preview-row"><span style="color:var(--t3);">P&L net depuis le début</span><span style="font-weight:700;color:${netMode>=0?'var(--up)':'var(--down)'};">${netMode>=0?'+':''}$${netMode.toFixed(2)}</span></div>
+        <div class="rp-preview-row"><span style="color:var(--t3);">P&L net depuis le début · impôt de l'année</span><span style="font-weight:700;color:${netMode>=0?'var(--up)':'var(--down)'};">${netMode>=0?'+':''}$${netMode.toFixed(2)}</span></div>
         <div class="rp-preview-row"><span style="color:var(--t3);">P&L brut des trades gardés</span><span style="font-weight:700;color:${totalPnl>=0?'var(--up)':'var(--down)'};">${totalPnl>=0?'+':''}$${totalPnl.toFixed(2)}</span></div>
         <div class="rp-preview-row"><span style="color:var(--t3);">Win Rate</span><span style="font-weight:700;color:${wr>=55?'var(--up)':'var(--down)'};">${wr}%</span></div>
         <div class="rp-preview-row"><span style="color:var(--t3);">Sharpe Ratio</span><span style="font-weight:700;">${m?m.sharpe.toFixed(2):'—'}</span></div>
@@ -1770,7 +1787,7 @@ function buildExcelData() {
       ['Trades perdants', losses.length, ''],
       ['Win Rate', n>0?(wins.length/n*100).toFixed(1)+'%':'—', ''],
       ['P&L brut des trades gardés', _xlCell(totalPnl,'usd'), 'avant frais'],
-      ['P&L net depuis le début', _xlCell(Number(fees.totalPnlNet)||0,'usd'), 'frais et impôt provisionné déduits'],
+      ['P&L net depuis le début', _xlCell(_feesNetTotal(),'usd'), 'brut et frais (funding compris) depuis le début, impôt de l\'année du registre — le net de l\'écran Fiscal'],   // [GO ALERTES 2] (n° 96)
       ['Gain moyen', wins.length>0?_xlCell(wins.reduce((s,t)=>s+t.pnlUsdt,0)/wins.length,'usd'):'—', ''],
       ['Perte moyenne', losses.length>0?_xlCell(Math.abs(losses.reduce((s,t)=>s+t.pnlUsdt,0)/losses.length),'usd'):'—', ''],
       ['','',''],
@@ -2502,11 +2519,11 @@ function _wr() {
 }
 function _perfectDay() {
   const today=new Date().toDateString();
-  const todayTrades=Object.values(S.pairStates||{}).flatMap(ps=>(ps.trades||[]).filter(t=>t.type==='position'&&t.ts&&new Date(t.ts).toDateString()===today));
+  const todayTrades=Object.values(S.pairStates||{}).flatMap(ps=>(ps.trades||[]).filter(t=>_isCloseRow(t)&&t.ts&&new Date(t.ts).toDateString()===today));   // [GO ALERTES 2 · 14/11/2026] (n° 81) toutes les fermetures, voix et urgence comprises (02 _isCloseRow)
   return todayTrades.length>=5 && todayTrades.every(t=>(t.pnlUsdt||0)>0);
 }
 function _nightTrades() {
-  return Object.values(S.pairStates||{}).flatMap(ps=>(ps.trades||[]).filter(t=>t.type==='position'&&t.ts)).filter(t=>{
+  return Object.values(S.pairStates||{}).flatMap(ps=>(ps.trades||[]).filter(t=>_isCloseRow(t)&&t.ts)).filter(t=>{   // [GO ALERTES 2 · 14/11/2026] (n° 81) toutes les fermetures, voix et urgence comprises (02 _isCloseRow)
     const h=new Date(t.ts).getHours(); return h>=0&&h<6;
   }).length;
 }
@@ -2733,14 +2750,7 @@ ${cfg.showAgents?`
 window.generateDashboardHTML = generateDashboardHTML;
 
 function shareDashboard() {
-  const html = generateDashboardHTML();
-  const blob = new Blob([html], {type:'text/html'});
-  const url  = URL.createObjectURL(blob);
-  const a    = document.createElement('a');
-  a.href=url; a.download='aura_dashboard_public.html';
-  document.body.appendChild(a); a.click();
-  document.body.removeChild(a); URL.revokeObjectURL(url);
-  showToast('📤 Dashboard téléchargé — partage le fichier HTML', 3000, 'win');
+  return _exportFile(generateDashboardHTML(), 'aura_dashboard_public.html', 'text/html', 'Dashboard (fichier HTML à partager)');   // [GO ALERTES 2] (n° 68)
 }
 window.shareDashboard = shareDashboard;
 
@@ -2840,7 +2850,7 @@ function _fmCalcStats() {
   _fmInit();
   const fm    = S.fundManager;
   const totalPnlPct = S.totalTrades>0 ? (() => {
-    const allT = Object.values(S.pairStates||{}).flatMap(ps=>(ps.trades||[]).filter(t=>t.type==='position'&&t.pnlUsdt!=null));
+    const allT = Object.values(S.pairStates||{}).flatMap(ps=>(ps.trades||[]).filter(t=>_isCloseRow(t)&&t.pnlUsdt!=null));   // [GO ALERTES 2 · 14/11/2026] (n° 81) toutes les fermetures, voix et urgence comprises (02 _isCloseRow)
     const sum  = allT.reduce((s,t)=>s+(t.pnl||0),0);
     return allT.length>0 ? sum/allT.length : 0;
   })() : 0;
@@ -3147,14 +3157,7 @@ body{background:#050709;color:#e0e0e0;font-family:'SF Pro Display',system-ui,san
 }
 
 function downloadWidget() {
-  const html = _buildWidgetHTML();
-  const blob = new Blob([html], {type:'text/html'});
-  const url  = URL.createObjectURL(blob);
-  const a    = document.createElement('a');
-  a.href=url; a.download='AURA_widget.html';
-  document.body.appendChild(a); a.click();
-  document.body.removeChild(a); URL.revokeObjectURL(url);
-  showToast('📱 Widget téléchargé — ouvre dans Chrome → ⋮ → Ajouter à l\'écran d\'accueil', 5000, 'user');
+  return _exportFile(_buildWidgetHTML(), 'AURA_widget.html', 'text/html', 'Widget (à ouvrir dans Chrome → ⋮ → Ajouter à l\'écran d\'accueil)');   // [GO ALERTES 2] (n° 68)
 }
 window.downloadWidget = downloadWidget;
 
@@ -3510,19 +3513,15 @@ function _toCSV(headers, rows) {
   return [headers.map(esc).join(','), ...rows.map(r=>r.map(esc).join(','))].join('\n');
 }
 
-function _downloadCSV(content, filename) {
-  const blob = new Blob(['\uFEFF'+content], {type:'text/csv;charset=utf-8'});
-  const url  = URL.createObjectURL(blob);
-  const a    = document.createElement('a');
-  a.href=url; a.download=filename;
-  document.body.appendChild(a); a.click();
-  document.body.removeChild(a); URL.revokeObjectURL(url);
+// [GO ALERTES 2 · 14/11/2026] (ETAT n° 68) par _exportFile (écriture native dans l'app Android, message selon le résultat) — avant : lien blob
+function _downloadCSV(content, filename, label) {
+  return _exportFile('\uFEFF' + content, filename, 'text/csv;charset=utf-8', label || filename);
 }
 
 // Export CSV Trades
 function exportGsTrades() {
   const allT = Object.values(S.pairStates||{}).flatMap(ps=>
-    (ps.trades||[]).filter(t=>t.type==='position'&&t.pnlUsdt!=null)
+    (ps.trades||[]).filter(t=>_isCloseRow(t)&&t.pnlUsdt!=null)   // [GO ALERTES 2 · 14/11/2026] (n° 81) toutes les fermetures, voix et urgence comprises (02 _isCloseRow)
   ).sort((a,b)=>(a.ts||0)-(b.ts||0));
 
   const csv = _toCSV(
@@ -3535,8 +3534,7 @@ function exportGsTrades() {
       (t.pnlUsdt||0)>0?'WIN':'LOSS',
     ])
   );
-  _downloadCSV(csv, 'AURA_trades.csv');
-  showToast('📊 AURA_trades.csv téléchargé → importer dans Google Sheets', 3000, 'win');
+  _downloadCSV(csv, 'AURA_trades.csv', 'AURA_trades.csv (à importer dans Google Sheets)');
 }
 window.exportGsTrades = exportGsTrades;
 
@@ -3549,7 +3547,6 @@ function exportGsPaires() {
   ]);
   const csv = _toCSV(['Paire','Trades','Wins','WR%','P&L $','P&L %'], rows);
   _downloadCSV(csv, 'AURA_paires.csv');
-  showToast('₿ AURA_paires.csv téléchargé', 2500, 'win');
 }
 window.exportGsPaires = exportGsPaires;
 
@@ -3565,7 +3562,6 @@ function exportGsAgents() {
     ])
   );
   _downloadCSV(csv, 'AURA_agents.csv');
-  showToast('🤖 AURA_agents.csv téléchargé', 2500, 'win');
 }
 window.exportGsAgents = exportGsAgents;
 
@@ -3591,7 +3587,6 @@ function exportGsResume() {
     ['Frais totaux $', (S.fees?.totalGross||0).toFixed(2), now],
   ]);
   _downloadCSV(csv, 'AURA_resume.csv');
-  showToast('📋 AURA_resume.csv téléchargé', 2500, 'win');
 }
 window.exportGsResume = exportGsResume;
 
@@ -3606,7 +3601,7 @@ function _generateAppsScript() {
 
   // Données aplaties pour Apps Script
   const tradesData = Object.values(S.pairStates||{}).flatMap(ps=>
-    (ps.trades||[]).filter(t=>t.type==='position'&&t.pnlUsdt!=null).slice(-20)
+    (ps.trades||[]).filter(t=>_isCloseRow(t)&&t.pnlUsdt!=null).slice(-20)   // [GO ALERTES 2 · 14/11/2026] (n° 81) toutes les fermetures, voix et urgence comprises (02 _isCloseRow)
   ).map(t=>`["${t.time||'—'}","${t.pair||''}","${t.side==='buy'?'LONG':'SHORT'}",${(t.pnlUsdt||0).toFixed(2)},"${(t.pnlUsdt||0)>0?'WIN':'LOSS'}"]`).join(',\n    ');
 
   return `// ═══ AURA Sync — Google Apps Script ═══
@@ -3681,12 +3676,7 @@ function _fallbackCopyScript(script) {
 }
 
 function downloadAppsScript() {
-  const script = _generateAppsScript();
-  const blob = new Blob([script], {type:'text/plain'});
-  const url  = URL.createObjectURL(blob);
-  const a    = document.createElement('a'); a.href=url; a.download='AURA_AppScript.gs';
-  document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
-  showToast('📥 AURA_AppScript.gs téléchargé', 2500, 'win');
+  return _exportFile(_generateAppsScript(), 'AURA_AppScript.gs', 'text/plain', 'AURA_AppScript.gs');   // [GO ALERTES 2] (n° 68)
 }
 window.downloadAppsScript = downloadAppsScript;
 
@@ -3807,7 +3797,7 @@ function _apiResponse(endpoint) {
     '/trades': {
       status:'ok', timestamp:ts,
       data:Object.values(S.pairStates||{}).flatMap(ps=>
-        (ps.trades||[]).filter(t=>t.type==='position').slice(-10)
+        (ps.trades||[]).filter(t=>_isCloseRow(t)).slice(-10)   // [GO ALERTES 2 · 14/11/2026] (n° 81) toutes les fermetures, voix et urgence comprises (02 _isCloseRow)
       ).sort((a,b)=>(b.ts||0)-(a.ts||0)).slice(0,20).map(t=>({
         pair:t.pair||'?', side:t.side==='buy'?'LONG':'SHORT',
         pnlUsd:+(t.pnlUsdt||0).toFixed(2),
@@ -3856,15 +3846,8 @@ setInterval(()=>{ try { _apiPublishToStorage(); } catch(e){} }, 10000);
 
 // ── Download JSON endpoint ──
 function downloadApiEndpoint(endpoint) {
-  const data = _apiResponse(endpoint);
-  const json = JSON.stringify(data, null, 2);
-  const blob = new Blob([json], {type:'application/json'});
-  const url  = URL.createObjectURL(blob);
-  const a    = document.createElement('a');
-  a.href=url; a.download=`aura_api${endpoint.replace('/','_')}.json`;
-  document.body.appendChild(a); a.click();
-  document.body.removeChild(a); URL.revokeObjectURL(url);
-  showToast('📥 '+endpoint+' téléchargé', 2000, 'win');
+  const json = JSON.stringify(_apiResponse(endpoint), null, 2);
+  return _exportFile(json, `aura_api${endpoint.replace('/','_')}.json`, 'application/json', 'API ' + endpoint);   // [GO ALERTES 2] (n° 68)
 }
 window.downloadApiEndpoint = downloadApiEndpoint;
 
@@ -3983,7 +3966,7 @@ function _computeCorrelationMatrix() {
   // Construire les séries de P&L par paire (alignées dans le temps)
   const series = {};
   pairs.forEach(pair=>{
-    const trades = (ps[pair]?.trades||[]).filter(t=>t.type==='position'&&t.pnlUsdt!=null&&t.ts);
+    const trades = (ps[pair]?.trades||[]).filter(t=>_isCloseRow(t)&&t.pnlUsdt!=null&&t.ts);   // [GO ALERTES 2 · 14/11/2026] (n° 81) toutes les fermetures, voix et urgence comprises (02 _isCloseRow)
     // Discrétiser en buckets de 6h
     const buckets = {};
     trades.forEach(t=>{
@@ -4322,18 +4305,18 @@ function renderFeeAnalysisSection() {
   const byPair = fees.byPair || {};
   const n      = S.totalTrades||0;
   const allT   = Object.values(S.pairStates||{}).flatMap(ps=>
-    (ps.trades||[]).filter(t=>t.type==='position'&&t.pnlUsdt!=null)
+    (ps.trades||[]).filter(t=>_isCloseRow(t)&&t.pnlUsdt!=null)   // [GO ALERTES 2 · 14/11/2026] (n° 81) toutes les fermetures, voix et urgence comprises (02 _isCloseRow)
   );
 
   const tradingFees = fees.totalTradingFees||0;
   const slippage    = fees.totalSlippage||0;
   const funding     = fees.totalFunding||0;
-  const taxProv     = fees.totalTaxProvision||0;
+  const taxProv     = (typeof calcTaxProvision === 'function') ? (Number(calcTaxProvision()) || 0) : 0;   // [GO ALERTES 2 · 14/11/2026] (n° 96) l'impôt du registre, celui de l'écran Fiscal
   const totalFees   = tradingFees+slippage+funding+taxProv;
   const feePerTrade = n>0?totalFees/n:0;
 
   const pnlGross = fees.totalPnlGross||0;
-  const pnlNet   = fees.totalPnlNet||allT.reduce((s,t)=>s+(t.pnlUsdt||0),0);
+  const pnlNet   = _feesNetTotal();   // [GO ALERTES 2 · 14/11/2026] (n° 96) brut − frais (funding compris) − impôt : avant, totalPnlNet sans le funding
   const feeRatio = pnlGross>0?totalFees/pnlGross*100:0;
 
   // Projection mensuelle

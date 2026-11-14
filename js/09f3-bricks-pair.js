@@ -308,7 +308,7 @@ function ac2UpdateXInd(pair) {
   // ── Streak de wins/losses sur les trades clôturés ──
   const streakEl = document.getElementById('ac2_streak_' + k);
   if (streakEl) {
-    const closedTrades = (ps.trades || []).filter(t => t.type === 'position' && typeof t.pnlUsdt === 'number');
+    const closedTrades = (ps.trades || []).filter(t => _isCloseRow(t) && typeof t.pnlUsdt === 'number');   // [GO ALERTES 2 · 14/11/2026] (n° 81) toutes les fermetures, voix et urgence comprises (02 _isCloseRow)
     if (!closedTrades.length) {
       streakEl.textContent = '—';
       streakEl.style.color = 'var(--t3)';
