@@ -137,10 +137,12 @@ T('N4 · VRAI applyBotSuggestion (« ✓ Appliquer ») : même EV, suggestion de
 });
 
 T('N5 · 09j getCapitalSummary : libre = caisse + trading (avant : − trades en cours, comptés deux fois) ; engagé, maximum et % inchangés', () => {
-  const W = evDuPont(); W.S.cashAccount = 12.5; W.run('syncLeverageReserve()');
+  const W = evDuPont(); W.S.cashAccount = 12.5;
+  W.S.openPositions.push({ id: 'L', pair: 'EUR/USDT', side: 'long', entryPrice: 100, stakeUsdt: 50, totalExposure: 150, levBorrowed: 100, auto: false });   // une position à levier ×3
+  W.run('syncLeverageReserve()');
   const r = W.run('getCapitalSummary()');
-  near(r.free, 1127.83, 1e-9, 'libre'); near(r.staked, 1055.89, 1e-9, 'engagé'); near(r.maxAllowed, W.S.leverageReserve, 0, 'maximum = la réserve du levier');
-  near(r.usedPct, 1055.89 / (1115.33 + 1055.89) * 100, 1e-9, '% du capital trading');
+  near(r.free, 1127.83, 1e-9, 'libre'); near(r.staked, 1055.89 + 150, 1e-9, 'engagé = exposition'); near(r.maxAllowed, W.S.leverageReserve, 0, 'maximum = la réserve du levier');
+  near(r.usedPct, (1055.89 + 150) / (1115.33 + 1055.89 + 150) * 100, 1e-9, '% du capital trading');
 });
 
 T('P · propriété, 2 000 états tirés : validateManualExposure = validateTotalExposure sauf la phase 5 SANS levier (plafond = trading) ; jamais plus stricte ; avec emprunt, identique', () => {
