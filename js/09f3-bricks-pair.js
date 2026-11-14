@@ -65,7 +65,7 @@ function updatePairBricks() {
 
     // Prix (toujours affiché)
     if (pxEl) {
-      const priceStr = (cfg.dec >= 4) ? ps.price.toFixed(cfg.dec) : Math.floor(ps.price).toLocaleString();
+      const priceStr = pxTxt(pair, ps.price);   // [GO CSS FINITIONS · 14/11/2026] (n° 86) 02 pxTxt
       const pnl24    = ps.pnl24h || 0;
       const pnl24Col = pnl24 >= 0 ? 'var(--up)' : 'var(--down)';
       pxEl.innerHTML = `${priceStr} <span style="color:${pnl24Col};margin-left:3px;">${pnl24 >= 0 ? '+' : ''}${pnl24.toFixed(2)}%</span>`;

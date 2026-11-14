@@ -103,6 +103,7 @@ function world(o) {
   const src = F02.map(n => fnSrc(s02, n)).concat(F02NEW.filter(n => has(s02, n)).map(n => fnSrc(s02, n)));
   src.push('var _leverageMarginCheck = ' + between(s02, 'window._leverageMarginCheck = function _leverageMarginCheck() {', '\n};\n').replace('window._leverageMarginCheck = ', '') + '\n};');
   src.push(o.capOk ? 'function validateTotalExposure() { return { ok: true, available: 1e9 }; }' : fnSrc(s9j, 'validateTotalExposure'), fnSrc(s9j, 'validateInvestmentCapProvisioned'));
+  src.push('const _pxFmt = {};', fnSrc(s02, 'pxTxt'), fnSrc(s02, 'pxIn'));   // [GO CSS FINITIONS · 14/11/2026] (n° 86) la fiche écrit ses indices ±2 % par 02 pxTxt / pxIn
   src.push('var _editModal = null;', fnSrc(s08, 'applyPosEdit'), fnSrc(s08, 'openPosEdit'), fnSrc(s08, 'flipPosition'), 'function closePosEditModal() { _editModal = null; }');
   src.push(fnSrc(s07, 'manuInvert'), fnSrc(s07, '_bkCapital'), fnSrc(s07, '_computeNetUsdParts'));
   src.push(has(s05, '_spRemainingFactor') ? fnSrc(s05, '_spRemainingFactor') : '', (s05.match(/const _SP_PALIERS_DEF = \[[\s\S]*?\];/) || [''])[0], fnSrc(s05, 'closePartial'));   // [GO NETTOYAGE · 19/10/2026] (n° 55) _spRemainingFactor retirée de 05 : lue seulement sur le code d'avant

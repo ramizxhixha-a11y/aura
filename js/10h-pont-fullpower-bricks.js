@@ -126,11 +126,9 @@ if(typeof loadAllTrades==='function') window.loadAllTrades = loadAllTrades;
 // _manOpenWarnings) affichés AVANT le clic ; bloc système rafraîchi toutes les 2 s tant que la fiche est ouverte. Rien de tout cela ne
 // décide à ta place : en MANU, le bot ne fait que suggérer, surveiller et protéger (règles du 05/07).
 function _manFmtPx(pair, px) {
-  const cfg = (typeof PAIRS !== 'undefined' && PAIRS[pair]) || {};
   px = Number(px);
   if (!isFinite(px) || px <= 0) return '—';
-  if (px >= 1000) return '$' + Math.round(px).toLocaleString();
-  return px.toFixed(cfg.dec >= 4 ? cfg.dec : (px >= 1 ? 2 : 4));
+  return pxTxt(pair, px);   // [GO CSS FINITIONS · 14/11/2026] (n° 86, relecture) avant : « 0.7610 » sans $ dans la fiche, « $0,761 » sur la brique
 }
 window._manFmtPx = _manFmtPx;
 
@@ -308,7 +306,7 @@ function openManDetail(pair) {
     const posSection = document.createElement('div');
     posSection.className = 'detail-section';
     posSection.innerHTML = `
-      <div class="detail-section-title">🎛️ Position active</div>
+      <div class="detail-section-title">${manualPos._voix === 'tendance' ? '📈 Position de la voix tendance' : '🎛️ Position active'}</div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px 10px;font-size:11px;">
         <div><span style="color:var(--t3);">Side</span><br><span style="color:${sideCol};font-weight:800;font-size:13px;">${sideLabel}</span></div>
         <div><span style="color:var(--t3);">Mise</span><br><span style="color:var(--t1);font-weight:700;font-family:var(--font-mono);">$${(manualPos.stakeUsdt || 0).toFixed(2)}</span></div>
@@ -475,7 +473,7 @@ function renderActionBricks() {
     
     brick.className = 'action-brick sig-' + signal;
     
-    const priceStr = (cfg.dec >= 4) ? ps.price.toFixed(cfg.dec) : ('$' + Math.floor(ps.price).toLocaleString());
+    const priceStr = pxTxt(pair, ps.price);   // [GO CSS FINITIONS · 14/11/2026] (n° 86) 02 pxTxt
     const p24 = ps.pnl24h || 0;
     const p24Col = p24 >= 0 ? 'var(--up)' : 'var(--down)';
     const pxEl = document.getElementById('ab_px_' + pairKey);

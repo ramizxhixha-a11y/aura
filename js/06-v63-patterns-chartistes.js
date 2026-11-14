@@ -696,7 +696,7 @@ function _runStressTest() {
     const stake = Number(p.stakeUsdt) || 0, expo = Number(p.totalExposure) || stake, dir = p.side === 'short' ? -1 : 1;
     const pnlAt = px => (e > 0 ? Math.max(-stake, expo * dir * (px - e) / e) : 0);
     const now = pnlAt(cur), after = pnlAt(cur * (1 + f));
-    return { pair: p.pair, side: p.side, auto: p.auto === true, stake, expo, now, after, delta: after - now };
+    return { pair: p.pair, side: p.side, auto: p.auto === true, voix: p._voix === 'tendance', stake, expo, now, after, delta: after - now };   // [GO CSS FINITIONS · 14/11/2026] (n° 88) voix
   });
   const engage   = rows.reduce((s, r) => s + r.stake, 0);
   const valNow   = libre + rows.reduce((s, r) => s + r.stake + r.now, 0);
@@ -776,7 +776,7 @@ function renderStressTestSection() {
       <!-- Positions -->
       ${r.rows.length ? `<div style="font-size:9px;color:var(--t3);margin:6px 0 4px;">Par position (perte bornée à la mise, comme à la fermeture)</div>
       ${r.rows.map(x=>`<div style="display:flex;justify-content:space-between;font-size:9px;padding:3px 0;border-bottom:1px solid rgba(255,255,255,.04);">
-        <span style="color:var(--t2);">${x.pair.replace('/USDT','')} ${x.side==='short'?'SHORT':'LONG'} ${x.auto?'🤖':'👤'} · mise $${x.stake.toFixed(2)}${x.expo!==x.stake?' · expo $'+x.expo.toFixed(2):''}</span>
+        <span style="color:var(--t2);">${x.pair.replace('/USDT','')} ${x.side==='short'?'SHORT':'LONG'} ${x.voix?'📈':x.auto?'🤖':'👤'} · mise $${x.stake.toFixed(2)}${x.expo!==x.stake?' · expo $'+x.expo.toFixed(2):''}</span>
         <span style="font-weight:700;color:${x.after>=0?'var(--up)':'var(--down)'};">${x.after>=0?'+':'−'}$${Math.abs(x.after).toFixed(2)}</span>
       </div>`).join('')}` : `<div style="font-size:9px;color:var(--t2);background:var(--s2);border-radius:8px;padding:8px 10px;line-height:1.5;">Aucune position ouverte en ${r.mode} : ton compte trading est en USDT, une baisse des cryptos ne le touche pas.</div>`}
 

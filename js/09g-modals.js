@@ -299,7 +299,7 @@ function openWhyModal(posId) {
       <div class="why-reason">${reason}</div>
       <div class="why-metric-row">
         <span class="why-metric-lbl">Mode</span>
-        <span class="why-metric-val">${pos.auto ? '🤖 Bot automatique' : '🎛️ Manuel'}</span>
+        <span class="why-metric-val">${pos._voix === 'tendance' ? '📈 Voix tendance longue' : pos.auto ? '🤖 Bot automatique' : '🎛️ Manuel'}</span>
       </div>
     </div>
 

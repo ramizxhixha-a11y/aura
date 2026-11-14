@@ -204,7 +204,7 @@ function showPairDetail(pair) {
 
   const comp = getCompositeSignal(pair);
   const tech = comp?.tech || {};
-  const priceStr = cfg.dec>=4 ? ps.price.toFixed(cfg.dec) : '$'+Math.floor(ps.price).toLocaleString();
+  const priceStr = pxTxt(pair, ps.price);   // [GO CSS FINITIONS · 14/11/2026] (n° 86) 02 pxTxt
   const prob = lmsrP(ps);
   const pct  = (prob*100).toFixed(1);
   const probCol = prob>.6?'var(--up)':prob<.4?'var(--down)':'var(--gold)';
@@ -494,7 +494,7 @@ function updatePairAnalysisPanels() {
     // Update price + 24h change header
     const pxEl  = document.getElementById('ppos_px_'+pairKey);
     const chgEl = document.getElementById('ppos_chg_'+pairKey);
-    if(pxEl)  pxEl.textContent  = cfg.dec>=4 ? ps.price.toFixed(cfg.dec) : '$'+Math.floor(ps.price).toLocaleString();
+    if(pxEl)  pxEl.textContent  = pxTxt(pair, ps.price);
     if(chgEl) {
       chgEl.textContent  = (ps.pnl24h>=0?'+':'')+ps.pnl24h.toFixed(2)+'%';
       chgEl.style.color  = ps.pnl24h>=0?'var(--up)':'var(--down)';
@@ -571,8 +571,6 @@ function updatePairAnalysisPanels() {
     const atr     = raw?.stddev?.atr || (ps.price * 0.015);
     const tpDist  = atr * (1.5 + conviction);
     const slDist  = atr * (0.8 + conviction * 0.5);
-    const priceFormatted = cfg.dec>=4;
-    const fmt     = v => priceFormatted ? v.toFixed(cfg.dec) : Math.round(v).toLocaleString();
 
     // ── Render analysis panel ────────────────────────────────
     const analysisEl = document.getElementById('panalysis_'+pairKey);
@@ -816,7 +814,7 @@ function updateManualSuggestion(pair, pairKey) {
   const netPnl = pnlUsd - fees - tax;
 
   // TP/SL status
-  const fmt = v => cfg.dec>=4 ? v.toFixed(cfg.dec) : '$'+Math.floor(v).toLocaleString();
+  const fmt = v => pxTxt(pair, v);   // [GO CSS FINITIONS · 14/11/2026] (n° 86) 02 pxTxt
   const tpSet = pos.tp != null;
   const slSet = pos.sl != null;
   const tpDist = tpSet
@@ -941,8 +939,7 @@ function syncPairPresets() {
     // ── 1. Live price ─────────────────────────────────────────
     const pxEl  = document.getElementById('ppos_px_'+pairKey);
     const chgEl = document.getElementById('ppos_chg_'+pairKey);
-    const priceStr = cfg.dec>=4 ? ps.price.toFixed(cfg.dec)
-                                : '$'+Math.floor(ps.price).toLocaleString();
+    const priceStr = pxTxt(pair, ps.price);   // [GO CSS FINITIONS · 14/11/2026] (n° 86) 02 pxTxt
     if(pxEl)  pxEl.textContent = priceStr;
     if(chgEl) {
       chgEl.textContent = (ps.pnl24h>=0?'+':'')+ps.pnl24h.toFixed(2)+'%';
@@ -1046,8 +1043,7 @@ function updateAllPairCtrlLabels() {
                      : 'var(--down)';
     }
     if(pxe && cfg) {
-      const priceStr = cfg.dec >= 4 ? ps.price.toFixed(cfg.dec) : '$'+Math.floor(ps.price).toLocaleString();
-      pxe.textContent = priceStr;
+      pxe.textContent = pxTxt(pair, ps.price);
     }
 
     // ── Suggestion strip for manual positions ──
@@ -1059,13 +1055,8 @@ function updateAllPairCtrlLabels() {
 // (PAIRS[p].dec, celles de 02 ou de 11 gestion des paires), format fr comme fmt$2. Écrit par drawMiniCharts (ici)
 // et par le pousseur 3×/s de 11 : le même texte des deux côtés, plus de clignotement entre deux formats.
 // Relecture du 13/11 : `dec` borné à 0–8 (un dec corrompu levait une RangeError) ; un formateur par dec, gardé (le pousseur écrit 3×/s).
-const _mcPxFmt = {};
 function _mcPxText(pair, price) {
-  const cfg = (typeof PAIRS !== 'undefined' && PAIRS) ? PAIRS[pair] : null;
-  let d = (cfg && cfg.dec != null) ? Math.round(Number(cfg.dec)) : (price >= 100 ? 0 : 4);
-  if (!(d >= 0)) d = 4; if (d > 8) d = 8;
-  const f = _mcPxFmt[d] || (_mcPxFmt[d] = new Intl.NumberFormat('fr-FR', { minimumFractionDigits: d, maximumFractionDigits: d }));
-  return '$' + f.format(Number(price) || 0);
+  return pxTxt(pair, Number(price) || 0);   // [GO CSS FINITIONS · 14/11/2026] (n° 86) le même texte que tout l'écran (02 pxTxt)
 }
 window._mcPxText = _mcPxText;
 
@@ -1686,28 +1677,32 @@ function showMemoryOverlay(agentId) {
   overlay.innerHTML = `
     <div class="memory-overlay-header">
       <div class="memory-overlay-title">${agent.emoji} ${agent.name} · Mémoire</div>
-      <div class="memory-overlay-close" onclick="document.getElementById('memoryOverlay').remove()">✕</div>
+      <button class="memory-overlay-close" aria-label="Fermer" onclick="document.getElementById('memoryOverlay').remove()">✕</button>
     </div>
     <div class="memory-overlay-body">
-      <div style="font-size:9px;color:var(--t3);margin-bottom:10px;letter-spacing:.06em;">
-        ${agent.memory.length} ÉPISODES · ${agent.memory.filter(e=>e.won).length} GAGNANTS · POOL GLOBAL: ${S.globalMemoryPool.length}
-      </div>
-      ${episodes.map(ep => `
+      <div class="memory-sum">${agent.memory.length} souvenirs · <b style="color:var(--up)">✓ ${agent.memory.filter(e=>e.won).length} votes justes</b> · <b style="color:var(--down)">✗ ${agent.memory.filter(e=>!e.won).length} faux</b> · mémoire commune ${S.globalMemoryPool.length}</div>
+      ${episodes.map(ep => {
+        // [GO CSS FINITIONS · 14/11/2026] (ETAT n° 91) fiche lisible : plancher 11 px (css/34), mots en français, la DATE (l'id d'un souvenir est l'heure
+        // où il a été écrit, 03 enrichMemory) au lieu du seul « Cycle #1953076 » ; tendance hausse / baisse. « won » = le VOTE de l'agent était juste (03
+        // learnFromOutcome, aligned), pas le trade gagnant : avant « 19 GAGNANTS » à côté de « −0.703% » en vert. Le résultat du trade a sa couleur à lui.
+        const _t = Math.floor(Number(ep.id) || 0), _d = _t > 1e12 ? new Date(_t) : null;
+        const _when = _d ? String(_d.getDate()).padStart(2,'0') + '/' + String(_d.getMonth()+1).padStart(2,'0') + ' · ' + String(ep.time||'').slice(0,5) : String(ep.time||'').slice(0,5);
+        const _tr = { up:'hausse', down:'baisse' }[ep.context && ep.context.pairTrend] || '—';
+        return `
         <div class="memory-episode ${ep.won?'won':'lost'}">
           <div class="memory-episode-top">
-            <span class="memory-episode-pair">${ep.pair} · Cycle #${ep.cycle}</span>
-            <span class="memory-episode-pnl" style="color:${ep.won?'var(--up)':'var(--down)'}">
-              ${ep.pnl>=0?'+':''}${ep.pnl}%
+            <span class="memory-episode-pair">${ep.pair} <span class="memory-when">${_when}</span></span>
+            <span class="memory-episode-pnl"><span class="memory-vote ${ep.won?'ok':'ko'}">${ep.won?'✓ vote juste':'✗ vote faux'}</span>
+              <span style="color:${ep.pnl>=0?'var(--up)':'var(--down)'}">trade ${ep.pnl>=0?'+':'−'}${String(Math.abs(ep.pnl)).replace('.', ',')} %</span>
             </span>
           </div>
-          <div class="memory-episode-text">"${ep.metaphor}"</div>
+          <div class="memory-episode-text">« ${String(ep.metaphor||'').replace(/\+-/g, '−')} »</div>
           <div class="memory-episode-foot">
-            <span>📡 LMSR: ${ep.context ? (ep.context.lmsrProb*100).toFixed(0)+'%' : '—'}</span>
-            <span>📈 Trend: ${ep.context?.pairTrend||'—'}</span>
-            <span>🔁 Rappels: ${ep.recalled||0}</span>
-            <span>🕐 ${ep.time}</span>
+            <span>📡 Marché ${ep.context ? (ep.context.lmsrProb*100).toFixed(0)+' %' : '—'}</span>
+            <span>📈 Tendance ${_tr}</span>
+            <span>🔁 Rappelé ${ep.recalled||0} fois</span>
           </div>
-        </div>`).join('')}
+        </div>`; }).join('')}
     </div>`;
   overlay.style.display = 'flex';
 }
@@ -2464,7 +2459,7 @@ function buildThoughtPhrase() {
   const ps = S.pairStates[pair];
 
   const actionColor = top.score > 0.1 ? 'th-up' : top.score < -0.1 ? 'th-down' : '';
-  const priceStr = ps && ps.price ? (ps.price < 10 ? ps.price.toFixed(4) : '$'+Math.floor(ps.price).toLocaleString()) : '—';
+  const priceStr = ps && ps.price ? pxTxt(pair, ps.price) : '—';   // [GO CSS FINITIONS · 14/11/2026] (n° 86) 02 pxTxt
 
   // Templates (varied for richness)
   const templates = [
@@ -2715,7 +2710,7 @@ function renderHorizonPanel() {
     <div class="horizon-card">
       <div class="horizon-card-head">
         <span style="color:${cfg.color};font-weight:700;font-size:11px;">${pair}</span>
-        <span style="font-size:8px;color:var(--t3);font-family:var(--font-mono);">${cfg.dec>=4?ps.price.toFixed(cfg.dec):'$'+Math.floor(ps.price).toLocaleString()}</span>
+        <span style="font-size:8px;color:var(--t3);font-family:var(--font-mono);">${pxTxt(pair, ps.price)}</span>
       </div>
       <div class="horizon-grid">
         ${horizons.map(h => {

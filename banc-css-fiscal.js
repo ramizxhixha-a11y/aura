@@ -11,7 +11,7 @@
 //   F6  ⚙ Réglages : commune, hors AURA, frais, région ; jamais rebâti pendant une saisie ni sans changement (avant : à chaque battement) ; .fee-total-sum au format français
 //   F7  Frais, Paires, Export : rebâtis seulement si ce qu'ils montrent change (avant : 5 passages = 5 écritures)
 //   F8  ⚖ Impôt (16b) : ordre de la maquette, historique par jour (10 puis « Tout voir »), volets fermés et mémorisés, réglages sortis ; dollars « $1 000,00 »
-//   F9  css/33-fiscal-zones.css chargé en dernier au token ; chaque règle visée à #page5 ; plancher 11 px ; 4 tuiles, téléphone 2
+//   F9  css/33-fiscal-zones.css chargé après les styles d'avant (puis css/34+ seulement) au token ; chaque règle visée à #page5 ; plancher 11 px ; 4 tuiles, téléphone 2
 //   F10 tuiles : impôt dû et régime, frais et net, paires et la plus coûteuse, exports et région
 //   G   ce que d'autres lisent : [id^="ftab-"].active (08 battement), goPage(5) → renderFiscal, taxPanel, renderFiscalTax / saveFeeSettings / selectRegion / renderFiscalMini
 'use strict';
@@ -227,9 +227,12 @@ T('F8 ⚖ Impôt (16b) : chiffres → bot fiscal → deux régimes → par crypt
   assert.ok(/data-fold="depot" open/.test(W2.els.taxPanel.innerHTML), 'relu au chargement');
 });
 
-T('F9 css/33-fiscal-zones.css chargé en dernier au token ' + TOK + ' ; chaque règle visée à #page5 ; plancher 11 px ; 4 tuiles, téléphone 2', () => {
+T('F9 css/33-fiscal-zones.css chargé après tous les styles d\'avant au token ' + TOK + ' (après lui : seules les finitions, css/34+) ; chaque règle visée à #page5 ; plancher 11 px ; 4 tuiles, téléphone 2', () => {
   const links = [...html.matchAll(/<link rel="stylesheet" href="(css\/[^"?]+)\?v=([0-9a-z]+)"/g)];
-  const last = links[links.length - 1]; assert.ok(last && last[1] === 'css/33-fiscal-zones.css' && last[2] === TOK, 'dernier : ' + (last && last[1]));
+  // [GO CSS FINITIONS · 14/11/2026] css/34-finitions.css (voix, boutons de la barre du bas, fiche mémoire, poids) se charge désormais après lui
+  const i33 = links.findIndex(l => l[1] === 'css/33-fiscal-zones.css');
+  assert.ok(i33 >= 0 && links[i33][2] === TOK, 'css/33 au token');
+  assert.deepStrictEqual(links.slice(i33 + 1).filter(l => !/^css\/(3[4-9]|[4-9]\d)-/.test(l[1])).map(l => l[1]), [], 'après css/33 : seuls css/34+');
   const css = CSS.replace(/\/\*[\s\S]*?\*\//g, '');
   const sel = [...css.replace(/@media[^{]+\{/g, '').matchAll(/([^{}]+)\{[^{}]*\}/g)].map(m => m[1].trim()).filter(Boolean);
   assert.deepStrictEqual(sel.flatMap(s => s.split(',').map(x => x.trim())).filter(x => x && !x.startsWith('#page5')), [], 'sélecteurs hors #page5');

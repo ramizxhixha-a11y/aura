@@ -84,10 +84,7 @@ window.buildActionBricks = buildActionBricks;
 function _abFmtPx(pair, px) {
   px = Number(px);
   if (!isFinite(px) || px <= 0) return '—';
-  if (px >= 1000) return Math.round(px).toLocaleString();
-  if (px >= 10) return px.toFixed(2);
-  if (px >= 1) return px.toFixed(4);
-  return px.toFixed(Math.min(10, Math.max(4, 3 - Math.floor(Math.log10(px)))));
+  return pxTxt(pair, px);   // [GO CSS FINITIONS · 14/11/2026] (n° 86) avant : « 71,653 » à l'anglaise, « 0.000004410 » sans $
 }
 window._abFmtPx = _abFmtPx;
 // % de la carte : le vrai 24 h en direct (EV / RE) ; AA (prix simulés) : la variation simulée d'avant
@@ -147,11 +144,11 @@ function updateActionBricks() {
     const pos = (S.openPositions || []).find(p => p && p.pair === pair) || null;
 
     if (pos) {
-      const isMan = pos.auto !== true;
+      const isMan = pos.auto !== true, isVoix = pos._voix === 'tendance';   // [GO CSS FINITIONS · 14/11/2026] (n° 88) la voix tendance (15b) : ni toi, ni un bot
       const long  = pos.side === 'long';
       brick.className = long ? 'action-brick sig-buy has-pos-long' : 'action-brick sig-sell has-pos-short';
-      brick.setAttribute('data-pos', isMan ? 'man' : 'auto');
-      if (sigEl) sigEl.textContent = (isMan ? '👤 MAN ' : '🤖 AUTO ') + (long ? '↑ LONG' : '↓ SHORT');
+      brick.setAttribute('data-pos', isVoix ? 'voix' : isMan ? 'man' : 'auto');
+      if (sigEl) sigEl.textContent = (isVoix ? '📈 TENDANCE ' : isMan ? '👤 MAN ' : '🤖 AUTO ') + (long ? '↑ LONG' : '↓ SHORT');
       const pl = _abPosPnl(pos, ps.price), up = pl.usd >= 0, stk = Number(pos.stakeUsdt) || 0, xp = Number(pos.totalExposure) || 0;
       if (posEl) {
         posEl.textContent = 'mise $' + stk.toFixed(2) + (xp > stk + 0.005 ? ' · levier ×' + (xp / stk).toFixed(1) : '');

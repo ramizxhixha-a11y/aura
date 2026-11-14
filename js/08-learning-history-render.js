@@ -110,7 +110,7 @@ function renderAgents() {
 
 function renderMarket() {
   const ps=AP(), cfg=ACFG();
-  const priceStr = cfg.dec>=4 ? ps.price.toFixed(cfg.dec) : ('$'+Math.floor(ps.price).toLocaleString());
+  const priceStr = pxTxt(S.activePair, ps.price);   // [GO CSS FINITIONS · 14/11/2026] (n° 86) 02 pxTxt
   const mktEl = document.getElementById('mktPrice');
   if(mktEl) {
     const prevPrice = parseFloat(mktEl.dataset.prev || ps.price);
@@ -706,32 +706,35 @@ function renderOpenPnlBanner() {
     const col   = pnlUsd >= 0 ? 'var(--up)' : 'var(--down)';
     const arrow = pos.side === 'long' ? '↑' : '↓';
     const fpx = (x) => (typeof _abFmtPx === 'function') ? _abFmtPx(pos.pair, x) : String(x);
+    const _u = v => (v >= 0 ? '+' : '−') + fmt$2(Math.abs(v)), _q = v => (v >= 0 ? '+' : '−') + Math.abs(v).toFixed(2).replace('.', ',') + ' %';   // [GO CSS FINITIONS · 14/11/2026] avant « $-6.75 »
     return `<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0;
                  border-bottom:1px solid var(--border);">
       <div style="display:flex;align-items:center;gap:6px;">
-        <span style="font-size:9px;font-weight:700;color:var(--ice);">👤 MAN</span>
+        ${pos._voix === 'tendance' ? '<span class="op-who op-voix">📈 Tendance</span>' : '<span class="op-who">👤 MAN</span>'}
         <span style="font-size:10px;color:${pos.side==='long'?'var(--up)':'var(--down)'};">${arrow}</span>
         <span style="font-size:10px;font-weight:600;color:var(--t1);">${pos.pair}</span>
-        <span style="font-size:8px;color:var(--t3);">mise $${(Number(pos.stakeUsdt) || 0).toFixed(2)} · entrée ${fpx(pos.entryPrice)}</span>
+        <span style="font-size:8px;color:var(--t3);">mise ${fmt$2(Number(pos.stakeUsdt) || 0)} · entrée ${fpx(pos.entryPrice)}</span>
       </div>
       <div style="text-align:right;">
-        <span style="font-size:11px;font-weight:700;color:${col};">${pnlUsd>=0?'+':''}$${pnlUsd.toFixed(2)}</span>
-        <span style="font-size:8px;color:var(--t3);margin-left:4px;">(${pnlPct>=0?'+':''}${pnlPct.toFixed(2)}%)</span>
+        <span style="font-size:11px;font-weight:700;color:${col};">${_u(pnlUsd)}</span>
+        <span style="font-size:8px;color:var(--t3);margin-left:4px;">(${_q(pnlPct)})</span>
       </div>
     </div>`;
   }).filter(Boolean).join('');
 
   const totCol   = totalUnreal >= 0 ? 'var(--up)' : 'var(--down)';
   const totPct   = totalInvested > 0 ? (totalUnreal/totalInvested*100) : 0;
+  const _u = v => (v >= 0 ? '+' : '−') + fmt$2(Math.abs(v)), _q = v => (v >= 0 ? '+' : '−') + Math.abs(v).toFixed(2).replace('.', ',') + ' %';
+  const nV = manualPos.filter(p => p._voix === 'tendance').length, nM = manualPos.length - nV;   // [GO CSS FINITIONS · 14/11/2026] (n° 88) qui tient quoi
 
   el.innerHTML = `
   <div style="background:var(--s1);border:1px solid ${totalUnreal>=0?'rgba(0,232,122,.2)':'rgba(255,61,107,.2)'};
               border-radius:12px;padding:10px 13px;">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:7px;">
-      <span style="font-size:9px;font-weight:700;color:var(--t2);">📂 Positions ouvertes (${manualPos.length})</span>
+      <span style="font-size:9px;font-weight:700;color:var(--t2);">📂 Positions ouvertes (${manualPos.length})${nV ? ` · ${nV} de la voix tendance` : ''}${nV && nM ? ` · ${nM} à toi` : ''}</span>
       <div style="text-align:right;">
-        <span style="font-size:13px;font-weight:800;color:${totCol};">${totalUnreal>=0?'+':''}$${totalUnreal.toFixed(2)}</span>
-        <span style="font-size:8px;color:var(--t3);margin-left:4px;">${totPct>=0?'+':''}${totPct.toFixed(2)}%</span>
+        <span style="font-size:13px;font-weight:800;color:${totCol};">${_u(totalUnreal)}</span>
+        <span style="font-size:8px;color:var(--t3);margin-left:4px;">${_q(totPct)}</span>
       </div>
     </div>
     <div style="font-size:9px;">${rows}</div>
@@ -1021,7 +1024,7 @@ function updateIntelBanner() {
     bannerBorder = avgProb > 0.55 ? 'rgba(0,232,122,.25)' : avgProb < 0.45 ? 'rgba(255,61,107,.25)' : 'rgba(245,200,66,.2)';
   } else if(totalMem > 20) {
     icon = '💭';
-    text = `<strong>Mémoire collective</strong> · ${totalMem} épisodes · ${memWR}% win rate · Pool: ${S.globalMemoryPool.length} · Rappels actifs`;
+    text = `<strong>Mémoire collective</strong> · ${totalMem} souvenirs · ${memWR} % de votes justes · Pool: ${S.globalMemoryPool.length} · Rappels actifs`;
     badge = 'MÉMOIRE';
     bannerBorder = 'rgba(56,212,245,.2)';
   } else if(S.activePairProposal) {
@@ -1328,19 +1331,15 @@ function openPosEdit(posId) {
   const ps  = S.pairStates[pos.pair];
   if(!cfg || !ps) return;
 
-  const fmt = v => cfg.dec>=4 ? parseFloat(v).toFixed(cfg.dec) : Math.floor(v).toLocaleString();
   // [GO LEVIER · 18/10/2026] les champs reçoivent la valeur EXACTE : tronquée (Math.floor pour les paires à 0–2 décimales), elle était réécrite sur la
   // position au premier « ✓ Appliquer » — DOT à 6,80 : entrée 6 → +4 $ créés en changeant seulement le TP (relecture du 18/10)
   const fmtInput = v => String(Number(v));
 
   // TP/SL distance hints
   const curPrice = ps.price;
-  const tpHint   = pos.side==='long'
-    ? (curPrice * 1.02).toFixed(cfg.dec>=4?cfg.dec:0)
-    : (curPrice * 0.98).toFixed(cfg.dec>=4?cfg.dec:0);
-  const slHint   = pos.side==='long'
-    ? (curPrice * 0.98).toFixed(cfg.dec>=4?cfg.dec:0)
-    : (curPrice * 1.02).toFixed(cfg.dec>=4?cfg.dec:0);
+  // [GO CSS FINITIONS · 14/11/2026] (n° 86) indices ±2 % : avant, 0 décimale sous dec 4 (DOT à 0,76 : « 1 » et « 1 ») ; texte = pxTxt, champ vide = pxIn (point décimal)
+  const tpV = pos.side==='long' ? curPrice * 1.02 : curPrice * 0.98, slV = pos.side==='long' ? curPrice * 0.98 : curPrice * 1.02;
+  const tpHint = pxTxt(pos.pair, tpV), slHint = pxTxt(pos.pair, slV);
 
   const modal = document.getElementById('posEditModal');
   if(!modal) return;
@@ -1355,8 +1354,8 @@ function openPosEdit(posId) {
   document.getElementById('peStakeInput').value        = pos.stakeUsdt;
   document.getElementById('peTpHint').textContent      = '+2%: '+tpHint;
   document.getElementById('peSlHint').textContent      = '−2%: '+slHint;
-  document.getElementById('peTpInput').placeholder     = tpHint;
-  document.getElementById('peSlInput').placeholder     = slHint;
+  document.getElementById('peTpInput').placeholder     = pxIn(pos.pair, tpV);
+  document.getElementById('peSlInput').placeholder     = pxIn(pos.pair, slV);
   document.getElementById('peFlipBtn').textContent     = pos.side==='long' ? '↓ Convertir en SHORT' : '↑ Convertir en LONG';
   document.getElementById('peFlipBtn').style.background= pos.side==='long' ? 'rgba(255,61,107,.12)' : 'rgba(0,232,122,.12)';
   document.getElementById('peFlipBtn').style.color     = pos.side==='long' ? 'var(--down)' : 'var(--up)';
@@ -2017,6 +2016,9 @@ function getFundamentalSignals(pair) {
     security:{ score:sec.score,      conf:sec.conf,     label:'Sécurité (volatilité)', detail:'Veto sur volatilité anormale · '+sec.name },
     volume:  { score:vol.score,      conf:vol.conf,     label:'Volume réel',     detail:'Volume des bougies Binance · '+vol.name },
     corr:    { score:btcTrend,       conf:0.70,         label:'Correl. BTC',     detail:pair==='BTC/USDT'?'Référence':'+60% suivi BTC' },
+    // [GO CSS FINITIONS · 14/11/2026] (n° 92) les deux facteurs du score qui n'avaient pas de tuile (affichage seul : la décision ne lit que fundScore)
+    corrAg:  { score:corr.score,     conf:corr.conf,    label:'Corrélations',    detail:'Agent corrélation entre actifs · '+corr.name },
+    vola:    { score:vola.score,     conf:vola.conf,    label:'Volatilité',      detail:'Compte en sens inverse : haute volatilité → prudence · '+vola.name },
     // Score global
     fundScore
   };
@@ -2105,34 +2107,36 @@ function renderFundamentalPanel() {
   const fundLbl = fund.fundScore>0.2?'↑ POSITIF':fund.fundScore<-0.2?'↓ NÉGATIF':'→ NEUTRE';
   const fundPct = ((fund.fundScore+1)*50).toFixed(0);
 
-  // 10 indicateurs fondamentaux officiels + 4 contextuels
+  // [GO CSS FINITIONS · 14/11/2026] (ETAT n° 92) avant : « 10 Indicateurs Fondamentaux » annoncés pour 2 montrés (8 clés supprimées le 26/08, S2), « 14 facteurs »
+  // pour 11 dans le score, et 5 facteurs du score sans tuile. Désormais : les 11 facteurs du score (getFundamentalSignals, même poids), du plus lourd au plus
+  // léger, puis Macro et News, montrés pour information (retirés du score le 03/09, S3). Affichage seul.
   const officialItems = [
-    {icon:'💹', key:'eps'},
-    {icon:'📊', key:'pe'},
-    {icon:'🏦', key:'rates'},
-    {icon:'🌡️', key:'cpi'},
-    {icon:'👷', key:'nfp'},
-    {icon:'🏢', key:'ev'},
-    {icon:'📈', key:'margin'},
-    {icon:'⚖️', key:'debt'},
-    {icon:'🧠', key:'nlp'},
-    {icon:'📦', key:'growth'},
+    {icon:'📡', key:'lmsr',      w:14},
+    {icon:'💹', key:'momentum',  w:12},
+    {icon:'⚡', key:'sentiment', w:12},
+    {icon:'🌍', key:'geo',       w:6},
+    {icon:'🕯️', key:'onchain',   w:6},
+    {icon:'🔗', key:'corr',      w:6},
+    {icon:'⚖️', key:'debt',      w:4},
+    {icon:'📦', key:'volume',    w:4},
+    {icon:'🧭', key:'corrAg',    w:4},
+    {icon:'🔒', key:'security',  w:3},
+    {icon:'🌊', key:'vola',      w:-3},
   ];
   const contextItems = [
-    {icon:'📡', key:'lmsr'},
-    {icon:'🌍', key:'geo'},
-    {icon:'🔒', key:'security'},
-    {icon:'🔗', key:'corr'},
+    {icon:'🏦', key:'macroAgg'},
+    {icon:'📰', key:'nlp'},
   ];
 
-  function renderItem(icon, d) {
+  function renderItem(icon, d, w) {
     if(!d) return '';
-    const cls  = d.score>0.1?'badge-bull':d.score<-0.1?'badge-bear':'badge-neut';
-    const lbl  = d.score>0.1?`↑ ${(d.score*100).toFixed(0)}%`:d.score<-0.1?`↓ ${(Math.abs(d.score)*100).toFixed(0)}%`:'→ 0%';
-    const col  = d.score>=0?'var(--up)':'var(--down)';
+    const sc   = (w && w < 0) ? -d.score : d.score;   // [GO CSS FINITIONS · 14/11/2026] poids négatif (volatilité) : flèche et couleur = l'effet sur le score
+    const cls  = sc>0.1?'badge-bull':sc<-0.1?'badge-bear':'badge-neut';
+    const lbl  = sc>0.1?`↑ ${(sc*100).toFixed(0)}%`:sc<-0.1?`↓ ${(Math.abs(sc)*100).toFixed(0)}%`:'→ 0%';
+    const col  = sc>=0?'var(--up)':'var(--down)';
     return `<div class="signal-row-item">
       <div style="flex:1;min-width:0;">
-        <div class="signal-row-label">${icon} ${d.label}</div>
+        <div class="signal-row-label">${icon} ${d.label}${w ? ` <span class="mk-w">poids ${w < 0 ? '−' + (-w) : w} %</span>` : ''}</div>
         <div class="signal-row-detail">${d.detail}</div>
         <div style="height:2px;background:var(--s3);border-radius:2px;margin-top:3px;width:55px;">
           <div style="height:100%;width:${(d.conf*100).toFixed(0)}%;background:${col};border-radius:2px;transition:width .4s;"></div>
@@ -2149,7 +2153,7 @@ function renderFundamentalPanel() {
     </div>
     <div style="padding:6px 14px 4px;">
       <div style="display:flex;justify-content:space-between;margin-bottom:3px;">
-        <span style="font-size:8px;color:var(--t3);">Score pondéré (14 facteurs)</span>
+        <span style="font-size:8px;color:var(--t3);">Score pondéré · ${officialItems.length} facteurs</span>
         <span style="font-size:9px;font-weight:700;color:${fundCol};">${fund.fundScore>=0?'+':''}${(fund.fundScore*100).toFixed(0)}%</span>
       </div>
       <div class="composite-bar-track">
@@ -2159,13 +2163,13 @@ function renderFundamentalPanel() {
     </div>
     <div style="padding:4px 14px 2px;">
       <div style="font-size:7px;font-weight:700;color:var(--ice);letter-spacing:.1em;text-transform:uppercase;margin-bottom:4px;padding-top:4px;border-top:1px solid var(--border);">
-        📋 10 Indicateurs Fondamentaux
+        📋 Dans le score · ${officialItems.length} facteurs
       </div>
-      ${officialItems.map(({icon,key}) => renderItem(icon, fund[key])).join('')}
+      ${officialItems.map(({icon,key,w}) => renderItem(icon, fund[key], w)).join('')}
     </div>
     <div style="padding:4px 14px 8px;">
       <div style="font-size:7px;font-weight:700;color:var(--gold);letter-spacing:.1em;text-transform:uppercase;margin-bottom:4px;padding-top:6px;border-top:1px solid var(--border);">
-        🧩 Contexte Marché
+        🧩 Pour information · hors score
       </div>
       ${contextItems.map(({icon,key}) => renderItem(icon, fund[key])).join('')}
     </div>

@@ -850,7 +850,27 @@ function getContextualWeight(agent, currentRegime) {
 }
 
 function lmsrP(ps){ ps=ps||AP(); if (typeof _mktOn === 'function' && _mktOn()) return _mktP(ps); return ps.qYes/(ps.qYes+ps.qNo); }   // [MARCHÉ RÉPARÉ · 30/09/2026] EV / RE : le vrai prix LMSR de la manche ouverte de la paire (03 _mktP), 50 % hors manche — AA : l'ancien rapport, inchangé
-function fmtPrice(v,dec){ return dec>=4?v.toFixed(dec):'$'+Math.floor(v).toLocaleString(); }
+// [GO CSS FINITIONS · 14/11/2026] (ETAT n° 86) LE texte du prix d'une paire, partout à l'écran : « $ » + format français, au moins les décimales de la paire
+// (PAIRS[p].dec) et assez pour 5 chiffres significatifs (au plus 8, comme les pas de prix de Binance) : BTC « $65 264 », BNB « $654,76 », DOT « $0,761 », PEPE « $0,0000041 ». Avant : quatre
+// formats selon l'écran, dont l'entier tronqué sous dec 4 (fmtPrice et ses copies : DOT « $0 », AVAX « $7 »), « 71,653 » à l'anglaise, « 0.000004410 » sans $.
+// Affichage seul : rien de ce qui décide ne lit ce texte ; un champ de saisie (input number) garde ses chiffres à point. fmtPrice (sans appelant) est retiré.
+const _pxFmt = {};
+function pxTxt(pair, v) {
+  v = Number(v); if (!isFinite(v)) return '—';
+  const cfg = (typeof PAIRS !== 'undefined' && PAIRS) ? PAIRS[pair] : null;
+  let lo = (cfg && cfg.dec != null) ? Math.round(Number(cfg.dec)) : 2; if (!(lo >= 0)) lo = 2; if (lo > 8) lo = 8;
+  const a = Math.abs(v); let hi = a > 0 ? 4 - Math.floor(Math.log10(a)) : lo; hi = Math.min(8, Math.max(lo, hi));
+  const k = lo + '-' + hi, f = _pxFmt[k] || (_pxFmt[k] = new Intl.NumberFormat('fr-FR', { minimumFractionDigits: lo, maximumFractionDigits: hi }));
+  return (v < 0 ? '−' : '') + '$' + f.format(a);
+}
+// chiffres d'un champ de saisie de prix (input number : point décimal, sans $) — mêmes décimales que pxTxt
+function pxIn(pair, v) {
+  v = Number(v); if (!isFinite(v)) return '';
+  const cfg = (typeof PAIRS !== 'undefined' && PAIRS) ? PAIRS[pair] : null;
+  let lo = (cfg && cfg.dec != null) ? Math.round(Number(cfg.dec)) : 2; if (!(lo >= 0)) lo = 2; if (lo > 8) lo = 8;
+  const a = Math.abs(v); const hi = Math.min(8, Math.max(lo, a > 0 ? 4 - Math.floor(Math.log10(a)) : lo));
+  return String(parseFloat(v.toFixed(hi)));
+}
 // Safe DOM text setter — never throws on missing element
 function setEl(id, val) { const e = document.getElementById(id); if(e) e.textContent = val; }
 
@@ -1694,7 +1714,7 @@ function _renderRealCandles() {
   const priceEl = document.getElementById('rcCurrentPrice');
   const updEl = document.getElementById('rcLastUpdate');
   if (priceEl && ps && cfg) {
-    const priceStr = cfg.dec >= 4 ? ps.price.toFixed(cfg.dec) : '$' + Math.floor(ps.price).toLocaleString();
+    const priceStr = pxTxt(pair, ps.price);
     const pnl = ps.pnl24h || 0;
     const pnlCol = pnl >= 0 ? 'var(--up)' : 'var(--down)';
     priceEl.innerHTML = `<span style="color:${cfg.color}">${pair}</span> ${priceStr} <span style="color:${pnlCol};font-size:9px;">${pnl >= 0 ? '+' : ''}${pnl.toFixed(2)}%</span>`;
@@ -1879,7 +1899,7 @@ function _renderRealCandles() {
   for (let i = 0; i <= 4; i++) {
     const y = priceTop + (priceH / 4) * i;
     const p = maxP - (range / 4) * i;
-    const lbl = (cfg && cfg.dec >= 4) ? p.toFixed(cfg.dec) : '$' + Math.floor(p).toLocaleString();
+    const lbl = pxTxt(pair, p);
     ctx.fillText(lbl, W - padRight + 4, y + 3);
   }
 
@@ -2164,7 +2184,7 @@ function _renderRealCandles() {
     ctx.lineTo(W - padRight, lastY);
     ctx.stroke();
     ctx.restore();
-    const priceLbl = (cfg && cfg.dec >= 4) ? lastClose.toFixed(cfg.dec) : '$' + Math.floor(lastClose).toLocaleString();
+    const priceLbl = pxTxt(pair, lastClose);
     ctx.font = 'bold 10px ui-monospace, monospace';
     const lblW = Math.max(50, ctx.measureText(priceLbl).width + 8);
     const lblH = 14;
@@ -2212,7 +2232,7 @@ function _renderRealCandles() {
         activePanelTop = priceTop; activePanelBot = priceBot;
         // Prix exact à la position Y
         const priceAtY = yToPrice(cy);
-        activePanelLabel = (cfg && cfg.dec >= 4) ? priceAtY.toFixed(cfg.dec) : '$' + Math.floor(priceAtY).toLocaleString();
+        activePanelLabel = pxTxt(pair, priceAtY);
       } else if (showVolume && cy >= volTop && cy <= volBot) {
         activePanelTop = volTop; activePanelBot = volBot;
       } else if (showRSI && cy >= rsiTop && cy <= rsiBot) {
@@ -2242,7 +2262,7 @@ function _renderRealCandles() {
         ctx.fillText(activePanelLabel, W - padRight + 4, lblY + 10);
       }
       // Tooltip OHLC (toujours sur le chart prix)
-      const fmtP = (v) => (cfg && cfg.dec >= 4) ? v.toFixed(cfg.dec) : '$' + Math.floor(v).toLocaleString();
+      const fmtP = (v) => pxTxt(pair, v);
       const tipLines = [
         new Date(k.ts).toLocaleString('fr', { day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit' }),
         'O ' + fmtP(k.o),
@@ -5547,7 +5567,7 @@ function drawMobileChart() {
   // v6.5 FIX: always sync mktPrice with live ps.price (was showing stale startPrice)
   const mktEl = document.getElementById('mktPrice');
   if(mktEl && ps.price > 0) {
-    mktEl.textContent = cfg.dec >= 4 ? '$' + ps.price.toFixed(cfg.dec) : '$' + Math.floor(ps.price).toLocaleString();
+    mktEl.textContent = pxTxt(S.activePair, ps.price);   // [GO CSS FINITIONS · 14/11/2026] (n° 86) 02 pxTxt
     mktEl.style.color = cfg.color;
   }
 
@@ -5567,7 +5587,7 @@ function drawMobileChart() {
     ctx.beginPath(); ctx.moveTo(pad.l,y); ctx.lineTo(W-pad.r,y);
     ctx.strokeStyle='rgba(255,255,255,.04)'; ctx.stroke();
     const priceVal = mx-(f*(mx-mn));
-    const label = cfg.dec>=4 ? priceVal.toFixed(cfg.dec) : ('$'+Math.floor(priceVal).toLocaleString());
+    const label = pxTxt(S.activePair, priceVal);
     ctx.fillStyle='rgba(136,153,187,.5)'; ctx.font='8px DM Mono';
     ctx.fillText(label, W-pad.r+4, y+3);
   });
@@ -5600,7 +5620,7 @@ function drawMobileChart() {
   ctx.fillRect(W-pad.r+2,py-8,58,16);
   ctx.fillStyle=hexColor;
   ctx.font='bold 9px DM Mono';
-  const priceTag = cfg.dec>=4 ? curP.toFixed(cfg.dec) : ('$'+Math.floor(curP).toLocaleString());
+  const priceTag = pxTxt(S.activePair, curP);
   ctx.fillText(priceTag, W-pad.r+5, py+3);
 
   // Label bottom
@@ -7132,7 +7152,7 @@ function updatePairBtnStates() {
     // Live price under pair name
     const pxe = document.getElementById('ppos_px_'+pairKey);
     if(pxe && ps && cfg) {
-      const priceStr = cfg.dec >= 4 ? ps.price.toFixed(cfg.dec) : '$'+Math.floor(ps.price).toLocaleString();
+      const priceStr = pxTxt(pair, ps.price);
       const posStr   = pos ? (pos.side === 'long' ? ' ↑ LONG' : ' ↓ SHORT') : '';
       pxe.textContent = priceStr + posStr;
       pxe.style.color = pos ? (pos.side === 'long' ? 'var(--up)' : 'var(--down)') : 'var(--t3)';
@@ -7487,7 +7507,7 @@ function renderClosePositionsList() {
     const pnlCol = pnlUsd >= 0 ? 'var(--up)' : 'var(--down)';
     const sideLabel = pos.side === 'long' ? '↑ LONG' : '↓ SHORT';
     const sideCol = pos.side === 'long' ? 'var(--up)' : 'var(--down)';
-    const modeLabel = pos.auto ? '🤖 BOT' : '🔒 MAN';
+    const modeLabel = pos._voix === 'tendance' ? '📈 TENDANCE' : pos.auto ? '🤖 BOT' : '🔒 MAN';   // [GO CSS FINITIONS · 14/11/2026] (n° 88) la voix
     return `<div style="display:flex;align-items:center;gap:10px;padding:10px;margin-bottom:6px;background:var(--s2);border:1px solid var(--border);border-radius:10px;">
       <div style="flex:1;min-width:0;">
         <div style="display:flex;gap:6px;align-items:center;margin-bottom:3px;">

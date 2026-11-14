@@ -43,7 +43,7 @@ function mkCtx(over) {
       'PEPE/USDT': { price: 0.00000428, pnl24h: 1.33, _dc: { C: 0, n: 3, ts: 0 }, totalTrades: 28, winTrades: 11, candles: [] }
     }
   }, over || {});
-  const ctx = { S, PAIRS, Math, Number, Object, Array, String, JSON, Date, isFinite, console,
+  const ctx = { S, PAIRS, Math, Number, Object, Array, String, JSON, Date, isFinite, console, Intl,
     document: { getElementById: id => els[id] || null },
     lmsrP: ps => ps.qYes / (ps.qYes + ps.qNo), _drawSparkline: () => { calls.spark++; }, _computeRSI14: () => 50, _isPairManual: () => false };
   ctx.window = ctx; ctx.els = els; ctx.calls = calls;
@@ -51,6 +51,8 @@ function mkCtx(over) {
   const ref = s02.match(/\nconst _ref24 = \{\};\n/); assert.ok(ref, 'const _ref24 dans 02');
   const slow = s09f1.match(/\nlet _abSlowTurn = 0;\n/); assert.ok(slow);
   // [GO LEVIER · 18/10/2026] _abPosPnl (09f1) délègue à 02 _posLatent : la mesure de 02 entre dans le monde
+  // [GO CSS FINITIONS · 14/11/2026] (n° 86, 88) le prix d'une paire = 02 pxTxt, les montants du bandeau = 02 fmt$2
+  vm.runInContext('const _pxFmt = {};\n' + fnSrc(s02, 'pxTxt') + '\n' + fnSrc(s02, 'fmt$2'), ctx);
   vm.runInContext(ref[0] + slow[0] + [fnSrc(s02, '_ref24Set'), fnSrc(s02, '_ref24Pct'), fnSrc(s02, '_posLatent'), fnSrc(s09f1, '_abFmtPx'), fnSrc(s09f1, '_abChg24'), fnSrc(s09f1, '_abPosPnl'),
     fnSrc(s09f1, 'updateActionBricks'), fnSrc(s08, 'renderOpenPnlBanner')].join('\n'), ctx);
   return ctx;
@@ -64,7 +66,7 @@ T('K1 · vrai 24 h EN DIRECT : prix d\'il y a 24 h (Binance openPrice / CoinGeck
   const c = mkCtx();
   run(c, '_ref24Set("BTC/USDT", 86223 / 1.017, "coingecko")');
   run(c, 'updateActionBricks()');
-  assert.ok(E(c, 'abpx_BTC_USDT').innerHTML.startsWith('86,223 <span') && E(c, 'abpx_BTC_USDT').innerHTML.includes('+1.70%</span>'), E(c, 'abpx_BTC_USDT').innerHTML);
+  assert.ok(E(c, 'abpx_BTC_USDT').innerHTML.startsWith('$86\u202f223 <span') && E(c, 'abpx_BTC_USDT').innerHTML.includes('+1.70%</span>'), E(c, 'abpx_BTC_USDT').innerHTML);
   c.S.pairStates['BTC/USDT'].price = 86223 * 1.01; run(c, 'updateActionBricks()');
   assert.ok(E(c, 'abpx_BTC_USDT').innerHTML.includes('+2.72%'), 'le prix bouge, le % suit au passage suivant : ' + E(c, 'abpx_BTC_USDT').innerHTML);
   assert.strictEqual(E(c, 'abpx_BTC_USDT').title, 'Variation réelle sur 24 h, en direct');
@@ -88,7 +90,7 @@ T('K2 · position : 👤 MAN ou 🤖 AUTO, mise, P&L % et $ en direct (expositio
   assert.strictEqual(E(c, 'absig_DOT_USDT').textContent, '👤 MAN ↑ LONG');
   assert.strictEqual(E(c, 'actbrick_DOT_USDT').getAttribute('data-pos'), 'man');
   assert.strictEqual(E(c, 'abpos_DOT_USDT').textContent, 'mise $82.10'); assert.strictEqual(E(c, 'abpos_DOT_USDT').style.display, '');
-  assert.strictEqual(E(c, 'abpos_DOT_USDT').title, 'Entrée 1.2070');
+  assert.strictEqual(E(c, 'abpos_DOT_USDT').title, 'Entrée $1,207');   // [GO CSS FINITIONS · 14/11/2026] (n° 86) 02 pxTxt
   assert.strictEqual(E(c, 'ablmsr_DOT_USDT').textContent, '+2.00%'); assert.strictEqual(E(c, 'abwr_DOT_USDT').textContent, '+$1.64');
   assert.strictEqual(E(c, 'absig_BTC_USDT').textContent, '🤖 AUTO ↓ SHORT');
   assert.strictEqual(E(c, 'actbrick_BTC_USDT').getAttribute('data-pos'), 'auto');
@@ -115,10 +117,11 @@ T('K3 · sans position : HOLD + force de la DÉCISION COMMUNE (plus de « 🤖 B
 
 T('K4 · prix lisibles (plus d\'arrondi à l\'entier : DOT « 1 », EUR « 1 », AVAX « 11 »)', () => {
   const c = mkCtx(); run(c, 'updateActionBricks()');
-  assert.ok(E(c, 'abpx_DOT_USDT').innerHTML.startsWith('1.2311 '));
-  assert.ok(E(c, 'abpx_PEPE_USDT').innerHTML.startsWith('0.000004280 '), E(c, 'abpx_PEPE_USDT').innerHTML);
-  assert.strictEqual(run(c, '_abFmtPx("X", 11.0912)'), '11.09'); assert.strictEqual(run(c, '_abFmtPx("X", 1.15983)'), '1.1598');
-  assert.strictEqual(run(c, '_abFmtPx("X", 0.09535)'), '0.09535'); assert.strictEqual(run(c, '_abFmtPx("X", 0.2646)'), '0.2646');
+  // [GO CSS FINITIONS · 14/11/2026] (n° 86) un seul texte de prix (02 pxTxt) : « $ », virgule, 5 chiffres significatifs au moins les décimales de la paire
+  assert.ok(E(c, 'abpx_DOT_USDT').innerHTML.startsWith('$1,2311 '), E(c, 'abpx_DOT_USDT').innerHTML);
+  assert.ok(E(c, 'abpx_PEPE_USDT').innerHTML.startsWith('$0,00000428 '), E(c, 'abpx_PEPE_USDT').innerHTML);
+  assert.strictEqual(run(c, '_abFmtPx("X", 11.0912)'), '$11,091'); assert.strictEqual(run(c, '_abFmtPx("X", 1.15983)'), '$1,1598');
+  assert.strictEqual(run(c, '_abFmtPx("X", 0.09535)'), '$0,09535'); assert.strictEqual(run(c, '_abFmtPx("X", 0.2646)'), '$0,2646');
 });
 
 T('K5 · à chaque battement (08) ; courbe et point RSI 1 passage sur 2 (même coût qu\'avant)', () => {
@@ -132,7 +135,7 @@ T('K6 · bandeau des positions ouvertes : 👤 MAN, mise et entrée (plus « @$1
   const c = mkCtx(); c.S.openPositions = [{ id: 'm', pair: 'DOT/USDT', side: 'long', auto: false, entryPrice: 1.2070, stakeUsdt: 82.1, totalExposure: 82.1, amount: 68 }];
   run(c, 'renderOpenPnlBanner()');
   const h = E(c, 'openPnlBanner').innerHTML;
-  assert.ok(h.includes('👤 MAN') && h.includes('mise $82.10 · entrée 1.2070') && h.includes('+$1.64') && h.includes('(+2.00%)'), h.replace(/\s+/g, ' ').slice(0, 600));
+  assert.ok(h.includes('👤 MAN') && h.includes('mise $82,10 · entrée $1,207') && h.includes('+$1,64') && h.includes('(+2,00 %)')   /* [GO CSS FINITIONS · 14/11/2026] format français */, h.replace(/\s+/g, ' ').slice(0, 600));
   assert.strictEqual(h.includes('@$1'), false);
 });
 

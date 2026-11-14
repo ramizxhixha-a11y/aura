@@ -1,0 +1,32 @@
+/* [GO CSS FINITIONS · 14/11/2026] n° 88 (étiquette de la voix), n° 89 (boutons flottants rangés dans la barre du bas), n° 91 (fiche mémoire ≥ 11 px), n° 92 (poids). */
+
+/* n° 89 · 🔇 et le bouclier Guardian : dans la barre du bas, à droite de Fiscal, l'un sur l'autre (32 px : la barre fait 70 px sur téléphone, 75 sur la tablette) —
+   plus rien posé sur le contenu ni sur « Fiscal ». */
+#nav { padding-right: 56px; }
+#soundToggle.sound-toggle { right: 11px; bottom: calc(var(--safe-bot, 0px) + 37px); width: 32px; height: 32px; font-size: 15px; z-index: 21; }
+html body #gdnFab { right: 11px; bottom: calc(var(--safe-bot, 0px) + 3px); width: 32px; height: 32px; font-size: 16px; box-shadow: none; }
+html body #gdnFab .gdnDot { min-width: 17px; height: 17px; font-size: 11px; top: -6px; right: -6px; }
+
+/* n° 88 · qui tient la position : la voix tendance en vert, comme sur la carte de la paire (07) */
+#openPnlBanner .op-who { font-size: 11px; font-weight: 700; color: var(--ice); white-space: nowrap; }
+#openPnlBanner .op-who.op-voix { color: var(--up); }
+.action-brick[data-pos="voix"] .ab-signal { color: var(--up); }
+.action-brick[data-pos="voix"].has-pos-long, .action-brick[data-pos="voix"].has-pos-short { border-color: rgba(0,232,122,0.55); }
+.ops-mode-badge.voix { color: var(--up); background: rgba(0,232,122,.1); border-color: rgba(0,232,122,.3); }
+.ac-pos-item.ac-pos-voix { border-left-color: var(--up); }
+.open-pos-summary.voix { border-left-color: var(--up); }
+
+/* n° 91 · fiche mémoire d'un agent (sur body) */
+#memoryOverlay .memory-overlay-close { min-width: 44px; min-height: 44px; font-size: 20px; color: var(--t2); background: var(--s2); border: 1px solid var(--border); border-radius: 10px; cursor: pointer; }
+#memoryOverlay .memory-sum { font-size: 12px; color: var(--t2); margin-bottom: 12px; }
+#memoryOverlay .memory-episode-pair { font-size: 13px; }
+#memoryOverlay .memory-when { font-size: 11px; font-weight: 400; color: var(--t3); margin-left: 6px; }
+#memoryOverlay .memory-episode-pnl { font-size: 13px; display: flex; gap: 8px; align-items: center; white-space: nowrap; }
+#memoryOverlay .memory-vote { font-size: 11px; font-weight: 600; padding: 1px 7px; border-radius: 6px; border: 1px solid; }
+#memoryOverlay .memory-vote.ok { color: var(--up); border-color: rgba(0,232,122,.35); }
+#memoryOverlay .memory-vote.ko { color: var(--down); border-color: rgba(255,61,107,.35); }
+#memoryOverlay .memory-episode-text { font-size: 13px; }
+#memoryOverlay .memory-episode-foot { font-size: 11px; flex-wrap: wrap; gap: 4px 12px; }
+
+/* n° 92 · le poids de chaque facteur du score */
+#fundamentalPanel .mk-w { font-size: 11px; font-weight: 400; color: var(--t3); margin-left: 4px; }

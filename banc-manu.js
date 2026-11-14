@@ -84,7 +84,8 @@ function mkCtx(opts) {
   ctx.window = ctx; ctx.calls = calls;
   vm.createContext(ctx);
   vm.runInContext('let _currentDetailPair = null; let _pendingClosePair = null;', ctx);
-  const src = [fnSrc(s02, '_livePairs'),   // [PAIRES VIVANTES · 10/10/2026] 10h _manPlan compte les emplacements sur les paires vivantes (02)
+  const src = ['const _pxFmt = {};', fnSrc(s02, 'pxTxt'),   // [GO CSS FINITIONS · 14/11/2026] (n° 86) les briques MAN écrivent le prix par 02 pxTxt
+    fnSrc(s02, '_livePairs'),   // [PAIRES VIVANTES · 10/10/2026] 10h _manPlan compte les emplacements sur les paires vivantes (02)
     fnSrc(s02, '_manOpenWarnings'), fnSrc(s02, '_manConsigneOf'), fnSrc(s02, 'openPosition'),   // [CONSIGNES · 06/10/2026] openPosition lit _manConsigneOf
     fnSrc(s03, 'closePairDetail'), fnSrc(s10e, '_openManTrade'),
     fnSrc(s10g, '_saveManConsigne'), fnSrc(s09e, '_manConsignesWatchdog'), fnSrc(s10d, '_confirmForceClose'),
@@ -149,13 +150,13 @@ T('M1 · bouton LONG quand la fiche suggère SHORT : TP AU-DESSUS de l\'entrée,
   assert.strictEqual(ctx.S.pairStates['ETH/USDT'].stake, 7, 'mise du bot rendue'); assert.strictEqual(ctx.S.pairStates['ETH/USDT'].pairLeverage, 3, 'levier rendu');
   assert.strictEqual(DOM.els.pairDetailOverlay.classList.contains('open'), false, 'fiche fermée');
   assert.strictEqual(pos._manMaxLossPct, 2); assert.strictEqual(pos._manTimeoutMin, 60);
-  assert.ok(ctx.calls.toast.some(t => t.m === '🎛️ ETH/USDT LONG ouvert · $75.4 · TP $2,718 · SL $2,690'), JSON.stringify(ctx.calls.toast));
+  assert.ok(ctx.calls.toast.some(t => t.m === '🎛️ ETH/USDT LONG ouvert · $75.4 · TP $2\u202f718,4 · SL $2\u202f690'   /* [GO CSS FINITIONS · 14/11/2026] (n° 86) prix = 02 pxTxt */), JSON.stringify(ctx.calls.toast));
   // SHORT : niveaux inversés ; SOL (dec 2) : plus d'arrondi au dollar
   const ctx2 = mkCtx(); run(ctx2, 'openManDetail("SOL/USDT")'); fieldsOf(ctx2, 'SOL/USDT', { stake: 60, lev: 1, tpp: 1.5, slp: 0.45 });
   const p2 = run(ctx2, '_openManTrade("SOL/USDT","short")');
   assert.ok(p2.tp < p2.entryPrice && p2.sl > p2.entryPrice);
   assert.ok(Math.abs(p2.tp - 121.63 * 0.985) < 1e-9, 'TP édité à la main appliqué : ' + p2.tp);
-  assert.strictEqual(run(ctx2, '_manFmtPx("SOL/USDT", 119.80555)'), '119.81');
+  assert.strictEqual(run(ctx2, '_manFmtPx("SOL/USDT", 119.80555)'), '$119,81');   // [GO CSS FINITIONS · 14/11/2026] (n° 86) la fiche MAN = 02 pxTxt (« $ », virgule)
 });
 
 T('M2 · rien ne s\'ouvre → rien n\'est annoncé comme ouvert ; mise et levier rendus', () => {
@@ -253,7 +254,7 @@ T('W2 · consignes de la fiche d\'une position : ce sont les siennes, les modifi
   run(ctx, 'openManDetail("ETH/USDT")');
   const body = DOM.els.pairDetailBody.children.map(c => c.innerHTML).join('\n');
   assert.ok(/id="manCon_tout_ETH_USDT" value="90"/.test(body) && /id="manCon_loss_ETH_USDT" value="3"/.test(body));
-  assert.ok(body.includes('Position active') && body.includes('$2,720') && body.includes('$2,690'), 'TP / SL de la position affichés');
+  assert.ok(body.includes('Position active') && body.includes('$2\u202f720') && body.includes('$2\u202f690')   /* [GO CSS FINITIONS · 14/11/2026] 02 pxTxt */, 'TP / SL de la position affichés');
   run(ctx, '_saveManConsigne("ETH/USDT","timeoutMin","240")');
   assert.strictEqual(ctx.S.openPositions[0]._manTimeoutMin, 240);
   // position manuelle sans consignes (ouverte avant go consignes, 06/10 — depuis, toute ouverture en porte) : dit, et un geste l'équipe

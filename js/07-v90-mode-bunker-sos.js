@@ -3596,7 +3596,7 @@ function renderPairPnl() {
         // l'exposition (mise × levier) affichée comme « mise » (mise 30 $ ×5 → « mise $150.00 »).
         const _st = Number(pos.stakeUsdt) || 0, exp = Number(pos.totalExposure) || _st;
         const _lx = _st > 0 ? exp / _st : 1;
-        badgeEl.textContent = (pos.auto === true ? '\uD83E\uDD16' : '\uD83D\uDC64') + ' ' + (pos.side==='long'?'\u2191':'\u2193') + ' mise $' + _st.toFixed(2) + (_lx > 1.005 ? ' \u00b7 \u00d7' + (Math.round(_lx * 10) / 10) : '');
+        badgeEl.textContent = (pos._voix === 'tendance' ? '\uD83D\uDCC8' : pos.auto === true ? '\uD83E\uDD16' : '\uD83D\uDC64') + ' ' + (pos.side==='long'?'\u2191':'\u2193') + ' mise $' + _st.toFixed(2) + (_lx > 1.005 ? ' \u00b7 \u00d7' + (Math.round(_lx * 10) / 10) : '');
         badgeEl.style.display = '';
       } else { badgeEl.style.display = 'none'; }
     }
@@ -3788,7 +3788,7 @@ function renderActionsGrid() {
       ? ((manualPos||botPos).side==='long' ? 'buy' : 'sell')
       : action;
     const pairKey  = pair.replace('/','_');
-    const priceStr = cfg.dec>=4 ? ps.price.toFixed(cfg.dec) : ('$'+ps.price.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}));
+    const priceStr = pxTxt(pair, ps.price);   // [GO CSS FINITIONS · 14/11/2026] (n° 86) 02 pxTxt
     const probCol  = dispAction==='buy'?'var(--up)':dispAction==='sell'?'var(--down)':'var(--gold)';
 
     // ── Wrapper colonne (carte + positions dessous) ──
@@ -4067,7 +4067,7 @@ function renderActionsGrid() {
           // Capital restant
           const capRestant = (S.tradingAccount || 0);
 
-          const fmtP  = v => v != null ? (cfg.dec>=4 ? v.toFixed(cfg.dec) : '$'+v.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})) : '—';
+          const fmtP  = v => v != null ? pxTxt(pair, v) : '—';   // [GO CSS FINITIONS · 14/11/2026] (n° 86) 02 pxTxt
           const fmtPct= v => v != null ? (v>=0?'+':'')+v.toFixed(2)+'%' : '—';
           const fmtUsd= v => v != null ? (v>=0?'+':'-')+'$'+Math.abs(v).toFixed(2) : '—';
 
@@ -4126,7 +4126,7 @@ function renderActionsGrid() {
           const prob2    = lmsrP(ps);
           const wouldAct = prob2 > 0.60 ? 'buy' : prob2 < 0.40 ? 'sell' : 'hold';
           const sugStake = Math.max(10, Math.floor((ps.stake||20)));
-          const priceStr2 = cfg.dec>=4 ? ps.price.toFixed(cfg.dec) : '$'+ps.price.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
+          const priceStr2 = pxTxt(pair, ps.price);
           const convPct  = Math.round(Math.abs(prob2-0.5)*200);
           if(wouldAct === 'hold') {
             sugEl.style.display = '';
@@ -4184,11 +4184,12 @@ function renderActionsGrid() {
 
         // Manual position — bot is locked out
         if(isManual) {
-          timeLbl.textContent = '🔒 Manuel';
-          timeLbl.style.color = 'var(--gold)';
+          const _vx = pos && pos._voix === 'tendance';   // [GO CSS FINITIONS · 14/11/2026] (n° 88) la voix tendance (15b) n'est pas « 🔒 Manuel »
+          timeLbl.textContent = _vx ? '📈 Tendance' : '🔒 Manuel';
+          timeLbl.style.color = _vx ? 'var(--up)' : 'var(--gold)';
           const holdSec = ps.holdStartTs ? Math.floor((Date.now()-ps.holdStartTs)/1000) : 0;
-          timerEl.textContent = fmtDur(holdSec) + ' · bot pause';
-          timerEl.style.color = 'var(--gold)';
+          timerEl.textContent = fmtDur(holdSec) + (_vx ? ' · tenue par la voix' : ' · bot pause');
+          timerEl.style.color = _vx ? 'var(--up)' : 'var(--gold)';
           if(arcEl) {
             const CIRC = 2*Math.PI*16  // v7.12 · r=16;
             arcEl.style.strokeDasharray = `${(fracLeft*CIRC).toFixed(1)} ${CIRC.toFixed(1)}`;
@@ -4459,8 +4460,7 @@ function renderInlinePosForPair(pair, pairKey, cfg, ps) {
     const pnlCls  = up ? 'up' : 'down';
     const pnlStr  = (up?'+':'')+pos.pnl.toFixed(2)+'%';
     const usdtStr = (up?'+':'−')+'$'+Math.abs(pos.pnlUsdt).toFixed(1);
-    const curStr  = cfg.dec>=4 ? ps.price.toFixed(cfg.dec) : '$'+ps.price.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
-    const entStr  = cfg.dec>=4 ? pos.entryPrice.toFixed(cfg.dec) : '$'+Math.floor(pos.entryPrice).toLocaleString();
+    const curStr  = pxTxt(pos.pair, ps.price), entStr = pxTxt(pos.pair, pos.entryPrice);   // [GO CSS FINITIONS · 14/11/2026] (n° 86) 02 pxTxt
     const barW    = Math.min(100, Math.abs(pos.pnl) * 8);
     const durStr  = pos.entryTs ? fmtSince(pos.entryTs) : pos.entryTime||'—';
     const ctClamped = Math.max(1, ps.cycleTimer || 1);
@@ -4485,7 +4485,9 @@ function renderInlinePosForPair(pair, pairKey, cfg, ps) {
       ? `<span style="font-size:8px;font-weight:600;background:rgba(245,200,66,.15);color:var(--gold);border:1px solid rgba(245,200,66,.3);padding:2px 7px;border-radius:5px;margin-left:4px;">🔒 Manuel</span>`
       : `<span style="font-size:8px;font-weight:600;background:rgba(56,212,245,.1);color:var(--ice);border:1px solid rgba(56,212,245,.25);padding:2px 7px;border-radius:5px;margin-left:4px;">🤖 Bot IA</span>`;
 
-    const botStatus = isManual
+    const botStatus = pos._voix === 'tendance'   // [GO CSS FINITIONS · 14/11/2026] (n° 88)
+      ? `<span style="font-size:7px;color:var(--up);">Tenue par la voix · se retourne seule</span>`
+      : isManual
       ? `<span style="font-size:7px;color:var(--gold);">Bot en pause · surveille</span>`
       : `<div style="display:flex;gap:5px;align-items:center;">
            ${tpDistPct!==null ? `<span style="font-size:9px;font-weight:600;color:var(--up);">🎯 ${tpDistPct>=0?'+':''}${tpDistPct.toFixed(2)}%</span>` : ''}
@@ -4493,8 +4495,8 @@ function renderInlinePosForPair(pair, pairKey, cfg, ps) {
            <span style="font-size:7px;color:var(--t3);">${fmtDur(pos._holdCycles||0)} cycles</span>
          </div>`;
 
-    const tpLine = pos.tp ? `<span style="font-size:7px;color:var(--up);margin-left:4px;">🎯${cfg.dec>=4?pos.tp.toFixed(cfg.dec):'$'+Math.floor(pos.tp).toLocaleString()}</span>` : '';
-    const slLine = pos.sl ? `<span style="font-size:7px;color:var(--down);margin-left:4px;">🛑${cfg.dec>=4?pos.sl.toFixed(cfg.dec):'$'+Math.floor(pos.sl).toLocaleString()}</span>` : '';
+    const tpLine = pos.tp ? `<span style="font-size:7px;color:var(--up);margin-left:4px;">🎯${pxTxt(pos.pair, pos.tp)}</span>` : '';
+    const slLine = pos.sl ? `<span style="font-size:7px;color:var(--down);margin-left:4px;">🛑${pxTxt(pos.pair, pos.sl)}</span>` : '';
 
     // Bot positions: close button visible but shows warning; manual: full edit
     const editBtn = isManual
@@ -4503,7 +4505,7 @@ function renderInlinePosForPair(pair, pairKey, cfg, ps) {
     // v16 · #25 Bouton Pourquoi ?
     const whyBtn = `<button onclick="openWhyModal('${pos.id}')" title="Pourquoi cette position ?" style="background:rgba(167,139,250,.1);color:var(--pur);border:1px solid rgba(167,139,250,.3);border-radius:6px;padding:3px 7px;font-size:9px;cursor:pointer;margin-left:3px;font-weight:700;">?</button>`;
     return `
-    <div class="ac-pos-item${isManual?' ac-pos-manual':''}">
+    <div class="ac-pos-item${pos._voix==='tendance'?' ac-pos-voix':isManual?' ac-pos-manual':''}">
       <div class="ac-pos-row1">
         <div style="display:flex;align-items:center;gap:5px;flex-wrap:wrap;">
           <span class="ac-pos-side ${sideCls}">${sideLabel}</span>
@@ -4588,7 +4590,7 @@ function renderOpenPosSummary() {
     const isManual = pos.auto !== true;
     const sideCol  = pos.side==='long' ? 'var(--up)' : 'var(--down)';
     const sideLbl  = pos.side==='long' ? '↑ LONG' : '↓ SHORT';
-    const fmtP     = (p) => cfg.dec>=4 ? p.toFixed(cfg.dec) : '$'+p.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
+    const fmtP     = (p) => pxTxt(pos.pair, p);   // [GO CSS FINITIONS · 14/11/2026] (n° 86) 02 pxTxt
     const ctDown   = ps.cycleTimer || 0;
     const nextEv   = ctDown <= 5 ? `⚡ ${fmtCountdown(ctDown)}` : `⏱ ${fmtCountdown(ctDown)}`;
     const levStr   = pos.levBorrowed > 0
@@ -4618,7 +4620,7 @@ function renderOpenPosSummary() {
     // Entry marker position on TP bar (0% since entry is the start)
     const pairColor = cfg.color;
     return `
-    <div class="open-pos-summary${isManual?' manual':''} ${up?'':'loss'}">
+    <div class="open-pos-summary${pos._voix==='tendance'?' voix':isManual?' manual':''} ${up?'':'loss'}">
       <div class="ops-pulse-dot"></div>
 
       <!-- Top row: pair + badges + PnL -->
@@ -4627,7 +4629,7 @@ function renderOpenPosSummary() {
           <div class="ops-pair" style="color:${pairColor};">${pos.pair}</div>
           <div class="ops-pair-sub">
             <span class="ops-badge" style="background:${pos.side==='long'?'rgba(0,232,122,.14)':'rgba(255,61,107,.14)'};color:${sideCol};">${sideLbl}</span>
-            <span class="ops-mode-badge${isManual?' manual':''}">${isManual?'🔒 MANUEL':'🤖 BOT IA'}</span>
+            <span class="ops-mode-badge${pos._voix==='tendance'?' voix':isManual?' manual':''}">${pos._voix==='tendance'?'📈 TENDANCE':isManual?'🔒 MANUEL':'🤖 BOT IA'}</span>
             ${heldMin>0?`<span style="font-size:8px;color:var(--t3);">⏱ ${heldStr}</span>`:''}
             ${pos.conviction!=null?`<span style="font-size:8px;color:var(--pur);">◆ Conv. ${(pos.conviction*100).toFixed(0)}%</span>`:''}
           </div>
@@ -5229,9 +5231,9 @@ function renderHome() {
                   : isOpen  ? (isBuy?'LONG →':'SHORT →')
                   : (isBuy  ? 'BUY':'SELL');
     const pillCls = isBuy ? 'pill-up' : 'pill-down';
-    const priceStr= cfg.dec>=4 ? parseFloat(t.price).toFixed(cfg.dec) : '$'+parseFloat(t.price).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
+    const priceStr= pxTxt(t.pair, parseFloat(t.price));   // [GO CSS FINITIONS · 14/11/2026] (n° 86) 02 pxTxt
     const entryStr= isClose && t.entryPrice
-      ? (cfg.dec>=4 ? parseFloat(t.entryPrice).toFixed(cfg.dec) : '$'+Math.floor(t.entryPrice).toLocaleString())
+      ? pxTxt(t.pair, parseFloat(t.entryPrice))
       : null;
 
     const badgeHtml = isClose ? ' <span style="font-size:8px;background:rgba(167,139,250,.15);color:var(--pur);padding:1px 4px;border-radius:4px;">' + (t.type === 'urgence' ? 'URGENCE' : t.type === 'tendance' ? 'TENDANCE' : 'CLOSE') + '</span>'
@@ -5701,11 +5703,12 @@ function patchAgentCards() {
       elMstrip.style.display = '';
       const last = a.memory[a.memory.length - 1];
       if(elMemText) elMemText.textContent = last.metaphor
-        ? '"' + last.metaphor.slice(0, 90) + (last.metaphor.length > 90 ? '…' : '') + '"'
+        ? '"' + String(last.metaphor).replace(/\+-/g, '−').slice(0, 90) + (last.metaphor.length > 90 ? '…' : '') + '"'
         : '—';
       if(elMemPnl) {
-        elMemPnl.textContent = (last.pnl >= 0 ? '+' : '') + last.pnl + '%';
-        elMemPnl.style.color = last.won ? 'var(--up)' : 'var(--down)';
+        // [GO CSS FINITIONS · 14/11/2026] (n° 91, relecture) le résultat du trade à SA couleur ; le vote juste / faux de l'agent à côté (avant : coloré par won)
+        elMemPnl.textContent = (last.won ? '✓ ' : '✗ ') + (last.pnl >= 0 ? '+' : '−') + String(Math.abs(Number(last.pnl) || 0)).replace('.', ',') + ' %';
+        elMemPnl.style.color = last.pnl >= 0 ? 'var(--up)' : 'var(--down)';
       }
       if(elMemPair) elMemPair.textContent = last.pair || '—';
       if(elMemCnt)  elMemCnt.textContent  = a.memory.length + ' ep.';
