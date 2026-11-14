@@ -56,7 +56,7 @@ function puces() {
   const a = s08.indexOf("  { const _ps = document.getElementById('pairSelWrap');"), b = s08.indexOf("  Object.keys(PAIRS).forEach(pair=>{\n    const el=document.getElementById('ppill_'");
   if (a < 0 || b < 0) throw new Error('bloc des puces absent de 08');
   const code = s08.slice(a, b);
-  const mk = tag => { const e = { tag, id: '', children: [], style: {}, attrs: {}, parent: null, setAttribute: (k, v) => { e.attrs[k] = v; },
+  const mk = tag => { const e = { tag, id: '', children: [], style: {}, attrs: {}, dataset: {}, parent: null, setAttribute: (k, v) => { e.attrs[k] = v; },
     appendChild: c => { c.parent = e; e.children.push(c); }, insertBefore: (c, ref) => { c.parent = e; const i = ref ? e.children.indexOf(ref) : -1; i < 0 ? e.children.push(c) : e.children.splice(i, 0, c); },
     remove: () => { if (e.parent) e.parent.children.splice(e.parent.children.indexOf(e), 1); e.parent = null; }, insertAdjacentElement: (w, c) => { c.parent = e.parent; e.parent.children.splice(e.parent.children.indexOf(e) + 1, 0, c); } };
     Object.defineProperty(e, 'firstChild', { get: () => e.children[0] || null }); return e; };
@@ -75,12 +75,16 @@ T('M3 08 renderMarket : une puce par paire, en tête de la barre de la paire ; r
   const sel = t.find(t.page, 'pairSelWrap'); assert.ok(sel, 'barre des puces');
   assert.deepStrictEqual(t.bar.children.map(e => e.id), ['pairSelWrap', 'pairMgrBtn'], 'puces puis « Gérer »');
   assert.deepStrictEqual(sel.children.map(e => e.attrs['data-pair']), ['BTC/USDT', 'ETH/USDT']);
+  assert.ok(sel.children.every(e => typeof e.onclick === 'function'), 'chaque puce choisit sa paire');
   t.run(); assert.strictEqual(t.find(t.page, 'pairSelWrap'), sel, 'même composition : rien n\'est rebâti');
   t.PAIRS['PEPE/USDT'] = { color: '#00f' }; t.run();
   const sel2 = t.find(t.page, 'pairSelWrap'); assert.notStrictEqual(sel2, sel, 'paire ajoutée : rebâtie');
   assert.deepStrictEqual(sel2.children.map(e => e.attrs['data-pair']), ['BTC/USDT', 'ETH/USDT', 'PEPE/USDT']);
   assert.deepStrictEqual(t.bar.children.map(e => e.id), ['pairSelWrap', 'pairMgrBtn'], 'une seule barre, toujours en tête');
   delete t.PAIRS['ETH/USDT']; t.run(); assert.strictEqual(t.find(t.page, 'pairSelWrap').children.length, 2, 'paire retirée : rebâtie');
+  // relecture du 14/11 : un retrait ET un ajout entre deux rendus (même nombre de paires) laissaient une puce fantôme
+  delete t.PAIRS['PEPE/USDT']; t.PAIRS['DOT/USDT'] = { color: '#ff0' }; t.run();
+  assert.deepStrictEqual(t.find(t.page, 'pairSelWrap').children.map(e => e.attrs['data-pair']), ['BTC/USDT', 'DOT/USDT'], 'échange de paire, même nombre : rebâtie');
   assert.ok(/color:\$\{cc\};">\$\{a\.type \|\| a\.name\} \$\{\(\(a\.score/.test(s08), 'consensus : la spécialité de l\'agent, pas son emoji');
 });
 
@@ -105,7 +109,14 @@ T('M5 css/30-marche-zones.css chargé en dernier au token ' + TOK + ' ; toutes s
   assert.ok(/#page2\s*\{[^}]*--fs-6:\s*11px[^}]*--fs-8:\s*11px/.test(css), 'variables --fs au plancher');
   assert.ok(/\[style\*="font-size:7px"\][\s\S]*font-size:\s*11px !important/.test(css), 'tailles en dur au plancher');
   ['.signal-row-detail', '.mini-chart-pnl', '.veille-fg-sub', '.veille-trend-rank', '.corr-matrix-title'].forEach(k => assert.ok(css.includes('#page2 ' + k), k + ' au plancher'));
-  assert.ok(!/veille-card-body \*/.test(css) && !/veille-fg-number/.test(css), 'les grands chiffres de la veille ne sont pas ramenés à 11 px');
+  // les grands chiffres de la veille (peur & avidité 36 px, sentiment 32 px, dominance, prix…) ne sont jamais ramenés à 11 px : une règle de taille
+  // ne vise dans la veille QUE ses petites étiquettes (relecture du 14/11 : « #veilleMarche * » ou « .veille-card-body div » passaient le banc)
+  const tailles = []; css.replace(/([^{}]+)\{([^}]*)\}/g, (m, sel, body) => { if (/font-size/.test(body)) tailles.push(...sel.split(',').map(x => x.trim())); return m; });
+  const PETITES = /^#page2 \.(veille-source|veille-loading|veille-fg-sub|veille-trend-rank|veille-dom-label|veille-news-meta|veille-alert-warn)$/;
+  assert.deepStrictEqual(tailles.filter(x => /veille|#veilleMarche/.test(x) && !PETITES.test(x)), [], 'taille posée sur autre chose que les petites étiquettes de la veille');
+  ['6', '7', '8', '9', '10'].forEach(n => assert.ok(css.includes('#page2 [style*="font-size:' + n + 'px"]') && css.includes('#page2 [style*="font-size: ' + n + 'px"]'), 'taille en dur ' + n + ' px au plancher'));
+  assert.ok(/#mkPairBar #pairSelWrap \{ display: contents !important; \}/.test(css), 'puces et « Gérer » sur une même ligne qui passe à la ligne');
+  assert.ok(/#compositePanel \.signal-card \{ display: grid; grid-template-columns: 1fr 1fr; \}/.test(css), 'composite : 2 colonnes');
   assert.ok(/\.mk-ana:not\(\.mk-open\) \.signal-card > :nth-child\(n\+3\) \{ display: none !important; \}/.test(css), 'analyse fermée : titre, verdict, score');
   assert.ok(/\.mk-ana\.mk-open \{ grid-column: 1 \/ -1; \}/.test(css), 'analyse ouverte : toute la largeur');
   assert.ok(/\.mk-fold-b \{ display: none;[\s\S]*\.mk-fold\.open \.mk-fold-b \{ display: block; \}/.test(css), 'volets');
@@ -144,6 +155,8 @@ T('M6 09i : volets fermés par défaut ; un appui ouvre et mémorise (matrice re
   assert.ok(!c2.log.some(l => l[0] === 'corr'), 'au démarrage : rouvert sans redessin');
   assert.ok(!ctx09i({ aura_marche_volets: '{pas du json' }).folds.agents.classList.contains('open'), 'stockage illisible → fermé');
   assert.strictEqual(vm.runInContext("_mkFold('inconnu')", c), false);
+  const rc = s08.slice(s08.indexOf('function renderCorrMatrix()'), s08.indexOf('if(tick - _corrLastTick < 5) return;', s08.indexOf('function renderCorrMatrix()')));
+  assert.ok(rc.includes("if(canvas.closest && canvas.closest('.mk-fold:not(.open)')) return;"), '08 : volet fermé, la matrice n\'est pas dessinée (avant la garde des 5 battements)');
   const tap = c.log.find(l => l[0] === 'listen' && l[1] === 'click'); assert.ok(tap, 'appui écouté sur #mkDuo');
   const cl = new Set(), panel = { classList: { toggle: k => (cl.has(k) ? (cl.delete(k), false) : (cl.add(k), true)) } };
   tap[2]({ target: { closest: q => (q === '.mk-ana' ? panel : null) } }); assert.ok(cl.has('mk-open'), 'ouverte');

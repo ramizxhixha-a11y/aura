@@ -75,7 +75,7 @@
 #page2 #corrMatrixCanvas { max-width: 480px; margin: 0 auto; }
 #page2 .mk-fold-b #veilleMarche { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 #page2 .mk-fold-b #veilleMarche .veille-card { margin: 0 !important; min-width: 0; }
-#page2 .mk-fold-b #veilleMarche > :last-child { grid-column: 1 / -1; }
+#page2 .mk-fold-b #veilleMarche > :last-child, #page2 #veilleSentiment, #page2 #veilleFeGr, #page2 #veilleNews { grid-column: 1 / -1; }   /* sentiment, peur & avidité (légende 0 · 50 · 100), actualités : pleine largeur ; dominance et tendances côte à côte */
 
 /* ── 6. TÉLÉPHONE ───────────────────────────────────────── */
 @media (max-width: 560px) {

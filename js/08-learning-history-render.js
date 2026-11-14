@@ -135,14 +135,16 @@ function renderMarket() {
 
   // ── Pair selector (build once) ──
   // [GO CSS · écran 3 · 14/11/2026] une puce par paire : la barre était bâtie UNE fois, avant que 11 ne recharge les paires ajoutées
-  // (sonde du 14/11 : 10 puces pour 12 paires, PEPE et EUR absentes) → rebâtie quand les paires changent ; elle va dans la barre de la paire (#mkPairBar)
+  // (sonde du 14/11 : 10 puces pour 12 paires, PEPE et EUR absentes) → rebâtie quand la LISTE des paires change (clé posée sur la barre : un retrait
+  // et un ajout entre deux rendus gardent le même nombre) ; elle va dans la barre de la paire (#mkPairBar)
   { const _ps = document.getElementById('pairSelWrap');
-    if (_ps && _ps.children.length !== Object.keys(PAIRS).length) _ps.remove(); }
+    if (_ps && _ps.dataset.k !== Object.keys(PAIRS).join('|')) _ps.remove(); }
   if(!document.getElementById('pairSelWrap')){
     const wrap = document.getElementById('candle-wrap-top');
     if(wrap){
       const sel = document.createElement('div');
       sel.id='pairSelWrap';
+      sel.dataset.k = Object.keys(PAIRS).join('|');
       sel.style.cssText='display:flex;gap:6px;padding:10px 16px 0;overflow-x:auto;scrollbar-width:none;flex-shrink:0;';
       Object.keys(PAIRS).forEach(pair=>{
         const btn=document.createElement('div');
@@ -1323,6 +1325,7 @@ let _corrLastTick = -1;
 function renderCorrMatrix() {
   const canvas = document.getElementById('corrMatrixCanvas');
   if(!canvas) return;
+  if(canvas.closest && canvas.closest('.mk-fold:not(.open)')) return;   // [GO CSS · écran 3 · 14/11/2026] volet Agents fermé : rien à dessiner (09i _mkFold redessine à l'ouverture)
   if(tick - _corrLastTick < 5) return;
   _corrLastTick = tick;
 
