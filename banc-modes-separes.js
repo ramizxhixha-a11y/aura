@@ -159,7 +159,8 @@ T('S3c · textes 02 : EVENT_MODE_KINDS (natures de trade), _chainStamp posé AVA
 
 // ── S4 · renderChain (08) RÉEL : la pastille des lignes d'un autre mode ──
 T('S4 · renderChain RÉEL, EV à l\'écran : la ligne de l\'AA porte la pastille « AA » (couleur de l\'AA), celle du RE « RE », celle de l\'EV et celle sans mode n\'en portent pas ; AA à l\'écran : c\'est l\'EV qui est nommée', () => {
-  const RC = fnSrc(s08, 'renderChain');
+  // [GO CSS · écran 5 · 14/11/2026] renderChain s'appuie sur ses aides (_chainCat, _chainHM, _chainVu…) : le bloc Chain entier, l'onglet « Tout le journal »
+  const RC = s08.slice(s08.indexOf("let _chainFilter = 'trade';") + "let _chainFilter = 'trade';".length, s08.indexOf('// PAGE 5 — FISCAL'));
   const mk = mode => { const S = { tradingMode: mode, currentPage: 4, pairStates: {}, chainLog: [
     { icon: '🔴', desc: 'Fermé PEPE/USDT LONG | −0.70%', hash: 'abcdef123456', time: '21:00:00', m: 'sim' }, { icon: '🔴', desc: 'Fermé BTC/USDT SHORT | +1.00%', hash: 'abcdef123457', time: '21:00:01', m: 'paperReal' },
     { icon: '⛔', desc: 'Perte max · RE', hash: 'abcdef123458', time: '21:00:02', m: 'real' }, { icon: '🧠', desc: 'Apprentissage', hash: 'abcdef123459', time: '21:00:03' }] };

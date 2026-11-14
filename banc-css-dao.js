@@ -6,7 +6,7 @@
 //      En bref ; la liste des propositions sans celles de paire (grande carte) ; vide = aucun enfant
 //   D3 renderDAO : rien à montrer = plus de reconstruction à chaque passage ; zone Propositions montrée / cachée ; la proposition de paire une seule fois
 //   D4 patchGovCards : sans changement = aucun rebâti ; l'ordre change = rebâti une fois ; En bref suit les chiffres
-//   D5 css/31-dao-zones.css chargé en DERNIER au token ; chaque règle visée à #page3 ; plancher 11 px ; 2 colonnes, téléphone 1
+//   D5 css/31-dao-zones.css chargé après tous les styles d'avant au token (après lui : css/32+, écrans suivants) ; chaque règle visée à #page3 ; plancher 11 px ; 2 colonnes, téléphone 1
 //   G  ids lus ailleurs (wrow_ / wv_ / wn_ / wbar_, gc_ / vf_ / va_ / vs_for_ / vs_ag_ / vbtns_, daoNewPairCard) ; 02 goPage(3) rebâtit toujours
 'use strict';
 const fs = require('fs'), vm = require('vm'), assert = require('assert'), path = require('path');
@@ -133,9 +133,12 @@ T('D4 patchGovCards : sans changement aucun rebâti ; l\'ordre change → rebât
   assert.strictEqual(v.c.nBuild, 2, 'rebâti par le patch'); assert.strictEqual(v.els.vs_for_3.textContent, '↑ Pour: 300 G$ (75%)', 'votes posés après le rebâti');
 });
 
-T('D5 css/31-dao-zones.css chargé en dernier au token ' + TOK + ' ; chaque règle visée à #page3 ; plancher 11 px ; 2 colonnes, téléphone 1', () => {
+T('D5 css/31-dao-zones.css chargé après tous les styles d\'avant au token ' + TOK + ' (après lui : seuls les écrans suivants du go css, css/32+) ; chaque règle visée à #page3 ; plancher 11 px ; 2 colonnes, téléphone 1', () => {
   const links = [...html.matchAll(/<link rel="stylesheet" href="(css\/[^"?]+)\?v=([0-9a-z]+)"/g)];
-  const last = links[links.length - 1]; assert.ok(last && last[1] === 'css/31-dao-zones.css' && last[2] === TOK, 'dernier : ' + (last && last[1]));
+  // [GO CSS · écran 5 · 14/11/2026] css/32-chain-zones.css (écran Chain, visé à #page4) se charge désormais après lui
+  const i31 = links.findIndex(l => l[1] === 'css/31-dao-zones.css');
+  assert.ok(i31 >= 0 && links[i31][2] === TOK, 'css/31 au token');
+  assert.deepStrictEqual(links.slice(i31 + 1).filter(l => !/^css\/(3[2-9]|[4-9]\d)-/.test(l[1])).map(l => l[1]), [], 'après css/31 : seuls css/32+');
   const css = rd('css/31-dao-zones.css').replace(/\/\*[\s\S]*?\*\//g, '');
   const sel = [...css.replace(/@media[^{]+\{/g, '').matchAll(/([^{}]+)\{[^{}]*\}/g)].map(m => m[1].trim()).filter(Boolean);
   const hors = sel.flatMap(s => s.split(',').map(x => x.trim())).filter(x => x && !x.startsWith('#page3'));

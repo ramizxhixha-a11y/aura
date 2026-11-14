@@ -306,8 +306,11 @@ function _injectLearnedButton() {
   var btn = document.createElement('button');
   btn.id = 'learnedBtn';
   btn.textContent = '🧠 Ce que le système a appris';
-  btn.style.cssText = 'display:block;margin:8px 16px 0 auto;padding:6px 14px;background:rgba(0,232,122,.08);color:var(--up,#00e87a);border:1px solid rgba(0,232,122,.35);border-radius:9px;font-size:11px;font-weight:600;cursor:pointer;';
   btn.onclick = openLearnedPanel;
+  // [GO CSS · écran 5 · 14/11/2026] rangé dans le titre de la liste, à côté de « Tout le journal » (style : css/32-chain-zones.css) ; sans cette place, comme avant
+  var slot = document.getElementById('chainHeadBtns');
+  if (slot) { btn.className = 'cz-learned'; slot.insertBefore(btn, slot.firstChild); return true; }
+  btn.style.cssText = 'display:block;margin:8px 16px 0 auto;padding:6px 14px;background:rgba(0,232,122,.08);color:var(--up,#00e87a);border:1px solid rgba(0,232,122,.35);border-radius:9px;font-size:11px;font-weight:600;cursor:pointer;';
   anchor.parentNode.insertBefore(btn, anchor);
   return true;
 }

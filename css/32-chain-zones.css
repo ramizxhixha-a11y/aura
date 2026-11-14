@@ -1,0 +1,79 @@
+/* ═══════════════════════════════════════════════════════════
+   AURA8 · 32-chain-zones.css — [GO CSS · écran 5 · 14/11/2026]
+   Écran Chain (#page4) par priorité : quatre tuiles = les onglets (Trades · Décisions · Apprentissage · Système, nombre et dernière ligne) ·
+   titre de la liste (« Ce que le système a appris », « Tout le journal ») · la liste (trades par jour ; journal en une ligne, heure à droite).
+   Rams 14/11 15:03 « Go css » ; maquette montrée, « Ok » 15:16. Chargé en dernier. Chaque règle est visée à #page4.
+   1. lecture : plancher 11 px, chiffres alignés, sans halo
+   2. tuiles
+   3. titre de la liste
+   4. lignes
+   5. téléphone
+   ═══════════════════════════════════════════════════════════ */
+
+/* ── 1. LECTURE ─────────────────────────────────────────── */
+#page4 {
+  --fs-6: 11px; --fs-7: 11px; --fs-8: 11px; --fs-9: 11.5px; --fs-10: 12px; --fs-11: 12.5px;
+  font-variant-numeric: tabular-nums;
+}
+#page4 * { text-shadow: none !important; }
+#page4 .scroll-hint { display: none; }
+
+/* ── 2. TUILES (les onglets) ────────────────────────────── */
+#page4 .cz-bref { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin: 14px 16px 0; }
+#page4 .cz-tile { all: unset; box-sizing: border-box; display: block; cursor: pointer; min-width: 0; background: var(--s1); border: 1px solid rgba(255,255,255,.06);
+  border-radius: 16px; padding: 11px 13px 10px; transition: border-color .15s, background .15s, transform .1s; -webkit-tap-highlight-color: transparent; }
+#page4 .cz-tile:active { transform: scale(.98); }
+/* « all: unset » efface l'anneau du clavier : on le rend */
+#page4 .cz-tile:focus-visible, #page4 .cz-hb > button:focus-visible { outline: 2px solid var(--ice); outline-offset: 2px; }
+#page4 .cz-tile.active { border-color: var(--ice); background: rgba(56,189,248,.07); }
+#page4 .cz-h { display: flex; justify-content: space-between; align-items: baseline; gap: 6px; }
+#page4 .cz-h > span { font: 700 12px/1.2 var(--font-mono); letter-spacing: .04em; color: var(--t2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+#page4 .cz-tile.active .cz-h > span { color: var(--t1); }
+#page4 .cz-h > em { font: 700 17px/1 var(--font-display, inherit); font-style: normal; color: var(--t1); flex-shrink: 0; }
+#page4 .cz-last { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; min-height: 32px; margin-top: 8px;
+  font: 500 12px/1.35 var(--font-display, inherit); color: var(--t1); word-break: break-word; }
+#page4 .cz-sub { display: block; margin-top: 5px; font: 500 11px/1.2 var(--font-mono); color: var(--t3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* ── 3. TITRE DE LA LISTE ───────────────────────────────── */
+#page4 .cz-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 18px 16px 8px; padding: 0 2px 8px; border-bottom: 1px solid rgba(255,255,255,.06); }
+#page4 .cz-ht { display: flex; align-items: baseline; gap: 10px; min-width: 0; flex: 1 1 auto; overflow: hidden; }
+#page4 .cz-ht > span { font: 700 13px/1.2 var(--font-mono); letter-spacing: .16em; text-transform: uppercase; color: var(--t2); white-space: nowrap; }
+#page4 .cz-ht > em { font: 500 11px/1.2 var(--font-mono); font-style: normal; color: var(--t3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#page4 .cz-hb { display: flex; gap: 8px; flex-shrink: 0; }
+#page4 .cz-hb > button { all: unset; box-sizing: border-box; display: inline-flex; align-items: center; justify-content: center; min-height: 40px; cursor: pointer;
+  font: 600 12px/1.2 var(--font-mono); padding: 8px 14px; border-radius: 10px; border: 1px solid rgba(255,255,255,.1); color: var(--t2); background: var(--s1);
+  white-space: nowrap; transition: transform .1s; -webkit-tap-highlight-color: transparent; }
+#page4 .cz-hb > button:active { transform: scale(.97); }
+#page4 .cz-hb > .cz-learned { color: var(--up); border-color: rgba(0,232,122,.3); background: rgba(0,232,122,.06); }
+#page4 .cz-hb > .cz-all.active { border-color: var(--ice); color: var(--t1); }
+
+/* ── 4. LIGNES (le « hash » tiré au hasard n'est plus montré) ── */
+#page4 .chain-card { margin: 0 16px; background: var(--s1); border: 1px solid rgba(255,255,255,.06); border-radius: 16px; overflow: hidden; }
+#page4 .chain-row { gap: 10px; padding: 7px 14px; align-items: center; border-bottom: 1px solid rgba(255,255,255,.04); }
+#page4 .chain-icon-wrap { width: 22px; height: 22px; border-radius: 7px; font-size: 13px; background: transparent; }
+#page4 .chain-desc { font: 500 12.5px/1.4 var(--font-display, inherit); color: var(--t1); }
+#page4 .chain-time { font: 500 11px/1.2 var(--font-mono); color: var(--t3); white-space: nowrap; text-align: right; }
+#page4 .chain-hash { display: none; }
+#page4 .chain-mode { display: inline-block; font: 700 11px/16px var(--font-mono) !important; letter-spacing: .04em; padding: 0 6px !important; margin-right: 7px !important; border-radius: 6px !important; vertical-align: 1px; }
+#page4 .cz-r { display: flex; align-items: baseline; gap: 10px; flex-shrink: 0; }
+#page4 .cz-x { display: inline-block; font: 700 11px/16px var(--font-mono); color: var(--t2); background: var(--s3); border-radius: 6px; padding: 0 6px; margin-right: 8px; }
+#page4 .cz-day { font: 700 11px/1 var(--font-mono); letter-spacing: .12em; text-transform: uppercase; color: var(--t3); padding: 12px 14px 7px;
+  background: rgba(255,255,255,.02); border-bottom: 1px solid rgba(255,255,255,.04); }
+#page4 .cz-pair { font-weight: 700; color: var(--t1); margin-right: 4px; }
+#page4 .cz-what { color: var(--t2); }
+#page4 .cz-res { font: 700 13px/1.2 var(--font-mono); white-space: nowrap; }
+#page4 .cz-res i { font-style: normal; font-weight: 500; font-size: 11px; opacity: .8; }
+#page4 .cz-res.up { color: var(--up); }
+#page4 .cz-res.dn { color: var(--down); }
+#page4 .cz-empty { color: var(--t3); font-size: 12px; padding: 18px; text-align: center; }
+
+/* ── 5. TÉLÉPHONE ───────────────────────────────────────── */
+@media (max-width: 520px) {
+  #page4 .cz-bref { grid-template-columns: 1fr 1fr; gap: 8px; margin: 10px 10px 0; }
+  #page4 .cz-head { flex-wrap: wrap; margin-left: 10px; margin-right: 10px; }
+  #page4 .cz-hb { width: 100%; }
+  #page4 .cz-hb > button { flex: 1 1 0; text-align: center; padding: 9px 6px; white-space: normal; min-height: 44px; }
+  #page4 .chain-card { margin-left: 10px; margin-right: 10px; }
+  #page4 .chain-row { padding: 7px 10px; gap: 8px; }
+  #page4 .cz-r { flex-direction: column; align-items: flex-end; gap: 2px; }
+}

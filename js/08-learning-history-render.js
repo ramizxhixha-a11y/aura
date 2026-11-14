@@ -425,102 +425,146 @@ function renderDAO() {
   patchGovCards();
 }
 
-let _chainFilter = 'all';
+// [GO CSS · écran 5 · 14/11/2026] Écran Chain par priorité (Rams 14/11 15:03 « Go css », maquette montrée, « Ok » 15:16 ; doc projet
+// claude/MAQUETTE-CHAIN-20261114.md) — affichage seul, rien de ce qui ouvre ou ferme un trade. Quatre tuiles en tête = les onglets (Trades · Décisions ·
+// Apprentissage · Système), chacune avec son nombre et sa dernière ligne ; « Tout le journal » à côté de « Ce que le système a appris » (11b).
+// L'écran s'ouvre sur les TRADES : avant, sur « Tout », le journal seul, où aucun trade n'apparaît (les trades ne vivent que dans ps.trades).
+// Trades groupés par jour, mise à 2 décimales, résultat coloré ; journal : une ligne, heure à droite, lignes identiques groupées (×n), plus de
+// « hash » (02 rndHash : tiré au hasard, pas une preuve). La liste n'est rebâtie que si le journal, les trades, l'onglet, le mode ou le jour changent
+// (avant : à chaque passage, toutes les 5 s). Badge de l'onglet : trades nouveaux depuis la dernière visite de Chain, par mode (clé d'affichage
+// aura_chain_vu) — avant : le nombre de lignes du journal, « 9+ » en permanence. L'onglet « DAO » disparaît : votes → Décisions, prix / réseau → Système.
+let _chainFilter = 'trade';
+
+// Nature d'une ligne du journal : décision (trade ouvert ou fermé, sortie, refus, vote, argent, bunker) · apprentissage · système (le reste).
+// Ordre : 02 _eventKind (trade, argent, bunker → décision ; réseau → système ; évolution → apprentissage), puis les règles apprises, puis l'icône et le texte.
+// Ouvertures : « BOT LONG SOL/USDT @… » (10f) et « Position LONG BTC/USDT | … » (02 openPosition, manuel) n'ont pas de nature dans 02 : leur icône 🟢 / 🔴.
+const _CHAIN_DEC_KINDS = { ouverture: 1, fermeture: 1, veto: 1, argent: 1, tendance: 1, bunker: 1, sortie_trailing: 1, sortie_zombie: 1, sortie_consensus: 1, sortie_tp: 1, sortie_sl: 1 };
+const _CHAIN_DEC_ICONS = ['🗳', '🟢', '🔴', '🚨', '🤖', '🤖⚡', '🎛️', '🎯', '💥', '🛑', '⛔', '🔗', '🧭', '📅', '₿', '📐', '🔒', '⏳', '🔌', '✕', '🏖️', '💶', '🏦', '💎', '✏️'];
+const _CHAIN_LEARN_ICONS = ['🧠', '🧬', '🔄', '⛓', '💭', '🪞', '🦋', '🌀', '📝', '🎓', '💤', '🧮', '🪜', '⚖️'];
+const _CHAIN_DEC_RE = /^Sortie |refus|annul|\bouvert|ferm[ée]|Trade MANUEL|contr[ôo]le|URGENCE|BUNKER|Anti-revenge|TP atteint|SL d[ée]clench|LIQUIDATION|Perte max|Trailing|Pyramide|TWAP|Vote|\bvoix |DAO #|Transfert|Injection|Vacances|Plein R[ée]gime|Stop c[ôo]t[ée] exchange|Pause streak|d[ée]sactiv|Garde comportementale/i;
+const _CHAIN_LEARN_RE = /appris|Apprentissage|Learn\[/i, _CHAIN_RULE_RE = /^(Stop|Gain|Horizon|Emplacements) appris|^Learn\[/;
+const _chainCatMemo = new WeakMap();
+function _chainCat(tx) {
+  if (!tx || typeof tx !== 'object') return 'sys';
+  const m = _chainCatMemo.get(tx); if (m) return m;
+  const k = (typeof _eventKind === 'function') ? _eventKind(tx) : null, d = String(tx.desc || '');
+  const c = _CHAIN_DEC_KINDS[k] ? 'dec' : (k === 'reseau') ? 'sys' : (k === 'evolution' || _CHAIN_RULE_RE.test(d)) ? 'learn'
+    : (_CHAIN_DEC_ICONS.includes(tx.icon) || _CHAIN_DEC_RE.test(d)) ? 'dec'
+    : (_CHAIN_LEARN_ICONS.includes(tx.icon) || tx.category === 'learn' || _CHAIN_LEARN_RE.test(d)) ? 'learn' : 'sys';
+  _chainCatMemo.set(tx, c); return c;
+}
+// heure HH:MM d'une ligne du journal (« 13:25:46 », ou « 3:06:04 PM » selon la langue de la tablette)
+function _chainHM(s) {
+  const m = String(s || '').match(/(\d{1,2}):(\d{2})(?::\d{2})?\s*([AP]\.?M\.?)?/i); if (!m) return String(s || '');
+  let h = +m[1]; if (m[3]) { const pm = /p/i.test(m[3]); if (pm && h < 12) h += 12; if (!pm && h === 12) h = 0; }
+  return String(h).padStart(2, '0') + ':' + m[2];
+}
+// formats français, réutilisés (un Intl.NumberFormat par forme : ~45× moins cher que toLocaleString à chaque nombre)
+const _chainNF = {};
+function _chainFmt(n, k, o) { return (_chainNF[k] || (_chainNF[k] = new Intl.NumberFormat('fr-FR', o))).format(n); }
+function _chainMoney(v) { const n = Number(v) || 0; return (n < 0 ? '−' : '') + '$' + _chainFmt(Math.abs(n), 'm2', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
+function _chainPx(v) {
+  if (v == null) return '?'; const n = Number(v); if (!isFinite(n)) return '?';
+  return n >= 100 ? _chainFmt(n, 'm2', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+    : (n >= 1 ? _chainFmt(n, 'p4', { minimumFractionDigits: 4, maximumFractionDigits: 4 }) : _chainFmt(n, 's4', { maximumSignificantDigits: 4 }));
+}
+function _chainDay(ts, now) {
+  const p = n => String(n).padStart(2, '0'), d = new Date(ts), t = new Date(now), y = new Date(now - 864e5);
+  const same = (a, b) => a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+  return (same(d, t) ? "Aujourd'hui · " : (same(d, y) ? 'Hier · ' : '')) + ['dim.', 'lun.', 'mar.', 'mer.', 'jeu.', 'ven.', 'sam.'][d.getDay()] + ' ' + p(d.getDate()) + '/' + p(d.getMonth() + 1);
+}
+// Dernier trade VU sur l'écran Chain, par mode (clé d'affichage aura_chain_vu, nouvelle) ; écrite seulement quand un trade plus récent est vu.
+function _chainVu(mode, ts) {
+  let v = _chainVu._v;
+  if (!v) { v = {}; try { v = JSON.parse(localStorage.getItem('aura_chain_vu') || '{}') || {}; } catch (e) { v = {}; } _chainVu._v = v; }
+  if (ts !== undefined && !(v[mode] >= ts)) { v[mode] = ts; try { localStorage.setItem('aura_chain_vu', JSON.stringify(v)); } catch (e) {} }
+  return v[mode];
+}
+function _chainTradeRow(pair, t) {
+  const close = t.type !== 'open', dir = t.side === 'buy' ? 'LONG' : 'SHORT', pnl = Number(t.pnlUsdt) || 0, p = n => String(n).padStart(2, '0');
+  const icon = close ? (pnl >= 0 ? '✅' : '❌') : (t.side === 'buy' ? '🟢' : '🔴'), d = new Date(t.ts || 0), hm = t.ts ? p(d.getHours()) + ':' + p(d.getMinutes()) : '—';
+  const what = close ? `${dir} fermé · ${_chainPx(t.entryPrice)} → ${_chainPx(t.price)}` : `${dir} ouvert · mise ${_chainMoney(t.stakeUsdt)} à ${_chainPx(t.price)}`;
+  const pct = (close && t.pnl != null && isFinite(Number(t.pnl))) ? ` <i>(${Number(t.pnl) < 0 ? '−' : '+'}${_chainFmt(Math.abs(Number(t.pnl)), 'q2', { maximumFractionDigits: 2 })} %)</i>` : '';
+  const res = close ? `<b class="cz-res ${pnl >= 0 ? 'up' : 'dn'}">${pnl >= 0 ? '+' : ''}${_chainMoney(pnl)}${pct}</b>` : '';
+  return `<div class="chain-row cz-tr"><div class="chain-icon-wrap">${icon}</div><div class="chain-content"><div class="chain-desc"><b class="cz-pair">${pair}</b> <span class="cz-what">${what}</span></div></div>`
+    + `<div class="cz-r">${res}<span class="chain-time">${hm}</span></div></div>`;
+}
+
+// Trades du mode à l'écran (historique RÉEL, ps.trades par paire, paire retirée comprise) : un passage sans allocation — nombre, dernier.
+function _chainScan() {
+  const ps = S.pairStates || {}; let n = 0, pair = null, t = null;
+  for (const p in ps) { const arr = (ps[p] && ps[p].trades) || []; n += arr.length;
+    for (let i = 0; i < arr.length; i++) if (!t || (arr[i].ts || 0) > (t.ts || 0)) { t = arr[i]; pair = p; } }
+  return { ps, n, pair, t, ts: t ? (t.ts || 0) : 0 };
+}
+// Badge de l'onglet Chain : trades nouveaux depuis la dernière visite de Chain (1re lecture d'un mode : rien de nouveau). Appelé par renderChain et,
+// hors de l'écran Chain, toutes les 10 s par le battement de 08 (avant : le badge n'était posé que par renderChain, au nombre de lignes du journal).
+function _chainBadge(sc, mode) {
+  const b = document.getElementById('chainCountBadge'); if (!b) return;
+  sc = sc || _chainScan(); mode = mode || ((typeof _walletKey === 'function') ? _walletKey(S.tradingMode) : S.tradingMode);
+  let vu = _chainVu(mode);
+  if (vu === undefined || S.currentPage === 4) { _chainVu(mode, sc.ts); vu = _chainVu(mode); }
+  let nv = 0;
+  if (sc.ts > vu) for (const p in sc.ps) ((sc.ps[p] && sc.ps[p].trades) || []).forEach(t => { if ((t.ts || 0) > vu) nv++; });
+  const bt = nv > 0 ? (nv > 9 ? '9+' : String(nv)) : '';
+  if (b.textContent !== bt) b.textContent = bt;
+  b.style.display = nv > 0 && S.currentPage !== 4 ? '' : 'none';
+}
 
 function filterChain(filter, el) {
   _chainFilter = filter;
-  document.querySelectorAll('[id^="chaintab-"]').forEach(b => b.classList.remove('active'));
-  if(el) el.classList.add('active');
   renderChain();
 }
 
 function renderChain() {
   const cl = document.getElementById('mobileChainList');
   if(!cl) return;
+  const txt = (id, v) => { const e = document.getElementById(id); if (e && e.textContent !== String(v)) e.textContent = v; };
+  const scrM = (typeof _walletKey === 'function') ? _walletKey(S.tradingMode) : S.tradingMode;
 
-  // Update nav badge with unread count
-  const nav4badge = document.getElementById('chainCountBadge');
-  if(nav4badge) {
-    const cnt = Math.min(99, S.chainLog.length);
-    nav4badge.textContent = cnt > 0 ? (cnt > 9 ? '9+' : cnt) : '';
-    nav4badge.style.display = cnt > 0 && S.currentPage !== 4 ? '' : 'none';
-  }
+  const sc = _chainScan(), _ps = sc.ps, nT = sc.n, lastP = sc.pair, lastT = sc.t, lastTs = sc.ts;
+  _chainBadge(sc, scrM);
 
-  if(S.chainLog.length===0){
-    cl.innerHTML='<div style="color:var(--t3);font-size:11px;padding:16px;text-align:center;">En attente des premières transactions…</div>';
+  const log = (S.chainLog || []).slice().reverse();
+  const cat = { dec: [], learn: [], sys: [] }; log.forEach(tx => cat[_chainCat(tx)].push(tx));
+
+  // Tuiles (léger : le texte n'est écrit que s'il change)
+  if (lastT) { const c = lastT.type !== 'open', dir = lastT.side === 'buy' ? 'LONG' : 'SHORT', pnl = Number(lastT.pnlUsdt) || 0;
+    txt('czN_trade', nT); txt('czL_trade', lastP + ' ' + dir + (c ? ' fermé ' + (pnl >= 0 ? '+' : '') + _chainMoney(pnl) : ' ouvert'));
+    txt('czS_trade', 'dernier · ' + (typeof fmtDT === 'function' ? fmtDT(lastTs).slice(0, 11) : '')); }
+  else { txt('czN_trade', 0); txt('czL_trade', 'aucun trade dans ce mode'); txt('czS_trade', ''); }
+  ['dec', 'learn', 'sys'].forEach(f => { const x = cat[f][0]; txt('czN_' + f, cat[f].length);
+    const lab = (x && x.m && x.m !== scrM && typeof _modeLab === 'function') ? _modeLab(x.m) + ' · ' : '';   // une ligne d'un autre mode dit son nom, comme dans la liste
+    txt('czL_' + f, x ? lab + String(x.desc || '').replace(/<[^>]*>/g, '') : 'rien dans le journal'); txt('czS_' + f, x ? 'dernière · ' + _chainHM(x.time) : ''); });
+  txt('chaintab-all', 'Tout le journal · ' + log.length);
+  document.querySelectorAll('#page4 [data-f]').forEach(b => b.classList.toggle('active', b.dataset.f === _chainFilter));
+
+  // La liste : rebâtie seulement si quelque chose a changé (avant : à chaque passage)
+  // clé : ce que montre l'onglet — trades (nombre, dernier) ou journal (longueur, dernière ligne) —, le mode et le jour (« Aujourd'hui », « Hier »)
+  const now = Date.now(), last = log[0];
+  const key = [_chainFilter, scrM, _chainDay(now, now)].concat(_chainFilter === 'trade' ? [nT, lastTs] : [log.length, last ? (last.time + '|' + last.hash + '|' + last.desc) : '']).join('§');
+  if (cl._chainK === key) return;
+  cl._chainK = key;
+  const T = { trade: ['Trades', 'historique réel · 60 derniers'], dec: ['Décisions', 'trades, sorties, refus, votes'], learn: ['Apprentissage', 'agents, génomes, évolution'],
+    sys: ['Système', 'prix, rythme des bots, démarrage'], all: ['Tout le journal', '30 dernières lignes'] }[_chainFilter] || ['Journal', ''];
+  txt('chainHeadT', T[0]); txt('chainHeadSub', T[1]);
+
+  if (_chainFilter === 'trade') {
+    const rows = [];
+    for (const pair in _ps) ((_ps[pair] && _ps[pair].trades) || []).forEach(t => rows.push({ pair, t }));
+    rows.sort((a, b) => (b.t.ts || 0) - (a.t.ts || 0));
+    let day = '', html = '';
+    rows.slice(0, 60).forEach(x => { const dk = x.t.ts ? _chainDay(x.t.ts, now) : 'Sans date'; if (dk !== day) { day = dk; html += `<div class="cz-day">${dk}</div>`; } html += _chainTradeRow(x.pair, x.t); });
+    cl.innerHTML = html || '<div class="cz-empty">Aucun trade dans ce mode.</div>';
     return;
   }
+  if (!log.length) { cl.innerHTML = '<div class="cz-empty">En attente des premières lignes du journal…</div>'; return; }
 
-  // Category icon sets (Trades lu depuis l'historique réel plus bas, pas par icône)
-  const LEARN_ICONS = ['🧠','🧬','⛓','💭','🪞','🦋','🌀','✏️','📝','🎓'];
-  const DAO_ICONS   = ['🏛','🔑','🪙','🗳','▶','⏸','🌐','📡','⚖️','⚠️','🌍','☁️','🤖','🚨','↺'];
-  const isLearn = t => LEARN_ICONS.includes(t.icon) || t.category === 'learn';
-  const isDao   = t => DAO_ICONS.includes(t.icon);
-
-  // ── Onglet Trades : lit l'historique RÉEL des trades (ps.trades par paire, conservé
-  //    dans l'état, capé à 100/paire). Le journal volatil (plafond 200) évinçait sinon les
-  //    trades sous le flot Apprentissage/Dream. Ouvertures + clôtures, format de ligne identique.
-  const _fmtPx = v => { if(v==null) return '?'; const n=Number(v); return n>=100?n.toFixed(2):(n>=1?n.toFixed(4):n.toPrecision(4)); };
-  const _ps = S.pairStates || {};
-  // Comptage LÉGER pour le badge d'onglet (aucune allocation de lignes).
-  let _tradeCount = 0;
-  Object.keys(_ps).forEach(p => { _tradeCount += ((_ps[p] && _ps[p].trades) || []).length; });
-  // [ANTI-CHURN 04/08/2026] les lignes ne sont construites (tri + mapping ~800 objets) QUE
-  // quand l'onglet Trades est affiché — avant, c'était refait à CHAQUE rendu du journal.
-  let tradeRows = [];
-  if(_chainFilter === 'trade'){
-  const _rawTrades = [];
-  Object.keys(_ps).forEach(pair => {
-    const arr = (_ps[pair] && _ps[pair].trades) || [];
-    arr.forEach(t => _rawTrades.push({ pair, t }));
-  });
-  _rawTrades.sort((a,b) => (b.t.ts||0) - (a.t.ts||0));
-  tradeRows = _rawTrades.map(({pair, t}) => {
-    const isClose = t.type !== 'open';
-    const dir  = t.side === 'buy' ? 'LONG' : 'SHORT';
-    const pnl  = Number(t.pnlUsdt);
-    const icon = isClose ? (pnl >= 0 ? '✅' : '❌') : (t.side === 'buy' ? '🟢' : '🔴');
-    let desc;
-    if (isClose) {
-      const pct = (t.pnl != null) ? ` (${Number(t.pnl).toFixed(2)}%)` : '';
-      desc = `${pair} ${dir} · ${_fmtPx(t.entryPrice)}→${_fmtPx(t.price)} · ${pnl>=0?'+':'−'}$${Math.abs(pnl||0).toFixed(2)}${pct}`;
-    } else {
-      desc = `${pair} ${dir} ouvert · mise $${Number(t.stakeUsdt||0).toFixed(4)} @ ${_fmtPx(t.price)}`;
-    }
-    return { icon, desc, hash:'', time:(typeof fmtDT === 'function' ? fmtDT(t.ts) : (t.time||'')) };
-  });
-  }
-
-  const allReversed = S.chainLog.slice().reverse();
-
-  // B. Count per category (for badges)
-  const counts = {
-    all: allReversed.length,
-    trade: _tradeCount,
-    learn: allReversed.filter(isLearn).length,
-    dao: allReversed.filter(isDao).length,
-  };
-  // Update tab labels with counts
-  const tabs = {all:'chaintab-all', trade:'chaintab-trade', learn:'chaintab-learn', dao:'chaintab-dao'};
-  const labels = {all:'Tout', trade:'⚡ Trades', learn:'🧠 Learn', dao:'🏛 DAO'};
-  Object.keys(tabs).forEach(key => {
-    const btn = document.getElementById(tabs[key]);
-    if (btn) {
-      const n = counts[key];
-      btn.innerHTML = labels[key] + (n > 0 ? ' <span style="opacity:.6;font-size:9px;font-weight:600;">('+n+')</span>' : '');
-    }
-  });
-
-  // A. Filter full log first, then take 30 most recent matches
-  let logs;
-  if(_chainFilter === 'trade')      logs = tradeRows;              // historique RÉEL des trades (ps.trades)
-  else if(_chainFilter === 'learn') logs = allReversed.filter(isLearn);
-  else if(_chainFilter === 'dao')   logs = allReversed.filter(isDao);
-  else                              logs = allReversed;
-
-  const visible = logs.slice(0, _chainFilter === 'trade' ? 60 : 30);
-
-  // Color map for icons
+  // Lignes identiques (même mode, même icône, même texte) groupées : la plus récente, ×n, de la première à la dernière heure
+  const src = _chainFilter === 'all' ? log : (cat[_chainFilter] || []);
+  const grp = [], idx = {};
+  src.forEach(tx => { const k = (tx.m || '') + '|' + tx.icon + '|' + tx.desc;
+    if (idx[k] != null) { const g = grp[idx[k]]; g.n++; g.first = tx.time; } else { idx[k] = grp.length; grp.push({ tx, n: 1, first: tx.time }); } });
   const iconColor = {
     '💚':'var(--up)','🟢':'var(--up)','✅':'var(--up)','▶':'var(--up)',
     '🔴':'var(--down)','❌':'var(--down)','⏸':'var(--down)',
@@ -528,28 +572,16 @@ function renderChain() {
     '💸':'var(--gold)','🗳':'var(--gold)','🪙':'var(--gold)',
     '⛓':'var(--t3)','🏛':'var(--t2)','🔑':'var(--t2)',
   };
-
   // [MODES SÉPARÉS · 10/10/2026] une ligne écrite par un AUTRE mode que celui de l'écran dit son nom (marque m posée par 02 _chainStamp) : AA / EV / RE, à la
   // couleur du mode. Les lignes du mode affiché et celles qui ne sont d'aucun mode restent comme avant.
-  const _scrM = (typeof _walletKey === 'function') ? _walletKey(S.tradingMode) : S.tradingMode;
   const _mCol = { sim: 'var(--ice)', paperReal: 'var(--up)', real: 'var(--down)' };
-  const _mChip = tx => (tx.m && tx.m !== _scrM && typeof _modeLab === 'function')
-    ? `<span class="chain-mode" style="display:inline-block;font-size:9px;font-weight:700;letter-spacing:.04em;line-height:14px;padding:0 5px;margin-right:6px;border-radius:5px;border:1px solid ${_mCol[tx.m] || 'var(--t3)'};color:${_mCol[tx.m] || 'var(--t3)'};">${_modeLab(tx.m)}</span>` : '';
-  cl.innerHTML = visible.map(tx => {
-    const col = iconColor[tx.icon] || 'var(--t2)';
-    const shortHash = tx.hash ? tx.hash.slice(0,8)+'…'+tx.hash.slice(-4) : '';
-    return `
-    <div class="chain-row" style="border-left:2px solid ${col}22;">
-      <div class="chain-icon-wrap" style="color:${col}">${tx.icon}</div>
-      <div class="chain-content">
-        <div class="chain-desc" style="color:var(--t1);">${_mChip(tx)}${tx.desc}</div>
-        <div style="display:flex;justify-content:space-between;margin-top:3px;">
-          <div class="chain-hash" style="color:${col}88;">${shortHash}</div>
-          <div class="chain-time">${tx.time}</div>
-        </div>
-      </div>
-    </div>`;
-  }).join('') || '<div style="color:var(--t3);font-size:11px;padding:16px;text-align:center;">Aucune transaction dans cette catégorie.</div>';
+  const _mChip = tx => (tx.m && tx.m !== scrM && typeof _modeLab === 'function')
+    ? `<span class="chain-mode" style="border:1px solid ${_mCol[tx.m] || 'var(--t3)'};color:${_mCol[tx.m] || 'var(--t3)'};">${_modeLab(tx.m)}</span>` : '';
+  cl.innerHTML = grp.slice(0, 30).map(({ tx, n, first }) => {
+    const tm = n > 1 ? `<span class="cz-x">×${n}</span>${_chainHM(first)} → ${_chainHM(tx.time)}` : _chainHM(tx.time);
+    return `<div class="chain-row"><div class="chain-icon-wrap" style="color:${iconColor[tx.icon] || 'var(--t2)'}">${tx.icon}</div>`
+      + `<div class="chain-content"><div class="chain-desc">${_mChip(tx)}${tx.desc}</div></div><div class="cz-r"><span class="chain-time">${tm}</span></div></div>`;
+  }).join('') || '<div class="cz-empty">Rien dans cette catégorie.</div>';
 }
 
 // ============================================================
@@ -3558,6 +3590,8 @@ function simTick() {
       renderFiscal(tab);
     }
   }
+  // [GO CSS · écran 5 · 14/11/2026] hors de l'écran Chain : le badge de son onglet (trades nouveaux depuis la dernière visite), toutes les 10 s
+  if(S.currentPage !== 4 && tick % 10 === 0 && typeof _chainBadge === 'function') { try { _chainBadge(); } catch(e) {} }
   // v7.2 Phase 18 · Fin instrumentation perf (rolling 20 ticks)
   try {
     const _perfEnd = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
