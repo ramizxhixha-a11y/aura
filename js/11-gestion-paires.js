@@ -200,7 +200,9 @@ function _injectPairManagerButton() {
   btn.textContent = '⚖ Gérer les paires';
   btn.style.cssText = 'display:block;margin:10px 16px 2px auto;padding:7px 16px;background:rgba(0,232,122,.08);color:var(--up,#00e87a);border:1px solid rgba(0,232,122,.35);border-radius:9px;font-size:12px;font-family:inherit;';
   btn.onclick = openPairManager;
-  anchor.parentNode.insertBefore(btn, anchor.nextSibling);
+  // [GO CSS · écran 3 · 14/11/2026] dans la barre de la paire (#mkPairBar), après les puces : choisir et gérer les paires au même endroit
+  var bar = document.getElementById('mkPairBar');
+  if (bar) bar.appendChild(btn); else anchor.parentNode.insertBefore(btn, anchor.nextSibling);
 }
 
 function openPairManager() {

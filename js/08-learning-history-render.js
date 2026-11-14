@@ -134,11 +134,17 @@ function renderMarket() {
   }
 
   // ── Pair selector (build once) ──
+  // [GO CSS · écran 3 · 14/11/2026] une puce par paire : la barre était bâtie UNE fois, avant que 11 ne recharge les paires ajoutées
+  // (sonde du 14/11 : 10 puces pour 12 paires, PEPE et EUR absentes) → rebâtie quand la LISTE des paires change (clé posée sur la barre : un retrait
+  // et un ajout entre deux rendus gardent le même nombre) ; elle va dans la barre de la paire (#mkPairBar)
+  { const _ps = document.getElementById('pairSelWrap');
+    if (_ps && _ps.dataset.k !== Object.keys(PAIRS).join('|')) _ps.remove(); }
   if(!document.getElementById('pairSelWrap')){
     const wrap = document.getElementById('candle-wrap-top');
     if(wrap){
       const sel = document.createElement('div');
       sel.id='pairSelWrap';
+      sel.dataset.k = Object.keys(PAIRS).join('|');
       sel.style.cssText='display:flex;gap:6px;padding:10px 16px 0;overflow-x:auto;scrollbar-width:none;flex-shrink:0;';
       Object.keys(PAIRS).forEach(pair=>{
         const btn=document.createElement('div');
@@ -150,7 +156,8 @@ function renderMarket() {
         btn.innerHTML=`<span style="color:${c.color};margin-right:3px">●</span>${pair}`;
         sel.appendChild(btn);
       });
-      wrap.insertAdjacentElement('afterend',sel);
+      const _bar = document.getElementById('mkPairBar');
+      if (_bar) _bar.insertBefore(sel, _bar.firstChild); else wrap.insertAdjacentElement('afterend',sel);
     }
   }
   Object.keys(PAIRS).forEach(pair=>{
@@ -168,7 +175,7 @@ function renderMarket() {
     const _bull=_topA.filter(a=>(a.score||0)>0.05).length, _bear=_topA.filter(a=>(a.score||0)<-0.05).length;
     const _dir=_bull>_bear?'↑ HAUSSIER':_bear>_bull?'↓ BAISSIER':'→ NEUTRE';
     const _col=_bull>_bear?'var(--up)':_bear>_bull?'var(--down)':'var(--gold)';
-    const _chips=_topA.map(a=>{const cc=(a.score||0)>0.05?'var(--up)':(a.score||0)<-0.05?'var(--down)':'var(--gold)';return `<span style="background:var(--s2);border:1px solid ${cc}33;border-radius:6px;padding:3px 7px;font-size:9px;color:${cc};">${a.emoji} ${((a.score||0)>=0?'+':'')+((a.score||0).toFixed(2))}</span>`;}).join('');
+    const _chips=_topA.map(a=>{const cc=(a.score||0)>0.05?'var(--up)':(a.score||0)<-0.05?'var(--down)':'var(--gold)';return `<span style="background:var(--s2);border:1px solid ${cc}33;border-radius:6px;padding:3px 7px;font-size:9px;color:${cc};">${a.type || a.name} ${((a.score||0)>=0?'+':'')+((a.score||0).toFixed(2))}</span>`;}).join('');   // [GO CSS · écran 3] la spécialité, pas 🧬 (tous les sièges portent 🧬)
     _consMkt.innerHTML=`<div style="display:flex;align-items:center;gap:5px;flex-wrap:wrap;padding:4px 0;"><span style="font-size:9px;font-weight:700;color:${_col};background:${_col}22;padding:3px 8px;border-radius:6px;white-space:nowrap;">${_dir}</span>${_chips}</div>`;
   }
 }
@@ -1318,6 +1325,7 @@ let _corrLastTick = -1;
 function renderCorrMatrix() {
   const canvas = document.getElementById('corrMatrixCanvas');
   if(!canvas) return;
+  if(canvas.closest && canvas.closest('.mk-fold:not(.open)')) return;   // [GO CSS · écran 3 · 14/11/2026] volet Agents fermé : rien à dessiner (09i _mkFold redessine à l'ouverture)
   if(tick - _corrLastTick < 5) return;
   _corrLastTick = tick;
 
