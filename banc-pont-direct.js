@@ -727,7 +727,7 @@ T('P34 · relecture — le marqueur de 00 (window._auraLastOp, nommé par la lig
 });
 
 // ───────────── J · statique, page, erreurs ─────────────
-T('P35 · textes : ni eval, ni Function, ni Math.random, showToast, _decErr, XMLHttpRequest, sendBeacon, WebSocket, cookie ; un seul innerHTML (texte fixe) ; 17 ne connaît ni fetch, ni setInterval, ni écouteur, ni le PAT (une seule minuterie : la borne de 3 s) ; la sonde vise CE fichier, déclaré dans le HTML ; ≤ 500 lignes ; en-têtes au jeton', () => {
+T('P35 · textes : de l\'app, le pont n\'appelle que buildSnapshot, _perfOp et (go pont) _auraSentry.signal — liste fermée de ce qu\'il lit sur window ; ni eval, ni Function, ni Math.random, showToast, _decErr, XMLHttpRequest, sendBeacon, WebSocket, cookie ; un seul innerHTML (texte fixe) ; 17 ne connaît ni fetch, ni setInterval, ni écouteur, ni le PAT (une seule minuterie : la borne de 3 s) ; la sonde vise CE fichier, déclaré dans le HTML ; ≤ 500 lignes ; en-têtes au jeton', () => {
   const p = codeStrict(M.PONT), l = codeStrict(M.LECT);   // les textes SOUS ESSAI (ceux des arguments, pour les mutations)
   for (const [nom, s, brut] of [[F17B, p, M.PONT], [F17, l, M.LECT]]) {
     for (const re of [/\beval\s*\(/, /\bFunction\s*\(/, /Math\.random/, /showToast/, /_decErr/, /XMLHttpRequest/, /sendBeacon/, /WebSocket/, /document\.cookie/, /document\.write/, /insertAdjacentHTML/, /outerHTML/, /\bimport\s*\(/, /setTimeout\(\s*['"`]/, /postMessage/, /\bnew\s+Proxy/, /__defineGetter__|__lookupGetter__/]) assert.ok(!re.test(s), nom + ' : ' + re);
@@ -745,6 +745,9 @@ T('P35 · textes : ni eval, ni Function, ni Math.random, showToast, _decErr, XML
   assert.ok(p.includes("var SONDE = API + 'aura/contents/" + F17B + "';")); assert.ok(fs.existsSync(path.join(ROOT, F17B)));
   assert.ok(p.includes("var CMDS = ['ping', 'etat', 'diag', 'lire', 'backup'];")); assert.ok(p.includes("var LS_PAT = 'aura_pont_pat', LS_MEM = 'aura_pont_mem';"));
   assert.deepStrictEqual([...new Set(p.match(/window\._perfOp|window\.buildSnapshot|window\.(?!(?:add|remove)EventListener)\w+\s*\(/g) || [])].sort(), ['window._perfOp', 'window.buildSnapshot'], 'de l\'app, le pont n\'appelle que buildSnapshot et _perfOp');
+  // [GO PONT · 14/11/2026] relecture : la règle ci-dessus ne voit que « window.X( » — liste FERMÉE de ce que 17b lit sur window (un alias s'y verrait) ;
+  // depuis go pont : _auraSentry, dont seul signal() est appelé (banc-pont-signal S7), avec un texte de SIGNAUX.
+  assert.deepStrictEqual([...new Set(p.match(/window\.\w+/g))].sort(), ['window._auraLastOp', 'window._auraSentry', 'window._perfOp', 'window._pont', 'window._pontLecture', 'window._pontStatus', 'window._stateReady', 'window.addEventListener', 'window.buildSnapshot', 'window.pontDirectActiver', 'window.pontDirectCouper', 'window.pontDirectEnvoyer', 'window.removeEventListener'], 'ce que le pont lit sur window');
   assert.ok(M.PONT.startsWith('// ═══ [PONT DIRECT · 11/10/2026] VERSION ' + PONT_TOK + ' · « go pont »')); assert.ok(M.LECT.startsWith('// ═══ [PONT DIRECT · 11/10/2026] VERSION ' + PONT_TOK + ' · LECTURE'));
   assert.ok(p.includes("var PONT_V = '" + PONT_TOK + "'") && l.includes("var LECT_V = '" + PONT_TOK + "'"));
 });

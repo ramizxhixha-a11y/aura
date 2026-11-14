@@ -240,6 +240,42 @@ function erreur(w, msg) { return vm.runInContext('(function lanceur_de_test(){ t
     assert.strictEqual(w3.envois.length, 1); assert.strictEqual(w3.ls.get('aura_sentry_v'), undefined); assert.strictEqual(w3._auraSentry.etat().dernierStatut, 429);
   });
 
+  /* ─────────── G · [GO PONT · 14/11/2026] signal à texte fixe d'un module (17b : pont suspendu ou coupé) ─────────── */
+  const SIG = 'AURA8 · Pont direct suspendu · PAT refusé par GitHub (401 : expiré ou révoqué)';
+  await T('G1 _auraSentry.signal(texte) : 1 envoi, niveau error (issue de priorité haute → règle d\'alerte), avalee=non, mode, message intact (401 gardé) ; même texte → doublon, rien ; non-texte, vide, ou sans « AURA8 · » en tête → rien ; > 200 caractères coupé ; un PAT glissé dans le texte → masqué ; API figée', async () => {
+    const w = monde();
+    assert.ok(Object.isFrozen(w._auraSentry)); assert.strictEqual(typeof w._auraSentry.signal, 'function');
+    w._auraSentry.signal(SIG); await attend(60);
+    assert.strictEqual(w.envois.length, 1); assert.ok(w.envois[0].url.startsWith(INGEST));
+    const ev = evt(w.envois[0]).ev;
+    assert.strictEqual(ev.message, SIG); assert.strictEqual(ev.level, 'error'); assert.strictEqual(ev.tags.avalee, 'non'); assert.strictEqual(ev.tags.mode, 'paperReal'); assert.strictEqual(ev.release, 'aura8@' + TOK);
+    w._auraSentry.signal(SIG); await attend(60); assert.strictEqual(w.envois.length, 1); assert.strictEqual(w._auraSentry.etat().refuses.doublon, 1);
+    [123, '', null, undefined, { m: SIG }, 'Pont direct suspendu', ' AURA8 · x', 'aura8 · x'].forEach(x => w._auraSentry.signal(x)); await attend(60); assert.strictEqual(w.envois.length, 1);
+    w._auraSentry.signal('AURA8 · Pont direct ' + 'mot '.repeat(100)); await attend(60); assert.strictEqual(w.envois.length, 2); const lg = evt(w.envois[1]).ev.message; assert.ok(lg.length <= 200 && lg.length > 150, 'coupé à 200 par signal (la garde, elle, coupe à 400) : ' + lg.length);
+    w._auraSentry.signal('AURA8 · Pont direct · ' + PAT); await attend(60); assert.strictEqual(w.envois.length, 3);
+    const b = corps(w.envois[2]); assert.ok(!b.includes(PAT) && !b.includes(PAT.slice(11, 30)), 'PAT masqué par la garde');
+  });
+  await T('G1b après un signal, la portée globale reste propre : une erreur avalée reste warning / avalee=oui, un plantage garde la DERNIÈRE opération de 00 (pas celle du moment du signal) et le niveau error', async () => {
+    const w = monde();
+    w._auraLastOp = { name: 'op-du-signal', at: 1 }; w._auraSentry.signal(SIG); await attend(60);
+    w._auraLastOp = { name: 'op-d-apres', at: 2 };   // posée juste avant chaque événement : l'envoi précédent passe par le fetch de 00, qui la réécrit
+    w._decErr(erreur(w, 'avalée après un signal')); await attend(60);
+    w._auraLastOp = { name: 'op-d-apres', at: 3 };
+    w.onerror('Uncaught Error: plantage après un signal', 'https://' + HOTE + '/aura/js/09c-auto-open.js?v=' + TOK, 1, 1, erreur(w, 'plantage après un signal')); await attend(80);
+    assert.strictEqual(w.envois.length, 3);
+    const [s0, a, p] = w.envois.map(e => evt(e).ev);
+    assert.strictEqual(s0.tags.derniere_op, 'op-du-signal');
+    assert.strictEqual(a.level, 'warning'); assert.strictEqual(a.tags.avalee, 'oui'); assert.strictEqual(a.tags.derniere_op, 'op-d-apres');
+    assert.strictEqual(p.level, 'error'); assert.strictEqual(p.tags.avalee, 'non'); assert.strictEqual(p.tags.derniere_op, 'op-d-apres', 'portée globale polluée par le signal');
+  });
+  await T('G2 signal hors de la page publiée (sondes, rejeux) ou SDK absent : rien ne part, aucune exception', async () => {
+    const w = monde({ hote: '127.0.0.1' }); w._auraSentry.signal(SIG); await attend(60); assert.strictEqual(w.envois.length, 0);
+    const t = monde(); t._auraSentry.signal(SIG); await attend(60); assert.strictEqual(t.envois.length, 1, 'le témoin envoie');
+    const s = monde(); vm.runInContext('delete window._auraSentry; window.__auraSentrySdk = undefined;', s.ctx);
+    s.document.currentScript = { src: 'https://' + HOTE + '/aura/js/00s-sentry.js?v=' + TOK }; s.run('js/00s-sentry.js');
+    assert.doesNotThrow(() => s._auraSentry.signal(SIG)); await attend(60); assert.strictEqual(s.envois.length, 0);
+  });
+
   /* ─────────── F · rien d'autre ne change ─────────── */
   await T('F1 setTimeout / fetch restent ceux de 00 (aucune enveloppe du SDK), console intacte, Error.stackTraceLimit rendu, seuls onerror / onunhandledrejection posés', () => {
     const w = monde();

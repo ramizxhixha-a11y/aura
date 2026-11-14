@@ -9,7 +9,7 @@
 //   3) BACKUP sur demande : le snapshot de 09b1 (buildSnapshot), même enveloppe que l'export de 10h, dans backups/.
 // LECTURE SEULE — le pont (ce fichier + 17-pont-lecture.js, qui lit l'app) :
 //   • n'écrit RIEN dans S ; n'appelle de l'app que buildSnapshot (09b1 : la fonction de la sauvegarde automatique, telle quelle, pour
-//     un backup — elle lit les accesseurs de portefeuille de 02 comme la sauvegarde, après _stateReady) et _perfOp (08 : il s'annonce « pont:backup / diag / lire », comme toute opération lourde) ; n'en remplace ni n'en
+//     un backup — elle lit les accesseurs de portefeuille de 02 comme la sauvegarde, après _stateReady) et _perfOp (08 : il s'annonce « pont:backup / diag / lire », comme toute opération lourde) ; depuis go pont (14/11) _auraSentry.signal (00s : un texte FIXE de SIGNAUX, une fois par motif et par jour, inerte hors de la page publiée ; son envoi passe par le fetch de 00, qui pose window._auraLastOp) ; n'en remplace ni n'en
 //     enveloppe aucune ; jamais Math.random (le rejeu le sème), ni showToast (08 y compte S._silencedCount), ni _decErr (00 → S._errStats) ;
 //   • n'ouvre ni ne ferme aucune position : aucune demande ne le peut, aucun chemin de code n'y mène ;
 //   • n'exécute RIEN de ce qui vient du dépôt : une demande est du JSON validé (nom du fichier, id, date, commande de la liste) ;
@@ -82,6 +82,12 @@
   function lsDel(k) { try { localStorage.removeItem(k); } catch (e) {} }
   function enLigne() { try { return navigator.onLine !== false; } catch (e) { return true; } }
   function incident(m) { st.err = m; st.errAt = now(); }
+  // [GO PONT · 14/11/2026] Suspendu ou coupé faute d'un geste de Rams (PAT expiré le 10/11 : 6 jours de silence, n° 97) : le motif part à Sentry
+  // (00s signal, niveau error), une fois par motif et par jour UTC (mémoire du pont) ; la session le lit. Texte FIXE : rien de GitHub, rien du PAT.
+  var GESTE = ' → « Couper le pont », puis colle un nouveau PAT et Activer';
+  var SIGNAUX = { '401': 'suspendu · PAT refusé par GitHub (401 : expiré ou révoqué)', acces: 'suspendu · le PAT ne voit plus aura-pont ou n\'y écrit plus (403 / 404)',
+    large: 'coupé · PAT trop large (il peut écrire dans le code), effacé', public: 'coupé · aura-pont public ou servi par Pages, PAT effacé' }, signales = {};
+  function signaler(code) { var j = new Date(now()).toISOString().slice(0, 10), m = memoire(); if (!Object.prototype.hasOwnProperty.call(SIGNAUX, code) || signales[code] || (m.sig && m.sig[code] === j)) return; signales[code] = 1; (m.sig = m.sig || {})[code] = j; memSauve(); try { var s = window._auraSentry; if (s && typeof s.signal === 'function') s.signal('AURA8 · Pont direct ' + SIGNAUX[code]); } catch (e) {} }
   function lecture() { var L = window._pontLecture; if (!L) throw new Error('17-pont-lecture.js absent'); return L; }
   function b64Octets(u8) {   // par blocs de 24 576 octets (multiple de 3 : les morceaux se concatènent sans bourrage au milieu)
     var out = [], PAS = 24576;
@@ -125,6 +131,7 @@
       fait: (Array.isArray(m.fait) ? m.fait : []).filter(function (x) { return typeof x === 'string' && x.length <= 40; }).slice(-FAIT_MAX),
       etatAt: passe(m.etatAt), sha: (typeof m.sha === 'string' && /^[0-9a-f]{40}$/.test(m.sha)) ? m.sha : null, backupAt: passe(m.backupAt),
       ecrits: (Array.isArray(m.ecrits) ? m.ecrits : []).map(passe).filter(function (x) { return x && t - x < 3600000; }).slice(-ECRITS_H) };
+    Object.keys(SIGNAUX).forEach(function (k) { var v = m.sig && m.sig[k]; if (typeof v === 'string' && /^\d{4}-\d\d-\d\d$/.test(v)) (n.sig = n.sig || {})[k] = v; }); if (mem && !n.sig) delete mem.sig;   // dernier signal à Sentry, par motif (go pont ; absent sans signal)
     if (!mem) mem = n; else Object.keys(n).forEach(function (k) { mem[k] = n[k]; });
     return mem;
   }
@@ -172,10 +179,13 @@
           if (rem !== null && rem !== '' && isFinite(Number(rem))) st.quota = Number(rem);
         } catch (e) {}
         if (r.status === 304 || r.status === 204) return out;
-        return r.text().then(function (t) { try { out.j = JSON.parse(t); } catch (e) { out.j = null; } return out; }, function () { return out; });
+        return r.text().then(function (t) { try { out.j = JSON.parse(t); } catch (e) { out.j = null; } return lente(out); }, function () { return out; });
       }).then(function (o) { fin(); oui(o); }, function (e) { fin(); rate(e); });
     });
   }
+  // [GO PONT · 14/11/2026] limite SECONDAIRE de GitHub : 403 / 429 dont le message dit « rate limit », sans en-tête d'attente → attendre 1 min, puis le
+  // double à chaque échec qui suit, comme une limite dite ; jamais « accès perdu » (le geste demandé effacerait un PAT valide).
+  function lente(o) { if (!o.attente && (o.st === 403 || o.st === 429) && o.j && /rate limit/i.test(String(o.j.message || ''))) o.attente = 60000 * Math.pow(2, Math.min(st.suite, 5)); return o; }
   function ghMsg(r) { return (r && r.plein) ? r.j.message : (r && r.st ? 'GitHub ' + r.st : 'réseau') + ((r && r.j && r.j.message) ? ' « ' + txt(r.j.message, 110) + ' »' : ''); }
   function bon(r) { return !!r && (r.st === 200 || r.st === 201); }
   function non(code, msg, attente) { return { ok: false, code: code, msg: msg, attente: attente || 0 }; }
@@ -349,12 +359,15 @@
     else if (r && (r.st === 403 || r.st === 404)) { st.etat = 'suspendu'; st.verifAt = 0; p = PAUSE_MAX; }   // accès perdu ? le contrôle du PAT est refait
     else p = Math.min(PAUSE_MAX, POLL_MS * Math.pow(2, Math.min(st.suite, 5)));
     st.pauseUntil = now() + p;
+    if (r && (r.st === 401 || ((r.st === 403 || r.st === 404) && !r.attente))) { signaler(r.st === 401 ? '401' : 'acces'); st.msg = ghMsg(r) + GESTE; }
   }
   function verdict(v) {
     if (!actif) return;
     incident(v.msg);
+    signaler(v.code);
     if (v.code === 'large' || v.code === 'public' || v.code === 'format') { couper('⛔ ' + v.msg); return; }   // refus définitif : le PAT quitte l'appareil
     st.etat = 'suspendu'; st.msg = v.msg; st.suite++; st.echecs++;
+    if (v.code === '401' || v.code === 'acces') st.msg += GESTE;
     st.pauseUntil = now() + ((v.code === '401' || v.code === 'acces') ? PAUSE_LONGUE : (v.attente ? Math.min(PAUSE_LONGUE, Math.max(60000, v.attente)) : Math.min(PAUSE_MAX, POLL_MS * Math.pow(2, Math.min(st.suite, 5)))));
   }
   async function cycle() {

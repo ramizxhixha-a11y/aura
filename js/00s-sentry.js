@@ -10,7 +10,9 @@
 // CE QUI PART :
 //   • les plantages (erreur non rattrapée, promesse rejetée sans gestion) — intégration globalHandlers ;
 //   • les erreurs AVALÉES par 00 _decErr (niveau « warning », étiquette avalee=oui) ;
-//   • une fois par token et par appareil, le message « AURA8 · Sentry branché · <token> » (preuve du tuyau).
+//   • une fois par token et par appareil, le message « AURA8 · Sentry branché · <token> » (preuve du tuyau) ;
+//   • [GO PONT · 14/11/2026] les signaux à texte fixe des modules (_auraSentry.signal) : « AURA8 · Pont direct … » quand le pont
+//     est suspendu ou coupé faute d'un geste de Rams (PAT expiré le 10/11 : 6 jours de silence, n° 97) — niveau error.
 //   Avec : type, message filtré, pile (fichier:ligne:colonne), token (release), mode à l'écran,
 //   visibilité de la page, dernière opération chronométrée par 00 (sans paramètres), User-Agent.
 //
@@ -269,6 +271,14 @@
     } catch (x) {}
   }
 
+  // [GO PONT · 14/11/2026] signal d'un module de l'app (17b : pont direct suspendu ou coupé) = un état qui ATTEND UN GESTE DE RAMS : TEXTE FIXE
+  // de l'appelant, commençant par « AURA8 · », même garde (filtre, une fois par chargement, plafond du jour), avalee=non, niveau error (Sentry en fait
+  // une issue de priorité haute, ce qui déclenche la règle d'alerte « high priority » du projet ; en warning, rien — relecture du 14/11).
+  function signal(texte) {
+    if (!st.actif || !SDK || typeof texte !== 'string' || texte.indexOf('AURA8 · ') !== 0) return;
+    try { SDK.withScope(function (scope) { etiquettes(scope, false); scope.setLevel('error'); SDK.captureMessage(texte.slice(0, 200)); }); } catch (x) {}
+  }
+
   try { demarrer(); } catch (e) { st.actif = false; st.raison = 'démarrage : ' + String(e && e.message || e).slice(0, 80); }
 
   // les plantages passent par globalHandlers : on y ajoute les mêmes étiquettes au moment de l'envoi
@@ -286,6 +296,7 @@
   window._auraSentry = Object.freeze({
     V: V,
     avalee: avalee,
+    signal: signal,
     etat: function () { return JSON.parse(JSON.stringify(st)); },
     // pour les bancs : la garde et les filtres, sans envoyer
     _garde: garde, _nettoieTexte: function (t) { return nettoieTexte(t, secretsConnus()); }, _nettoieUrl: function (u) { return nettoieUrl(u, secretsConnus()); },
