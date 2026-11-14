@@ -61,6 +61,7 @@ function mkCtx(over) {
   ctx._computePortfolio = () => S.cashAccount + S.tradingAccount;
   ctx.window = ctx; ctx.toasts = toasts; ctx.els = els;
   vm.createContext(ctx);
+  vm.runInContext('function validateManualExposure(a, b) { return validateTotalExposure(a, b); }', ctx);   // [GO N° 61 · 15/11/2026] 02 openPosition lit 09j validateManualExposure : ici le même contrôle que le bouchon validateTotalExposure du banc (le vrai est éprouvé par banc-n61.js)
   vm.runInContext([
     fnSrc(s02, '_livePairs'),   // [PAIRES VIVANTES · 10/10/2026] 10h _manPlan compte les emplacements sur les paires vivantes (02)
     fnSrc(s02, '_manOpenWarnings'), fnSrc(s02, '_manConsigneOf'), fnSrc(s02, 'openPosition'), fnSrc(s02, 'applyBotSuggestion'), fnSrc(s02, 'quickOpen'),

@@ -445,13 +445,13 @@ function _openProposedPosition(pair, side) {
 
   // ── VALIDATION CAPITAL avant ouverture manuelle ──────────────
   const leverageBonus = stake * (lev - 1);  // part empruntée
-  const capCheck = validateTotalExposure(stake, leverageBonus);
+  const capCheck = validateManualExposure(stake, leverageBonus);   // [GO N° 61 · 15/11/2026] (ETAT n° 61) contrôle des ouvertures à la main (09j)
   if(!capCheck.ok) {
     const free = Math.max(0, capCheck.available);
     // v7.1 P5: si bloqué par la règle spec utilisateur, on le précise
     if(capCheck.phase5) {
-      const _src = capCheck.phase5Mode === 'leverage' ? 'levier emprunté' : 'trading';
-      showToast(`⚠ Règle sizing · max investissable ${fmt$(free)} (${_src} − engagés)`, 3200, 'critical');
+      const _src = capCheck.phase5Mode === 'leverage' ? 'levier emprunté − engagés' : 'trading';   // [GO N° 61] sans levier : le trading (déjà débité des mises)
+      showToast(`⚠ Règle sizing · max investissable ${fmt$(free)} (${_src})`, 3200, 'critical');
     } else {
       showToast(`⚠ Dépassement capital · max disponible: ${fmt$(free)} · réduire la mise ou le levier`);
     }

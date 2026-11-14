@@ -6255,7 +6255,8 @@ function openPosition(pair, side, opts) {
 
   // ── Validation capital avant ouverture manuelle ──────────
   // [GO TENDANCE RÉELLE · 12/11/2026] la voix : exposition = mise ≤ trading (contrôlé plus bas) — le plafond « conviction » des bots ne la concerne pas
-  const capCheck = _vx ? { ok: true, available: Infinity } : validateTotalExposure(stakeUsdt, levBorrowed);
+  // [GO N° 61 · 15/11/2026] (ETAT n° 61) ouverture à la main : 09j validateManualExposure (la phase 5 sans levier ne retranche plus deux fois les mises)
+  const capCheck = _vx ? { ok: true, available: Infinity } : validateManualExposure(stakeUsdt, levBorrowed);
   if(!capCheck.ok && capCheck.available < stakeUsdt * 0.5) {
     showToast('⚠ Capital max atteint · ' + fmt$(Math.max(0,capCheck.available)) + ' libre', 2800, 'critical');
     if(levBorrowed > 0) repayLeverage(levBorrowed);

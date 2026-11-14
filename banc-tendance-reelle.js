@@ -66,6 +66,7 @@ function world(o) {
   c.window = c; c._walletFor = (m) => ({ openPositions: S.openPositions, pairStates: S.pairStates, tradingAccount: S.tradingAccount });
   c._isModeRunning = (m) => !!S.walletStore.paperReal.running; c.saveState = () => { seen.saves++; };
   vm.createContext(c);
+  vm.runInContext('function validateManualExposure(a, b) { return validateTotalExposure(a, b); }', c);   // [GO N° 61 · 15/11/2026] 02 openPosition lit 09j validateManualExposure : ici le même contrôle que le bouchon validateTotalExposure du banc (le vrai est éprouvé par banc-n61.js)
   const names = ['_computePortfolio', '_computePortfolioSans', 'repayLeverage', 'releaseTradeReserve', 'recordFees', '_posLatent', '_posCloseFees', '_posMark', '_posLevCash', '_repayCashDebt', '_levFreeDebt', '_levCashDebt', '_levNormAuto'].filter(n => has(s02, n));
   vm.runInContext(names.map(n => fnSrc(s02, n)).join('\n') + '\n' + (o.code || (fnSrc(s02, 'openPosition') + '\n' + fnSrc(s02, 'closePosition'))) + '\nvar S = this.S;', c);
   if (o.f15b !== false && s15b) vm.runInContext(s15b, c);

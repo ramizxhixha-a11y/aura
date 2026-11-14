@@ -96,8 +96,8 @@ T('E6 (84) · btcImpactTick : prix plat → 0 alerte ; chute > 3 % → 1 ; la ch
   t += 601000; for (let i = 0; i < 5; i++) { t += 1000; c.S.pairStates['BTC/USDT'].price *= 0.99; vm.runInContext('btcImpactTick()', c); }
   assert.strictEqual(toasts.length, 2, 'nouvelle chute après 10 min');
 });
-T('G · getCapitalSummary (09j) et applyBotSuggestion (02), lues pour des mises, identiques au commit f6c3920', () => {
-  assert.strictEqual(h16(fnSrc(s09j, 'getCapitalSummary')), '113562fbebdc6a31', 'getCapitalSummary a changé');
+T('G · getCapitalSummary (09j) et applyBotSuggestion (02), lues pour des mises, identiques au commit f6c3920 — hors la retouche de go n° 61 (n° 87 : libre = caisse + trading, passée par la porte rejeu/porte_n61.js, éprouvée par banc-n61.js)', () => {
+  assert.strictEqual(h16(fnSrc(require('./banc-fixtures/sans-n61.js')(s09j, 'js/09j-helpers.js'), 'getCapitalSummary')), '113562fbebdc6a31', 'getCapitalSummary a changé');
   assert.strictEqual(h16(fnSrc(s02, 'applyBotSuggestion')), '3fb037063c1325e2', 'applyBotSuggestion a changé');
 });
 T('C · capFree et _mcPxText ne sont lus que par l\'écran (07 carte capital, 03 mini-cartes, 11 pousseur)', () => {
