@@ -6,7 +6,7 @@
 // ═══ v63 · PATTERNS CHARTISTES ═══
 // [GO FIGURES · 26/10/2026] L'écran lit les VRAIES bougies closes du mode à l'écran (_detectCandlePatterns, plus bas). Avant, il lisait les prix des
 // trades de la paire (30 au plus) et, avec moins de 4 trades, une série INVENTÉE (sinus + hasard) en écrivant « Basé sur les prix réels des trades ».
-// La décision (08 getTechSignals) lit _detectPatterns(closes), juste dessous, INCHANGÉE : voir le verdict de la porte rejeu/porte_figures.js.
+// [GO FIGURES 2 · 14/11/2026] La décision (08 getTechSignals) ne lit plus AUCUNE figure : verdicts de rejeu/porte_figures.js (27/10) et porte_figures_2.js (14/11).
 
 let _ptPair = Object.keys(PAIRS||{})[0] || 'BTC/USDT';
 
@@ -19,8 +19,9 @@ window.selectPtPair = selectPtPair;
 // [GO FIGURES · 26/10/2026] _ptPrices (prix des trades, ou série inventée) est RETIRÉE : son seul appelant était renderPatternSection (grep de tous les
 // scripts du HTML, du HTML et de js/native-bridge.js, 26/10).
 
-// Détecter les patterns sur une série de prix — FIGURES D'AVANT, sur les seules clôtures : celles que lit la décision (08 getTechSignals). Ne pas retoucher
-// sans la porte (rejeu/porte_figures.js ; rejeu/talent.js l'extrait par son ancre).
+// Détecter les patterns sur une série de prix — FIGURES D'AVANT, sur les seules clôtures. [GO FIGURES 2 · 14/11/2026] Plus aucun appelant dans l'app :
+// la décision (08 getTechSignals) ne la lit plus (porte rejeu/porte_figures_2.js). Gardée pour les rejeux qui la mesurent (rejeu/talent.js --figures 1,
+// banc-figures.js) : ne pas la rebrancher sur la décision sans une nouvelle porte.
 function _detectPatterns(prices) {
   const n = prices.length;
   if(n<5) return [];
@@ -148,7 +149,7 @@ function _detectPatterns(prices) {
 //    (un sommet) d'au moins 1 ATR entre eux, et la clôture qui le franchit (confirmation) ; consolidation = 10 bougies dans 2 ATR ; cassure = clôture
 //    au-delà du plus haut (plus bas) des 10 bougies d'avant ; tendance = 5 clôtures de suite en hausse (en baisse).
 //  · Mêmes noms, icônes, sens et confiances qu'avant : seule la lecture change.
-// DÉCISION : 08 getTechSignals lit toujours _detectPatterns(closes). Ces figures-ci n'y entrent que si la porte rejeu/porte_figures.js le dit.
+// DÉCISION : 08 getTechSignals ne lit aucune figure (go figures 2, 14/11). Ces figures-ci n'y sont pas entrées (porte rejeu/porte_figures.js, 27/10).
 function _ptClosedSeries(candles) {
   if (!Array.isArray(candles) || !candles.length) return [];
   const N = candles.length, last = candles[N - 1];
@@ -304,8 +305,8 @@ function _ptMiniChart(candles, w, h) {
   return `<svg width="${w}" height="${h}" style="display:block;">${out}</svg>`;
 }
 
-// [GO FIGURES · 26/10/2026] Ce que l'écran dit de la décision — selon le verdict de la porte (rejeu/porte_figures.js).
-const _PT_DECISION_NOTE = 'La décision du bot lit encore les figures d\'avant (clôtures seules) : la porte des figures (26/10) ne les a pas laissées entrer.';
+// [GO FIGURES · 26/10/2026] Ce que l'écran dit de la décision — selon le verdict des portes (rejeu/porte_figures.js, porte_figures_2.js le 14/11).
+const _PT_DECISION_NOTE = 'La décision du bot ne lit aucune de ces figures : ni celles-ci (refusées par la porte du 26/10), ni celles d\'avant (retirées le 14/11).';
 const _PT_MESURE_NOTE = 'Mesuré (porte du 26/10, 24 mois, 12 paires, après frais) : ces figures ne prévoient pas le prix — « haussier » / « baissier » est la lecture des manuels, pas une prévision.';
 
 function renderPatternSection() {

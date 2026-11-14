@@ -209,7 +209,9 @@ T('D la DÉCISION n\'a pas bougé : 19 fonctions identiques au commit 6f4cd12 ; 
     _posLevCash: '2a29ce45dce38032', _feesDueOf: '06f247aa7097ee98', estimateStakes: '191de2e4cf018d53', _checkPaperRealStakeLimit: '31c0b71e7147fa7a',
     guardianCheck: '09a759da6045c358', botRescue: 'd41aca153b4299f8', validateInvestmentCapProvisioned: '3229d70744efd7a8', validateTotalExposure: '9ff782139655cb22',
     applyAutoLeverageBorrow: '5bb64a08d6e4a677', borrowLeverage: '615d09462f6b0438', repayLeverage: '9167fa725a2fc01d', _repayCashDebt: 'b39eb2a687ac37bb',
-    applyLeverageBorrowFees: 'e364c8a77e5c72ad', syncLeverageReserve: '77805e0810c80b7b', getTechSignals: '0c8a8a273d52421d' };
+    applyLeverageBorrowFees: 'e364c8a77e5c72ad', syncLeverageReserve: '77805e0810c80b7b', getTechSignals: '629b226baac43dc6' };
+  // [GO FIGURES 2 · 14/11/2026] getTechSignals change EXPRÈS : la figure d'avant (signals.pattern) sort de la décision, sur le verdict ENTRE de
+  // rejeu/porte_figures_2.js (banc-figures-2.js le prouve). Empreinte d'avant : 0c8a8a273d52421d. Le levier n'y est pour rien.
   Object.entries(AV).forEach(([n, h]) => assert.strictEqual(h16(fnSrc(TOUT, n) || ''), h, n + ' a changé'));
   // computePortfolioTotal : seul son commentaire change (la valeur, lue par l'écran, reste la même)
   // [GO ALERTES 2 · 14/11/2026] (ETAT n° 77) la valeur change exprès : la « réserve frais » (cumul des frais déjà payés) sort du total. Lu par l'accueil seul

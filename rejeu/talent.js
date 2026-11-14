@@ -20,7 +20,13 @@
 //   (±conf si haussière / baissière, 0 si neutre ou rien) : « figures_avant » = _detectPatterns(_closes(candles)) ; « figures_ohlc » = _detectCandlePatterns(candles).
 //   Les voix de FICHIER ne changent pas.
 // --figures-decision 1 (porte FIGURES) : getTechSignals lit _detectCandlePatterns(candles) à la place de _detectPatterns(closes) (une seule ancre, sinon arrêt).
-// usage : node rejeu/talent.js --data DIR --out FICHIER [--from i --to j] [--genome backup.json] [--encours 1] [--carnet DIR] [--figures 1] [--figures-decision 1]
+// --sans-figures 1 (porte FIGURES 2, 14/11/2026) : getTechSignals ne lit plus aucune figure (signals.pattern jamais posé) — la même ancre que
+//   --figures-decision, remplacée par « const _pats = null; » (une seule ancre, dans getTechSignals, sinon arrêt). Incompatible avec --figures-decision.
+//   Depuis 20261114h (go figures 2 livré), getTechSignals n'a plus cette ancre : --figures-decision et --sans-figures s'arrêtent sur le code livré ; ils
+//   ne servent qu'à rejouer le code d'avant (commit 7f7233a et plus ancien). Le code livré, rejoué sans option, rend les votes de R4 (porte_figures_2.js --livre).
+// --atscore-seul 1 (relecture de go figures 2, 14/11/2026) : n'écrit QUE FICHIER.at (+ .at.json) — une voix, « atScore » = getTechSignals(paire).atScore,
+//   le score technique que 10f mêle au composite (60 %), voix « composite » de la décision commune (03 _dcConsensus). Les voix ne sont pas rejouées.
+// usage : node rejeu/talent.js --data DIR --out FICHIER [--from i --to j] [--genome backup.json] [--encours 1] [--carnet DIR] [--figures 1] [--figures-decision 1] [--sans-figures 1] [--atscore-seul 1]
 'use strict';
 const fs = require('fs'), vm = require('vm'), path = require('path');
 const A = {}; for (let i = 2; i < process.argv.length; i += 2) A[process.argv[i].replace(/^--/, '')] = process.argv[i + 1];
@@ -58,12 +64,13 @@ const CODE = [
 ].join('\n;\n');
 // porte FIGURES : la décision lit les figures corrigées — l'ancre doit exister une fois, dans getTechSignals, sinon le rejeu ne tourne pas
 let CODE_RUN = CODE;
-if (A['figures-decision'] === '1') {
+if (A['figures-decision'] === '1' && A['sans-figures'] === '1') throw new Error('--figures-decision et --sans-figures : l\'un ou l\'autre');
+if (A['figures-decision'] === '1' || A['sans-figures'] === '1') {
   const anc = 'const _pats = _detectPatterns(closes);';
   if (CODE.split(anc).length !== 2) throw new Error('ancre figures-decision : ' + (CODE.split(anc).length - 1) + ' occurrence(s)');
   const gi = CODE.indexOf('function getTechSignals(pair) {'), ai = CODE.indexOf(anc), ge = CODE.indexOf('\n}\n', gi);
   if (!(gi >= 0 && ai > gi && ai < ge)) throw new Error('ancre figures-decision hors de getTechSignals');
-  CODE_RUN = CODE.replace(anc, 'const _pats = _detectCandlePatterns(candles);');
+  CODE_RUN = CODE.replace(anc, A['sans-figures'] === '1' ? 'const _pats = null;' : 'const _pats = _detectCandlePatterns(candles);');
 }
 
 // empreinte du code de l'app lu par ce rejeu (porte FIGURES : un rejeu d'un autre code est dit, pas compté) ; --sha 1 l'écrit et s'arrête
@@ -118,6 +125,7 @@ let fi = 0;
 const nV = VOICES.length, nP = PAIRS.length, rows = TO - FROM;
 const buf = new Float32Array(rows * nP * nV);
 const FIG = A.figures === '1', figBuf = FIG ? new Float32Array(rows * nP * 2) : null;
+const AT = A['atscore-seul'] === '1', atBuf = AT ? new Float32Array(rows * nP) : null, gtsR = vm.runInContext('getTechSignals', ctx);
 const dp = vm.runInContext('_detectPatterns', ctx), dcp = vm.runInContext('_detectCandlePatterns', ctx), cl = vm.runInContext('_closes', ctx);
 const best = r => (r && r.length && r[0].signal !== 'neu') ? (r[0].signal === 'bull' ? r[0].conf : -r[0].conf) : 0;   // comme getTechSignals (08 signals.pattern)
 const t0 = Date.now();
@@ -147,6 +155,7 @@ for (let i = FROM; i < TO; i++) {
   });
   PAIRS.forEach((p, j) => {
     const sr = {}, base = ((i - FROM) * nP + j) * nV;
+    if (AT) { const t = gtsR(p); atBuf[(i - FROM) * nP + j] = (t && isFinite(t.atScore)) ? t.atScore : 0; return; }
     vm.runInContext('ROSTER_TIERS.scouts', ctx).forEach(id => { sr[id] = scoutAnalysis(id, p); });
     if (FIG) { const cs = S.pairStates[p].candles, fb = ((i - FROM) * nP + j) * 2; figBuf[fb] = best(dp(cl(cs))); figBuf[fb + 1] = best(dcp(cs)); }
     VOICES.forEach((id, v) => {
@@ -158,11 +167,16 @@ for (let i = FROM; i < TO; i++) {
   });
   if ((i - FROM) % 5000 === 0) process.stderr.write(`  ${new Date(NOW).toISOString().slice(0, 10)} · ${i - FROM}/${rows} · ${((Date.now() - t0) / 1000).toFixed(0)} s\n`);
 }
+if (AT) {
+  fs.writeFileSync(A.out + '.at', Buffer.from(atBuf.buffer));
+  fs.writeFileSync(A.out + '.at.json', JSON.stringify({ token: TOK, from: FROM, to: TO, pairs: PAIRS, voices: ['atScore'], ts0: P[0].k[FROM][0], genome: A.genome ? path.basename(A.genome) : 'départ', encours: ENC, carnet: !!A.carnet, figuresDecision: A['figures-decision'] === '1', sansFigures: A['sans-figures'] === '1', codeSha: CODE_SHA }));
+  console.log(`talent · atScore seul · ${TOK} · ${rows} bougies × ${nP} paires · ${((Date.now() - t0) / 1000).toFixed(0)} s`); process.exit(0);
+}
 fs.writeFileSync(A.out, Buffer.from(buf.buffer));
-const FD = A['figures-decision'] === '1';
-fs.writeFileSync(A.out + '.json', JSON.stringify({ token: TOK, from: FROM, to: TO, pairs: PAIRS, voices: VOICES, ts0: P[0].k[FROM][0], genome: A.genome ? path.basename(A.genome) : 'départ', encours: ENC, carnet: !!A.carnet, figuresDecision: FD, codeSha: CODE_SHA }));
+const FD = A['figures-decision'] === '1', SF = A['sans-figures'] === '1';
+fs.writeFileSync(A.out + '.json', JSON.stringify({ token: TOK, from: FROM, to: TO, pairs: PAIRS, voices: VOICES, ts0: P[0].k[FROM][0], genome: A.genome ? path.basename(A.genome) : 'départ', encours: ENC, carnet: !!A.carnet, figuresDecision: FD, sansFigures: SF, codeSha: CODE_SHA }));
 if (FIG) {
   fs.writeFileSync(A.out + '.fig', Buffer.from(figBuf.buffer));
-  fs.writeFileSync(A.out + '.fig.json', JSON.stringify({ token: TOK, from: FROM, to: TO, pairs: PAIRS, voices: ['figures_avant', 'figures_ohlc'], ts0: P[0].k[FROM][0], genome: A.genome ? path.basename(A.genome) : 'départ', encours: ENC, carnet: !!A.carnet, figuresDecision: FD, codeSha: CODE_SHA }));
+  fs.writeFileSync(A.out + '.fig.json', JSON.stringify({ token: TOK, from: FROM, to: TO, pairs: PAIRS, voices: ['figures_avant', 'figures_ohlc'], ts0: P[0].k[FROM][0], genome: A.genome ? path.basename(A.genome) : 'départ', encours: ENC, carnet: !!A.carnet, figuresDecision: FD, sansFigures: SF, codeSha: CODE_SHA }));
 }
 console.log(`talent · ${TOK} · ${rows} bougies × ${nP} paires × ${nV} voix · ${((Date.now() - t0) / 1000).toFixed(0)} s`);

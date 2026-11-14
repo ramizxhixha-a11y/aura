@@ -1889,25 +1889,15 @@ function getTechSignals(pair) {
     };
   }
 
-  // [NUTRITION · 09/08/2026] les patterns chartistes de 06 (_detectPatterns) n'étaient
-  // consommés QUE par l'affichage — aucune décision ne les mangeait. Le meilleur pattern
-  // détecté (conf max) entre au score pondéré comme un signal, poids = sa confiance
-  // (0.6-0.77, dans la gamme des autres poids). Il nourrit ainsi atScore → agents,
-  // conseil, composite, gate. Visible dans signals.pattern (label = nom du pattern).
-  try {
-    if (typeof _detectPatterns === 'function') {
-      const _pats = _detectPatterns(closes);
-      if (_pats && _pats.length && _pats[0].signal !== 'neu') {
-        const _bp = _pats[0];
-        signals.pattern = {
-          signal: _bp.signal === 'bull' ? 'bull' : 'bear',
-          label:  `${_bp.icon} ${_bp.name}`,
-          detail: `Pattern chartiste · conf ${( _bp.conf*100).toFixed(0)}%`,
-          weight: _bp.conf
-        };
-      }
-    }
-  } catch(e) { try{window._decErr&&window._decErr(e)}catch(_e){} }
+  // [GO FIGURES 2 · 14/11/2026] AUCUNE FIGURE dans la décision (n° 74 du registre). Depuis le 09/08 (« NUTRITION »), la meilleure figure d'avant
+  // (06 _detectPatterns, clôtures seules) entrait ici comme un signal, poids = sa confiance : sur 24 mois de vraies bougies, elle parlait sur 95,5 % des
+  // bougies (surtout un faux « Double Top / Bottom », tolérance 2 %), sans aucun talent (z −2,7 à −0,2). Retirée sur le verdict ENTRE de
+  // rejeu/porte_figures_2.js (règles écrites avant toute donnée, 14/11). Portée : avant le retrait, une seule voix avait une qualité (fundamental_v1,
+  // talent à 15 min), que le retrait ne touche pas ; la décision commune apprise ne gagnait rien avant et ne gagne rien après (24 h : −13,6 → −2,7 pb
+  // en bougies closes, −25,5 → −37,2 pb en bougie en cours). Mesuré après la relecture, hors règles : atScore seul, sans talent avec ou sans figure
+  // (z ≤ 1,5). Non mesuré : la part fondamentale du composite (10f), la porte |atScore| ≥ 0,35 de 09c, techBonus de 10f / 10h, l'AA.
+  // Les figures sur vraies bougies (06 _detectCandlePatterns) n'y entrent pas non plus (rejeu/porte_figures.js, 26/10).
+  // signals.pattern n'est plus jamais posé : atScore, les signaux comptés par 10f / 10h (techBonus) et les listes de signaux à l'écran n'en ont plus.
 
   // ── Score pondéré ──────────────────────────────────────────
   let scoreSum=0, weightSum=0;

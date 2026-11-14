@@ -9,7 +9,7 @@
 //   F3 englobante, double sommet confirmé / non confirmé, cassure (sans « consolidation » le même jour), tendance, doji, marché plat (ATR nul → rien,
 //      pas de NaN) ; noms / sens / poids d'avant
 //   F4 l'écran : vraies bougies closes, aucun tirage au hasard, plus de « prix réels des trades » ; trop peu de bougies → il le dit
-//   D1 la DÉCISION n'a pas bougé : texte de _detectPatterns et de getTechSignals identique au commit 57d1864 (verdict de la porte : N'ENTRE PAS)
+//   D1 la DÉCISION ne lit pas les figures corrigées (verdict de la porte : N'ENTRE PAS) ; depuis go figures 2 (14/11), plus aucune figure (banc-figures-2.js)
 //   R  les règles de la porte n'ont pas bougé depuis leur écriture (sha-256 des 30 premières lignes de rejeu/porte_figures.js)
 'use strict';
 const fs = require('fs'), vm = require('vm'), assert = require('assert'), path = require('path'), crypto = require('crypto');
@@ -182,10 +182,11 @@ T('F4 l\'écran : vraies bougies closes, aucun tirage au hasard, plus de « prix
   assert.ok(/Un trou dans les 15 dernières bougies/.test(c3.__el.innerHTML), 'trou non dit à l\'écran');
 });
 
-T('D1 la DÉCISION n\'a pas bougé : _detectPatterns et getTechSignals identiques au commit 57d1864', () => {
+T('D1 la DÉCISION ne lit pas les figures corrigées ; depuis go figures 2 (14/11), elle ne lit plus aucune figure (banc-figures-2.js)', () => {
   assert.strictEqual(h16(need(s06, '_detectPatterns')), '9eb7b970e59ea92a', '_detectPatterns a changé');
-  assert.strictEqual(h16(need(s08, 'getTechSignals')), '0c8a8a273d52421d', 'getTechSignals a changé');
-  assert.ok(/_detectPatterns\(closes\)/.test(need(s08, 'getTechSignals')) && !/_detectCandlePatterns/.test(need(s08, 'getTechSignals')), 'la décision lit les figures corrigées');
+  const g = need(s08, 'getTechSignals').replace(/\/\/.*$/gm, '');   // le code, sans ses commentaires
+  assert.ok(!/_detectCandlePatterns/.test(g), 'la décision lit les figures corrigées (refusées par la porte du 26/10)');
+  assert.ok(!/_detectPatterns/.test(g), 'la décision lit encore les figures d\'avant (retirées par go figures 2)');
 });
 
 T('R les règles de la porte n\'ont pas bougé (sha-256 des 30 premières lignes de rejeu/porte_figures.js)', () => {
