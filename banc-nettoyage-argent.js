@@ -220,13 +220,24 @@ await T('F1 · VRAI renderPairPnl (07) : le badge dit la MISE et le levier (« m
   W.run(fnSrc(s07, 'renderPairPnl')); W.run('renderPairPnl()');
   const b = W.els['pb_badge_BTC_USDT'].textContent; assert.ok(/mise \$30\.00 · ×3$/.test(b), b);
 });
-await T('F2 · VRAI renderFiscalPairs (08) « Prochain trade estimé » : la mise de base de 10f (part du capital libre, mise de la paire en plancher), bornée comme 09c ; frais aller-retour (avant : min(mise, 10 % du trading) — $0.00 en EV et RE —, frais d\'un côté, « impôt » sur les frais)', () => {
+await T('F2 · VRAI renderFiscalPairs (08) « Prochain trade d\'un bot » : la mise de base de 10f (08 _fzNextStake : part du capital libre, mise de la paire en plancher), bornée comme 09c ; frais aller-retour (avant le 19/10 : min(mise, 10 % du trading) — $0.00 en EV et RE —, frais d\'un côté, « impôt » sur les frais) — [GO CSS · écran 6 · 14/11/2026] une ligne sous le tableau, de la plus petite à la plus grande mise, absente là où les bots n\'ouvrent pas (MANU, EV tenue par la voix : 09c:70, 75)', () => {
   const W = world({ trading: 100 }); W.S.pairStates['BTC/USDT'].stake = 40; W.S.pairStates['ETH/USDT'].stake = 500;
-  W.run(fnSrc(s08, 'renderFiscalPairs')); W.run('renderFiscalPairs()'); const h = W.els.feesByPair.innerHTML;
+  const s16 = rd('js/16-fiscal.js'), s16b = rd('js/16b-fiscal-ecran.js');
+  ['_fzNum', '_fzUsd', '_fzEsc', '_fzSec', '_fzSame', '_fzModeLbl', '_fzBotsOuvrent', '_fzNextStake', '_fzPairRows', 'renderFiscalPairs'].forEach(n => W.run(fnSrc(s08, n)));
+  W.run(fnSrc(s02, 'calcTaxProvision')); W.S.botAutoMode = true;   // les bots n'ouvrent qu'en AUTO (09c:70)
+  W.run('var _fzKeys = {};\n' + fnSrc(s16, '_fiscNum') + '\nvar _FISC_NF2 = null;\n' + fnSrc(s16b, '_fiscUsd'));
   // 10f : part du capital libre = (100 − 2) ÷ 2 paires sans position = 49 $, la mise de la paire en plancher (BTC 40 → 49) ; ETH 500 > 95 % du trading → borne de 09c (98 ÷ 3 emplacements = 32,7)
-  assert.ok(/Mise de base: <strong[^>]*>\$49\.00<\/strong>/.test(h), 'BTC : 49'); assert.ok(/Mise de base: <strong[^>]*>\$32\.70<\/strong>/.test(h), 'ETH : 32,70');
-  assert.ok(/Frais A\/R: −\$0\.13/.test(h), 'frais aller-retour de 49 $ = 0,127'); assert.ok(/Impôt: sur le gain seulement/.test(h));
-  W.S.pairStates['BTC/USDT'].stake = 0; W.run('renderFiscalPairs()'); assert.ok(/Mise de base: <strong[^>]*>\$49\.00<\/strong>/.test(W.els.feesByPair.innerHTML), 'mise de paire à 0 (EV, RE) : la part du capital, pas $0.00');
+  const st = JSON.parse(W.run('JSON.stringify([_fzNextStake("BTC/USDT"), _fzNextStake("ETH/USDT")])'));
+  near(st[0], 49, 1e-9, 'BTC : 49'); near(st[1], 32.7, 1e-9, 'ETH : 32,70');
+  W.run('renderFiscalPairs()'); let h = W.els.feesByPair.innerHTML;
+  assert.ok(/mise de base de \$32,70 à \$49,00 selon la paire/.test(h), h.slice(-420));
+  assert.ok(/frais aller-retour −\$0,09 à −\$0,13/.test(h), 'frais aller-retour de 32,70 $ et de 49 $ = 0,085 et 0,127'); assert.ok(/impôt : sur le gain seulement/i.test(h));
+  W.S.pairStates['BTC/USDT'].stake = 0; W.run('renderFiscalPairs()'); h = W.els.feesByPair.innerHTML;
+  assert.ok(/mise de base de \$32,70 à \$49,00/.test(h), 'mise de paire à 0 (EV, RE) : la part du capital, pas $0.00');
+  W.c._tlrTientEV = () => true; W.run('renderFiscalPairs()'); h = W.els.feesByPair.innerHTML;
+  assert.ok(!/Prochain trade/.test(h) && /Total/.test(h), 'EV tenue par la voix : le tableau, pas de prochain trade');
+  W.c._tlrTientEV = () => false; W.S.botAutoMode = false; W.run('renderFiscalPairs()');
+  assert.ok(!/Prochain trade/.test(W.els.feesByPair.innerHTML), 'MANU : pas de prochain trade');
 });
 
 console.log('▶ G. n° 60 — Inverser une position perdante');

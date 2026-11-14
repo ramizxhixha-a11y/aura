@@ -235,7 +235,7 @@ const run = (sb, code) => vm.runInContext(code, sb);
     t('HTML : js/16-fiscal.js chargé une fois, après 15', i16 > i15 && i15 > 0 && html.split('src="js/16-fiscal.js').length === 2);
     const i16b = html.indexOf('src="js/16b-fiscal-ecran.js');
     t('HTML : js/16b-fiscal-ecran.js chargé une fois, juste après 16 ; chaque fichier ≤ 500 lignes', i16b > i16 && html.split('src="js/16b-fiscal-ecran.js').length === 2 && SRC.split('\n').length <= 500 && SRCB.split('\n').length <= 500);
-    t('HTML : onglet ⚖ Impôt actif par défaut, son panneau visible, « Frais » masqué', /class="agent-tab active" id="ftab-tax"/.test(html) && /<div id="fpanel-tax">/.test(html) && /<div id="fpanel-global" style="display:none;">/.test(html));
+    t('HTML : onglet ⚖ Impôt actif par défaut, son panneau visible, « Frais » masqué (tuiles depuis GO CSS écran 6, 14/11)', /class="fz-tile active" id="ftab-tax"/.test(html) && /<div id="fpanel-tax">/.test(html) && /<div id="fpanel-global" style="display:none;">/.test(html));
     t('buildSnapshot (09b1) : fiscalCfg ; registres dans walletStore', /\bfiscalCfg: S\.fiscalCfg \|\| null,/.test(b1) && /walletStore:\s+S\.walletStore,/.test(b1));
     t('applySnap (09b2) : S.fiscalCfg = snap.fiscalCfg ; manifeste', /if \(snap\.fiscalCfg && typeof snap\.fiscalCfg === 'object'\)\s+S\.fiscalCfg\s+= snap\.fiscalCfg;/.test(b2) && /window\._APPLYSNAP_MANIFEST = \[[^\]]*'fiscalCfg'/.test(b2));
     const s10h = fs.readFileSync(path.join(ROOT, 'js/10h-pont-fullpower-bricks.js'), 'utf8'), s09k = fs.readFileSync(path.join(ROOT, 'js/09k-init.js'), 'utf8');
@@ -251,9 +251,11 @@ const run = (sb, code) => vm.runInContext(code, sb);
             'var document = { activeElement: null, getElementById: function(){ return null; } };' +
             '_fiscRenderPage(__el); __el.childElementCount = 1;');
     const page = run(sb, '__el.innerHTML');
-    ['Registre 2026', 'Dépôt fiscal', 'Impôt dû 2026', 'Régime en cours', 'Normal · 10 %', 'Spéculatif · 35,3 %', 'Bot fiscal', 'Par crypto', 'ETH/USDT', 'SOL/USDT', 'Historique 2026 · 2 trades', '👤 MAN', '🤖 AUTO', 'Réglages fiscaux', 'La loi appliquée', 'argent réel — dû au fisc']
+    ['Registre 2026', 'Dépôt fiscal', 'Impôt dû 2026', 'Régime en cours', 'Normal · 10 %', 'Spéculatif · 35,3 %', 'Bot fiscal', 'Par crypto', 'ETH/USDT', 'SOL/USDT', 'Historique 2026', '2 trades fermés', '👤 MAN', '🤖 AUTO', 'La loi appliquée', 'argent réel — dû au fisc']
       .forEach(x => t('page ⚖ Impôt : « ' + x + ' »', page.includes(x)));
     t('page : rien de « NaN » ni « undefined »', !/NaN|undefined/.test(page));
+    // [GO CSS · écran 6 · 14/11/2026] les réglages (commune, hors AURA) et l'export du registre sont dans l'onglet 🧰 Outils (08 renderFiscalSettings / renderFiscalExport, banc-css-fiscal)
+    t('page ⚖ Impôt : réglages et export du registre sortis vers 🧰 Outils', !/fxCommune|fxExt|_fiscExportCsv/.test(page));
     run(sb, '__el.innerHTML = "x"; _fiscRenderPage(__el);');
     t('page : pas reconstruite si rien n\'a changé (anti-clignotement)', run(sb, '__el.innerHTML') === 'x');
     const card = JSON.parse(run(sb, 'JSON.stringify(_fiscHomeCard())'));

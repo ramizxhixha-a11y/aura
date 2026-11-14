@@ -194,9 +194,12 @@ T('C6 badge : trades nouveaux depuis la dernière visite, par mode (aura_chain_v
   assert.ok(/if\(S\.currentPage !== 4 && tick % 10 === 0 && typeof _chainBadge === 'function'\) \{ try \{ _chainBadge\(\); \} catch\(e\) \{\} \}/.test(tick), '08 : le badge hors écran');
 });
 
-T('C7 css/32-chain-zones.css chargé en dernier au token ' + TOK + ' ; chaque règle visée à #page4 ; plancher 11 px ; hash caché ; 4 tuiles, téléphone 2', () => {
+T('C7 css/32-chain-zones.css chargé après tous les styles d\'avant au token ' + TOK + ' (après lui : seuls les écrans suivants du go css, css/33+) ; chaque règle visée à #page4 ; plancher 11 px ; hash caché ; 4 tuiles, téléphone 2', () => {
   const links = [...html.matchAll(/<link rel="stylesheet" href="(css\/[^"?]+)\?v=([0-9a-z]+)"/g)];
-  const last = links[links.length - 1]; assert.ok(last && last[1] === 'css/32-chain-zones.css' && last[2] === TOK, 'dernier : ' + (last && last[1]));
+  // [GO CSS · écran 6 · 14/11/2026] css/33-fiscal-zones.css (écran Fiscal, visé à #page5) se charge désormais après lui
+  const i32 = links.findIndex(l => l[1] === 'css/32-chain-zones.css');
+  assert.ok(i32 >= 0 && links[i32][2] === TOK, 'css/32 au token');
+  assert.deepStrictEqual(links.slice(i32 + 1).filter(l => !/^css\/(3[3-9]|[4-9]\d)-/.test(l[1])).map(l => l[1]), [], 'après css/32 : seuls css/33+');
   const css = rd('css/32-chain-zones.css').replace(/\/\*[\s\S]*?\*\//g, '');
   const sel = [...css.replace(/@media[^{]+\{/g, '').matchAll(/([^{}]+)\{[^{}]*\}/g)].map(m => m[1].trim()).filter(Boolean);
   const hors = sel.flatMap(s => s.split(',').map(x => x.trim())).filter(x => x && !x.startsWith('#page4'));

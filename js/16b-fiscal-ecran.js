@@ -30,7 +30,13 @@ function _fiscEur(v, dec) {
   var n = _fiscNum(v);
   try { return n.toLocaleString('fr-FR', { minimumFractionDigits: dec, maximumFractionDigits: dec }) + ' €'; } catch (e) { return n.toFixed(dec) + ' €'; }
 }
-function _fiscUsd(v, sign) { var n = _fiscNum(v); return (sign && n > 0 ? '+' : (n < 0 ? '−' : '')) + '$' + Math.abs(n).toFixed(2); }
+// [GO CSS · écran 6 · 14/11/2026] dollars au format français, comme l'écran Chain (« $1 000,00 » ; avant : « $1000.00 ») ; formateur gardé (pas un toLocaleString par nombre)
+var _FISC_NF2 = null;
+function _fiscUsd(v, sign) {
+  var n = _fiscNum(v), a = Math.abs(n), s;
+  try { _FISC_NF2 = _FISC_NF2 || new Intl.NumberFormat('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); s = _FISC_NF2.format(a); } catch (e) { s = a.toFixed(2); }
+  return (n <= -0.005 ? '−' : (sign && n >= 0.005 ? '+' : '')) + '$' + s;
+}
 function _fiscSgnEur(v) { var n = _fiscNum(v); return (n > 0 ? '+' : (n < 0 ? '−' : '')) + _fiscEur(Math.abs(n)); }
 
 // Carte d'accueil « Régime fiscal » (09k) : le régime en cours, pas une estimation du comportement.
@@ -67,7 +73,14 @@ function _fiscManNote(pair, manualPos) {
 }
 
 // État d'interface de la page (non sauvegardé)
-var _fiscUi = { all: false, mode: null, sig: '', paidAsk: null, lawOpen: false };
+var _fiscUi = { all: false, mode: null, sig: '', paidAsk: null, lawOpen: false, open: {} };
+// [GO CSS · écran 6 · 14/11/2026] volets de l'onglet ⚖ Impôt (dépôt, années, la loi), fermés par défaut, mémorisés : localStorage `aura_fiscal_volets`
+// (nouvelle clé d'affichage, comme aura_accueil_volets / aura_agents_volets / aura_marche_volets ; jamais dans le snapshot)
+(function () { try { var v = JSON.parse(localStorage.getItem('aura_fiscal_volets') || '{}'); if (v && typeof v === 'object') _fiscUi.open = v; } catch (e) {} })();
+function _fiscFold(id, open) {
+  _fiscUi.open[id] = !!open; if (id === 'loi') _fiscUi.lawOpen = !!open;
+  try { localStorage.setItem('aura_fiscal_volets', JSON.stringify(_fiscUi.open)); } catch (e) {}
+}
 
 function _fiscSig(el, mode) {
   var L = _fiscLedger(mode, false);
@@ -105,7 +118,7 @@ function _fiscInsights(mode) {
       + '. Déduits en spéculatif, pas en normal.']);
   }
   if (yr.shortUsd > 0.005) out.push(['🔴', 'Provision incomplète : il manque ' + _fiscUsd(yr.shortUsd) + ' au dépôt (compte trading vide au moment du calcul). Le bot réessaie toutes les 10 min.']);
-  if (!(d.commune > 0)) out.push(['🏛️', 'Additionnels communaux non saisis (0 %) : ils s\'ajoutent aux 33 %. Mets le taux de ta commune dans les réglages ci-dessous.']);
+  if (!(d.commune > 0)) out.push(['🏛️', 'Additionnels communaux non saisis (0 %) : ils s\'ajoutent aux 33 %. Mets le taux de ta commune dans 🧰 Outils › Réglages fiscaux.']);   // [GO CSS · écran 6 · 14/11/2026] les réglages ont quitté cet onglet
   var h = _fiscHarvest(mode);
   if (h) out.push(['💎', 'Perte latente ' + h.pair + ' (' + (h.regime === 'normal' ? 'normal' : 'spéculatif') + ') : la réaliser avant le 31/12 baisserait l\'impôt ' + y + ' de ' + _fiscEur(h.savingEur) + ' (même régime, même année).']);
   var end = new Date(y + 1, 0, 1).getTime();
@@ -128,6 +141,19 @@ function _fiscRow(lbl, val, col, strong) {
   return '<div class="fx-row' + (strong ? ' fx-row-strong' : '') + '"><span>' + lbl + '</span><span style="color:' + (col || 'var(--t1)') + ';">' + val + '</span></div>';
 }
 
+// [GO CSS · écran 6 · 14/11/2026] l'onglet ⚖ Impôt par priorité (Rams 14/11 « Go css », maquette montrée, « Ok » 16:15) — affichage seul, le calcul reste dans 16 :
+// A · les trois chiffres (impôt dû, dépôt, régime en cours) · B · le bot fiscal, alertes et conseils d'abord · C · les deux régimes · D · par crypto ·
+// E · historique groupé par jour, 10 visibles puis « Tout voir » · F · volets fermés : dépôt fiscal, années, la loi (avec la règle d'AURA, avant répétée).
+// Les réglages (commune, hors AURA) et l'export du registre vont dans l'onglet 🧰 Outils (08 renderFiscalSettings / renderFiscalExport).
+var _FISC_ORD = ['🔴', '⚠️', '💎', '💡', '📉', '♻️', '💸', '🏛️', '🛡️', '📅', 'ℹ️'];
+function _fiscSec(t, s) { return '<div class="fz-sec"><span>' + t + '</span>' + (s ? '<em>' + s + '</em>' : '') + '</div>'; }
+function _fiscHm(t) { var d = new Date(t); return ('0' + d.getHours()).slice(-2) + ':' + ('0' + d.getMinutes()).slice(-2); }
+function _fiscDay(t) { try { return t ? new Date(t).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' }) : 'Sans date'; } catch (e) { return 'Sans date'; } }
+function _fiscFoldHtml(id, title, right, body) {
+  return '<details class="fz-fold" data-fold="' + id + '"' + (_fiscUi.open[id] ? ' open' : '') + ' ontoggle="_fiscFold(\'' + id + '\', this.open)">'
+    + '<summary><span>' + title + '</span><em>' + right + '</em></summary><div class="fz-fb">' + body + '</div></details>';
+}
+
 function _fiscRenderPage(el) {
   if (!el) return;
   var mode = (typeof _walletKey === 'function') ? _walletKey() : 'sim';
@@ -135,11 +161,10 @@ function _fiscRenderPage(el) {
   var sig = _fiscSig(el, mode);
   if (sig === _fiscUi.sig && el.childElementCount) return;
   _fiscUi.sig = sig;
-  var badge = document.getElementById('fRegionBadge'); if (badge) badge.textContent = 'BE · ' + (_FISC_MODE_LBL[mode] || mode);
   var region = S.taxConfig && S.taxConfig.region;
   if (region && region !== 'BE') {
     el.innerHTML = '<div class="fx-card"><div class="fx-note">Le registre applique la loi belge. Région choisie : ' + _fiscEsc(region)
-      + ' — avec une autre région, AURA ne provisionne aucun impôt. Choisis 🇧🇪 Belgique dans ⚙ pour que le registre s\'applique.</div></div>';
+      + ' — avec une autre région, AURA ne provisionne aucun impôt. Choisis 🇧🇪 Belgique dans 🧰 Outils pour que le registre s\'applique.</div></div>';
     return;
   }
   var L = _fiscLedger(mode, false), cfg = _fiscCfg(), isReal = mode === 'real';
@@ -155,24 +180,26 @@ function _fiscRenderPage(el) {
   var dep = _fiscNum(w.fiscalReserveAccount);
   var other = Math.max(0, dep - heldUnpaid);
   var h = [];
-  // 1 · en-tête
-  h.push('<div class="fx-head"><span class="fx-mode" style="color:' + modeCol + ';border-color:' + modeCol + ';">' + lbl + '</span>'
-    + '<span class="fx-head-t">Registre ' + y + ' · loi belge</span>'
-    + '<span class="fx-head-s">' + (isReal ? 'argent réel — dû au fisc' : 'simulation — rien n\'est dû') + '</span></div>');
-  if (!L) h.push('<div class="fx-note">Le registre de ce mode s\'ouvre au premier trade fermé. Tout ce qui suit est déjà calculé selon la loi : il se remplit trade après trade.</div>');
-  // 2 · dépôt et dû
-  h.push('<div class="fx-card fx-hero"><div><div class="fx-lbl">Dépôt fiscal · provision ' + y + '</div>'
-    + '<div class="fx-big" style="color:var(--gold);">' + _fiscUsd(yr.provUsd) + '</div>'
-    + '<div class="fx-sub">≈ ' + _fiscEur(_fiscNum(yr.provUsd) * fx) + (yr.shortUsd > 0.005 ? ' · <span style="color:var(--down);">manque ' + _fiscUsd(yr.shortUsd) + '</span>' : '') + '</div></div>'
-    + '<div style="text-align:right;"><div class="fx-lbl">Impôt dû ' + y + ' à ce jour</div><div class="fx-big">' + _fiscEur(d.due) + '</div>'
-    + '<div class="fx-sub">10 % : ' + _fiscEur(d.taxN) + ' · 33 % : ' + _fiscEur(d.taxS) + '</div></div></div>');
-  // 3 · régime en cours
-  h.push('<div class="fx-card fx-regime" style="border-color:' + r.col + '55;"><div class="fx-lbl">Régime en cours · ' + (r.auto ? 'AUTO' : 'MANU') + '</div>'
-    + '<div class="fx-regime-v" style="color:' + r.col + ';">' + r.pct + ' · ' + _fiscEsc(r.label) + '</div><div class="fx-sub">' + _fiscEsc(r.sub) + '</div>'
-    + '<div class="fx-sub">Règle : MANU + LONG + sans levier → normal 10 %, exonération · AUTO, SHORT ou levier → spéculatif, sans exonération. Le fisc qualifie en dernier ressort.</div></div>');
-  // 4 · les deux régimes
+  // en-tête du registre
+  h.push('<div class="fz-mode"><span class="fz-mchip" style="color:' + modeCol + ';border-color:' + modeCol + ';">' + lbl + '</span>'
+    + '<span>Registre ' + y + ' · loi belge</span><em>' + (isReal ? 'argent réel — dû au fisc' : 'simulation — rien n\'est dû') + '</em></div>');
+  if (!L) h.push('<div class="fx-card"><div class="fx-note">Le registre de ce mode s\'ouvre au premier trade fermé. Tout ce qui suit est déjà calculé selon la loi : il se remplit trade après trade.</div></div>');
+  // A · les trois chiffres
+  h.push('<div class="fz-hero">'
+    + '<div class="fz-hc"><span class="fz-l">Impôt dû ' + y + ' à ce jour</span><span class="fz-big">' + _fiscEur(d.due) + '</span>'
+    + '<span class="fz-s">10 % : ' + _fiscEur(d.taxN) + ' · 33 % : ' + _fiscEur(d.taxS) + '</span></div>'
+    + '<div class="fz-hc"><span class="fz-l">Dépôt fiscal · provision ' + y + '</span><span class="fz-big" style="color:var(--gold);">' + _fiscUsd(yr.provUsd) + '</span>'
+    + '<span class="fz-s">≈ ' + _fiscEur(_fiscNum(yr.provUsd) * fx) + (yr.shortUsd > 0.005 ? ' · <b style="color:var(--down);">manque ' + _fiscUsd(yr.shortUsd) + '</b>' : '') + '</span></div>'
+    + '<div class="fz-hc fz-reg" style="--c:' + r.col + ';"><span class="fz-l">Régime en cours · ' + (r.auto ? 'AUTO' : 'MANU') + '</span>'
+    + '<span class="fz-big" style="color:' + r.col + ';">' + r.pct + ' · ' + _fiscEsc(r.label) + '</span><span class="fz-s">' + _fiscEsc(r.sub) + '</span></div></div>');
+  // B · bot fiscal : alertes et conseils d'abord (ordre des icônes ci-dessus, puis l'ordre de 16)
+  var ins = _fiscInsights(mode).map(function (i, k) { return [i[0], i[1], k]; }).sort(function (a, b) {
+    var ia = _FISC_ORD.indexOf(a[0]), ib = _FISC_ORD.indexOf(b[0]); return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib) || a[2] - b[2]; });
+  h.push(_fiscSec('💎 Bot fiscal', 'analyse ' + y) + '<div class="fx-card">'
+    + ins.map(function (i) { return '<div class="fx-ins"><span>' + i[0] + '</span><span>' + _fiscEsc(i[1]) + '</span></div>'; }).join('') + '</div>');
+  // C · les deux régimes
   var rSs = (Math.round(d.rateS * 1000) / 10).toString().replace('.', ',') + ' %';
-  h.push('<div class="fx-grid">'
+  h.push(_fiscSec('⚖ Les deux régimes', 'MANU LONG sans levier → normal · AUTO, SHORT ou levier → spéculatif') + '<div class="fx-grid">'
     + '<div class="fx-card"><div class="fx-card-t" style="color:var(--up);">Normal · 10 %</div><div class="fx-n">' + yr.nN + ' trade' + (yr.nN > 1 ? 's' : '') + ' · MANU LONG sans levier</div>'
     + _fiscRow('Plus-values', _fiscEur(yr.normal.gain), 'var(--up)') + _fiscRow('Moins-values', '−' + _fiscEur(yr.normal.loss), 'var(--down)')
     + _fiscRow('Net AURA', _fiscSgnEur(d.N), d.N >= 0 ? 'var(--up)' : 'var(--down)')
@@ -190,13 +217,9 @@ function _fiscRenderPage(el) {
     + _fiscRow('Taux', '33 %' + (d.commune > 0 ? ' + ' + String(d.commune).replace('.', ',') + ' % commune' : ' <span class="fx-dim">+ commune ?</span>'))
     + _fiscRow('Impôt', _fiscEur(d.taxS), 'var(--gold)', true)
     + '<div class="fx-dim fx-tiny">Aucune exonération. Pertes : 5 ans de report.</div></div></div>');
-  // 5 · bot fiscal
-  var ins = _fiscInsights(mode);
-  h.push('<div class="fx-sec">💎 Bot fiscal · analyse ' + y + '</div><div class="fx-card">'
-    + ins.map(function (i) { return '<div class="fx-ins"><span>' + i[0] + '</span><span>' + _fiscEsc(i[1]) + '</span></div>'; }).join('') + '</div>');
-  // 6 · par crypto (biens distincts)
+  // D · par crypto (biens distincts)
   var pk = Object.keys(yr.pairs || {}).sort(function (a, b) { return Math.abs(yr.pairs[b].gN + yr.pairs[b].gS) - Math.abs(yr.pairs[a].gN + yr.pairs[a].gS); });
-  h.push('<div class="fx-sec">💱 Par crypto · ' + y + '</div><div class="fx-card">');
+  h.push(_fiscSec('💱 Par crypto · ' + y, 'biens distincts') + '<div class="fx-card">');
   if (!pk.length) h.push('<div class="fx-dim">Aucun trade fermé cette année dans ce registre.</div>');
   else {
     h.push('<div class="fx-tab fx-tab-h"><span>Paire</span><span>Trades</span><span>Normal</span><span>Spéc. net</span><span>Frais</span><span>Dépôt</span></div>');
@@ -211,68 +234,55 @@ function _fiscRenderPage(el) {
     h.push('<div class="fx-dim fx-tiny">Normal = plus-value légale (frais exclus) · Spéc. net = frais déduits · Frais = courtage + glissement · Dépôt = provision versée (+) ou rendue (−).</div>');
   }
   h.push('</div>');
-  // 7 · historique des trades
+  // E · historique des trades, groupé par jour (la raison du régime n'est plus répétée : les pastilles la disent ; le levier, si, avec son emprunt)
   var hist = L ? L.hist.filter(function (e) { return e.y === y; }) : [];
-  var shown = _fiscUi.all ? hist : hist.slice(0, 15);
-  h.push('<div class="fx-sec">🧾 Historique ' + y + ' · ' + hist.length + ' trade' + (hist.length > 1 ? 's' : '') + '</div><div class="fx-card">');
-  if (!hist.length) h.push('<div class="fx-dim">Chaque trade fermé apparaîtra ici : régime, raison, gain en euros, frais, part versée au dépôt.</div>');
+  var shown = _fiscUi.all ? hist : hist.slice(0, 10), last = '';
+  h.push(_fiscSec('🧾 Historique ' + y, hist.length + ' trade' + (hist.length > 1 ? 's' : '') + ' fermé' + (hist.length > 1 ? 's' : '')) + '<div class="fz-list">');
+  if (!hist.length) h.push('<div class="fz-tr fz-tr2">Chaque trade fermé apparaîtra ici : régime, gain en euros, frais, part versée au dépôt.</div>');
   shown.forEach(function (e) {
-    var dt = new Date(e.t);
-    var when = ('0' + dt.getDate()).slice(-2) + '/' + ('0' + (dt.getMonth() + 1)).slice(-2) + ' ' + ('0' + dt.getHours()).slice(-2) + ':' + ('0' + dt.getMinutes()).slice(-2);
+    var dy = _fiscDay(e.t);
+    if (dy !== last) { h.push('<div class="fz-day">' + dy + '</div>'); last = dy; }
     var rc = e.r === 'n' ? 'var(--up)' : 'var(--down)';
-    h.push('<div class="fx-h"><div class="fx-h1"><span class="fx-dim">' + when + '</span><span>' + _fiscEsc(e.p) + ' ' + (e.s === 'L' ? '↑ LONG' : '↓ SHORT') + '</span>'
-      + '<span class="fx-chip">' + (e.a ? '🤖 AUTO' : '👤 MAN') + '</span><span class="fx-chip" style="color:' + rc + ';border-color:' + rc + '66;">' + (e.r === 'n' ? 'normal' : 'spéculatif') + '</span></div>'
-      + '<div class="fx-h2"><span style="color:' + (e.g >= 0 ? 'var(--up)' : 'var(--down)') + ';">' + _fiscSgnEur(e.g) + '</span>'
-      + '<span class="fx-dim">frais ' + _fiscUsd(e.fe + e.sl) + '</span>'
-      + '<span style="color:var(--gold);">dépôt ' + _fiscUsd(e.mv, true) + '</span></div>'
-      + '<div class="fx-h3">' + _fiscEsc(_fiscWhy(e)) + ' · mise ' + _fiscUsd(e.st) + (e.N > e.st + 1e-9 ? ' (expo ' + _fiscUsd(e.N) + ')' : '') + ' · dû ' + _fiscEur(e.d0) + ' → ' + _fiscEur(e.d1)
-      + (e.ff ? ' · cours € de repli' : '') + '</div></div>');
+    h.push('<div class="fz-tr"><div class="fz-tr1"><span class="fz-t">' + _fiscHm(e.t) + '</span><b>' + _fiscEsc(e.p) + '</b>'
+      + '<span style="color:' + (e.s === 'L' ? 'var(--up)' : 'var(--down)') + ';">' + (e.s === 'L' ? '↑ LONG' : '↓ SHORT') + '</span>'
+      + '<span class="fx-chip">' + (e.a ? '🤖 AUTO' : '👤 MAN') + '</span><span class="fx-chip" style="color:' + rc + ';border-color:' + rc + ';">' + (e.r === 'n' ? 'normal' : 'spéculatif') + '</span>'
+      + '<span class="fz-g" style="color:' + (e.g >= 0 ? 'var(--up)' : 'var(--down)') + ';">' + _fiscSgnEur(e.g) + '</span></div>'
+      + '<div class="fz-tr2">' + (_fiscNum(e.lv) > 0 ? 'levier · emprunt ' + _fiscUsd(e.lv) + ' · ' : '') + 'mise ' + _fiscUsd(e.st) + (e.N > e.st + 1e-9 ? ' (expo ' + _fiscUsd(e.N) + ')' : '')
+      + ' · frais ' + _fiscUsd(e.fe + e.sl) + ' · dépôt ' + _fiscUsd(e.mv, true) + ' · dû ' + _fiscEur(e.d0) + ' → ' + _fiscEur(e.d1) + (e.ff ? ' · cours € de repli' : '') + '</div></div>');
   });
-  if (hist.length > 15) h.push('<button class="fx-btn" onclick="_fiscToggleAll()">' + (_fiscUi.all ? 'Réduire' : 'Tout voir (' + hist.length + ')') + '</button>');
-  if (L && L.hist.length) h.push('<button class="fx-btn" onclick="_fiscExportCsv()">📥 Exporter le registre ' + lbl + ' (CSV)</button>');
+  if (hist.length > 10) h.push('<button class="fz-btn" onclick="_fiscToggleAll()">' + (_fiscUi.all ? 'Réduire' : 'Tout voir (' + hist.length + ')') + '</button>');
   h.push('</div>');
-  // 8 · dépôt fiscal : composition et mouvements
+  // F · volets : dépôt fiscal, années, la loi
   var lg = (w.fiscalReserveLog || []).slice(0, 10);
   var srcLbl = { tax_trade_close: 'Impôt · trade', tax_release: 'Rendu · perte', tax_adjust: 'Réajustement', tax_paid: 'Impôt payé', leverage_interest: 'Intérêt levier', margin_call: 'Appel de marge', tax_session_dispatch: 'Ancien calcul' };
-  h.push('<div class="fx-sec">🏦 Dépôt fiscal · ' + _fiscUsd(dep) + '</div><div class="fx-card">'
-    + _fiscRow('Impôt provisionné (années non payées)', _fiscUsd(heldUnpaid), 'var(--gold)')
-    + _fiscRow('Autres (intérêts levier, appels de marge)', _fiscUsd(other), 'var(--ice)'));
-  if (lg.length) lg.forEach(function (e) {
-    var a = _fiscNum(e.amount);
-    h.push('<div class="fx-row fx-log"><span>' + _fiscEsc(srcLbl[e.source] || e.source || '') + (e.pair ? ' · ' + _fiscEsc(e.pair) : '') + (e.year ? ' · ' + e.year : '') + ' <span class="fx-dim">' + _fiscEsc(e.time || '') + '</span></span>'
-      + '<span style="color:' + (a >= 0 ? 'var(--gold)' : 'var(--ice)') + ';">' + (a >= 0 ? '+' : '−') + '$' + Math.abs(a).toFixed(3) + '</span></div>');
-  });
-  h.push('</div>');
-  // 9 · années
+  h.push(_fiscFoldHtml('depot', '🏦 Dépôt fiscal', _fiscUsd(dep) + ' · ' + lg.length + ' mouvement' + (lg.length > 1 ? 's' : ''),
+    _fiscRow('Impôt provisionné (années non payées)', _fiscUsd(heldUnpaid), 'var(--gold)')
+    + _fiscRow('Autres (intérêts levier, appels de marge)', _fiscUsd(other), 'var(--ice)')
+    + lg.map(function (e) {
+      var a = _fiscNum(e.amount);
+      return '<div class="fx-row fx-log"><span>' + _fiscEsc(srcLbl[e.source] || e.source || '') + (e.pair ? ' · ' + _fiscEsc(e.pair) : '') + (e.year ? ' · ' + e.year : '') + ' <span class="fx-dim">' + _fiscEsc(e.time || '') + '</span></span>'
+        + '<span style="color:' + (a >= 0 ? 'var(--gold)' : 'var(--ice)') + ';">' + (a >= 0 ? '+' : '−') + '$' + Math.abs(a).toFixed(3).replace('.', ',') + '</span></div>';
+    }).join('')));
   var ys = L ? Object.keys(L.years).map(Number).sort(function (a, b) { return b - a; }) : [];
   if (ys.length) {
-    h.push('<div class="fx-sec">📚 Années</div><div class="fx-card">');
-    ys.forEach(function (k) {
-      var v = L.years[k];
-      var st = !v.closed ? 'en cours' : (v.paid ? 'payé' : 'à payer');
-      var co = v.carryOut ? ' · reporté : exonération ' + _fiscEur(v.carryOut.comp, 0) + ', pertes spéc. ' + _fiscEur(v.carryOut.specLoss.reduce(function (s, e) { return s + e.eur; }, 0), 0) : '';
-      h.push('<div class="fx-yr"><div><b>' + k + '</b> · ' + v.n + ' trades · dû ' + _fiscEur(v.dueEur) + ' · provision ' + _fiscUsd(v.paid ? v.paidUsd : v.provUsd) + ' <span class="fx-chip">' + st + '</span></div>'
-        + '<div class="fx-dim fx-tiny">' + _fiscEsc(co) + '</div>'
-        + (v.closed && !v.paid ? '<button class="fx-btn" onclick="_fiscPaidClick(' + k + ')">' + (_fiscUi.paidAsk === k ? 'Confirmer : impôt ' + k + ' payé' : 'Marquer ' + k + ' payé') + '</button>' : '') + '</div>');
-    });
-    h.push('</div>');
+    var stOf = function (v) { return !v.closed ? 'en cours' : (v.paid ? 'payé' : 'à payer'); };
+    h.push(_fiscFoldHtml('annees', '📚 Années', ys.map(function (k) { return k + ' ' + stOf(L.years[k]); }).join(' · '),
+      ys.map(function (k) {
+        var v = L.years[k];
+        var co = v.carryOut ? ' · reporté : exonération ' + _fiscEur(v.carryOut.comp, 0) + ', pertes spéc. ' + _fiscEur(v.carryOut.specLoss.reduce(function (s, e) { return s + e.eur; }, 0), 0) : '';
+        return '<div class="fx-yr"><div><b>' + k + '</b> · ' + v.n + ' trades · dû ' + _fiscEur(v.dueEur) + ' · provision ' + _fiscUsd(v.paid ? v.paidUsd : v.provUsd) + ' <span class="fx-chip">' + stOf(v) + '</span></div>'
+          + (co ? '<div class="fx-dim fx-tiny">' + _fiscEsc(co) + '</div>' : '')
+          + (v.closed && !v.paid ? '<button class="fz-btn" onclick="_fiscPaidClick(' + k + ')">' + (_fiscUi.paidAsk === k ? 'Confirmer : impôt ' + k + ' payé' : 'Marquer ' + k + ' payé') + '</button>' : '') + '</div>';
+      }).join('')));
   }
-  // 10 · réglages
-  var extV = _fiscNum(cfg.ext[y]);
-  h.push('<div class="fx-sec">⚙️ Réglages fiscaux</div><div class="fx-card">'
-    + '<label class="fx-lbl" for="fxCommune">Additionnels communaux (% de l\'impôt à 33 %, taux de ta commune)</label>'
-    + '<input class="fx-in" id="fxCommune" type="number" min="0" max="15" step="0.1" value="' + _fiscNum(cfg.commune) + '" onchange="_fiscSetCommune(this.value)">'
-    + '<label class="fx-lbl" for="fxExt">Plus-values nettes ' + y + ' réalisées HORS AURA, régime normal (€, perte en négatif) — elles partagent ton exonération ; RE seulement</label>'
-    + '<input class="fx-in" id="fxExt" type="number" step="1" value="' + extV + '" onchange="_fiscSetExt(this.value)">'
-    + '</div>');
-  // 11 · la loi appliquée
-  h.push('<details class="fx-card fx-law"' + (_fiscUi.lawOpen ? ' open' : '') + ' ontoggle="_fiscUi.lawOpen = this.open"><summary>📜 La loi appliquée · relue le ' + FISC_BE.reviewed.split('-').reverse().join('/') + '</summary>'
+  h.push(_fiscFoldHtml('loi', '📜 La loi appliquée', 'relue le ' + FISC_BE.reviewed.split('-').reverse().join('/'),
+    '<div class="fx-law-b">Règle d\'AURA : MANU + LONG + sans levier → normal 10 %, exonération · AUTO, SHORT ou levier → spéculatif, sans exonération. Le fisc qualifie en dernier ressort.</div>'
     + '<div class="fx-law-b">Plus-values réalisées depuis le 01/01/2026, crypto et stablecoins compris (un échange crypto → USDT est une cession). '
     + 'Normal : 10 %, exonération ' + _fiscEur(10000, 0) + '/an + report de la part non utilisée (≤ 1 000 €/an, ≤ 5 000 € utilisés la même année), moins-values de la même année, aucun frais déduit. '
     + 'Spéculatif (CIR 92 art. 90, 1°) : 33 % + additionnels communaux, aucune exonération, frais déduits (art. 97), pertes des 5 années antérieures déduites (art. 103). '
     + 'Indices du fisc pour les crypto (circulaire 2026/C/74 du 22/07/2026) : part du patrimoine en crypto, emprunt, bots de trading — appréciés ensemble. '
     + 'Gain en euros au cours USD→EUR de l\'app à l\'ouverture et à la fermeture. Je ne suis pas conseiller fiscal : en cas de doute, un comptable ou une décision anticipée du SPF Finances (ruling).</div>'
-    + '<div class="fx-law-s">' + FISC_BE.sources.map(function (s) { return '<a href="' + s[1] + '" target="_blank" rel="noopener">' + _fiscEsc(s[0]) + '</a>'; }).join(' · ') + '</div></details>');
+    + '<div class="fx-law-s">' + FISC_BE.sources.map(function (s) { return '<a href="' + s[1] + '" target="_blank" rel="noopener">' + _fiscEsc(s[0]) + '</a>'; }).join(' · ') + '</div>'));
   el.innerHTML = h.join('');
 }
 
@@ -316,6 +326,6 @@ function _fiscExportCsv() {
 try {
   window._fiscRegimeNow = _fiscRegimeNow; window._fiscHomeCard = _fiscHomeCard; window._fiscResSub = _fiscResSub; window._fiscManNote = _fiscManNote;
   window._fiscInsights = _fiscInsights; window._fiscWhy = _fiscWhy; window._fiscUi = _fiscUi; window._fiscRenderPage = _fiscRenderPage;
-  window._fiscToggleAll = _fiscToggleAll; window._fiscPaidClick = _fiscPaidClick; window._fiscSetCommune = _fiscSetCommune;
+  window._fiscToggleAll = _fiscToggleAll; window._fiscFold = _fiscFold; window._fiscPaidClick = _fiscPaidClick; window._fiscSetCommune = _fiscSetCommune;
   window._fiscSetExt = _fiscSetExt; window._fiscExportCsv = _fiscExportCsv;
 } catch (e) {}

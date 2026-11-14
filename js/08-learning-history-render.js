@@ -587,28 +587,98 @@ function renderChain() {
 // ============================================================
 // PAGE 5 — FISCAL
 // ============================================================
+// [GO CSS · écran 6 · 14/11/2026] l'écran Fiscal par priorité (Rams 14/11 15:56 « Go css », maquette montrée, « Ok » 16:15) — affichage seul :
+// quatre tuiles = les onglets (⚖ Impôt · 💸 Frais · 💱 Paires · 🧰 Outils = Export + Réglages réunis) ; chaque onglet n'est rebâti que si ce qu'il
+// montre change (avant : Frais, Paires, Export et ⚙ rebâtis à chaque passage du battement, toutes les 3 s — un champ de ⚙ perdait le doigt en pleine
+// saisie) ; dollars au format français (16b _fiscUsd). L'onglet ⚖ Impôt est rendu par 16b _fiscRenderPage. Rien ici ne calcule l'impôt ni les frais.
+const _FZ_PANELS = { tax: ['tax'], global: ['global'], pairs: ['pairs'], outils: ['export', 'settings'] };
+const _fzKeys = {};
+function _fzTab(tab) { if (tab === 'export' || tab === 'settings') return 'outils'; return _FZ_PANELS[tab] ? tab : null; }
+function _fzSame(slot, key, el) { if (_fzKeys[slot] === key && el && el.childElementCount) return true; _fzKeys[slot] = key; return false; }
+function _fzNum(v) { v = Number(v); return isFinite(v) ? v : 0; }
+function _fzUsd(v, sign) { return (typeof _fiscUsd === 'function') ? _fiscUsd(v, sign) : ((_fzNum(v) < 0 ? '−' : (sign && _fzNum(v) > 0 ? '+' : '')) + '$' + Math.abs(_fzNum(v)).toFixed(2)); }
+function _fzPct(v, d) { d = (d == null) ? 2 : d; return _fzNum(v).toFixed(d).replace('.', ',') + ' %'; }
+function _fzEsc(s) { return (typeof _fiscEsc === 'function') ? _fiscEsc(s) : String(s == null ? '' : s).replace(/[&<>]/g, ''); }   // 16b _fiscEsc échappe tout ; repli sans guillemets dans la classe (les extracteurs de fonctions des bancs lisent ' et " comme des chaînes)
+function _fzSec(t, s) { return '<div class="fz-sec"><span>' + t + '</span>' + (s ? '<em>' + s + '</em>' : '') + '</div>'; }
+function _fzRow(lbl, val, col) { return '<div class="fx-row"><span>' + lbl + '</span><span style="color:' + (col || 'var(--t1)') + ';">' + val + '</span></div>'; }
+function _fzModeLbl() { const m = (typeof _walletKey === 'function') ? _walletKey() : 'sim'; return (typeof _FISC_MODE_LBL !== 'undefined' && _FISC_MODE_LBL[m]) || m; }
+function _fzDay(t) { return (typeof _fiscDay === 'function') ? _fiscDay(t) : 'Sans date'; }
+function _fzHm(t) { const d = new Date(t); return ('0' + d.getHours()).slice(-2) + ':' + ('0' + d.getMinutes()).slice(-2); }
+// Les bots ouvrent-ils dans ce mode ? Mêmes règles que 09c : pas en MANU (l. 70) ; en EV, tant que la voix tendance tient l'argent (15b _tlrTientEV, l. 75), non.
+function _fzBotsOuvrent() {
+  if (S.botAutoMode === false) return false;   // 09c:70 : le bot n'agit qu'en AUTO
+  return !(S.tradingMode === 'paperReal' && typeof window !== 'undefined' && typeof window._tlrTientEV === 'function' && window._tlrTientEV());
+}
+// [GO NETTOYAGE · 19/10/2026] (ETAT n° 59) mise DE BASE que le bot prendrait sur cette paire (10f, « engagement quasi-total ») : la part du capital libre
+// (trading moins 2 % moins les mises engagées) qui revient à cette paire (÷ les paires vivantes sans position, 2 au moins), avec la mise de la paire comme
+// plancher, bornée comme 09c la borne (95 % du trading) ; ensuite la conviction, la qualité de la paire et les gardes (09c) la modulent. Calcul inchangé
+// (avant : dans renderFiscalPairs, carte par carte).
+function _fzNextStake(pair) {
+  const acc = Math.max(0, Number(S.tradingAccount) || 0), capT = Math.max(0, acc - Math.max(1, acc * 0.02));
+  const eng = (S.openPositions || []).reduce((a, p) => a + (Number(p.stakeUsdt) || 0), 0), held = {};
+  (S.openPositions || []).forEach(p => { if (p && p.pair) held[p.pair] = 1; });
+  const live = (typeof _livePairs === 'function') ? _livePairs() : [];   // les paires VIVANTES, comme 10f
+  const slots = live.filter(k => !held[k]).length, floor = Math.max(0, Number(S.pairStates[pair]?.stake) || 0);
+  let st = Math.max(floor, Math.max(0, capT - eng) / Math.max(2, slots));
+  if (st > acc * 0.95) {   // la borne de 09c : le disponible moins 2 %, partagé entre les emplacements libres
+    const slotsMax = (S.tradingMode === 'real') ? 1 : ((S.paperRealConfig && S.paperRealConfig.maxConcurrentPos) || 1);
+    const free = Math.max(1, slotsMax - ((S.openPositions && S.openPositions.length) || 0));
+    st = Math.max((typeof _stakeFloor === 'function') ? _stakeFloor() : 0, ((typeof _stakeRound === 'function') ? _stakeRound : (x => x))((acc - Math.max(1, acc * 0.02)) / free));
+  }
+  return st;
+}
+
+// Les lignes de 💱 Paires : chaque paire de PAIRS et chaque paire qui a des frais dans byPair (une paire retirée de PAIRS par 11 garde les siens : GBP/USDT en AA),
+// coût = byPair.gross (exchange + glissement à la fermeture, funding pendant la tenue, 02 recordFees / applyFundingFees), net = brut − coût.
+// « Hors paire » = ce que le mode compte sans paire (intérêts du levier, 02 applyLeverageBorrowFees) ; l'impôt, dû par régime et par année (registre 16),
+// a sa ligne. Le total donne ainsi les chiffres de 💸 Frais : frais = totalGross, net = brut − totalGross − impôt.
+function _fzPairRows() {
+  const f = S.fees || {}, bp = f.byPair || {};
+  const keys = Object.keys(PAIRS).concat(Object.keys(bp).filter(p => !PAIRS[p] && (_fzNum(bp[p].trades) > 0 || Math.abs(_fzNum(bp[p].gross)) > 0.005)));
+  const rows = keys.map(p => { const b = bp[p] || {}, ex = _fzNum(b.tradingFees), sl = _fzNum(b.slippage), gr = _fzNum(b.gross), br = _fzNum(b.pnlGross);
+    return { p, c: (PAIRS[p] || {}).color, out: !PAIRS[p], t: _fzNum(b.trades), ex, sl, fu: gr - ex - sl, co: gr, br, ne: br - gr }; })
+    .sort((a, b) => b.co - a.co || b.t - a.t);
+  const sum = k => rows.reduce((a, r) => a + r[k], 0);
+  const hors = { co: _fzNum(f.totalGross) - sum('co'), br: _fzNum(f.totalPnlGross) - sum('br') };
+  return { rows, hors, tax: calcTaxProvision() };
+}
+
+// Les quatre tuiles : chacune dit son chiffre ; écrites seulement si le texte change
+function _fzSet(t, v, s) { const a = document.getElementById('fzV_' + t), b = document.getElementById('fzS_' + t); if (a && a.innerHTML !== v) a.innerHTML = v; if (b && b.innerHTML !== s) b.innerHTML = s; }
+function _fzBref() {
+  const f = S.fees || {}, y = (typeof _fiscYearOf === 'function') ? _fiscYearOf(Date.now()) : new Date().getFullYear();
+  const tax = calcTaxProvision(), net = _fzNum(f.totalPnlGross) - _fzNum(f.totalGross) - tax;
+  const region = S.taxConfig && S.taxConfig.region;
+  if (region && region !== 'BE') _fzSet('tax', '—', 'région ' + _fzEsc(region) + ' : aucun impôt provisionné');   // le registre n'applique que la loi belge (16b)
+  else if (typeof _fiscRegimeNow === 'function') {
+    const r = _fiscRegimeNow(), m = r.mode, L = (typeof _fiscLedger === 'function') ? _fiscLedger(m, false) : null, yr = (L && L.years[y]) || null;
+    _fzSet('tax', (typeof _fiscEur === 'function') ? _fiscEur(r.d.due) : '', '<b style="color:' + r.col + ';">' + r.pct + ' · ' + (r.auto ? 'spéculatif' : 'normal') + '</b> · dépôt ' + _fzUsd(yr ? yr.provUsd : 0));
+  }
+  _fzSet('global', _fzUsd(-_fzNum(f.totalGross)), _fzNum(f.tradeCount) + ' trades · net <b style="color:' + (net < 0 ? 'var(--down)' : 'var(--up)') + ';">' + _fzUsd(net, true) + '</b>');
+  const pr = _fzPairRows().rows.filter(r => r.t > 0), worst = pr[0];   // les lignes du tableau, triées par coût
+  _fzSet('pairs', String(pr.length), worst ? 'la plus coûteuse : ' + _fzEsc(worst.p.replace('/USDT', '')) + ' ' + _fzUsd(-worst.co) : 'aucun trade fermé');
+  const reg = ((S.taxConfig && S.taxConfig.regions) || {})[region] || {}, com = (S.fiscalCfg && _fzNum(S.fiscalCfg.commune)) || 0;
+  _fzSet('outils', '5 exports', 'réglages · ' + _fzEsc(reg.label || region || '') + ' · commune ' + String(com).replace('.', ',') + ' %');
+}
+
 function switchFiscalTab(tab, el) {
-  ['global','pairs','tax','export','settings'].forEach(t => {
-    const p = document.getElementById('fpanel-'+t);
-    const b = document.getElementById('ftab-'+t);
-    if(p) p.style.display = t===tab ? '' : 'none';
-    if(b) b.classList.toggle('active', t===tab);
+  tab = _fzTab(tab) || 'tax';
+  ['global', 'pairs', 'tax', 'export', 'settings'].forEach(t => {
+    const p = document.getElementById('fpanel-' + t);
+    if (p) p.style.display = _FZ_PANELS[tab].indexOf(t) >= 0 ? '' : 'none';
   });
-  if(tab==='global')   renderFiscalGlobal();
-  else if(tab==='pairs')    renderFiscalPairs();
-  else if(tab==='tax')      renderFiscalTax();
-  else if(tab==='export')   renderFiscalExport();
-  else if(tab==='settings') renderFiscalSettings();
+  document.querySelectorAll('#fiscBref .fz-tile').forEach(b => b.classList.toggle('active', b.id === 'ftab-' + tab));
+  renderFiscal(tab);
 }
 
 function renderFiscal(tab) {
   // [GO FISCAL · 07/10/2026] sans onglet demandé : celui qui est affiché (⚖ Impôt par défaut)
-  tab = tab || ((document.querySelector('[id^="ftab-"].active') || {}).id || 'ftab-tax').replace('ftab-','');
-  if(tab==='global')   renderFiscalGlobal();
+  tab = _fzTab(tab) || _fzTab(((document.querySelector('#fiscBref .fz-tile.active') || {}).id || 'ftab-tax').replace('ftab-', '')) || 'tax';
+  try { _fzBref(); } catch(e) { try{window._decErr&&window._decErr(e)}catch(_e){} }
+  if(tab==='global')        renderFiscalGlobal();
   else if(tab==='pairs')    renderFiscalPairs();
   else if(tab==='tax')      renderFiscalTax();
-  else if(tab==='export')   renderFiscalExport();
-  else if(tab==='settings') renderFiscalSettings();
+  else { renderFiscalExport(); renderFiscalSettings(); }
 }
 
 // ── Unrealized P&L banner for open manual positions ────────
@@ -700,375 +770,136 @@ function renderFiscalMini() {
   </div>`;
 }
 
-function fmtFee$(v) { return '$'+Math.abs(v).toFixed(2); }
-
+// [GO CSS · écran 6 · 14/11/2026] 💸 Frais : quatre chiffres (brut, frais, impôt, net), alertes, détail des frais, comptes liés, derniers frais groupés par jour.
+// Avant : « P&L Brut $21.02 » sans le signe moins (valeur absolue) ; « Compte Réserve Fiscal $58.83 » = la réserve frais (cumul des frais payés, ETAT n° 77)
+// plus la réserve fiscale — ce n'était pas de l'impôt, les deux sont séparés ; sous-lignes fausses (« Maker si conviction ≥80% » : l'entrée est toujours
+// taker, la sortie maker ou taker selon la sortie, 02:4615-4619 ; « 0.01% par cycle » : funding par 8 h au taux réglé, 02:599, 02:4744) ; badge « SESSION »
+// (c'est le cumul du mode). Le résultat net reste brut − frais − impôt du registre, comme avant.
 function renderFiscalGlobal() {
-  const f   = S.fees;
-  const reg = S.taxConfig.regions[S.taxConfig.region];
-  const taxLive  = calcTaxProvision();
-  const netPnl   = f.totalPnlGross - f.totalGross - taxLive;
-  const netCol   = netPnl >= 0 ? 'var(--up)' : 'var(--down)';
-  const effRate  = f.totalPnlGross > 0
-    ? ((f.totalGross + taxLive) / f.totalPnlGross * 100).toFixed(1)
-    : '0.0';
-  const reserve  = f.feeReserveAccount;
-  const fiscalRes = S.fiscalReserveAccount || 0;  // v7.1 P4': compte séparé taxes + intérêts levier
-  const totalReserve = reserve + fiscalRes;       // vue combinée
-  const reservePct = f.totalPnlGross > 0
-    ? (totalReserve / f.totalPnlGross * 100).toFixed(1)
-    : '0.0';
-
   const sumEl = document.getElementById('fiscalSummary');
   if(!sumEl) return;
+  const f = S.fees, fc = S.feeConfig || {}, tax = calcTaxProvision();
+  const fiscRes = _fzNum(S.fiscalReserveAccount), log = f.feeLog || [], flog = S.fiscalReserveLog || [];
+  const covered = (S.openPositions || []).filter(p => p._reservedAmount > 0).length;
+  const key = [_fzModeLbl(), f.tradeCount, _fzNum(f.totalGross).toFixed(4), _fzNum(f.totalTradingFees).toFixed(4), _fzNum(f.totalSlippage).toFixed(4), _fzNum(f.totalFunding).toFixed(4),
+    _fzNum(f.totalPnlGross).toFixed(4), _fzNum(f.feeReserveAccount).toFixed(4), tax.toFixed(4), fiscRes.toFixed(4), _fzNum(S.antiNegReserve).toFixed(2), covered,
+    _fzNum(S.ownFundsInjected).toFixed(2), _fzNum(S.leverageTotalFees).toFixed(4), log.length, log[0] && (log[0].ts || log[0].time), flog.length, JSON.stringify(fc), S.taxConfig && S.taxConfig.region].join('|');
+  if (_fzSame('global', key, sumEl)) return;
+  const brut = _fzNum(f.totalPnlGross), frais = _fzNum(f.totalGross), net = brut - frais - tax;
+  const cU = v => v < 0 ? 'var(--down)' : 'var(--up)';
+  sumEl.innerHTML = _fzSec('💸 Frais et résultat', 'cumul ' + _fzModeLbl() + ' · ' + _fzNum(f.tradeCount) + ' trades fermés')
+    + '<div class="fz-kpi">'
+    + '<div class="fz-k"><span class="fz-l">Résultat brut</span><b style="color:' + cU(brut) + ';">' + _fzUsd(brut, true) + '</b><span class="fz-s">avant frais</span></div>'
+    + '<div class="fz-k"><span class="fz-l">Frais</span><b style="color:var(--down);">' + _fzUsd(-frais) + '</b><span class="fz-s">exchange · glissement · funding</span></div>'
+    + '<div class="fz-k"><span class="fz-l">Impôt provisionné</span><b style="color:var(--gold);">' + _fzUsd(-tax) + '</b><span class="fz-s">registre ⚖ Impôt</span></div>'
+    + '<div class="fz-k"><span class="fz-l">Résultat net</span><b style="color:' + cU(net) + ';">' + _fzUsd(net, true) + '</b><span class="fz-s">après frais et impôt</span></div></div>';
 
-  // v7.1 P4': Historique des 10 derniers dépôts fiscaux
-  const _flog = (S.fiscalReserveLog || []).slice(0, 10);
-  const _logHtml = _flog.length === 0
-    ? `<div style="font-size:10px;color:var(--t3);padding:8px 2px;">Aucun dépôt fiscal pour l'instant.</div>`
-    : _flog.map(e => {
-        const _src = e.source === 'tax_trade_close' ? `Taxe · ${e.pair||''}`
-                   : e.source === 'leverage_interest' ? `Intérêt levier`
-                   : (e.source || 'autre');
-        const _col = e.source === 'leverage_interest' ? 'var(--ice)' : 'var(--gold)';
-        return `<div style="display:flex;justify-content:space-between;align-items:center;padding:5px 2px;border-bottom:1px solid rgba(255,255,255,.04);font-size:10px;">
-          <span style="color:${_col};">${_src}</span>
-          <span><span style="color:var(--t2);font-size:9px;margin-right:6px;">${e.time||''}</span><span style="color:var(--gold);font-weight:600;">+$${(e.amount||0).toFixed(3)}</span></span>
-        </div>`;
-      }).join('');
-
-  sumEl.innerHTML = `
-    <!-- RÉGIME FISCAL EN COURS · [GO FISCAL · 07/10/2026] la règle du registre (16), plus le régime deviné par detectFiscalRegime -->
-    ${(function(){
-      if (typeof _fiscRegimeNow !== 'function' || !S.taxConfig || S.taxConfig.region !== 'BE') return '';
-      const _r = _fiscRegimeNow();
-      const _bg = _r.auto ? 'rgba(255,61,107,.08)' : 'rgba(0,232,122,.06)';
-      return `<div style="background:${_bg};border:1px solid ${_r.col}33;border-radius:14px;padding:12px 14px;margin-bottom:10px;" onclick="switchFiscalTab('tax',document.getElementById('ftab-tax'))">
-        <div style="font-size:10px;font-weight:700;color:${_r.col};text-transform:uppercase;letter-spacing:.06em;">${_r.auto ? '⚠ ' : '✓ '}${_r.label} · ${_r.pct}</div>
-        <div style="font-size:9px;color:var(--t3);margin-top:3px;">${_r.sub} · impôt dû ${(_r.d.due).toFixed(2)} € — détail ⚖ Impôt</div>
-      </div>`;
-    })()}
-
-    <!-- COMPTE RÉSERVE SÉPARÉ -->
-    <div class="fee-reserve-card">
-      <div class="fee-reserve-top">
-        <div>
-          <div class="fee-reserve-label">🏦 Compte Réserve Fiscal</div>
-          <div class="fee-reserve-val">$${totalReserve.toFixed(2)}</div>
-          <div class="fee-reserve-sub">${reservePct}% du P&L brut · dont fisc. séparée $${fiscalRes.toFixed(2)}</div>
-        </div>
-        <div style="text-align:right;">
-          <div class="fee-reserve-badge">${reg.label}</div>
-          <div style="font-size:9px;color:var(--t3);margin-top:3px;">${f.tradeCount} trades · ${reg.method}</div>
-        </div>
-      </div>
-      <div class="fee-reserve-breakdown">
-        <!-- RÉSERVE ANTI-NÉGATIF (livraison trading · juin 2026) -->
-        <div class="fee-reserve-item" style="background:rgba(56,212,245,.05);border-radius:6px;padding:4px 6px;">
-          <span class="fee-reserve-item-label" style="font-weight:600;">🛡️ Réserve anti-négatif <span style="font-size:9px;color:var(--t3);">· ${(S.openPositions||[]).filter(p=>p._reservedAmount>0).length} trade(s) couvert(s)</span></span>
-          <span class="fee-reserve-item-val" style="color:var(--ice);font-weight:700;">$${(S.antiNegReserve||0).toFixed(2)}</span>
-        </div>
-        <div class="fee-reserve-item">
-          <span class="fee-reserve-item-label">Exchange</span>
-          <span class="fee-reserve-item-val" style="color:var(--down);">$${f.totalTradingFees.toFixed(2)}</span>
-        </div>
-        <div class="fee-reserve-item">
-          <span class="fee-reserve-item-label">Slippage</span>
-          <span class="fee-reserve-item-val" style="color:var(--pur);">$${f.totalSlippage.toFixed(2)}</span>
-        </div>
-        <div class="fee-reserve-item">
-          <span class="fee-reserve-item-label">Funding</span>
-          <span class="fee-reserve-item-val" style="color:var(--ice);">$${f.totalFunding.toFixed(2)}</span>
-        </div>
-        <div class="fee-reserve-item">
-          <span class="fee-reserve-item-label">Prov. impôt</span>
-          <span class="fee-reserve-item-val" style="color:var(--gold);">$${taxLive.toFixed(2)}</span>
-        </div>
-        <div class="fee-reserve-item">
-          <span class="fee-reserve-item-label">Frais levier</span>
-          <span class="fee-reserve-item-val" style="color:var(--gold);">$${(S.leverageTotalFees||0).toFixed(3)}</span>
-        </div>
-        <div class="fee-reserve-item" style="border-top:1px solid rgba(255,255,255,.08);margin-top:4px;padding-top:5px;">
-          <span class="fee-reserve-item-label" style="font-weight:600;">Réserve fisc. dédiée</span>
-          <span class="fee-reserve-item-val" style="color:var(--gold);font-weight:700;">$${fiscalRes.toFixed(2)}</span>
-        </div>
-        <!-- v7.1 P8: Fonds propres injectés (exonérés) -->
-        <div class="fee-reserve-item">
-          <span class="fee-reserve-item-label">Fonds propres injectés <span style="font-size:9px;color:var(--up);">· exonérés</span></span>
-          <span class="fee-reserve-item-val" style="color:var(--up);">$${(S.ownFundsInjected||0).toFixed(2)}</span>
-        </div>
-      </div>
-      <!-- v7.1 P4': Historique dépôts fiscaux -->
-      <details style="margin-top:10px;border-top:1px solid rgba(255,255,255,.06);padding-top:8px;">
-        <summary style="cursor:pointer;font-size:11px;color:var(--t2);user-select:none;">📜 Historique dépôts fiscaux (${(S.fiscalReserveLog||[]).length})</summary>
-        <div style="margin-top:6px;max-height:180px;overflow-y:auto;">${_logHtml}</div>
-      </details>
-    </div>
-
-    <!-- SYNTHÈSE NET -->
-    <div class="fiscal-grid">
-      <div class="fiscal-item">
-        <div class="fiscal-item-label">P&L Brut</div>
-        <div class="fiscal-item-val" style="color:${f.totalPnlGross>=0?'var(--up)':'var(--down)'}">
-          ${f.totalPnlGross>=0?'+':''}${fmtFee$(f.totalPnlGross)}
-        </div>
-        <div class="fiscal-item-sub">${f.tradeCount} trades</div>
-      </div>
-      <div class="fiscal-item">
-        <div class="fiscal-item-label">P&L Net</div>
-        <div class="fiscal-item-val" style="color:${netCol}">
-          ${netPnl>=0?'+':'−'}${fmtFee$(Math.abs(netPnl))}
-        </div>
-        <div class="fiscal-item-sub">Après frais &amp; impôts</div>
-      </div>
-      <div class="fiscal-item">
-        <div class="fiscal-item-label">Total frais</div>
-        <div class="fiscal-item-val" style="color:var(--down)">−${fmtFee$(f.totalGross)}</div>
-        <div class="fiscal-item-sub">Taux eff. ${effRate}%</div>
-      </div>
-      <div class="fiscal-item">
-        <div class="fiscal-item-label">Provision impôt</div>
-        <div class="fiscal-item-val" style="color:var(--gold)">−${fmtFee$(taxLive)}</div>
-        <div class="fiscal-item-sub">${(reg.rate*100*reg.inclusion).toFixed(1)}% eff.</div>
-      </div>
-    </div>`;
-
-  const tcEl = document.getElementById('fTradeCount');
-  if(tcEl) tcEl.textContent = f.tradeCount + ' trades';
-
-  // ── Fiscal threshold alerts ──────────────────────────────────
+  // ── alertes (mêmes règles qu'avant) ──
   const alertEl = document.getElementById('fiscalAlertZone');
   if(alertEl) {
     const alerts = [];
-    const gross  = f.totalPnlGross;
-    const tc     = S.taxConfig;
-    const region = tc.region;
-
-    // Belgium specific: 33% day-trader threshold
-    if(region === 'BE') {
-      if(gross > 37500 && gross <= 40000)
-        alerts.push({ icon:'⚠️', col:'var(--gold)', msg:`Proche du seuil déclaratif (37 500 €) — P&L: $${gross.toFixed(0)}` });
-      else if(gross > 40000)
-        alerts.push({ icon:'🚨', col:'var(--down)', msg:`Seuil 40 000 € dépassé — vérifier avec comptable` });
+    if(S.taxConfig.region === 'BE') {
+      if(brut > 37500 && brut <= 40000) alerts.push({ icon:'⚠️', col:'var(--gold)', msg:'Proche du seuil déclaratif (37 500 €) — résultat ' + _fzUsd(brut) });
+      else if(brut > 40000) alerts.push({ icon:'🚨', col:'var(--down)', msg:'Seuil 40 000 € dépassé — vérifier avec un comptable' });
     }
-    // France: PFU 30%
-    if(region === 'FR') {
-      if(gross > 9000 && gross <= 10000)
-        alerts.push({ icon:'⚠️', col:'var(--gold)', msg:`Proche du seuil abattement (10 000 €)` });
-    }
-    // Reserve coverage
+    if(S.taxConfig.region === 'FR' && brut > 9000 && brut <= 10000) alerts.push({ icon:'⚠️', col:'var(--gold)', msg:'Proche du seuil abattement (10 000 €)' });
     // v7.1 P2: la couverture impôts utilise fiscalReserveAccount (dédié au fisc)
-    const reserveNeeded = taxLive * 1.1;
-    const _fiscalRes = S.fiscalReserveAccount || 0;
-    if(_fiscalRes < reserveNeeded && taxLive > 5)
-      alerts.push({ icon:'💰', col:'#ff9500', msg:`Réserve fiscale ($${_fiscalRes.toFixed(0)}) insuffisante pour couvrir impôts ($${taxLive.toFixed(0)})` });
-    // High fees ratio
-    if(f.totalPnlGross > 0 && f.totalGross / f.totalPnlGross > 0.25)
-      alerts.push({ icon:'📊', col:'var(--pur)', msg:`Frais élevés: ${(f.totalGross/f.totalPnlGross*100).toFixed(1)}% du P&L brut` });
-    // Net loss
-    const netLoss = f.totalPnlGross - f.totalGross - taxLive;
-    if(netLoss < -200)
-      alerts.push({ icon:'📉', col:'var(--down)', msg:`P&L net négatif: $${netLoss.toFixed(0)} — optimiser la stratégie` });
-
-    if(alerts.length === 0) {
-      alertEl.innerHTML = `<div style="display:flex;align-items:center;gap:8px;padding:10px 14px;background:rgba(0,232,122,.06);border:1px solid rgba(0,232,122,.2);border-radius:10px;">
-        <span style="font-size:16px;">✅</span>
-        <span style="font-size:11px;color:var(--up);">Aucune alerte fiscale · situation saine</span>
-      </div>`;
-    } else {
-      alertEl.innerHTML = alerts.map(a => `
-        <div style="display:flex;align-items:flex-start;gap:8px;padding:9px 12px;margin-bottom:6px;
-             background:${a.col}11;border:1px solid ${a.col}44;border-radius:10px;">
-          <span style="font-size:15px;flex-shrink:0;">${a.icon}</span>
-          <span style="font-size:11px;color:${a.col};line-height:1.4;">${a.msg}</span>
-        </div>`).join('');
-    }
+    if(fiscRes < tax * 1.1 && tax > 5) alerts.push({ icon:'💰', col:'#ff9500', msg:'Réserve fiscale (' + _fzUsd(fiscRes) + ') insuffisante pour l\'impôt (' + _fzUsd(tax) + ')' });
+    if(brut > 0 && frais / brut > 0.25) alerts.push({ icon:'📊', col:'var(--pur)', msg:'Frais élevés : ' + _fzPct(frais / brut * 100, 1) + ' du résultat brut' });
+    if(net < -200) alerts.push({ icon:'📉', col:'var(--down)', msg:'Résultat net négatif : ' + _fzUsd(net) });
+    alertEl.innerHTML = alerts.length
+      ? alerts.map(a => '<div class="fz-alert" style="--c:' + a.col + ';"><span>' + a.icon + '</span><span>' + _fzEsc(a.msg) + '</span></div>').join('')
+      : '<div class="fz-alert" style="--c:var(--up);"><span>✅</span><span>Aucune alerte fiscale</span></div>';
   }
 
-  // ── Détail par type (barres) ──
+  // ── détail des frais (barres) + comptes liés ──
   const bdEl = document.getElementById('fiscalBreakdown');
   if(bdEl) {
-    const total = Math.max(0.01, f.totalGross + taxLive);
+    const total = Math.max(0.01, frais + tax);
     const items = [
-      { label:`Frais trading (maker ${(S.feeConfig.makerRate*100).toFixed(2)}% / taker ${(S.feeConfig.takerRate*100).toFixed(2)}%)`, val:f.totalTradingFees, col:'var(--down)', sub:'Maker si conviction ≥80%, taker sinon' },
-      { label:`Slippage estimé (${(S.feeConfig.slippage*100).toFixed(2)}%)`, val:f.totalSlippage, col:'var(--pur)', sub:'Glissement de prix à l\'exécution' },
-      { label:'Frais de financement',         val:f.totalFunding,     col:'var(--ice)',   sub:'0.01% par cycle sur positions ouvertes' },
-      { label:'Provision fiscale',            val:taxLive,            col:'var(--gold)',  sub:reg.method+' — '+reg.label },
+      ['Frais d\'exchange', 'maker ' + _fzPct(fc.makerRate * 100) + ' / taker ' + _fzPct(fc.takerRate * 100), f.totalTradingFees, 'var(--down)', 'entrée taker · sortie maker ou taker selon la sortie'],
+      ['Glissement', _fzPct(fc.slippage * 100, 3) + ' par côté', f.totalSlippage, 'var(--pur)', 'écart de prix à l\'exécution, à l\'entrée et à la sortie'],
+      ['Financement', _fzPct(fc.fundingRate * 100, 3) + ' par 8 h', f.totalFunding, 'var(--ice)', 'sur la mise, pendant la tenue'],
+      ['Provision fiscale', 'registre', tax, 'var(--gold)', 'impôt dû de l\'année (⚖ Impôt)'],
     ];
-    bdEl.innerHTML = `<div style="background:var(--s1);border:1px solid var(--border);border-radius:14px;overflow:hidden;">
-    ${items.map((it,i)=>{
-      const pct = Math.min(100,(it.val/total*100));
-      return `<div style="padding:10px 14px;${i<items.length-1?'border-bottom:1px solid var(--border);':''}">
-        <div style="display:flex;justify-content:space-between;margin-bottom:3px;">
-          <span style="font-size:11px;color:var(--t2);">${it.label}</span>
-          <span style="font-size:12px;font-weight:700;color:${it.col};">−$${it.val.toFixed(2)}</span>
-        </div>
-        <div style="height:5px;background:var(--s3);border-radius:100px;overflow:hidden;">
-          <div style="height:100%;width:${pct.toFixed(1)}%;background:${it.col};border-radius:100px;transition:width .5s;"></div>
-        </div>
-        <div style="display:flex;justify-content:space-between;margin-top:3px;">
-          <span style="font-size:8px;color:var(--t3);">${it.sub}</span>
-          <span style="font-size:8px;color:var(--t3);">${pct.toFixed(1)}%</span>
-        </div>
-      </div>`;
-    }).join('')}
-    </div>`;
+    bdEl.innerHTML = _fzSec('📊 Détail des frais', 'part de chaque coût') + '<div class="fx-card">'
+      + items.map(it => { const pct = Math.min(100, _fzNum(it[2]) / total * 100);
+        return '<div class="fz-bar"><div class="fz-bar1"><span>' + it[0] + ' <span class="fx-dim">· ' + it[1] + '</span></span><b style="color:' + it[3] + ';">' + _fzUsd(-_fzNum(it[2])) + '</b></div>'
+          + '<div class="fz-bar2"><i style="width:' + pct.toFixed(1) + '%;background:' + it[3] + ';"></i></div>'
+          + '<div class="fz-bar3"><span>' + it[4] + '</span><span>' + _fzPct(pct, 1) + '</span></div></div>'; }).join('') + '</div>'
+      + _fzSec('🏦 Comptes liés', 'ce que la fiscalité met de côté')
+      + '<div class="fx-card"><div class="fz-acc">'
+      + _fzRow('Réserve frais <span class="fx-dim">· cumul des frais payés</span>', _fzUsd(f.feeReserveAccount))
+      + _fzRow('Réserve fiscale dédiée', _fzUsd(fiscRes), 'var(--gold)')
+      + _fzRow('Réserve anti-négatif <span class="fx-dim">· ' + covered + ' trade' + (covered > 1 ? 's' : '') + ' couvert' + (covered > 1 ? 's' : '') + '</span>', _fzUsd(S.antiNegReserve), 'var(--ice)')
+      + _fzRow('Frais du levier', _fzUsd(S.leverageTotalFees), 'var(--gold)')
+      + _fzRow('Fonds propres injectés <span class="fx-dim">· exonérés</span>', _fzUsd(S.ownFundsInjected), 'var(--up)')
+      + _fzRow('Dépôts fiscaux <span class="fx-dim">· détail : ⚖ Impôt › Dépôt fiscal</span>', String(flog.length), 'var(--t2)')
+      + '</div></div>';
   }
 
-  // ── Log des derniers frais ──
+  // ── derniers frais : une entrée par trade, groupées par jour ──
   const flEl = document.getElementById('feeLog');
   if(flEl) {
-    if(f.feeLog.length === 0) {
-      flEl.innerHTML = '<div style="color:var(--t3);font-size:11px;padding:12px 0;text-align:center;">En attente des premiers trades…</div>';
-      return;
-    }
-    flEl.innerHTML = f.feeLog.slice(0,15).map(e=>{
-      const pnlUp = parseFloat(e.pnlGross) >= 0;
-      const netUp = parseFloat(e.pnlNet)   >= 0;
-      const tf    = parseFloat(e.tradingFee).toFixed(2);
-      const sf    = parseFloat(e.slipFee).toFixed(2);
-      const _txN  = parseFloat(e.taxAmount) || 0;   // [GO FISCAL · 07/10/2026] signé : + versé au dépôt, − rendu (perte du même régime)
-      const tx    = Math.abs(_txN).toFixed(2);
-      const tot   = parseFloat(e.totalFee).toFixed(2);
-      const pnlN  = parseFloat(e.pnlNet).toFixed(2);
-      return `<div class="fee-log-item">
-        <div class="fee-log-icon">${pnlUp?'💚':'🔴'}</div>
-        <div class="fee-log-body">
-          <div class="fee-log-title">
-            <span style="color:var(--ice);font-weight:600;">${e.pair}</span>
-            <span style="color:var(--t3);"> · $${parseFloat(e.notional).toFixed(0)} USDT</span>
-          </div>
-          <div class="fee-log-detail">
-            <span style="color:var(--down);">Exch: −$${tf}</span>
-            <span style="color:var(--pur);"> · Slip: −$${sf}</span>
-            <span style="color:${_txN < 0 ? 'var(--ice)' : 'var(--gold)'};"> · Impôt: ${_txN < 0 ? '+' : '−'}$${tx}${e.regime ? ' (' + (e.regime === 'normal' ? '10 %' : '33 %') + ')' : ''}</span>
-          </div>
-          <div style="font-size:8px;color:var(--t3);margin-top:1px;">${e.time} · ${e.region||'—'}</div>
-        </div>
-        <div class="fee-log-right">
-          <div class="fee-log-total" style="color:var(--down);">−$${tot}</div>
-          <div style="font-size:9px;font-weight:700;margin-top:2px;color:${netUp?'var(--up)':'var(--down)'};">
-            Net: ${netUp?'+':'-'}$${Math.abs(pnlN)}
-          </div>
-        </div>
-      </div>`;
-    }).join('');
+    if(!log.length) { flEl.innerHTML = _fzSec('🧾 Derniers frais', '') + '<div class="fz-list"><div class="fz-tr fz-tr2">En attente des premiers trades…</div></div>'; return; }
+    const out = [_fzSec('🧾 Derniers frais', Math.min(15, log.length) + ' derniers trades fermés'), '<div class="fz-list">']; let last = '';
+    log.slice(0, 15).forEach(e => {
+      const dy = e.ts ? _fzDay(e.ts) : 'Sans date';
+      if (dy !== last) { out.push('<div class="fz-day">' + dy + '</div>'); last = dy; }
+      const tx = _fzNum(e.taxAmount), pnlN = _fzNum(e.pnlNet);   // [GO FISCAL · 07/10/2026] impôt signé : + versé au dépôt, − rendu (perte du même régime)
+      out.push('<div class="fz-fl"><span class="fz-t">' + (e.ts ? _fzHm(e.ts) : _fzEsc(String(e.time || '').slice(0, 5))) + '</span>'
+        + '<span class="fz-fl1">' + (_fzNum(e.pnlGross) >= 0 ? '💚' : '🔴') + ' <b>' + _fzEsc(e.pair) + '</b><span class="fx-dim">mise ' + _fzUsd(e.notional) + '</span></span>'
+        + '<span class="fz-fr" style="color:var(--down);">' + _fzUsd(-_fzNum(e.totalFee)) + '<i style="color:' + cU(pnlN) + ';">net ' + _fzUsd(pnlN, true) + '</i></span>'
+        + '<span class="fz-fl2">exchange ' + _fzUsd(-_fzNum(e.tradingFee)) + ' · glissement ' + _fzUsd(-_fzNum(e.slipFee))
+        + ' · impôt ' + (tx <= -0.005 ? _fzUsd(-tx, true) : _fzUsd(-tx)) + (e.regime ? ' (' + (e.regime === 'normal' ? '10 %' : '33 %') + ')' : '') + '</span></div>');
+    });
+    out.push('</div>');
+    flEl.innerHTML = out.join('');
   }
 }
 
+// [GO CSS · écran 6 · 14/11/2026] 💱 Paires : un tableau, de la paire la plus coûteuse à la moins coûteuse (lignes : _fzPairRows), puis « Hors paire » s'il y en a,
+// l'impôt de l'année et le total — mêmes chiffres que 💸 Frais. Avant : 12 cartes de 270 px, « P&L Net » d'une paire sans son funding (byPair.pnlNet),
+// un « Prov. impôt » par paire (mouvements au dépôt, toutes années) qui ne s'additionnait pas à l'impôt de 💸 (dû de l'année), et un 2e P&L net sans le funding (Export).
+// Retirés (dit à Rams, « Ok ») : « 💡 Optimisation » (« réduire la fréquence des trades » contredit sa règle, « signal LMSR > 250 % » impossible) ;
+// « Prochain trade estimé » là où les bots n'ouvrent pas (MANU, EV tenue par la voix : 09c:70, 75) — ailleurs, une ligne sous le tableau (_fzNextStake).
 function renderFiscalPairs() {
   const el = document.getElementById('feesByPair');
   if(!el) return;
-  const reg = S.taxConfig.regions[S.taxConfig.region];
-  el.innerHTML = Object.keys(PAIRS).map(pair => {
-    const cfg = PAIRS[pair];
-    const bp  = S.fees.byPair[pair] || {
-      tradingFees:0, slippage:0, gross:0, tax:0, pnlGross:0, pnlNet:0, trades:0, netPct:0
-    };
-    const pnlNetUp  = bp.pnlNet >= 0;
-    const pnlGrossUp= bp.pnlGross >= 0;
-    const totalCost = bp.gross + bp.tax;
-    // [GO NETTOYAGE · 19/10/2026] (ETAT n° 59) « Prochain trade estimé » : la mise DE BASE que le bot prendrait (10f, « engagement quasi-total ») — la part du
-    // capital libre (trading moins 2 % moins les mises engagées) qui revient à cette paire (÷ les paires vivantes sans position, 2 au moins), avec la mise de
-    // la paire comme plancher, bornée comme 09c la borne (95 % du trading) ; ensuite la conviction, la qualité de la paire et les gardes (09c) la modulent. Frais = l'aller-retour que recordFees prendra.
-    // Avant : min(mise, 10 % du trading) — un 10 % qui n'existe nulle part —, frais d'un seul côté, et un « impôt » calculé sur les frais (l'impôt ne porte
-    // que sur un gain, inconnu avant le trade). Relecture du 19/10 : ps.stake vaut 0 en EV et RE, la mise vient de 10f.
-    const _stNext = (() => {
-      const acc = Math.max(0, Number(S.tradingAccount) || 0), capT = Math.max(0, acc - Math.max(1, acc * 0.02));
-      const eng = (S.openPositions || []).reduce((a, p) => a + (Number(p.stakeUsdt) || 0), 0), held = {};
-      (S.openPositions || []).forEach(p => { if (p && p.pair) held[p.pair] = 1; });
-      const live = (typeof _livePairs === 'function') ? _livePairs() : [];   // les paires VIVANTES, comme 10f
-      const slots = live.filter(k => !held[k]).length, floor = Math.max(0, Number(S.pairStates[pair]?.stake) || 0);
-      let st = Math.max(floor, Math.max(0, capT - eng) / Math.max(2, slots));
-      if (st > acc * 0.95) {   // la borne de 09c : le disponible moins 2 %, partagé entre les emplacements libres
-        const slotsMax = (S.tradingMode === 'real') ? 1 : ((S.paperRealConfig && S.paperRealConfig.maxConcurrentPos) || 1);
-        const free = Math.max(1, slotsMax - ((S.openPositions && S.openPositions.length) || 0));
-        st = Math.max((typeof _stakeFloor === 'function') ? _stakeFloor() : 0, ((typeof _stakeRound === 'function') ? _stakeRound : (x => x))((acc - Math.max(1, acc * 0.02)) / free));
-      }
-      return st;
-    })();
-    const estFeeNext= _stNext * ((S.feeConfig.takerRate || 0) * 2 + (S.feeConfig.slippage || 0) * 2);
-    // Ratio frais/P&L brut (plus bas = plus efficace)
-    const costRatio = bp.pnlGross !== 0 ? (totalCost / Math.abs(bp.pnlGross) * 100) : 0;
-    const effBadge  = costRatio < 5 ? {col:'var(--up)', lbl:'Efficace'} :
-                      costRatio < 15? {col:'var(--gold)', lbl:'Moyen'} :
-                                      {col:'var(--down)', lbl:'Coûteux'};
-
-    return `<div class="pair-fee-card">
-      <div class="pair-fee-header">
-        <span style="font-size:13px;font-weight:700;color:${cfg.color};">${pair}</span>
-        <div style="display:flex;gap:5px;align-items:center;">
-          <span class="pill" style="font-size:8px;background:rgba(255,255,255,.05);color:${effBadge.col};border:1px solid ${effBadge.col}33;">${effBadge.lbl}</span>
-          <span class="pill ${bp.trades>0?'pill-ice':'pill-gold'}" style="font-size:9px;">${bp.trades} tr.</span>
-        </div>
-      </div>
-
-      <!-- Grille détail -->
-      <div class="pair-fee-grid">
-        <div class="pair-fee-cell">
-          <div class="pair-fee-cell-label">Frais exch.</div>
-          <div class="pair-fee-cell-val" style="color:var(--down);">−$${bp.tradingFees.toFixed(2)}</div>
-          <div class="pair-fee-cell-sub">${(S.feeConfig.takerRate*100).toFixed(2)}% taker</div>
-        </div>
-        <div class="pair-fee-cell">
-          <div class="pair-fee-cell-label">Slippage</div>
-          <div class="pair-fee-cell-val" style="color:var(--pur);">−$${bp.slippage.toFixed(2)}</div>
-          <div class="pair-fee-cell-sub">${(S.feeConfig.slippage*100).toFixed(2)}% slip</div>
-        </div>
-        <div class="pair-fee-cell">
-          <div class="pair-fee-cell-label">Prov. impôt</div>
-          <div class="pair-fee-cell-val" style="color:var(--gold);">−$${bp.tax.toFixed(2)}</div>
-          <div class="pair-fee-cell-sub">${reg.method}</div>
-        </div>
-        <div class="pair-fee-cell">
-          <div class="pair-fee-cell-label">Total coût</div>
-          <div class="pair-fee-cell-val" style="color:var(--down);">−$${totalCost.toFixed(2)}</div>
-          <div class="pair-fee-cell-sub">${costRatio.toFixed(1)}% du P&L</div>
-        </div>
-      </div>
-
-      <!-- Séparateur P&L -->
-      <div style="height:1px;background:var(--border);margin:8px 0;"></div>
-      <div style="display:flex;justify-content:space-between;align-items:center;">
-        <div>
-          <div style="font-size:9px;color:var(--t3);">P&L Brut</div>
-          <div style="font-size:13px;font-weight:700;color:${pnlGrossUp?'var(--up)':'var(--down)'};">
-            ${pnlGrossUp?'+':''}$${bp.pnlGross.toFixed(2)}
-          </div>
-        </div>
-        <div style="text-align:center;">
-          <div style="font-size:9px;color:var(--t3);">→</div>
-        </div>
-        <div style="text-align:right;">
-          <div style="font-size:9px;color:var(--t3);">P&L Net</div>
-          <div style="font-size:13px;font-weight:700;color:${pnlNetUp?'var(--up)':'var(--down)'};">
-            ${pnlNetUp?'+':''}$${bp.pnlNet.toFixed(2)}
-          </div>
-        </div>
-      </div>
-
-      <!-- Prochain trade estimé -->
-      <div style="margin-top:8px;background:var(--s3);border-radius:9px;padding:8px 10px;">
-        <div style="font-size:8px;color:var(--t3);text-transform:uppercase;letter-spacing:.07em;margin-bottom:4px;">Prochain trade estimé</div>
-        <div style="display:flex;justify-content:space-between;font-size:10px;">
-          <span style="color:var(--t2);">Mise de base: <strong style="color:var(--gold);">$${_stNext.toFixed(2)}</strong></span>
-          <span style="color:var(--down);">Frais A/R: −$${estFeeNext.toFixed(2)}</span>
-          <span style="color:var(--gold);">Impôt: sur le gain seulement</span>
-        </div>
-      </div>
-
-      <!-- Optimisation -->
-      ${costRatio > 10 ? `
-      <div style="margin-top:6px;background:rgba(0,232,122,.05);border:1px solid rgba(0,232,122,.15);border-radius:9px;padding:8px 10px;">
-        <div style="font-size:8px;color:var(--up);font-weight:600;text-transform:uppercase;letter-spacing:.06em;">💡 Optimisation</div>
-        <div style="font-size:9px;color:var(--t2);margin-top:3px;line-height:1.5;">
-          ${costRatio > 20 ? '• Réduire la fréquence des trades sur cette paire' : ''}
-          ${bp.slippage > bp.tradingFees ? '• Utiliser des ordres limites (maker)' : ''}
-          ${bp.pnlGross < 0 && bp.tax > 0 ? '• Compenser avec gains d\'autres paires' : ''}
-          • Seuil de rentabilité: signal LMSR &gt; ${(60 + costRatio*.2).toFixed(0)}%
-        </div>
-      </div>` : ''}
-    </div>`;
-  }).join('');
+  const f = S.fees, fc = S.feeConfig || {}, bots = _fzBotsOuvrent(), y = (typeof _fiscYearOf === 'function') ? _fiscYearOf(Date.now()) : new Date().getFullYear();
+  const next = bots ? Object.keys(PAIRS).map(p => _fzNextStake(p)) : [];
+  const R = _fzPairRows();
+  const key = [_fzModeLbl(), f.tradeCount, _fzNum(f.totalGross).toFixed(4), _fzNum(f.totalPnlGross).toFixed(4), R.tax.toFixed(4), JSON.stringify(R.rows.map(r => [r.p, r.t, r.co.toFixed(4), r.ex.toFixed(4), r.br.toFixed(4)])),
+    bots, next.map(x => x.toFixed(2)).join(), JSON.stringify(fc)].join('|');
+  if (_fzSame('pairs', key, el)) return;
+  const cU = v => v < 0 ? 'var(--down)' : 'var(--up)', blank = '<span></span>';
+  const line = (r, cls) => '<div class="fz-pt' + (cls || '') + '"><span' + (r.c ? ' style="color:' + r.c + ';"' : '') + '>' + _fzEsc(r.p.replace('/USDT', '')) + (r.out ? ' <i class="fx-dim">· retirée</i>' : '') + '</span>'
+    + '<span>' + (r.t == null ? '' : r.t) + '</span>'
+    + (r.ex == null ? blank + blank + blank : '<span style="color:var(--down);">' + _fzUsd(-r.ex) + '</span><span style="color:var(--down);">' + _fzUsd(-r.sl) + '</span><span style="color:var(--ice);">' + _fzUsd(-r.fu) + '</span>')
+    + '<span style="color:' + (r.tax ? 'var(--gold)' : 'var(--down)') + ';"><b>' + _fzUsd(-r.co) + '</b></span>'
+    + (r.br == null ? blank : '<span style="color:' + cU(r.br) + ';">' + _fzUsd(r.br, true) + '</span>')
+    + '<span style="color:' + cU(r.ne) + ';"><b>' + _fzUsd(r.ne, true) + '</b></span></div>';
+  const T = { p: 'Total', t: 0, ex: 0, sl: 0, fu: 0, co: 0, br: 0, ne: 0 };
+  R.rows.forEach(r => ['t', 'ex', 'sl', 'fu', 'co', 'br', 'ne'].forEach(k => { T[k] += r[k]; }));
+  let extra = '';
+  if (Math.abs(R.hors.co) > 0.005 || Math.abs(R.hors.br) > 0.005) {
+    extra += line({ p: 'Hors paire', co: R.hors.co, br: Math.abs(R.hors.br) > 0.005 ? R.hors.br : null, ne: R.hors.br - R.hors.co }, ' fz-xr');
+    T.co += R.hors.co; T.br += R.hors.br; T.ne += R.hors.br - R.hors.co; T.ex = T.sl = T.fu = null;
+  }
+  extra += line({ p: 'Impôt ' + y, co: R.tax, ne: -R.tax, tax: true }, ' fz-xr');
+  T.co += R.tax; T.ne -= R.tax;
+  let nextHtml = '';
+  if (bots && next.length) {
+    const lo = Math.min.apply(null, next), hi = Math.max.apply(null, next), ar = s => s * ((fc.takerRate || 0) * 2 + (fc.slippage || 0) * 2), one = Math.abs(hi - lo) < 0.005;
+    nextHtml = '<div class="fx-card fz-next"><span class="fz-l">Prochain trade d\'un bot</span><span>mise de base ' + (one ? _fzUsd(lo) : 'de ' + _fzUsd(lo) + ' à ' + _fzUsd(hi) + ' selon la paire')
+      + ' · frais aller-retour ' + _fzUsd(-ar(lo)) + (one ? '' : ' à ' + _fzUsd(-ar(hi))) + ' · impôt : sur le gain seulement</span></div>';
+  }
+  el.innerHTML = _fzSec('💱 Frais par paire', 'cumul ' + _fzModeLbl() + ' · de la plus coûteuse à la moins coûteuse')
+    + '<div class="fz-list"><div class="fz-pt fz-ph"><span>Paire</span><span>Trades</span><span>Exchange</span><span>Glissem.</span><span>Funding</span><span>Coût</span><span>Brut</span><span>Net</span></div>'
+    + R.rows.map(r => line(r, r.t || Math.abs(r.co) > 0.005 ? '' : ' fz-z')).join('') + extra + line(T, ' fz-ptot') + '</div>'
+    + '<div class="fz-note">Coût d\'une paire = exchange + glissement + funding (pris pendant la tenue) ; net = brut − coût. « Hors paire » : ce que le mode compte sans paire (intérêts du levier). '
+    + 'L\'impôt se calcule par régime et par année (⚖ Impôt). Le total donne les chiffres de 💸 Frais.</div>'
+    + nextHtml;
 }
 
 // [GO FISCAL · 07/10/2026] l'onglet ⚖ Impôt = le registre légal belge du mode affiché (16 _fiscRenderPage) : dépôt, dû par
@@ -1080,146 +911,60 @@ function renderFiscalTax() {
   if (typeof _fiscRenderPage === 'function') { try { _fiscRenderPage(el); } catch(e) { try{window._decErr&&window._decErr(e)}catch(_e){} } }
 }
 
+// [GO CSS · écran 6 · 14/11/2026] 🧰 Outils = 📥 Export puis ⚙ Réglages, dans le même onglet. Les cinq exports ensemble (le registre fiscal, avant au bas de
+// l'onglet Impôt, les rejoint) ; « Données à exporter » retiré (les chiffres de 💸 Frais, avec un 2e « P&L net » : −79,85 $ contre −80,20 $, sans le funding).
+// ETAT n° 68 inchangé : les exports de 09h passent encore par un lien blob dans l'app Android.
 function renderFiscalExport() {
   const el = document.getElementById('exportPanel');
   if(!el) return;
-  const f   = S.fees;
-  const reg = S.taxConfig.regions[S.taxConfig.region];
-  const tax = calcTaxProvision();
-  const d   = new Date().toISOString().slice(0,10);
-
-  el.innerHTML = `
-  <!-- Statut stockage -->
-  <div style="background:var(--s1);border:1px solid var(--border);border-radius:14px;padding:14px;margin-bottom:10px;">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
-      <span style="font-size:12px;font-weight:700;color:var(--t1);">💾 Stockage Local (IndexedDB)</span>
-      <span class="pill pill-up" style="font-size:9px;">ACTIF</span>
-    </div>
-    <div style="font-size:10px;color:var(--t3);line-height:1.6;">
-      ${f.tradeCount} trades · ${f.feeLog.length} entrées frais<br>
-      Région: ${reg ? reg.label : S.taxConfig.region} · Session: ${d}
-    </div>
-  </div>
-
-  <!-- Boutons export -->
-  <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:10px;">
-
-    <button onclick="exportTradesCSV()" style="
-      width:100%;padding:14px;border-radius:12px;border:1px solid rgba(0,232,122,.3);
-      background:rgba(0,232,122,.06);color:var(--up);font-family:var(--font-mono);
-      font-size:11px;font-weight:600;cursor:pointer;text-align:left;-webkit-user-select:none;">
-      📥 Trades complets (CSV)
-      <span style="float:right;font-size:9px;color:var(--t3);">${f.tradeCount} trades · ${d}</span>
-    </button>
-
-    <button onclick="exportFeesCSV()" style="
-      width:100%;padding:14px;border-radius:12px;border:1px solid rgba(255,61,107,.3);
-      background:rgba(255,61,107,.06);color:var(--down);font-family:var(--font-mono);
-      font-size:11px;font-weight:600;cursor:pointer;text-align:left;-webkit-user-select:none;">
-      📥 Journal des frais (CSV)
-      <span style="float:right;font-size:9px;color:var(--t3);">${f.feeLog.length} entrées</span>
-    </button>
-
-    <button onclick="exportSummaryCSV()" style="
-      width:100%;padding:14px;border-radius:12px;border:1px solid rgba(247,200,26,.3);
-      background:rgba(247,200,26,.06);color:var(--gold);font-family:var(--font-mono);
-      font-size:11px;font-weight:600;cursor:pointer;text-align:left;-webkit-user-select:none;">
-      📥 Résumé fiscal (CSV)
-      <span style="float:right;font-size:9px;color:var(--t3);">par paire + total</span>
-    </button>
-
-    <button onclick="exportFullJSON()" style="
-      width:100%;padding:14px;border-radius:12px;border:1px solid rgba(167,139,250,.3);
-      background:rgba(167,139,250,.06);color:var(--pur);font-family:var(--font-mono);
-      font-size:11px;font-weight:600;cursor:pointer;text-align:left;-webkit-user-select:none;">
-      📦 Backup complet (JSON)
-      <span style="float:right;font-size:9px;color:var(--t3);">Toutes données</span>
-    </button>
-  </div>
-
-  <!-- Résumé fiscal rapide -->
-  <div style="background:var(--s1);border:1px solid var(--border);border-radius:14px;padding:14px;">
-    <div style="font-size:10px;font-weight:700;color:var(--t1);text-transform:uppercase;letter-spacing:.07em;margin-bottom:8px;">📋 Données à exporter</div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
-      ${[
-        ['Frais exchange',  '-$'+f.totalTradingFees.toFixed(2),  'var(--down)'],
-        ['Slippage',        '-$'+f.totalSlippage.toFixed(2),     'var(--pur)'],
-        ['Funding',         '-$'+f.totalFunding.toFixed(2),      'var(--ice)'],
-        ['Prov. impôt',     '-$'+tax.toFixed(2),                 'var(--gold)'],
-        ['Réserve totale',  '$'+(f.feeReserveAccount + (S.fiscalReserveAccount||0)).toFixed(2),  'var(--gold)'],
-        ['P&L Net',         (f.totalPnlNet>=0?'+':'')+f.totalPnlNet.toFixed(2)+'$', f.totalPnlNet>=0?'var(--up)':'var(--down)'],
-      ].map(([l,v,c])=>`
-        <div style="background:var(--s3);border-radius:9px;padding:8px;">
-          <div style="font-size:8px;color:var(--t3);text-transform:uppercase;">${l}</div>
-          <div style="font-size:13px;font-weight:700;color:${c};margin-top:2px;">${v}</div>
-        </div>`).join('')}
-    </div>
-    <div style="font-size:9px;color:var(--t3);margin-top:10px;line-height:1.5;">
-      ⚠️ Estimations indicatives. Les fichiers CSV peuvent être importés dans Excel, Google Sheets ou un logiciel comptable.
-    </div>
-  </div>`;
+  const f = S.fees, m = (typeof _walletKey === 'function') ? _walletKey() : 'sim';
+  const L = (typeof _fiscLedger === 'function') ? _fiscLedger(m, false) : null, nh = L ? L.hist.length : 0, nl = (f.feeLog || []).length;
+  const key = [m, f.tradeCount, nl, nh].join('|');
+  if (_fzSame('export', key, el)) return;
+  const b = (fn, t, s, c) => '<button class="fz-eb" style="--c:' + c + ';" onclick="' + fn + '"><b>' + t + '</b><span>' + s + '</span></button>';
+  el.innerHTML = _fzSec('📥 Exporter', '💾 stockage local · ' + _fzNum(f.tradeCount) + ' trades · ' + nl + ' frais')
+    + '<div class="fz-exp">'
+    + (nh ? b('_fiscExportCsv()', '🧾 Registre fiscal ' + _fzModeLbl(), 'CSV · ' + nh + ' trades du registre', 'var(--gold)') : '')
+    + b('exportTradesCSV()', '📥 Trades complets', 'CSV · ' + _fzNum(f.tradeCount) + ' trades', 'var(--up)')
+    + b('exportFeesCSV()', '📥 Journal des frais', 'CSV · ' + nl + ' entrées', 'var(--down)')
+    + b('exportSummaryCSV()', '📥 Résumé fiscal', 'CSV · par paire + total', 'var(--gold)')
+    + b('exportFullJSON()', '📦 Backup complet', 'JSON · toutes les données', 'var(--pur)')
+    + '</div><div class="fz-note">Les CSV s\'ouvrent dans Excel, Google Sheets ou un logiciel comptable.</div>';
 }
 
+// ⚙ Réglages : les réglages fiscaux (additionnels communaux, plus-values hors AURA — avant dans l'onglet Impôt, mêmes champs, mêmes fonctions de 16b),
+// les frais de trading, la région (la choisie en grand, les autres en grille). Jamais rebâti pendant une saisie, ni si rien n'a changé
+// (avant : rebâti toutes les 3 s par le battement de 08, le champ perdait le doigt).
 function renderFiscalSettings() {
   const el = document.getElementById('taxSettings');
   if(!el) return;
-  const regions = S.taxConfig.regions;
-  const fc = S.feeConfig;
-
-  el.innerHTML = `
-    <!-- Fee rate editor -->
-    <div style="background:var(--s1);border:1px solid var(--border);border-radius:14px;padding:14px;margin-bottom:14px;">
-      <div style="font-size:11px;font-weight:700;color:var(--t2);margin-bottom:10px;">⚙️ Configuration des frais</div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
-        ${[
-          { key:'makerRate', label:'Maker %', hint:'Ordre limite', mul:100 },
-          { key:'takerRate', label:'Taker %', hint:'Ordre marché', mul:100 },
-          { key:'slippage',  label:'Slippage %', hint:'Glissement prix', mul:100 },
-          { key:'fundingRate',label:'Funding %', hint:'Par cycle ouvert', mul:100 },
-        ].map(f => `
-          <div>
-            <div style="font-size:8px;color:var(--t3);margin-bottom:3px;">${f.label} <span style="color:var(--t4);">(${f.hint})</span></div>
-            <div style="display:flex;align-items:center;gap:4px;">
-              <input type="number" id="fee_${f.key}" step="0.001" min="0" max="5"
-                value="${(fc[f.key]*f.mul).toFixed(3)}"
-                oninput="saveFeeSettings()"
-                style="flex:1;background:var(--s3);border:1px solid var(--border);border-radius:6px;
-                       padding:5px 7px;color:var(--gold);font-family:var(--font-mono);font-size:11px;
-                       font-weight:700;box-sizing:border-box;-webkit-appearance:none;">
-              <span style="font-size:9px;color:var(--t3);">%</span>
-            </div>
-          </div>`).join('')}
-      </div>
-      <div style="font-size:8px;color:var(--t3);margin-top:8px;padding-top:8px;border-top:1px solid var(--border);">
-        Frais totaux aller-retour estimés: <span style="color:var(--down);font-weight:700;">
-        ${((fc.makerRate + fc.takerRate + fc.slippage*2 + fc.fundingRate)*100).toFixed(3)}%</span>
-      </div>
-    </div>
-
-    <!-- Region selector -->
-    <div style="font-size:11px;font-weight:700;color:var(--t2);margin-bottom:8px;">🌍 Région fiscale</div>
-    ${Object.entries(regions).map(([key, r])=>{
-      const isZero = r.rate === 0;
-      const rateStr = isZero ? '0%' : (r.rate*100*r.inclusion).toFixed(1)+'%';
-      return `
-      <div class="region-btn ${S.taxConfig.region===key?'active':''}"
-           onclick="selectRegion('${key}')">
-        <div class="region-btn-flag">${r.label.split(' ')[0]}</div>
-        <div class="region-btn-info">
-          <div class="region-btn-name">${r.label.split(' ').slice(1).join(' ')}</div>
-          <div class="region-btn-note">${r.method} · ${r.note.substring(0,52)}${r.note.length>52?'…':''}</div>
-        </div>
-        <div class="region-btn-rate ${isZero?'zero':'nonzero'}">${rateStr}</div>
-      </div>`;
-    }).join('')}
-
-    <div style="font-size:10px;color:var(--t3);margin-top:12px;line-height:1.7;padding:12px 14px;
-         background:var(--s1);border-radius:12px;border:1px solid var(--border);">
-      ⚠️ <strong style="color:var(--t2);">Belgique (BE)</strong> : loi du 03/04/2026 — 10 % au-delà de 10 000 €/an en gestion normale,
-      33 % + additionnels communaux sans exonération en spéculatif. Le registre ⚖ Impôt l'applique trade par trade
-      (MANU LONG sans levier = normal ; AUTO, SHORT ou levier = spéculatif). Autre région : aucun impôt provisionné.<br><br>
-      Le fisc qualifie en dernier ressort. En cas de doute : un comptable ou une décision anticipée du SPF Finances.
-    </div>`;
+  try { if (el.contains(document.activeElement) && /INPUT|SELECT/.test(document.activeElement.tagName)) return; } catch(e) {}
+  const regions = S.taxConfig.regions, cur = S.taxConfig.region, fc = S.feeConfig;
+  const cfg = (typeof _fiscCfg === 'function') ? _fiscCfg() : { commune: 0, ext: {} }, y = (typeof _fiscYearOf === 'function') ? _fiscYearOf(Date.now()) : new Date().getFullYear();
+  const key = [JSON.stringify(fc), JSON.stringify(cfg), cur, y].join('|');
+  if (_fzSame('settings', key, el)) return;
+  const inp = (k, lab, hint) => '<div><label class="fz-lab" for="fee_' + k + '">' + lab + ' <span class="fx-dim">· ' + hint + '</span></label>'
+    + '<input class="fz-in" type="number" id="fee_' + k + '" step="0.001" min="0" max="5" value="' + (fc[k] * 100).toFixed(3) + '" oninput="saveFeeSettings()"></div>';
+  const rate = r => r.rate === 0 ? '0 %' : (r.rate * 100 * r.inclusion).toFixed(1).replace('.', ',') + ' %';
+  const R = regions[cur] || {}, lb = String(R.label || cur || '');
+  el.innerHTML = _fzSec('⚙ Réglages fiscaux', 'registre ⚖ Impôt')
+    + '<div class="fx-card"><div class="fz-f2">'
+    + '<div><label class="fz-lab" for="fxCommune">Additionnels communaux <span class="fx-dim">· % de l\'impôt à 33 %, taux de ta commune</span></label>'
+    + '<input class="fz-in" id="fxCommune" type="number" min="0" max="15" step="0.1" value="' + _fzNum(cfg.commune) + '" onchange="_fiscSetCommune(this.value)"></div>'
+    + '<div><label class="fz-lab" for="fxExt">Plus-values ' + y + ' hors AURA, régime normal <span class="fx-dim">· €, perte en négatif ; RE seulement</span></label>'
+    + '<input class="fz-in" id="fxExt" type="number" step="1" value="' + _fzNum(cfg.ext && cfg.ext[y]) + '" onchange="_fiscSetExt(this.value)"></div>'
+    + '</div></div>'
+    + _fzSec('💸 Frais de trading', 'appliqués à chaque trade')
+    + '<div class="fx-card"><div class="fz-f2">' + inp('makerRate', 'Maker %', 'ordre limite') + inp('takerRate', 'Taker %', 'ordre au marché')
+    + inp('slippage', 'Glissement %', 'par côté') + inp('fundingRate', 'Funding %', 'par 8 h') + '</div>'
+    + '<div class="fz-ar">Frais aller-retour estimés : <b class="fee-total-sum" style="color:var(--down);">' + _fzPct((fc.makerRate + fc.takerRate + fc.slippage * 2 + fc.fundingRate) * 100, 3) + '</b></div></div>'
+    + _fzSec('🌍 Région fiscale', 'Belgique = registre trade par trade')
+    + '<div class="fx-card"><div class="fz-rsel"><span>' + _fzEsc(lb.split(' ')[0]) + '</span><div><b>' + _fzEsc(lb.split(' ').slice(1).join(' ')) + '</b>'
+    + '<em>' + _fzEsc(R.method || '') + (R.note ? ' · ' + _fzEsc(R.note) : '') + '</em></div><strong>' + rate(R) + '</strong></div></div>'
+    + '<div class="fz-rg">' + Object.keys(regions).filter(k => k !== cur).map(k => { const r = regions[k], l = String(r.label || k);
+      return '<button class="fz-rb" onclick="selectRegion(\'' + k + '\')"><span>' + _fzEsc(l.split(' ')[0]) + '</span><span>' + _fzEsc(l.split(' ').slice(1).join(' ')) + '</span><b>' + rate(r) + '</b></button>'; }).join('') + '</div>'
+    + '<div class="fz-note">Belgique : loi du 03/04/2026, appliquée trade par trade par le registre ⚖ Impôt (MANU LONG sans levier = normal ; AUTO, SHORT ou levier = spéculatif). '
+    + 'Autre région : aucun impôt provisionné. Le fisc qualifie en dernier ressort ; en cas de doute, un comptable ou une décision anticipée du SPF Finances.</div>';
 }
 
 function saveFeeSettings() {
@@ -1230,8 +975,8 @@ function saveFeeSettings() {
   S.feeConfig.fundingRate = Math.max(0, Math.min(0.05, get('fee_fundingRate')));
   // Re-render the summary line live
   const sumEl = document.querySelector('#taxSettings .fee-total-sum');
-  if(sumEl) sumEl.textContent =
-    ((S.feeConfig.makerRate + S.feeConfig.takerRate + S.feeConfig.slippage*2 + S.feeConfig.fundingRate)*100).toFixed(3)+'%';
+  if(sumEl) sumEl.textContent =   // [GO CSS · écran 6 · 14/11/2026] la ligne existe enfin (avant : aucune balise .fee-total-sum, rien ne bougeait), au format français
+    _fzPct((S.feeConfig.makerRate + S.feeConfig.takerRate + S.feeConfig.slippage*2 + S.feeConfig.fundingRate)*100, 3);
   showToast('⚙️ Frais mis à jour', 2800, 'user');
 }
 
@@ -1239,8 +984,7 @@ function selectRegion(key) {
   S.taxConfig.region = key;
   renderFiscalSettings();  // rebuild selection
   renderFiscalTax();       // update tax panel
-  const badge = document.getElementById('fRegionBadge');
-  if(badge) badge.textContent = S.taxConfig.regions[key].label;
+  try { _fzBref(); } catch(e) {}   // [GO CSS · écran 6 · 14/11/2026] la tuile 🧰 Outils dit la région
   showToast('🌍 Région: '+S.taxConfig.regions[key].label, 2800, 'user');
 }
 
