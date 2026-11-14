@@ -5,7 +5,7 @@
 //   M2 aucun bloc perdu : les 27 id de #page2 au commit 1a2ec3d présents une seule fois ; aucun id en double dans le HTML ; balises équilibrées
 //   M3 08 renderMarket : une puce par paire, dans la barre (en tête), rebâtie quand les paires changent, pas à chaque battement ; consensus nommé
 //   M4 11 « Gérer les paires » au bout de la barre (sans barre : sous le graphique, comme avant)
-//   M5 css/30-marche-zones.css chargé en DERNIER au token ; chaque règle visée à #page2 ; plancher 11 px ; analyse fermée / ouverte ; volets ; téléphone
+//   M5 css/30-marche-zones.css chargé après tous les styles d'avant au token (après lui : css/31+, écrans suivants) ; chaque règle visée à #page2 ; plancher 11 px ; analyse fermée / ouverte ; volets ; téléphone
 //   M6 09i : volets fermés par défaut, un appui ouvre et mémorise (matrice redessinée), un 2e referme et oublie, rouverts sans redessin ; appui sur l'analyse
 //   G  ids lus ailleurs (08 graphique, puces, analyses, composite, consensus, matrice ; 03 mini-graphiques ; 07 veille) toujours dans #page2
 'use strict';
@@ -99,9 +99,12 @@ T('M4 11 « Gérer les paires » : au bout de la barre de la paire ; sans barre,
   assert.deepStrictEqual(run(false), [['après-graphique', 'pairMgrBtn']]);
 });
 
-T('M5 css/30-marche-zones.css chargé en dernier au token ' + TOK + ' ; toutes ses règles visent #page2 ; plancher 11 px ; analyse fermée / ouverte ; volets ; téléphone', () => {
+T('M5 css/30-marche-zones.css chargé après tous les styles d\'avant au token ' + TOK + ' (après lui : seuls les écrans suivants du go css, css/31+) ; toutes ses règles visent #page2 ; plancher 11 px ; analyse fermée / ouverte ; volets ; téléphone', () => {
   const links = [...html.matchAll(/<link[^>]*href="(css\/[^"?]+)\?v=([^"]+)"/g)];
-  const last = links[links.length - 1]; assert.ok(last && last[1] === 'css/30-marche-zones.css' && last[2] === TOK, 'dernier : ' + (last && last[1]));
+  // [GO CSS · écran 4 · 14/11/2026] css/31-dao-zones.css (écran DAO, visé à #page3) se charge désormais après lui
+  const i30 = links.findIndex(l => l[1] === 'css/30-marche-zones.css');
+  assert.ok(i30 >= 0 && links[i30][2] === TOK, 'css/30 au token');
+  assert.deepStrictEqual(links.slice(i30 + 1).filter(l => !/^css\/(3[1-9]|[4-9]\d)-/.test(l[1])).map(l => l[1]), [], 'après css/30 : seuls css/31+');
   const css = rd('css/30-marche-zones.css').replace(/\/\*[\s\S]*?\*\//g, '');
   const sels = []; css.replace(/([^{}]+)\{/g, (m, s) => { s = s.trim(); if (!s.startsWith('@')) sels.push(...s.split(',').map(x => x.trim())); return m; });
   assert.ok(sels.length > 40, sels.length + ' sélecteurs');

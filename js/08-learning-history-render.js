@@ -188,6 +188,48 @@ function selectPair(pair) {
   showToast('Paire: '+pair);
 }
 
+// [GO CSS · écran 4 · 14/11/2026] écran DAO par priorité (Rams « Go css », maquette validée « Go » 13:59), affichage seul :
+//  En bref (#daoBref : bots · analystes · propositions) · Propositions (#daoPropZone, montrée seulement s'il y en a) ·
+//  Classement T$ en deux groupes — bots (rôle 'execution', les maîtres, comme l'écran Agents) puis analystes —, 2 colonnes,
+//  chaque ligne garde son rang sur tous ; un analyste se lit par sa spécialité (a.type), son nom en dessous ; la série seulement
+//  si elle existe. Ids gardés : wrow_ / wv_ / wn_ / wbar_ (patchGovCards), gc_ / vf_ / va_ / vs_for_ / vs_ag_ / vbtns_. Style : css/31-dao-zones.css.
+function _daoIsBot(a) { return (a.role || 'fundamental') === 'execution'; }
+function _daoStreak(n) {
+  n = Math.trunc(Number(n) || 0);
+  if (!n) return '';
+  return n > 0 ? `<span class="dao-stk up">🔥 ${n} gain${n > 1 ? 's' : ''} d'affilée</span>`
+               : `<span class="dao-stk dn">❄ ${-n} perte${n < -1 ? 's' : ''} d'affilée</span>`;
+}
+// la liste des propositions SANS la proposition de paire EN VOTE : elle a sa grande carte (#daoNewPairCard, renderDAO) — avant, elle était montrée deux fois ;
+// une proposition de paire passée (exécutée, rejetée) garde sa petite carte, comme avant
+function _daoGovProps() { return (S.proposals || []).filter(p => !(p.isPairProposal && p.status === 'active')); }
+function _daoPropZone() {
+  const z = document.getElementById('daoPropZone'); if (!z) return;
+  const on = _daoGovProps().length > 0 || !!document.getElementById('daoNewPairCard');
+  if (z.classList.contains('on') !== on) z.classList.toggle('on', on);
+}
+// clé du classement : l'ordre, les spécialités et les séries — si elle change, buildGovCards rebâtit (patchGovCards ne fait que les chiffres)
+function _daoKey(sorted) { return sorted.map(a => a.id + ':' + (a.type || '') + ':' + Math.trunc(Number(a.streak) || 0)).join('|'); }
+function _daoBrefRender(sorted) {
+  const set = (id, t) => { const e = document.getElementById(id); if (e && e.textContent !== t) e.textContent = t; };
+  const T = a => Math.floor(Number(a.fitness) || 0);
+  const rank = new Map(sorted.map((a, i) => [a.id, i + 1]));
+  const bots = sorted.filter(_daoIsBot), ana = sorted.filter(a => !_daoIsBot(a));
+  const r1 = bots.length ? rank.get(bots[0].id) : 0, devant = bots.length ? ana.filter(a => rank.get(a.id) < r1).length : 0;
+  set('daoBrefBots', String(bots.length));
+  set('daoBrefBotsBest', bots[0] ? '1er : ' + bots[0].name : '—');
+  set('daoBrefBotsSub', bots[0] ? T(bots[0]) + ' T$ · rang ' + r1 + ' sur ' + sorted.length : '—');
+  set('daoBrefAna', String(ana.length));
+  set('daoBrefAnaBest', ana[0] ? '1er : ' + (ana[0].type || ana[0].name) : '—');
+  set('daoBrefAnaSub', ana[0] ? T(ana[0]) + ' T$' + (bots.length ? ' · ' + devant + ' devant le 1er bot' : '') : '—');
+  const act = (S.proposals || []).filter(p => p.status === 'active').length;
+  set('daoBrefProp', String(act));
+  set('daoBrefPropBest', act ? act + ' en vote' : 'aucune active');
+  set('daoClsSub', 'marché interne · rang sur ' + sorted.length);
+  set('daoGrpBotsSub', bots.length + (bots.length ? ' · le 1er au rang ' + r1 : ''));
+  set('daoGrpAnaSub', ana.length + (bots.length ? ' · ' + devant + ' devant le 1er bot' : ''));
+}
+
 function buildGovCards() {
   if(!S.proposals) S.proposals = [];
   // [02/08/2026] purge définitive des anciennes propositions « position » codées en dur
@@ -195,8 +237,9 @@ function buildGovCards() {
   S.proposals = S.proposals.filter(p => p.id !== 42 && p.id !== 43);
   if(!S.totalTFlows) S.totalTFlows = 0;
   const gl = document.getElementById('mobileGovList');
-  gl.innerHTML = S.proposals.map(p=>`
-    <div class="gov-card" id="gc_${p.id}" style="margin:10px 16px 0;">
+  // [GO CSS · écran 4] sans les propositions de paire (grande carte) ; vide = la zone se cache, la tuile « Propositions » d'En bref le dit
+  gl.innerHTML = _daoGovProps().map(p=>`
+    <div class="gov-card" id="gc_${p.id}">
       <div class="gov-id">Proposition #${p.id}</div>
       <div class="gov-desc">${p.desc}</div>
       <div class="vote-progress">
@@ -207,47 +250,44 @@ function buildGovCards() {
         <span class="vote-stat-for"    id="vs_for_${p.id}">↑ Pour: 0 G$ (0%)</span>
         <span class="vote-stat-against" id="vs_ag_${p.id}">↓ Contre: 0 G$ (0%)</span>
       </div>
-      <div id="vbtns_${p.id}" style="text-align:center;padding:6px 0;font-size:10px;color:var(--pur);">🤖 Décision bot · vote automatique</div>
-    </div>`).join('') || '<div style="text-align:center;color:var(--t3);font-size:11px;padding:18px 16px;">Aucune proposition active · le bot agit en autonome (AA/EV/RE).</div>';
+      <div id="vbtns_${p.id}" class="gov-bot">🤖 Décision bot · vote automatique</div>
+    </div>`).join('');
+  _daoPropZone();
 
-  // Wallet scoreboard — sorted by fitness desc, with bar
+  // Classement T$ — trié par fitness, deux groupes (bots puis analystes), rang sur tous
   const wl = document.getElementById('mobileWallets');
   const sorted = [...S.agents].sort((a,b)=>b.fitness-a.fitness);
   const maxFit = Math.max(1, sorted[0]?.fitness || 1);
-  const medals = ['🥇','🥈','🥉','4','5'];
-  wl.innerHTML = `<div style="background:var(--s1);border:1px solid var(--border);border-radius:14px;overflow:hidden;">
-  ${sorted.map((a,i)=>{
-    const pct = Math.round(a.fitness/maxFit*100);
-    const stk = a.streak || 0;
-    const trendCol = stk >= 0 ? 'var(--up)' : 'var(--down)';
-    return `<div style="padding:11px 14px;border-bottom:1px solid var(--border);${i===sorted.length-1?'border-bottom:none;':''}"
-      id="wrow_${a.id}">
-      <div style="display:flex;align-items:center;gap:10px;">
-        <div style="font-size:16px;flex-shrink:0;">${medals[i]||i+1}</div>
-        <div style="font-size:14px;flex-shrink:0;">${a.emoji}</div>
-        <div style="flex:1;min-width:0;">
-          <div style="display:flex;justify-content:space-between;align-items:center;">
-            <span style="font-size:12px;font-weight:600;color:var(--t1);" id="wn_${a.id}">${a.name}</span>
-            <span style="font-family:var(--font-display);font-size:15px;font-weight:700;color:var(--gold);">
-              <span id="wv_${a.id}">${Math.floor(a.fitness)}</span>
-              <span style="font-size:9px;color:var(--t3);"> T$</span>
-            </span>
-          </div>
-          <div style="margin-top:5px;height:4px;background:var(--s3);border-radius:100px;overflow:hidden;">
-            <div id="wbar_${a.id}" style="height:100%;width:${pct}%;background:${a.color};border-radius:100px;transition:width .6s;"></div>
-          </div>
-          <div style="display:flex;justify-content:space-between;margin-top:3px;">
-            <span style="font-size:8px;color:var(--t3);">${a.type}</span>
-            <span style="font-size:8px;color:${trendCol};">${stk >= 0 ? '🔥 '+stk+' gains' : '❄ '+Math.abs(stk)+' pertes'} d'affilée</span>
-          </div>
-        </div>
+  const rank = new Map(sorted.map((a, i) => [a.id, i + 1]));
+  const medals = ['🥇','🥈','🥉'];
+  const row = (a, i, half) => {
+    const r = rank.get(a.id), bot = _daoIsBot(a);
+    const nom = `<span id="wn_${a.id}">${a.name}</span>`;
+    return `<div class="dao-row${i >= half ? ' dao-c2' : ''}" id="wrow_${a.id}">
+      <div class="dao-rk${r <= 3 ? ' m' : ''}">${medals[r - 1] || r}</div>
+      <div class="dao-em">${a.emoji}</div>
+      <div class="dao-mid">
+        <div class="dao-top"><span class="dao-nm">${bot ? nom : (a.type || a.name)}</span><span class="dao-tv"><span id="wv_${a.id}">${Math.floor(a.fitness)}</span> <small>T$</small></span></div>
+        <div class="dao-bar"><div id="wbar_${a.id}" style="width:${Math.round(a.fitness/maxFit*100)}%;background:${a.color};"></div></div>
+        <div class="dao-sub"><span>${bot ? (a.type || '') : nom}</span>${_daoStreak(a.streak)}</div>
       </div>
     </div>`;
-  }).join('')}
-  </div>`;
+  };
+  const grp = (arr, titre, subId) => {
+    const half = Math.ceil(arr.length / 2);
+    return arr.length ? `<div class="dao-grp"><div class="dao-grp-h"><span>${titre}</span><em id="${subId}"></em></div>
+      <div class="dao-rows" style="--rows:${half}">${arr.map((a, i) => row(a, i, half)).join('')}</div></div>` : '';
+  };
+  wl.innerHTML = grp(sorted.filter(_daoIsBot), 'Bots · les maîtres', 'daoGrpBotsSub') + grp(sorted.filter(a => !_daoIsBot(a)), 'Analystes', 'daoGrpAnaSub');
+  wl.dataset.k = _daoKey(sorted);
+  _daoBrefRender(sorted);
 }
 
 function patchGovCards() {
+  // [GO CSS · écran 4 · 14/11/2026] l'ordre, une spécialité ou une série a changé : on rebâtit (rangs, groupes) AVANT de poser les chiffres,
+  // pour que les cartes de propositions rebâties reçoivent tout de suite leurs votes (relecture du 14/11)
+  const _wl = document.getElementById('mobileWallets');
+  if (_wl && _wl.children.length && _wl.dataset.k !== _daoKey([...S.agents].sort((a,b)=>b.fitness-a.fitness))) buildGovCards();
   S.proposals.forEach(p=>{
     const total = p.forVotes+p.againstVotes;
     const fp = (p.forVotes/total*100);
@@ -297,6 +337,7 @@ function patchGovCards() {
     if(wn) wn.textContent = a.name;
     if(wbar) wbar.style.width = Math.round(a.fitness/maxFit2*100)+'%';
   });
+  _daoBrefRender(sorted2);   // [GO CSS · écran 4] En bref suit les chiffres
 }
 
 function renderDAO() {
@@ -305,7 +346,7 @@ function renderDAO() {
   // v6.5 FIX: always call buildGovCards on first render OR when proposals change
   // Previously: never called when S.proposals.length===0 → mobileWallets empty
   const wl = document.getElementById('mobileWallets');
-  if(gl.children.length !== (S.proposals||[]).length || (wl && !wl.children.length)) {
+  if(gl.children.length !== _daoGovProps().length || (wl && !wl.children.length)) {   // [GO CSS · écran 4] la liste sans les propositions de paire ; vide = 0 enfant (avant : le message « Aucune proposition » faisait tout rebâtir à chaque passage)
     buildGovCards();
   }
 
@@ -379,6 +420,7 @@ function renderDAO() {
   } else if(pairProposalEl) {
     pairProposalEl.remove();
   }
+  _daoPropZone();   // [GO CSS · écran 4] la zone Propositions suit la grande carte
 
   patchGovCards();
 }

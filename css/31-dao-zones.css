@@ -1,0 +1,89 @@
+/* ═══════════════════════════════════════════════════════════
+   AURA8 · 31-dao-zones.css — [GO CSS · écran 4 · 14/11/2026]
+   Écran DAO (#page3) par priorité : En bref (bots · analystes · propositions) · Propositions (zone montrée seulement s'il y en a) ·
+   Classement T$ en deux groupes — bots (les maîtres) puis analystes —, 2 colonnes, rang sur tous.
+   Rams 14/11 13:50 « Go css » ; maquette montrée, « Go » 13:59. Chargé en dernier. Chaque règle est visée à #page3.
+   1. lecture : plancher 11 px, chiffres alignés, sans halo
+   2. zones, En bref
+   3. propositions
+   4. classement
+   5. téléphone
+   ═══════════════════════════════════════════════════════════ */
+
+/* ── 1. LECTURE ─────────────────────────────────────────── */
+#page3 {
+  --fs-6: 11px; --fs-7: 11px; --fs-8: 11px; --fs-9: 11.5px; --fs-10: 12px; --fs-11: 12.5px;
+  font-variant-numeric: tabular-nums;
+}
+/* Tailles écrites en dur (6–10 px) dans les rendus de l'écran (08 renderDAO : carte de paire, patchGovCards : « exécuté »). */
+#page3 [style*="font-size:6px"], #page3 [style*="font-size:7px"], #page3 [style*="font-size:8px"],
+#page3 [style*="font-size:9px"], #page3 [style*="font-size:10px"],
+#page3 [style*="font-size: 6px"], #page3 [style*="font-size: 7px"], #page3 [style*="font-size: 8px"],
+#page3 [style*="font-size: 9px"], #page3 [style*="font-size: 10px"],
+#page3 [style*="font-size:6.5px"], #page3 [style*="font-size:7.5px"], #page3 [style*="font-size:8.5px"], #page3 [style*="font-size:9.5px"], #page3 [style*="font-size:10.5px"] { font-size: 11px !important; }
+/* Classes de l'écran sous 11 px (css/07 : carte de paire ; css/09 : propositions). */
+#page3 .gov-id, #page3 .pill, #page3 .pair-proposal-name, #page3 .pair-proposal-rationale, #page3 .pair-proposal-stat-lbl,
+#page3 .pair-proposal-card::before { font-size: 11px !important; }   /* « ✨ NOUVEAU » (pseudo-élément, 7 px dans css/07) */
+/* Reposant : plus de halos ni d'ombres portées. */
+#page3 * { text-shadow: none !important; }
+#page3 .gov-card, #page3 .pair-proposal-card, #page3 .dao-grp, #page3 .dab { box-shadow: none !important; }
+#page3 .scroll-hint { display: none; }
+
+/* ── 2. ZONES, EN BREF ──────────────────────────────────── */
+#page3 .dao-zone-h { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin: 18px 16px 10px; padding: 0 2px 8px; border-bottom: 1px solid rgba(255,255,255,.06); }
+#page3 .dao-zone-h > span { font: 700 13px/1.2 var(--font-mono); letter-spacing: .16em; text-transform: uppercase; color: var(--t2); }
+#page3 .dao-zone-h > em { font: 500 11px/1.2 var(--font-mono); font-style: normal; color: var(--t3); letter-spacing: .06em; white-space: nowrap; }
+#page3 #daoBref { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin: 14px 16px 0; }
+#page3 #daoBref .dab { background: var(--s1); border: 1px solid rgba(255,255,255,.06); border-radius: 16px; padding: 12px 14px; min-width: 0; }
+#page3 #daoBref .dab-l { font: 600 11px/1.2 var(--font-mono); letter-spacing: .1em; text-transform: uppercase; color: var(--t3); }
+#page3 #daoBref .dab-v { font: 700 22px/1.1 var(--font-display, inherit); color: var(--t1); margin-top: 8px; }
+#page3 #daoBref .dab-s { font: 500 12px/1.35 var(--font-mono); color: var(--t2); margin-top: 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#page3 #daoBref .dab-g { color: var(--gold); }
+#page3 #daoBref .dab-n { color: var(--t3); }
+
+/* ── 3. PROPOSITIONS (zone cachée tant qu'il n'y en a pas : 08 _daoPropZone) ── */
+#page3 #daoPropZone:not(.on) { display: none; }
+#page3 #daoPropZone .gov-card { margin: 10px 16px 0; }
+#page3 #daoPropZone .vote-stat-row { font-size: 12px; }
+#page3 #daoPropZone .gov-bot { text-align: center; padding: 6px 0; font-size: 12px; color: var(--pur); }
+#page3 #daoNewPairCard { margin: 0 16px; }
+#page3 #daoNewPairCard .pair-proposal-card { margin: 0; }
+
+/* ── 4. CLASSEMENT ──────────────────────────────────────── */
+#page3 #mobileWallets { margin: 0 16px; }
+#page3 .dao-grp { background: var(--s1); border: 1px solid rgba(255,255,255,.06); border-radius: 16px; overflow: hidden; }
+#page3 .dao-grp + .dao-grp { margin-top: 12px; }
+#page3 .dao-grp-h { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; padding: 11px 16px 9px; border-bottom: 1px solid rgba(255,255,255,.05); }
+#page3 .dao-grp-h > span { font: 700 14px/1.2 var(--font-display, inherit); color: var(--t1); }
+#page3 .dao-grp-h > em { font: 500 11px/1.2 var(--font-mono); font-style: normal; color: var(--t3); white-space: nowrap; }
+/* rang de haut en bas, colonne de gauche puis de droite (--rows = moitié, posé par 08) */
+#page3 .dao-rows { display: grid; grid-template-columns: 1fr 1fr; grid-auto-flow: column; grid-template-rows: repeat(var(--rows, 1), auto); }
+#page3 .dao-row { display: flex; align-items: center; gap: 10px; padding: 7px 14px; min-width: 0; border-bottom: 1px solid rgba(255,255,255,.04); }
+#page3 .dao-row.dao-c2 { border-left: 1px solid rgba(255,255,255,.05); }
+#page3 .dao-rk { width: 24px; flex-shrink: 0; text-align: center; font: 700 13px/1 var(--font-mono); color: var(--t3); }
+#page3 .dao-rk.m { font-size: 16px; }
+#page3 .dao-em { font-size: 15px; flex-shrink: 0; width: 20px; text-align: center; }
+#page3 .dao-mid { flex: 1; min-width: 0; }
+#page3 .dao-top { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+#page3 .dao-nm { font: 600 13px/1.25 var(--font-display, inherit); color: var(--t1); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+#page3 .dao-tv { font: 700 15px/1 var(--font-display, inherit); color: var(--gold); white-space: nowrap; flex-shrink: 0; }
+#page3 .dao-tv small { font: 500 11px/1 var(--font-mono); color: var(--t3); }
+#page3 .dao-bar { height: 4px; margin-top: 5px; background: var(--s3); border-radius: 100px; overflow: hidden; }
+#page3 .dao-bar > div { height: 100%; border-radius: 100px; transition: width .6s; }
+#page3 .dao-sub { display: flex; justify-content: space-between; gap: 8px; margin-top: 4px; font: 500 11px/1.2 var(--font-mono); color: var(--t3); }
+#page3 .dao-sub > span:first-child { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+#page3 .dao-stk { white-space: nowrap; flex-shrink: 0; }
+#page3 .dao-stk.up { color: var(--up); }
+#page3 .dao-stk.dn { color: var(--down); }
+
+/* ── 5. TÉLÉPHONE ───────────────────────────────────────── */
+@media (max-width: 520px) {
+  #page3 #daoBref { grid-template-columns: 1fr 1fr; margin: 12px 10px 0; }
+  #page3 #daoBref .dab:last-child { grid-column: 1 / -1; }
+  #page3 #daoBref .dab-s { white-space: normal; }   /* sous-lignes entières sur téléphone (relecture du 14/11) */
+  #page3 #mobileWallets, #page3 #daoNewPairCard { margin-left: 10px; margin-right: 10px; }
+  #page3 #daoPropZone .gov-card { margin-left: 10px; margin-right: 10px; }
+  #page3 .dao-zone-h { margin-left: 10px; margin-right: 10px; }
+  #page3 .dao-rows { grid-template-columns: 1fr; grid-auto-flow: row; grid-template-rows: none; }
+  #page3 .dao-row.dao-c2 { border-left: 0; }
+}
