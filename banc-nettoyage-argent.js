@@ -40,7 +40,7 @@ const has = (src, name) => new RegExp('(^|\\n)(async )?function ' + name.replace
 const between = (s, a, b) => { const i = s.indexOf(a); assert.ok(i >= 0, 'ancre : ' + a.slice(0, 50)); const j = s.indexOf(b, i + a.length); assert.ok(j > i, 'fin : ' + b.slice(0, 50)); return s.slice(i, j); };
 const near = (a, b, tol, quoi) => assert.ok(typeof a === 'number' && Math.abs(a - b) <= (tol || 1e-9), (quoi || 'valeur') + ' : ' + a + ' ≠ ' + b);
 const s02 = rd('js/02-state-init.js'), s03 = rd('js/03-per-pair-position-buttons-controls-buid.js'), s05 = rd('js/05-v37-19-indicateur-de-fatigue-bot.js'),
-      s07 = rd('js/07-v90-mode-bunker-sos.js'), s08 = rd('js/08-learning-history-render.js'), s9j = rd('js/09j-helpers.js'), html = rd('AURA8_v118.html');
+      s07 = require('./banc-fixtures/sans-n62.js')(rd('js/07-v90-mode-bunker-sos.js'), 'js/07-v90-mode-bunker-sos.js'), s08 = rd('js/08-learning-history-render.js'), s9j = rd('js/09j-helpers.js'), html = rd('AURA8_v118.html');   // [GO N° 62 · 15/11/2026] l'ANCIEN « Inverser » (07 manuInvert d'avant go n° 62, banc-fixtures/sans-n62.js) : ce banc garde ses essais d'avant ; banc-n62.js prouve le nouveau
 
 // ─── Le monde : un portefeuille à plat (EV), VRAIES fonctions d'argent (même harnais que banc-levier.js) ───
 const FEE = { takerRate: 0.001, makerRate: 0.001, slippage: 0.0003, fundingRate: 0 };

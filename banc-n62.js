@@ -13,6 +13,7 @@
 //   E   miroir, 3 000 états tirés : l'état prévu par _invApres = l'état RÉEL après closePosition (trading, dette, réserve du levier, caisse), au 1e-6 —
 //       avec emprunts (index, part « exposition », part en argent), réserve anti-négatif, frais dus, part caisse, dette orpheline, perte totale ;
 //       et 400 états avec l'impôt belge RÉEL (16) : écart ≤ 1 cent
+//   A   miroir de l'ouverture, 3 000 essais : _invPasse(x, L) dit oui ⇔ le VRAI openPosition ouvre ; part empruntée prévue = réelle (jit compris)
 //   M   propriété, 2 000 états tirés, VRAI manuInvert : (1) toute question vient avant la fermeture ; (2) sans question, rien n'a bougé ; (3) ce qui
 //       s'ouvre = ce que la dernière question acceptée annonçait (mise et exposition, au cent) ; (4) jamais « fermé, mais … non rouvert » après un accord ;
 //       sans débit imprévu, 0 deuxième question. Témoin : le code d'avant, sur les mêmes états, ferme sans rouvrir ou change le levier (compté)
@@ -125,6 +126,7 @@ T('Q · la question vient AVANT la fermeture (position ouverte, trading intact),
   assert.ok(/2\. Ouvrir un SHORT · mise \$490,00\n/.test(q.q) && /mêmes distances, mêmes consignes/.test(q.q) && !/⚠/.test(q.q), q.q);
   const np = ouverte(W, 'BTC/USDT'); assert.ok(np && np.side === 'short', JSON.stringify(W.seen.toasts)); near(np.stakeUsdt, 490, 1e-12, 'mise rouverte');
   assert.ok(W.seen.toasts.some(t => /inversé → SHORT · mise \$490,00$/.test(t[0])), JSON.stringify(W.seen.toasts));
+  assert.strictEqual(W.S.pairStates['BTC/USDT'].stake, 30, 'mise de la paire rendue'); assert.strictEqual(W.S.pairStates['BTC/USDT'].pairLeverage, 1, 'levier de la paire rendu');
   const V = mk(() => false), av = etat(V); V.run("manuInvert('BTC/USDT')");
   assert.strictEqual(etat(V), av, 'rien ne change'); assert.strictEqual(ouverte(V, 'BTC/USDT').id, 'pA');
   assert.ok(V.seen.toasts.some(t => /annulé · rien n'a changé/.test(t[0])), JSON.stringify(V.seen.toasts));
@@ -233,6 +235,26 @@ T('E · miroir, 3 000 états : l\'état prévu par _invApres = l\'état RÉEL ap
   console.log('     (miroir : ' + n + ' états au 1e-6 · impôt belge : ' + taxes + ' fermetures imposées, écart max ' + maxE.toExponential(2) + ' $)');
 });
 
+T('A · miroir de l\'ouverture, 3 000 essais : _invPasse(x, L) dit oui ⇔ le VRAI openPosition ouvre (emprunt de la part à levier, contrôle de capital, emprunt « juste à temps ») ; emprunt prévu = emprunt réel', () => {
+  assert.ok(NOUVEAU, '_invPasse absente (code d\'avant)');
+  let oui = 0, non = 0, jit = 0, b = 0;
+  let seed = 99; const rnd = () => (seed = (seed * 1103515245 + 12345) % 2147483648) / 2147483648, pick = a => a[Math.floor(rnd() * a.length)];
+  for (let i = 0; i < 3000; i++) {
+    const W = world({ trading: Math.round(rnd() * 1500 * 100) / 100, cash: rnd() < 0.3 ? Math.round(rnd() * 500) : 0, leverage: pick([0, 0, 1, 1, 2]) }), S = W.S, ps = S.pairStates['EUR/USDT'];
+    if (S.leverage >= 1 && rnd() < 0.6) { const d = Math.round(S.tradingAccount * S.leverage * (0.5 + rnd() * 0.5) * 100) / 100; S.tradingAccount += d; S.leverageBorrowed += d; S._autoLevBorrowed += d; }   // l'emprunt de l'index, versé au trading
+    for (let j = 0, n = Math.floor(rnd() * 4); j < n; j++) { const s2 = Math.round(rnd() * 300 * 100) / 100; poser(W, posOf({ id: 'o' + j, pair: PAIRES[j], stakeUsdt: s2, totalExposure: s2 * pick([1, 1, 1, 2]) })); }
+    if (rnd() < 0.1) S.leverageBorrowed += 0.01;
+    S.tradingAccount = Math.max(0, S.tradingAccount); W.run('syncLeverageReserve()'); if (rnd() < 0.15) S.leverageReserve = Math.round(rnd() * 200);
+    const x = Math.round((0.5 + rnd() * (S.tradingAccount * 1.4 + 50)) * 100) / 100, L = [1, 1, 1.4, 1.5, 2, 3][Math.floor(rnd() * 6)];
+    const pr = W.c._invPasse(x, L), av = etat(W); assert.strictEqual(etat(W), av, 'lecture seule');
+    const T0 = S.tradingAccount; ps.stake = x; ps.pairLeverage = L;
+    const np = W.run("openPosition('EUR/USDT', 'long')");
+    assert.strictEqual(!!np, !!pr.ok, 'essai ' + i + ' : prévu ' + JSON.stringify(pr) + ' · réel ' + JSON.stringify(W.seen.toasts.slice(-2)));
+    if (np) { oui++; near(np.totalExposure - np.stakeUsdt, pr.b, 1e-9, 'essai ' + i + ' : part empruntée'); if (x > T0) jit++; if (pr.b > 0) b++; } else non++;
+  }
+  assert.ok(oui > 500 && non > 500 && jit > 50 && b > 100, 'tirage trop pauvre : ' + [oui, non, jit, b]);
+});
+
 T('M · propriété, 2 000 états, VRAI manuInvert : question avant la fermeture ; sans question rien ne bouge ; ouvert = annoncé ; jamais « non rouvert » après un accord ; 0 deuxième question — témoin : le code d\'avant', () => {
   const tire = tirage(2062); let ouvertes = 0, sansQ = 0, reduites = 0, lev1 = 0;
   for (let i = 0; i < 2000; i++) {
@@ -249,6 +271,7 @@ T('M · propriété, 2 000 états, VRAI manuInvert : question avant la fermeture
     assert.ok(np && np !== p && np.side !== p.side, 'état ' + i + ' : non rouverte après accord : ' + JSON.stringify(W.seen.toasts) + '\n' + qs[0].q);
     near(np.stakeUsdt, a.x, 0.005, 'état ' + i + ' : mise ouverte / annoncée'); near(np.totalExposure, a.expo, 0.01, 'état ' + i + ' : exposition ouverte / annoncée');
     assert.ok(!W.seen.toasts.some(t => /non rouvert/.test(t[0])), JSON.stringify(W.seen.toasts));
+    if (a.x < p.stakeUsdt - 0.005 && qs.length === 1) assert.ok(/\n\n⚠ Mise \$[\d\u202f\u00a0]+,\d\d au lieu de \$[\d\u202f\u00a0]+,\d\d : (le trading ne tiendra que|contrôle de capital : )/.test(qs[0].q), 'état ' + i + ' : mise réduite non dite\n' + qs[0].q);
     ouvertes++; if (np.stakeUsdt < p.stakeUsdt - 0.005) reduites++; if (Math.abs(np.totalExposure / np.stakeUsdt - p.totalExposure / p.stakeUsdt) > 0.005) lev1++;
   }
   assert.ok(ouvertes > 1000 && sansQ > 5 && reduites > 20 && lev1 > 20, 'tirage trop pauvre : ' + [ouvertes, sansQ, reduites, lev1]);

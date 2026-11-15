@@ -30,7 +30,7 @@ function fnSrc(src, name) {
   }
   throw new Error('fin introuvable : ' + name);
 }
-const s02 = rd('js/02-state-init.js'), s03 = rd('js/03-per-pair-position-buttons-controls-buid.js'), s07 = rd('js/07-v90-mode-bunker-sos.js');
+const s02 = rd('js/02-state-init.js'), s03 = rd('js/03-per-pair-position-buttons-controls-buid.js'), s07 = require('./banc-fixtures/sans-n62.js')(rd('js/07-v90-mode-bunker-sos.js'), 'js/07-v90-mode-bunker-sos.js');   // [GO N° 62 · 15/11/2026] l'ANCIEN « Inverser » (07 manuInvert d'avant go n° 62, banc-fixtures/sans-n62.js) : ce banc garde ses essais d'avant ; banc-n62.js prouve le nouveau
 const s09e = rd('js/09e-guards.js'), s10h = rd('js/10h-pont-fullpower-bricks.js'), s09b1 = rd('js/09b1-build-snapshot.js'), s09b2 = rd('js/09b2-save-load.js');
 const MIN = 60000;
 const PRICES = { 'BTC/USDT': 85584.01, 'ETH/USDT': 2701.6, 'SOL/USDT': 120.19, 'DOGE/USDT': 0.0948 };

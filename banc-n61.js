@@ -42,7 +42,7 @@ function fnSrc(src, name) {
 const need = (src, n) => { const t = fnSrc(src, n); assert.ok(t, 'fonction absente : ' + n); return t; };
 const between = (s, a, b) => { const i = s.indexOf(a); assert.ok(i >= 0, 'ancre : ' + a.slice(0, 50)); const j = s.indexOf(b, i + a.length); assert.ok(j > i, 'fin'); return s.slice(i, j); };
 const near = (a, b, tol, quoi) => assert.ok(typeof a === 'number' && Math.abs(a - b) <= (tol || 1e-9), (quoi || 'valeur') + ' : ' + a + ' ≠ ' + b);
-const s02 = rd('js/02-state-init.js'), s03 = rd('js/03-per-pair-position-buttons-controls-buid.js'), s07 = rd('js/07-v90-mode-bunker-sos.js'), s9j = rd('js/09j-helpers.js'),
+const s02 = rd('js/02-state-init.js'), s03 = rd('js/03-per-pair-position-buttons-controls-buid.js'), s07 = require('./banc-fixtures/sans-n62.js')(rd('js/07-v90-mode-bunker-sos.js'), 'js/07-v90-mode-bunker-sos.js'), s9j = rd('js/09j-helpers.js'),   // [GO N° 62 · 15/11/2026] l'ANCIEN « Inverser » (07 manuInvert d'avant go n° 62, banc-fixtures/sans-n62.js) : ce banc garde ses essais d'avant ; banc-n62.js prouve le nouveau
       html = rd('AURA8_v118.html');
 
 // ─── Le monde : un portefeuille à plat (EV), VRAIES fonctions d'argent (même harnais que banc-nettoyage-argent.js) ───
@@ -209,7 +209,7 @@ T('C · appels : validateManualExposure ← 02 openPosition, 03 _openProposedPos
     for (const m of s.matchAll(re)) { const line = s.slice(s.lastIndexOf('\n', m.index) + 1, s.indexOf('\n', m.index)); if (/^\s*\/\//.test(line)) continue;
       const before = fns.filter(x => x[0] < m.index).pop(); out.push(f + ':' + (before ? before[1] : '(haut du fichier)')); } }); return [...new Set(out)].sort(); };
   assert.deepStrictEqual(appelants(/validateManualExposure\s*\(/g), ['js/02-state-init.js:openPosition', 'js/03-per-pair-position-buttons-controls-buid.js:_openProposedPosition',
-    'js/07-v90-mode-bunker-sos.js:manuInvert', 'js/09j-helpers.js:validateManualExposure'].sort());
+    'js/07-v90-mode-bunker-sos.js:_invPasse', 'js/09j-helpers.js:validateManualExposure'].sort());   // [GO N° 62 · 15/11/2026] 07 : « Inverser » la lit par _invPasse (appelé seulement par manuInvert, banc-n62 G)
   // lecteurs de `.free` du résultat de getCapitalSummary : la fonction englobante de chaque appel, puis `getCapitalSummary().free` ou `X.free` avec X = getCapitalSummary()
   const libre = [];
   appelants(/getCapitalSummary\(\)/g).forEach(fx => { const [f, n] = fx.split(':'); if (f === 'js/09j-helpers.js' && n === 'getCapitalSummary') return;
@@ -232,7 +232,7 @@ T('B · garde : ce que le BOT lit est au texte d\'avant (918ae59) et, sur l\'EV 
 
 T('F · garde : banc-fixtures/n61-retours.json redonne les 4 fichiers d\'avant au caractère près (empreintes du commit 918ae59)', () => {
   if (process.env.BANC_ROOT) return;   // code d'avant : rien à retirer
-  const sans = ((n61, n99, a3) => (src, f) => n61(n99(a3(src, f), f), f))(require('./banc-fixtures/sans-n61.js'), require('./banc-fixtures/sans-n99.js'), require('./banc-fixtures/sans-affichage-3.js'));   // [GO AFFICHAGE 3 · 15/11/2026] retire d'abord go affichage 3 (banc-affichage-3.js) ·   // [GO N° 99 · 15/11/2026] retire d'abord go n° 99 (banc-n99.js)
+  const sans = ((n61, n99, a3, n62) => (src, f) => n61(n99(a3(n62(src, f), f), f), f))(require('./banc-fixtures/sans-n61.js'), require('./banc-fixtures/sans-n99.js'), require('./banc-fixtures/sans-affichage-3.js'), require('./banc-fixtures/sans-n62.js'));   // [GO N° 62 · 15/11/2026] retire d'abord go n° 62 (banc-n62.js) ·   // [GO AFFICHAGE 3 · 15/11/2026] retire d'abord go affichage 3 (banc-affichage-3.js) ·   // [GO N° 99 · 15/11/2026] retire d'abord go n° 99 (banc-n99.js)
   const A = { 'js/02-state-init.js': 'cf8eae00ce2618de', 'js/03-per-pair-position-buttons-controls-buid.js': 'f439468ae00df1a0', 'js/07-v90-mode-bunker-sos.js': '06cae2cfa7a41d43', 'js/09j-helpers.js': '9f10f52d5bd6268f' };
   Object.keys(A).forEach(f => { const s = rd(f); assert.notStrictEqual(h16(s), A[f], f + ' : la retouche manque'); assert.strictEqual(h16(sans(s, f)), A[f], f + ' : autre chose a bougé'); });
 });
