@@ -247,8 +247,20 @@
 ],
 "js/09b3-import-export.js": [
 [
+"async function autoDlDownload() {\n  window._autoDlLastFail = '';   // [GO AFFICHAGE 3 · 15/11/2026] (n° 68b) la raison de CET essai, jamais celle d'un essai d'avant\n  try {",
+"async function autoDlDownload() {\n  try {"
+],
+[
+"    const full = _buildFullBackupFile();\n    if (!full) { window._autoDlLastFail = \"état de l'app non prêt\"; return false; }\n    const json = JSON.stringify(full);",
+"    const full = _buildFullBackupFile();\n    if (!full) return false;\n    const json = JSON.stringify(full);"
+],
+[
 "    if (fsRes) return true;\n    // [GO AFFICHAGE 3 · 15/11/2026] (n° 68b) dans l'app Android (Capacitor), un lien blob n'écrit RIEN (05 _outilsSaveText, go alertes 2) : l'échec est rendu\n    // tel quel, avec la raison de 09b3 _fsWriteBackup. Avant : lien blob, « true », et autoDlTick notait une sauvegarde (m.last) — aucun fichier, aucun message,\n    // le compte à rebours repartait pour 3 h.\n    if (window.Capacitor || window.cordova) {\n      window._autoDlLastFail = String(window._fsLastDiag || 'écriture native refusée').replace(/\\s*\\n\\s*/g, ' · ').slice(0, 240);\n      return false;\n    }\n    // Repli navigateur (Chrome) : telechargement blob",
 "    if (fsRes) return true;\n    // Repli navigateur (Chrome) : telechargement blob"
+],
+[
+"    return true;\n  } catch (e) { window._autoDlLastFail = 'erreur : ' + String((e && e.message) || e).slice(0, 200); return false; }\n}",
+"    return true;\n  } catch (e) { return false; }\n}"
 ],
 [
 "    if (m.last && (now - m.last) < m.everyMin * 60000) return;\n    if (m.fail && (now - m.fail) < m.everyMin * 60000) return;   // [GO AFFICHAGE 3 · 15/11/2026] (n° 68b) après un échec : nouvel essai à la fréquence choisie (ou « Télécharger maintenant »)\n    // garde-fou : ne jamais télécharger un état vide/neuf.",

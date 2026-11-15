@@ -395,9 +395,10 @@ function autoDlSetMeta(m) { try { localStorage.setItem(AUTODL_KEY, JSON.stringif
 
 // Télécharge l'état avec un nom unique (cycle + horodatage → jamais de conflit).
 async function autoDlDownload() {
+  window._autoDlLastFail = '';   // [GO AFFICHAGE 3 · 15/11/2026] (n° 68b) la raison de CET essai, jamais celle d'un essai d'avant
   try {
     const full = _buildFullBackupFile();
-    if (!full) return false;
+    if (!full) { window._autoDlLastFail = "état de l'app non prêt"; return false; }
     const json = JSON.stringify(full);
     const fname = _fullBackupName();
     // Ecriture native silencieuse dans Telechargements -> APK Capacitor
@@ -420,7 +421,7 @@ async function autoDlDownload() {
     a.click();
     setTimeout(() => { try { document.body.removeChild(a); } catch(e){} try { URL.revokeObjectURL(url); } catch(e){} }, 100);
     return true;
-  } catch (e) { return false; }
+  } catch (e) { window._autoDlLastFail = 'erreur : ' + String((e && e.message) || e).slice(0, 200); return false; }
 }
 
 // Déclenche un téléchargement si l'intervalle est écoulé ET si l'état est sain.
