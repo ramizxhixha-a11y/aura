@@ -6912,7 +6912,7 @@ function closePosition(id, botClose = false) {
     desc: `${_part ? 'Sortie partielle' : 'Fermé'} ${pos.pair} ${pos.side.toUpperCase()} | ${pnlStr} (${usdtStr} USDT)`,   // [GO NETTOYAGE · 19/10/2026] (n° 55)
     hash: rndHash(), time: nowStr()
   });
-  const levTag = pos.levBorrowed > 0 ? ` ⚡$${pos.levBorrowed}` : '';
+  const levTag = pos.levBorrowed > 0 ? ` ⚡$${Math.round(pos.levBorrowed * 100) / 100}` : '';   // [GO N° 103 · 15/11/2026] arrondi au cent (avant : « ⚡$39.99999999999999 », le nombre brut)
   showToast((_part ? 'Sortie partielle ' : 'Fermé ')+pos.pair+levTag+' · '+pnlStr+' · '+usdtStr);   // [GO NETTOYAGE · 19/10/2026] (n° 55)
 
   // ═══ v5.1 — Milestones & Particles ═══

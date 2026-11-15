@@ -48,7 +48,7 @@ const F = { s02: 'js/02-state-init.js', s03: 'js/03-per-pair-position-buttons-co
   s05: 'js/05-v37-19-indicateur-de-fatigue-bot.js', s06: 'js/06-v63-patterns-chartistes.js', s07: 'js/07-v90-mode-bunker-sos.js', s08: 'js/08-learning-history-render.js',
   s9b1: 'js/09b1-build-snapshot.js', s9b2: 'js/09b2-save-load.js', s9d1: 'js/09d1-paper-real-core.js', s9h: 'js/09h-exports.js', s10g: 'js/10g-resolveur-ev-csv.js',
   s10h: 'js/10h-pont-fullpower-bricks.js', s16b: 'js/16b-fiscal-ecran.js', s9g: 'js/09g-modals.js', s9f3: 'js/09f3-bricks-pair.js' };
-const C = {}; Object.keys(F).forEach(k => { C[k] = rd(F[k]); });
+const C = {}; Object.keys(F).forEach(k => { C[k] = require('./banc-fixtures/sans-n103.js')(rd(F[k]), F[k]); });   // [GO N° 103 · 15/11/2026] retire d'abord go n° 103 (02 closePosition, toast arrondi : affichage seul, banc-n103.js)
 const html = rd('AURA8_v118.html');
 
 // contexte : S à 3 portefeuilles (accesseurs vers le mode traité, comme 02 _installWalletAccessors), stubs recensés
