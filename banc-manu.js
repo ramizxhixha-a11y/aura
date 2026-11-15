@@ -91,7 +91,8 @@ function mkCtx(opts) {
     fnSrc(s03, 'closePairDetail'), fnSrc(s10e, '_openManTrade'),
     fnSrc(s10g, '_saveManConsigne'), fnSrc(s09e, '_manConsignesWatchdog'), fnSrc(s10d, '_confirmForceClose'),
     fnSrc(s10h, '_manFmtPx'), fnSrc(s10h, '_manPlan'), fnSrc(s10h, '_manSideLevels'), fnSrc(s10h, '_manSystemHtml'), fnSrc(s10h, '_manPreviewHtml'),
-    fnSrc(s10h, '_manWarnHtml'), fnSrc(s10h, '_manPreview'), fnSrc(s10h, '_manRefreshTick'), fnSrc(s10h, 'openManDetail'), fnSrc(s09f2, 'updateManBricks')].join('\n');
+    fnSrc(s10h, '_manWarnHtml'), fnSrc(s10h, '_manPreview'), fnSrc(s10h, '_manRefreshTick'), fnSrc(s10h, 'openManDetail'), fnSrc(s09f2, 'updateManBricks'),
+    fnSrc(s10h, '_manPairLevParts'), fnSrc(s10h, '_manPairLevHtml'), fnSrc(s10h, '_manPairLevSync'), fnSrc(s10h, '_manPairLev')].join('\n');   // [GO N° 101 · 15/11/2026] la fiche montre le levier gardé de la paire (banc-n101.js) ; sur le code d'avant : absentes (vides)
   const reg = s10h.match(/\nconst _MAN_REG = [^\n]+\n/); assert.ok(reg, '_MAN_REG');
   vm.runInContext(reg[0] + 'let _manRefreshT = null;\n' + src + '\nfunction _cancelForceClose(){ _pendingClosePair = null; const o = document.getElementById("closeConfirmOverlay"); if (o) o.classList.remove("open"); }', ctx);
   // la fiche MAN de la page (AURA8_v118.html) : overlay + titre + corps ; le volet du bas (03)

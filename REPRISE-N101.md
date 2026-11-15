@@ -13,6 +13,7 @@ Rams 15/11 12:48 « Fo 101 » (= go 101). Branche `travail/n101`. Départ : main
 
 ## Étapes
 - [x] Démarrage : pont, Sentry (seule « Sentry branché »), banc-all LIVRABLE
-- [ ] Correction : commande visible du levier de paire dans la fiche MAN (10h), toast honnête (03 changePairLev)
-- [ ] banc-n101 (vm) + mutations + sonde vraie page (backup ci-dessus)
+- [x] Correction : 10h, section « ⚡ Levier de la paire » de la fiche MAN (− ×N +, par 03 changePairLev ; 03 inchangé), synchro dans _manRefreshTick
+- [x] banc-n101 9/9 (7 échouent sur 733ed6a : `BANC_ROOT=/tmp/avant101`), `python3 -I rejeu/mutations_n101.py .` 17/17 ; banc-manu (helpers ajoutés), banc-n99 F (via sans-n101) ; fixture `banc-fixtures/sans-n101.js` + `n101-retours.json`
+- [ ] sonde vraie page `rejeu/sonde_n101.js` (backup ci-dessus)
 - [ ] ETAT, PASSATION, banc-all, un commit sur main, push, DOC_V raw + Pages

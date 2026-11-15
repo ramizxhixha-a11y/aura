@@ -249,6 +249,39 @@ function _manPreview(pair) {
 }
 window._manPreview = _manPreview;
 
+// [GO N° 101 · 15/11/2026] (ETAT n° 101) LE LEVIER GARDÉ DE LA PAIRE. ps.pairLeverage (par mode : S.pairStates est celui du mode à l'écran) est pris par
+// « ✓ Appliquer » (02 applyBotSuggestion → openPosition) et affiché par la carte (07) ; son seul écrivain, 03 changePairLev, n'était appelé que par le
+// panneau 03 (#pairPosButtons, display:none) : AVAX ×2 de l'EV ne pouvait plus être remis à ×1. La fiche le montre et le change par ce même écrivain
+// (bornes de 03, sauvé par l'autosave de 09b2 comme les consignes). Le champ « Levier × » de « Ton trade » reste à part (un seul trade).
+function _manPairLevParts(pair) {
+  const ps = S.pairStates && S.pairStates[pair], L = ps ? (ps.pairLeverage || 1) : 1;
+  const ix0 = (Number(S.leverage) || 0) === 0, mode = (typeof _modeLab === 'function') ? _modeLab() : '';
+  return { L: L, mode: mode, col: L === 1 ? 'var(--up)' : 'var(--gold)',
+    note: `Réglage gardé pour ${pair} en ${mode} : la carte le montre hors position, « ✓ Appliquer » (suggestion du bot) le prend.` + (L > 1 && ix0 ? ` Levier général ×0 : aucun emprunt, ×${L} inactif.` : '') };
+}
+function _manPairLevHtml(pair) {
+  const k = pair.replace('/', '_'), P = _manPairLevParts(pair);
+  const b = 'background:var(--s3);border:1px solid var(--border);border-radius:6px;color:var(--t1);width:36px;height:30px;font-size:15px;font-weight:700;cursor:pointer;';
+  return `<div class="detail-section-title">⚡ Levier de la paire</div>
+    <div style="display:flex;align-items:center;gap:10px;">
+      <button style="${b}" onclick="_manPairLev('${pair}',-1)">−</button>
+      <span id="manPairLev_${k}" style="font-family:var(--font-mono);font-size:14px;font-weight:800;min-width:34px;text-align:center;color:${P.col};">×${P.L}</span>
+      <button style="${b}" onclick="_manPairLev('${pair}',1)">+</button>
+    </div>
+    <div id="manPairLevNote_${k}" style="margin-top:4px;font-size:9px;color:var(--t3);line-height:1.4;">${P.note}</div>`;
+}
+function _manPairLevSync(pair) {
+  const k = pair.replace('/', '_'), P = _manPairLevParts(pair);
+  const v = document.getElementById('manPairLev_' + k), n = document.getElementById('manPairLevNote_' + k);
+  if (v) { v.textContent = '×' + P.L; v.style.color = P.col; }
+  if (n) n.textContent = P.note;
+}
+function _manPairLev(pair, d) {
+  if (typeof changePairLev === 'function') changePairLev(pair, d);
+  _manPairLevSync(pair);
+}
+window._manPairLev = _manPairLev;
+
 let _manRefreshT = null;
 function _manRefreshTick(pair, hadManual) {
   const o = document.getElementById('pairDetailOverlay'), k = pair.replace('/', '_');
@@ -257,6 +290,7 @@ function _manRefreshTick(pair, hadManual) {
   try {
     const hasManual = !!(S.openPositions || []).find(p => p.pair === pair && p.auto !== true);
     if (hasManual !== hadManual) { openManDetail(pair); return; }   // ouverte / fermée entre-temps : la fiche entière change
+    _manPairLevSync(pair);   // [GO N° 101] mode changé, index du levier général changé : le réglage montré suit
     const pl = _manPlan(pair); if (!pl) return;
     box.innerHTML = _manSystemHtml(pair, pl);
     const L = pl.lv[pl.dir || 'long'];
@@ -361,6 +395,12 @@ function openManDetail(pair) {
       <div style="margin-top:4px;font-size:9px;color:var(--t3);line-height:1.4;">Mise : part du capital libre de la paire (règle des bots, $${pl.free.toFixed(2)} libres). TP / SL : règle de sortie des bots (force commune + signaux techniques + volatilité) ; ils s'appliquent au sens que tu cliques.</div>`;
     body.appendChild(paramsSection);
   }
+  
+  // [GO N° 101 · 15/11/2026] (ETAT n° 101) le levier gardé de la paire, avec ou sans position : sa seule commande était le panneau 03, masqué (AVAX ×2 de l'EV)
+  const levSection = document.createElement('div');
+  levSection.className = 'detail-section';
+  levSection.innerHTML = _manPairLevHtml(pair);
+  body.appendChild(levSection);
   
   const consignesSection = document.createElement('div');
   consignesSection.className = 'detail-section';

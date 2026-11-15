@@ -307,7 +307,7 @@ T('C · appels : _pairLevShortWhy ← 02 openPosition seulement ; _levTxt ← 02
 T('F · garde : banc-fixtures/n99-retours.json redonne les 4 fichiers d\'avant au caractère près (empreintes du commit 733674d)', () => {
   if (process.env.BANC_ROOT) return;   // code d'avant : rien à retirer
   const A = { 'js/02-state-init.js': '905210979c640363', 'js/07-v90-mode-bunker-sos.js': 'a4fbc05aef5f996d', 'js/10e-helpers-adaptatifs.js': '2455e8b0c3ed8ad3', 'js/10h-pont-fullpower-bricks.js': 'ee5ae4f1b898b80e' };
-  Object.keys(A).forEach(f => { const s = rd(f); assert.notStrictEqual(h16(s), A[f], f + ' : la retouche manque'); assert.strictEqual(h16(sansN99(sansA3(sansN62(require('./banc-fixtures/sans-n103.js')(s, f), f), f), f)), A[f], f + ' : autre chose a bougé'); });   // [GO N° 103 · 15/11/2026] hors go n° 103 (banc-n103.js)   // [GO N° 62 · 15/11/2026] hors go n° 62 (banc-n62.js)   // [GO AFFICHAGE 3 · 15/11/2026] hors les retouches de go affichage 3 (affichage seul, banc-affichage-3.js)
+  Object.keys(A).forEach(f => { const s = require('./banc-fixtures/sans-n101.js')(rd(f), f); assert.notStrictEqual(h16(s), A[f], f + ' : la retouche manque'); assert.strictEqual(h16(sansN99(sansA3(sansN62(require('./banc-fixtures/sans-n103.js')(s, f), f), f), f)), A[f], f + ' : autre chose a bougé'); });   // [GO N° 101 · 15/11/2026] hors go n° 101 (10h : levier de la paire dans la fiche, banc-n101.js)   // [GO N° 103 · 15/11/2026] hors go n° 103 (banc-n103.js)   // [GO N° 62 · 15/11/2026] hors go n° 62 (banc-n62.js)   // [GO AFFICHAGE 3 · 15/11/2026] hors les retouches de go affichage 3 (affichage seul, banc-affichage-3.js)
 });
 
 console.log('\n' + (fail ? '❌' : '✅') + ' ' + pass + '/' + (pass + fail) + ' tests passés' + (fail ? ' — ' + fail + ' ÉCHEC(S)' : ''));
