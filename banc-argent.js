@@ -59,7 +59,7 @@ function world(o) {
     syncLeverageReserve() {}, recordTradeForHeatmap() {}, learnFromOutcome: (k, pct, pair) => seen.learn.push([pair, pct]), emitVictoryParticles() {}, emitLossParticles() {}, showMilestone() {},
     checkPnlAlerts() {}, checkBadges() {}, _updateCloseAllBadge() {}, updatePairBtnStates() {}, renderPositions() {}, renderChain() {}, renderHome() {}, renderPyramideSection() {},
     renderActionsGrid() {}, renderOpenPosSummary() {}, _urgAppendLog() {}, saveFeeRecord() {}, addAnnualNetRealised() {}, _fiscOnClose: () => ({ movedUsd: 0, regime: 'speculatif', gainEur: 0 }) };
-  c.window = c; vm.createContext(c);
+  c.window = c; vm.createContext(c); require('./banc-fixtures/px-vm.js')(c, ROOT);   /* [GO AFFICHAGE 3 · 15/11/2026] aides d'affichage de 02 (pxTxt, _closeRowUsd : banc-fixtures/px-vm.js) */
   // [GO LEVIER · 18/10/2026] closePosition rend l'emprunt versé en argent sur le trading (_posLevCash, _repayCashDebt, _levFreeDebt) et mesure une position par
   // _posLatent / _posCloseFees : ces fonctions de 02 entrent dans le monde quand elles existent (BANC_ROOT d'un commit plus ancien : sans elles)
   const names = ['_computePortfolio', '_computePortfolioSans', 'repayLeverage', 'releaseTradeReserve', 'recordFees']
@@ -203,7 +203,7 @@ function importWorld() {
   const c = { Math, Number, Object, Array, String, JSON, Date, isFinite, console: { log() {}, warn() {}, error() {} },
     confirm: (m) => { seen.confirm = m; return true; }, alert: (m) => seen.alerts.push(m), showToast() {}, renderSettingsPanel() {},
     saveState: () => { seen.saved++; }, _buildFullBackup: () => ({}), _saveBackupToDB: async () => {}, makePairState: () => ({ trades: [] }), PAIRS: {} };
-  c.window = c; vm.createContext(c);
+  c.window = c; vm.createContext(c); require('./banc-fixtures/px-vm.js')(c, ROOT);   /* [GO AFFICHAGE 3 · 15/11/2026] aides d'affichage de 02 (pxTxt, _closeRowUsd : banc-fixtures/px-vm.js) */
   const take = (re, src) => (src.match(re) || [''])[0];
   const parts = ['const S={tradingMode:"paperReal",botAutoMode:false,mode:"manual",profitSplitCaissePct:0,cycle:1365892,agents:[{id:"a1",fitness:812}],walletStore:null,chainLog:[],paperRealConfig:{x:1}};',
     fnSrc(s02, '_freshWallet'), fnSrc(s02, '_freshWalletStore'), fnSrc(s02, '_walletKey'), fnSrc(s02, '_walletFor'), fnSrc(s02, '_activeWallet'),
@@ -252,7 +252,7 @@ console.log('▶ G. « ↶ Restaurer état pré-réel » (02, 04) — n° 7');
 await T('G1 · même avec un snapshot pré-réel présent, confirmRollbackPreReal n\'écrit RIEN (avant : historique d\'un autre mode dans RE, agents remplacés, stats EV effacées)', () => {
   const c = { S: { tradingMode: 'real', preRealSnapshot: { snap: { agents: [{ id: 'x' }], pairStates: { a: 1 }, fees: { f: 1 }, pnlHistory: [1], cycle: 5 }, takenAt: 1, meta: { totalUsd: 999 } }, agents: [{ id: 'a1' }], paperRealStats: { s: 1 }, tradingAccount: 10, cashAccount: 1 },
     confirm: () => true, showToast() {}, _updateRealModeBanner() {}, renderSettingsPanel() {}, renderHome() {}, _walletFor: () => ({}), JSON, Object, Array, Math, Date, isFinite };
-  c.window = c; vm.createContext(c); const av = J(c.S); vm.runInContext(fnSrc(s02, 'confirmRollbackPreReal') + '\nconfirmRollbackPreReal();', c); assert.deepStrictEqual(J(c.S), av);
+  c.window = c; vm.createContext(c); require('./banc-fixtures/px-vm.js')(c, ROOT);   /* [GO AFFICHAGE 3 · 15/11/2026] aides d'affichage de 02 (pxTxt, _closeRowUsd : banc-fixtures/px-vm.js) */ const av = J(c.S); vm.runInContext(fnSrc(s02, 'confirmRollbackPreReal') + '\nconfirmRollbackPreReal();', c); assert.deepStrictEqual(J(c.S), av);
 });
 await T('G2 · le bouton n\'est plus dessiné (04) et l\'activation du RE ne prend plus de snapshot pré-réel (02)', () => {
   assert.ok(!/onclick="confirmRollbackPreReal\(\)"/.test(s04)); assert.ok(!/S\.preRealSnapshot\s*=/.test(codeStrict(fnSrc(s02, 'confirmSwitchToReal'))));
@@ -276,7 +276,7 @@ function sortieWorld(o) {
   const closed = [], S = { tradingMode: o.mode || 'paperReal', openPositions: o.positions, pairStates: o.pairStates, gainRules: {}, chainLog: [] };
   const c = { S, Math, Number, Object, Array, String, JSON, Date, isFinite, isNaN, console: { log() {}, warn() {} }, rndHash: () => 'h', nowStr: () => 't', showToast() {},
     lmsrP: () => 0.5, _rcPriceAge: () => (o.age === undefined ? 0 : o.age), _rcSeenAge: () => (o.age === undefined ? 0 : o.age), closePosition: (id) => { closed.push(id); S.openPositions = S.openPositions.filter(p => p.id !== id); } };
-  c.window = c; vm.createContext(c); vm.runInContext(fnSrc(s07, '_trailStopHit') + '\n' + fnSrc(s07, 'learnFromOpenPositions') + (has(s02, '_addToPosition') ? '\n' + fnSrc(s02, '_addToPosition') : '') + '\nvar S = this.S;', c);
+  c.window = c; vm.createContext(c); require('./banc-fixtures/px-vm.js')(c, ROOT);   /* [GO AFFICHAGE 3 · 15/11/2026] aides d'affichage de 02 (pxTxt, _closeRowUsd : banc-fixtures/px-vm.js) */ vm.runInContext(fnSrc(s07, '_trailStopHit') + '\n' + fnSrc(s07, 'learnFromOpenPositions') + (has(s02, '_addToPosition') ? '\n' + fnSrc(s02, '_addToPosition') : '') + '\nvar S = this.S;', c);
   return { c, S, closed, run: code => vm.runInContext(code, c) };
 }
 await T('R1 (C1) · « ↑ Renforcer » après un pic (LONG 50 $ @100, TP 102, pic 101,96, prix 101,5) : le trailing NE ferme PAS au prix même du renforcement (avant la revue : fermée)', () => {

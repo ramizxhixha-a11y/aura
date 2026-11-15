@@ -1157,11 +1157,21 @@ function renderCorrMatrix() {
   const dpr = window.devicePixelRatio || 1;
   let W = canvas.offsetWidth || canvas.parentElement?.offsetWidth || 0;
   if(W < 10) { _corrLastTick=-1; requestAnimationFrame(()=>{_corrLastTick=-10;}); W=300; }
-  const cellSize = Math.floor(W / n);
-  const H = cellSize * n;
+  // [GO AFFICHAGE 3 · 15/11/2026] (n° 93) chaque agent est NOMMÉ dans le canvas : sa spécialité (type, comme les puces de l'écran Marché — tous les sièges
+  // portent 🧬 et un nom « Hybrid Gen-… ») avec un numéro, en colonne à gauche ; la diagonale porte ce numéro (il nomme les colonnes) ; le titre est sous la
+  // grille, dans le canvas. Avant : 🧬 sur toute la diagonale, noms écrits à droite de la grille (x ≥ largeur : hors du canvas), titre sous le canvas (invisible).
+  const _cmFont = '500 11px monospace';
+  const _cmLab = agents.map((a, i) => (i + 1) + ' ' + String(a.type || String(a.name || '').split('·')[0].trim() || a.id || '·'));
+  const _cm0 = canvas.getContext('2d');   // mesure seulement (le redimensionnement plus bas remet son état à zéro)
+  let labW = 0;
+  if (_cm0) { _cm0.font = _cmFont; _cmLab.forEach(t => { labW = Math.max(labW, _cm0.measureText(t).width); }); } else labW = 7 * Math.max(..._cmLab.map(t => t.length));
+  labW = Math.ceil(Math.min(W * 0.42, labW + 8));
+  const cellSize = Math.floor((W - labW) / n);
+  const H = cellSize * n + 16;
   canvas.width=W*dpr; canvas.height=H*dpr; canvas.style.height=H+'px';
   const ctx = canvas.getContext('2d');
   ctx.scale(dpr, dpr);
+  ctx.translate(labW, 0);   // la grille commence après la colonne des noms
 
   // Pearson correlation using fitnessHistory (real time series)
   function pearson(xs, ys) {
@@ -1212,10 +1222,11 @@ function renderCorrMatrix() {
 
       // Cell content
       if(i===j) {
-        // Diagonal: agent emoji
-        ctx.font=`${Math.round(cellSize*0.45)}px serif`;
+        // Diagonal: le numéro de l'agent (il nomme la colonne) — [GO AFFICHAGE 3 · 15/11/2026] (n° 93) avant : son emoji, 🧬 pour tous
+        ctx.fillStyle='rgba(255,255,255,.9)';
+        ctx.font=`bold ${Math.max(11, Math.round(cellSize*0.4))}px monospace`;
         ctx.textAlign='center'; ctx.textBaseline='middle';
-        ctx.fillText(ai.emoji||'·', j*cellSize+cellSize/2, i*cellSize+cellSize/2);
+        ctx.fillText(String(i+1), j*cellSize+cellSize/2, i*cellSize+cellSize/2);
       } else if(Math.abs(corr) > 0.25) {
         // Off-diagonal: show correlation value
         ctx.fillStyle=corr>0?'rgba(0,232,122,0.9)':'rgba(255,61,107,0.9)';
@@ -1226,15 +1237,15 @@ function renderCorrMatrix() {
     }
   }
 
-  // Right-side labels
+  // Noms à gauche de la grille (dans le canvas), coupés « … » s'ils dépassent leur colonne
+  ctx.font=_cmFont; ctx.textAlign='left'; ctx.textBaseline='middle'; ctx.fillStyle='rgba(200,210,230,.85)';
   for(let i=0;i<n;i++) {
-    ctx.font=`500 ${Math.round(cellSize*0.19)}px monospace`;
-    ctx.textAlign='left'; ctx.fillStyle='rgba(136,153,187,.6)';
-    const shortName=agents[i].name.split('·')[0].trim().slice(0,7);
-    ctx.fillText(shortName, n*cellSize+3, i*cellSize+cellSize/2+3);
+    let t = _cmLab[i];
+    while (t.length > 2 && ctx.measureText(t).width > labW - 6) t = t.slice(0, -2) + '…';
+    ctx.fillText(t, -labW + 2, i*cellSize+cellSize/2);
   }
-  ctx.font='500 9px monospace'; ctx.textAlign='center'; ctx.fillStyle='rgba(136,153,187,.3)';
-  ctx.fillText('ACCORD INTER-AGENTS', W/2, H+12);
+  ctx.font='500 11px monospace'; ctx.textAlign='center'; ctx.textBaseline='alphabetic'; ctx.fillStyle='rgba(136,153,187,.6)';
+  ctx.fillText('ACCORD INTER-AGENTS', (W - labW)/2, H-3);
 }
 
 function renderAll() {
@@ -1392,13 +1403,13 @@ function applyPosEdit() {
   }
   if(!isNaN(tp) && tp > 0) {
     pos.tp = tp;
-    changed.push('TP→'+tp.toFixed(_editModal.cfg.dec>=4?_editModal.cfg.dec:2));
+    changed.push('TP→'+pxTxt(pos.pair, tp));   // [GO AFFICHAGE 3 · 15/11/2026] (n° 86c) prix par 02 pxTxt
   } else if(document.getElementById('peTpInput').value === '') {
     pos.tp = null; changed.push('TP effacé');
   }
   if(!isNaN(sl) && sl > 0) {
     pos.sl = sl;
-    changed.push('SL→'+sl.toFixed(_editModal.cfg.dec>=4?_editModal.cfg.dec:2));
+    changed.push('SL→'+pxTxt(pos.pair, sl));
   } else if(document.getElementById('peSlInput').value === '') {
     pos.sl = null; changed.push('SL effacé');
   }

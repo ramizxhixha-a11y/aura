@@ -65,7 +65,7 @@ function world(o) {
     setInterval: () => 0, setTimeout: () => 0, clearInterval() {}, document: { getElementById: () => null } };
   c.window = c; c._walletFor = (m) => ({ openPositions: S.openPositions, pairStates: S.pairStates, tradingAccount: S.tradingAccount });
   c._isModeRunning = (m) => !!S.walletStore.paperReal.running; c.saveState = () => { seen.saves++; };
-  vm.createContext(c);
+  vm.createContext(c); require('./banc-fixtures/px-vm.js')(c, ROOT);   /* [GO AFFICHAGE 3 · 15/11/2026] aides d'affichage de 02 (pxTxt, _closeRowUsd : banc-fixtures/px-vm.js) */
   vm.runInContext('function validateManualExposure(a, b) { return validateTotalExposure(a, b); }', c);   // [GO N° 61 · 15/11/2026] 02 openPosition lit 09j validateManualExposure : ici le même contrôle que le bouchon validateTotalExposure du banc (le vrai est éprouvé par banc-n61.js)
   const names = ['_computePortfolio', '_computePortfolioSans', 'repayLeverage', 'releaseTradeReserve', 'recordFees', '_posLatent', '_posCloseFees', '_posMark', '_posLevCash', '_repayCashDebt', '_levFreeDebt', '_levCashDebt', '_levNormAuto'].filter(n => has(s02, n));
   vm.runInContext(names.map(n => fnSrc(s02, n)).join('\n') + '\n' + (o.code || (fnSrc(s02, 'openPosition') + '\n' + fnSrc(s02, 'closePosition'))) + '\nvar S = this.S;', c);
@@ -152,6 +152,8 @@ await T('B3 · SANS { voix } : le nouveau openPosition écrit le MÊME état que
       W.S.pairStates['DOT/USDT'].stake = st; if (occ) W.S.openPositions.push(vpos({ pair: 'DOT/USDT', id: 'o', _voix: undefined }));
       W.run("openPosition('DOT/USDT', '" + side + "', " + opts + ")"); return W; };
     const s0 = seed; const A = mk(null); seed = s0; const B = mk(AVANT);
+    // [GO AFFICHAGE 3 · 15/11/2026] (n° 86b) le prix de la ligne « Position … @prix » s'écrit par 02 pxTxt (éprouvé par banc-affichage-3.js) : comparé hors ce texte
+    [A, B].forEach(W => W.S.chainLog.forEach(l => { if (/^Position /.test(l.desc)) l.desc = l.desc.replace(/ @[^ ]+$/, ' @·'); }));
     assert.deepStrictEqual(J(A.S), J(B.S), 'ouverture ' + k); assert.deepStrictEqual(A.seen, B.seen, 'témoins ' + k);
   }
 });
@@ -255,7 +257,7 @@ await T('D3 · fiscal : une position de la voix, même LONG sans levier, est au 
   assert.strictEqual(v.regime, 'spec'); assert.ok(v.why.some(x => /voix tendance/.test(x))); assert.strictEqual(m.regime, 'normal');
 });
 await T('D4 · rapports, résumé hebdo et historique comptent les fermetures de la voix (ligne « tendance ») ; Telegram dit « tendance longue »', () => {
-  assert.ok(/t\.type === 'tendance'\) && t\.pnlUsdt != null\) out\.push/.test(s05), 'rapports (05)');
+  assert.ok(/t\.type === 'tendance'\) && t\.pnlUsdt != null\) (out\.push|\{)/.test(s05), 'rapports (05)');   // [GO AFFICHAGE 3 · 15/11/2026] (n° 64) le bloc gagne les paliers (02 _closeRowUsd)
   assert.ok(/t\.type !== 'urgence' && t\.type !== 'tendance'\)\) return;/.test(s06), 'hebdo (06)');
   assert.ok(/t\.type === 'urgence' \|\| t\.type === 'tendance';/.test(s07) && /'TENDANCE'/.test(s07), 'historique (07)');
   assert.ok(/i\.voix \? '📈 tendance longue'/.test(s06), 'Telegram');

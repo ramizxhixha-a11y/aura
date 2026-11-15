@@ -28,6 +28,7 @@ const fs = require('fs'), vm = require('vm'), assert = require('assert'), path =
 const ROOT = process.env.BANC_ROOT || __dirname, rd = f => fs.readFileSync(path.join(ROOT, f), 'utf8');
 const h16 = s => crypto.createHash('sha256').update(s).digest('hex').slice(0, 16);
 const sansN99 = require('./banc-fixtures/sans-n99.js');
+const sansA3 = require('./banc-fixtures/sans-affichage-3.js');   // [GO AFFICHAGE 3 · 15/11/2026] hors les retouches de go affichage 3 (affichage seul, banc-affichage-3.js)
 let pass = 0, fail = 0;
 function T(name, fn) { try { fn(); pass++; console.log('  ✅ ' + name); } catch (e) { fail++; console.log('  ❌ ' + name + '\n     ' + (e && e.stack || e).toString().split('\n').slice(0, 3).join('\n     ')); } }
 function fnSrc(src, name) {
@@ -88,6 +89,7 @@ function world(o) {
   c._activeWallet = () => S;
   c.window = c; vm.createContext(c);
   const src = F02.map(n => fnSrc(src0.s02, n)).filter(Boolean);
+  c.Intl = Intl; src.unshift('var _pxFmt = {};', need(src0.s02, 'pxTxt'));   // [GO AFFICHAGE 3 · 15/11/2026] (n° 86b) le journal d'ouverture écrit le prix par 02 pxTxt
   src.push('var _leverageMarginCheck = ' + between(src0.s02, 'window._leverageMarginCheck = function _leverageMarginCheck() {', '\n};\n').replace('window._leverageMarginCheck = ', '') + '\n};');
   src.push(need(src0.s9j, 'validateTotalExposure'), need(src0.s9j, 'validateInvestmentCapProvisioned'), need(src0.s9j, 'getCapitalSummary'), fnSrc(src0.s9j, 'validateManualExposure') || '');
   src.push(need(src0.s07, 'manuInvert'), need(src0.s10e, '_openManTrade'));
@@ -116,7 +118,7 @@ T('L1 · VRAI openPosition, l\'EV du pont (index ×0) : EUR/USDT réglée ×2, m
   near(W.S.tradingAccount, 1055.33, 1e-9, 'trading débité de la mise');
   assert.deepStrictEqual(avert(W), [['⚠ EUR/USDT LONG ouvert en ×1 au lieu de ×2 · levier général ×0 : aucun emprunt', 'warn']], JSON.stringify(W.seen.toasts));
   assert.ok(journal(W).includes('Levier EUR/USDT LONG : ×2 demandé, ×1 pris (exposition $60) · levier général ×0 : aucun emprunt'), JSON.stringify(journal(W)));
-  assert.ok(journal(W).includes('Position LONG EUR/USDT | $60 @$100'), 'ligne d\'ouverture d\'avant (sans « lev ») : ' + JSON.stringify(journal(W)));
+  assert.ok(journal(W).includes('Position LONG EUR/USDT | $60 @$100,00')   /* [GO AFFICHAGE 3 · 15/11/2026] (n° 86b) prix du journal par 02 pxTxt (avant : « @$100 », entier tronqué) */, 'ligne d\'ouverture d\'avant (sans « lev ») : ' + JSON.stringify(journal(W)));
 });
 
 T('L1b · VRAI applyBotSuggestion (« ✓ Appliquer ») : même EV, paire ×2 → ouverte en ×1, avertie ; « Suggestion appliquée » gardé', () => {
@@ -134,7 +136,7 @@ T('L2 · garde : index ×1, réserve ample, aucune position → ×2 pris en enti
     assert.ok(W.run("openPosition('EUR/USDT', 'long')"));
     const p = ouverte(W, 'EUR/USDT'); near(p.totalExposure, 120, 1e-9, 'exposition'); near(p.levBorrowed, 60, 1e-9, 'emprunt');
     assert.deepStrictEqual(avert(W), []); assert.ok(!journal(W).some(d => / demandé, ×[\d,]+ pris /.test(d)));
-    assert.ok(journal(W).includes('Position LONG EUR/USDT | $60 (×2 lev → $120) @$100'), JSON.stringify(journal(W)));
+    assert.ok(journal(W).includes('Position LONG EUR/USDT | $60 (×2 lev → $120) @$100,00')   /* [GO AFFICHAGE 3 · 15/11/2026] (n° 86b) prix du journal par 02 pxTxt (avant : « @$100 », entier tronqué) */, JSON.stringify(journal(W)));
   }
 });
 
@@ -143,7 +145,7 @@ T('L3 · index ×1, réserve 30 $ pour ×3 (90 $ demandés) : ×1,5 pris, dit av
   assert.ok(W.run("openPosition('EUR/USDT', 'long')"));
   const p = ouverte(W, 'EUR/USDT'); near(p.totalExposure, 90, 1e-9, 'exposition'); near(p.levBorrowed, 30, 1e-9, 'emprunt partiel');
   assert.deepStrictEqual(avert(W).map(t => t[0]), ['⚠ EUR/USDT LONG ouvert en ×1,5 au lieu de ×3 · réserve du levier insuffisante (' + W.run('fmt$2(30)') + ' empruntés sur ' + W.run('fmt$2(120)') + ')']);
-  assert.ok(journal(W).includes('Position LONG EUR/USDT | $60 (×1,5 lev → $90) @$100'), JSON.stringify(journal(W)));
+  assert.ok(journal(W).includes('Position LONG EUR/USDT | $60 (×1,5 lev → $90) @$100,00')   /* [GO AFFICHAGE 3 · 15/11/2026] (n° 86b) prix du journal par 02 pxTxt (avant : « @$100 », entier tronqué) */, JSON.stringify(journal(W)));
 });
 
 T('L4 · index ×1, dette au plafond (10× fonds propres) → ×1, raison « plafond » ; L5 part sous 10 $ ; L5b réserve sous 10 $', () => {
@@ -283,7 +285,7 @@ T('G · garde : ce que le BOT lit et écrit est au texte d\'avant (733674d) ; au
   assert.strictEqual(h16(need(C.s02, 'estimateStakes')), '191de2e4cf018d53', 'estimateStakes (empreinte de go n° 61)');
   const FH = { 'js/09c-auto-open.js': 'cb981dcbb9806d73', 'js/10f-resolveur-cycle.js': '2c7f1bbbb66741a0', 'js/15-voix-tendance.js': '9757929e4b295254', 'js/15b-tendance-reelle.js': '08582a20cd8f495a',
     'js/09j-helpers.js': '469be1c86f4a9337', 'js/04-v8-0-livraison-35-mode-max-permissif-v.js': '61d3dedc2ac96e82', 'js/03-per-pair-position-buttons-controls-buid.js': '9c2ecc2cbdd73a08' };
-  Object.keys(FH).forEach(f => assert.strictEqual(h16(rd(f)), FH[f], f + ' a changé'));
+  Object.keys(FH).forEach(f => assert.strictEqual(h16(sansA3(rd(f), f)), FH[f], f + ' a changé'));   // [GO AFFICHAGE 3 · 15/11/2026] hors les retouches de go affichage 3 (affichage seul, banc-affichage-3.js)
   ['js/09c-auto-open.js', 'js/10f-resolveur-cycle.js', 'js/15-voix-tendance.js', 'js/04-v8-0-livraison-35-mode-max-permissif-v.js'].forEach(f =>
     assert.ok(!/(^|[^\w$.])openPosition\s*\(/.test(rd(f).replace(/\/\/.*$/gm, '')), f + ' appelle openPosition'));
 });
@@ -303,7 +305,7 @@ T('C · appels : _pairLevShortWhy ← 02 openPosition seulement ; _levTxt ← 02
 T('F · garde : banc-fixtures/n99-retours.json redonne les 4 fichiers d\'avant au caractère près (empreintes du commit 733674d)', () => {
   if (process.env.BANC_ROOT) return;   // code d'avant : rien à retirer
   const A = { 'js/02-state-init.js': '905210979c640363', 'js/07-v90-mode-bunker-sos.js': 'a4fbc05aef5f996d', 'js/10e-helpers-adaptatifs.js': '2455e8b0c3ed8ad3', 'js/10h-pont-fullpower-bricks.js': 'ee5ae4f1b898b80e' };
-  Object.keys(A).forEach(f => { const s = rd(f); assert.notStrictEqual(h16(s), A[f], f + ' : la retouche manque'); assert.strictEqual(h16(sansN99(s, f)), A[f], f + ' : autre chose a bougé'); });
+  Object.keys(A).forEach(f => { const s = rd(f); assert.notStrictEqual(h16(s), A[f], f + ' : la retouche manque'); assert.strictEqual(h16(sansN99(sansA3(s, f), f)), A[f], f + ' : autre chose a bougé'); });   // [GO AFFICHAGE 3 · 15/11/2026] hors les retouches de go affichage 3 (affichage seul, banc-affichage-3.js)
 });
 
 console.log('\n' + (fail ? '❌' : '✅') + ' ' + pass + '/' + (pass + fail) + ' tests passés' + (fail ? ' — ' + fail + ' ÉCHEC(S)' : ''));

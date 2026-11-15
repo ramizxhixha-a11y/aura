@@ -51,13 +51,13 @@ T('P1 (86) · 02 pxTxt : BTC « $71 653 », BNB « $654,76 », DOT « $0,761 »,
   assert.strictEqual(/\nfunction fmtPrice\s*\(/.test(s02), false, 'fmtPrice encore là');
 });
 
-T('P2 (86) · plus aucune copie de l\'arrondi à l\'entier ni du « en-US » sur un prix de paire (restent les 2 lignes de journal épinglées des ouvreurs : 02 openPosition, 10f)', () => {
+T('P2 (86) · plus aucune copie de l\'arrondi à l\'entier ni du « en-US » sur un prix de paire (go affichage 3 : les 2 lignes de journal des ouvreurs aussi, 02 openPosition et 10f — n° 86b)', () => {
   const files = fs.readdirSync(path.join(ROOT, 'js')).filter(f => /\.js$/.test(f) && !/\.min\.js$/.test(f));
   const left = [];   // relecture du 14/11 : toute valeur arrondie à l'entier puis « toLocaleString » (Math.floor ET Math.round), et le « en-US » sur un prix
   files.forEach(f => rd('js/' + f).split('\n').forEach((l, i) => {
     if (/Math\.(floor|round)\([^)]*\)\.toLocaleString\(\)|\.dec\s*>=\s*4[^;\n]*toLocaleString\('en-US',\{minimumFractionDigits:2,maximumFractionDigits:2\}\)/.test(l)) left.push(f + ':' + (/priceTag|const (pt|tt|st)=/.exec(l) || [String(i + 1)])[0]); }));
-  assert.deepStrictEqual(left.sort(), ['02-state-init.js:priceTag', '10f-resolveur-cycle.js:const pt=', '10f-resolveur-cycle.js:const st=', '10f-resolveur-cycle.js:const tt='], left.join(' · '));
-  assert.ok(/\nfunction openPosition\s*\(/.test(s02) && /const priceTag= cfg\.dec>=4 \? ps\.price\.toFixed\(cfg\.dec\) : '\$'\+Math\.floor\(ps\.price\)\.toLocaleString\(\);/.test(fnSrc(s02, 'openPosition')), 'openPosition gardé tel quel');
+  assert.deepStrictEqual(left.sort(), [], left.join(' · '));   // [GO AFFICHAGE 3 · 15/11/2026] (n° 86b) avant : 02 openPosition priceTag, 10f pt / tt / st — passés par pxTxt
+  assert.ok(/\nfunction openPosition\s*\(/.test(s02) && /const priceTag= pxTxt\(pair, ps\.price\);/.test(fnSrc(s02, 'openPosition')), 'openPosition : le prix du journal par pxTxt (go affichage 3)');
 });
 
 T('P3 (86) · 09f1 _abFmtPx, 03 _mcPxText, 10h _manFmtPx (fiche MAN, ligne « Trade MANUEL ») et les indices ±2 % de la fiche (08 openPosEdit) passent par pxTxt / pxIn', () => {
@@ -192,8 +192,10 @@ T('G · rien de ce qui décide ne change : formule de fundScore identique (sha-2
   const g = fnSrc(s08, 'getFundamentalSignals'), i = g.indexOf('  const fundScore = Math.max(-1, Math.min(1,'), j = g.indexOf('\n  ));', i);
   const blk = g.slice(i, j + 6) + '\n';
   assert.strictEqual(crypto.createHash('sha256').update(blk).digest('hex'), 'd7a6e8b7eebb7b91cbf624cf11880cac' + '006c4c6f46bcd9502c96282c704b2190'   /* coupée : banc-p0b cherche les clés en dur */, 'formule de fundScore modifiée');
-  assert.ok(s10f.includes("const pt=cfg.dec>=4?ps.price.toFixed(cfg.dec):Math.floor(ps.price).toLocaleString();"), '10f gardé');
-  ['09c-auto-open.js', '10f-resolveur-cycle.js', '15-voix-tendance.js', '15b-tendance-reelle.js', '09e-guards.js', '09j-helpers.js'].forEach(f => assert.strictEqual(/\bpx(Txt|In)\(/.test(rd('js/' + f)), false, f + ' lit pxTxt'));
+  // [GO AFFICHAGE 3 · 15/11/2026] (n° 86b) 10f lit pxTxt pour la SEULE ligne de journal « BOT … @prix | … TP:… SL:… » (affichage) : rien d'autre
+  const _px10f = s10f.split('\n').filter(l => /\bpx(Txt|In)\(/.test(l));
+  assert.ok(_px10f.length === 1 && _px10f[0].trim().startsWith('const pt=pxTxt(pair,ps.price), tt=pxTxt(pair,tpE), st=pxTxt(pair,slE);'), '10f : pxTxt pour la ligne de journal seulement : ' + _px10f.join(' | '));
+  ['09c-auto-open.js', '15-voix-tendance.js', '15b-tendance-reelle.js', '09e-guards.js', '09j-helpers.js'].forEach(f => assert.strictEqual(/\bpx(Txt|In)\(/.test(rd('js/' + f)), false, f + ' lit pxTxt'));
 });
 
 console.log('\n' + (fail ? '❌ ' : '✅ ') + pass + '/' + (pass + fail) + ' tests passés');

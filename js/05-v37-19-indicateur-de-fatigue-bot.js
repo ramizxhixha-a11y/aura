@@ -528,8 +528,8 @@ function pyramidPosition(posId) {
   S.tradingAccount = Math.max(0, (S.tradingAccount||0) - rounded);
 
   // Log
-  S.chainLog.push({ icon:'📐', desc:`Pyramide: +$${rounded} sur ${pos.pair} ${pos.side.toUpperCase()} · Entrée ${entries.length+2}/${_PY_CFG.maxEntries} · Prix moy: ${avgEntry.toFixed(PAIRS[pos.pair]?.dec>=4?PAIRS[pos.pair].dec:2)}`, hash:rndHash(), time:nowStr() });
-  showToast('📐 Entrée ajoutée · $'+rounded+' · Prix moy: '+avgEntry.toFixed(2), 2500, 'win');
+  S.chainLog.push({ icon:'📐', desc:`Pyramide: +$${rounded} sur ${pos.pair} ${pos.side.toUpperCase()} · Entrée ${entries.length+2}/${_PY_CFG.maxEntries} · Prix moy: ${pxTxt(pos.pair, avgEntry)}`, hash:rndHash(), time:nowStr() });
+  showToast('📐 Entrée ajoutée · $'+rounded+' · Prix moy: '+pxTxt(pos.pair, avgEntry), 2500, 'win');   // [GO AFFICHAGE 3 · 15/11/2026] (n° 86c) prix par 02 pxTxt
   renderPyramideSection();
 }
 window.pyramidPosition = pyramidPosition;
@@ -604,13 +604,13 @@ function renderPyramideSection() {
                 <div class="py-entry">
                   <div class="py-entry-dot" style="background:var(--ice);"></div>
                   <span style="color:var(--t2);">Entrée 1 (initiale)</span>
-                  <span style="color:var(--t3);">${Number(first.price).toFixed(dec)}</span>
+                  <span style="color:var(--t3);">${pxTxt(pos.pair, first.price)}</span>
                   <span style="font-weight:700;">$${Number(first.stake).toFixed(0)}</span>
                 </div>
                 ${entries.map((e,i)=>`<div class="py-entry">
                   <div class="py-entry-dot" style="background:var(--pur);"></div>
                   <span style="color:var(--t2);">Entrée ${i+2}</span>
-                  <span style="color:var(--t3);">${e.price.toFixed(dec)}</span>
+                  <span style="color:var(--t3);">${pxTxt(pos.pair, e.price)}</span>
                   <span style="font-weight:700;">$${e.stake.toFixed(0)}</span>
                 </div>`).join('')}
               </div>
@@ -618,7 +618,7 @@ function renderPyramideSection() {
               <!-- Prix moyen -->
               <div class="py-avg-line">
                 <span style="color:var(--t3);">Prix moyen pondéré</span>
-                <span style="font-weight:700;color:var(--ice);">${avgEntry.toFixed(dec)}</span>
+                <span style="font-weight:700;color:var(--ice);">${pxTxt(pos.pair, avgEntry)}</span>
                 <span style="font-size:9px;color:var(--t3);">entrée ${nEntries}/${_PY_CFG.maxEntries}</span>
               </div>
 
@@ -691,8 +691,8 @@ function closePartial(posId, palierIdx) {
     S.openPositions.push(part);
   }
   // ce que closePosition réalisera (02 _posLatent / _posCloseFees : la même mesure, à l'octet) — pour le palier affiché
-  let netPnl = 0;
-  try { const _lt = _posLatent(part, cur); netPnl = _lt.usd - _posCloseFees(part, _lt.pct).total; } catch(e) {}
+  let netPnl = 0, grossPnl = NaN;
+  try { const _lt = _posLatent(part, cur); grossPnl = _lt.usd; netPnl = _lt.usd - _posCloseFees(part, _lt.pct).total; } catch(e) {}
   closePosition(part.id, false, { partiel: pal.size < 100, sortie: { k: 'tp', why: pal.label + ' · sortie par paliers' } });
   if ((S.openPositions||[]).some(p => p && p.id === part.id)) { showToast('⚠ ' + pos.pair + ' : ' + pal.label + ' non exécuté', 2500, 'warn'); return; }
 
@@ -700,10 +700,10 @@ function closePartial(posId, palierIdx) {
   pal.closedAt  = cur;
   pal.pnlUsd    = netPnl;
   // le résultat de la part fermée, porté par la position jusqu'à sa fermeture finale (02 closePosition l'écrit sur sa ligne d'historique, champ « paliers »)
-  if (part !== pos) { if (!Array.isArray(pos._paliers)) pos._paliers = []; pos._paliers.push({ l: pal.label, stake: closingStake, pnlUsdt: netPnl, px: cur, ts: Date.now() }); }
+  if (part !== pos) { if (!Array.isArray(pos._paliers)) pos._paliers = []; pos._paliers.push({ l: pal.label, stake: closingStake, pnlUsdt: netPnl, g: isFinite(grossPnl) ? grossPnl : undefined, px: cur, ts: Date.now() }); }   // [GO AFFICHAGE 3 · 15/11/2026] (n° 64) + g = brut, comme la ligne d'historique (02 _closeRowUsd)
 
   // Log
-  S.chainLog.push({ icon:'🎯', desc:`${pal.label} ${pos.pair} · fermé ${pal.size}% (${fmt$2(closingStake)}) → ${netPnl>=0?'+':'−'}$${Math.abs(netPnl).toFixed(2)} net de frais · prix ${cur.toFixed(dec)}`, hash:rndHash(), time:nowStr() });
+  S.chainLog.push({ icon:'🎯', desc:`${pal.label} ${pos.pair} · fermé ${pal.size}% (${fmt$2(closingStake)}) → ${netPnl>=0?'+':'−'}$${Math.abs(netPnl).toFixed(2)} net de frais · prix ${pxTxt(pos.pair, cur)}`, hash:rndHash(), time:nowStr() });
   showToast('🎯 '+pal.label+' exécuté · '+(netPnl>=0?'+':'−')+'$'+Math.abs(netPnl).toFixed(2)+' net de frais', 2500, netPnl >= 0 ? 'win' : 'warn');
   renderSortiePartiSection();
   renderPyramideSection();
@@ -819,7 +819,7 @@ function renderSortiePartiSection() {
                         Exécuter
                       </button>`}
                 </div>
-                <div style="font-size:7px;color:var(--t3);margin:-2px 0 3px 16px;">Prix cible: ${tpPrice.toFixed(dec)} · ${pal.hit?'✅ Exécuté à '+pal.closedAt?.toFixed(dec):distPct>0?'reste +'+distPct.toFixed(2)+'%':'🟡 Seuil atteint'}</div>`;
+                <div style="font-size:7px;color:var(--t3);margin:-2px 0 3px 16px;">Prix cible: ${pxTxt(pos.pair, tpPrice)} · ${pal.hit?'✅ Exécuté à '+pxTxt(pos.pair, pal.closedAt):distPct>0?'reste +'+distPct.toFixed(2)+'%':'🟡 Seuil atteint'}</div>`;
               }).join('')}
 
               <!-- Toggle auto -->
@@ -1028,7 +1028,13 @@ function _outilsClosedTrades() {
     ((ps && ps.trades) || []).forEach(t => {
       // [GO NETTOYAGE · 18/10/2026] (ETAT n° 39) + les fermetures d'urgence (ligne « urgence » de 02 closePosition), marquées urgence:true, comptées comme le
       // résumé Telegram (06 _tgHebdoText) — avant : « position » seulement : une urgence n'entrait ni dans le rapport, ni dans l'Excel, ni dans le résumé hebdo
-          if(t && (t.type === 'position' || t.type === 'urgence' || t.type === 'tendance') && t.pnlUsdt != null) out.push(Object.assign({}, t, { pair, urgence: t.type === 'urgence', tendance: t.type === 'tendance' || undefined }));   // [GO TENDANCE RÉELLE · 12/11/2026] + les fermetures de la voix (argent réel de l'EV)
+          if(t && (t.type === 'position' || t.type === 'urgence' || t.type === 'tendance') && t.pnlUsdt != null) {
+            const c = Object.assign({}, t, { pair, urgence: t.type === 'urgence', tendance: t.type === 'tendance' || undefined });
+            // [GO AFFICHAGE 3 · 15/11/2026] (ETAT n° 64) une fermeture précédée de sorties par paliers : son résultat ET sa mise comptent les parts déjà fermées
+            // (02 _closeRowUsd) ; le % suit (paliers : jamais avec levier, 05 toggleSpAuto). Avant : la ligne seule — l'argent des paliers manquait.
+            if (Array.isArray(t.paliers) && t.paliers.length) { const r = _closeRowUsd(t); c.pnlUsdt = r.usd; c.stakeUsdt = r.stake; if (r.stake > 0) c.pnl = r.usd / r.stake * 100; c.paliersN = t.paliers.length; }
+            out.push(c);
+          }   // [GO TENDANCE RÉELLE · 12/11/2026] + les fermetures de la voix (argent réel de l'EV)
     });
   });
   return out;
@@ -2488,9 +2494,9 @@ const _BADGES = [
   { id:'first_blood',  emoji:'🩸', name:'First Blood',      desc:'Premier trade clôturé',          check:()=>(S.totalTrades||0)>=1,          prog:()=>Math.min(1,(S.totalTrades||0)/1) },
   { id:'ten_trades',   emoji:'📊', name:'Trader Actif',     desc:'10 trades complétés',            check:()=>(S.totalTrades||0)>=10,         prog:()=>Math.min(1,(S.totalTrades||0)/10) },
   { id:'century',      emoji:'💯', name:'Le Centenaire',    desc:'100 trades clôturés',            check:()=>(S.totalTrades||0)>=100,        prog:()=>Math.min(1,(S.totalTrades||0)/100) },
-  { id:'win_streak_3', emoji:'🔥', name:'En Feu !',         desc:'3 victoires consécutives',       check:()=>Object.values(S.pairStates||{}).some(p=>(p.streak||0)>=3), prog:()=>Math.min(1,Math.max(...Object.values(S.pairStates||{}).map(p=>p.streak||0),0)/3) },
-  { id:'win_streak_5', emoji:'🌋', name:'Inarrêtable',      desc:'5 victoires consécutives',       check:()=>Object.values(S.pairStates||{}).some(p=>(p.streak||0)>=5), prog:()=>Math.min(1,Math.max(...Object.values(S.pairStates||{}).map(p=>p.streak||0),0)/5) },
-  { id:'win_streak_10',emoji:'⚡', name:'Électrique',       desc:'10 victoires consécutives',      check:()=>Object.values(S.pairStates||{}).some(p=>(p.streak||0)>=10), prog:()=>Math.min(1,Math.max(...Object.values(S.pairStates||{}).map(p=>p.streak||0),0)/10) },
+  { id:'win_streak_3', emoji:'🔥', name:'En Feu !',         desc:'3 victoires consécutives',       check:()=>_badgeWinRun()>=3, prog:()=>Math.min(1,_badgeWinRun()/3) },
+  { id:'win_streak_5', emoji:'🌋', name:'Inarrêtable',      desc:'5 victoires consécutives',       check:()=>_badgeWinRun()>=5, prog:()=>Math.min(1,_badgeWinRun()/5) },
+  { id:'win_streak_10',emoji:'⚡', name:'Électrique',       desc:'10 victoires consécutives',      check:()=>_badgeWinRun()>=10, prog:()=>Math.min(1,_badgeWinRun()/10) },
   // P&L
   { id:'profit_10',    emoji:'💰', name:'Premier Profit',   desc:'Gagner +$10 net',                check:()=>_netPnl()>=10,                  prog:()=>Math.min(1,Math.max(0,_netPnl())/10) },
   { id:'profit_100',   emoji:'💎', name:'Triple Chiffre',   desc:'Gagner +$100 net',               check:()=>_netPnl()>=100,                 prog:()=>Math.min(1,Math.max(0,_netPnl())/100) },
@@ -2511,6 +2517,19 @@ const _BADGES = [
 ];
 
 // Helpers
+// [GO AFFICHAGE 3 · 15/11/2026] (n° 67b) « N victoires consécutives » : la plus longue suite de fermetures GAGNANTES du mode (toutes les paires, dans l'ordre du
+// temps, voix et urgence comprises — 02 _isCloseRow ; gagnante = P&L > 0, comme 04 _alertWinStreak), sur l'historique gardé. Avant : ps.streak, qu'aucun code
+// n'écrit — « En Feu ! », « Inarrêtable », « Électrique » ne pouvaient jamais se débloquer (même défaut que n° 67, réparé par go alertes 2 pour les alertes).
+function _badgeWinRun() {
+  const all = [];
+  Object.values(S.pairStates || {}).forEach(ps => ((ps && ps.trades) || []).forEach(t => {
+    if (_isCloseRow(t) && isFinite(Number(t.pnlUsdt)) && Number(t.ts) > 0) all.push(t);
+  }));
+  all.sort((x, y) => Number(x.ts) - Number(y.ts));
+  let best = 0, n = 0;
+  all.forEach(t => { if (Number(t.pnlUsdt) > 0) { n++; if (n > best) best = n; } else n = 0; });
+  return best;
+}
 function _netPnl() {
   return Object.values(S.pairStates||{}).reduce((s,ps)=>s+(ps.totalPnlUsd||0),0);
 }

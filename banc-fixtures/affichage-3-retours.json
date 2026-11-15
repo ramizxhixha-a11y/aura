@@ -1,0 +1,320 @@
+{
+"js/02-state-init.js": [
+[
+"window._isCloseRow = _isCloseRow;\n// [GO AFFICHAGE 3 · 15/11/2026] (ETAT n° 64) ce qu'une fermeture a rapporté EN TOUT, pour les rapports : sa ligne (pnlUsdt, brut de frais) + les parts déjà fermées\n// par paliers (champ « paliers » de la même ligne, 05 closePartial : g = brut, comme la ligne ; une part notée avant go affichage 3 n'a que son net, pris à défaut).\n// Rend { usd, stake } (la mise totale : celle de la ligne + celle des parts). Affichage seul : les lecteurs de la décision lisent la ligne, pas ceci.\nfunction _closeRowUsd(t) {\n  let usd = Number(t && t.pnlUsdt) || 0, stake = Number(t && t.stakeUsdt) || 0;\n  ((t && Array.isArray(t.paliers)) ? t.paliers : []).forEach(p => {\n    if (!p) return;\n    const g = Number(p.g), net = Number(p.pnlUsdt);\n    usd += isFinite(g) ? g : (isFinite(net) ? net : 0);\n    stake += Number(p.stake) || 0;\n  });\n  return { usd, stake };\n}\nwindow._closeRowUsd = _closeRowUsd;\n",
+"window._isCloseRow = _isCloseRow;\n"
+],
+[
+"  const amount  = (totalExposure / Math.max(0.0001, ps.price)).toFixed(cfg.dec>=4?4:6);\n  const priceTag= pxTxt(pair, ps.price);   // [GO AFFICHAGE 3 · 15/11/2026] (n° 86b) le texte du prix de l'écran (pxTxt) — avant : l'entier tronqué sous dec 4 (DOT « @$0 »)\n",
+"  const amount  = (totalExposure / Math.max(0.0001, ps.price)).toFixed(cfg.dec>=4?4:6);\n  const priceTag= cfg.dec>=4 ? ps.price.toFixed(cfg.dec) : '$'+Math.floor(ps.price).toLocaleString();\n"
+]
+],
+"js/03-per-pair-position-buttons-controls-buid.js": [
+[
+"        <div class=\"cascade-body\">\n          <div class=\"cascade-title\">💰 Entrée · ${pxTxt(d.pair, d.entryPrice)}</div>\n          <div class=\"cascade-detail\">Mise $${d.stake.toFixed(2)} · ${d.reason}</div>",
+"        <div class=\"cascade-body\">\n          <div class=\"cascade-title\">💰 Entrée · $${d.entryPrice.toFixed(cfg?.dec || 2)}</div>\n          <div class=\"cascade-detail\">Mise $${d.stake.toFixed(2)} · ${d.reason}</div>"
+],
+[
+"        <div class=\"cascade-body\">\n          <div class=\"cascade-title\">🏁 Sortie · ${pxTxt(d.pair, d.exitPrice)}</div>\n          <div class=\"cascade-detail\">${d.pnlPct>=0?'+':''}${d.pnlPct.toFixed(2)}%</div>",
+"        <div class=\"cascade-body\">\n          <div class=\"cascade-title\">🏁 Sortie · $${d.exitPrice.toFixed(cfg?.dec || 2)}</div>\n          <div class=\"cascade-detail\">${d.pnlPct>=0?'+':''}${d.pnlPct.toFixed(2)}%</div>"
+]
+],
+"js/04-v8-0-livraison-35-mode-max-permissif-v.js": [
+[
+"        if (ad.enabled) {\n          const _adT = Math.max(ad.last || 0, ad.fail || 0);   // [GO AFFICHAGE 3 · 15/11/2026] (n° 68b) après un échec, le prochain essai part de l'échec (09b3 autoDlTick)\n          if (!_adT) countdown = 'au prochain cycle';\n          else { let r = _adT + ad.everyMin*60000 - Date.now(); if (r<=0) countdown='imminent…'; else { const h=Math.floor(r/3600000),mn=Math.floor((r%3600000)/60000),s=Math.floor((r%60000)/1000); countdown=(h>0?h+'h ':'')+mn+'min '+(s<10?'0':'')+s+'s'; } }\n        }",
+"        if (ad.enabled) {\n          if (!ad.last) countdown = 'au prochain cycle';\n          else { let r = ad.last + ad.everyMin*60000 - Date.now(); if (r<=0) countdown='imminent…'; else { const h=Math.floor(r/3600000),mn=Math.floor((r%3600000)/60000),s=Math.floor((r%60000)/1000); countdown=(h>0?h+'h ':'')+mn+'min '+(s<10?'0':'')+s+'s'; } }\n        }"
+],
+[
+"            <div style=\"font-size:var(--fs-9);color:var(--t3);margin-top:2px;\">${ad.enabled?'⏳ Prochain dans : <b id=\"savCountdown\" style=\"color:var(--up)\">'+countdown+'</b>':'désactivé'}</div>\n            ${ad.enabled && ad.fail && ad.fail > (ad.last || 0) ? '<div style=\"font-size:var(--fs-9);color:var(--down);margin-top:2px;\">❌ Dernier essai ' + new Date(ad.fail).toLocaleString('fr-FR', { day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit' }) + ' : non écrit — ' + String(ad.failWhy || '').replace(/[<>&]/g, '') + '</div>' : ''}\n          </div>",
+"            <div style=\"font-size:var(--fs-9);color:var(--t3);margin-top:2px;\">${ad.enabled?'⏳ Prochain dans : <b id=\"savCountdown\" style=\"color:var(--up)\">'+countdown+'</b>':'désactivé'}</div>\n          </div>"
+],
+[
+"      if (!ad.enabled) { cd.textContent = 'désactivé'; return; }\n      const _adT = Math.max(ad.last || 0, ad.fail || 0);   // [GO AFFICHAGE 3 · 15/11/2026] (n° 68b) comme le panneau\n      if (!_adT) { cd.textContent = 'au prochain cycle'; return; }\n      let r = _adT + ad.everyMin*60000 - Date.now();\n      if (r <= 0) { cd.textContent = 'imminent…'; return; }",
+"      if (!ad.enabled) { cd.textContent = 'désactivé'; return; }\n      if (!ad.last) { cd.textContent = 'au prochain cycle'; return; }\n      let r = ad.last + ad.everyMin*60000 - Date.now();\n      if (r <= 0) { cd.textContent = 'imminent…'; return; }"
+],
+[
+"          <span style=\"color:${t.side==='long'?'var(--up)':'var(--down)'};\">${t.side==='long'?'↑':'↓'} ${t.reason}</span>\n          <span style=\"color:var(--t3);\">${pxTxt(pair, t.entry)} → ${pxTxt(pair, t.exit)}</span>\n          <span style=\"font-weight:700;color:${t.netPnl>=0?'var(--up)':'var(--down)'};\">${t.netPnl>=0?'+':''}$${t.netPnl.toFixed(2)}</span>",
+"          <span style=\"color:${t.side==='long'?'var(--up)':'var(--down)'};\">${t.side==='long'?'↑':'↓'} ${t.reason}</span>\n          <span style=\"color:var(--t3);\">${t.entry.toFixed(2)} → ${t.exit.toFixed(2)}</span>\n          <span style=\"font-weight:700;color:${t.netPnl>=0?'var(--up)':'var(--down)'};\">${t.netPnl>=0?'+':''}$${t.netPnl.toFixed(2)}</span>"
+],
+[
+"          <div class=\"ml-target-card\">\n            <span class=\"ml-target-val\" style=\"color:var(--up);\">${pxTxt(pred.pair, pred.tpTarget)}</span>\n            <span class=\"ml-target-lbl\">🎯 TP estimé</span>",
+"          <div class=\"ml-target-card\">\n            <span class=\"ml-target-val\" style=\"color:var(--up);\">${pred.tpTarget.toFixed(pred.dec)}</span>\n            <span class=\"ml-target-lbl\">🎯 TP estimé</span>"
+],
+[
+"          <div class=\"ml-target-card\">\n            <span class=\"ml-target-val\" style=\"color:var(--t1);\">${pxTxt(pred.pair, pred.cur)}</span>\n            <span class=\"ml-target-lbl\">Prix actuel</span>",
+"          <div class=\"ml-target-card\">\n            <span class=\"ml-target-val\" style=\"color:var(--t1);\">${pred.cur.toFixed(pred.dec)}</span>\n            <span class=\"ml-target-lbl\">Prix actuel</span>"
+],
+[
+"          <div class=\"ml-target-card\">\n            <span class=\"ml-target-val\" style=\"color:var(--down);\">${pxTxt(pred.pair, pred.slTarget)}</span>\n            <span class=\"ml-target-lbl\">🛑 SL estimé</span>",
+"          <div class=\"ml-target-card\">\n            <span class=\"ml-target-val\" style=\"color:var(--down);\">${pred.slTarget.toFixed(pred.dec)}</span>\n            <span class=\"ml-target-lbl\">🛑 SL estimé</span>"
+],
+[
+"        desc:`Variation de ${chgPct.toFixed(2)}% sur 5 bougies. Possible pump/dump. Les positions ouvertes sont à risque.`,\n        val:`Prix : ${pxTxt(pair, last)}` });   // [GO AFFICHAGE 3 · 15/11/2026] (n° 86c) prix par 02 pxTxt\n    } else if(chgPct > 4) {",
+"        desc:`Variation de ${chgPct.toFixed(2)}% sur 5 bougies. Possible pump/dump. Les positions ouvertes sont à risque.`,\n        val:`Prix : ${last.toFixed(PAIRS[pair]?.dec>=4?PAIRS[pair].dec:2)}` });\n    } else if(chgPct > 4) {"
+]
+],
+"js/05-v37-19-indicateur-de-fatigue-bot.js": [
+[
+"  // Log\n  S.chainLog.push({ icon:'📐', desc:`Pyramide: +$${rounded} sur ${pos.pair} ${pos.side.toUpperCase()} · Entrée ${entries.length+2}/${_PY_CFG.maxEntries} · Prix moy: ${pxTxt(pos.pair, avgEntry)}`, hash:rndHash(), time:nowStr() });\n  showToast('📐 Entrée ajoutée · $'+rounded+' · Prix moy: '+pxTxt(pos.pair, avgEntry), 2500, 'win');   // [GO AFFICHAGE 3 · 15/11/2026] (n° 86c) prix par 02 pxTxt\n  renderPyramideSection();",
+"  // Log\n  S.chainLog.push({ icon:'📐', desc:`Pyramide: +$${rounded} sur ${pos.pair} ${pos.side.toUpperCase()} · Entrée ${entries.length+2}/${_PY_CFG.maxEntries} · Prix moy: ${avgEntry.toFixed(PAIRS[pos.pair]?.dec>=4?PAIRS[pos.pair].dec:2)}`, hash:rndHash(), time:nowStr() });\n  showToast('📐 Entrée ajoutée · $'+rounded+' · Prix moy: '+avgEntry.toFixed(2), 2500, 'win');\n  renderPyramideSection();"
+],
+[
+"                  <span style=\"color:var(--t2);\">Entrée 1 (initiale)</span>\n                  <span style=\"color:var(--t3);\">${pxTxt(pos.pair, first.price)}</span>\n                  <span style=\"font-weight:700;\">$${Number(first.stake).toFixed(0)}</span>",
+"                  <span style=\"color:var(--t2);\">Entrée 1 (initiale)</span>\n                  <span style=\"color:var(--t3);\">${Number(first.price).toFixed(dec)}</span>\n                  <span style=\"font-weight:700;\">$${Number(first.stake).toFixed(0)}</span>"
+],
+[
+"                  <span style=\"color:var(--t2);\">Entrée ${i+2}</span>\n                  <span style=\"color:var(--t3);\">${pxTxt(pos.pair, e.price)}</span>\n                  <span style=\"font-weight:700;\">$${e.stake.toFixed(0)}</span>",
+"                  <span style=\"color:var(--t2);\">Entrée ${i+2}</span>\n                  <span style=\"color:var(--t3);\">${e.price.toFixed(dec)}</span>\n                  <span style=\"font-weight:700;\">$${e.stake.toFixed(0)}</span>"
+],
+[
+"                <span style=\"color:var(--t3);\">Prix moyen pondéré</span>\n                <span style=\"font-weight:700;color:var(--ice);\">${pxTxt(pos.pair, avgEntry)}</span>\n                <span style=\"font-size:9px;color:var(--t3);\">entrée ${nEntries}/${_PY_CFG.maxEntries}</span>",
+"                <span style=\"color:var(--t3);\">Prix moyen pondéré</span>\n                <span style=\"font-weight:700;color:var(--ice);\">${avgEntry.toFixed(dec)}</span>\n                <span style=\"font-size:9px;color:var(--t3);\">entrée ${nEntries}/${_PY_CFG.maxEntries}</span>"
+],
+[
+"  // ce que closePosition réalisera (02 _posLatent / _posCloseFees : la même mesure, à l'octet) — pour le palier affiché\n  let netPnl = 0, grossPnl = NaN;\n  try { const _lt = _posLatent(part, cur); grossPnl = _lt.usd; netPnl = _lt.usd - _posCloseFees(part, _lt.pct).total; } catch(e) {}\n  closePosition(part.id, false, { partiel: pal.size < 100, sortie: { k: 'tp', why: pal.label + ' · sortie par paliers' } });",
+"  // ce que closePosition réalisera (02 _posLatent / _posCloseFees : la même mesure, à l'octet) — pour le palier affiché\n  let netPnl = 0;\n  try { const _lt = _posLatent(part, cur); netPnl = _lt.usd - _posCloseFees(part, _lt.pct).total; } catch(e) {}\n  closePosition(part.id, false, { partiel: pal.size < 100, sortie: { k: 'tp', why: pal.label + ' · sortie par paliers' } });"
+],
+[
+"  // le résultat de la part fermée, porté par la position jusqu'à sa fermeture finale (02 closePosition l'écrit sur sa ligne d'historique, champ « paliers »)\n  if (part !== pos) { if (!Array.isArray(pos._paliers)) pos._paliers = []; pos._paliers.push({ l: pal.label, stake: closingStake, pnlUsdt: netPnl, g: isFinite(grossPnl) ? grossPnl : undefined, px: cur, ts: Date.now() }); }   // [GO AFFICHAGE 3 · 15/11/2026] (n° 64) + g = brut, comme la ligne d'historique (02 _closeRowUsd)\n",
+"  // le résultat de la part fermée, porté par la position jusqu'à sa fermeture finale (02 closePosition l'écrit sur sa ligne d'historique, champ « paliers »)\n  if (part !== pos) { if (!Array.isArray(pos._paliers)) pos._paliers = []; pos._paliers.push({ l: pal.label, stake: closingStake, pnlUsdt: netPnl, px: cur, ts: Date.now() }); }\n"
+],
+[
+"  // Log\n  S.chainLog.push({ icon:'🎯', desc:`${pal.label} ${pos.pair} · fermé ${pal.size}% (${fmt$2(closingStake)}) → ${netPnl>=0?'+':'−'}$${Math.abs(netPnl).toFixed(2)} net de frais · prix ${pxTxt(pos.pair, cur)}`, hash:rndHash(), time:nowStr() });\n  showToast('🎯 '+pal.label+' exécuté · '+(netPnl>=0?'+':'−')+'$'+Math.abs(netPnl).toFixed(2)+' net de frais', 2500, netPnl >= 0 ? 'win' : 'warn');",
+"  // Log\n  S.chainLog.push({ icon:'🎯', desc:`${pal.label} ${pos.pair} · fermé ${pal.size}% (${fmt$2(closingStake)}) → ${netPnl>=0?'+':'−'}$${Math.abs(netPnl).toFixed(2)} net de frais · prix ${cur.toFixed(dec)}`, hash:rndHash(), time:nowStr() });\n  showToast('🎯 '+pal.label+' exécuté · '+(netPnl>=0?'+':'−')+'$'+Math.abs(netPnl).toFixed(2)+' net de frais', 2500, netPnl >= 0 ? 'win' : 'warn');"
+],
+[
+"                </div>\n                <div style=\"font-size:7px;color:var(--t3);margin:-2px 0 3px 16px;\">Prix cible: ${pxTxt(pos.pair, tpPrice)} · ${pal.hit?'✅ Exécuté à '+pxTxt(pos.pair, pal.closedAt):distPct>0?'reste +'+distPct.toFixed(2)+'%':'🟡 Seuil atteint'}</div>`;\n              }).join('')}",
+"                </div>\n                <div style=\"font-size:7px;color:var(--t3);margin:-2px 0 3px 16px;\">Prix cible: ${tpPrice.toFixed(dec)} · ${pal.hit?'✅ Exécuté à '+pal.closedAt?.toFixed(dec):distPct>0?'reste +'+distPct.toFixed(2)+'%':'🟡 Seuil atteint'}</div>`;\n              }).join('')}"
+],
+[
+"      // résumé Telegram (06 _tgHebdoText) — avant : « position » seulement : une urgence n'entrait ni dans le rapport, ni dans l'Excel, ni dans le résumé hebdo\n          if(t && (t.type === 'position' || t.type === 'urgence' || t.type === 'tendance') && t.pnlUsdt != null) {\n            const c = Object.assign({}, t, { pair, urgence: t.type === 'urgence', tendance: t.type === 'tendance' || undefined });\n            // [GO AFFICHAGE 3 · 15/11/2026] (ETAT n° 64) une fermeture précédée de sorties par paliers : son résultat ET sa mise comptent les parts déjà fermées\n            // (02 _closeRowUsd) ; le % suit (paliers : jamais avec levier, 05 toggleSpAuto). Avant : la ligne seule — l'argent des paliers manquait.\n            if (Array.isArray(t.paliers) && t.paliers.length) { const r = _closeRowUsd(t); c.pnlUsdt = r.usd; c.stakeUsdt = r.stake; if (r.stake > 0) c.pnl = r.usd / r.stake * 100; c.paliersN = t.paliers.length; }\n            out.push(c);\n          }   // [GO TENDANCE RÉELLE · 12/11/2026] + les fermetures de la voix (argent réel de l'EV)\n    });",
+"      // résumé Telegram (06 _tgHebdoText) — avant : « position » seulement : une urgence n'entrait ni dans le rapport, ni dans l'Excel, ni dans le résumé hebdo\n          if(t && (t.type === 'position' || t.type === 'urgence' || t.type === 'tendance') && t.pnlUsdt != null) out.push(Object.assign({}, t, { pair, urgence: t.type === 'urgence', tendance: t.type === 'tendance' || undefined }));   // [GO TENDANCE RÉELLE · 12/11/2026] + les fermetures de la voix (argent réel de l'EV)\n    });"
+],
+[
+"  { id:'century',      emoji:'💯', name:'Le Centenaire',    desc:'100 trades clôturés',            check:()=>(S.totalTrades||0)>=100,        prog:()=>Math.min(1,(S.totalTrades||0)/100) },\n  { id:'win_streak_3', emoji:'🔥', name:'En Feu !',         desc:'3 victoires consécutives',       check:()=>_badgeWinRun()>=3, prog:()=>Math.min(1,_badgeWinRun()/3) },\n  { id:'win_streak_5', emoji:'🌋', name:'Inarrêtable',      desc:'5 victoires consécutives',       check:()=>_badgeWinRun()>=5, prog:()=>Math.min(1,_badgeWinRun()/5) },\n  { id:'win_streak_10',emoji:'⚡', name:'Électrique',       desc:'10 victoires consécutives',      check:()=>_badgeWinRun()>=10, prog:()=>Math.min(1,_badgeWinRun()/10) },\n  // P&L",
+"  { id:'century',      emoji:'💯', name:'Le Centenaire',    desc:'100 trades clôturés',            check:()=>(S.totalTrades||0)>=100,        prog:()=>Math.min(1,(S.totalTrades||0)/100) },\n  { id:'win_streak_3', emoji:'🔥', name:'En Feu !',         desc:'3 victoires consécutives',       check:()=>Object.values(S.pairStates||{}).some(p=>(p.streak||0)>=3), prog:()=>Math.min(1,Math.max(...Object.values(S.pairStates||{}).map(p=>p.streak||0),0)/3) },\n  { id:'win_streak_5', emoji:'🌋', name:'Inarrêtable',      desc:'5 victoires consécutives',       check:()=>Object.values(S.pairStates||{}).some(p=>(p.streak||0)>=5), prog:()=>Math.min(1,Math.max(...Object.values(S.pairStates||{}).map(p=>p.streak||0),0)/5) },\n  { id:'win_streak_10',emoji:'⚡', name:'Électrique',       desc:'10 victoires consécutives',      check:()=>Object.values(S.pairStates||{}).some(p=>(p.streak||0)>=10), prog:()=>Math.min(1,Math.max(...Object.values(S.pairStates||{}).map(p=>p.streak||0),0)/10) },\n  // P&L"
+],
+[
+"// Helpers\n// [GO AFFICHAGE 3 · 15/11/2026] (n° 67b) « N victoires consécutives » : la plus longue suite de fermetures GAGNANTES du mode (toutes les paires, dans l'ordre du\n// temps, voix et urgence comprises — 02 _isCloseRow ; gagnante = P&L > 0, comme 04 _alertWinStreak), sur l'historique gardé. Avant : ps.streak, qu'aucun code\n// n'écrit — « En Feu ! », « Inarrêtable », « Électrique » ne pouvaient jamais se débloquer (même défaut que n° 67, réparé par go alertes 2 pour les alertes).\nfunction _badgeWinRun() {\n  const all = [];\n  Object.values(S.pairStates || {}).forEach(ps => ((ps && ps.trades) || []).forEach(t => {\n    if (_isCloseRow(t) && isFinite(Number(t.pnlUsdt)) && Number(t.ts) > 0) all.push(t);\n  }));\n  all.sort((x, y) => Number(x.ts) - Number(y.ts));\n  let best = 0, n = 0;\n  all.forEach(t => { if (Number(t.pnlUsdt) > 0) { n++; if (n > best) best = n; } else n = 0; });\n  return best;\n}\nfunction _netPnl() {",
+"// Helpers\nfunction _netPnl() {"
+]
+],
+"js/06-v63-patterns-chartistes.js": [
+[
+"          <span>${closed.length} bougies closes · ${_srcLbl}${_stale ? ' · ⚠️ périmées' : ''}</span>\n          <span style=\"font-family:monospace;font-size:9px;color:${cfg.color||'var(--ice)'};\">${pxTxt(_ptPair, cur)}</span>\n        </div>",
+"          <span>${closed.length} bougies closes · ${_srcLbl}${_stale ? ' · ⚠️ périmées' : ''}</span>\n          <span style=\"font-family:monospace;font-size:9px;color:${cfg.color||'var(--ice)'};\">${cur.toFixed(dec)}</span>\n        </div>"
+],
+[
+"function _prEsc(s) { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\"/g, '&quot;').replace(/'/g, '&#39;'); }\n// [GO AFFICHAGE 3 · 15/11/2026] (n° 86c) _prDec (2 décimales sous dec 4 : DOT « 0.76 ») retiré : les prix des alertes passent par 02 pxTxt\nfunction _prIsPnl(a) { return !!a && (a.type === 'pnl_pos' || a.type === 'pnl_neg'); }",
+"function _prEsc(s) { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\"/g, '&quot;').replace(/'/g, '&#39;'); }\nfunction _prDec(pair) { const d = (typeof PAIRS !== 'undefined' && PAIRS && PAIRS[pair]) ? Number(PAIRS[pair].dec) : 0; return d >= 4 ? d : 2; }\nfunction _prIsPnl(a) { return !!a && (a.type === 'pnl_pos' || a.type === 'pnl_neg'); }"
+],
+[
+"  const v = Number(a.value), m = _PR_MODE_LAB[a.mode];\n  if (a.type === 'above')    return a.pair + ' ≥ ' + pxTxt(a.pair, v);   // [GO AFFICHAGE 3 · 15/11/2026] (n° 86c) prix par 02 pxTxt\n  if (a.type === 'below')    return a.pair + ' ≤ ' + pxTxt(a.pair, v);\n  if (a.type === 'pct_up')   return a.pair + ' +' + v + ' % depuis la création';",
+"  const v = Number(a.value), m = _PR_MODE_LAB[a.mode];\n  if (a.type === 'above')    return a.pair + ' ≥ ' + v.toFixed(_prDec(a.pair));\n  if (a.type === 'below')    return a.pair + ' ≤ ' + v.toFixed(_prDec(a.pair));\n  if (a.type === 'pct_up')   return a.pair + ' +' + v + ' % depuis la création';"
+],
+[
+"function _prFireAlert(alert, cur, pnl) {\n  const quoi = _prNote(alert) + (pnl !== null && pnl !== undefined ? ' · P&L ' + _prMoney(pnl) : ' · prix ' + pxTxt(alert.pair, cur));\n  // Toast visuel",
+"function _prFireAlert(alert, cur, pnl) {\n  const quoi = _prNote(alert) + (pnl !== null && pnl !== undefined ? ' · P&L ' + _prMoney(pnl) : ' · prix ' + Number(cur).toFixed(_prDec(alert.pair)));\n  // Toast visuel"
+],
+[
+"          const cur = _prRealPx(a.pair);\n          actuel = cur > 0 ? 'Prix réel : ' + pxTxt(a.pair, cur) : 'Prix réel indisponible — l\\'alerte attend';\n          // [relecture adverse du 18/10/2026] sans prix réel au moment de la création, la référence est posée au PREMIER prix réel reçu : elle est dite",
+"          const cur = _prRealPx(a.pair);\n          actuel = cur > 0 ? 'Prix réel : ' + cur.toFixed(_prDec(a.pair)) : 'Prix réel indisponible — l\\'alerte attend';\n          // [relecture adverse du 18/10/2026] sans prix réel au moment de la création, la référence est posée au PREMIER prix réel reçu : elle est dite"
+],
+[
+"          // [relecture adverse du 18/10/2026] sans prix réel au moment de la création, la référence est posée au PREMIER prix réel reçu : elle est dite\n          if ((a.type === 'pct_up' || a.type === 'pct_down')) actuel += a.priceAtCreation > 0 ? ' · référence ' + pxTxt(a.pair, a.priceAtCreation) : ' · référence au premier prix réel';\n          if (cur > 0 && a.type === 'above') dist = (a.value - cur) / cur * 100;",
+"          // [relecture adverse du 18/10/2026] sans prix réel au moment de la création, la référence est posée au PREMIER prix réel reçu : elle est dite\n          if ((a.type === 'pct_up' || a.type === 'pct_down')) actuel += a.priceAtCreation > 0 ? ' · référence ' + Number(a.priceAtCreation).toFixed(_prDec(a.pair)) : ' · référence au premier prix réel';\n          if (cur > 0 && a.type === 'above') dist = (a.value - cur) / cur * 100;"
+],
+[
+"          <div class=\"pr-alert-cond\">${_prEsc(_prNote(a))}</div>\n          <div style=\"font-size:8px;color:var(--gold);\">Déclenchée ${typeof a.triggeredPnl === 'number' && isFinite(a.triggeredPnl) ? 'à P&L ' + _prMoney(a.triggeredPnl) : (typeof a.triggeredPrice === 'number' && isFinite(a.triggeredPrice) ? 'à ' + pxTxt(a.pair, a.triggeredPrice) : '')}${typeof a.triggeredAt === 'number' && isFinite(a.triggeredAt) ? ' · ' + _prEsc(new Date(a.triggeredAt).toLocaleString('fr-FR')) : ''}</div>\n        </div>",
+"          <div class=\"pr-alert-cond\">${_prEsc(_prNote(a))}</div>\n          <div style=\"font-size:8px;color:var(--gold);\">Déclenchée ${typeof a.triggeredPnl === 'number' && isFinite(a.triggeredPnl) ? 'à P&L ' + _prMoney(a.triggeredPnl) : (typeof a.triggeredPrice === 'number' && isFinite(a.triggeredPrice) ? 'à ' + a.triggeredPrice.toFixed(_prDec(a.pair)) : '')}${typeof a.triggeredAt === 'number' && isFinite(a.triggeredAt) ? ' · ' + _prEsc(new Date(a.triggeredAt).toLocaleString('fr-FR')) : ''}</div>\n        </div>"
+],
+[
+"          <div style=\"font-size:9px;color:var(--t3);margin-bottom:2px;\">Bitcoin / USDT</div>\n          <div style=\"font-size:16px;font-weight:900;font-family:var(--font-mono);color:${PAIRS[_BTC_PAIR]?.color||'#f7931a'};\">${pxTxt(_BTC_PAIR, btcPrice)}</div>\n        </div>",
+"          <div style=\"font-size:9px;color:var(--t3);margin-bottom:2px;\">Bitcoin / USDT</div>\n          <div style=\"font-size:16px;font-weight:900;font-family:var(--font-mono);color:${PAIRS[_BTC_PAIR]?.color||'#f7931a'};\">$${btcPrice.toFixed(dec)}</div>\n        </div>"
+],
+[
+"            <div style=\"text-align:right;\">\n              <span class=\"ph-pair-price\" style=\"color:${col};\">${pxTxt(pair, cur>0?cur:lastC)}</span>\n              <span class=\"ph-pair-change\" style=\"background:${change7>=0?'rgba(0,232,122,.12)':'rgba(255,61,107,.12)'};color:${change7>=0?'var(--up)':'var(--down)'};\">",
+"            <div style=\"text-align:right;\">\n              <span class=\"ph-pair-price\" style=\"color:${col};\">$${cur>0?cur.toFixed(dec):lastC.toFixed(dec)}</span>\n              <span class=\"ph-pair-change\" style=\"background:${change7>=0?'rgba(0,232,122,.12)':'rgba(255,61,107,.12)'};color:${change7>=0?'var(--up)':'var(--down)'};\">"
+],
+[
+"            <div class=\"ph-stat\">\n              <div class=\"ph-stat-val\" style=\"color:var(--up);\">${pxTxt(pair, high7)}</div>\n              <div class=\"ph-stat-lbl\">Haut 7j</div>",
+"            <div class=\"ph-stat\">\n              <div class=\"ph-stat-val\" style=\"color:var(--up);\">$${high7.toFixed(dec)}</div>\n              <div class=\"ph-stat-lbl\">Haut 7j</div>"
+],
+[
+"            <div class=\"ph-stat\">\n              <div class=\"ph-stat-val\" style=\"color:var(--down);\">${pxTxt(pair, low7)}</div>\n              <div class=\"ph-stat-lbl\">Bas 7j</div>",
+"            <div class=\"ph-stat\">\n              <div class=\"ph-stat-val\" style=\"color:var(--down);\">$${low7.toFixed(dec)}</div>\n              <div class=\"ph-stat-lbl\">Bas 7j</div>"
+],
+[
+"            <div class=\"ph-stat\">\n              <div class=\"ph-stat-val\">${pxTxt(pair, firstC)}</div>\n              <div class=\"ph-stat-lbl\">Ouverture</div>",
+"            <div class=\"ph-stat\">\n              <div class=\"ph-stat-val\">$${firstC.toFixed(dec)}</div>\n              <div class=\"ph-stat-lbl\">Ouverture</div>"
+],
+[
+"        <div class=\"calc-result-row\"><span style=\"color:var(--t2);\">Perte au SL (avant frais)</span><span class=\"calc-result-val\" style=\"color:${r.riskCol};\">$${r.riskUsd.toFixed(2)} (${r.riskPct}%)</span></div>\n        <div class=\"calc-result-row\"><span style=\"color:var(--t2);\">Prix SL</span><span class=\"calc-result-val\" style=\"color:var(--down);\">${pxTxt(_CALC.pair, r.sl)}</span></div>\n        <div class=\"calc-result-row\"><span style=\"color:var(--t2);\">Prix TP</span><span class=\"calc-result-val\" style=\"color:var(--up);\">${pxTxt(_CALC.pair, r.tp)}</span></div>\n        <div class=\"calc-result-row\"><span style=\"color:var(--t2);\">Frais entrée + sortie</span><span class=\"calc-result-val\" style=\"color:var(--t3);\">-$${r.feesUsd.toFixed(2)}</span></div>",
+"        <div class=\"calc-result-row\"><span style=\"color:var(--t2);\">Perte au SL (avant frais)</span><span class=\"calc-result-val\" style=\"color:${r.riskCol};\">$${r.riskUsd.toFixed(2)} (${r.riskPct}%)</span></div>\n        <div class=\"calc-result-row\"><span style=\"color:var(--t2);\">Prix SL</span><span class=\"calc-result-val\" style=\"color:var(--down);\">$${r.sl.toFixed(dec)}</span></div>\n        <div class=\"calc-result-row\"><span style=\"color:var(--t2);\">Prix TP</span><span class=\"calc-result-val\" style=\"color:var(--up);\">$${r.tp.toFixed(dec)}</span></div>\n        <div class=\"calc-result-row\"><span style=\"color:var(--t2);\">Frais entrée + sortie</span><span class=\"calc-result-val\" style=\"color:var(--t3);\">-$${r.feesUsd.toFixed(2)}</span></div>"
+],
+[
+"      if (!t || !(Number(t.ts) >= t0) || (t.type !== 'position' && t.type !== 'urgence' && t.type !== 'tendance')) return;   // [GO TENDANCE RÉELLE · 12/11/2026]\n      const _r = _closeRowUsd(t); n++; pnl += _r.usd; if (_r.usd > 0) gagnants++;   // [GO AFFICHAGE 3 · 15/11/2026] (ETAT n° 64) + les parts fermées par paliers (02 _closeRowUsd)\n    }));",
+"      if (!t || !(Number(t.ts) >= t0) || (t.type !== 'position' && t.type !== 'urgence' && t.type !== 'tendance')) return;   // [GO TENDANCE RÉELLE · 12/11/2026]\n      n++; pnl += Number(t.pnlUsdt) || 0; if (Number(t.pnl) > 0) gagnants++;\n    }));"
+],
+[
+"        <div class=\"cin-pair-sym\" style=\"color:${col};\">${pair.replace('/USDT','')}</div>\n        <div class=\"cin-pair-price\" style=\"color:${hasPos?'#00e87a':'rgba(255,255,255,.5)'};\">${pxTxt(pair, cur)}</div>\n        <div class=\"cin-pair-chg\" style=\"color:${pnl>=0?'#00e87a':'#ff3d6b'};\">${pnl>=0?'+':''}$${pnl.toFixed(1)}</div>",
+"        <div class=\"cin-pair-sym\" style=\"color:${col};\">${pair.replace('/USDT','')}</div>\n        <div class=\"cin-pair-price\" style=\"color:${hasPos?'#00e87a':'rgba(255,255,255,.5)'};\">$${cur.toFixed(dec)}</div>\n        <div class=\"cin-pair-chg\" style=\"color:${pnl>=0?'#00e87a':'#ff3d6b'};\">${pnl>=0?'+':''}$${pnl.toFixed(1)}</div>"
+],
+[
+"    const items = [\n      ...Object.entries(S.pairStates||{}).map(([p,ps])=>`${p.replace('/USDT','')} ${pxTxt(p, ps.price||0)} ${(ps.totalPnlUsd||0)>=0?'▲':'▼'}${Math.abs(ps.totalPnlUsd||0).toFixed(2)}`),\n      `WR ${wr!==null?wr:50}%`,",
+"    const items = [\n      ...Object.entries(S.pairStates||{}).map(([p,ps])=>`${p.replace('/USDT','')} $${(ps.price||0).toFixed(PAIRS[p]?.dec>=4?PAIRS[p].dec:2)} ${(ps.totalPnlUsd||0)>=0?'▲':'▼'}${Math.abs(ps.totalPnlUsd||0).toFixed(2)}`),\n      `WR ${wr!==null?wr:50}%`,"
+]
+],
+"js/07-v90-mode-bunker-sos.js": [
+[
+"  const dec  = cfg.dec >= 4 ? cfg.dec : 2;\n  const curr = pos.tp ? pxIn(pair, pos.tp) : '';   // [GO AFFICHAGE 3 · 15/11/2026] (n° 86c) prix par 02 pxTxt ; champ : pxIn\n  const val  = prompt('🎯 Target (TP) pour '+pair+' :\\nPrix actuel : '+pxTxt(pair, ps.price)+'\\nEntrez le prix cible :', curr);\n  if(val === null) return;",
+"  const dec  = cfg.dec >= 4 ? cfg.dec : 2;\n  const curr = pos.tp ? pos.tp.toFixed(dec) : '';\n  const val  = prompt('🎯 Target (TP) pour '+pair+' :\\nPrix actuel : '+ps.price.toFixed(dec)+'\\nEntrez le prix cible :', curr);\n  if(val === null) return;"
+],
+[
+"  pos.tp = n;\n  showToast('🎯 TP '+pair+' → '+pxTxt(pair, n), 1800, 'win');\n  if(typeof renderActionsGrid === 'function') try { renderActionsGrid(); } catch(e) {}",
+"  pos.tp = n;\n  showToast('🎯 TP '+pair+' → '+n.toFixed(dec), 1800, 'win');\n  if(typeof renderActionsGrid === 'function') try { renderActionsGrid(); } catch(e) {}"
+],
+[
+"  const dec  = cfg.dec >= 4 ? cfg.dec : 2;\n  const curr = pos.sl ? pxIn(pair, pos.sl) : '';   // [GO AFFICHAGE 3 · 15/11/2026] (n° 86c) prix par 02 pxTxt ; champ : pxIn\n  const val  = prompt('🛑 Stop Loss (SL) pour '+pair+' :\\nPrix actuel : '+pxTxt(pair, ps.price)+'\\nEntrez le prix stop :', curr);\n  if(val === null) return;",
+"  const dec  = cfg.dec >= 4 ? cfg.dec : 2;\n  const curr = pos.sl ? pos.sl.toFixed(dec) : '';\n  const val  = prompt('🛑 Stop Loss (SL) pour '+pair+' :\\nPrix actuel : '+ps.price.toFixed(dec)+'\\nEntrez le prix stop :', curr);\n  if(val === null) return;"
+],
+[
+"  pos.sl = n;\n  showToast('🛑 SL '+pair+' → '+pxTxt(pair, n), 1800, 'win');\n  if(typeof renderActionsGrid === 'function') try { renderActionsGrid(); } catch(e) {}",
+"  pos.sl = n;\n  showToast('🛑 SL '+pair+' → '+n.toFixed(dec), 1800, 'win');\n  if(typeof renderActionsGrid === 'function') try { renderActionsGrid(); } catch(e) {}"
+],
+[
+"          closePosition(pos.id, false, { sortie: { k: 'tp', why: 'TP' } });  // user-set TP — always allowed · [GO ALERTES] raison pour les notifications\n          S.chainLog.push({ icon:'🎯', desc:`TP atteint ${pos.pair} ${pos.side.toUpperCase()} @${pxTxt(pos.pair, cur)}`, hash:rndHash(), time:nowStr() });\n          showToast('🎯 TP atteint — '+pos.pair+' fermé');",
+"          closePosition(pos.id, false, { sortie: { k: 'tp', why: 'TP' } });  // user-set TP — always allowed · [GO ALERTES] raison pour les notifications\n          S.chainLog.push({ icon:'🎯', desc:`TP atteint ${pos.pair} ${pos.side.toUpperCase()} @${cur.toFixed(2)}`, hash:rndHash(), time:nowStr() });\n          showToast('🎯 TP atteint — '+pos.pair+' fermé');"
+],
+[
+"          closePosition(pos.id, false, { sortie: { k: 'sl', why: 'garde-fou −90 %' } });\n          S.chainLog.push({ icon:'💥', desc:`LIQUIDATION ${pos.pair} ${pos.side.toUpperCase()} @${pxTxt(pos.pair, cur)} · perte extrême évitée`, hash:rndHash(), time:nowStr() });\n          showToast('💥 Liquidation — '+pos.pair+' (garde-fou -90%)', 4000, 'critical');",
+"          closePosition(pos.id, false, { sortie: { k: 'sl', why: 'garde-fou −90 %' } });\n          S.chainLog.push({ icon:'💥', desc:`LIQUIDATION ${pos.pair} ${pos.side.toUpperCase()} @${cur.toFixed(pos.pair.includes('USDT')&&ps.price<10?4:2)} · perte extrême évitée`, hash:rndHash(), time:nowStr() });\n          showToast('💥 Liquidation — '+pos.pair+' (garde-fou -90%)', 4000, 'critical');"
+],
+[
+"          closePosition(pos.id, false, { sortie: { k: 'sl', why: 'SL' } });  // user-set SL — always allowed · [GO ALERTES] raison pour les notifications\n          S.chainLog.push({ icon:'🛑', desc:`SL déclenché ${pos.pair} ${pos.side.toUpperCase()} @${pxTxt(pos.pair, cur)}`, hash:rndHash(), time:nowStr() });\n          showToast('🛑 Stop Loss — '+pos.pair+' fermé', 2800, 'critical');",
+"          closePosition(pos.id, false, { sortie: { k: 'sl', why: 'SL' } });  // user-set SL — always allowed · [GO ALERTES] raison pour les notifications\n          S.chainLog.push({ icon:'🛑', desc:`SL déclenché ${pos.pair} ${pos.side.toUpperCase()} @${cur.toFixed(2)}`, hash:rndHash(), time:nowStr() });\n          showToast('🛑 Stop Loss — '+pos.pair+' fermé', 2800, 'critical');"
+],
+[
+"  // aurait été un double comptage. fundCum = compteur cumulé réel (informatif).\n  // [GO AFFICHAGE 3 · 15/11/2026] (n° 77b) totalFunding SEUL : 02 applyLeverageBorrowFees y ajoute déjà les intérêts du levier (et leverageTotalFees) — la somme\n  // des deux les comptait deux fois (taux d'emprunt à 0 aujourd'hui : 0 $ d'écart, mais faux dès qu'un taux est réglé)\n  const fundCum = (S.fees&&S.fees.totalFunding)||0;\n  const feesDue = (typeof _feesDueOf === 'function') ? _feesDueOf(null) : 0;   // [GO NETTOYAGE · 19/10/2026] (n° 54) frais restés dus : une dette comme une autre",
+"  // aurait été un double comptage. fundCum = compteur cumulé réel (informatif).\n  const fundCum = ((S.fees&&S.fees.totalFunding)||0) + (S.leverageTotalFees||0);\n  const feesDue = (typeof _feesDueOf === 'function') ? _feesDueOf(null) : 0;   // [GO NETTOYAGE · 19/10/2026] (n° 54) frais restés dus : une dette comme une autre"
+],
+[
+"       +_tile('\\ud83e\\ude99','Frais payés (info)',fmt$2((S.fees&&S.fees.feeReserveAccount)||0),'cumul · déjà sortis du trading, hors total')\n       +_tile('\\u23f3','Funding payé (info)',fmt$2((S.fees&&S.fees.totalFunding)||0),'intérêts du levier compris · déjà sorti du trading, hors total')   // [GO AFFICHAGE 3 · 15/11/2026] (n° 77b) une fois, plus deux\n       +((()=>{ const d=_heroDebtParts(); if(!(d.debt>0.005)) return '';   // [GO LEVIER 56 · 27/10/2026]",
+"       +_tile('\\ud83e\\ude99','Frais payés (info)',fmt$2((S.fees&&S.fees.feeReserveAccount)||0),'cumul · déjà sortis du trading, hors total')\n       +_tile('\\u23f3','Funding payé (info)',fmt$2(((S.fees&&S.fees.totalFunding)||0)+(S.leverageTotalFees||0)),'déjà sorti du trading, hors total')\n       +((()=>{ const d=_heroDebtParts(); if(!(d.debt>0.005)) return '';   // [GO LEVIER 56 · 27/10/2026]"
+],
+[
+"       +_tile('\\ud83c\\udfdb\\ufe0f','Impôt anticipé',(p.taxAnt>=0?'\\u2212':'+')+fmt$2(Math.abs(p.taxAnt)),'si tout fermait maintenant · registre fiscal',p.taxAnt>=0?'neg':'')\n       +_tile('\\u23f3','Funding payé (cumul)',fmt$2(p.fundCum),'intérêts du levier compris · prélevé en continu du trading','cy')\n       +(p.levDebt > 0.005 ? _tile('\\u26a1','Dette du levier','\\u2212'+fmt$2(p.levDebt),'emprunt versé au trading ou dans une mise','neg') : '')   // [GO LEVIER · 18/10/2026]",
+"       +_tile('\\ud83c\\udfdb\\ufe0f','Impôt anticipé',(p.taxAnt>=0?'\\u2212':'+')+fmt$2(Math.abs(p.taxAnt)),'si tout fermait maintenant · registre fiscal',p.taxAnt>=0?'neg':'')\n       +_tile('\\u23f3','Funding payé (cumul)',fmt$2(p.fundCum),'prélevé en continu du trading','cy')\n       +(p.levDebt > 0.005 ? _tile('\\u26a1','Dette du levier','\\u2212'+fmt$2(p.levDebt),'emprunt versé au trading ou dans une mise','neg') : '')   // [GO LEVIER · 18/10/2026]"
+]
+],
+"js/08-learning-history-render.js": [
+[
+"  if(W < 10) { _corrLastTick=-1; requestAnimationFrame(()=>{_corrLastTick=-10;}); W=300; }\n  // [GO AFFICHAGE 3 · 15/11/2026] (n° 93) chaque agent est NOMMÉ dans le canvas : sa spécialité (type, comme les puces de l'écran Marché — tous les sièges\n  // portent 🧬 et un nom « Hybrid Gen-… ») avec un numéro, en colonne à gauche ; la diagonale porte ce numéro (il nomme les colonnes) ; le titre est sous la\n  // grille, dans le canvas. Avant : 🧬 sur toute la diagonale, noms écrits à droite de la grille (x ≥ largeur : hors du canvas), titre sous le canvas (invisible).\n  const _cmFont = '500 11px monospace';\n  const _cmLab = agents.map((a, i) => (i + 1) + ' ' + String(a.type || String(a.name || '').split('·')[0].trim() || a.id || '·'));\n  const _cm0 = canvas.getContext('2d');   // mesure seulement (le redimensionnement plus bas remet son état à zéro)\n  let labW = 0;\n  if (_cm0) { _cm0.font = _cmFont; _cmLab.forEach(t => { labW = Math.max(labW, _cm0.measureText(t).width); }); } else labW = 7 * Math.max(..._cmLab.map(t => t.length));\n  labW = Math.ceil(Math.min(W * 0.42, labW + 8));\n  const cellSize = Math.floor((W - labW) / n);\n  const H = cellSize * n + 16;\n  canvas.width=W*dpr; canvas.height=H*dpr; canvas.style.height=H+'px';",
+"  if(W < 10) { _corrLastTick=-1; requestAnimationFrame(()=>{_corrLastTick=-10;}); W=300; }\n  const cellSize = Math.floor(W / n);\n  const H = cellSize * n;\n  canvas.width=W*dpr; canvas.height=H*dpr; canvas.style.height=H+'px';"
+],
+[
+"  ctx.scale(dpr, dpr);\n  ctx.translate(labW, 0);   // la grille commence après la colonne des noms\n",
+"  ctx.scale(dpr, dpr);\n"
+],
+[
+"      if(i===j) {\n        // Diagonal: le numéro de l'agent (il nomme la colonne) — [GO AFFICHAGE 3 · 15/11/2026] (n° 93) avant : son emoji, 🧬 pour tous\n        ctx.fillStyle='rgba(255,255,255,.9)';\n        ctx.font=`bold ${Math.max(11, Math.round(cellSize*0.4))}px monospace`;\n        ctx.textAlign='center'; ctx.textBaseline='middle';",
+"      if(i===j) {\n        // Diagonal: agent emoji\n        ctx.font=`${Math.round(cellSize*0.45)}px serif`;\n        ctx.textAlign='center'; ctx.textBaseline='middle';"
+],
+[
+"        ctx.textAlign='center'; ctx.textBaseline='middle';\n        ctx.fillText(String(i+1), j*cellSize+cellSize/2, i*cellSize+cellSize/2);\n      } else if(Math.abs(corr) > 0.25) {",
+"        ctx.textAlign='center'; ctx.textBaseline='middle';\n        ctx.fillText(ai.emoji||'·', j*cellSize+cellSize/2, i*cellSize+cellSize/2);\n      } else if(Math.abs(corr) > 0.25) {"
+],
+[
+"\n  // Noms à gauche de la grille (dans le canvas), coupés « … » s'ils dépassent leur colonne\n  ctx.font=_cmFont; ctx.textAlign='left'; ctx.textBaseline='middle'; ctx.fillStyle='rgba(200,210,230,.85)';\n  for(let i=0;i<n;i++) {",
+"\n  // Right-side labels\n  for(let i=0;i<n;i++) {"
+],
+[
+"  for(let i=0;i<n;i++) {\n    let t = _cmLab[i];\n    while (t.length > 2 && ctx.measureText(t).width > labW - 6) t = t.slice(0, -2) + '…';\n    ctx.fillText(t, -labW + 2, i*cellSize+cellSize/2);\n  }",
+"  for(let i=0;i<n;i++) {\n    ctx.font=`500 ${Math.round(cellSize*0.19)}px monospace`;\n    ctx.textAlign='left'; ctx.fillStyle='rgba(136,153,187,.6)';\n    const shortName=agents[i].name.split('·')[0].trim().slice(0,7);\n    ctx.fillText(shortName, n*cellSize+3, i*cellSize+cellSize/2+3);\n  }"
+],
+[
+"  }\n  ctx.font='500 11px monospace'; ctx.textAlign='center'; ctx.textBaseline='alphabetic'; ctx.fillStyle='rgba(136,153,187,.6)';\n  ctx.fillText('ACCORD INTER-AGENTS', (W - labW)/2, H-3);\n}",
+"  }\n  ctx.font='500 9px monospace'; ctx.textAlign='center'; ctx.fillStyle='rgba(136,153,187,.3)';\n  ctx.fillText('ACCORD INTER-AGENTS', W/2, H+12);\n}"
+],
+[
+"    pos.tp = tp;\n    changed.push('TP→'+pxTxt(pos.pair, tp));   // [GO AFFICHAGE 3 · 15/11/2026] (n° 86c) prix par 02 pxTxt\n  } else if(document.getElementById('peTpInput').value === '') {",
+"    pos.tp = tp;\n    changed.push('TP→'+tp.toFixed(_editModal.cfg.dec>=4?_editModal.cfg.dec:2));\n  } else if(document.getElementById('peTpInput').value === '') {"
+],
+[
+"    pos.sl = sl;\n    changed.push('SL→'+pxTxt(pos.pair, sl));\n  } else if(document.getElementById('peSlInput').value === '') {",
+"    pos.sl = sl;\n    changed.push('SL→'+sl.toFixed(_editModal.cfg.dec>=4?_editModal.cfg.dec:2));\n  } else if(document.getElementById('peSlInput').value === '') {"
+]
+],
+"js/09b3-import-export.js": [
+[
+"async function autoDlDownload() {\n  window._autoDlLastFail = '';   // [GO AFFICHAGE 3 · 15/11/2026] (n° 68b) la raison de CET essai, jamais celle d'un essai d'avant\n  try {",
+"async function autoDlDownload() {\n  try {"
+],
+[
+"    const full = _buildFullBackupFile();\n    if (!full) { window._autoDlLastFail = \"état de l'app non prêt\"; return false; }\n    const json = JSON.stringify(full);",
+"    const full = _buildFullBackupFile();\n    if (!full) return false;\n    const json = JSON.stringify(full);"
+],
+[
+"    if (fsRes) return true;\n    // [GO AFFICHAGE 3 · 15/11/2026] (n° 68b) dans l'app Android (Capacitor), un lien blob n'écrit RIEN (05 _outilsSaveText, go alertes 2) : l'échec est rendu\n    // tel quel, avec la raison de 09b3 _fsWriteBackup. Avant : lien blob, « true », et autoDlTick notait une sauvegarde (m.last) — aucun fichier, aucun message,\n    // le compte à rebours repartait pour 3 h.\n    if (window.Capacitor || window.cordova) {\n      window._autoDlLastFail = String(window._fsLastDiag || 'écriture native refusée').replace(/\\s*\\n\\s*/g, ' · ').slice(0, 240);\n      return false;\n    }\n    // Repli navigateur (Chrome) : telechargement blob",
+"    if (fsRes) return true;\n    // Repli navigateur (Chrome) : telechargement blob"
+],
+[
+"    return true;\n  } catch (e) { window._autoDlLastFail = 'erreur : ' + String((e && e.message) || e).slice(0, 200); return false; }\n}",
+"    return true;\n  } catch (e) { return false; }\n}"
+],
+[
+"    if (m.last && (now - m.last) < m.everyMin * 60000) return;\n    if (m.fail && (now - m.fail) < m.everyMin * 60000) return;   // [GO AFFICHAGE 3 · 15/11/2026] (n° 68b) après un échec : nouvel essai à la fréquence choisie (ou « Télécharger maintenant »)\n    // garde-fou : ne jamais télécharger un état vide/neuf.",
+"    if (m.last && (now - m.last) < m.everyMin * 60000) return;\n    // garde-fou : ne jamais télécharger un état vide/neuf."
+],
+[
+"    Promise.resolve(autoDlDownload()).then(function (ok) {\n      if (ok) { m.last = now; delete m.fail; delete m.failWhy; autoDlSetMeta(m); return; }\n      // [GO AFFICHAGE 3 · 15/11/2026] (n° 68b) un échec n'est plus une sauvegarde : m.last reste au dernier fichier vraiment écrit, l'échec est noté (réglages),\n      // dit (message + journal) une fois par essai\n      m.fail = now; m.failWhy = String(window._autoDlLastFail || 'sauvegarde non écrite').slice(0, 240); autoDlSetMeta(m);\n      try { if (typeof showToast === 'function') showToast('❌ Sauvegarde auto non écrite : ' + m.failWhy, 6000, 'warn'); } catch (e) {}\n      try { const St = (typeof window._auraGetGlobalS === 'function') ? window._auraGetGlobalS() : null;\n            if (St && Array.isArray(St.chainLog)) St.chainLog.push({ icon: '💾', desc: 'Sauvegarde auto non écrite : ' + m.failWhy, hash: (typeof rndHash === 'function' ? rndHash() : ''), time: (typeof nowStr === 'function' ? nowStr() : '') }); } catch (e) {}\n    });",
+"    Promise.resolve(autoDlDownload()).then(function (ok) {\n      if (ok) { m.last = now; autoDlSetMeta(m); }\n    });"
+]
+],
+"js/09g-modals.js": [
+[
+"        <span class=\"why-metric-lbl\">Prix entrée</span>\n        <span class=\"why-metric-val\">${pxTxt(pos.pair, entryPrice)}</span>\n      </div>",
+"        <span class=\"why-metric-lbl\">Prix entrée</span>\n        <span class=\"why-metric-val\">${entryPrice.toFixed(dec)}</span>\n      </div>"
+],
+[
+"        <span class=\"why-metric-lbl\">Take Profit</span>\n        <span class=\"why-metric-val\" style=\"color:var(--up)\">${pxTxt(pos.pair, pos.tp)}</span>\n      </div>` : ''}",
+"        <span class=\"why-metric-lbl\">Take Profit</span>\n        <span class=\"why-metric-val\" style=\"color:var(--up)\">${pos.tp.toFixed(dec)}</span>\n      </div>` : ''}"
+],
+[
+"        <span class=\"why-metric-lbl\">Stop Loss</span>\n        <span class=\"why-metric-val\" style=\"color:var(--down)\">${pxTxt(pos.pair, pos.sl)}</span>\n      </div>` : ''}",
+"        <span class=\"why-metric-lbl\">Stop Loss</span>\n        <span class=\"why-metric-val\" style=\"color:var(--down)\">${pos.sl.toFixed(dec)}</span>\n      </div>` : ''}"
+]
+],
+"js/10f-resolveur-cycle.js": [
+[
+"\n  const pt=pxTxt(pair,ps.price), tt=pxTxt(pair,tpE), st=pxTxt(pair,slE);   // [GO AFFICHAGE 3 · 15/11/2026] (n° 86b) le texte du prix de l'écran (02 pxTxt) — avant : l'entier tronqué sous dec 4 (« BOT … @0 »)\n  S.chainLog.push({icon:side==='long'?'🟢':'🔴',",
+"\n  const pt=cfg.dec>=4?ps.price.toFixed(cfg.dec):Math.floor(ps.price).toLocaleString();\n  const tt=cfg.dec>=4?tpE.toFixed(cfg.dec):Math.floor(tpE).toLocaleString();\n  const st=cfg.dec>=4?slE.toFixed(cfg.dec):Math.floor(slE).toLocaleString();\n  S.chainLog.push({icon:side==='long'?'🟢':'🔴',"
+]
+],
+"js/11-gestion-paires.js": [
+[
+"\n    _pairLog('➕', 'Paire ajoutée : ' + pair + ' @ ' + pxTxt(pair, price) + (hadMemory ? ' · mémoire retrouvée (LMSR/stats conservés du retrait)' : ' · naissance neutre (LMSR 130/130)'));\n    try { if (typeof saveState === 'function') saveState(true); } catch (e) {}",
+"\n    _pairLog('➕', 'Paire ajoutée : ' + pair + ' @ ' + price.toFixed(dec) + (hadMemory ? ' · mémoire retrouvée (LMSR/stats conservés du retrait)' : ' · naissance neutre (LMSR 130/130)'));\n    try { if (typeof saveState === 'function') saveState(true); } catch (e) {}"
+]
+],
+"js/16-fiscal.js": [
+[
+"  };\n  if (pos._voix === 'tendance') h.v = 1;   // [GO AFFICHAGE 3 · 15/11/2026] (n° 88b) position de la voix tendance (ni le bot, ni toi) : l'historique la dit « 📈 Tendance » — absent sinon, le registre reste léger\n  L.hist.unshift(h);",
+"  };\n  L.hist.unshift(h);"
+]
+],
+"js/16b-fiscal-ecran.js": [
+[
+"  var w = [];\n  if (e.v) w.push('voix tendance longue (décision automatique)');   // [GO AFFICHAGE 3 · 15/11/2026] (n° 88b) comme 16 _fiscRegimeOf\n  else if (e.a) w.push('AUTO (bot)');\n  if (e.s !== 'L') w.push('SHORT (vente à découvert = crypto empruntée)');",
+"  var w = [];\n  if (e.a) w.push('AUTO (bot)');\n  if (e.s !== 'L') w.push('SHORT (vente à découvert = crypto empruntée)');"
+],
+[
+"      + '<span style=\"color:' + (e.s === 'L' ? 'var(--up)' : 'var(--down)') + ';\">' + (e.s === 'L' ? '↑ LONG' : '↓ SHORT') + '</span>'\n      + '<span class=\"fx-chip\">' + (e.v ? '📈 Tendance' : e.a ? '🤖 AUTO' : '👤 MAN') + '</span><span class=\"fx-chip\" style=\"color:' + rc + ';border-color:' + rc + ';\">' + (e.r === 'n' ? 'normal' : 'spéculatif') + '</span>'\n      + '<span class=\"fz-g\" style=\"color:' + (e.g >= 0 ? 'var(--up)' : 'var(--down)') + ';\">' + _fiscSgnEur(e.g) + '</span></div>'",
+"      + '<span style=\"color:' + (e.s === 'L' ? 'var(--up)' : 'var(--down)') + ';\">' + (e.s === 'L' ? '↑ LONG' : '↓ SHORT') + '</span>'\n      + '<span class=\"fx-chip\">' + (e.a ? '🤖 AUTO' : '👤 MAN') + '</span><span class=\"fx-chip\" style=\"color:' + rc + ';border-color:' + rc + ';\">' + (e.r === 'n' ? 'normal' : 'spéculatif') + '</span>'\n      + '<span class=\"fz-g\" style=\"color:' + (e.g >= 0 ? 'var(--up)' : 'var(--down)') + ';\">' + _fiscSgnEur(e.g) + '</span></div>'"
+],
+[
+"  var rows = L.hist.slice().reverse().map(function (e) {\n    return [new Date(e.t).toISOString(), e.y, e.p, e.s === 'L' ? 'LONG' : 'SHORT', e.v ? 'TENDANCE' : e.a ? 'AUTO' : 'MANU', e.r === 'n' ? 'normal 10%' : 'speculatif 33%', _fiscWhy(e),\n            e.x0, e.x1, e.N.toFixed(4), e.st.toFixed(4), e.pu.toFixed(6), e.sl.toFixed(6), e.fe.toFixed(6), e.fi, e.fo, e.g.toFixed(6), e.fE.toFixed(6), e.d0.toFixed(6), e.d1.toFixed(6), e.mv.toFixed(6)].map(q).join(';');",
+"  var rows = L.hist.slice().reverse().map(function (e) {\n    return [new Date(e.t).toISOString(), e.y, e.p, e.s === 'L' ? 'LONG' : 'SHORT', e.a ? 'AUTO' : 'MANU', e.r === 'n' ? 'normal 10%' : 'speculatif 33%', _fiscWhy(e),\n            e.x0, e.x1, e.N.toFixed(4), e.st.toFixed(4), e.pu.toFixed(6), e.sl.toFixed(6), e.fe.toFixed(6), e.fi, e.fo, e.g.toFixed(6), e.fE.toFixed(6), e.d0.toFixed(6), e.d1.toFixed(6), e.mv.toFixed(6)].map(q).join(';');"
+]
+]
+}

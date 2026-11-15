@@ -5895,6 +5895,20 @@ async function fetchUsdEurRate(){
 // mises, refroidissements, espérance — 03, 06, 09e, 10e4, 10e6…) gardent « position » seul, exprès : ils ne passent pas par ici.
 function _isCloseRow(t) { return !!t && (t.type === 'position' || t.type === 'urgence' || t.type === 'tendance'); }
 window._isCloseRow = _isCloseRow;
+// [GO AFFICHAGE 3 · 15/11/2026] (ETAT n° 64) ce qu'une fermeture a rapporté EN TOUT, pour les rapports : sa ligne (pnlUsdt, brut de frais) + les parts déjà fermées
+// par paliers (champ « paliers » de la même ligne, 05 closePartial : g = brut, comme la ligne ; une part notée avant go affichage 3 n'a que son net, pris à défaut).
+// Rend { usd, stake } (la mise totale : celle de la ligne + celle des parts). Affichage seul : les lecteurs de la décision lisent la ligne, pas ceci.
+function _closeRowUsd(t) {
+  let usd = Number(t && t.pnlUsdt) || 0, stake = Number(t && t.stakeUsdt) || 0;
+  ((t && Array.isArray(t.paliers)) ? t.paliers : []).forEach(p => {
+    if (!p) return;
+    const g = Number(p.g), net = Number(p.pnlUsdt);
+    usd += isFinite(g) ? g : (isFinite(net) ? net : 0);
+    stake += Number(p.stake) || 0;
+  });
+  return { usd, stake };
+}
+window._closeRowUsd = _closeRowUsd;
 
 // [GO ALERTES 2 · 14/11/2026] (ETAT n° 76) une injection n'est pas un gain : les bases du P&L jour / semaine / mois (09d1 _computePnlByPeriod, lues par
 // l'accueil, le panneau « P&L par période » et les alertes P&L) montent du montant injecté. Avant : l'injection en devises ne déplaçait que le jour (la semaine
@@ -6328,7 +6342,7 @@ function openPosition(pair, side, opts) {
   syncLeverageReserve();
 
   const amount  = (totalExposure / Math.max(0.0001, ps.price)).toFixed(cfg.dec>=4?4:6);
-  const priceTag= cfg.dec>=4 ? ps.price.toFixed(cfg.dec) : '$'+Math.floor(ps.price).toLocaleString();
+  const priceTag= pxTxt(pair, ps.price);   // [GO AFFICHAGE 3 · 15/11/2026] (n° 86b) le texte du prix de l'écran (pxTxt) — avant : l'entier tronqué sous dec 4 (DOT « @$0 »)
 
   // [CONSIGNES · 06/10/2026] niveaux du bon côté pour le sens ouvert, consignes de la paire
   const _d = side === 'long' ? 1 : -1, _px = Number(ps.price);

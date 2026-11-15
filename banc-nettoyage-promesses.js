@@ -87,7 +87,7 @@ function app(o) {
   ctx.window = ctx; ctx.self = ctx;
   if (o.native) ctx.Capacitor = { Plugins: {} };
   ctx.window.open = (...a) => { rec.opened.push(a); return { document: { write() {}, close() {} }, focus() {}, print() {} }; };
-  vm.createContext(ctx);
+  vm.createContext(ctx); require('./banc-fixtures/px-vm.js')(ctx, ROOT);   /* [GO AFFICHAGE 3 · 15/11/2026] aides d'affichage de 02 (pxTxt, _closeRowUsd : banc-fixtures/px-vm.js) */
   vm.runInContext(BASE, ctx);
   return { ctx, S, ws, rec };
 }

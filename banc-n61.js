@@ -77,6 +77,7 @@ function world(o) {
   c._activeWallet = () => S;
   c.window = c; vm.createContext(c);
   const src = F02.map(n => fnSrc(s02, n)).filter(Boolean);
+  c.Intl = Intl; src.unshift('var _pxFmt = {};', need(s02, 'pxTxt'));   // [GO AFFICHAGE 3 · 15/11/2026] (n° 86b) le journal d'ouverture écrit le prix par 02 pxTxt
   src.push('var _leverageMarginCheck = ' + between(s02, 'window._leverageMarginCheck = function _leverageMarginCheck() {', '\n};\n').replace('window._leverageMarginCheck = ', '') + '\n};');
   src.push(need(s9j, 'validateTotalExposure'), need(s9j, 'validateInvestmentCapProvisioned'), need(s9j, 'getCapitalSummary'), fnSrc(s9j, 'validateManualExposure') || '');
   src.push(need(s07, 'manuInvert'), need(s03, '_openProposedPosition'));
@@ -224,14 +225,14 @@ T('B · garde : ce que le BOT lit est au texte d\'avant (918ae59) et, sur l\'EV 
   const E = { estimateStakes: [s02, '191de2e4cf018d53'], validateTotalExposure: [s9j, '9ff782139655cb22'], validateInvestmentCapProvisioned: [s9j, '3229d70744efd7a8'] };
   Object.keys(E).forEach(n => assert.strictEqual(h16(need(E[n][0], n)), E[n][1], n + ' a changé'));
   const FH = { 'js/09c-auto-open.js': 'cb981dcbb9806d73', 'js/10f-resolveur-cycle.js': '2c7f1bbbb66741a0', 'js/15-voix-tendance.js': '9757929e4b295254', 'js/15b-tendance-reelle.js': '08582a20cd8f495a' };
-  Object.keys(FH).forEach(f => assert.strictEqual(h16(rd(f)), FH[f], f + ' a changé'));
+  Object.keys(FH).forEach(f => assert.strictEqual(h16(require('./banc-fixtures/sans-affichage-3.js')(rd(f), f)), FH[f], f + ' a changé'));   // [GO AFFICHAGE 3 · 15/11/2026] hors les retouches de go affichage 3 (affichage seul, banc-affichage-3.js)
   const W = evDuPont(); const p5 = W.run('validateInvestmentCapProvisioned(334)'); near(p5.cap, 1115.33 - 1055.89, 1e-9, 'plafond du bot'); assert.strictEqual(p5.ok, false);
   const v = W.run('validateTotalExposure(334, 0, 0.5)'); assert.strictEqual(v.ok, false); assert.strictEqual(v.phase5, true);
 });
 
 T('F · garde : banc-fixtures/n61-retours.json redonne les 4 fichiers d\'avant au caractère près (empreintes du commit 918ae59)', () => {
   if (process.env.BANC_ROOT) return;   // code d'avant : rien à retirer
-  const sans = ((n61, n99) => (src, f) => n61(n99(src, f), f))(require('./banc-fixtures/sans-n61.js'), require('./banc-fixtures/sans-n99.js'));   // [GO N° 99 · 15/11/2026] retire d'abord go n° 99 (banc-n99.js)
+  const sans = ((n61, n99, a3) => (src, f) => n61(n99(a3(src, f), f), f))(require('./banc-fixtures/sans-n61.js'), require('./banc-fixtures/sans-n99.js'), require('./banc-fixtures/sans-affichage-3.js'));   // [GO AFFICHAGE 3 · 15/11/2026] retire d'abord go affichage 3 (banc-affichage-3.js) ·   // [GO N° 99 · 15/11/2026] retire d'abord go n° 99 (banc-n99.js)
   const A = { 'js/02-state-init.js': 'cf8eae00ce2618de', 'js/03-per-pair-position-buttons-controls-buid.js': 'f439468ae00df1a0', 'js/07-v90-mode-bunker-sos.js': '06cae2cfa7a41d43', 'js/09j-helpers.js': '9f10f52d5bd6268f' };
   Object.keys(A).forEach(f => { const s = rd(f); assert.notStrictEqual(h16(s), A[f], f + ' : la retouche manque'); assert.strictEqual(h16(sans(s, f)), A[f], f + ' : autre chose a bougé'); });
 });
