@@ -44,7 +44,7 @@ const h16 = s => crypto.createHash('sha256').update(s).digest('hex').slice(0, 16
 const near = (a, b, quoi, tol) => assert.ok(typeof a === 'number' && Math.abs(a - b) <= (tol || 1e-6), (quoi || 'valeur') + ' : ' + a + ' ≠ ' + b);
 const s02 = rd('js/02-state-init.js'), s07 = rd('js/07-v90-mode-bunker-sos.js'), s09d1 = rd('js/09d1-paper-real-core.js'), s10c = rd('js/10c-profil-ab-contexte.js'),
       s10e = rd('js/10e-helpers-adaptatifs.js'), html = rd('AURA8_v118.html');
-const _TR = require('./banc-fixtures/sans-tendance-reelle.js');   // [GO TENDANCE RÉELLE · 12/11/2026] retire les retouches de go tendance réelle avant d'épingler le texte (voir le fichier)
+const _TR = ((tr, n103) => (src, f) => tr(n103(src, f), f))(require('./banc-fixtures/sans-tendance-reelle.js'), require('./banc-fixtures/sans-n103.js'));   // [GO N° 103 · 15/11/2026] retire d'abord go n° 103 (02 closePosition, toast arrondi : affichage seul, banc-n103.js) ·   // [GO TENDANCE RÉELLE · 12/11/2026] retire les retouches de go tendance réelle avant d'épingler le texte (voir le fichier)
 const toggle = (() => { const i = s07.indexOf('window._toggleHeroBk = function(which){'); return i < 0 ? '' : s07.slice(i, s07.indexOf('\n};', i) + 3); })();
 
 // le monde : un S plat (le portefeuille du mode à l'écran, comme les accesseurs de 02) et le vrai texte des fonctions

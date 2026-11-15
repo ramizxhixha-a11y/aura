@@ -11,6 +11,7 @@ Rams 15/11 10:36 « Go n63 ». Branche `travail/n63`, base `c730c1b` (`20261115d
 - [x] banc-n63.js 6/6 (6 échouent sur c730c1b : `git worktree add /tmp/aura-avant c730c1b`), `python3 -I rejeu/mutations_n63.py .` 13/13
 - [x] sonde vraie page `node rejeu/sonde_n63.js --root . --avant /tmp/aura-avant --backup rejeu/backups/pont/aura_guardian_full_20261115-103934.json` 7/7
 - [x] ETAT, PASSATION, jeton 20261115e (HTML 97 + 3 bancs) ; banc-all LIVRABLE
+- [x] main a bougé pendant la mission (go n° 103, `7a1d649`, jeton e) : fusionné dans la branche, jeton → `20261115f`, G par sans-n103, sonde 7/7 (avant 7a1d649), banc-all LIVRABLE
 - [ ] Livraison : un commit sur main (squash sans cette note), DOC_V raw + Pages
 
 ## Données
