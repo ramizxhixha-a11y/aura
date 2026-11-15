@@ -13,7 +13,8 @@ Sentry : seule l'issue « Sentry branché ».
 - [x] banc-n108.js (15/15, 11 échecs sur e09d72a) (vm) + témoin banc-fixtures/tendance-reelle-avant-n108.js + sans-n108.js / n108-retours.json ; gardes des autres bancs
 - [x] mutations (22/22 ; mutations_n80 12/12) rejeu/mutations_n108.py
 - [x] sonde vraie page rejeu/sonde_n108.js 7/7 + témoins 2/2 (backup 15/11 23:45 : rejeu/backups/pont/aura_guardian_full_20261115-234506.json)
-- [ ] ETAT, PASSATION, token, banc-all, squash sur main, push, DOC_V raw + Pages
+- [x] ETAT, PASSATION, token 20261116a, banc-all LIVRABLE (16/11 00:2x)
+- [ ] squash sur main, push, DOC_V raw + Pages
 
 ## Données
 - backup : rejeu/backups/pont/aura_guardian_full_20261115-231303.json
