@@ -378,7 +378,10 @@ function _openManTrade(pair, side) {
 
   const fp = (x) => (typeof _manFmtPx === 'function') ? _manFmtPx(pair, x) : String(x);
   const lvl = (pos.tp > 0 && pos.sl > 0) ? ` · TP ${fp(pos.tp)} · SL ${fp(pos.sl)}` : '';
-  S.chainLog.push({ icon: '🎛️', desc: `Trade MANUEL ${pair} ${side.toUpperCase()} · mise $${stake} · levier ×${lev}${lvl}`, hash: rndHash(), time: nowStr() });
+  // [GO N° 99 · 15/11/2026] (ETAT n° 99) le journal dit le levier PRIS par la position (exposition / mise), et le demandé s'il diffère (02 openPosition dit pourquoi)
+  const _st = Number(pos.stakeUsdt) || 0, _ex = Number(pos.totalExposure) || _st, _red = _st > 0 && _ex < _st * lev - 0.005;   // même règle que 02 openPosition
+  const _lx = (_st > 0 && typeof _levTxt === 'function') ? _levTxt(_ex / _st, _red ? lev : 0) : String(lev);
+  S.chainLog.push({ icon: '🎛️', desc: `Trade MANUEL ${pair} ${side.toUpperCase()} · mise $${stake} · levier ×${_lx}${_red ? ' (×' + lev + ' demandé)' : ''}${lvl}`, hash: rndHash(), time: nowStr() });
   if (S.chainLog.length > 100) S.chainLog.splice(0, S.chainLog.length - 100);
   if (typeof showToast === 'function') { showToast('🎛️ ' + pair + ' ' + side.toUpperCase() + ' ouvert · $' + stake + lvl, 3000); }
   try { closePairDetail(); } catch(e){ try{window._decErr&&window._decErr(e)}catch(_e){} }

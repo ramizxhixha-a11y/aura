@@ -44,7 +44,7 @@ const LOADED = (html.match(/src="(js\/[^"?]+\.js)/g) || []).map(x => x.slice(5))
 const s02 = rd('js/02-state-init.js'), s04 = rd('js/04-v8-0-livraison-35-mode-max-permissif-v.js'), s05 = rd('js/05-v37-19-indicateur-de-fatigue-bot.js'),
       s06 = rd('js/06-v63-patterns-chartistes.js'), s07 = rd('js/07-v90-mode-bunker-sos.js'), s9b1 = rd('js/09b1-build-snapshot.js'), s9b2 = rd('js/09b2-save-load.js'),
       s9b3 = rd('js/09b3-import-export.js'), s11 = rd('js/11-gestion-paires.js');
-const _TR = ((tr, n61) => (src, f) => tr(n61(src, f), f))(require('./banc-fixtures/sans-tendance-reelle.js'), require('./banc-fixtures/sans-n61.js'));   // [GO N° 61 · 15/11/2026] retire aussi les retouches de go n° 61 (les plus récentes d'abord)   // [GO TENDANCE RÉELLE · 12/11/2026] retire les retouches de go tendance réelle avant d'épingler le texte (voir le fichier)
+const _TR = ((tr, n61, n99) => (src, f) => tr(n61(n99(src, f), f), f))(require('./banc-fixtures/sans-tendance-reelle.js'), require('./banc-fixtures/sans-n61.js'), require('./banc-fixtures/sans-n99.js'));   // [GO N° 99 · 15/11/2026] retire d'abord les retouches de go n° 99 (levier de paire dit, banc-n99.js) ·   // [GO N° 61 · 15/11/2026] retire aussi les retouches de go n° 61 (les plus récentes d'abord)   // [GO TENDANCE RÉELLE · 12/11/2026] retire les retouches de go tendance réelle avant d'épingler le texte (voir le fichier)
 function storage() { const o = {}, st = { _o: o, throwOn: null, getItem: k => (k in o ? o[k] : null), setItem: (k, v) => { if (st.throwOn && st.throwOn(k)) throw new Error('QuotaExceededError'); o[k] = String(v); }, removeItem: k => { delete o[k]; } }; return st; }
 function fakeOpenDB(ok, rec) {
   return async () => ({ close() {}, transaction() {

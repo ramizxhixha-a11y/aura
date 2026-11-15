@@ -4504,6 +4504,29 @@ function borrowLeverage(amount, pair) {
   return available;
 }
 
+// [GO N° 99 · 15/11/2026] (ETAT n° 99) Pourquoi une ouverture À LA MAIN (02 openPosition) n'a pas reçu tout le levier de paire demandé — LECTURE seule,
+// juste après borrowLeverage, dans l'ordre de ses refus : index ×0 (P10 : à ×0 aucun emprunt, plafond ou pas), plafond « dette ≤ 10× fonds propres »,
+// minimum de 10 $, réserve courte (emprunt partiel). Rend null si tout le levier a été pris. N'écrit rien : l'argent reste celui de borrowLeverage.
+function _pairLevShortWhy(asked, got) {
+  const a = Math.max(0, Number(asked) || 0), g = Math.max(0, Number(got) || 0);
+  if (!(a > 0) || g >= a - 0.005) return null;
+  if ((Number(S.leverage) || 0) === 0) return 'levier général ×0 : aucun emprunt';
+  if (!(g > 0)) {
+    let cap = Infinity; try { cap = _tradingCapitalBase() * 10; } catch (e) {}
+    if ((Number(S.leverageBorrowed) || 0) + a > cap) return 'dette du levier au plafond (10× tes fonds propres)';
+    if (a < 10) return 'part à emprunter sous le minimum de 10 $';
+    return 'réserve du levier sous 10 $';
+  }
+  return 'réserve du levier insuffisante (' + fmt$2(g) + ' empruntés sur ' + fmt$2(a) + ')';
+}
+// ×2 · ×1,5 · ×2,25 (levier réellement pris = exposition / mise, au centième). `sous` = le levier demandé quand il n'a PAS été pris en entier :
+// le texte reste alors SOUS lui (tronqué, au plus sous − 0,01) — jamais « ouvert en ×2 au lieu de ×2 » pour un manque de quelques cents (relecture du 15/11).
+function _levTxt(x, sous) {
+  const n = Number(x) || 0, s = Number(sous) || 0;
+  const v = s > 0 ? Math.min(Math.floor(n * 100 + 1e-6) / 100, Math.round((s - 0.01) * 100) / 100) : Math.round(n * 100) / 100;
+  return Number.isInteger(v) ? String(v) : v.toFixed(2).replace(/0$/, '').replace('.', ',');
+}
+
 // repayLeverage rend au compteur une dette dont l'argent n'est JAMAIS entré dans le trading : la part « exposition » d'une position (borrowLeverage :
 // l'exposition dépasse la mise, la position la rend elle-même à sa fermeture) ou un emprunt annulé avant l'ouverture. Pour une dette versée en
 // ARGENT (au trading, ou comme mise), c'est _repayCashDebt.
@@ -6252,6 +6275,12 @@ function openPosition(pair, side, opts) {
   const leverageBonus = stakeUsdt * (pairLev - 1);
   const levBorrowed   = leverageBonus > 0 ? borrowLeverage(leverageBonus, pair) : 0;
   const totalExposure = stakeUsdt + levBorrowed;
+  // [GO N° 99 · 15/11/2026] (ETAT n° 99) le levier demandé (fiche MAN, « ✓ Appliquer », Inverser, panneau) n'est plus réduit EN SILENCE : borrowLeverage rend 0 à
+  // l'index ×0 (P10), au plafond 10×, sous 10 $, ou moins que demandé — la position s'ouvrait en ×1 (ou ×1,5) avec pour seul mot un toast « info » masqué
+  // et un journal « ×N ». L'argent est le même qu'avant (même emprunt) ; le levier RÉELLEMENT pris et la raison sont dits (plus bas, après l'ouverture).
+  let _levWhy = null;   // après l'emprunt : rien ici ne doit lever (une exception laisserait l'emprunt sans position)
+  try { _levWhy = (typeof _pairLevShortWhy === 'function') ? _pairLevShortWhy(leverageBonus, levBorrowed) : null; } catch(e){ try{window._decErr&&window._decErr(e)}catch(_e){} }
+  const _levEff = _levWhy ? _levTxt(totalExposure / Math.max(1e-9, stakeUsdt), pairLev) : null;
 
   // ── Validation capital avant ouverture manuelle ──────────
   // [GO TENDANCE RÉELLE · 12/11/2026] la voix : exposition = mise ≤ trading (contrôlé plus bas) — le plafond « conviction » des bots ne la concerne pas
@@ -6364,7 +6393,7 @@ function openPosition(pair, side, opts) {
   });
   if(ps.trades.length > 100) ps.trades.splice(0, ps.trades.length - 100);
 
-  const levStr = levBorrowed > 0 ? ` (×${pairLev} lev → $${totalExposure})` : '';
+  const levStr = levBorrowed > 0 ? ` (×${_levWhy ? _levEff : pairLev} lev → $${totalExposure})` : '';   // [GO N° 99] le levier pris, pas le demandé
   S.chainLog.push({
     icon: side==='long'?'🟢':'🔴',
     desc: `Position ${side.toUpperCase()} ${pair} | $${stakeUsdt}${levStr} @${priceTag}`,
@@ -6373,6 +6402,13 @@ function openPosition(pair, side, opts) {
   if(!existing && !_vx) showToast('📈 '+side.toUpperCase()+' '+pair+' — $'+totalExposure+' USDT'+levStr);   // [GO TENDANCE RÉELLE · 12/11/2026] la voix dit ses ouvertures en un seul toast (15b)
   // v19 · #38 Notification trade ouvert
   try { if(typeof notifTradeOpen === 'function') notifTradeOpen(pair, side, totalExposure); } catch(e) {}
+  if (_levWhy) {   // [GO N° 99 · 15/11/2026] (ETAT n° 99) levier réduit : dit (avertissement, visible même sans le mode verbeux) et journalisé
+    try {
+      S.chainLog.push({ icon: '⚠', desc: `Levier ${pair} ${side.toUpperCase()} : ×${pairLev} demandé, ×${_levEff} pris (exposition $${totalExposure}) · ${_levWhy}`, hash: rndHash(), time: nowStr() });
+      if (S.chainLog.length > 100) S.chainLog.splice(0, S.chainLog.length - 100);
+      showToast('⚠ ' + pair + ' ' + side.toUpperCase() + ' ouvert en ×' + _levEff + ' au lieu de ×' + pairLev + ' · ' + _levWhy, 4500, 'warn');
+    } catch(e){ try{window._decErr&&window._decErr(e)}catch(_e){} }
+  }
   // [MANU · 05/10/2026] l'avis du système est dit, le trade est le tien
   if (_warn.length) {
     try {

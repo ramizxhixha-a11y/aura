@@ -1,0 +1,42 @@
+{
+"js/02-state-init.js": [
+[
+"\n// [GO N° 99 · 15/11/2026] (ETAT n° 99) Pourquoi une ouverture À LA MAIN (02 openPosition) n'a pas reçu tout le levier de paire demandé — LECTURE seule,\n// juste après borrowLeverage, dans l'ordre de ses refus : index ×0 (P10 : à ×0 aucun emprunt, plafond ou pas), plafond « dette ≤ 10× fonds propres »,\n// minimum de 10 $, réserve courte (emprunt partiel). Rend null si tout le levier a été pris. N'écrit rien : l'argent reste celui de borrowLeverage.\nfunction _pairLevShortWhy(asked, got) {\n  const a = Math.max(0, Number(asked) || 0), g = Math.max(0, Number(got) || 0);\n  if (!(a > 0) || g >= a - 0.005) return null;\n  if ((Number(S.leverage) || 0) === 0) return 'levier général ×0 : aucun emprunt';\n  if (!(g > 0)) {\n    let cap = Infinity; try { cap = _tradingCapitalBase() * 10; } catch (e) {}\n    if ((Number(S.leverageBorrowed) || 0) + a > cap) return 'dette du levier au plafond (10× tes fonds propres)';\n    if (a < 10) return 'part à emprunter sous le minimum de 10 $';\n    return 'réserve du levier sous 10 $';\n  }\n  return 'réserve du levier insuffisante (' + fmt$2(g) + ' empruntés sur ' + fmt$2(a) + ')';\n}\n// ×2 · ×1,5 · ×2,25 (levier réellement pris = exposition / mise, au centième). `sous` = le levier demandé quand il n'a PAS été pris en entier :\n// le texte reste alors SOUS lui (tronqué, au plus sous − 0,01) — jamais « ouvert en ×2 au lieu de ×2 » pour un manque de quelques cents (relecture du 15/11).\nfunction _levTxt(x, sous) {\n  const n = Number(x) || 0, s = Number(sous) || 0;\n  const v = s > 0 ? Math.min(Math.floor(n * 100 + 1e-6) / 100, Math.round((s - 0.01) * 100) / 100) : Math.round(n * 100) / 100;\n  return Number.isInteger(v) ? String(v) : v.toFixed(2).replace(/0$/, '').replace('.', ',');\n}\n\n// repayLeverage rend au compteur une dette dont l'argent n'est JAMAIS entré dans le trading : la part « exposition » d'une position (borrowLeverage :\n",
+"\n// repayLeverage rend au compteur une dette dont l'argent n'est JAMAIS entré dans le trading : la part « exposition » d'une position (borrowLeverage :\n"
+],
+[
+"  const totalExposure = stakeUsdt + levBorrowed;\n  // [GO N° 99 · 15/11/2026] (ETAT n° 99) le levier demandé (fiche MAN, « ✓ Appliquer », Inverser, panneau) n'est plus réduit EN SILENCE : borrowLeverage rend 0 à\n  // l'index ×0 (P10), au plafond 10×, sous 10 $, ou moins que demandé — la position s'ouvrait en ×1 (ou ×1,5) avec pour seul mot un toast « info » masqué\n  // et un journal « ×N ». L'argent est le même qu'avant (même emprunt) ; le levier RÉELLEMENT pris et la raison sont dits (plus bas, après l'ouverture).\n  let _levWhy = null;   // après l'emprunt : rien ici ne doit lever (une exception laisserait l'emprunt sans position)\n  try { _levWhy = (typeof _pairLevShortWhy === 'function') ? _pairLevShortWhy(leverageBonus, levBorrowed) : null; } catch(e){ try{window._decErr&&window._decErr(e)}catch(_e){} }\n  const _levEff = _levWhy ? _levTxt(totalExposure / Math.max(1e-9, stakeUsdt), pairLev) : null;\n\n",
+"  const totalExposure = stakeUsdt + levBorrowed;\n\n"
+],
+[
+"\n  const levStr = levBorrowed > 0 ? ` (×${_levWhy ? _levEff : pairLev} lev → $${totalExposure})` : '';   // [GO N° 99] le levier pris, pas le demandé\n  S.chainLog.push({\n",
+"\n  const levStr = levBorrowed > 0 ? ` (×${pairLev} lev → $${totalExposure})` : '';\n  S.chainLog.push({\n"
+],
+[
+"  try { if(typeof notifTradeOpen === 'function') notifTradeOpen(pair, side, totalExposure); } catch(e) {}\n  if (_levWhy) {   // [GO N° 99 · 15/11/2026] (ETAT n° 99) levier réduit : dit (avertissement, visible même sans le mode verbeux) et journalisé\n    try {\n      S.chainLog.push({ icon: '⚠', desc: `Levier ${pair} ${side.toUpperCase()} : ×${pairLev} demandé, ×${_levEff} pris (exposition $${totalExposure}) · ${_levWhy}`, hash: rndHash(), time: nowStr() });\n      if (S.chainLog.length > 100) S.chainLog.splice(0, S.chainLog.length - 100);\n      showToast('⚠ ' + pair + ' ' + side.toUpperCase() + ' ouvert en ×' + _levEff + ' au lieu de ×' + pairLev + ' · ' + _levWhy, 4500, 'warn');\n    } catch(e){ try{window._decErr&&window._decErr(e)}catch(_e){} }\n  }\n  // [MANU · 05/10/2026] l'avis du système est dit, le trade est le tien\n",
+"  try { if(typeof notifTradeOpen === 'function') notifTradeOpen(pair, side, totalExposure); } catch(e) {}\n  // [MANU · 05/10/2026] l'avis du système est dit, le trade est le tien\n"
+]
+],
+"js/07-v90-mode-bunker-sos.js": [
+[
+"          const effStk  = baseStk * lev;\n          if(lev > 1 && (Number(S.leverage) || 0) === 0) {   // [GO N° 99 · 15/11/2026] (ETAT n° 99) index ×0 : aucun emprunt, le ×N de la paire ne s'applique pas — dit, plus « =$mise×N »\n            stEl.innerHTML = `$${baseStk}<span style=\"color:var(--t3);font-size:9px;\"> ×${lev} inactif · levier ×0</span>`;\n          } else if(lev > 1) {\n            stEl.innerHTML = `$${baseStk}<span style=\"color:var(--gold);font-size:9px;\"> ×${lev}</span><span style=\"color:var(--up);font-size:9px;font-weight:700;\"> =$${effStk}</span>`;\n",
+"          const effStk  = baseStk * lev;\n          if(lev > 1) {\n            stEl.innerHTML = `$${baseStk}<span style=\"color:var(--gold);font-size:9px;\"> ×${lev}</span><span style=\"color:var(--up);font-size:9px;font-weight:700;\"> =$${effStk}</span>`;\n"
+],
+[
+"        // quand aucune n'était ouverte. Sans levier : mêmes nombres.\n        const stake = _activePos ? (Number(_activePos.totalExposure) || _activePos.stakeUsdt || ps.stake || 0) : (ps.stake||0) * ((Number(S.leverage) || 0) === 0 ? 1 : (ps.pairLeverage||1));   // [GO N° 99] index ×0 : ×1\n        const _own  = _activePos ? (_activePos.stakeUsdt || ps.stake || 0) : (ps.stake||0);\n",
+"        // quand aucune n'était ouverte. Sans levier : mêmes nombres.\n        const stake = _activePos ? (Number(_activePos.totalExposure) || _activePos.stakeUsdt || ps.stake || 0) : (ps.stake||0) * (ps.pairLeverage||1);\n        const _own  = _activePos ? (_activePos.stakeUsdt || ps.stake || 0) : (ps.stake||0);\n"
+]
+],
+"js/10e-helpers-adaptatifs.js": [
+[
+"  const lvl = (pos.tp > 0 && pos.sl > 0) ? ` · TP ${fp(pos.tp)} · SL ${fp(pos.sl)}` : '';\n  // [GO N° 99 · 15/11/2026] (ETAT n° 99) le journal dit le levier PRIS par la position (exposition / mise), et le demandé s'il diffère (02 openPosition dit pourquoi)\n  const _st = Number(pos.stakeUsdt) || 0, _ex = Number(pos.totalExposure) || _st, _red = _st > 0 && _ex < _st * lev - 0.005;   // même règle que 02 openPosition\n  const _lx = (_st > 0 && typeof _levTxt === 'function') ? _levTxt(_ex / _st, _red ? lev : 0) : String(lev);\n  S.chainLog.push({ icon: '🎛️', desc: `Trade MANUEL ${pair} ${side.toUpperCase()} · mise $${stake} · levier ×${_lx}${_red ? ' (×' + lev + ' demandé)' : ''}${lvl}`, hash: rndHash(), time: nowStr() });\n  if (S.chainLog.length > 100) S.chainLog.splice(0, S.chainLog.length - 100);\n",
+"  const lvl = (pos.tp > 0 && pos.sl > 0) ? ` · TP ${fp(pos.tp)} · SL ${fp(pos.sl)}` : '';\n  S.chainLog.push({ icon: '🎛️', desc: `Trade MANUEL ${pair} ${side.toUpperCase()} · mise $${stake} · levier ×${lev}${lvl}`, hash: rndHash(), time: nowStr() });\n  if (S.chainLog.length > 100) S.chainLog.splice(0, S.chainLog.length - 100);\n"
+]
+],
+"js/10h-pont-fullpower-bricks.js": [
+[
+"          <label style=\"${lab}\">Levier ×</label>\n          ${(Number(S.leverage) || 0) === 0\n            ? `<input type=\"number\" id=\"manIn_lev_${k}\" value=\"1\" min=\"1\" max=\"1\" step=\"1\" disabled style=\"${inp}color:var(--t3);\">\n          <div id=\"manLevNote_${k}\" style=\"margin-top:3px;font-size:9px;color:var(--gold);line-height:1.3;\">Levier général ×0 : aucun emprunt, le trade s'ouvre en ×1</div>`\n            : `<input type=\"number\" id=\"manIn_lev_${k}\" value=\"1\" min=\"1\" max=\"10\" step=\"1\" style=\"${inp}color:var(--t1);\">`}\n        </div>\n",
+"          <label style=\"${lab}\">Levier ×</label>\n          <input type=\"number\" id=\"manIn_lev_${k}\" value=\"1\" min=\"1\" max=\"10\" step=\"1\" style=\"${inp}color:var(--t1);\">\n        </div>\n"
+]
+]
+}

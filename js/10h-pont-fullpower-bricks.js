@@ -343,7 +343,10 @@ function openManDetail(pair) {
         </div>
         <div>
           <label style="${lab}">Levier ×</label>
-          <input type="number" id="manIn_lev_${k}" value="1" min="1" max="10" step="1" style="${inp}color:var(--t1);">
+          ${(Number(S.leverage) || 0) === 0
+            ? `<input type="number" id="manIn_lev_${k}" value="1" min="1" max="1" step="1" disabled style="${inp}color:var(--t3);">
+          <div id="manLevNote_${k}" style="margin-top:3px;font-size:9px;color:var(--gold);line-height:1.3;">Levier général ×0 : aucun emprunt, le trade s'ouvre en ×1</div>`
+            : `<input type="number" id="manIn_lev_${k}" value="1" min="1" max="10" step="1" style="${inp}color:var(--t1);">`}
         </div>
         <div>
           <label style="${lab}">TP (% depuis l'entrée)</label>

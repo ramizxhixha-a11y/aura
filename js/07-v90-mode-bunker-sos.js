@@ -4394,7 +4394,9 @@ function renderActionsGrid() {
           const lev     = ps.pairLeverage || 1;
           const baseStk = ps.stake || 0;
           const effStk  = baseStk * lev;
-          if(lev > 1) {
+          if(lev > 1 && (Number(S.leverage) || 0) === 0) {   // [GO N° 99 · 15/11/2026] (ETAT n° 99) index ×0 : aucun emprunt, le ×N de la paire ne s'applique pas — dit, plus « =$mise×N »
+            stEl.innerHTML = `$${baseStk}<span style="color:var(--t3);font-size:9px;"> ×${lev} inactif · levier ×0</span>`;
+          } else if(lev > 1) {
             stEl.innerHTML = `$${baseStk}<span style="color:var(--gold);font-size:9px;"> ×${lev}</span><span style="color:var(--up);font-size:9px;font-weight:700;"> =$${effStk}</span>`;
           } else {
             stEl.textContent = '$'+baseStk;
@@ -4413,7 +4415,7 @@ function renderActionsGrid() {
         // [GO LEVIER · 18/10/2026] (ETAT n° 29) frais d'aller-retour et mouvement attendu sur l'EXPOSITION (ce que l'exchange achète : recordFees),
         // funding sur la MISE (applyFundingFees le prélève sur elle). Avant : la mise d'une position ouverte (sans son levier), mais la mise × levier
         // quand aucune n'était ouverte. Sans levier : mêmes nombres.
-        const stake = _activePos ? (Number(_activePos.totalExposure) || _activePos.stakeUsdt || ps.stake || 0) : (ps.stake||0) * (ps.pairLeverage||1);
+        const stake = _activePos ? (Number(_activePos.totalExposure) || _activePos.stakeUsdt || ps.stake || 0) : (ps.stake||0) * ((Number(S.leverage) || 0) === 0 ? 1 : (ps.pairLeverage||1));   // [GO N° 99] index ×0 : ×1
         const _own  = _activePos ? (_activePos.stakeUsdt || ps.stake || 0) : (ps.stake||0);
         if(stake > 0) {
           const roundTripFee = stake * (fc.takerRate * 2 + fc.slippage * 2);

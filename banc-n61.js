@@ -231,7 +231,7 @@ T('B · garde : ce que le BOT lit est au texte d\'avant (918ae59) et, sur l\'EV 
 
 T('F · garde : banc-fixtures/n61-retours.json redonne les 4 fichiers d\'avant au caractère près (empreintes du commit 918ae59)', () => {
   if (process.env.BANC_ROOT) return;   // code d'avant : rien à retirer
-  const sans = require('./banc-fixtures/sans-n61.js');
+  const sans = ((n61, n99) => (src, f) => n61(n99(src, f), f))(require('./banc-fixtures/sans-n61.js'), require('./banc-fixtures/sans-n99.js'));   // [GO N° 99 · 15/11/2026] retire d'abord go n° 99 (banc-n99.js)
   const A = { 'js/02-state-init.js': 'cf8eae00ce2618de', 'js/03-per-pair-position-buttons-controls-buid.js': 'f439468ae00df1a0', 'js/07-v90-mode-bunker-sos.js': '06cae2cfa7a41d43', 'js/09j-helpers.js': '9f10f52d5bd6268f' };
   Object.keys(A).forEach(f => { const s = rd(f); assert.notStrictEqual(h16(s), A[f], f + ' : la retouche manque'); assert.strictEqual(h16(sans(s, f)), A[f], f + ' : autre chose a bougé'); });
 });
