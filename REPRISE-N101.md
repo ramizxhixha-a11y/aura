@@ -16,4 +16,5 @@ Rams 15/11 12:48 « Fo 101 » (= go 101). Branche `travail/n101`. Départ : main
 - [x] Correction : 10h, section « ⚡ Levier de la paire » de la fiche MAN (− ×N +, par 03 changePairLev ; 03 inchangé), synchro dans _manRefreshTick
 - [x] banc-n101 9/9 (7 échouent sur 733ed6a : `BANC_ROOT=/tmp/avant101`), `python3 -I rejeu/mutations_n101.py .` 17/17 ; banc-manu (helpers ajoutés), banc-n99 F (via sans-n101) ; fixture `banc-fixtures/sans-n101.js` + `n101-retours.json`
 - [x] sonde vraie page 8/8 : `node rejeu/sonde_n101.js --root . --avant /tmp/avant101 --backup rejeu/backups/pont/aura_guardian_full_20261115-125237.json` (avant = `git archive 733ed6a`)
-- [ ] ETAT, PASSATION, banc-all, un commit sur main, push, DOC_V raw + Pages
+- [x] ETAT, PASSATION, jeton `20261115i` (HTML + banc-marche-repare, banc-horloge-mode, banc-degel)
+- [ ] banc-all, un commit sur main (squash, sans cette note), push, DOC_V raw + Pages
