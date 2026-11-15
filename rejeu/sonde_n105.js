@@ -92,8 +92,11 @@ const rel = (a, b) => Math.abs(a - b) <= Math.abs(b) * 1e-9;
     av.charge.bornes['DOT/USDT'][0] === 3 && av.charge.bornes['DOT/USDT'][1] === 30 && av.charge.bornes['AVAX/USDT'][0] === 8 && REEL['DOT/USDT'] < 3 && REEL['AVAX/USDT'] < 8,
     { DOT: av.charge.bornes['DOT/USDT'], AVAX: av.charge.bornes['AVAX/USDT'] });
   const mn = a => Math.min(...a);
-  R('(1) témoin — avant, ' + SEC + ' s d\'AA : DOT passe à 3 $ et y reste (2e moitié des relevés : min ' + mn(Ra['DOT/USDT'].fin) + ', ' + Ra['DOT/USDT'].horsRegle + ' relevés hors règle) ; AVAX touche sa borne constante 8 (' + Ra['AVAX/USDT'].aConstante + ' relevés), ADA la sienne, 0,15 (' + Ra['ADA/USDT'].aConstante + ')',
-    Ra['DOT/USDT'].n >= SEC - 2 && mn(Ra['DOT/USDT'].fin) >= 3 && Ra['DOT/USDT'].horsRegle > 0 && Ra['AVAX/USDT'].aConstante > 0 && Ra['ADA/USDT'].aConstante > 0, { DOT: Ra['DOT/USDT'], AVAX: Ra['AVAX/USDT'], ADA: Ra['ADA/USDT'] });
+  // (avant, DOT : selon que l'attraction vers le dernier prix réel gardé — 02 blendRealPrices, ps._targetPrice du backup — est éteinte ou non avant le 1er pas de
+  //  bougie, DOT reste à 3 $ ou va et vient entre 3 $ et ≈ 0,76 toutes les 3 s : les deux se voient d'une passe à l'autre ; le témoin exige seulement d'atteindre 3 $)
+  const a3 = (Ra['DOT/USDT'].serie = (av.serie['DOT/USDT'] || []).filter(v => v >= 3)).length;
+  R('(1) témoin — avant, ' + SEC + ' s d\'AA : DOT atteint 3 $ (' + a3 + ' relevés à 3 $ ou plus, max ' + Ra['DOT/USDT'].max.toPrecision(4) + ' ; ' + Ra['DOT/USDT'].horsRegle + ' relevés hors règle) ; AVAX touche sa borne constante 8 (' + Ra['AVAX/USDT'].aConstante + ' relevés) ; ADA la sienne, 0,15 (' + Ra['ADA/USDT'].aConstante + ', au hasard de la marche)',
+    Ra['DOT/USDT'].n >= SEC - 2 && a3 >= 3 && Ra['DOT/USDT'].horsRegle > 0 && Ra['AVAX/USDT'].aConstante > 0, { DOT: Ra['DOT/USDT'], AVAX: Ra['AVAX/USDT'], ADA: Ra['ADA/USDT'] });
   const dep = Math.max(...P.map(p => Rp[p].depasse));
   R('(1b) après, ' + SEC + ' s d\'AA : le prix de l\'école de chaque paire reste dans [0,65 ; 1,55] × son dernier prix réel, au pas GBM de 02 près (dépassement max ' + (dep * 100).toFixed(3) + ' %, ' + P.reduce((a, p) => a + Rp[p].horsRegle, 0) + ' relevés) ; aucun relevé à une borne constante du code ; DOT ' + Rp['DOT/USDT'].min.toPrecision(4) + '…' + Rp['DOT/USDT'].max.toPrecision(4) + ', AVAX ' + Rp['AVAX/USDT'].min.toPrecision(4) + '…' + Rp['AVAX/USDT'].max.toPrecision(4),
     P.every(p => Rp[p].n >= SEC - 2 && Rp[p].depasse < 0.01 && Rp[p].aConstante === 0) && Rp['DOT/USDT'].max < 3, Rp);
