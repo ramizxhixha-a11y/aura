@@ -16,7 +16,8 @@
 //   N6  entrée de l'EV sous celle de la poche (2 × x0 au-delà de 2 × son entrée) : −100 % de sa mise, comme la poche
 //   N7  témoin : sans liquidation (ouverture, retournement frais / périmé, ✕, ×2 de l'EV, paire retirée, MANU, pause), l'état = celui du code
 //       d'avant au caractère près ; et le banc VOIT la différence sur une liquidation (règle 10)
-//   N8  garde : 15b ne change que dans le bloc (b) et l'en-tête ; banc-fixtures/tendance-reelle-avant-n80.js = 15b de 85e18ca (empreinte)
+//   N8  garde : 15b ne change que dans le bloc (b) et l'en-tête ; banc-fixtures/tendance-reelle-avant-n80.js = 15b de 85e18ca (empreinte) ;
+//       banc-fixtures/sans-n80.js (lu par les gardes des autres bancs) redonne ce 15b au caractère près
 'use strict';
 const fs = require('fs'), vm = require('vm'), assert = require('assert'), path = require('path'), crypto = require('crypto');
 const ROOT = process.env.BANC_ROOT || __dirname, rd = f => fs.readFileSync(path.join(ROOT, f), 'utf8');
@@ -215,6 +216,7 @@ T('N8 · 15b ne change que dans le bloc (b) de sync et l\'en-tête ; le témoin 
   const corps = (s) => s.slice(s.indexOf('(function () {'));
   const A = bloc(corps(AVANT15b)), B = bloc(corps(s15b));
   assert.strictEqual(B[0], A[0], 'avant le bloc (b) : identique'); assert.strictEqual(B[1], A[1], 'après le bloc (b) : identique');
+  assert.strictEqual(require('./banc-fixtures/sans-n80.js')(s15b, 'js/15b-tendance-reelle.js'), AVANT15b, 'sans-n80.js redonne le 15b d\'avant au caractère près (lu par les gardes des autres bancs)');
 });
 
 console.log('\n' + (fail ? '❌' : '✅') + ' ' + pass + '/' + (pass + fail) + ' tests passés');

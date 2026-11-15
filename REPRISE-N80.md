@@ -14,7 +14,7 @@ Remède retenu (convention existante 10f:717 / 10f:739, décision Rams 26/09 « 
 - [x] 3. remède 15b
 - [x] 4. mutations rejeu/mutations_n80.py
 - [x] 5. sonde vraie page rejeu/sonde_n80.js (backup du pont du jour)
-- [ ] 6. ETAT, PASSATION, jeton 20261115l, banc-all, un commit sur main, push, DOC_V raw + Pages
+- [~] 6. ETAT, PASSATION, jeton 20261115l, banc-all, un commit sur main, push, DOC_V raw + Pages
 
 Commandes : `node banc-n80.js` · `python3 -I rejeu/mutations_n80.py .` · `node rejeu/sonde_n80.js --root . --avant /tmp/avant-n80 --backup <b>`
 Copie d'avant : `git worktree add /tmp/avant-n80 85e18ca` (ou `git archive 85e18ca | tar -x -C /tmp/avant-n80`).
