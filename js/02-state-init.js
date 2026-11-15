@@ -6942,7 +6942,13 @@ function applyBotSuggestion(pair, side, stake) {
 
   // Cap stake to free capital
   const cap = getCapitalSummary();
-  const safeStake = Math.min(Math.floor(cap.free * 0.3), stake);
+  // [GO N° 61 · 15/11/2026] (ETAT n° 87) le libre compte maintenant la caisse (09j getCapitalSummary), qu'openPosition ne dépense pas : la mise demandée
+  // ne dépasse jamais ce qu'openPosition peut ouvrir — le trading, plus l'emprunt « juste à temps » du levier d'index (02 ensureLeverageCoverForTrade,
+  // base × index − dette), comme 07 manuInvert. Sans cette borne, 30 % d'une grosse caisse dépassaient le trading : « rien ouvert » là où l'ancien
+  // libre (− les mises) ouvrait (relecture adverse du 15/11 : caisse 2 500 $, trading 1 000 $ → avant 930 $ ouverts, sans la borne refus).
+  const _ix = Number(S.leverage) || 0;
+  const _ouvrable = Math.max(0, Number(S.tradingAccount) || 0) + (_ix >= 1 ? Math.max(0, _tradingCapitalBase() * Math.min(_ix, S.leverageMaxMult || 10) - (Number(S.leverageBorrowed) || 0)) : 0);
+  const safeStake = Math.min(Math.floor(cap.free * 0.3), stake, Math.floor(_ouvrable));
   if(safeStake < 5) { showToast('Capital libre insuffisant'); return; }
 
   // Haptic feedback if available

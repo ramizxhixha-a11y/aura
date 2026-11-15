@@ -16,6 +16,8 @@ M = [
   ('03 message d\'avant (« trading − engagés »)', J3, "showToast(`⚠ Règle sizing · max investissable ${fmt$(free)} (${_src})`", "showToast(`⚠ Règle sizing · max investissable ${fmt$(free)} (${_src} − engagés)`"),
   ('07 manuInvert cherche la mise sur validateTotalExposure', J7, "const r = validateManualExposure(x, x * (lev - 1));", "const r = validateTotalExposure(x, x * (lev - 1));"),
   ('libre = caisse + trading − engagés (n° 87 revient)', J9, "    free: Math.max(0, (S.cashAccount||0) + (S.tradingAccount||0))\n", "    free: Math.max(0, (S.cashAccount||0) + (S.tradingAccount||0) - staked)\n"),
+  ('« ✓ Appliquer » sans la borne de ce qu\'openPosition peut ouvrir', J2, "  const safeStake = Math.min(Math.floor(cap.free * 0.3), stake, Math.floor(_ouvrable));", "  const safeStake = Math.min(Math.floor(cap.free * 0.3), stake);"),
+  ('« ✓ Appliquer » : borne sans l\'emprunt juste à temps', J2, "  const _ouvrable = Math.max(0, Number(S.tradingAccount) || 0) + (_ix >= 1 ?", "  const _ouvrable = Math.max(0, Number(S.tradingAccount) || 0) + (_ix >= 99 ?"),
   ('libre sans la caisse', J9, "    free: Math.max(0, (S.cashAccount||0) + (S.tradingAccount||0))\n", "    free: Math.max(0, (S.tradingAccount||0))\n"),
   ('engagé du résumé sans l\'exposition', J9, "  const staked     = S.openPositions.reduce((s, p) => s + (p.totalExposure || p.stakeUsdt || 0), 0);", "  const staked     = S.openPositions.reduce((s, p) => s + (p.stakeUsdt || 0), 0);"),
   ('le BOT (02 estimateStakes) lit la correction', J2, "const _p5 = validateInvestmentCapProvisioned(kelly);", "const _p5 = validateManualExposure(kelly);"),

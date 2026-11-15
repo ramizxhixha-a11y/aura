@@ -1,11 +1,14 @@
 // banc-n61.js — [GO N° 61 · 15/11/2026] les parties MANUELLES de n° 61 et n° 87 (ETAT-AURA8.md, registre G1 / G2).
 // Chaque essai fait tourner le VRAI texte de l'app en vm (02, 03, 07, 09j) et ÉCHOUE sur le code d'avant
-//   BANC_ROOT=<copie du commit 918ae59> node banc-n61.js        (sauf les gardes B et F, marquées « garde »)
+//   BANC_ROOT=<copie du commit 918ae59> node banc-n61.js        (sauf les gardes N7, B et F)
 //   N1  VRAI openPosition, l'EV comme au pont du 15/11 00:26 (11 positions de la voix, 1 055,89 $ engagés, 1 115,33 $ au trading, sans levier) :
 //       200 $ à la main sur EUR/USDT s'ouvrent (avant : « Capital max atteint · $59 libre », plafond = trading − engagés, les mises comptées deux fois)
 //   N2  VRAI manuInvert (07) : 3 positions à la main, la 1re (490 $) inversée → rouverte à 490 $ dans l'autre sens (avant : « fermé, mais … non rouvert »)
 //   N3  VRAI _openProposedPosition (03, panneau de la paire) : même état que N1, 200 $ s'ouvrent ; refus au-delà du trading, message « (trading) »
 //   N4  VRAI applyBotSuggestion (02, « ✓ Appliquer ») : même état, suggestion de 150 $ → 150 $ ouverts (avant : 17 $ = ⌊(trading − engagés) × 0,3⌋)
+//   N4b VRAI applyBotSuggestion, grosse caisse : la mise ne dépasse pas ce qu'openPosition peut ouvrir (trading + emprunt « juste à temps » de l'index)
+//   N6  VRAI openPosition au levier d'index ×1 sans dette : l'emprunt « juste à temps » couvre la mise à la main (avant : refus « $59 libre »)
+//   N7  garde, limite dite : avec une dette de levier (même 0,01 $), la phase 5 passe en branche « levier » — la correction n'agit pas
 //   N5  09j getCapitalSummary : libre = caisse + trading ; engagé et maximum inchangés
 //   P   propriété (2 000 états tirés) : validateManualExposure = validateTotalExposure, sauf la phase 5 sans levier (plafond = le trading) ;
 //       jamais plus stricte ; avec un emprunt du levier, réponse identique
@@ -136,6 +139,34 @@ T('N4 · VRAI applyBotSuggestion (« ✓ Appliquer ») : même EV, suggestion de
   const W2 = evDuPont(); W2.run("applyBotSuggestion('EUR/USDT', 'long', 900)"); near(ouverte(W2, 'EUR/USDT').stakeUsdt, 334, 1e-12, '30 % du libre');
 });
 
+T('N4b · VRAI applyBotSuggestion, grosse caisse (2 500 $), trading 1 000 $, une position de 400 $, levier ×0 : la mise ne dépasse pas ce qu\'openPosition peut ouvrir — 1 000 $ ouverts (relecture du 15/11 : sans la borne, 1 050 $ demandés → « rien ouvert » ; l\'ancien libre ouvrait 930 $)', () => {
+  const W = world({ trading: 1000, cash: 2500 });
+  W.S.openPositions.push({ id: 'o', pair: 'BTC/USDT', side: 'long', entryPrice: 100, stakeUsdt: 400, totalExposure: 400, levBorrowed: 0, auto: false });
+  W.run('syncLeverageReserve()'); W.run("applyBotSuggestion('EUR/USDT', 'long', 1100)");
+  assert.ok(ouverte(W, 'EUR/USDT'), JSON.stringify(W.seen.toasts)); near(ouverte(W, 'EUR/USDT').stakeUsdt, 1000, 1e-12, 'mise = le trading');
+  assert.ok(!W.seen.toasts.some(t => /rien ouvert/.test(t[0])), JSON.stringify(W.seen.toasts));
+  // levier d'index ×1 sans dette : l'emprunt « juste à temps » compte (base × 1 − dette) — 1 050 $ ouverts, 50 $ empruntés
+  const W2 = world({ trading: 1000, cash: 2500 }); W2.S.leverage = 1;
+  W2.S.openPositions.push({ id: 'o', pair: 'BTC/USDT', side: 'long', entryPrice: 100, stakeUsdt: 400, totalExposure: 400, levBorrowed: 0, auto: false });
+  W2.run('syncLeverageReserve()'); W2.run("applyBotSuggestion('EUR/USDT', 'long', 1100)");
+  assert.ok(ouverte(W2, 'EUR/USDT'), JSON.stringify(W2.seen.toasts)); near(ouverte(W2, 'EUR/USDT').stakeUsdt, 1050, 1e-12, 'mise'); near(W2.S.leverageBorrowed, 50, 1e-9, 'emprunt juste à temps');
+});
+
+T('N6 · VRAI openPosition, l\'EV du pont au levier d\'index ×1 SANS dette : 1 500 $ à la main s\'ouvrent avec l\'emprunt « juste à temps » (avant : « $59 libre ») ; jamais plus que trading + emprunt possible', () => {
+  const W = evDuPont(); W.S.leverage = 1; W.run('syncLeverageReserve()'); W.S.pairStates['EUR/USDT'].stake = 1500;
+  assert.ok(W.run("openPosition('EUR/USDT', 'long')"), JSON.stringify(W.seen.toasts));
+  near(ouverte(W, 'EUR/USDT').stakeUsdt, 1500, 1e-12); near(W.S.leverageBorrowed, 1500 - 1115.33, 1e-9, 'emprunt = le manque'); assert.ok(W.S.tradingAccount >= 0);
+  const W2 = evDuPont(); W2.S.leverage = 1; W2.run('syncLeverageReserve()'); W2.S.pairStates['EUR/USDT'].stake = 1115.33 + 2171.22 + 1;   // > trading + base × 1
+  assert.strictEqual(W2.run("openPosition('EUR/USDT', 'long')"), null); assert.strictEqual(W2.S.leverageBorrowed, 0, 'rien emprunté');
+});
+
+T('N7 · limite dite : une dette de levier, même de 0,01 $, met la phase 5 en branche « levier » — la correction n\'agit plus (refus comme avant, « $0 libre »)', () => {
+  const W = evDuPont(); W.S.leverageBorrowed = 0.01; W.S.pairStates['EUR/USDT'].stake = 200;
+  assert.strictEqual(W.run("openPosition('EUR/USDT', 'long')"), null);
+  assert.ok(W.seen.toasts.some(t => /Capital max atteint · \$0 libre/.test(t[0])), JSON.stringify(W.seen.toasts));
+  if (W.run('typeof validateManualExposure') === 'function') assert.deepStrictEqual(W.run('validateManualExposure(200, 0)'), W.run('validateTotalExposure(200, 0)'));
+});
+
 T('N5 · 09j getCapitalSummary : libre = caisse + trading (avant : − trades en cours, comptés deux fois) ; engagé, maximum et % inchangés', () => {
   const W = evDuPont(); W.S.cashAccount = 12.5;
   W.S.openPositions.push({ id: 'L', pair: 'EUR/USDT', side: 'long', entryPrice: 100, stakeUsdt: 50, totalExposure: 150, levBorrowed: 100, auto: false });   // une position à levier ×3
@@ -190,7 +221,7 @@ T('C · appels : validateManualExposure ← 02 openPosition, 03 _openProposedPos
 });
 
 T('B · garde : ce que le BOT lit est au texte d\'avant (918ae59) et, sur l\'EV du pont, le bot voit toujours le plafond d\'avant — partie bot de n° 61 au registre', () => {
-  const E = { estimateStakes: [s02, '191de2e4cf018d53'], validateTotalExposure: [s9j, '9ff782139655cb22'], validateInvestmentCapProvisioned: [s9j, '3229d70744efd7a8'], applyBotSuggestion: [s02, '3fb037063c1325e2'] };
+  const E = { estimateStakes: [s02, '191de2e4cf018d53'], validateTotalExposure: [s9j, '9ff782139655cb22'], validateInvestmentCapProvisioned: [s9j, '3229d70744efd7a8'] };
   Object.keys(E).forEach(n => assert.strictEqual(h16(need(E[n][0], n)), E[n][1], n + ' a changé'));
   const FH = { 'js/09c-auto-open.js': 'cb981dcbb9806d73', 'js/10f-resolveur-cycle.js': '2c7f1bbbb66741a0', 'js/15-voix-tendance.js': '9757929e4b295254', 'js/15b-tendance-reelle.js': '08582a20cd8f495a' };
   Object.keys(FH).forEach(f => assert.strictEqual(h16(rd(f)), FH[f], f + ' a changé'));

@@ -112,8 +112,10 @@ fichiers.forEach(([dn, f]) => {
     paires.filter(p => !base.openPositions.some(x => x && x.pair === p)).forEach(p => {
       const ps = base.pairStates[p] || {}, lev = Math.max(1, Number(ps.pairLeverage) || 1);
       [10, Number(ps.stake) || 0, T * 0.25, T * 0.5, T].filter((x, i, a) => x > 0 && a.indexOf(x) === i).forEach(x => {
-        const lb = x * (lev - 1);
-        [cAv, cAp].forEach(c => { c.S.leverageBorrowed = (Number(base.leverageBorrowed) || 0) + lb; });   // 02 openPosition emprunte la part du levier AVANT le contrôle
+        // 02 openPosition emprunte la part du levier AVANT le contrôle, par 02 borrowLeverage : rien à l'index ×0, rien sous 10 $, borné par la réserve
+        // [corrigé après la relecture du 15/11, hors règles : la 1re version ajoutait la part entière même à l'index ×0 — sous-comptait les « refus → accord »]
+        const lbDem = x * (lev - 1), lbRes = Math.min(Number(base.leverageReserve) || 0, lbDem), lb = ((Number(base.leverage) || 0) >= 1 && lbRes >= 10) ? lbRes : 0;
+        [cAv, cAp].forEach(c => { c.S.leverageBorrowed = (Number(base.leverageBorrowed) || 0) + lb; });
         const a = cAv.validateTotalExposure(x, lb), b = cAp.validateManualExposure(x, lb);
         const ra = !a.ok && a.available < x * 0.5, rb = !b.ok && b.available < x * 0.5;
         M2.essais++;
@@ -121,6 +123,21 @@ fichiers.forEach(([dn, f]) => {
         if (!ra && rb) M2.accordRefus++;
       });
     });
+    // M2b (AJOUTÉE APRÈS LA RELECTURE, hors règles) : « ✓ Appliquer » (02 applyBotSuggestion) jusqu'à l'ouverture — mise demandée, contrôle de capital,
+    // puis ce qu'openPosition peut dépenser (trading, + emprunt « juste à temps » base × index − dette à l'index ≥ 1) ; avant / après
+    { const ix = Number(base.leverage) || 0, eng = base.openPositions.reduce((s, q) => s + (Number(q.stakeUsdt) || 0), 0);
+      const baseCap = Math.max(0, (Number(base.cashAccount) || 0) + T + eng - (Number(base.leverageBorrowed) || 0));
+      const ouvrable = T + (ix >= 1 ? Math.max(0, baseCap * Math.min(ix, Number(base.leverageMaxMult) || 10) - (Number(base.leverageBorrowed) || 0)) : 0);
+      const fAv = monde('avant', clone(base)).getCapitalSummary().free, fAp = monde('apres', clone(base)).getCapitalSummary().free;
+      const cA = monde('avant', clone(base)), cB = monde('apres', clone(base));
+      paires.filter(p => !base.openPositions.some(x => x && x.pair === p)).forEach(p => { [Number((base.pairStates[p] || {}).stake) || 0, 100, 1000].filter((x, i, a) => x > 0 && a.indexOf(x) === i).forEach(sug => {
+        const sa = Math.min(Math.floor(fAv * 0.3), sug), sb = Math.min(Math.floor(fAp * 0.3), sug, Math.floor(ouvrable));
+        const passe = (c, fn, s) => { const r = c[fn](s, 0); return !!(r.ok || r.available >= s * 0.5); };
+        const okA = sa >= 5 && passe(cA, 'validateTotalExposure', sa) && sa <= ouvrable, okB = sb >= 5 && passe(cB, 'validateManualExposure', sb) && sb <= ouvrable;
+        M2.appliquer = M2.appliquer || { essais: 0, accordRefus: 0, refusAccord: 0, miseChangee: 0, exemples: [] }; const Q = M2.appliquer; Q.essais++;
+        if (okA && !okB) Q.accordRefus++; if (!okA && okB) Q.refusAccord++;
+        if (okA && okB && sa !== sb) { Q.miseChangee++; if (Q.exemples.length < 6) Q.exemples.push({ nom, mode, p, propose: sug, avant: sa, apres: sb }); }
+      }); }); }
     if (base.openPositions.length) { const la = monde('avant', clone(base)).getCapitalSummary().free, lb2 = monde('apres', clone(base)).getCapitalSummary().free;
       M2.libre.push({ nom, mode, positions: base.openPositions.length, libreAvant: r2(la), libreApres: r2(lb2), appliquerAvant: Math.floor(la * 0.3), appliquerApres: Math.floor(lb2 * 0.3) }); }
   });
@@ -164,7 +181,7 @@ R.M0 = M0; R.M1 = M1; R.M2 = M2;
   R.M4 = { vme: ap.vme, vmeDe: ap.vmeDe, libre: ap.libre, libreDe: ap.libreDe, controlesBot: ap.vteBot, autres: ap.vteAutre, vteDe: ap.vteDe, ouvertures: ap.ouvertures.length, fermetures: ap.fermetures.length,
     M4b: !av ? 'absent' : (!det ? 'non déterministe' : (liste(av) === liste(ap) ? 'identique' : 'DIFFÉRENT')), ouverturesAvant: av ? av.ouvertures.length : null };
 })();
-// verdict (règles des lignes 1 à 42)
+// verdict (règles des lignes 1 à 43 ; l'en-tête dit « 45 » : erreur de compte, laissée telle quelle)
 (function () {
   const M4 = R.M4, M3 = R.M3;
   if (R.M0.differences === 0 || M4.absent || !(M4.controlesBot >= 1)) { R.verdict = 'NON PROUVÉ — porte aveugle (' + (R.M0.differences === 0 ? 'M0 ne voit rien' : 'M4 sans contrôle du bot') + ')'; return; }
@@ -173,7 +190,20 @@ R.M0 = M0; R.M1 = M1; R.M2 = M2;
   if (R.M2.refusAccord < 1) { R.verdict = 'N\'ENTRE PAS — M2 : la correction n\'agit sur aucun état réel'; return; }
   R.verdict = 'ENTRE';
 })();
+R.horsRegles = [
+  'M1 est vrai par construction : les deux fonctions que lit le bot ont le même texte avant / après (M3 a). Que le bot ne lise pas la correction repose sur M3 (statique) et M4 (dynamique, mince : 1 contrôle du bot en 2 h, en AA ; 0 trade en EV).',
+  'M4 : un 1er passage (rejeu/out/n61/m4_v1) attribuait les lectures de .free à « js/03-…:? » (flèche anonyme dans un forEach) ; la sonde prend désormais la 1re fonction NOMMÉE de la pile (updatePairAnalysisPanels) et M4 a été rejoué. Avec le verdict tel qu\'écrit, le 1er passage aurait donné N\'ENTRE PAS.',
+  'Verdict : les lectures de .free par l\'affichage 03 updatePairAnalysisPanels (lecteur admis par M3 d, panneau masqué) sont mises à part — interprétation écrite après les règles.',
+  'M2 : l\'emprunt de la part à levier est modelé comme 02 borrowLeverage (corrigé après la relecture ; la 1re version sous-comptait les « refus → accord »).',
+  'M2b ajoutée après la relecture : « ✓ Appliquer » jusqu\'à l\'ouverture (la 1re version de la correction pouvait transformer un accord en refus avec une grosse caisse ; bornée depuis par ce qu\'openPosition peut ouvrir).',
+  'M4 rejoué une 3e fois (rejeu/out/n61/m4_v2 = 2e passage) après la borne de « ✓ Appliquer » et deux commentaires (02, 07) : code après = la livraison.'];
 fs.mkdirSync(path.dirname(OUT), { recursive: true }); fs.writeFileSync(OUT, JSON.stringify(R, null, 1));
+// résultat compact versionné (rejeu/out/ n'est pas suivi par git)
+fs.writeFileSync(path.join(__dirname, 'porte_n61.resultat.json'), JSON.stringify({ regles_sha256: R.regles_sha256, donnees: R.donnees,
+  M0: { lectures: R.M0.lectures, differences: R.M0.differences, exemple: R.M0.exemples[0] }, M1: { lectures: R.M1.lectures, differences: R.M1.differences },
+  M2: { essais: R.M2.essais, refusAccord: R.M2.refusAccord, accordRefus: R.M2.accordRefus, exemples: R.M2.exemples, libre: R.M2.libre, appliquer: R.M2.appliquer },
+  M3: { a: R.M3.ok_a, b: R.M3.ok_b, c: R.M3.ok_c, d: R.M3.ok_d, appelsManuels: R.M3.b, ouvreurs: R.M3.c, libre: R.M3.libre, appliquer: R.M3.appliquer }, M4: R.M4,
+  verdict: R.verdict, horsRegles: R.horsRegles }, null, 1) + '\n');
 console.log(JSON.stringify({ regles: R.regles_sha256.slice(0, 16), donnees: R.donnees, M0: { lectures: R.M0.lectures, differences: R.M0.differences, ex: R.M0.exemples[0] },
   M1: { lectures: R.M1.lectures, differences: R.M1.differences }, M2: { essais: R.M2.essais, refusAccord: R.M2.refusAccord, accordRefus: R.M2.accordRefus, ex: R.M2.exemples.slice(0, 3), libre: R.M2.libre },
-  M3: { a: R.M3.ok_a, b: R.M3.ok_b, c: R.M3.ok_c, d: R.M3.ok_d, appelsManuels: R.M3.b, ouvreurs: R.M3.c, libre: R.M3.libre }, M4: R.M4, verdict: R.verdict }, null, 1));
+  M3: { a: R.M3.ok_a, b: R.M3.ok_b, c: R.M3.ok_c, d: R.M3.ok_d, appelsManuels: R.M3.b, ouvreurs: R.M3.c, libre: R.M3.libre }, M4: R.M4, appliquer: R.M2.appliquer, verdict: R.verdict }, null, 1));

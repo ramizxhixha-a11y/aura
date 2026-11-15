@@ -1,0 +1,315 @@
+{
+ "regles_sha256": "410032ff37da67dd11e7711f9672fd2e9715517833f4e860514c0edf03cc191c",
+ "donnees": {
+  "20261115-002600": "D1",
+  "20261004-030019": "D2",
+  "20261004-210405": "D2",
+  "20261005-000505": "D2",
+  "20261005-210810": "D2",
+  "20261017-020445": "D2",
+  "20261017-230836": "D2",
+  "20261020-005111": "D2",
+  "20261020-214340": "D2",
+  "20261114-012251": "D2",
+  "20261114-222803": "D2",
+  "20261020-035156": "D2"
+ },
+ "M0": {
+  "lectures": 1644,
+  "differences": 231,
+  "exemple": {
+   "nom": "20261115-002600",
+   "mode": "paperReal",
+   "p": "BTC/USDT",
+   "code": "validateInvestmentCapProvisioned(60)",
+   "avant": {
+    "ok": false,
+    "cap": 59.442798575510096,
+    "mode": "no_leverage",
+    "engaged": 1055.8899999999999,
+    "tradingAccount": 1115.33279857551
+   },
+   "entiere": {
+    "ok": true,
+    "cap": 1115.33279857551,
+    "mode": "no_leverage",
+    "engaged": 1055.8899999999999,
+    "tradingAccount": 1115.33279857551
+   }
+  }
+ },
+ "M1": {
+  "lectures": 1644,
+  "differences": 0
+ },
+ "M2": {
+  "essais": 1702,
+  "refusAccord": 18,
+  "accordRefus": 0,
+  "exemples": [
+   {
+    "nom": "20261115-002600",
+    "mode": "paperReal",
+    "p": "EUR/USDT",
+    "mise": 278.83,
+    "trading": 1115.33,
+    "engage": 1055.89,
+    "avant": 59.44
+   },
+   {
+    "nom": "20261115-002600",
+    "mode": "paperReal",
+    "p": "EUR/USDT",
+    "mise": 557.67,
+    "trading": 1115.33,
+    "engage": 1055.89,
+    "avant": 59.44
+   },
+   {
+    "nom": "20261115-002600",
+    "mode": "paperReal",
+    "p": "EUR/USDT",
+    "mise": 1115.33,
+    "trading": 1115.33,
+    "engage": 1055.89,
+    "avant": 59.44
+   },
+   {
+    "nom": "20261115-002600",
+    "mode": "paperReal",
+    "p": "GBP/USDT",
+    "mise": 278.83,
+    "trading": 1115.33,
+    "engage": 1055.89,
+    "avant": 59.44
+   },
+   {
+    "nom": "20261115-002600",
+    "mode": "paperReal",
+    "p": "GBP/USDT",
+    "mise": 557.67,
+    "trading": 1115.33,
+    "engage": 1055.89,
+    "avant": 59.44
+   },
+   {
+    "nom": "20261115-002600",
+    "mode": "paperReal",
+    "p": "GBP/USDT",
+    "mise": 1115.33,
+    "trading": 1115.33,
+    "engage": 1055.89,
+    "avant": 59.44
+   },
+   {
+    "nom": "20261114-012251",
+    "mode": "paperReal",
+    "p": "EUR/USDT",
+    "mise": 278.87,
+    "trading": 1115.48,
+    "engage": 1055.89,
+    "avant": 59.59
+   },
+   {
+    "nom": "20261114-012251",
+    "mode": "paperReal",
+    "p": "EUR/USDT",
+    "mise": 557.74,
+    "trading": 1115.48,
+    "engage": 1055.89,
+    "avant": 59.59
+   },
+   {
+    "nom": "20261114-012251",
+    "mode": "paperReal",
+    "p": "EUR/USDT",
+    "mise": 1115.48,
+    "trading": 1115.48,
+    "engage": 1055.89,
+    "avant": 59.59
+   },
+   {
+    "nom": "20261114-012251",
+    "mode": "paperReal",
+    "p": "GBP/USDT",
+    "mise": 278.87,
+    "trading": 1115.48,
+    "engage": 1055.89,
+    "avant": 59.59
+   },
+   {
+    "nom": "20261114-012251",
+    "mode": "paperReal",
+    "p": "GBP/USDT",
+    "mise": 557.74,
+    "trading": 1115.48,
+    "engage": 1055.89,
+    "avant": 59.59
+   },
+   {
+    "nom": "20261114-012251",
+    "mode": "paperReal",
+    "p": "GBP/USDT",
+    "mise": 1115.48,
+    "trading": 1115.48,
+    "engage": 1055.89,
+    "avant": 59.59
+   }
+  ],
+  "libre": [
+   {
+    "nom": "20261115-002600",
+    "mode": "paperReal",
+    "positions": 11,
+    "libreAvant": 59.44,
+    "libreApres": 1115.33,
+    "appliquerAvant": 17,
+    "appliquerApres": 334
+   },
+   {
+    "nom": "20261017-020445",
+    "mode": "sim",
+    "positions": 2,
+    "libreAvant": 821.97,
+    "libreApres": 915.8,
+    "appliquerAvant": 246,
+    "appliquerApres": 274
+   },
+   {
+    "nom": "20261114-012251",
+    "mode": "paperReal",
+    "positions": 11,
+    "libreAvant": 59.59,
+    "libreApres": 1115.48,
+    "appliquerAvant": 17,
+    "appliquerApres": 334
+   },
+   {
+    "nom": "20261114-222803",
+    "mode": "paperReal",
+    "positions": 11,
+    "libreAvant": 59.46,
+    "libreApres": 1115.35,
+    "appliquerAvant": 17,
+    "appliquerApres": 334
+   },
+   {
+    "nom": "20261020-035156",
+    "mode": "sim",
+    "positions": 3,
+    "libreAvant": 4918.08,
+    "libreApres": 5890.32,
+    "appliquerAvant": 1475,
+    "appliquerApres": 1767
+   }
+  ],
+  "appliquer": {
+   "essais": 882,
+   "accordRefus": 0,
+   "refusAccord": 0,
+   "miseChangee": 23,
+   "exemples": [
+    {
+     "nom": "20261115-002600",
+     "mode": "paperReal",
+     "p": "EUR/USDT",
+     "propose": 100,
+     "avant": 17,
+     "apres": 100
+    },
+    {
+     "nom": "20261115-002600",
+     "mode": "paperReal",
+     "p": "EUR/USDT",
+     "propose": 1000,
+     "avant": 17,
+     "apres": 334
+    },
+    {
+     "nom": "20261115-002600",
+     "mode": "paperReal",
+     "p": "GBP/USDT",
+     "propose": 100,
+     "avant": 17,
+     "apres": 100
+    },
+    {
+     "nom": "20261115-002600",
+     "mode": "paperReal",
+     "p": "GBP/USDT",
+     "propose": 1000,
+     "avant": 17,
+     "apres": 334
+    },
+    {
+     "nom": "20261017-020445",
+     "mode": "sim",
+     "p": "BTC/USDT",
+     "propose": 1000,
+     "avant": 246,
+     "apres": 274
+    },
+    {
+     "nom": "20261017-020445",
+     "mode": "sim",
+     "p": "ETH/USDT",
+     "propose": 1000,
+     "avant": 246,
+     "apres": 274
+    }
+   ]
+  }
+ },
+ "M3": {
+  "a": true,
+  "b": true,
+  "c": true,
+  "d": true,
+  "appelsManuels": [
+   "js/02-state-init.js:openPosition",
+   "js/03-per-pair-position-buttons-controls-buid.js:_openProposedPosition",
+   "js/07-v90-mode-bunker-sos.js:manuInvert"
+  ],
+  "ouvreurs": [
+   "js/02-state-init.js:applyBotSuggestion",
+   "js/02-state-init.js:quickOpen",
+   "js/03-per-pair-position-buttons-controls-buid.js:_openProposedPosition",
+   "js/07-v90-mode-bunker-sos.js:manuInvert",
+   "js/10e-helpers-adaptatifs.js:_openManTrade",
+   "js/15b-tendance-reelle.js:(haut)"
+  ],
+  "libre": [
+   "js/02-state-init.js:applyBotSuggestion",
+   "js/03-per-pair-position-buttons-controls-buid.js:updatePairAnalysisPanels"
+  ],
+  "appliquer": [
+   "js/07-v90-mode-bunker-sos.js:renderActionsGrid"
+  ]
+ },
+ "M4": {
+  "vme": 0,
+  "vmeDe": {},
+  "libre": 5,
+  "libreDe": {
+   "js/03-per-pair-position-buttons-controls-buid.js:updatePairAnalysisPanels": 5
+  },
+  "controlesBot": 1,
+  "autres": 0,
+  "vteDe": {
+   "js/09c-auto-open.js:autoOpenPosition": 1
+  },
+  "ouvertures": 1,
+  "fermetures": 1,
+  "M4b": "identique",
+  "ouverturesAvant": 1
+ },
+ "verdict": "ENTRE",
+ "horsRegles": [
+  "M1 est vrai par construction : les deux fonctions que lit le bot ont le même texte avant / après (M3 a). Que le bot ne lise pas la correction repose sur M3 (statique) et M4 (dynamique, mince : 1 contrôle du bot en 2 h, en AA ; 0 trade en EV).",
+  "M4 : un 1er passage (rejeu/out/n61/m4_v1) attribuait les lectures de .free à « js/03-…:? » (flèche anonyme dans un forEach) ; la sonde prend désormais la 1re fonction NOMMÉE de la pile (updatePairAnalysisPanels) et M4 a été rejoué. Avec le verdict tel qu'écrit, le 1er passage aurait donné N'ENTRE PAS.",
+  "Verdict : les lectures de .free par l'affichage 03 updatePairAnalysisPanels (lecteur admis par M3 d, panneau masqué) sont mises à part — interprétation écrite après les règles.",
+  "M2 : l'emprunt de la part à levier est modelé comme 02 borrowLeverage (corrigé après la relecture ; la 1re version sous-comptait les « refus → accord »).",
+  "M2b ajoutée après la relecture : « ✓ Appliquer » jusqu'à l'ouverture (la 1re version de la correction pouvait transformer un accord en refus avec une grosse caisse ; bornée depuis par ce qu'openPosition peut ouvrir).",
+  "M4 rejoué une 3e fois (rejeu/out/n61/m4_v2 = 2e passage) après la borne de « ✓ Appliquer » et deux commentaires (02, 07) : code après = la livraison."
+ ]
+}
