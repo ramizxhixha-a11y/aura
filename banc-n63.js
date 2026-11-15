@@ -214,7 +214,7 @@ T('G · garde : purge nouvelle = ancienne hors antiNegReserveLog ; aucun lecteur
   const H = { 'js/02-state-init.js': '5b82fc4d014f1cb4', 'js/03-per-pair-position-buttons-controls-buid.js': '117f962efbeb4f37', 'js/04-v8-0-livraison-35-mode-max-permissif-v.js': '56365f1615101466',
     'js/08-learning-history-render.js': 'e5b53d1146fba1b1', 'js/09c-auto-open.js': 'cb981dcbb9806d73', 'js/09j-helpers.js': '469be1c86f4a9337', 'js/10f-resolveur-cycle.js': '9935b3138d2a97b0', 'js/15-voix-tendance.js': '9757929e4b295254',
     'js/15b-tendance-reelle.js': '08582a20cd8f495a', 'js/16-fiscal.js': '18d61b55137bc8f3', 'js/09b1-build-snapshot.js': '393c4df7cf1df426' };
-  Object.keys(H).forEach(f => assert.strictEqual(h16(require('./banc-fixtures/sans-n103.js')(rd(f), f)), H[f], f + ' a changé'));   // hors go n° 103 (02, toast arrondi : banc-n103.js, livré pendant go n° 63)
+  Object.keys(H).forEach(f => assert.strictEqual(h16(require('./banc-fixtures/sans-n103.js')(require('./banc-fixtures/sans-n86d.js')(rd(f), f), f)), H[f], f + ' a changé'));   // [GO N° 86D · 15/11/2026] hors go n° 86d (03, 08 : champs de saisie TP / SL, banc-n86d.js)   // hors go n° 103 (02, toast arrondi : banc-n103.js, livré pendant go n° 63)
 });
 
 T('F · garde : l\'ancienne purge reconstruite par ce banc = 09b2 du commit c730c1b au caractère près', () => {

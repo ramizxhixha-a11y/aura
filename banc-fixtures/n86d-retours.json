@@ -1,0 +1,38 @@
+{
+"js/03-per-pair-position-buttons-controls-buid.js": [
+[
+"  if(!ps || !cfg) return;\n  // [GO N° 86D · 15/11/2026] (ETAT n° 86d) les champs TP / SL du panneau (ici et dans la proposition de updatePairAnalysisPanels) reçoivent 02 pxIn : les mêmes\n  // décimales que le prix affiché (pxTxt), point décimal. Avant : toFixed(dec ≥ 4 ? dec : 2) — 2 décimales sous dec 4 (DOT à 0,734 : +1 % → « 0.74 » = +0,82 %,\n  // EUR à 1,0994 → « 1.11 ») et 1 seul chiffre pour PEPE (dec 6, 0,00000404 : TP +1 % ET SL −1 % → « 0.000004 », le TP d'un LONG sous le prix).\n  // Determine side from the proposal card",
+"  if(!ps || !cfg) return;\n  const dec = cfg.dec >= 4 ? cfg.dec : 2;\n  // Determine side from the proposal card"
+],
+[
+"    const inp = document.getElementById('pinput_tp_'+k);\n    if(inp) { inp.value = pxIn(pair, price); _recalcProposal(pair); }\n  } else if(field === 'sl') {",
+"    const inp = document.getElementById('pinput_tp_'+k);\n    if(inp) { inp.value = price.toFixed(dec); _recalcProposal(pair); }\n  } else if(field === 'sl') {"
+],
+[
+"    const inp = document.getElementById('pinput_sl_'+k);\n    if(inp) { inp.value = pxIn(pair, price); _recalcProposal(pair); }\n  }",
+"    const inp = document.getElementById('pinput_sl_'+k);\n    if(inp) { inp.value = price.toFixed(dec); _recalcProposal(pair); }\n  }"
+],
+[
+"            <div style=\"font-size:7px;color:var(--up);margin-bottom:3px;\">🎯 Take Profit</div>\n            <input id=\"pinput_tp_${pairKey}\" type=\"number\" step=\"any\" value=\"${pxIn(pair, tpVal)}\"\n              oninput=\"_recalcProposal('${pair}')\"",
+"            <div style=\"font-size:7px;color:var(--up);margin-bottom:3px;\">🎯 Take Profit</div>\n            <input id=\"pinput_tp_${pairKey}\" type=\"number\" step=\"any\" value=\"${tpVal.toFixed(cfg.dec>=4?cfg.dec:2)}\"\n              oninput=\"_recalcProposal('${pair}')\""
+],
+[
+"            <div style=\"font-size:7px;color:var(--down);margin-bottom:3px;\">🛑 Stop Loss</div>\n            <input id=\"pinput_sl_${pairKey}\" type=\"number\" step=\"any\" value=\"${pxIn(pair, slVal)}\"\n              oninput=\"_recalcProposal('${pair}')\"",
+"            <div style=\"font-size:7px;color:var(--down);margin-bottom:3px;\">🛑 Stop Loss</div>\n            <input id=\"pinput_sl_${pairKey}\" type=\"number\" step=\"any\" value=\"${slVal.toFixed(cfg.dec>=4?cfg.dec:2)}\"\n              oninput=\"_recalcProposal('${pair}')\""
+]
+],
+"js/08-learning-history-render.js": [
+[
+"  const cur = ps.price;\n  // [GO N° 86D · 15/11/2026] (ETAT n° 86d) le champ reçoit 02 pxIn (les décimales du prix affiché, point décimal) : « ✓ Appliquer » écrit ce champ sur la position.\n  // Avant : toFixed(dec ≥ 4 ? dec : 2) — DOT à 0,734 : TP +1 % → 0.74 (+0,82 %) ; PEPE à 0,00000404 : TP +1 % d'un LONG → 0.000004, sous le prix (TP « atteint » au passage suivant).\n  let price;",
+"  const cur = ps.price;\n  const cfg = _editModal.cfg;\n  let price;"
+],
+[
+"    const inp = document.getElementById('peTpInput');\n    if(inp) inp.value = pxIn(pos.pair, price);\n  } else {",
+"    const inp = document.getElementById('peTpInput');\n    if(inp) inp.value = price.toFixed(cfg.dec>=4?cfg.dec:2);\n  } else {"
+],
+[
+"    const inp = document.getElementById('peSlInput');\n    if(inp) inp.value = pxIn(pos.pair, price);\n  }",
+"    const inp = document.getElementById('peSlInput');\n    if(inp) inp.value = price.toFixed(cfg.dec>=4?cfg.dec:2);\n  }"
+]
+]
+}

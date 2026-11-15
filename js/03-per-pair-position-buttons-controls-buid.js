@@ -331,7 +331,9 @@ function _adjPropPct(pair, field, pct) {
   const ps  = S.pairStates[pair];
   const cfg = PAIRS[pair];
   if(!ps || !cfg) return;
-  const dec = cfg.dec >= 4 ? cfg.dec : 2;
+  // [GO N° 86D · 15/11/2026] (ETAT n° 86d) les champs TP / SL du panneau (ici et dans la proposition de updatePairAnalysisPanels) reçoivent 02 pxIn : les mêmes
+  // décimales que le prix affiché (pxTxt), point décimal. Avant : toFixed(dec ≥ 4 ? dec : 2) — 2 décimales sous dec 4 (DOT à 0,734 : +1 % → « 0.74 » = +0,82 %,
+  // EUR à 1,0994 → « 1.11 ») et 1 seul chiffre pour PEPE (dec 6, 0,00000404 : TP +1 % ET SL −1 % → « 0.000004 », le TP d'un LONG sous le prix).
   // Determine side from the proposal card
   const levEl  = document.getElementById('pinput_lev_'+k);
   const propCard = levEl?.closest('[id^="pcard_"]') || levEl?.parentElement?.parentElement?.parentElement;
@@ -343,11 +345,11 @@ function _adjPropPct(pair, field, pct) {
   if(field === 'tp') {
     const price = isLong ? cur * (1 + pct/100) : cur * (1 - pct/100);
     const inp = document.getElementById('pinput_tp_'+k);
-    if(inp) { inp.value = price.toFixed(dec); _recalcProposal(pair); }
+    if(inp) { inp.value = pxIn(pair, price); _recalcProposal(pair); }
   } else if(field === 'sl') {
     const price = isLong ? cur * (1 - pct/100) : cur * (1 + pct/100);
     const inp = document.getElementById('pinput_sl_'+k);
-    if(inp) { inp.value = price.toFixed(dec); _recalcProposal(pair); }
+    if(inp) { inp.value = pxIn(pair, price); _recalcProposal(pair); }
   }
 }
 
@@ -680,7 +682,7 @@ function updatePairAnalysisPanels() {
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:5px;margin-bottom:5px;">
           <div>
             <div style="font-size:7px;color:var(--up);margin-bottom:3px;">🎯 Take Profit</div>
-            <input id="pinput_tp_${pairKey}" type="number" step="any" value="${tpVal.toFixed(cfg.dec>=4?cfg.dec:2)}"
+            <input id="pinput_tp_${pairKey}" type="number" step="any" value="${pxIn(pair, tpVal)}"
               oninput="_recalcProposal('${pair}')"
               style="width:100%;background:var(--s3);border:1px solid rgba(0,232,122,.2);border-radius:6px;
                      padding:5px 7px;color:var(--up);font-family:var(--font-mono);font-size:10px;
@@ -693,7 +695,7 @@ function updatePairAnalysisPanels() {
           </div>
           <div>
             <div style="font-size:7px;color:var(--down);margin-bottom:3px;">🛑 Stop Loss</div>
-            <input id="pinput_sl_${pairKey}" type="number" step="any" value="${slVal.toFixed(cfg.dec>=4?cfg.dec:2)}"
+            <input id="pinput_sl_${pairKey}" type="number" step="any" value="${pxIn(pair, slVal)}"
               oninput="_recalcProposal('${pair}')"
               style="width:100%;background:var(--s3);border:1px solid rgba(255,61,107,.2);border-radius:6px;
                      padding:5px 7px;color:var(--down);font-family:var(--font-mono);font-size:10px;
