@@ -6,7 +6,7 @@
 //   3) BACKUP sur demande : le snapshot de 09b1 (buildSnapshot), même enveloppe que l'export de 10h, dans backups/.
 // LECTURE SEULE — le pont (ce fichier + 17-pont-lecture.js, qui lit l'app) :
 //   • n'écrit RIEN dans S ; n'appelle de l'app que buildSnapshot (09b1 : la fonction de la sauvegarde automatique, telle quelle, pour
-//     un backup — elle lit les accesseurs de portefeuille de 02 comme la sauvegarde, après _stateReady) et _perfOp (08 : il s'annonce « pont:backup / diag / lire », comme toute opération lourde) ; depuis go pont (14/11) _auraSentry.signal (00s : un texte FIXE de SIGNAUX, une fois par motif et par jour, inerte hors de la page publiée ; son envoi passe par le fetch de 00, qui pose window._auraLastOp) ; n'en remplace ni n'en
+//     un backup — elle lit les accesseurs de portefeuille de 02 comme la sauvegarde, après _stateReady) et _perfOp (08 : il s'annonce « pont:backup / diag / lire », comme toute opération lourde) ; depuis go pont (14/11) _auraSentry.signal (00s : un texte FIXE de SIGNAUX, une fois par motif et par jour, inerte hors de la page publiée ; son envoi passe par le fetch de 00, qui pose window._auraLastOp) et, depuis go n° 107, _auraSentry.avalee (00s, warning, sans S : une faute de CODE du battement, message FIXE, type et pile seuls) ; n'en remplace ni n'en
 //     enveloppe aucune ; jamais Math.random (le rejeu le sème), ni showToast (08 y compte S._silencedCount), ni _decErr (00 → S._errStats) ;
 //   • n'ouvre ni ne ferme aucune position : aucune demande ne le peut, aucun chemin de code n'y mène ;
 //   • n'exécute RIEN de ce qui vient du dépôt : une demande est du JSON validé (nom du fichier, id, date, commande de la liste) ; ni eval, ni Function, ni HTML bâti avec ce qui est reçu ;
@@ -60,7 +60,6 @@
   var mem = null, memOk = true, errs = [], essais = {}, ecartes = {}, garde = null, ecoute = false, videA = null;
   var DOC = null;
   try { var cs = document.currentScript, mv = cs && /[?&]v=([0-9a-z]+)/.exec(cs.src || ''); DOC = mv ? mv[1] : null; } catch (e) {}
-
   // ── outils ──
   function now() { return Date.now(); }
   function txt(x, n) { return String(x === null || x === undefined ? '' : x).slice(0, n || 200); }
@@ -79,12 +78,15 @@
   var GESTE = ' → « Couper le pont », puis colle un nouveau PAT et Activer';
   var SIGNAUX = { '401': 'suspendu · PAT refusé par GitHub (401 : expiré ou révoqué)', acces: 'suspendu · le PAT ne voit plus aura-pont ou n\'y écrit plus (403 / 404)',
     large: 'coupé · PAT trop large (il peut écrire dans le code), effacé', public: 'coupé · aura-pont public ou servi par Pages, PAT effacé',
-    controle: 'muet · contrôle du PAT non concluant depuis 24 h, GitHub répond pourtant', etat: 'muet · etat.json non écrit depuis 24 h, GitHub répond pourtant', disparu: 'coupé · le PAT a disparu de l\'appareil sans « Couper le pont »' }, signales = {};
+    controle: 'muet · contrôle du PAT non concluant depuis 24 h, GitHub répond pourtant', etat: 'muet · etat.json non écrit depuis 24 h, GitHub répond pourtant', disparu: 'coupé · le PAT a disparu de l\'appareil sans « Couper le pont »', code: 'muet · faute de code dans son battement depuis 24 h (pas une coupure du réseau)' }, signales = {};
   function signaler(code) { var j = new Date(now()).toISOString().slice(0, 10), m = memoire(); if (!Object.prototype.hasOwnProperty.call(SIGNAUX, code) || signales[code] || (m.sig && m.sig[code] === j)) return; signales[code] = 1; (m.sig = m.sig || {})[code] = j; memSauve(); try { var s = window._auraSentry; if (s && typeof s.signal === 'function') s.signal('AURA8 · Pont direct ' + SIGNAUX[code]); } catch (e) {} }
   // [GO N° 98 · 15/11/2026] muet SANS signal. (1) GitHub RÉPOND mais aucun etat.json ne part (contrôle « non concluant », écriture refusée) : début gardé dans la mémoire (muet, effacé au 1er etat.json écrit ; réseau coupé : ni début ni fin) ; passé VERIF_MS (24 h, la période du contrôle quotidien) → motif.
   // (2) PAT absent du stockage sans « Couper le pont » : marque actif (posée par demarrer, retirée par Couper AVANT le PAT) → motif disparu, en route tout de suite, au lancement après BOOT_MS (ou au retour du réseau).
   var DISPARU = 'coupé · le PAT a disparu de cet appareil sans « Couper le pont » → colle un nouveau PAT et Activer', guet = null; function muet(code) { var m = memoire(), t = now(); if (!m.muet) { m.muet = t; memSauve(); } else if (code && t - m.muet >= VERIF_MS) signaler(code); }
   function guetter(on) { try { if (guet) window.removeEventListener('online', guet); guet = on ? disparu : null; if (guet) window.addEventListener('online', guet); } catch (e) {} } function disparu() { guetter(false); if (actif || pat || lsLit(LS_PAT) !== null || !memoire(true).actif) return; if (enLigne()) signaler('disparu'); else guetter(true); }
+  // [GO N° 107 · 16/11/2026] faute de CODE dans le battement : avant, toute exception y était prise pour une coupure du réseau (echec st 0) → muet SANS signal. Désormais seul un rejet RÉSEAU de gh() (fetch rejeté, délai) porte la marque reseau ; toute autre exception = faute : tout de suite à Sentry (avalee, warning : message FIXE, type et pile), début de panne (muet, motif code : 24 h comme les autres), même pause qu'un échec.
+  function reseau(e) { var x = new Error(txt(e && e.message !== undefined ? e.message : e, 200)); x.reseau = 1; return x; } function faute(e) { if (!actif) return; muet('code'); avaler(e); st.echecs++; st.suite++; incident('faute de code : ' + txt(e && e.message !== undefined ? e.message : e, 110)); st.pauseUntil = now() + Math.min(PAUSE_MAX, POLL_MS * Math.pow(2, Math.min(st.suite, 5))); }
+  function avaler(e) { try { var s = window._auraSentry, x = new Error('AURA8 · Pont direct · faute de code dans le battement'), p = (e && typeof e.stack === 'string') ? e.stack : '', d = String(e); if (e && typeof e.name === 'string' && /^[A-Za-z]{1,40}$/.test(e.name)) x.name = e.name; if (p.indexOf(d) === 0) p = p.slice(d.length); x.stack = [x.name + ': ' + x.message].concat(p.split('\n').filter(function (l) { return /^\s+at /.test(l); })).join('\n'); if (s && typeof s.avalee === 'function') s.avalee(x); } catch (y) {} }   // rien du message d'origine : seules les lignes « at … » de la pile (code)
   function lecture() { var L = window._pontLecture; if (!L) throw new Error('17-pont-lecture.js absent'); return L; }
   function b64Octets(u8) {   // par blocs de 24 576 octets (multiple de 3 : les morceaux se concatènent sans bourrage au milieu)
     var out = [], PAS = 24576;
@@ -114,7 +116,6 @@
     for (var i = 0; i < L.length; i++) if (t.indexOf(L[i]) >= 0) t = t.split(L[i]).join('[masqué]');
     return t.replace(RE_JETON, '$1[masqué]').replace(RE_TG, 'bot[masqué]');
   }
-
   // ── mémoire du pont (hors S, hors snapshot) : installation, demandes déjà servies, dernier état (heure, sha), écritures de l'heure, dernier backup ──
   // relire : au début de chaque battement la mémoire est RELUE (un autre onglet a pu servir une demande ou écrire) — sur place, pour que les
   // références tenues restent bonnes ; jamais si la dernière sauvegarde a échoué (ce qui est en mémoire serait plus juste que le stockage).
@@ -135,7 +136,6 @@
   }
   function memSauve() { memOk = lsSet(LS_MEM, JSON.stringify(mem)); if (!memOk) incident('le stockage de l\'appareil refuse l\'écriture : la mémoire du pont n\'est pas gardée'); }
   function fini(id) { var m = memoire(); if (m.fait.indexOf(id) < 0) { m.fait.push(id); if (m.fait.length > FAIT_MAX) m.fait.splice(0, m.fait.length - FAIT_MAX); } delete essais[id]; memSauve(); }
-
   // ── ce qui part : la lecture de l'app (17) + l'état du pont lui-même ──
   function entete(a) {
     var o = { pont: PROTO, v: PONT_V, doc: DOC, t: a.t, iso: a.iso, inst: memoire().inst, boot: st.boot, n: st.n };
@@ -164,7 +164,7 @@
     var avant, marque = 'fetch ' + url.replace(/^https?:\/\//, '').split('?')[0].slice(0, 60);   // le nom que 00 donnera à cette requête
     try { avant = window._auraLastOp; } catch (e) {}
     return new Promise(function (oui, rate) {
-      var to = setTimeout(function () { to = null; try { if (ac) ac.abort(); } catch (e) {} rate(new Error('délai dépassé')); }, delai || T_GET);
+      var to = setTimeout(function () { to = null; try { if (ac) ac.abort(); } catch (e) {} rate(reseau('délai dépassé')); }, delai || T_GET);
       var fin = function () { if (to) { clearTimeout(to); to = null; } }, envoi;
       try { envoi = fetch(url, opt); } catch (e) { fin(); rate(e); return; }
       envoi.then(function (r) {
@@ -178,7 +178,7 @@
         } catch (e) {}
         if (r.status === 304 || r.status === 204) return out;
         return r.text().then(function (t) { try { out.j = JSON.parse(t); } catch (e) { out.j = null; } return lente(out); }, function () { return out; });
-      }).then(function (o) { fin(); oui(o); }, function (e) { fin(); rate(e); });
+      }, function (e) { throw reseau(e); }).then(function (o) { fin(); oui(o); }, function (e) { fin(); rate(e); });   // go n° 107 : seul le rejet de la requête elle-même (réseau) est marqué ; une exception plus haut = faute de code
     });
   }
   // [GO PONT · 14/11/2026] limite SECONDAIRE de GitHub : 403 / 429 dont le message dit « rate limit », sans en-tête d'attente → attendre 1 min, puis le
@@ -396,7 +396,7 @@
       }
       if (!(await relever()) || !actif) return;
       st.suite = 0; st.etat = 'actif'; st.msg = '';
-    } catch (e) { echec({ st: 0, j: { message: txt(e && e.message, 110) } }); }
+    } catch (e) { if (e && e.reseau === 1) echec({ st: 0, j: { message: txt(e && e.message, 110) } }); else faute(e); }   // go n° 107 : réseau (marqué par gh) ou faute de code
     finally { busy = false; peindre(); }
   }
   function tic() { var t = now(), e = t - dernierTic; dernierTic = t; st.tics++; if (e > st.ticMax) st.ticMax = e; cycle(); }
