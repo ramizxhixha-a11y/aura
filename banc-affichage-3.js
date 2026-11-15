@@ -5,8 +5,8 @@
 //   O2  (86b) 10f : les VRAIES lignes des prix de « BOT … @prix | … TP:… SL:… » évaluées — DOT → « $0,7612 », TP « $0,7841 » (avant : « 0 », « 0 »)
 //   P1  (86c) 06 _prNote (alertes de prix, Telegram) : « DOT/USDT ≥ $0,7612 » (avant : « 0.76 ») ; 07 manuEditTp / manuEditSl : « Prix actuel : $0,7612 »,
 //       valeur proposée « 0.7841 » (avant : « 0.78 » — accepter tel quel arrondissait le TP), toast « → $0,7841 »
-//   P2  (86c) inventaire : plus aucun prix de paire écrit par toFixed(dec) / l'entier tronqué ; restent, classés : quantités (02, 09c), champs de saisie (03, 08 :
-//       registre n° 86d), valeurs stockées (07 _calcBotTpSl), formats génériques (06 _diffVal, 11b, 16b)
+//   P2  (86c) inventaire : plus aucun prix de paire écrit par toFixed(dec) / l'entier tronqué ; restent, classés : quantités (02, 09c), [champs de saisie (03, 08) :
+//       fermés par go n° 86d], valeurs stockées (07 _calcBotTpSl), formats génériques (06 _diffVal, 11b, 16b)
 //   F1  (88b) VRAI 16 _fiscOnClose sur une position de la voix → ligne d'historique marquée v:1 ; VRAI 16b : puce « 📈 Tendance » (avant : « 👤 MAN »), raison
 //       « voix tendance longue », CSV « TENDANCE » ; une position à la main garde « 👤 MAN » et n'a PAS de champ v (registre léger)
 //   B1  (67b) VRAIS badges de 05 : 3 fermetures gagnantes de suite (2 paires, voix comprise) → « En Feu ! » débloqué par checkBadges, « Inarrêtable » à 3/5
@@ -93,7 +93,7 @@ const ctxOf = (o) => { const c = Object.assign({ console, Math, Object, JSON, Ar
     assert.deepStrictEqual(seen.toasts, ['🎯 TP DOT/USDT → $0,7841', '🛑 SL DOT/USDT → $0,7412']);
   });
 
-  await T('P2 (86c) · inventaire : plus aucun prix de paire écrit par toFixed(dec) ou l\'entier tronqué — restent, classés : quantités, champs de saisie (n° 86d), valeurs stockées, formats génériques', () => {
+  await T('P2 (86c) · inventaire : plus aucun prix de paire écrit par toFixed(dec) ou l\'entier tronqué — restent, classés : quantités, valeurs stockées, formats génériques (champs de saisie : fermés par go n° 86d)', () => {
     const RE = /toFixed\([^)]*\bdec\b|_prDec\(|Math\.floor\(ps\.price\)|\.toFixed\(cfg\??\.dec|toFixed\(PAIRS\[[^\]]*\]\??\.dec/;
     const out = {};
     fs.readdirSync(path.join(ROOT, 'js')).filter(f => /\.js$/.test(f) && !/\.min\.js$/.test(f)).forEach(f => {
@@ -103,7 +103,7 @@ const ctxOf = (o) => { const c = Object.assign({ console, Math, Object, JSON, Ar
     });
     assert.deepStrictEqual(out, {
       '02-s openPosition': 1, '02-s closePosition': 1, '02-s _addToPosition': 1, '09c- autoOpenPosition': 1,   // quantités (amount, qty)
-      '03-p _adjPropPct': 2, '03-p updatePairAnalysisPanels': 2, '08-l setTpSl': 2,                           // champs de saisie (input number) : registre n° 86d
+      // [GO N° 86D · 15/11/2026] les champs de saisie (03 _adjPropPct, updatePairAnalysisPanels, 08 setTpSl) passent par 02 pxIn : sortis de l'inventaire (banc-n86d.js)
       '07-v _calcBotTpSl': 2,                                                                                     // valeurs stockées (tp / sl arrondis)
       '06-v _diffVal': 1, '11b- _lrnPct': 1, '16b- _fiscEur': 1 });                                              // formats génériques (pas un prix de paire)
   });
@@ -276,7 +276,7 @@ const ctxOf = (o) => { const c = Object.assign({ console, Math, Object, JSON, Ar
       'js/05-v37-19-indicateur-de-fatigue-bot.js': '9d00d9013ca38fd1', 'js/06-v63-patterns-chartistes.js': '1736c53482f0c9b9', 'js/07-v90-mode-bunker-sos.js': '8c2e3319d78c3cad',
       'js/08-learning-history-render.js': '147126b2da90e4e1', 'js/09b3-import-export.js': '385a22f566231d6e', 'js/09g-modals.js': 'a8ed1afe73c57abe', 'js/10f-resolveur-cycle.js': '2c7f1bbbb66741a0',
       'js/11-gestion-paires.js': '337ff15799b77e72', 'js/16-fiscal.js': '45259077a3003f56', 'js/16b-fiscal-ecran.js': 'f560e7d8ba7c2670' };
-    Object.keys(A).forEach(f => { const s = rd(f); assert.notStrictEqual(h16(s), A[f], f + ' : la retouche manque'); assert.strictEqual(h16(sansA3(require('./banc-fixtures/sans-n62.js')(require('./banc-fixtures/sans-n103.js')(s, f), f), f)), A[f], f + ' : autre chose a bougé'); });   // [GO N° 103 · 15/11/2026] hors go n° 103 (banc-n103.js)   // [GO N° 62 · 15/11/2026] hors la retouche de go n° 62 (07, banc-n62.js)
+    Object.keys(A).forEach(f => { const s = rd(f); assert.notStrictEqual(h16(s), A[f], f + ' : la retouche manque'); assert.strictEqual(h16(sansA3(require('./banc-fixtures/sans-n62.js')(require('./banc-fixtures/sans-n103.js')(require('./banc-fixtures/sans-n86d.js')(s, f), f), f), f)), A[f], f + ' : autre chose a bougé'); });   // [GO N° 86D · 15/11/2026] hors go n° 86d (03, 08 : champs de saisie TP / SL, banc-n86d.js)   // [GO N° 103 · 15/11/2026] hors go n° 103 (banc-n103.js)   // [GO N° 62 · 15/11/2026] hors la retouche de go n° 62 (07, banc-n62.js)
   });
 
   console.log('\n' + (fail ? '❌' : '✅') + ' ' + pass + '/' + (pass + fail) + ' tests passés' + (fail ? ' — ' + fail + ' ÉCHEC(S)' : ''));

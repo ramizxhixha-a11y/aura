@@ -1466,16 +1466,17 @@ function setTpSl(posId, type, pct) {
   const ps = S.pairStates[pos.pair];
   if(!ps) return;
   const cur = ps.price;
-  const cfg = _editModal.cfg;
+  // [GO N° 86D · 15/11/2026] (ETAT n° 86d) le champ reçoit 02 pxIn (les décimales du prix affiché, point décimal) : « ✓ Appliquer » écrit ce champ sur la position.
+  // Avant : toFixed(dec ≥ 4 ? dec : 2) — DOT à 0,734 : TP +1 % → 0.74 (+0,82 %) ; PEPE à 0,00000404 : TP +1 % d'un LONG → 0.000004, sous le prix (TP « atteint » au passage suivant).
   let price;
   if(type==='tp') {
     price = pos.side==='long' ? cur*(1+pct/100) : cur*(1-pct/100);
     const inp = document.getElementById('peTpInput');
-    if(inp) inp.value = price.toFixed(cfg.dec>=4?cfg.dec:2);
+    if(inp) inp.value = pxIn(pos.pair, price);
   } else {
     price = pos.side==='long' ? cur*(1-pct/100) : cur*(1+pct/100);
     const inp = document.getElementById('peSlInput');
-    if(inp) inp.value = price.toFixed(cfg.dec>=4?cfg.dec:2);
+    if(inp) inp.value = pxIn(pos.pair, price);
   }
 }
 
