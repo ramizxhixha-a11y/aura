@@ -146,7 +146,7 @@ T('C · appels : _schoolBoundsFromReal ← 09b2 loadState seul ; cfg.minP / cfg.
 T('F · garde : banc-fixtures/n105-retours.json redonne 08 et 09b2 du commit cb896e0 au caractère près', () => {
   if (!NOUVEAU) return;   // code d'avant : rien à retirer
   const A = { 'js/08-learning-history-render.js': '1612eb4233084d9c', 'js/09b2-save-load.js': '7c05cdce855b9eca' };
-  Object.keys(A).forEach(f => { const s = rd(f); assert.notStrictEqual(h16(s), A[f], f + ' : la retouche manque'); assert.strictEqual(h16(sansN105(s, f)), A[f], f + ' : autre chose a bougé'); });
+  Object.keys(A).forEach(f => { const s = require('./banc-fixtures/sans-n106.js')(rd(f), f); assert.notStrictEqual(h16(s), A[f], f + ' : la retouche manque'); assert.strictEqual(h16(sansN105(s, f)), A[f], f + ' : autre chose a bougé'); });   // [GO N° 106 · 15/11/2026] hors go n° 106 (08, 09b2 : amplitude de l'école, banc-n106.js)
 });
 
 console.log('\n' + (fail ? '❌' : '✅') + ' ' + pass + '/' + (pass + fail) + ' tests passés' + (fail ? ' — ' + fail + ' ÉCHEC(S)' : ''));

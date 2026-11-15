@@ -175,7 +175,7 @@ T('G · garde : 02, 03, 07, 09b1, 09b2, 09c, 09f2, 09j, 10e, 15b au texte d\'ava
   const H = { 'js/02-state-init.js': '9f458ee895a6c0bc', 'js/03-per-pair-position-buttons-controls-buid.js': 'edeb1cf93142e44b', 'js/07-v90-mode-bunker-sos.js': '037d807afdbdafed',
     'js/09b1-build-snapshot.js': '393c4df7cf1df426', 'js/09b2-save-load.js': '246e0b7eb4e21195', 'js/09j-helpers.js': '469be1c86f4a9337', 'js/09f2-bricks-man.js': 'd88b74ad5e9d428c',
     'js/10e-helpers-adaptatifs.js': 'c79bbfdff68a816f', 'js/15b-tendance-reelle.js': '08582a20cd8f495a' };
-  Object.keys(H).forEach(f => assert.strictEqual(h16(rd(f)), H[f], f + ' a changé'));
+  Object.keys(H).forEach(f => assert.strictEqual(h16(require('./banc-fixtures/sans-n106.js')(rd(f), f)), H[f], f + ' a changé'));   // [GO N° 106 · 15/11/2026] hors go n° 106 (08, 09b2 : amplitude de l'école, banc-n106.js)
   assert.ok(!/pairLeverage/.test(rd('js/09c-auto-open.js')), '09c ne lit pas le levier de la paire');
 });
 
