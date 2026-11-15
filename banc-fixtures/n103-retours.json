@@ -1,0 +1,8 @@
+{
+"js/02-state-init.js": [
+[
+"  });\n  const levTag = pos.levBorrowed > 0 ? ` ⚡$${Math.round(pos.levBorrowed * 100) / 100}` : '';   // [GO N° 103 · 15/11/2026] arrondi au cent (avant : « ⚡$39.99999999999999 », le nombre brut)\n  showToast((_part ? 'Sortie partielle ' : 'Fermé ')+pos.pair+levTag+' · '+pnlStr+' · '+usdtStr);   // [GO NETTOYAGE · 19/10/2026] (n° 55)",
+"  });\n  const levTag = pos.levBorrowed > 0 ? ` ⚡$${pos.levBorrowed}` : '';\n  showToast((_part ? 'Sortie partielle ' : 'Fermé ')+pos.pair+levTag+' · '+pnlStr+' · '+usdtStr);   // [GO NETTOYAGE · 19/10/2026] (n° 55)"
+]
+]
+}
