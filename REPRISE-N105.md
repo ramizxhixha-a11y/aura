@@ -14,8 +14,8 @@ Aucun format de sauvegarde changé. `cfg.vol` (constante, DOT 0,25 pour 0,73) : 
 - [x] code 08 + appel 09b2 (appel APRÈS les paires candidates, sinon DOT garde ses constantes)
 - [x] banc-n105.js 9/9 (7 échouent sur cb896e0)
 - [x] mutations 14/14
-- [ ] sonde vraie page rejeu/sonde_n105.js (--avant copie de cb896e0)
-- [ ] fixtures des bancs qui épinglent 08 / 09b2, jeton 20261115h
+- [x] sonde vraie page 9/9
+- [x] fixtures (affichage-3, n62, n63, n86d), jeton 20261115h, ETAT, PASSATION, banc-all LIVRABLE
 - [ ] ETAT, PASSATION, banc-all, un commit sur main, push, DOC_V raw + Pages
 
 Copie d'avant : `git worktree add /home/claude/avant cb896e0` (ou `git archive cb896e0 | tar -x -C /home/claude/avant`).
