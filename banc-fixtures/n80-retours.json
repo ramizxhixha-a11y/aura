@@ -1,0 +1,20 @@
+{
+"js/15b-tendance-reelle.js": [
+[
+"//   • la poche se retourne ou ferme (retournement, liquidation, paire retirée) → la position EV est fermée (closePosition { voix }), puis\n//     rouverte dans le nouveau sens avec l'argent revenu ; liquidée par la poche : fermée AU PRIX DE LA LIQUIDATION (go n° 80, 15/11) ;\n//   • un SHORT de l'EV dont le prix a doublé depuis SON entrée est fermé (−100 % de sa mise, comme la poche) et n'est pas rouvert avant le",
+"//   • la poche se retourne ou ferme (retournement, liquidation, paire retirée) → la position EV est fermée (closePosition { voix }), puis\n//     rouverte dans le nouveau sens avec l'argent revenu ;\n//   • un SHORT de l'EV dont le prix a doublé depuis SON entrée est fermé (−100 % de sa mise, comme la poche) et n'est pas rouvert avant le"
+],
+[
+"          if (pp && pp.side === pos.side && num(pp.t0) === num(pos._voixT0)) return;\n          var why = 'la voix ne la tient plus', liq = false, liqPx = 0;\n          var hist = Array.isArray(t.hist) ? t.hist : [];",
+"          if (pp && pp.side === pos.side && num(pp.t0) === num(pos._voixT0)) return;\n          var why = 'la voix ne la tient plus', liq = false;\n          var hist = Array.isArray(t.hist) ? t.hist : [];"
+],
+[
+"            var h = hist[i];\n            if (h && h.p === pos.pair && num(h.t0) === num(pos._voixT0)) { why = String(h.why || why); liq = why.indexOf('liquidation') >= 0; if (liq) liqPx = num(h.x1); break; }\n          }",
+"            var h = hist[i];\n            if (h && h.p === pos.pair && num(h.t0) === num(pos._voixT0)) { why = String(h.why || why); liq = why.indexOf('liquidation') >= 0; break; }\n          }"
+],
+[
+"          if (!pp && i < 0) why = 'paire retirée de la voix';\n          // [GO N° 80 · 15/11/2026] liquidation de la poche (js/15 : x1 = 2 × SON entrée, le prix que le marché a touché) : fermée tout de suite AU PRIX DE\n          // LA LIQUIDATION (02 closePosition, pos._forcedExitPx — comme 10f « stop côté exchange simulé », décision Rams du 26/09 : au stop, pas au prix de\n          // retour), EV en pause comprise. Avant : au ps.price de l'EV, le prix SAUVEGARDÉ quand le prix réel avait plus de 5 min. Sans ce prix (ligne\n          // d'avant), elle attend un prix frais comme toute autre fermeture de la voix. Effacé si la fermeture n'aboutit pas (jamais laissé à un ✕ suivant).\n          if (!(liqPx > 0) && !fresh(pos.pair)) return;      // pas de prix réel frais : on attend (jamais au prix sauvegardé)\n          if (liqPx > 0) pos._forcedExitPx = liqPx;\n          var done = false;\n          try { done = closeVoix(r, t, pos, why); } finally { if (!done) delete pos._forcedExitPx; }\n          if (done) changed = true;\n          if (liq) r.attente[pos.pair] = { w: w, t0: pp ? num(pp.t0) : 0 };",
+"          if (!pp && i < 0) why = 'paire retirée de la voix';\n          if (!liq && !fresh(pos.pair)) return;              // pas de prix réel frais : on attend (jamais au prix sauvegardé)\n          if (closeVoix(r, t, pos, why)) changed = true;\n          if (liq) r.attente[pos.pair] = { w: w, t0: pp ? num(pp.t0) : 0 };"
+]
+]
+}

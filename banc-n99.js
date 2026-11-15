@@ -286,7 +286,7 @@ T('G · garde : ce que le BOT lit et écrit est au texte d\'avant (733674d) ; au
   assert.strictEqual(h16(need(C.s02, 'estimateStakes')), '191de2e4cf018d53', 'estimateStakes (empreinte de go n° 61)');
   const FH = { 'js/09c-auto-open.js': 'cb981dcbb9806d73', 'js/10f-resolveur-cycle.js': '2c7f1bbbb66741a0', 'js/15-voix-tendance.js': '9757929e4b295254', 'js/15b-tendance-reelle.js': '08582a20cd8f495a',
     'js/09j-helpers.js': '469be1c86f4a9337', 'js/04-v8-0-livraison-35-mode-max-permissif-v.js': '61d3dedc2ac96e82', 'js/03-per-pair-position-buttons-controls-buid.js': '9c2ecc2cbdd73a08' };
-  Object.keys(FH).forEach(f => assert.strictEqual(h16(sansA3(require('./banc-fixtures/sans-n86d.js')(rd(f), f), f)), FH[f], f + ' a changé'));   // [GO N° 86D · 15/11/2026] hors go n° 86d (03, 08 : champs de saisie TP / SL, banc-n86d.js)   // [GO AFFICHAGE 3 · 15/11/2026] hors les retouches de go affichage 3 (affichage seul, banc-affichage-3.js)
+  Object.keys(FH).forEach(f => assert.strictEqual(h16(sansA3(require('./banc-fixtures/sans-n86d.js')(require('./banc-fixtures/sans-n80.js')(rd(f), f), f), f)), FH[f], f + ' a changé'));   // [GO N° 86D · 15/11/2026] hors go n° 86d (03, 08 : champs de saisie TP / SL, banc-n86d.js)   // [GO AFFICHAGE 3 · 15/11/2026] hors les retouches de go affichage 3 (affichage seul, banc-affichage-3.js)   // [GO N° 80 · 15/11/2026] hors go n° 80 (15b : liquidation de la poche au prix de la liquidation, banc-n80.js)
   ['js/09c-auto-open.js', 'js/10f-resolveur-cycle.js', 'js/15-voix-tendance.js', 'js/04-v8-0-livraison-35-mode-max-permissif-v.js'].forEach(f =>
     assert.ok(!/(^|[^\w$.])openPosition\s*\(/.test(rd(f).replace(/\/\/.*$/gm, '')), f + ' appelle openPosition'));
 });

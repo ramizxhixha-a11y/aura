@@ -243,7 +243,7 @@ const ctxOf = (o) => { const c = Object.assign({ console, Math, Object, JSON, Ar
     const H = { 'js/09c-auto-open.js': 'cb981dcbb9806d73', 'js/09e-guards.js': '6d8ac3f2aafb9e39', 'js/09j-helpers.js': '469be1c86f4a9337', 'js/10a-base-analyse.js': '31a4ecb469243d0a',
       'js/10d-protections-indicateurs.js': '5df7acbcb09379ca', 'js/10e-helpers-adaptatifs.js': 'c79bbfdff68a816f', 'js/10e6-frais-slippage.js': '05c8eeac6085a3fc', 'js/12-bots-disciples.js': '22be243cac985f66',
       'js/15-voix-tendance.js': '9757929e4b295254', 'js/15b-tendance-reelle.js': '08582a20cd8f495a', 'js/10c-profil-ab-contexte.js': 'c6cbe6c8ff325aea', 'js/09d1-paper-real-core.js': '8053d970e74c8db6' };
-    Object.keys(H).forEach(f => assert.strictEqual(h16(rd(f)), H[f], f + ' a changé'));
+    Object.keys(H).forEach(f => assert.strictEqual(h16(require('./banc-fixtures/sans-n80.js')(rd(f), f)), H[f], f + ' a changé'));   // [GO N° 80 · 15/11/2026] hors go n° 80 (15b : liquidation de la poche au prix de la liquidation, banc-n80.js)
     const AV = { s02: sansA3(C.s02, F.s02), s07: sansA3(C.s07, F.s07), s10f: sansA3(C.s10f, F.s10f) };
     ['closePosition', 'estimateStakes', 'recordFees', 'applyFundingFees', 'applyLeverageBorrowFees', 'borrowLeverage', 'repayLeverage', '_computePortfolio', '_pnlBasis', 'syncLeverageReserve',
      '_tradingCapitalBase', '_isCloseRow'].forEach(n => assert.strictEqual(need(C.s02, n), need(AV.s02, n), '02 ' + n + ' a changé'));
