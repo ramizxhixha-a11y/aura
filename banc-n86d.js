@@ -195,7 +195,7 @@ T('C · appels : pxIn lu par aucun fichier de la décision ; setTpSl ← boutons
 T('F · garde : banc-fixtures/n86d-retours.json redonne 03 et 08 du commit c52acfa au caractère près', () => {
   if (!NOUVEAU) return;   // code d'avant : rien à retirer
   const A = { 'js/03-per-pair-position-buttons-controls-buid.js': '117f962efbeb4f37', 'js/08-learning-history-render.js': 'e5b53d1146fba1b1' };
-  Object.keys(A).forEach(f => { const s = rd(f); assert.notStrictEqual(h16(s), A[f], f + ' : la retouche manque'); assert.strictEqual(h16(sansN86d(s, f)), A[f], f + ' : autre chose a bougé'); });
+  Object.keys(A).forEach(f => { const s = require('./banc-fixtures/sans-n105.js')(rd(f), f); assert.notStrictEqual(h16(s), A[f], f + ' : la retouche manque'); assert.strictEqual(h16(sansN86d(s, f)), A[f], f + ' : autre chose a bougé'); });   // [GO N° 105 · 15/11/2026] hors go n° 105 (08, 09b2 : bornes de l'école, banc-n105.js)
 });
 
 console.log('\n' + (fail ? '❌' : '✅') + ' ' + pass + '/' + (pass + fail) + ' tests passés' + (fail ? ' — ' + fail + ' ÉCHEC(S)' : ''));

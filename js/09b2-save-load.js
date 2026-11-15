@@ -809,6 +809,8 @@ async function loadState() {
     if (snap.pairCandidates) S.pairCandidates = snap.pairCandidates;
     try { if (typeof _ensureWalletStore === 'function') _ensureWalletStore(); } catch(e) {}   // [GO RÉGLAGES · 14/10/2026] une paire rajoutée ici : les 3 portefeuilles (ETAT n° 10)
   } catch(e) { dbg.push('dynPairs:err'); }
+  // [GO N° 105 · 15/11/2026] (ETAT n° 105) les bornes du prix de l'école repartent du dernier prix réel gardé (08 _schoolBoundsFromReal), après les paires du code et des candidats (plus haut)
+  try { if (typeof _schoolBoundsFromReal === 'function') _schoolBoundsFromReal(); } catch(e) { dbg.push('bornes:err'); }
 
   try {
     if (snap.proposals && snap.proposals.length && S.proposals) {
