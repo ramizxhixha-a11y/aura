@@ -24,6 +24,7 @@ const TETAT = P + 'muet · etat.json non écrit depuis 24 h, GitHub répond pour
 const TDISP = P + 'coupé · le PAT a disparu de l\'appareil sans « Couper le pont »';
 const T401 = P + 'suspendu · PAT refusé par GitHub (401 : expiré ou révoqué)';
 const TLARGE = P + 'coupé · PAT trop large (il peut écrire dans le code), effacé';
+const TACC = P + 'suspendu · le PAT ne voit plus aura-pont ou n\'y écrit plus (403 / 404)';
 const DISP_LIGNE = 'coupé · le PAT a disparu de cet appareil sans « Couper le pont » → colle un nouveau PAT et Activer';
 const sentry = X => X.run('window._auraSentry = { signal: function (t) { window.__sig = (window.__sig || []).concat([t]); } };');
 const sig = X => JSON.parse(X.run('JSON.stringify(window.__sig || [])'));
@@ -36,6 +37,7 @@ const sondeRefus = msg => r => (r.m === 'PUT' && r.url === SONDE) ? { st: 403, j
 const etatRefuse = st => r => (r.m === 'PUT' && /\/etat\.json$/.test(r.url)) ? { st, j: { message: st === 409 ? 'etat.json does not match' : 'Server Error' } } : null;
 const enLigneSur = (X, v) => { X.c.navigator.onLine = v; };
 const online = X => X.winL.filter(x => x[0] === 'online');
+const retenir = X => { const r = { lache: null }, f = X.c.fetch; X.c.fetch = (u, i) => new Promise(res => { r.lache = fn => { X.c.fetch = f; if (fn) fn(); res(f(u, i)); }; }); return r; };   // une requête retenue en vol (comme banc-pont-signal)
 
 // ───────────── A · (a) GitHub répond, aucun etat.json ne part ─────────────
 T('V1 · le cas n° 98 (a) : PAT gardé, le contrôle du code reste « non concluant » (GitHub a changé le texte de son 403) → suspendu ; rien pendant 24 h (aucun geste demandé), puis UN signal « controle » à texte fixe ; aucun etat.json ; relance le même jour : rien de plus ; le lendemain : un ; la panne finie → actif, état écrit, début de panne effacé', async () => {
@@ -98,6 +100,8 @@ T('V6 · 401 / accès perdu qui durent : leur motif seul (comme go pont), jamais
   X = avec({ ls: { aura_pont_pat: PAT_OK } }); X.gh.panne(r => (r.url === DEPOT) ? { st: 401, j: { message: 'Bad credentials' } } : null); await X.avancer(20 * H);
   X.gh.pannes.length = 0; X.gh.panne(sondeRefus('Forbidden')); await X.avancer(3 * H); assert.deepStrictEqual(sig(X), [T401]); await X.avancer(2 * H); assert.deepStrictEqual(sig(X), [T401, TCTRL]);
   void droits;
+  // PAT passé en LECTURE SEULE sur aura-pont : le contrôle passe (il ne teste pas l'écriture du pont), etat.json refusé 403 à chaque fois → « accès » seul, deux jours
+  X = avec(); await X.activer(PAT_OK); X.gh.jetons[PAT_OK] = { pont: 'r', code: null }; await X.avancer(2 * J); assert.deepStrictEqual(sig(X), [TACC], 'lecture seule : son motif, pas « etat »');
 });
 
 // ───────────── B · (b) le PAT disparu du stockage ─────────────
@@ -119,8 +123,11 @@ T('V8 · (b) AU LANCEMENT : marque sans PAT → la ligne le dit tout de suite ; 
   assert.deepStrictEqual(sig(X), [], 'hors ligne : rien'); assert.strictEqual(online(X).length, 1, 'il attend le réseau');
   enLigneSur(X, true); online(X)[0][1](); assert.deepStrictEqual(sig(X), [TDISP]); assert.strictEqual(online(X).length, 0, 'écouteur retiré');
   X = avec({ lsMap: new Map(ls), t0: X.clock.t + J }); enLigneSur(X, false); await X.avancer(2 * MIN); assert.strictEqual(online(X).length, 1);
-  enLigneSur(X, true); await X.activer(PAT_OK, 6000); assert.strictEqual(X.st().etat, 'actif');   // 6 s : faux GitHub neuf, le sha gardé est relu (une écriture de plus) assert.strictEqual(online(X).length, 0, 'activé : plus d\'attente');
+  enLigneSur(X, true); await X.activer(PAT_OK, 6000); assert.strictEqual(X.st().etat, 'actif'); assert.strictEqual(online(X).length, 0, 'activé : plus d\'attente');   // 6 s : faux GitHub neuf, le sha gardé est relu (une écriture de plus)
   X.run('window.__sig = []'); await X.avancer(H); assert.deepStrictEqual(sig(X), []);
+  // Rams colle un PAT à 58 s : le contrôle est en vol quand la minute tombe (PAT en main, pas encore gardé) → aucun signal
+  X = avec({ lsMap: new Map(ls), t0: X.clock.t + J }); await X.avancer(58000); const r = retenir(X); X.els.pontDirectPat.value = PAT_OK; X.c.pontDirectActiver(); await X.avancer(4000);
+  assert.ok(r.lache, 'contrôle en vol'); assert.strictEqual(X.st().etat, 'verif'); assert.deepStrictEqual(sig(X), [], 'activation en cours : pas une disparition'); r.lache(); await X.avancer(8000); assert.strictEqual(X.st().etat, 'actif'); assert.deepStrictEqual(sig(X), []);
 });
 T('V9 · (b) PAT gardé devenu ILLISIBLE (abîmé) avec la marque : effacé comme avant, puis « disparu » après 1 min ; sans la marque (installation d\'avant go n° 98) : rien, comme avant (limite dite)', async () => {
   const A = avec(); await A.activer(PAT_OK); const ls = new Map(A.ls); ls.set('aura_pont_pat', PAT_OK.slice(0, 30) + '!' + PAT_OK.slice(31));
@@ -133,8 +140,10 @@ T('V10 · rien quand Rams coupe : « Couper le pont » retire la marque AVANT le
   const w = X.lsJ.slice(k).filter(x => x[0] !== 'get'); assert.deepStrictEqual(w, [['set', 'aura_pont_mem'], ['del', 'aura_pont_pat']], 'marque retirée AVANT le PAT');
   assert.strictEqual(memo(X).actif, undefined); await X.avancer(H); assert.deepStrictEqual(sig(X), []);
   const Y = avec({ lsMap: new Map(X.ls), t0: X.clock.t + MIN }); await Y.avancer(H); assert.deepStrictEqual(sig(Y), []); assert.strictEqual(Y.timers.size, 0); assert.ok(/^coupé · colle le PAT/.test(ligne(Y)));
-  const L = new Map(), A = avec({ lsMap: L }); await A.activer(PAT_OK); const B = avec({ lsMap: L, gh: A.gh, t0: A.clock.t }); await B.avancer(20000); assert.strictEqual(B.st().etat, 'actif');
-  A.c.pontDirectCouper(); await B.avancer(16000); assert.strictEqual(B.st().etat, 'coupe'); assert.ok(/coupé depuis un autre onglet/.test(ligne(B)), ligne(B)); assert.deepStrictEqual(sig(B), []); assert.deepStrictEqual(sig(A), []);
+  const L = new Map(), A = avec({ lsMap: L }); await A.activer(PAT_OK); const B = avec({ lsMap: L, gh: A.gh, t0: A.clock.t }); await B.avancer(70000); assert.strictEqual(B.st().etat, 'actif');
+  const mB = JSON.parse(L.get('aura_pont_mem')); assert.ok(mB.etatAt > memo(A).etatAt - 1 && mB.ecrits.length > 2, 'B a écrit un état depuis');
+  A.clock.t = B.clock.t;   // même appareil, même horloge (A n'a pas battu depuis l'écriture de B : sa mémoire en main est périmée)
+  A.c.pontDirectCouper(); const mC = JSON.parse(L.get('aura_pont_mem')); assert.strictEqual(mC.etatAt, mB.etatAt, 'Couper dans A ne réécrit pas une mémoire PÉRIMÉE par-dessus celle de B (relue d\'abord)'); assert.deepStrictEqual(mC.ecrits, mB.ecrits); assert.strictEqual(mC.actif, undefined); await B.avancer(16000); assert.strictEqual(B.st().etat, 'coupe'); assert.ok(/coupé depuis un autre onglet/.test(ligne(B)), ligne(B)); assert.deepStrictEqual(sig(B), []); assert.deepStrictEqual(sig(A), []);
   const Z = avec({ ls: { aura_pont_pat: PAT_LARGE } }); await Z.avancer(H); assert.deepStrictEqual(sig(Z), [TLARGE]); assert.strictEqual(memo(Z).actif, undefined, 'coupure définitive : marque retirée');
   const Z2 = avec({ lsMap: new Map(Z.ls), t0: Z.clock.t + J }); await Z2.avancer(H); assert.deepStrictEqual(sig(Z2), []);
 });

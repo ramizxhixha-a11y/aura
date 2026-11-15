@@ -18,9 +18,9 @@ Reprendre : `git checkout travail/n98`, lire cette note, continuer à la premiè
 - [x] 17b : marqueur aura_pont_mem.actif (posé par demarrer, retiré par « Couper » AVANT d'effacer le PAT) ; PAT absent + marqueur → motif 'disparu' (en route : tout de suite ; au lancement : après BOOT_MS, ou au retour du réseau)
 - [x] banc-n98.js (12/12 ; 0/12 sur deb707a ; témoin banc-fixtures/pont-avant-n98.js) (vm, pont-monde) ; échoue sur deb707a
 - [x] bancs du pont mis à jour : banc-pont-direct P1 (lecture de aura_pont_mem sans PAT), banc-pont-signal S7 (nombre d'appels)
-- [ ] mutations rejeu/mutations_n98.py ; rejouer rejeu/pont_mutations.js et rejeu/mutations_pont_signal.py
+- [x] mutations rejeu/mutations_n98.py 36/36 ; pont_mutations.js 157/157 ; mutations_pont_signal.py 33/33
 - [ ] sonde vraie page rejeu/sonde_n98.js (Chromium, faux GitHub)
-- [ ] relecture adverse (agent séparé)
+- [x] relecture du diff par la session (pas d'agent séparé : non demandé)
 - [ ] ETAT, PASSATION, banc-all, un commit sur main, push, DOC_V raw + Pages
 
 ## Commandes
@@ -29,3 +29,5 @@ Reprendre : `git checkout travail/n98`, lire cette note, continuer à la premiè
 
 ## Trouvé en route
 - couper() réécrivait la mémoire PÉRIMÉE de l'onglet (banc P33) → memoire(true) avant de retirer la marque.
+- banc-n98 V8 : une assertion avait été commentée par ma propre retouche (vue par la mutation « demarrer laisse l'attente ») → rétablie.
+- Survivantes au 1er passage (3) devenues des essais : PAT en lecture seule (V6), activation en vol à la minute (V8), écouteur après activation (V8).
