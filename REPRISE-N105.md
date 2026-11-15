@@ -11,9 +11,9 @@ Aucun format de sauvegarde changé. `cfg.vol` (constante, DOT 0,25 pour 0,73) : 
 ## Étapes
 - [x] démarrage : pont etat 12:09 (20261115g), Sentry (seule « Sentry branché »), banc-all brut LIVRABLE
 - [x] backup du pont `rejeu/backups/pont/aura_guardian_full_20261115-121000.json`
-- [ ] code 08 + appel 09b2
-- [ ] banc-n105.js (vm) — tests qui échouent sur cb896e0
-- [ ] mutations rejeu/mutations_n105.py
+- [x] code 08 + appel 09b2 (appel APRÈS les paires candidates, sinon DOT garde ses constantes)
+- [x] banc-n105.js 9/9 (7 échouent sur cb896e0)
+- [x] mutations 14/14
 - [ ] sonde vraie page rejeu/sonde_n105.js (--avant copie de cb896e0)
 - [ ] fixtures des bancs qui épinglent 08 / 09b2, jeton 20261115h
 - [ ] ETAT, PASSATION, banc-all, un commit sur main, push, DOC_V raw + Pages

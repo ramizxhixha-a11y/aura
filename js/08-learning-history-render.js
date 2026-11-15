@@ -2770,6 +2770,28 @@ function _simCandleStep() {
   });
 }
 window._simCandleStep = _simCandleStep;
+// [GO N° 105 · 15/11/2026] (ETAT n° 105) LES BORNES DE L'ÉCOLE AVANT LE 1er PRIX RÉEL. Tant qu'aucun prix réel n'est arrivé, _simCandleStep (plus haut) borne le prix
+// de l'école à cfg.minP / cfg.maxP. 02 les pose à chaque prix réel (prix × 0,65 / × 1,55 : Binance, CoinGecko), mais elles ne sont pas sauvées : au rechargement,
+// une paire du code (02 PAIRS) ou bâtie d'un candidat (09b2) repart des constantes du code. Sonde du 15/11 (backup 12:10, réseau coupé, AA à l'écran) : DOT
+// (constante 3–30, réel 0,734) passe à 3 $ au premier pas et y reste ; AVAX (8–80, réel 7,217) ne redescend plus sous 8 ; ADA reste collé à 0,15 (réel 0,1547).
+// Ici, appelée par 09b2 loadState : les bornes repartent du DERNIER PRIX RÉEL GARDÉ de la paire (S.realCandles, la bougie la plus récente, sauvée), même règle
+// que 02. Rien si un prix réel est déjà arrivé (02 a posé les bornes du moment) ; une paire sans bougie réelle garde les siennes. Ne touche que ces bornes,
+// lues par la seule ligne de _simCandleStep : ni le prix, ni cfg.vol, ni l'EV / le RE.
+function _schoolBoundsFromReal() {
+  if (_pricesFetched || typeof PAIRS === 'undefined' || !S || !S.realCandles || typeof S.realCandles !== 'object') return 0;
+  let n = 0;
+  Object.keys(PAIRS).forEach(pair => {
+    const cfg = PAIRS[pair], rc = S.realCandles[pair];
+    if (!cfg || !rc || typeof rc !== 'object') return;
+    let k = null;
+    Object.keys(rc).forEach(iv => { const a = rc[iv], x = Array.isArray(a) ? a[a.length - 1] : null;
+      if (x && isFinite(x.c) && x.c > 0 && isFinite(x.ts) && (!k || x.ts > k.ts)) k = x; });
+    if (!k) return;
+    cfg.minP = k.c * 0.65; cfg.maxP = k.c * 1.55; n++;   // la règle de 02 (fetchBinancePrices, CoinGecko)
+  });
+  return n;
+}
+window._schoolBoundsFromReal = _schoolBoundsFromReal;
 
 // ═══ [MODES SÉPARÉS · 10/10/2026] LA SURVEILLANCE D'UN MODE EN PLAY DERRIÈRE L'ÉCRAN (go Rams 10/10 20:01 : « Go pour tout ») ═══
 // Le multiplexeur donnait à un mode d'arrière-plan ses cycles, les sorties de ses bots sur TP / SL (10f _botExitSweep) et le garde-fou de perte max (10f
