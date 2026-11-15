@@ -2527,7 +2527,7 @@ function _invPasse(x, L) {
       const maxB = base * Math.min(ix, mm) - Bn, abs = base * mm, p9 = (abs > 0 ? Bn / abs * 100 : 0) >= 95;
       if (maxB > 0 && !p9) { tient = T + maxB; if (x > T) jit = Math.min(x - T, maxB); }
     }
-    if (x > T + jit + 1e-9) return { ok: false, b, why: 'trading', tient };
+    if (x > T + jit + 1e-9) return { ok: false, b, why: 'trading', tient, ix: ix >= 1 };
     return { ok: true, b };
   });
 }
@@ -2542,7 +2542,7 @@ function _invChoix(pair, stake, lev) {
     return r && r.ok ? { x, L, b: r.b, r0 } : { x: 0, L, b: 0, r0 };
   };
   const A = meilleur(lev), U = lev > 1 + 1e-9 ? meilleur(1) : A, c = U.x > A.x + 0.005 ? U : A;
-  const pourquoi = (r) => r.why === 'trading' ? 'le trading ne tiendra que ' + fmt$2(Math.max(0, r.tient)) + ' après la fermeture'
+  const pourquoi = (r) => r.why === 'trading' ? 'le trading' + (r.ix ? ' (emprunt du levier compris)' : '') + ' ne tiendra que ' + fmt$2(Math.max(0, r.tient)) + ' après la fermeture'
     : 'contrôle de capital : ' + (r.c && r.c.phase5 && r.c.phase5Mode === 'leverage' ? 'avec une dette de levier, plafond = dette − mises engagées (' + fmt$2(Math.max(0, r.c.phase5Cap)) + ')'
       : r.c && r.c.phase5 ? 'mise ≤ trading (' + fmt$2(Math.max(0, r.c.available)) + ')'
       : 'exposition ≤ ' + (r.c && r.c.autoCap ? '80 % de ' : '') + 'trading + réserve du levier');
@@ -2635,7 +2635,7 @@ function manuInvert(pair) {
     if (!(r.ok && Math.abs(r.b - ch.b) < 0.005)) {
       const c2 = _invChoix(pair, plan.stake, plan.lev);
       if (!(c2.x >= 0.01)) { showToast('⚠ ' + pair + ' : ' + pos.side.toUpperCase() + ' fermé, mais ' + newSide.toUpperCase() + ' non rouvert · ' + (c2.why || '—'), 5000, 'warn'); return; }
-      const q2 = '↓ Inverser ' + pair + ' : le ' + pos.side.toUpperCase() + ' est fermé.\n\nLa fermeture a laissé moins que prévu. Ouvrir le ' + newSide.toUpperCase()
+      const q2 = '↓ Inverser ' + pair + ' : le ' + pos.side.toUpperCase() + ' est fermé.\n\nLa réouverture annoncée n\'est plus possible telle quelle. Ouvrir le ' + newSide.toUpperCase()
         + ' avec mise ' + fmt$2(c2.x) + ' · ×' + _levTxt(c2.eff, c2.eff < plan.lev - 0.005 ? plan.lev : 0) + ' (au lieu de ' + fmt$2(ch.x) + ' · ×' + _levTxt(ch.eff, ch.eff < plan.lev - 0.005 ? plan.lev : 0) + ' annoncés) ?'
         + (c2.why ? '\n⚠ ' + c2.why : '') + (c2.levWhy ? '\n⚠ ' + c2.levWhy : '') + '\n\nAnnuler = rien n\'est rouvert.';
       if (typeof confirm === 'function' && !confirm(q2)) { showToast('⚠ ' + pair + ' : ' + pos.side.toUpperCase() + ' fermé · ' + newSide.toUpperCase() + ' non rouvert (annulé)', 3500, 'warn'); return; }

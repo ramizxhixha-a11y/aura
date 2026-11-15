@@ -6,7 +6,7 @@
 //   P   levier de paire ×2, index ×1, 2 autres positions : avant « fermé, mais SHORT non rouvert » (l'emprunt de la part à levier passait le contrôle
 //       de capital en branche « levier » APRÈS la recherche de la mise) ; après : la question dit « ×1 au lieu de ×2 » et pourquoi, et c'est ce qui s'ouvre
 //   R   rien ne peut être rouvert (dette de levier de 0,01 $ et une autre position : plafond = dette − mises engagées) → RIEN n'est fermé
-//   D   la fermeture laisse moins que prévu (un débit imprévu pendant la fermeture) → 2e question avec les vrais montants ; acceptée : c'est ce qui
+//   D   la fermeture laisse moins que prévu (un débit imprévu pendant la fermeture) → 2e question (« La réouverture annoncée n'est plus possible telle quelle ») avec les vrais montants ; acceptée : c'est ce qui
 //       s'ouvre ; refusée : rien n'est rouvert, et c'est dit
 //   C   garde — ce que go consignes et go levier avaient prouvé tient toujours : vraie fermeture (historique, frais), mêmes distances de TP / SL, mêmes consignes ;
 //       la voix tendance refusée ; « Pas de position »
@@ -271,7 +271,7 @@ T('M · propriété, 2 000 états, VRAI manuInvert : question avant la fermeture
     assert.ok(np && np !== p && np.side !== p.side, 'état ' + i + ' : non rouverte après accord : ' + JSON.stringify(W.seen.toasts) + '\n' + qs[0].q);
     near(np.stakeUsdt, a.x, 0.005, 'état ' + i + ' : mise ouverte / annoncée'); near(np.totalExposure, a.expo, 0.01, 'état ' + i + ' : exposition ouverte / annoncée');
     assert.ok(!W.seen.toasts.some(t => /non rouvert/.test(t[0])), JSON.stringify(W.seen.toasts));
-    if (a.x < p.stakeUsdt - 0.005 && qs.length === 1) assert.ok(/\n\n⚠ Mise \$[\d\u202f\u00a0]+,\d\d au lieu de \$[\d\u202f\u00a0]+,\d\d : (le trading ne tiendra que|contrôle de capital : )/.test(qs[0].q), 'état ' + i + ' : mise réduite non dite\n' + qs[0].q);
+    if (a.x < p.stakeUsdt - 0.005 && qs.length === 1) assert.ok(/\n\n⚠ Mise \$[\d\u202f\u00a0]+,\d\d au lieu de \$[\d\u202f\u00a0]+,\d\d : (le trading( \(emprunt du levier compris\))? ne tiendra que|contrôle de capital : )/.test(qs[0].q), 'état ' + i + ' : mise réduite non dite\n' + qs[0].q);
     ouvertes++; if (np.stakeUsdt < p.stakeUsdt - 0.005) reduites++; if (Math.abs(np.totalExposure / np.stakeUsdt - p.totalExposure / p.stakeUsdt) > 0.005) lev1++;
   }
   assert.ok(ouvertes > 1000 && sansQ > 5 && reduites > 20 && lev1 > 20, 'tirage trop pauvre : ' + [ouvertes, sansQ, reduites, lev1]);
