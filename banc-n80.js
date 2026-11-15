@@ -181,9 +181,11 @@ function scenario(src, liq) {
   const W = world({ src15b: src }); poche(W, all11('short')); const out = [];
   const snap = (k) => out.push(k + ' ' + JSON.stringify({ S: W.S, toasts: W.seen.toasts, judges: W.seen.judges, saves: W.seen.saves }));
   W.run('_tlr.sync()'); snap('ouverture');
-  W.tick(60000); W.S.tendance.pos['ETH/USDT'] = { side: 'long', w: 0, pW: 1, pL: 1, x0: 16, t0: 9, n: 11, cIn: 0, liqChk: 0 }; W.S.pairStates['ETH/USDT'].price = 16.5;
+  // un retournement de la poche (js/15 decide → closePos puis openPos) : ligne d'historique au prix de la poche (x1), nouvelle entrée
+  const tourne = (pair, x1, t0) => { const t = W.S.tendance, p = t.pos[pair]; t.hist.push({ p: pair, s: -1, w0: p.w, t0: p.t0, x0: p.x0, t1: W.run('Date.now()'), x1, r: 0, c: 0, net: 0, n: p.n, why: 'retournement' }); t.pos[pair] = { side: 'long', w: 0, pW: 1, pL: 1, x0: x1, t0, n: 11, cIn: 0, liqChk: 0 }; };
+  W.tick(60000); tourne('ETH/USDT', 16, 9); W.S.pairStates['ETH/USDT'].price = 16.5;
   W.run('_tlr.sync()'); snap('retournement frais');
-  W.tick(60000); W.ages['SOL/USDT'] = 400000; W.S.tendance.pos['SOL/USDT'] = { side: 'long', w: 0, pW: 1, pL: 1, x0: 19, t0: 10, n: 11, cIn: 0, liqChk: 0 };
+  W.tick(60000); W.ages['SOL/USDT'] = 400000; tourne('SOL/USDT', 19, 10);
   W.run('_tlr.sync()'); snap('retournement périmé'); W.ages['SOL/USDT'] = 1000; W.run('_tlr.sync()'); snap('retournement redevenu frais');
   W.tick(60000); const d = voix(W).find(p => p.pair === 'DOGE/USDT'); W.S.pairStates['DOGE/USDT'].price = 2 * d.entryPrice; W.run('_tlr.sync()'); snap('×2 de l\'EV');
   W.tick(60000); delete W.S.tendance.pos['XRP/USDT']; W.run('_tlr.sync()'); snap('paire retirée');
