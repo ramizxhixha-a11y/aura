@@ -1152,7 +1152,10 @@ function _auraRotatePurge() {
         if (pst[pp] && Array.isArray(pst[pp].trades)) pst[pp].trades = cutEnd(pst[pp].trades, _TRADES_GARDES_PAR_PAIRE);   // [GO NETTOYAGE · 18/10/2026] (ETAT n° 37) avant : 40 en dur
       });
       w.dreamJournal      = cutEnd(w.dreamJournal, 40);   // [1c-LITE]
-      w.antiNegReserveLog = cutEnd(w.antiNegReserveLog, 50);   // [1c-LITE]
+      // [GO N° 63 · 15/11/2026] (ETAT n° 63) le journal anti-négatif est écrit en TÊTE (02 holdTradeReserve, releaseTradeReserve, _dispatchSessionTaxes :
+      // unshift, le plus récent d'abord) : on garde la TÊTE, comme fiscalReserveLog ci-dessus. Avant : cutEnd (1c-LITE) gardait les 50 plus VIEUX et
+      // effaçait toute ligne neuve 2 min au plus après son écriture — journal figé au 13/09 (AA) et au 15/09 (EV) dans le backup du 15/11 10:39.
+      if (Array.isArray(w.antiNegReserveLog) && w.antiNegReserveLog.length > 50) w.antiNegReserveLog = w.antiNegReserveLog.slice(0, 50);
       w.pnlHistory        = cutEnd(w.pnlHistory, 100);
     });
 

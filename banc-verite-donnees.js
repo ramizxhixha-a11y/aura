@@ -77,10 +77,11 @@ T('S4 · 10f : aucune vérification TP/SL dans _resolvePairCycleCore (écrit _tp
   assert.strictEqual(count(s10f, 'window._lossCapSweep = function _lossCapSweep()'), 1);
   assert.strictEqual(count(html, '10-fin-bloc-restauration-v93.js'), 0, 'la copie morte de 10-fin-bloc n\'est pas chargée');
 });
-T('S5 · 09b2 : les 6 historiques rotatifs de _auraRotatePurge gardent le plus RÉCENT (cutEnd), plus aucun cut( (tête)', () => {
+T('S5 · 09b2 : les historiques rotatifs de _auraRotatePurge gardent le plus RÉCENT — écrits en queue (push) : cutEnd ; journal anti-négatif écrit en tête (unshift) : slice(0, 50) ; plus aucun cut( (tête)', () => {   // [GO N° 63 · 15/11/2026] antiNegReserveLog sorti de la liste cutEnd : 1c-LITE l'y avait rangé à tort (ses écrivains de 02 font unshift), il gardait les 50 plus VIEUX
   const c = codeStrict(s9b2);
   assert.strictEqual(count(c, ' cut('), 0, 'cut( = tête, interdit');
-  for (const k of ['S.learningHistory  = cutEnd(S.learningHistory, 80);', 'S.globalMemoryPool = cutEnd(S.globalMemoryPool, 30);', 'S.dreamJournal     = cutEnd(S.dreamJournal, 30);', 'w.dreamJournal      = cutEnd(w.dreamJournal, 40);', 'w.antiNegReserveLog = cutEnd(w.antiNegReserveLog, 50);']) assert.ok(c.includes(k), k);
+  for (const k of ['S.learningHistory  = cutEnd(S.learningHistory, 80);', 'S.globalMemoryPool = cutEnd(S.globalMemoryPool, 30);', 'S.dreamJournal     = cutEnd(S.dreamJournal, 30);', 'w.dreamJournal      = cutEnd(w.dreamJournal, 40);']) assert.ok(c.includes(k), k);
+  assert.ok(c.includes('if (Array.isArray(w.antiNegReserveLog) && w.antiNegReserveLog.length > 50) w.antiNegReserveLog = w.antiNegReserveLog.slice(0, 50);') && count(c, 'cutEnd(w.antiNegReserveLog') === 0, 'antiNegReserveLog : la tête');
 });
 T('S6 · 07 : évolution ≥ 1 h (_EVO_COOLDOWN_MS 3 600 000), rêve ≥ 24 h (86 400 000), type/source du siège via _SEAT_DEF (21 sièges), regimeFitness du siège conservée', () => {
   const s07 = rd('js/07-v90-mode-bunker-sos.js'), c = codeStrict(s07);
