@@ -22,6 +22,7 @@ const T401 = 'AURA8 · Pont direct suspendu · PAT refusé par GitHub (401 : exp
 const TACC = 'AURA8 · Pont direct suspendu · le PAT ne voit plus aura-pont ou n\'y écrit plus (403 / 404)';
 const TLARGE = 'AURA8 · Pont direct coupé · PAT trop large (il peut écrire dans le code), effacé';
 const TPUB = 'AURA8 · Pont direct coupé · aura-pont public ou servi par Pages, PAT effacé';
+const TCTRL = 'AURA8 · Pont direct muet · contrôle du PAT non concluant depuis 24 h, GitHub répond pourtant', TETAT = 'AURA8 · Pont direct muet · etat.json non écrit depuis 24 h, GitHub répond pourtant', TDISP = 'AURA8 · Pont direct coupé · le PAT a disparu de l\'appareil sans « Couper le pont »';   // go n° 98 (banc-n98.js)
 const GESTE = '→ « Couper le pont », puis colle un nouveau PAT et Activer';
 const JOUR = new Date(M.T0).toISOString().slice(0, 10);
 // un faux Sentry : enregistre chaque appel de signal (le vrai 00s filtre et ne garde qu'un envoi par texte et par chargement)
@@ -129,12 +130,12 @@ T('S7 · texte FIXE : un message GitHub hostile (balise, faux jeton, montant) n\
   const X = avecSentry({ ls: { aura_pont_pat: PAT_OK } });
   X.gh.panne(() => ({ st: 401, j: { message: '<img src=x onerror=alert(1)> github_pat_' + 'Z'.repeat(40) + ' 1062.49 $' } }));
   await X.avancer(15000); assert.deepStrictEqual(sig(X), [T401]); assert.ok(ligne(X).includes('<img'), 'la ligne d\'Outils reste du texte (textContent)');
-  for (const t of [T401, TACC, TLARGE, TPUB]) { assert.ok(!/\d{4}/.test(t) && !/github_pat_/.test(t) && t.startsWith('AURA8 · Pont direct ')); assert.ok(t.length <= 200); }
+  for (const t of [T401, TACC, TLARGE, TPUB, TCTRL, TETAT, TDISP]) { assert.ok(!/\d{4}/.test(t) && !/github_pat_/.test(t) && t.startsWith('AURA8 · Pont direct ')); assert.ok(t.length <= 200); }
   const p = codeStrict(M.PONT);
   assert.deepStrictEqual(p.match(/_auraSentry[^;]*/g), ['_auraSentry'], 'une seule lecture de window._auraSentry');
   assert.deepStrictEqual(p.match(/\bs\.(\w+)\(/g), ['s.signal('], 'seule méthode appelée : signal');
   assert.ok(!/\.avalee|captureMessage|captureException|showToast|_decErr/.test(p));
-  assert.strictEqual((p.match(/signaler\(/g) || []).length, 3, 'définie une fois, appelée dans echec et verdict');
+  assert.strictEqual((p.match(/signaler\(/g) || []).length, 6, 'définie une fois, appelée dans echec et verdict ; depuis go n° 98 aussi dans muet, disparu et le battement (PAT disparu en route) — banc-n98.js');
 });
 T('S8 · limite SECONDAIRE de GitHub (403 ou 429 « secondary rate limit », SANS en-tête d\'attente) : au lancement et en route, ni signal ni geste, le PAT gardé, le pont attend (1 min, puis le double) et repart SEUL', async () => {
   for (const st of [403, 429]) {

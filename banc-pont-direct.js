@@ -27,11 +27,11 @@ const sondes = X => X.gh.journal.filter(r => r.m === 'PUT' && r.url === SONDE).l
 const seme = (n, age) => JSON.stringify({ ecrits: Array.from({ length: n }, (_, i) => T0 - age - i) });   // une mémoire avec n écritures déjà comptées
 
 // ───────────── A · inertie ─────────────
-T('P1 · sans PAT : aucune minuterie, aucune requête, aucun écouteur d\'erreur, aucune écriture ; une seule lecture de localStorage (aura_pont_pat) ; S identique ; une heure passe : toujours rien', async () => {
+T('P1 · sans PAT : aucune minuterie, aucune requête, aucun écouteur d\'erreur, aucune écriture ; deux lectures de localStorage (aura_pont_pat, puis sa mémoire aura_pont_mem : go n° 98, un PAT gardé ici a-t-il disparu ?) ; S identique ; une heure passe : toujours rien', async () => {
   const X = monde({ sansCharger: true }), S = X.run('S'), e0 = empreinte(S);
   X.charger(); await X.avancer(H);
   assert.strictEqual(X.timers.size, 0); assert.deepStrictEqual(X.stats.intervals, []); assert.strictEqual(X.gh.journal.length, 0); assert.deepStrictEqual(X.winL, []);
-  assert.deepStrictEqual(X.lsJ, [['get', 'aura_pont_pat']]);
+  assert.deepStrictEqual(X.lsJ, [['get', 'aura_pont_pat'], ['get', 'aura_pont_mem']]);   // [GO N° 98 · 15/11/2026] avant : la seule lecture d'aura_pont_pat
   assert.strictEqual(empreinte(S), e0); assert.deepStrictEqual(X.stats.acc, { get: 0, set: 0 }); assert.strictEqual(X.stats.alea, 0);
   assert.strictEqual(X.st().etat, 'coupe'); assert.strictEqual(typeof X.c.pontDirectActiver, 'function'); assert.strictEqual(X.c._auraLastOp, undefined);
 });
