@@ -8,7 +8,8 @@
 //   • la poche se retourne ou ferme (retournement, liquidation, paire retirée) → la position EV est fermée (closePosition { voix }), puis
 //     rouverte dans le nouveau sens avec l'argent revenu ; liquidée par la poche : fermée AU PRIX DE LA LIQUIDATION (go n° 80, 15/11) ;
 //   • un SHORT de l'EV dont le prix a doublé depuis SON entrée est fermé (−100 % de sa mise, comme la poche) et n'est pas rouvert avant le
-//     lundi suivant ;
+//     lundi suivant ; vu sur le prix en direct ET, pour les heures où la tablette dormait, sur les plus hauts des bougies 1 h Binance depuis
+//     le dernier contrôle (même règle que la poche, js/15 liqHist ; go n° 108, 15/11) — fermé alors AU PRIX DE LA LIQUIDATION (2 × son entrée) ;
 //   • ENTRÉE AU PRIX DU MOMENT (prix réel de moins de 5 min), jamais au prix d'entrée de la poche : ce serait de l'argent inventé.
 //   • MISE (porte POIDS du 12/11, rejeu/porte_poids.py : « égal » retenu ; « force » perd, « risque égal » non prouvé) : à chaque entrée,
 //     min(trading, (trading + valeur des positions de la voix) / n), n = paires tenues par la poche ; sans levier ; une position tenue n'est
@@ -19,6 +20,7 @@
 // RÈGLES DE RAMS : AUTO / MANU à Rams seul — en MANU la voix ferme mais n'ouvre jamais ; EV en pause : rien n'est ouvert (les fermetures
 // suivent la poche, qui ne décide pas en pause : seules les liquidations passent). Les bots à 15 min n'ouvrent plus en EV (09c) ; ils restent
 // dans l'AA. Le RE ne change pas. Fiscal : ouvertes par la voix → régime spéculatif (16). État : S.tendance.reel (sauvé avec la poche).
+// RÉSEAU (go n° 108) : 1 appel klines 1 h par heure et par SHORT de la voix (comme la poche) ; un échec est réessayé l'heure suivante.
 (function () {
   'use strict';
   if (typeof window === 'undefined' || window._tlr) return;
@@ -30,6 +32,10 @@
   var MODE = 'paperReal';
   var busy = false, lastHtml = '';
   var st = { v: V, tick: 0, last: 0, err: null, errAt: 0 };
+  // [GO N° 108 · 15/11/2026] liquidation PROPRE de l'EV pendant le sommeil de la tablette : mêmes constantes que la poche (js/15)
+  var HOUR = 3600000, FETCH_MS = 10000, STALE = 300000, API = 'https://api.binance.com/api/v3/';
+  var pend = {}, liqAt = {}, hRun = 0, hGen = 0;     // mémoire seulement : pend[id] = mèche trouvée (fermée au battement), liqAt[id] = dernier contrôle
+  var hst = { n: 0, at: 0, err: null, errAt: 0 };
 
   function now() { return Date.now(); }
   function mondayOf(t) { return MON0 + Math.floor((t - MON0) / WEEK) * WEEK; }
@@ -102,6 +108,48 @@
     return true;
   }
 
+  // ── [GO N° 108 · 15/11/2026] la liquidation PROPRE de l'EV (SHORT, prix ×2 de SON entrée) relue sur les bougies 1 h des heures de sommeil ──
+  // Avant : (c) ne la voyait qu'au prix frais du moment ; une mèche de la nuit au-delà de 2 × l'entrée de l'EV, retombée au réveil, n'était jamais
+  // comptée (la poche, elle, relit ses plus hauts 1 h : js/15 liqHist — mais son entrée est plus haute que celle de l'EV). Même règle que la poche :
+  // les bougies 1 h depuis l'heure qui suit l'entrée (l'heure d'entrée elle-même est couverte par le prix en direct), depuis le dernier contrôle
+  // (S.tendance.reel.suivi[paire].chk, sauvé), pages de 1 000 heures, la bougie en cours relue au contrôle suivant ; une fois par heure et par SHORT.
+  function getJ(url) {
+    try { if (window._perfOp) window._perfOp('tendance-reelle:' + url.split('symbol=')[1].split('&')[0]); } catch (e) {}
+    var opt = {};
+    try { if (typeof AbortSignal !== 'undefined' && typeof AbortSignal.timeout === 'function') opt.signal = AbortSignal.timeout(FETCH_MS); } catch (e) {}
+    return fetch(url, opt).then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); });
+  }
+  function liqStart(pos) { var t = num(pos.openedAt) || num(pos.entryTs); return t > 0 ? Math.ceil(t / HOUR) * HOUR : 0; }
+  function liqHist(r, q, g) {
+    var s = r.suivi[q.pair]; if (!s || s.id !== q.id) return Promise.resolve(false);
+    var from = Math.max(num(s.chk), q.start);
+    return getJ(API + 'klines?symbol=' + String(q.pair).replace('/', '') + '&interval=1h&startTime=' + from + '&limit=1000').then(function (a) {
+      if (g !== hGen || R() !== r || r.suivi[q.pair] !== s || s.id !== q.id || !Array.isArray(a)) return false;
+      for (var i = 0; i < a.length; i++) {
+        var o = Number(a[i][0]), hi = parseFloat(a[i][2]);
+        if (o < q.start) continue;
+        if (isFinite(hi) && hi >= 2 * q.e) { pend[q.id] = { e: q.e, px: 2 * q.e, o: o }; return true; }
+      }
+      if (a.length >= 1000) { s.chk = Number(a[a.length - 1][0]) + HOUR; return liqHist(r, q, g); }
+      var lastO = a.length ? Number(a[a.length - 1][0]) : from;     // la bougie en cours sera relue au prochain contrôle
+      s.chk = Math.max(from, Math.min(Math.floor(now() / HOUR) * HOUR, lastO));
+      return false;
+    });
+  }
+  function liqCheck(r, due) {   // les SHORT à contrôler, l'un après l'autre (un seul appel en vol) ; une mèche trouvée : fermée tout de suite (sync)
+    if (hRun && now() - hRun > STALE) { hRun = 0; hGen++; }        // contrôle resté sans réponse : abandonné (ses écritures sont ignorées)
+    if (hRun || !due.length || typeof fetch !== 'function') return;
+    hRun = now(); var g = ++hGen, hit = false, chain = Promise.resolve();
+    due.forEach(function (q) {
+      chain = chain.then(function () {
+        if (g !== hGen) return;
+        liqAt[q.id] = now(); hst.n++;
+        return liqHist(r, q, g).then(function (h) { if (h) hit = true; hst.at = now(); });
+      }).catch(function (e) { hst.err = q.pair + ' : ' + ((e && e.message) || e); hst.errAt = now(); });
+    });
+    chain.then(function () { if (g !== hGen) return; hRun = 0; if (hit) { try { sync(); } catch (e) {} } });
+  }
+
   function sync() {
     if (busy) return;
     var r = R(); if (!r || r.on !== 1) return;
@@ -109,7 +157,7 @@
     var t = S.tendance, H = held(t);
     var running = false;
     try { running = typeof window._isModeRunning === 'function' && !!window._isModeRunning(MODE); } catch (e) {}
-    var changed = false;
+    var changed = false, due = [];
     busy = true; st.tick++;
     try {
       inEV(function () {
@@ -151,6 +199,24 @@
           try { done = closeVoix(r, t, pos, why); } finally { if (!done) delete pos._forcedExitPx; }
           if (done) changed = true;
           if (liq) r.attente[pos.pair] = { w: w, t0: pp ? num(pp.t0) : 0 };
+        });
+        // (c0) [GO N° 108 · 15/11/2026] SHORT de l'EV dont une bougie 1 h (heures de sommeil) a touché 2 × SON entrée : fermé AU PRIX DE LA
+        // LIQUIDATION (pos._forcedExitPx, comme la poche et go n° 80), EV en pause et MANU compris, prix frais ou non ; pas rouvert avant le lundi qui
+        // suit la mèche. Effacé si la fermeture n'aboutit pas (réessayée au battement suivant). Puis : les SHORT à contrôler cette heure (liqCheck).
+        Object.keys(pend).forEach(function (id) { if (!ids[id]) delete pend[id]; });
+        mine().forEach(function (pos) {
+          if (pos.side !== 'short') return;
+          var q = pend[pos.id];
+          if (q && q.e === num(pos.entryPrice)) {
+            var pp = H[pos.pair], done = false, d = new Date(q.o), dd = function (x) { return (x < 10 ? '0' : '') + x; };
+            pos._forcedExitPx = q.px;
+            try { done = closeVoix(r, t, pos, 'liquidation : le prix a doublé depuis ton entrée — bougie 1 h du ' + dd(d.getDate()) + '/' + dd(d.getMonth() + 1) + ' ' + dd(d.getHours()) + ' h'); }
+            finally { if (!done) delete pos._forcedExitPx; }
+            if (done) { changed = true; delete pend[pos.id]; r.attente[pos.pair] = { w: mondayOf(q.o), t0: pp ? num(pp.t0) : 0 }; }
+            return;
+          }
+          var s0 = liqStart(pos);
+          if (s0 > 0 && !((liqAt[pos.id] || 0) > tNow - HOUR)) due.push({ id: pos.id, pair: pos.pair, e: num(pos.entryPrice), start: s0 });
         });
         // (c) SHORT de l'EV dont le prix a doublé depuis SON entrée : liquidé, pas rouvert cette semaine
         mine().forEach(function (pos) {
@@ -214,6 +280,7 @@
       st.err = String(e && e.message || e); st.errAt = now();
       try { window._decErr && window._decErr(e); } catch (_e) {}
     } finally { busy = false; st.last = now(); }
+    try { liqCheck(r, due); } catch (e) {}   // [GO N° 108 · 15/11/2026]
     if (changed) { try { if (typeof window.saveState === 'function') window.saveState(true); } catch (e) {} }
     try { render(); } catch (e) {}
   }
@@ -253,7 +320,7 @@
 
   window._tlrTientEV = tientEV;
   window._tlrStatus = st;
-  window._tlr = { V: V, sync: sync, state: R, summary: summary, render: render, mondayOf: mondayOf, tientEV: tientEV };
+  window._tlr = { V: V, sync: sync, state: R, summary: summary, render: render, mondayOf: mondayOf, tientEV: tientEV, liq: hst };   // [GO N° 108 · 15/11/2026] liq : contrôles des bougies 1 h
 
   setInterval(function () { try { sync(); } catch (e) {} }, 20000);
   setInterval(function () { try { render(); } catch (e) {} }, 5000);
