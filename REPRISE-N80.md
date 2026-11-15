@@ -10,8 +10,8 @@ Remède retenu (convention existante 10f:717 / 10f:739, décision Rams 26/09 « 
 
 Étapes :
 - [x] 1. ETAT, CLAUDE.md, pont `etat` (20261115k, 0 erreur), Sentry (seule « Sentry branché »), banc-all LIVRABLE avant
-- [ ] 2. banc-n80.js (vm, vrai 15b + vrai 02 closePosition) : échoue sur l'ancien code
-- [ ] 3. remède 15b
+- [x] 2. banc-n80.js (vm, vrai 15b + vrai 02 closePosition) : échoue sur l'ancien code
+- [x] 3. remède 15b
 - [ ] 4. mutations rejeu/mutations_n80.py
 - [ ] 5. sonde vraie page rejeu/sonde_n80.js (backup du pont du jour)
 - [ ] 6. ETAT, PASSATION, jeton 20261115l, banc-all, un commit sur main, push, DOC_V raw + Pages

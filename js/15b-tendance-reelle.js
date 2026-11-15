@@ -6,7 +6,7 @@
 // CE QUE FAIT LE MODULE (toutes les 20 s, dans le contexte EV — même bascule que 10f _lossCapSweep) :
 //   • la poche tient une paire (LONG / SHORT, entrée t0) → le compte EV tient la même paire, même sens, marquée _voix = 'tendance' ;
 //   • la poche se retourne ou ferme (retournement, liquidation, paire retirée) → la position EV est fermée (closePosition { voix }), puis
-//     rouverte dans le nouveau sens avec l'argent revenu ;
+//     rouverte dans le nouveau sens avec l'argent revenu ; liquidée par la poche : fermée AU PRIX DE LA LIQUIDATION (go n° 80, 15/11) ;
 //   • un SHORT de l'EV dont le prix a doublé depuis SON entrée est fermé (−100 % de sa mise, comme la poche) et n'est pas rouvert avant le
 //     lundi suivant ;
 //   • ENTRÉE AU PRIX DU MOMENT (prix réel de moins de 5 min), jamais au prix d'entrée de la poche : ce serait de l'argent inventé.
@@ -134,15 +134,22 @@
         M.forEach(function (pos) {
           var pp = H[pos.pair];
           if (pp && pp.side === pos.side && num(pp.t0) === num(pos._voixT0)) return;
-          var why = 'la voix ne la tient plus', liq = false;
+          var why = 'la voix ne la tient plus', liq = false, liqPx = 0;
           var hist = Array.isArray(t.hist) ? t.hist : [];
           for (var i = hist.length - 1; i >= 0; i--) {
             var h = hist[i];
-            if (h && h.p === pos.pair && num(h.t0) === num(pos._voixT0)) { why = String(h.why || why); liq = why.indexOf('liquidation') >= 0; break; }
+            if (h && h.p === pos.pair && num(h.t0) === num(pos._voixT0)) { why = String(h.why || why); liq = why.indexOf('liquidation') >= 0; if (liq) liqPx = num(h.x1); break; }
           }
           if (!pp && i < 0) why = 'paire retirée de la voix';
-          if (!liq && !fresh(pos.pair)) return;              // pas de prix réel frais : on attend (jamais au prix sauvegardé)
-          if (closeVoix(r, t, pos, why)) changed = true;
+          // [GO N° 80 · 15/11/2026] liquidation de la poche (js/15 : x1 = 2 × SON entrée, le prix que le marché a touché) : fermée tout de suite AU PRIX DE
+          // LA LIQUIDATION (02 closePosition, pos._forcedExitPx — comme 10f « stop côté exchange simulé », décision Rams du 26/09 : au stop, pas au prix de
+          // retour), EV en pause comprise. Avant : au ps.price de l'EV, le prix SAUVEGARDÉ quand le prix réel avait plus de 5 min. Sans ce prix (ligne
+          // d'avant), elle attend un prix frais comme toute autre fermeture de la voix. Effacé si la fermeture n'aboutit pas (jamais laissé à un ✕ suivant).
+          if (!(liqPx > 0) && !fresh(pos.pair)) return;      // pas de prix réel frais : on attend (jamais au prix sauvegardé)
+          if (liqPx > 0) pos._forcedExitPx = liqPx;
+          var done = false;
+          try { done = closeVoix(r, t, pos, why); } finally { if (!done) delete pos._forcedExitPx; }
+          if (done) changed = true;
           if (liq) r.attente[pos.pair] = { w: w, t0: pp ? num(pp.t0) : 0 };
         });
         // (c) SHORT de l'EV dont le prix a doublé depuis SON entrée : liquidé, pas rouvert cette semaine
