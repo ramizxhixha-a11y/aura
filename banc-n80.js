@@ -214,9 +214,10 @@ T('N8 · 15b ne change que dans le bloc (b) de sync et l\'en-tête ; le témoin 
   assert.strictEqual(crypto.createHash('sha256').update(AVANT15b).digest('hex').slice(0, 16), '08582a20cd8f495a', 'empreinte du témoin');
   const bloc = (s) => { const i = s.indexOf('        // (b) la poche ne la tient plus'), j = s.indexOf('        // (c) SHORT de l\'EV'); assert.ok(i > 0 && j > i, 'bloc (b)'); return [s.slice(0, i), s.slice(j)]; };
   const corps = (s) => s.slice(s.indexOf('(function () {'));
-  const A = bloc(corps(AVANT15b)), B = bloc(corps(s15b));
+  const s15bN80 = require('./banc-fixtures/sans-n108.js')(s15b, 'js/15b-tendance-reelle.js');   // [GO N° 108 · 15/11/2026] hors go n° 108 (liquidation propre de l'EV, bougies 1 h)
+  const A = bloc(corps(AVANT15b)), B = bloc(corps(s15bN80));
   assert.strictEqual(B[0], A[0], 'avant le bloc (b) : identique'); assert.strictEqual(B[1], A[1], 'après le bloc (b) : identique');
-  assert.strictEqual(require('./banc-fixtures/sans-n80.js')(s15b, 'js/15b-tendance-reelle.js'), AVANT15b, 'sans-n80.js redonne le 15b d\'avant au caractère près (lu par les gardes des autres bancs)');
+  assert.strictEqual(require('./banc-fixtures/sans-n80.js')(s15bN80, 'js/15b-tendance-reelle.js'), AVANT15b, 'sans-n80.js redonne le 15b d\'avant au caractère près (lu par les gardes des autres bancs)');
 });
 
 console.log('\n' + (fail ? '❌' : '✅') + ' ' + pass + '/' + (pass + fail) + ' tests passés');
