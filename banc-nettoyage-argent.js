@@ -76,7 +76,7 @@ function world(o) {
   const src = F02.filter(n => n !== '_levNormAuto' || has(s02, n)).map(n => fnSrc(s02, n));
   if (has(s02, '_feesDueOf')) src.push(fnSrc(s02, '_feesDueOf'));
   src.push('var _leverageMarginCheck = ' + between(s02, 'window._leverageMarginCheck = function _leverageMarginCheck() {', '\n};\n').replace('window._leverageMarginCheck = ', '') + '\n};');
-  src.push(fnSrc(s9j, 'validateTotalExposure'), fnSrc(s9j, 'validateInvestmentCapProvisioned'));
+  src.push(fnSrc(s9j, 'validateTotalExposure'), fnSrc(s9j, 'validateInvestmentCapProvisioned'), fnSrc(s9j, 'validateManualExposure') || '');   // [GO N° 61 · 15/11/2026] lue par 02 openPosition et 07 manuInvert (absente du code d'avant)
   src.push(fnSrc(s07, 'manuInvert'), fnSrc(s07, '_computeNetUsdParts'), fnSrc(s03, '_executeAccountReset'));
   src.push((s05.match(/const _SP_PALIERS_DEF = \[[\s\S]*?\];/) || [''])[0], has(s05, '_spRemainingFactor') ? fnSrc(s05, '_spRemainingFactor') : '', fnSrc(s05, 'closePartial'));
   vm.runInContext(src.join('\n') + '\nvar S = this.S;', c);

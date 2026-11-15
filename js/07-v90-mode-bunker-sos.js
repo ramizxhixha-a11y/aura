@@ -2513,11 +2513,13 @@ function manuInvert(pair) {
     const _jit = _ix >= 1 ? Math.max(0, (typeof _tradingCapitalBase === 'function' ? _tradingCapitalBase() : 0) * Math.min(_ix, S.leverageMaxMult || 10) - (Number(S.leverageBorrowed) || 0)) : 0;
     const _avail = Math.max(0, Number(S.tradingAccount) || 0) + _jit;
     if (reStake > _avail) { reStake = Math.floor(_avail * 100) / 100; why = 'c\'est ce que le trading tient après la fermeture'; }
-    // le contrôle de capital de l'ouverture manuelle (09j validateTotalExposure, sans écriture), tel qu'openPosition (02) le lit : refus si !ok ET disponible
+    // le contrôle de capital de l'ouverture manuelle (09j validateManualExposure, sans écriture), tel qu'openPosition (02) le lit : refus si !ok ET disponible
     // < la moitié de la mise. La plus grande mise qu'il laisse passer est cherchée sur lui-même (relecture du 19/10 : avec plusieurs positions ouvertes, son
-    // « disponible » retire deux fois les mises engagées — défaut de 09j au registre, il touche la décision — et la mise rouverte tombait à 13,82 $ au lieu de 490 $).
-    if (typeof validateTotalExposure === 'function' && reStake > 0) {
-      const passe = (x) => { const r = validateTotalExposure(x, x * (lev - 1)); return !!(r && (r.ok || Number(r.available) >= x * 0.5)); };
+    // « disponible » retirait deux fois les mises engagées et la mise rouverte tombait à 13,82 $ au lieu de 490 $ — [GO N° 61 · 15/11/2026] corrigé pour
+    // les ouvertures à la main, n° 61 ; la recherche reste pour le levier et les autres plafonds). Limite : la recherche se fait SANS l'emprunt de la part
+    // à levier de la paire, qu'openPosition prend AVANT son contrôle (branche « levier » de la phase 5) — avec un levier de paire, le message peut différer (n° 62).
+    if (typeof validateManualExposure === 'function' && reStake > 0) {
+      const passe = (x) => { const r = validateManualExposure(x, x * (lev - 1)); return !!(r && (r.ok || Number(r.available) >= x * 0.5)); };
       if (!passe(reStake)) {
         let lo = 0, hi = reStake;
         for (let i = 0; i < 40; i++) { const mid = (lo + hi) / 2; if (passe(mid)) lo = mid; else hi = mid; }
@@ -5032,8 +5034,8 @@ function renderHomePrices() {
     // [GO ÉCRAN · 13/11/2026] (ETAT n° 83) LIBRE = caisse + trading. Le trading est DÉJÀ débité de la mise à l'ouverture
     // (02 openPosition « S.tradingAccount − stakeUsdt ») : retrancher encore les trades en cours les comptait deux fois
     // (backup 13/11 19:22 : « $59,63 » pour 1 115,52 $ libres). La règle de Rams du 23/08 (caisse + trading − trades en cours,
-    // sur un argent qui les contient) reste vraie. Affichage seul : 09j getCapitalSummary().free (même formule, lue par
-    // 02 applyBotSuggestion et 03 suggestStake) n'est PAS changé ici — registre.
+    // sur un argent qui les contient) reste vraie. [GO N° 61 · 15/11/2026] 09j getCapitalSummary().free (lue par 02 applyBotSuggestion
+    // et 03 suggestStake) a la même formule depuis go n° 61 (n° 87).
     free:       Math.max(0, (S.cashAccount||0)+(S.tradingAccount||0))
   };
   const capFill = document.getElementById('capBarFill');

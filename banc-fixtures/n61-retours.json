@@ -1,0 +1,46 @@
+{
+"js/02-state-init.js": [
+[
+"  // [GO TENDANCE RÉELLE · 12/11/2026] la voix : exposition = mise ≤ trading (contrôlé plus bas) — le plafond « conviction » des bots ne la concerne pas\n  // [GO N° 61 · 15/11/2026] (ETAT n° 61) ouverture à la main : 09j validateManualExposure (la phase 5 sans levier ne retranche plus deux fois les mises)\n  const capCheck = _vx ? { ok: true, available: Infinity } : validateManualExposure(stakeUsdt, levBorrowed);\n  if(!capCheck.ok && capCheck.available < stakeUsdt * 0.5) {",
+"  // [GO TENDANCE RÉELLE · 12/11/2026] la voix : exposition = mise ≤ trading (contrôlé plus bas) — le plafond « conviction » des bots ne la concerne pas\n  const capCheck = _vx ? { ok: true, available: Infinity } : validateTotalExposure(stakeUsdt, levBorrowed);\n  if(!capCheck.ok && capCheck.available < stakeUsdt * 0.5) {"
+],
+[
+"  const cap = getCapitalSummary();\n  // [GO N° 61 · 15/11/2026] (ETAT n° 87) le libre compte maintenant la caisse (09j getCapitalSummary), qu'openPosition ne dépense pas : la mise demandée\n  // ne dépasse jamais ce qu'openPosition peut ouvrir — le trading, plus l'emprunt « juste à temps » du levier d'index (02 ensureLeverageCoverForTrade,\n  // base × index − dette), comme 07 manuInvert. Sans cette borne, 30 % d'une grosse caisse dépassaient le trading : « rien ouvert » là où l'ancien\n  // libre (− les mises) ouvrait (relecture adverse du 15/11 : caisse 2 500 $, trading 1 000 $ → avant 930 $ ouverts, sans la borne refus).\n  const _ix = Number(S.leverage) || 0;\n  const _ouvrable = Math.max(0, Number(S.tradingAccount) || 0) + (_ix >= 1 ? Math.max(0, _tradingCapitalBase() * Math.min(_ix, S.leverageMaxMult || 10) - (Number(S.leverageBorrowed) || 0)) : 0);\n  const safeStake = Math.min(Math.floor(cap.free * 0.3), stake, Math.floor(_ouvrable));\n  if(safeStake < 5) { showToast('Capital libre insuffisant'); return; }",
+"  const cap = getCapitalSummary();\n  const safeStake = Math.min(Math.floor(cap.free * 0.3), stake);\n  if(safeStake < 5) { showToast('Capital libre insuffisant'); return; }"
+]
+],
+"js/03-per-pair-position-buttons-controls-buid.js": [
+[
+"  const leverageBonus = stake * (lev - 1);  // part empruntée\n  const capCheck = validateManualExposure(stake, leverageBonus);   // [GO N° 61 · 15/11/2026] (ETAT n° 61) contrôle des ouvertures à la main (09j)\n  if(!capCheck.ok) {",
+"  const leverageBonus = stake * (lev - 1);  // part empruntée\n  const capCheck = validateTotalExposure(stake, leverageBonus);\n  if(!capCheck.ok) {"
+],
+[
+"    if(capCheck.phase5) {\n      const _src = capCheck.phase5Mode === 'leverage' ? 'levier emprunté − engagés' : 'trading';   // [GO N° 61] sans levier : le trading (déjà débité des mises)\n      showToast(`⚠ Règle sizing · max investissable ${fmt$(free)} (${_src})`, 3200, 'critical');\n    } else {",
+"    if(capCheck.phase5) {\n      const _src = capCheck.phase5Mode === 'leverage' ? 'levier emprunté' : 'trading';\n      showToast(`⚠ Règle sizing · max investissable ${fmt$(free)} (${_src} − engagés)`, 3200, 'critical');\n    } else {"
+]
+],
+"js/07-v90-mode-bunker-sos.js": [
+[
+"    if (reStake > _avail) { reStake = Math.floor(_avail * 100) / 100; why = 'c\\'est ce que le trading tient après la fermeture'; }\n    // le contrôle de capital de l'ouverture manuelle (09j validateManualExposure, sans écriture), tel qu'openPosition (02) le lit : refus si !ok ET disponible\n    // < la moitié de la mise. La plus grande mise qu'il laisse passer est cherchée sur lui-même (relecture du 19/10 : avec plusieurs positions ouvertes, son",
+"    if (reStake > _avail) { reStake = Math.floor(_avail * 100) / 100; why = 'c\\'est ce que le trading tient après la fermeture'; }\n    // le contrôle de capital de l'ouverture manuelle (09j validateTotalExposure, sans écriture), tel qu'openPosition (02) le lit : refus si !ok ET disponible\n    // < la moitié de la mise. La plus grande mise qu'il laisse passer est cherchée sur lui-même (relecture du 19/10 : avec plusieurs positions ouvertes, son"
+],
+[
+"    // < la moitié de la mise. La plus grande mise qu'il laisse passer est cherchée sur lui-même (relecture du 19/10 : avec plusieurs positions ouvertes, son\n    // « disponible » retirait deux fois les mises engagées et la mise rouverte tombait à 13,82 $ au lieu de 490 $ — [GO N° 61 · 15/11/2026] corrigé pour\n    // les ouvertures à la main, n° 61 ; la recherche reste pour le levier et les autres plafonds). Limite : la recherche se fait SANS l'emprunt de la part\n    // à levier de la paire, qu'openPosition prend AVANT son contrôle (branche « levier » de la phase 5) — avec un levier de paire, le message peut différer (n° 62).\n    if (typeof validateManualExposure === 'function' && reStake > 0) {\n      const passe = (x) => { const r = validateManualExposure(x, x * (lev - 1)); return !!(r && (r.ok || Number(r.available) >= x * 0.5)); };\n      if (!passe(reStake)) {",
+"    // < la moitié de la mise. La plus grande mise qu'il laisse passer est cherchée sur lui-même (relecture du 19/10 : avec plusieurs positions ouvertes, son\n    // « disponible » retire deux fois les mises engagées — défaut de 09j au registre, il touche la décision — et la mise rouverte tombait à 13,82 $ au lieu de 490 $).\n    if (typeof validateTotalExposure === 'function' && reStake > 0) {\n      const passe = (x) => { const r = validateTotalExposure(x, x * (lev - 1)); return !!(r && (r.ok || Number(r.available) >= x * 0.5)); };\n      if (!passe(reStake)) {"
+],
+[
+"    // (backup 13/11 19:22 : « $59,63 » pour 1 115,52 $ libres). La règle de Rams du 23/08 (caisse + trading − trades en cours,\n    // sur un argent qui les contient) reste vraie. [GO N° 61 · 15/11/2026] 09j getCapitalSummary().free (lue par 02 applyBotSuggestion\n    // et 03 suggestStake) a la même formule depuis go n° 61 (n° 87).\n    free:       Math.max(0, (S.cashAccount||0)+(S.tradingAccount||0))",
+"    // (backup 13/11 19:22 : « $59,63 » pour 1 115,52 $ libres). La règle de Rams du 23/08 (caisse + trading − trades en cours,\n    // sur un argent qui les contient) reste vraie. Affichage seul : 09j getCapitalSummary().free (même formule, lue par\n    // 02 applyBotSuggestion et 03 suggestStake) n'est PAS changé ici — registre.\n    free:       Math.max(0, (S.cashAccount||0)+(S.tradingAccount||0))"
+]
+],
+"js/09j-helpers.js": [
+[
+"    usedPct,\n    // [GO N° 61 · 15/11/2026] (ETAT n° 87) LIBRE = caisse + trading : le trading est DÉJÀ débité de la mise à l'ouverture (02 openPosition), retrancher\n    // encore les trades en cours les comptait deux fois (comme la carte capital avant go écran, n° 83). Lu seulement par les suggestions MANUELLES :\n    // 02 applyBotSuggestion (« ✓ Appliquer », 30 %) et 03 suggestStake (panneau de la paire, 25 %). La règle de Rams du 23/08 (caisse + trading\n    // − trades en cours, sur un argent qui les contient) reste vraie. Aucun chemin du bot ne lit `.free` (porte rejeu/porte_n61.js, M3 d).\n    free: Math.max(0, (S.cashAccount||0) + (S.tradingAccount||0))\n  };",
+"    usedPct,\n    free: Math.max(0, (S.cashAccount||0) + (S.tradingAccount||0) - staked)   // [23/08 · Rams] LIBRE = caisse+trading−trades en cours\n  };"
+],
+[
+"\n// [GO N° 61 · 15/11/2026] (ETAT n° 61, partie MANUELLE) Contrôle de capital des ouvertures À LA MAIN : 02 openPosition, 03 _openProposedPosition,\n// 07 manuInvert. Le même que validateTotalExposure, sauf la phase 5 SANS levier : son plafond « trading − mises engagées » comptait les mises deux\n// fois — le trading est DÉJÀ débité de la mise à l'ouverture (02 openPosition) — ; ici le plafond est le trading. Pont du 15/11 00:26, EV :\n// 11 positions de la voix (1 055,89 $ engagés), 1 115,33 $ au trading → plafond 59,44 $ avant : toute ouverture à la main au-delà de ~119 $\n// était refusée (« Capital max atteint »). Jamais plus strict que validateTotalExposure (le trading ≥ trading − engagé).\n// Les chemins du BOT (02 estimateStakes, 09c) lisent toujours validateInvestmentCapProvisioned / validateTotalExposure tels quels : les corriger\n// change la mise du bot (porte du 20/10, M5) — n° 61, partie bot, reste au registre. Porte de ce changement : rejeu/porte_n61.js.\nfunction validateManualExposure(proposedStake, proposedLevBonus) {\n  const r = validateTotalExposure(proposedStake, proposedLevBonus);\n  if (r.ok || !r.phase5 || r.phase5Mode !== 'no_leverage') return r;\n  const cap = Math.max(0, S.tradingAccount || 0);\n  if ((proposedStake || 0) <= cap) return { ok: true, available: r.maxAllowed - r.alreadyStaked };\n  return Object.assign({}, r, { available: cap, phase5Cap: cap });\n}\nwindow.validateManualExposure = validateManualExposure;\n",
+""
+]
+]
+}

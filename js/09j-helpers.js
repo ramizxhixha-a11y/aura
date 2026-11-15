@@ -79,7 +79,11 @@ function getCapitalSummary() {
     staked,
     maxAllowed,
     usedPct,
-    free: Math.max(0, (S.cashAccount||0) + (S.tradingAccount||0) - staked)   // [23/08 · Rams] LIBRE = caisse+trading−trades en cours
+    // [GO N° 61 · 15/11/2026] (ETAT n° 87) LIBRE = caisse + trading : le trading est DÉJÀ débité de la mise à l'ouverture (02 openPosition), retrancher
+    // encore les trades en cours les comptait deux fois (comme la carte capital avant go écran, n° 83). Lu seulement par les suggestions MANUELLES :
+    // 02 applyBotSuggestion (« ✓ Appliquer », 30 %) et 03 suggestStake (panneau de la paire, 25 %). La règle de Rams du 23/08 (caisse + trading
+    // − trades en cours, sur un argent qui les contient) reste vraie. Aucun chemin du bot ne lit `.free` (porte rejeu/porte_n61.js, M3 d).
+    free: Math.max(0, (S.cashAccount||0) + (S.tradingAccount||0))
   };
 }
 window.getCapitalSummary = getCapitalSummary;
@@ -268,3 +272,19 @@ function validateTotalExposure(proposedStake, proposedLevBonus, proposedConvicti
   return { ok: true, available: maxAllowed - alreadyStaked };
 }
 window.validateTotalExposure = validateTotalExposure;
+
+// [GO N° 61 · 15/11/2026] (ETAT n° 61, partie MANUELLE) Contrôle de capital des ouvertures À LA MAIN : 02 openPosition, 03 _openProposedPosition,
+// 07 manuInvert. Le même que validateTotalExposure, sauf la phase 5 SANS levier : son plafond « trading − mises engagées » comptait les mises deux
+// fois — le trading est DÉJÀ débité de la mise à l'ouverture (02 openPosition) — ; ici le plafond est le trading. Pont du 15/11 00:26, EV :
+// 11 positions de la voix (1 055,89 $ engagés), 1 115,33 $ au trading → plafond 59,44 $ avant : toute ouverture à la main au-delà de ~119 $
+// était refusée (« Capital max atteint »). Jamais plus strict que validateTotalExposure (le trading ≥ trading − engagé).
+// Les chemins du BOT (02 estimateStakes, 09c) lisent toujours validateInvestmentCapProvisioned / validateTotalExposure tels quels : les corriger
+// change la mise du bot (porte du 20/10, M5) — n° 61, partie bot, reste au registre. Porte de ce changement : rejeu/porte_n61.js.
+function validateManualExposure(proposedStake, proposedLevBonus) {
+  const r = validateTotalExposure(proposedStake, proposedLevBonus);
+  if (r.ok || !r.phase5 || r.phase5Mode !== 'no_leverage') return r;
+  const cap = Math.max(0, S.tradingAccount || 0);
+  if ((proposedStake || 0) <= cap) return { ok: true, available: r.maxAllowed - r.alreadyStaked };
+  return Object.assign({}, r, { available: cap, phase5Cap: cap });
+}
+window.validateManualExposure = validateManualExposure;

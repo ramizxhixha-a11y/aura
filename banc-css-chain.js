@@ -43,14 +43,15 @@ function monde(S, ls) {
   idsOf(p4).forEach(id => { const m = p4.match(new RegExp('id="' + id + '"[^>]*data-f="([a-z]+)"')); els[id] = mk(id, m && m[1]); });
   els.chainCountBadge = mk('chainCountBadge'); els.chainCountBadge.style.display = 'none';
   const store = ls || { d: {}, sets: 0 };
-  const c = { S, Math, Number, Object, Array, String, JSON, isFinite, RegExp, WeakMap, Intl, console, __now: Date.now(),
+  const c = { S, Math, Number, Object, Array, String, JSON, isFinite, RegExp, WeakMap, Intl, console, __now: NOW,
     localStorage: { getItem: k => (k in store.d ? store.d[k] : null), setItem: (k, v) => { store.sets++; store.d[k] = String(v); } },
     document: { getElementById: id => els[id] || null, querySelectorAll: sel => (/\[data-f\]|chaintab-/.test(sel) ? Object.values(els).filter(e => e.dataset.f || /^chaintab-/.test(e.id)) : []) } };
   c.Date = new Proxy(Date, { construct: (t, a) => (a.length ? new t(...a) : new t(c.__now)), get: (t, k) => (k === 'now' ? (() => c.__now) : t[k]) });
   c.window = c; vm.createContext(c); vm.runInContext(AIDES02 + '\n' + CHAIN + '\n;this.__setF = f => { _chainFilter = f; }; this.__getF = () => _chainFilter;', c);
   return { c, els, S, store, run: code => vm.runInContext(code, c) };
 }
-const H = 3600e3, NOW = Date.now(), HIER = NOW - 26 * H;
+// [GO N° 61 · 15/11/2026] heure du banc figée à midi du jour (heure locale) : avec Date.now(), « il y a 2 h » tombait la veille entre 00:00 et 02:00 → C2 échouait (« Hier » au lieu de « Aujourd'hui »)
+const H = 3600e3, NOW = (d => (d.setHours(12, 0, 0, 0), d.getTime()))(new Date()), HIER = NOW - 26 * H;
 const TR = () => ({
   'XRP/USDT': { trades: [{ type: 'open', side: 'sell', price: 1.0266, stakeUsdt: 95.99, ts: NOW - 2 * H }] },
   'ETH/USDT': { trades: [{ type: 'open', side: 'sell', price: 2307.13, stakeUsdt: 1000, ts: HIER - H },

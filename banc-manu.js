@@ -83,6 +83,7 @@ function mkCtx(opts) {
   };
   ctx.window = ctx; ctx.calls = calls;
   vm.createContext(ctx);
+  vm.runInContext('function validateManualExposure(a, b) { return validateTotalExposure(a, b); }', ctx);   // [GO N° 61 · 15/11/2026] 02 openPosition lit 09j validateManualExposure : ici le même contrôle que le bouchon validateTotalExposure du banc (le vrai est éprouvé par banc-n61.js)
   vm.runInContext('let _currentDetailPair = null; let _pendingClosePair = null;', ctx);
   const src = ['const _pxFmt = {};', fnSrc(s02, 'pxTxt'),   // [GO CSS FINITIONS · 14/11/2026] (n° 86) les briques MAN écrivent le prix par 02 pxTxt
     fnSrc(s02, '_livePairs'),   // [PAIRES VIVANTES · 10/10/2026] 10h _manPlan compte les emplacements sur les paires vivantes (02)

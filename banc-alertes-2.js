@@ -385,7 +385,8 @@ const tr = (o) => Object.assign({ type: 'position', side: 'buy', pnl: 1, stakeUs
 
   console.log('▶ G. garde : la décision n\'a pas bougé');
   await T('G1 · fonctions de la décision et de l\'argent identiques au commit ab5be43 (ouverture, fermeture, frais, funding, mises, portefeuille canonique, argent à Rams, rotation des périodes, résolveur) ; fichiers de la décision identiques', () => {
-    const P = { openPosition: [C.s02, '4253a25008eb23a3'], closePosition: [C.s02, 'f306ef7b27f64ac3'], recordFees: [C.s02, 'f2b897580fc692af'], applyFundingFees: [C.s02, '9f9d15892dd2757c'],
+    const P = { openPosition: [require('./banc-fixtures/sans-n61.js')(C.s02, F.s02), '4253a25008eb23a3'],   // [GO N° 61 · 15/11/2026] hors la retouche de go n° 61 (banc-n61.js)
+      closePosition: [C.s02, 'f306ef7b27f64ac3'], recordFees: [C.s02, 'f2b897580fc692af'], applyFundingFees: [C.s02, '9f9d15892dd2757c'],
       applyLeverageBorrowFees: [C.s02, 'e364c8a77e5c72ad'], estimateStakes: [C.s02, '191de2e4cf018d53'], _computePortfolio: [C.s02, '257f2a1047dbc64b'], _pnlBasis: [C.s02, 'd03c58239bff81bd'],
       calcTaxProvision: [C.s02, 'a53f25980c254185'], botRescue: [C.s03, 'd5ab2721c75c37af'], learnFromOutcome: [C.s03, '1d0bef339fad49fa'],
       _checkAndRotatePeriods: [rd('js/10c-profil-ab-contexte.js'), 'e97c74c187cb8e10'], _resolvePairCycleCore: [rd('js/10f-resolveur-cycle.js'), 'a3b9d1df45a293d9'] };

@@ -41,7 +41,7 @@ const h16 = s => crypto.createHash('sha256').update(s).digest('hex').slice(0, 16
 const s02 = rd('js/02-state-init.js'), s03 = rd('js/03-per-pair-position-buttons-controls-buid.js'), s05 = rd('js/05-v37-19-indicateur-de-fatigue-bot.js'), s06 = rd('js/06-v63-patterns-chartistes.js'),
       s07 = rd('js/07-v90-mode-bunker-sos.js'), s08 = rd('js/08-learning-history-render.js'), s9c = rd('js/09c-auto-open.js'), s9f1 = rd('js/09f1-bricks-action.js'),
       s9g = rd('js/09g-modals.js'), s9j = rd('js/09j-helpers.js'), s10f = rd('js/10f-resolveur-cycle.js'), s16 = rd('js/16-fiscal.js'), html = rd('AURA8_v118.html');
-const _TR = require('./banc-fixtures/sans-tendance-reelle.js');   // [GO TENDANCE RÉELLE · 12/11/2026] retire les retouches de go tendance réelle avant d'épingler le texte (voir le fichier)
+const _TR = ((tr, n61) => (src, f) => tr(n61(src, f), f))(require('./banc-fixtures/sans-tendance-reelle.js'), require('./banc-fixtures/sans-n61.js'));   // [GO N° 61 · 15/11/2026] retire aussi les retouches de go n° 61 (les plus récentes d'abord)   // [GO TENDANCE RÉELLE · 12/11/2026] retire les retouches de go tendance réelle avant d'épingler le texte (voir le fichier)
 
 // empreintes (sha-256, 16 car.) du texte au commit a82841b (token 20261018b), juste avant GO LEVIER
 const EMPREINTES_AVANT = { estimateStakes: '191de2e4cf018d53', borrowLeverage: 'f4ddc794f667473e', ensureLeverageCoverForTrade: 'a6f142883b38357d', applyAutoLeverageBorrow: '1ede99649e526761',
@@ -102,7 +102,7 @@ function world(o) {
   c.window = c; vm.createContext(c);
   const src = F02.map(n => fnSrc(s02, n)).concat(F02NEW.filter(n => has(s02, n)).map(n => fnSrc(s02, n)));
   src.push('var _leverageMarginCheck = ' + between(s02, 'window._leverageMarginCheck = function _leverageMarginCheck() {', '\n};\n').replace('window._leverageMarginCheck = ', '') + '\n};');
-  src.push(o.capOk ? 'function validateTotalExposure() { return { ok: true, available: 1e9 }; }' : fnSrc(s9j, 'validateTotalExposure'), fnSrc(s9j, 'validateInvestmentCapProvisioned'));
+  src.push(o.capOk ? 'function validateTotalExposure() { return { ok: true, available: 1e9 }; }' : fnSrc(s9j, 'validateTotalExposure'), fnSrc(s9j, 'validateInvestmentCapProvisioned'), fnSrc(s9j, 'validateManualExposure') || '');   // [GO N° 61 · 15/11/2026] lue par 02 openPosition (absente du code d'avant)
   src.push('const _pxFmt = {};', fnSrc(s02, 'pxTxt'), fnSrc(s02, 'pxIn'));   // [GO CSS FINITIONS · 14/11/2026] (n° 86) la fiche écrit ses indices ±2 % par 02 pxTxt / pxIn
   src.push('var _editModal = null;', fnSrc(s08, 'applyPosEdit'), fnSrc(s08, 'openPosEdit'), fnSrc(s08, 'flipPosition'), 'function closePosEditModal() { _editModal = null; }');
   src.push(fnSrc(s07, 'manuInvert'), fnSrc(s07, '_bkCapital'), fnSrc(s07, '_computeNetUsdParts'));

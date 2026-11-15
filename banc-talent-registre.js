@@ -39,7 +39,7 @@ const h16 = s => crypto.createHash('sha256').update(s).digest('hex').slice(0, 16
 const near = (a, b, tol, quoi) => assert.ok(typeof a === 'number' && Math.abs(a - b) <= (tol || 1e-9), (quoi || 'valeur') + ' : ' + a + ' ≠ ' + b);
 const s03 = rd('js/03-per-pair-position-buttons-controls-buid.js'), s02 = rd('js/02-state-init.js'), s9b2 = rd('js/09b2-save-load.js'), s9c = rd('js/09c-auto-open.js'), s9e = rd('js/09e-guards.js'), s9j = rd('js/09j-helpers.js'),
       s10g = rd('js/10g-resolveur-ev-csv.js'), s10h = rd('js/10h-pont-fullpower-bricks.js'), html = rd('AURA8_v118.html');
-const _TR = require('./banc-fixtures/sans-tendance-reelle.js');   // [GO TENDANCE RÉELLE · 12/11/2026] retire les retouches de go tendance réelle avant d'épingler le texte (voir le fichier)
+const _TR = ((tr, n61) => (src, f) => tr(n61(src, f), f))(require('./banc-fixtures/sans-tendance-reelle.js'), require('./banc-fixtures/sans-n61.js'));   // [GO N° 61 · 15/11/2026] retire aussi les retouches de go n° 61 (les plus récentes d'abord)   // [GO TENDANCE RÉELLE · 12/11/2026] retire les retouches de go tendance réelle avant d'épingler le texte (voir le fichier)
 const TOUT = [s02, s03, s9b2, s9e, s9j, s10g, s10h].join('\n');
 const FN = ['_posLevCash', '_levCashDebt', '_computePortfolio', '_computePortfolioSans', '_tradingCapitalBase', '_checkPaperRealStakeLimit', 'guardianCheck', 'botRescue',
   'validateInvestmentCapProvisioned', 'validateTotalExposure',
