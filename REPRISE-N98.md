@@ -14,10 +14,10 @@ Reprendre : `git checkout travail/n98`, lire cette note, continuer à la premiè
 - (b) PAT absent du stockage en route (17b:380 `couper('coupé depuis un autre onglet', true)`) ou au lancement (17b:496-497 : rien, ou valeur illisible effacée) → arrêt muet.
 
 ## Remède (plan)
-- [ ] 17b : `muet(code)` — début de panne gardé dans aura_pont_mem.muet (GitHub a RÉPONDU, réseau coupé = neutre) ; effacé au 1er etat.json écrit ; passé VERIF_MS (24 h, période du contrôle quotidien existant) → motif 'controle' (vérif) ou 'etat' (écriture) à Sentry
-- [ ] 17b : marqueur aura_pont_mem.actif (posé par demarrer, retiré par « Couper » AVANT d'effacer le PAT) ; PAT absent + marqueur → motif 'disparu' (en route : tout de suite ; au lancement : après BOOT_MS, ou au retour du réseau)
-- [ ] banc-n98.js (vm, pont-monde) ; échoue sur deb707a
-- [ ] bancs du pont mis à jour : banc-pont-direct P1 (lecture de aura_pont_mem sans PAT), banc-pont-signal S7 (nombre d'appels)
+- [x] 17b : `muet(code)` — début de panne gardé dans aura_pont_mem.muet (GitHub a RÉPONDU, réseau coupé = neutre) ; effacé au 1er etat.json écrit ; passé VERIF_MS (24 h, période du contrôle quotidien existant) → motif 'controle' (vérif) ou 'etat' (écriture) à Sentry
+- [x] 17b : marqueur aura_pont_mem.actif (posé par demarrer, retiré par « Couper » AVANT d'effacer le PAT) ; PAT absent + marqueur → motif 'disparu' (en route : tout de suite ; au lancement : après BOOT_MS, ou au retour du réseau)
+- [x] banc-n98.js (12/12 ; 0/12 sur deb707a ; témoin banc-fixtures/pont-avant-n98.js) (vm, pont-monde) ; échoue sur deb707a
+- [x] bancs du pont mis à jour : banc-pont-direct P1 (lecture de aura_pont_mem sans PAT), banc-pont-signal S7 (nombre d'appels)
 - [ ] mutations rejeu/mutations_n98.py ; rejouer rejeu/pont_mutations.js et rejeu/mutations_pont_signal.py
 - [ ] sonde vraie page rejeu/sonde_n98.js (Chromium, faux GitHub)
 - [ ] relecture adverse (agent séparé)
@@ -26,3 +26,6 @@ Reprendre : `git checkout travail/n98`, lire cette note, continuer à la premiè
 ## Commandes
 - `node banc-n98.js [<17b>]` · `node banc-pont-signal.js` · `node banc-pont-direct.js` · `node rejeu/pont_mutations.js` · `python3 -I rejeu/mutations_pont_signal.py .`
 - copie d'avant : `git show deb707a:js/17b-pont-direct.js > /tmp/avant-17b.js`
+
+## Trouvé en route
+- couper() réécrivait la mémoire PÉRIMÉE de l'onglet (banc P33) → memoire(true) avant de retirer la marque.

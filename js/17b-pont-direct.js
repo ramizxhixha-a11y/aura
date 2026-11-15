@@ -1,26 +1,20 @@
 // ═══ [PONT DIRECT · 11/10/2026] VERSION 20261011a · « go pont » (Rams, 11/10 00:25) ═══
-// POURQUOI : Rams n'a pas de PC, une tablette c'est tout. Une session Claude ne voyait l'app vivante que par les backups du Drive et
-// ses captures : aucun contrôle « sur la tablette » (window._recStatus, _tlStatus, version chargée) n'était possible sans console.
+// POURQUOI : Rams n'a pas de PC, une tablette c'est tout. Une session Claude ne voyait l'app vivante que par les backups du Drive et ses captures : aucun contrôle « sur la tablette » (window._recStatus, _tlStatus, version chargée) n'était possible sans console.
 // Ce module ouvre un pont DIRECT par un dépôt GitHub PRIVÉ, séparé du code : ramizxhixha-a11y/aura-pont.
-//   1) ÉTAT : toutes les 5 min l'app y réécrit etat.json (version chargée, mode à l'écran, modes en play, positions, réseau,
-//      enregistreur, arrêts de la tablette, erreurs, et le plus long trou entre deux battements du pont) ;
-//   2) DEMANDES : toutes les 15 s elle lit le dossier demandes/ ; une session y dépose demandes/<id>.json, l'app répond dans
-//      reponses/<id>.json. LISTE FERMÉE : ping, etat, diag, lire, backup — rien d'autre n'existe ;
+//   1) ÉTAT : toutes les 5 min l'app y réécrit etat.json (version chargée, mode à l'écran, modes en play, positions, réseau, enregistreur, arrêts de la tablette, erreurs, et le plus long trou entre deux battements du pont) ;
+//   2) DEMANDES : toutes les 15 s elle lit le dossier demandes/ ; une session y dépose demandes/<id>.json, l'app répond dans reponses/<id>.json. LISTE FERMÉE : ping, etat, diag, lire, backup — rien d'autre n'existe ;
 //   3) BACKUP sur demande : le snapshot de 09b1 (buildSnapshot), même enveloppe que l'export de 10h, dans backups/.
 // LECTURE SEULE — le pont (ce fichier + 17-pont-lecture.js, qui lit l'app) :
 //   • n'écrit RIEN dans S ; n'appelle de l'app que buildSnapshot (09b1 : la fonction de la sauvegarde automatique, telle quelle, pour
 //     un backup — elle lit les accesseurs de portefeuille de 02 comme la sauvegarde, après _stateReady) et _perfOp (08 : il s'annonce « pont:backup / diag / lire », comme toute opération lourde) ; depuis go pont (14/11) _auraSentry.signal (00s : un texte FIXE de SIGNAUX, une fois par motif et par jour, inerte hors de la page publiée ; son envoi passe par le fetch de 00, qui pose window._auraLastOp) ; n'en remplace ni n'en
 //     enveloppe aucune ; jamais Math.random (le rejeu le sème), ni showToast (08 y compte S._silencedCount), ni _decErr (00 → S._errStats) ;
 //   • n'ouvre ni ne ferme aucune position : aucune demande ne le peut, aucun chemin de code n'y mène ;
-//   • n'exécute RIEN de ce qui vient du dépôt : une demande est du JSON validé (nom du fichier, id, date, commande de la liste) ;
-//     ni eval, ni Function, ni HTML bâti avec ce qui est reçu ;
+//   • n'exécute RIEN de ce qui vient du dépôt : une demande est du JSON validé (nom du fichier, id, date, commande de la liste) ; ni eval, ni Function, ni HTML bâti avec ce qui est reçu ;
 //   • TRACES INDIRECTES, dites : 00 et 08 chronomètrent le pont comme le reste de la page — un rappel de plus de 1 s serait noté par 00
 //     (S.chainLog / S.perfLog.lent), un gel RÉEL pendant un backup le serait par 08 (S.perfLog.gels, sous le nom « pont:backup »).
-//     00 pose son marqueur window._auraLastOp à chaque réponse réseau, celles du pont comprises : le pont le REMET tel qu'il l'a
-//     trouvé, pour qu'un gel venu d'ailleurs ne lui soit pas attribué ;
-//   • est TOTALEMENT INERTE sans PAT : ni minuterie, ni requête, ni écouteur d'erreurs — seulement sa ligne dans le panneau Outils.
-// LE PAT (jeton GitHub) — ce pont REVIENT sur la phase 0 du 08/09 (« plus de push GitHub par jeton en localStorage ») : décision de
-// Rams du 11/10, bornée ainsi :
+//     00 pose son marqueur window._auraLastOp à chaque réponse réseau, celles du pont comprises : le pont le REMET tel qu'il l'a trouvé, pour qu'un gel venu d'ailleurs ne lui soit pas attribué ;
+//   • est TOTALEMENT INERTE sans PAT : ni minuterie, ni requête, ni écouteur d'erreurs — seulement sa ligne dans le panneau Outils ; sauf (go n° 98) si sa mémoire dit qu'un PAT était gardé ici sans « Couper le pont » : UN signal (1 min après le lancement, ou au retour du réseau).
+// LE PAT (jeton GitHub) — ce pont REVIENT sur la phase 0 du 08/09 (« plus de push GitHub par jeton en localStorage ») : décision de Rams du 11/10, bornée ainsi :
 //   • seul un PAT fine-grained (github_pat_…) est accepté ; un PAT classique (ghp_…, tous les dépôts) est refusé ;
 //   • AVANT de le garder, puis à chaque lancement et une fois par jour : (a) aura-pont répond, il est PRIVÉ et sans GitHub Pages ;
 //     (b) le PAT ne peut PAS écrire de fichier dans le dépôt du code : ce fichier-ci y est relu (il existe), puis une écriture
@@ -32,12 +26,10 @@
 //     ramizxhixha-a11y.github.io) peut lire localStorage : le PAT n'est pas plus à l'abri que la page elle-même ;
 //   • le PAT vit dans localStorage « aura_pont_pat », hors snapshot et hors backups (comme aura_news_key, 10e7) ; il ne part QUE dans
 //     l'en-tête Authorization vers api.github.com/repos/ramizxhixha-a11y/aura-pont (et l'unique adresse de contrôle du dépôt du
-//     code), redirections interdites ; dernier filet : le PAT, tout texte en forme de jeton GitHub ou Telegram et la valeur des
-//     secrets de S sont retirés de TOUT ce qui part ;
+//     code), redirections interdites ; dernier filet : le PAT, tout texte en forme de jeton GitHub ou Telegram et la valeur des secrets de S sont retirés de TOUT ce qui part ;
 //   • débit borné : 60 écritures / h dont 12 gardées pour etat.json, comptées d'un rechargement à l'autre, 2 s entre deux, un backup
 //     toutes les 2 min au plus ; 3 demandes par relevé, la plus récente d'abord ; une demande dont le NOM date de plus de 65 min n'est
-//     même pas lue ; une demande ne sert qu'UNE fois (mémoire « aura_pont_mem ») et périme (15 min) ; toute attente est bornée ; pause
-//     qui double jusqu'à 5 min sur erreur, 1 h sur un PAT refusé.
+//     même pas lue ; une demande ne sert qu'UNE fois (mémoire « aura_pont_mem ») et périme (15 min) ; toute attente est bornée ; pause qui double jusqu'à 5 min sur erreur, 1 h sur un PAT refusé.
 // POUR COUPER : bouton « Couper le pont » (Outils) → le PAT est effacé de l'appareil, tout s'arrête (un autre onglet de la page aussi, au
 // battement suivant) ; ou révoquer le PAT sur GitHub. Le « Reset usine » n'efface que nexus* : il ne coupe PAS le pont. LIMITE dite :
 // deux onglets actifs à la fois peuvent servir deux fois une demande arrivée au même instant (l'app native n'a qu'une page).
@@ -86,8 +78,13 @@
   // (00s signal, niveau error), une fois par motif et par jour UTC (mémoire du pont) ; la session le lit. Texte FIXE : rien de GitHub, rien du PAT.
   var GESTE = ' → « Couper le pont », puis colle un nouveau PAT et Activer';
   var SIGNAUX = { '401': 'suspendu · PAT refusé par GitHub (401 : expiré ou révoqué)', acces: 'suspendu · le PAT ne voit plus aura-pont ou n\'y écrit plus (403 / 404)',
-    large: 'coupé · PAT trop large (il peut écrire dans le code), effacé', public: 'coupé · aura-pont public ou servi par Pages, PAT effacé' }, signales = {};
+    large: 'coupé · PAT trop large (il peut écrire dans le code), effacé', public: 'coupé · aura-pont public ou servi par Pages, PAT effacé',
+    controle: 'muet · contrôle du PAT non concluant depuis 24 h, GitHub répond pourtant', etat: 'muet · etat.json non écrit depuis 24 h, GitHub répond pourtant', disparu: 'coupé · le PAT a disparu de l\'appareil sans « Couper le pont »' }, signales = {};
   function signaler(code) { var j = new Date(now()).toISOString().slice(0, 10), m = memoire(); if (!Object.prototype.hasOwnProperty.call(SIGNAUX, code) || signales[code] || (m.sig && m.sig[code] === j)) return; signales[code] = 1; (m.sig = m.sig || {})[code] = j; memSauve(); try { var s = window._auraSentry; if (s && typeof s.signal === 'function') s.signal('AURA8 · Pont direct ' + SIGNAUX[code]); } catch (e) {} }
+  // [GO N° 98 · 15/11/2026] muet SANS signal. (1) GitHub RÉPOND mais aucun etat.json ne part (contrôle « non concluant », écriture refusée) : début gardé dans la mémoire (muet, effacé au 1er etat.json écrit ; réseau coupé : ni début ni fin) ; passé VERIF_MS (24 h, la période du contrôle quotidien) → motif.
+  // (2) PAT absent du stockage sans « Couper le pont » : marque actif (posée par demarrer, retirée par Couper AVANT le PAT) → motif disparu, en route tout de suite, au lancement après BOOT_MS (ou au retour du réseau).
+  var DISPARU = 'coupé · le PAT a disparu de cet appareil sans « Couper le pont » → colle un nouveau PAT et Activer', guet = null; function muet(code) { var m = memoire(), t = now(); if (!m.muet) { m.muet = t; memSauve(); } else if (code && t - m.muet >= VERIF_MS) signaler(code); }
+  function guetter(on) { try { if (guet) window.removeEventListener('online', guet); guet = on ? disparu : null; if (guet) window.addEventListener('online', guet); } catch (e) {} } function disparu() { guetter(false); if (actif || pat || lsLit(LS_PAT) !== null || !memoire(true).actif) return; if (enLigne()) signaler('disparu'); else guetter(true); }
   function lecture() { var L = window._pontLecture; if (!L) throw new Error('17-pont-lecture.js absent'); return L; }
   function b64Octets(u8) {   // par blocs de 24 576 octets (multiple de 3 : les morceaux se concatènent sans bourrage au milieu)
     var out = [], PAS = 24576;
@@ -132,6 +129,7 @@
       etatAt: passe(m.etatAt), sha: (typeof m.sha === 'string' && /^[0-9a-f]{40}$/.test(m.sha)) ? m.sha : null, backupAt: passe(m.backupAt),
       ecrits: (Array.isArray(m.ecrits) ? m.ecrits : []).map(passe).filter(function (x) { return x && t - x < 3600000; }).slice(-ECRITS_H) };
     Object.keys(SIGNAUX).forEach(function (k) { var v = m.sig && m.sig[k]; if (typeof v === 'string' && /^\d{4}-\d\d-\d\d$/.test(v)) (n.sig = n.sig || {})[k] = v; }); if (mem && !n.sig) delete mem.sig;   // dernier signal à Sentry, par motif (go pont ; absent sans signal)
+    if (m.actif === 1) n.actif = 1; if (passe(m.muet)) n.muet = passe(m.muet); if (mem) { if (!n.actif) delete mem.actif; if (!n.muet) delete mem.muet; }   // go n° 98 : PAT gardé ici ; début d'une panne muette (absents sinon)
     if (!mem) mem = n; else Object.keys(n).forEach(function (k) { mem[k] = n[k]; });
     return mem;
   }
@@ -243,7 +241,7 @@
     }
     if (bon(r)) {
       m.sha = (r.j && r.j.content && typeof r.j.content.sha === 'string') ? r.j.content.sha : null;
-      st.etatAt = now(); st.n++; st.tics = 0; st.ticMax = 0; etatDu = st.etatAt + ETAT_MS; m.etatAt = st.etatAt; memSauve();
+      st.etatAt = now(); st.n++; st.tics = 0; st.ticMax = 0; delete m.muet; etatDu = st.etatAt + ETAT_MS; m.etatAt = st.etatAt; memSauve();
     }
     return r;
   }
@@ -365,6 +363,7 @@
     if (!actif) return;
     incident(v.msg);
     signaler(v.code);
+    if (v.code === 'reseau' || v.code === 'limite') muet('controle'); else if (v.code === '401' || v.code === 'acces') muet(null);   // go n° 98 : GitHub a répondu (une coupure du réseau lève, sans verdict)
     if (v.code === 'large' || v.code === 'public' || v.code === 'format') { couper('⛔ ' + v.msg); return; }   // refus définitif : le PAT quitte l'appareil
     st.etat = 'suspendu'; st.msg = v.msg; st.suite++; st.echecs++;
     if (v.code === '401' || v.code === 'acces') st.msg += GESTE;
@@ -377,7 +376,7 @@
     if (etatDu > t + ETAT_MS) etatDu = t + ETAT_MS;                           // ni plus de 5 min sans état
     if (t < st.pauseUntil || !enLigne()) { peindre(); return; }
     var s = lsLit(LS_PAT);   // « Couper » dans un autre onglet arrête celui-ci aussi
-    if (s !== undefined && s !== pat) { couper(s ? 'arrêté ici : le PAT a changé dans un autre onglet (recharge la page)' : 'coupé depuis un autre onglet', true); return; }
+    if (s !== undefined && s !== pat) { if (s === null && memoire(true).actif) { signaler('disparu'); couper(DISPARU, true); return; } couper(s ? 'arrêté ici : le PAT a changé dans un autre onglet (recharge la page)' : 'coupé depuis un autre onglet', true); return; }
     memoire(true);
     busy = true;
     try {
@@ -390,6 +389,7 @@
         var r = await envoyerEtat();
         if (!bon(r)) {
           incident('etat.json non écrit · ' + ghMsg(r));
+          muet((r.st === 401 || ((r.st === 403 || r.st === 404) && !r.attente)) ? null : 'etat');   // go n° 98 : GitHub a répondu (ou quota du pont) ; 401 / accès ont leur motif
           if (!r.plein && r.st !== 409 && r.st !== 422) { echec(r); return; }   // réseau, accès perdu (401, 403, 404), GitHub en panne : tout attend
           etatDu = now() + ETAT_MS;   // etat.json seul est en cause (409 / 422 même après relecture), ou le quota : nouvel essai dans 5 min, les demandes sont servies quand même
         }
@@ -409,8 +409,8 @@
   }
   function ecouter() { if (ecoute) return; ecoute = true; try { window.addEventListener('error', noterErr); window.addEventListener('unhandledrejection', noterRej); } catch (e) {} }
   function sourd() { if (!ecoute) return; ecoute = false; try { window.removeEventListener('error', noterErr); window.removeEventListener('unhandledrejection', noterRej); } catch (e) {} }
-  function demarrer() { actif = true; ecouter(); if (!memoire().inst) { mem.inst = now().toString(36); memSauve(); } if (!iv) { dernierTic = now(); iv = setInterval(tic, POLL_MS); } }
-  function couper(msg, sansEffacer) {   // sansEffacer : arrêt de CET onglet seulement (le PAT qu'un autre onglet vient de poser n'est pas à lui)
+  function demarrer() { actif = true; ecouter(); guetter(false); if (!memoire().inst || !mem.actif) { if (!mem.inst) mem.inst = now().toString(36); mem.actif = 1; memSauve(); } if (!iv) { dernierTic = now(); iv = setInterval(tic, POLL_MS); } }
+  function couper(msg, sansEffacer) { if (!sansEffacer) { var m = memoire(true); if (m.actif) { delete m.actif; memSauve(); } }   // go n° 98 : la marque part AVANT le PAT (un autre onglet ne croit pas à une disparition) ; sansEffacer : arrêt de CET onglet seulement (le PAT qu'un autre onglet vient de poser n'est pas à lui)
     gen++; actif = false; pat = null; if (!sansEffacer) lsDel(LS_PAT);
     if (videA) { clearTimeout(videA); videA = null; }
     if (iv) { clearInterval(iv); iv = null; }
@@ -495,5 +495,6 @@
   window.pontDirectEnvoyer = function () { if (!actif) return; etatDu = 0; cycle(); };   // un état tout de suite (une attente demandée par GitHub reste respectée)
   var stocke = lsGet(LS_PAT);
   if (stocke) { if (RE_PAT.test(stocke)) { pat = stocke; st.etat = 'verif'; etatDu = memoire().etatAt + BOOT_MS; demarrer(); } else lsDel(LS_PAT); }   // au lancement : pas plus d'un état par minute, même si la page se relance en boucle
+  if (!pat && memoire().actif) { st.msg = DISPARU; setTimeout(disparu, BOOT_MS); }   // go n° 98 : la mémoire dit qu'un PAT était gardé ici, il n'y est plus (ou illisible) — Couper ne l'a pas retiré
   try { if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', poser, { once: true }); else poser(); } catch (e) {}
 })();
