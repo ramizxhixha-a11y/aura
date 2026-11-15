@@ -239,11 +239,7 @@ window._computePortfolioSans = _computePortfolioSans;
 function _tradingCapitalBase() {
   try {
     var eng = (S.openPositions || []).reduce(function(a, p){ return a + (Number(p.stakeUsdt) || 0); }, 0);
-    // [23/08 · règle Rams] la CAISSE compte dans le capital : MAX levier = (caisse+trading+trades en cours)×10
-    // [GO N° 75 · 15/11/2026] (ETAT n° 75) moins la dette versée en ARGENT (_levCashDebt), plus la dette entière : la part « exposition » d'une position
-    // (borrowLeverage, l'exposition au-delà de la mise) n'est jamais entrée dans l'argent ci-dessus — la retrancher sous-estimait l'argent propre tant
-    // qu'elle était ouverte (réserve du levier, plafond d'emprunt 10×, emprunt de l'index et « juste à temps »). Porte : rejeu/porte_n75.js.
-    var base = (S.cashAccount || 0) + (S.tradingAccount || 0) + eng - _levCashDebt(S);
+    var base = (S.cashAccount || 0) + (S.tradingAccount || 0) + eng - (S.leverageBorrowed || 0);   // [23/08 · règle Rams] la CAISSE compte dans le capital : MAX levier = (caisse+trading+trades en cours)×10
     return Math.max(0, base);
   } catch(e) { return Math.max(0, S.tradingAccount || 0); }
 }

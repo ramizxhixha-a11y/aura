@@ -5,10 +5,10 @@ Base : main `40742a4` (token 20261115a). Branche `travail/n75`.
 ## Étapes
 - [x] Démarrage : pont etat (15/11 00:35 UTC, doc 20261115a, EV 12 positions), Sentry (seule « Sentry branché »), banc-all brut LIVRABLE
 - [x] Lecteurs de `_tradingCapitalBase` : 02 initLeverageReserve, syncLeverageReserve, applyAutoLeverageBorrow, setLeverageByBot P6, ensureLeverageCoverForTrade, borrowLeverage (cap10), applyBotSuggestion ; 07 manuInvert, barre capital ; 09b2 / 02 one-shots morts. Décision : réserve → estimateStakes, 09c (bonus, repli, validateTotalExposure, anticipation), JIT
-- [ ] Données : backups (pont + Drive) avec une part « exposition » ouverte
+- [x] Données : 20 backups Drive + pont 15/11 01:41 (rejeu/backups/n75, rejeu/backups/pont)
 - [x] Porte `rejeu/porte_n75.js` : règles lignes 1–36 écrites AVANT toute mesure, sha-256 `960fae708a0a3f23df11e82f44a011dc70db7fba77a692ac969a501fd60089dc` (15/11 00:40:44 UTC)
-- [ ] Mesure, verdict
-- [ ] Si ENTRE : correction, banc, mutations, sonde vraie page
+- [x] Mesure, verdict : NON PROUVÉ (M0 0/63, M1 0/6384, M2 0 s E>0 ; M2 « DIFFÉRENT » = bruit, hors règles) → correction retirée
+- [x] Si ENTRE : sans objet
 - [ ] ETAT, PASSATION, banc-all, commit unique sur main, push, DOC_V raw + Pages
 
 ## Données

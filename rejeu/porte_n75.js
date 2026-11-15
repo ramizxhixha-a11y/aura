@@ -43,7 +43,7 @@
 const fs = require('fs'), vm = require('vm'), path = require('path'), crypto = require('crypto');
 const A = {}; for (let i = 2; i < process.argv.length; i += 2) A[process.argv[i].replace(/^--/, '')] = process.argv[i + 1];
 const RACINE = path.join(__dirname, '..');
-const AVANT = A.avant || path.join(__dirname, 'out/n75/code_avant'), APRES = A.apres || RACINE;
+const AVANT = A.avant || path.join(__dirname, 'out/n75/code_avant');
 const D1 = A.d1 || path.join(__dirname, 'backups/pont/aura_guardian_full_20261115-014135.json');   // le 1er backup du pont qui a répondu (15/11 00:41 UTC)
 const D2DIR = A.d2 || path.join(__dirname, 'backups/n75'), M2DIR = A.m2 || path.join(__dirname, 'out/n75'), OUT = A.out || path.join(M2DIR, 'verdict.json');
 const D2 = ['20261017-230838', '20261018-231602', '20261019-215033', '20261020-214342', '20261021-034540', '20261026-231837', '20261027-210236', '20261028-060435',
@@ -74,7 +74,12 @@ const NOMS = { 'js/02-state-init.js': ['_computePortfolio', '_posLevCash', '_lev
   'js/03-per-pair-position-buttons-controls-buid.js': ['_mktOn', '_mktPrice', '_mktP'],
   'js/09j-helpers.js': ['validateInvestmentCapProvisioned', 'validateTotalExposure'], 'js/09c-auto-open.js': ['_stakeFloor', '_stakeRound'] };
 function texte(root) { return Object.keys(NOMS).map(f => { const s = rd(root, f); return NOMS[f].map(n => { const t = fnSrc(s, n); if (!t) throw new Error(f + ' : ' + n + ' introuvable (' + root + ')'); return t; }).join('\n'); }).join('\n') + '\nvar MKT_B = 100;\n'; }
-const V = { avant: texte(AVANT), apres: texte(APRES) };
+// code après : un dossier (--apres) ; par défaut, le code avant avec la SEULE ligne de la correction (règles, ligne 6). La vraie page de M2 a joué le
+// dossier de travail au commit 2f454b5 de la branche travail/n75 (code avant + cette ligne et ses commentaires). La correction n'est pas dans le dépôt :
+// la porte ne l'a pas fait entrer.
+const ANCRE = '+ eng - (S.leverageBorrowed || 0);';
+function corrige(t) { if (t.split(ANCRE).length !== 2) throw new Error('ancre de la correction absente ou multiple'); return t.replace(ANCRE, '+ eng - _levCashDebt(S);'); }
+const V = { avant: texte(AVANT), apres: A.apres ? texte(A.apres) : corrige(texte(AVANT)) };
 const clone = o => JSON.parse(JSON.stringify(o));
 function etat(bk, mode) { const S = clone(bk); const w = clone(bk.walletStore[mode] || {}); Object.keys(w).forEach(k => { S[k] = w[k]; }); S.tradingMode = mode; S.openPositions = S.openPositions || []; S.chainLog = []; return S; }
 // Math.random figé : les journaux de borrowLeverage / P9 tirent au sort leur écriture, jamais une décision ; deux variantes doivent tirer pareil
@@ -137,7 +142,7 @@ fichiers.forEach(([dn, f]) => {
 R.M0 = M0; R.M1 = M1;
 // M2 — vraie page (sorties de la sonde des modes)
 (function () {
-  const lit = n => { const f = path.join(M2DIR, n); if (!fs.existsSync(f)) return null; try { return JSON.parse(fs.readFileSync(f, 'utf8')).probe || null; } catch (e) { return null; } };
+  const lit = n => { const f = path.join(M2DIR, n); if (!fs.existsSync(f)) return null; try { const j = JSON.parse(fs.readFileSync(f, 'utf8')); return (j.result && j.result.probe) || j.probe || null; } catch (e) { return null; } };   // la sonde range la mesure dans result.probe
   const ap = lit('m2_apres.json'), av = lit('m2_avant.json'), av2 = lit('m2_avant_bis.json');
   if (!ap) { R.M2 = { etat: 'absent' }; return; }
   const liste = p => JSON.stringify(p ? p.ouvertures : null) + '|' + JSON.stringify(p ? p.fermetures : null);
@@ -149,11 +154,21 @@ R.M0 = M0; R.M1 = M1;
 // Verdict (règles lignes 29–34)
 const voit = R.M0.actifs > 0 || (R.M2.secondesE || 0) > 0;
 const diff = R.M1.differences > 0 || R.M2.comparaison === 'DIFFÉRENT';
-R.verdict = !voit ? 'NON PROUVÉ' : (diff ? "N'ENTRE PAS" : 'ENTRE');
+// les règles ne disent pas laquelle l'emporte quand la porte est aveugle ET qu'une liste diffère : les deux sont dites ; l'une comme l'autre = rien de livré
+R.verdict = !voit ? ('NON PROUVÉ' + (diff ? " (et N'ENTRE PAS à la lettre : M1 ou M2 diffère)" : '')) : (diff ? "N'ENTRE PAS" : 'ENTRE');
+// HORS RÈGLES (ajouté après le 1er passage, ne change pas le verdict) : la vraie page rejouée — le code après deux fois de plus (m2_apres_bis, _ter), un
+// témoin (code avant + les seuls commentaires de la correction, m2_temoin) — et le diagnostic m2 diag_apres (chaque appel de _tradingCapitalBase dans la
+// page du code après, comparé à l'ancienne formule).
+(function () { const L = n => { const f = path.join(M2DIR, n); if (!fs.existsSync(f)) return null; try { const j = JSON.parse(fs.readFileSync(f, 'utf8')); return (j.result && j.result.probe) || null; } catch (e) { return null; } };
+  const o = p => p ? p.ouvertures.map(x => x[1] + ' ' + x[2]).join(', ') + ' · ' + p.fermetures.length + ' fermetures' : null;
+  const d = L('diag_apres.json');
+  R.horsRegles = { apres: o(L('m2_apres.json')), apres_bis: o(L('m2_apres_bis.json')), apres_ter: o(L('m2_apres_ter.json')), avant: o(L('m2_avant.json')), avant_bis: o(L('m2_avant_bis.json')),
+    temoin_commentaires: o(L('m2_temoin.json')), diag: d ? { appels: d.appels, ecarts: d.ecarts } : null }; })();
 fs.mkdirSync(path.dirname(OUT), { recursive: true }); fs.writeFileSync(OUT, JSON.stringify(R, null, 1));
 console.log('règles sha-256 ' + R.regles_sha256);
 console.log('données : ' + Object.keys(R.donnees).length + ' fichiers (' + Object.values(R.donnees).filter(x => x === 'D1' || x === 'D2').length + ' lus)');
 console.log('M0 témoin : ' + M0.actifs + ' état(s) sur ' + M0.etats + ' où la correction est active · frais à part « exposition » dans les journaux : ' + M0.fraisExpo + ' / ' + M0.fraisN);
 console.log('M1 : ' + M1.differences + ' décision(s) du bot différente(s) sur ' + M1.lectures + ' lectures');
 console.log('M2 : ' + JSON.stringify(R.M2));
+console.log('hors règles : ' + JSON.stringify(R.horsRegles));
 console.log('VERDICT : ' + R.verdict + '  → ' + OUT);
