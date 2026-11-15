@@ -51,7 +51,8 @@ const need = (src, n) => { const t = fnSrc(src, n); assert.ok(t, 'fonction absen
 const between = (s, a, b) => { const i = s.indexOf(a); assert.ok(i >= 0, 'ancre : ' + a.slice(0, 50)); const j = s.indexOf(b, i + a.length); assert.ok(j > i, 'fin'); return s.slice(i, j); };
 const near = (a, b, tol, quoi) => assert.ok(typeof a === 'number' && Math.abs(a - b) <= (tol || 1e-9), (quoi || 'valeur') + ' : ' + a + ' ≠ ' + b);
 const F = { s02: 'js/02-state-init.js', s07: 'js/07-v90-mode-bunker-sos.js', s9j: 'js/09j-helpers.js', s10e: 'js/10e-helpers-adaptatifs.js', s10h: 'js/10h-pont-fullpower-bricks.js' };
-const C = {}; Object.keys(F).forEach(k => { C[k] = rd(F[k]); });
+const sansN62 = require('./banc-fixtures/sans-n62.js');
+const C = {}; Object.keys(F).forEach(k => { C[k] = sansN62(rd(F[k]), F[k]); });   // [GO N° 62 · 15/11/2026] l'ANCIEN « Inverser » (07 manuInvert d'avant go n° 62, banc-fixtures/sans-n62.js) : ce banc garde ses essais d'avant ; banc-n62.js prouve le nouveau
 const html = rd('AURA8_v118.html');
 const AVANT = {}; Object.keys(F).forEach(k => { AVANT[k] = sansN99(C[k], F[k]); });   // le code d'avant, pour P (sur BANC_ROOT : identique)
 
@@ -298,14 +299,15 @@ T('C · appels : _pairLevShortWhy ← 02 openPosition seulement ; _levTxt ← 02
     const fns = [...s.matchAll(/\nfunction ([\w$]+)\s*\(/g)].map(m => [m.index, m[1]]);
     for (const m of s.matchAll(re)) { const line = s.slice(s.lastIndexOf('\n', m.index) + 1, s.indexOf('\n', m.index)); if (/^\s*\/\//.test(line)) continue;
       const before = fns.filter(x => x[0] < m.index).pop(); out.push(f + ':' + (before ? before[1] : '(haut du fichier)')); } }); return [...new Set(out)].sort(); };
-  assert.deepStrictEqual(appelants(/_pairLevShortWhy\s*\(/g), ['js/02-state-init.js:_pairLevShortWhy', 'js/02-state-init.js:openPosition'].sort());
-  assert.deepStrictEqual(appelants(/_levTxt\s*\(/g), ['js/02-state-init.js:_levTxt', 'js/02-state-init.js:openPosition', 'js/10e-helpers-adaptatifs.js:_openManTrade'].sort());
+  // [GO N° 62 · 15/11/2026] + 07 « Inverser » : la raison du levier réduit DITE AVANT la fermeture (_invChoix) et le levier écrit (_invQuestion, manuInvert)
+  assert.deepStrictEqual(appelants(/_pairLevShortWhy\s*\(/g), ['js/02-state-init.js:_pairLevShortWhy', 'js/02-state-init.js:openPosition', 'js/07-v90-mode-bunker-sos.js:_invChoix'].sort());
+  assert.deepStrictEqual(appelants(/_levTxt\s*\(/g), ['js/02-state-init.js:_levTxt', 'js/02-state-init.js:openPosition', 'js/10e-helpers-adaptatifs.js:_openManTrade', 'js/07-v90-mode-bunker-sos.js:_invChoix', 'js/07-v90-mode-bunker-sos.js:_invQuestion', 'js/07-v90-mode-bunker-sos.js:manuInvert'].sort());
 });
 
 T('F · garde : banc-fixtures/n99-retours.json redonne les 4 fichiers d\'avant au caractère près (empreintes du commit 733674d)', () => {
   if (process.env.BANC_ROOT) return;   // code d'avant : rien à retirer
   const A = { 'js/02-state-init.js': '905210979c640363', 'js/07-v90-mode-bunker-sos.js': 'a4fbc05aef5f996d', 'js/10e-helpers-adaptatifs.js': '2455e8b0c3ed8ad3', 'js/10h-pont-fullpower-bricks.js': 'ee5ae4f1b898b80e' };
-  Object.keys(A).forEach(f => { const s = rd(f); assert.notStrictEqual(h16(s), A[f], f + ' : la retouche manque'); assert.strictEqual(h16(sansN99(sansA3(s, f), f)), A[f], f + ' : autre chose a bougé'); });   // [GO AFFICHAGE 3 · 15/11/2026] hors les retouches de go affichage 3 (affichage seul, banc-affichage-3.js)
+  Object.keys(A).forEach(f => { const s = rd(f); assert.notStrictEqual(h16(s), A[f], f + ' : la retouche manque'); assert.strictEqual(h16(sansN99(sansA3(sansN62(s, f), f), f)), A[f], f + ' : autre chose a bougé'); });   // [GO N° 62 · 15/11/2026] hors go n° 62 (banc-n62.js)   // [GO AFFICHAGE 3 · 15/11/2026] hors les retouches de go affichage 3 (affichage seul, banc-affichage-3.js)
 });
 
 console.log('\n' + (fail ? '❌' : '✅') + ' ' + pass + '/' + (pass + fail) + ' tests passés' + (fail ? ' — ' + fail + ' ÉCHEC(S)' : ''));
