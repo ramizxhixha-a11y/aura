@@ -5,7 +5,7 @@
 // centaines de trades depuis.
 // Chaque essai fait tourner le VRAI texte de l'app en vm : 02 (_walletKey, _walletFor, _activeWallet, _installWalletAccessors,
 // _WALLET_ACCESSOR_FIELDS, holdTradeReserve, releaseTradeReserve, _dispatchSessionTaxes) et 09b2 (_auraRotatePurge).
-// ÉCHOUE sur le code d'avant      BANC_ROOT=<copie du commit c730c1b> node banc-n63.js       (N1 à N4 et G ; F est sautée)
+// ÉCHOUE sur le code d'avant      BANC_ROOT=<copie du commit c730c1b> node banc-n63.js       (N1 à N4, G et F : tous)
 //   N1  120 trades ouverts / fermés dans l'EV (240 lignes), purge toutes les 2 min : après chaque purge, le journal = les 50 lignes les plus
 //       récentes, la plus récente en tête (avant : les 50 plus vieilles)
 //   N2  journal figé comme au backup (50 lignes du 15/09) + une fermeture le 15/11 + purge : la ligne du 15/11 est en tête et y reste ;
@@ -17,7 +17,8 @@
 //   G   garde : la purge nouvelle = l'ancienne sur tout le reste de l'état (bougies, historiques, trades par paire, fiscalReserveLog, souvenirs) ;
 //       antiNegReserveLog n'a aucun lecteur dans l'app (seuls ses écrivains de 02, tous en tête, et la purge) ; les fichiers que lit la décision,
 //       08, 09b1 et 16 au texte de c730c1b
-//   F   garde : l'ancienne purge, reconstruite par ce banc, est celle du commit c730c1b au caractère près (empreinte de 09b2)
+//   F   garde : l'ancienne purge, reconstruite par ce banc, est celle du commit c730c1b au caractère près (empreinte de 09b2) : rien d'autre de 09b2
+//       n'a bougé, et c'est contre ELLE que G compare la purge nouvelle
 'use strict';
 const fs = require('fs'), vm = require('vm'), assert = require('assert'), path = require('path'), crypto = require('crypto');
 const ROOT = process.env.BANC_ROOT || __dirname, rd = f => fs.readFileSync(path.join(ROOT, f), 'utf8');
@@ -217,7 +218,6 @@ T('G · garde : purge nouvelle = ancienne hors antiNegReserveLog ; aucun lecteur
 });
 
 T('F · garde : l\'ancienne purge reconstruite par ce banc = 09b2 du commit c730c1b au caractère près', () => {
-  if (process.env.BANC_ROOT) return;
   assert.notStrictEqual(h16(s9b2), '7f258dbbee099bca', '09b2 : la retouche manque');
   assert.strictEqual(h16(sansN63(s9b2)), '7f258dbbee099bca', '09b2 : autre chose a bougé');
 });
