@@ -394,7 +394,7 @@ const tr = (o) => Object.assign({ type: 'position', side: 'buy', pnl: 1, stakeUs
     Object.entries(P).forEach(([n, [src, h]]) => assert.strictEqual(h16(fnSrc(src, n)), h, n + ' a changé'));
     const H = {"js/09c-auto-open.js":"cb981dcbb9806d73","js/10f-resolveur-cycle.js":"2c7f1bbbb66741a0","js/15-voix-tendance.js":"9757929e4b295254","js/15b-tendance-reelle.js":"08582a20cd8f495a",
       "js/16-fiscal.js":"45259077a3003f56","js/10d-protections-indicateurs.js":"5df7acbcb09379ca","js/12-bots-disciples.js":"22be243cac985f66","js/10a-base-analyse.js":"31a4ecb469243d0a"};
-    Object.keys(H).forEach(f => assert.strictEqual(h16(require('./banc-fixtures/sans-affichage-3.js')(require('./banc-fixtures/sans-n80.js')(rd(f), f), f)), H[f], f + ' a changé'));   // [GO AFFICHAGE 3 · 15/11/2026] hors les retouches d'affichage de go affichage 3 (10f ligne « BOT … @ », 16 marque de la voix — banc-affichage-3.js)   // [GO N° 80 · 15/11/2026] hors go n° 80 (15b : liquidation de la poche au prix de la liquidation, banc-n80.js)
+    Object.keys(H).forEach(f => assert.strictEqual(h16(require('./banc-fixtures/sans-affichage-3.js')(require('./banc-fixtures/sans-n80.js')(require('./banc-fixtures/sans-n108.js')(rd(f), f), f), f)), H[f], f + ' a changé'));   // [GO AFFICHAGE 3 · 15/11/2026] hors les retouches d'affichage de go affichage 3 (10f ligne « BOT … @ », 16 marque de la voix — banc-affichage-3.js)   // [GO N° 80 · 15/11/2026] hors go n° 80 (15b : liquidation de la poche au prix de la liquidation, banc-n80.js) · [GO N° 108 · 15/11/2026] hors go n° 108 (15b : liquidation propre de l'EV relue sur les bougies 1 h, banc-fixtures/sans-n108.js)
   });
 
   console.log(`\n${fail ? '❌' : '✅'} ${pass}/${pass + fail} tests passés`);
