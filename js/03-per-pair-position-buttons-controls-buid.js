@@ -3489,14 +3489,14 @@ function renderCascadePanel() {
       <div class="cascade-node">
         <div class="cascade-time">T-${mins}m</div>
         <div class="cascade-body">
-          <div class="cascade-title">💰 Entrée · $${d.entryPrice.toFixed(cfg?.dec || 2)}</div>
+          <div class="cascade-title">💰 Entrée · ${pxTxt(d.pair, d.entryPrice)}</div>
           <div class="cascade-detail">Mise $${d.stake.toFixed(2)} · ${d.reason}</div>
         </div>
       </div>
       ${d.closed ? `<div class="cascade-node">
         <div class="cascade-time">${Math.floor((d.exitTs-d.ts)/60000)}m</div>
         <div class="cascade-body">
-          <div class="cascade-title">🏁 Sortie · $${d.exitPrice.toFixed(cfg?.dec || 2)}</div>
+          <div class="cascade-title">🏁 Sortie · ${pxTxt(d.pair, d.exitPrice)}</div>
           <div class="cascade-detail">${d.pnlPct>=0?'+':''}${d.pnlPct.toFixed(2)}%</div>
         </div>
       </div>` : ''}

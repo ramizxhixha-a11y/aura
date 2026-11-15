@@ -7,8 +7,9 @@ Backup du jour : pont, `rejeu/backups/pont/aura_guardian_full_20261115-041039.js
 ## Étapes
 - [x] Démarrage : pont actif (app en `20261115b`), Sentry : seule « Sentry branché », banc-all LIVRABLE (1re passe : banc-alertes A1 intermittent sous charge, 2e passe LIVRABLE)
 - [x] Lecture du code des 8 défauts (voir décisions)
-- [ ] Remèdes
-- [ ] banc-affichage-3.js + mutations + bancs épinglés (sans-affichage-3)
+- [x] Remèdes (13 fichiers js, jeton 20261115c dans le HTML et 3 bancs)
+- [x] bancs existants adaptés : fixture `banc-fixtures/sans-affichage-3.js` (+ `affichage-3-retours.json`, outil `rejeu/retours_gen.py ba8be3a …`), aides `banc-fixtures/px-vm.js` ; banc-all : seuls ETAT / PASSATION manquent
+- [ ] banc-affichage-3.js + mutations
 - [ ] Sonde vraie page avant / après
 - [ ] Relecture séparée
 - [ ] ETAT, PASSATION, banc-all, un commit sur main, push, DOC_V

@@ -403,6 +403,13 @@ async function autoDlDownload() {
     // Ecriture native silencieuse dans Telechargements -> APK Capacitor
     const fsRes = await _fsWriteBackup(json, fname);
     if (fsRes) return true;
+    // [GO AFFICHAGE 3 · 15/11/2026] (n° 68b) dans l'app Android (Capacitor), un lien blob n'écrit RIEN (05 _outilsSaveText, go alertes 2) : l'échec est rendu
+    // tel quel, avec la raison de 09b3 _fsWriteBackup. Avant : lien blob, « true », et autoDlTick notait une sauvegarde (m.last) — aucun fichier, aucun message,
+    // le compte à rebours repartait pour 3 h.
+    if (window.Capacitor || window.cordova) {
+      window._autoDlLastFail = String(window._fsLastDiag || 'écriture native refusée').replace(/\s*\n\s*/g, ' · ').slice(0, 240);
+      return false;
+    }
     // Repli navigateur (Chrome) : telechargement blob
     const blob = new Blob([json], { type: 'application/json' });
     const url  = URL.createObjectURL(blob);
@@ -423,6 +430,7 @@ function autoDlTick() {
     if (!m.enabled) return;
     const now = Date.now();
     if (m.last && (now - m.last) < m.everyMin * 60000) return;
+    if (m.fail && (now - m.fail) < m.everyMin * 60000) return;   // [GO AFFICHAGE 3 · 15/11/2026] (n° 68b) après un échec : nouvel essai à la fréquence choisie (ou « Télécharger maintenant »)
     // garde-fou : ne jamais télécharger un état vide/neuf.
     // FIX : S est un `const` de portée script (02-state-init.js), donc INVISIBLE
     // à un eval('S') exécuté en scope global → l'ancien code récupérait toujours
@@ -444,7 +452,13 @@ function autoDlTick() {
     }
     if (cyc <= 100) return;
     Promise.resolve(autoDlDownload()).then(function (ok) {
-      if (ok) { m.last = now; autoDlSetMeta(m); }
+      if (ok) { m.last = now; delete m.fail; delete m.failWhy; autoDlSetMeta(m); return; }
+      // [GO AFFICHAGE 3 · 15/11/2026] (n° 68b) un échec n'est plus une sauvegarde : m.last reste au dernier fichier vraiment écrit, l'échec est noté (réglages),
+      // dit (message + journal) une fois par essai
+      m.fail = now; m.failWhy = String(window._autoDlLastFail || 'sauvegarde non écrite').slice(0, 240); autoDlSetMeta(m);
+      try { if (typeof showToast === 'function') showToast('❌ Sauvegarde auto non écrite : ' + m.failWhy, 6000, 'warn'); } catch (e) {}
+      try { const St = (typeof window._auraGetGlobalS === 'function') ? window._auraGetGlobalS() : null;
+            if (St && Array.isArray(St.chainLog)) St.chainLog.push({ icon: '💾', desc: 'Sauvegarde auto non écrite : ' + m.failWhy, hash: (typeof rndHash === 'function' ? rndHash() : ''), time: (typeof nowStr === 'function' ? nowStr() : '') }); } catch (e) {}
     });
   } catch (e) {}
 }

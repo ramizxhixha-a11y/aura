@@ -130,6 +130,9 @@ T('V7 · INVENTAIRE des boucles brutes sur S.pairStates / walletStore[m].pairSta
     // [GO ALERTES 2 · 14/11/2026] entre, HISTOIRE : 04 _alertWinStreak (série de clôtures gagnantes du mode, toutes les paires de l'historique, paire retirée
     // comprise) ; elle remplace les boucles sur ps.streak (champ jamais écrit) de checkPnlAlerts et _getGoals
     '04-v8-0-livraison-35-mode-max-permissif-v.js _alertWinStreak': 1,
+    // [GO AFFICHAGE 3 · 15/11/2026] (n° 67b) entre, HISTOIRE : 05 _badgeWinRun (plus longue suite de clôtures gagnantes du mode, toutes les paires de l'historique,
+    // pour les badges « En Feu ! / Inarrêtable / Électrique ») ; elle remplace leurs boucles sur ps.streak (champ jamais écrit)
+    '05-v37-19-indicateur-de-fatigue-bot.js _badgeWinRun': 1,
     // [GO NETTOYAGE · 18/10/2026] (ETAT G4 n° 22) sortent avec le module 18 : '18-reparation-demo.js trace' ×1 et '18-reparation-demo.js plan' ×3
   };
   const files = [...html.matchAll(/<script[^>]*\bsrc="([^"?]+)(?:\?[^"]*)?"/g)].map(m => m[1]).filter(f => f.startsWith('js/'));

@@ -350,7 +350,7 @@ function renderPatternSection() {
         ${_ptMiniChart(closed, 280, 60)}
         <div style="display:flex;justify-content:space-between;font-size:7px;color:#555;margin-top:2px;">
           <span>${closed.length} bougies closes · ${_srcLbl}${_stale ? ' · ⚠️ périmées' : ''}</span>
-          <span style="font-family:monospace;font-size:9px;color:${cfg.color||'var(--ice)'};">${cur.toFixed(dec)}</span>
+          <span style="font-family:monospace;font-size:9px;color:${cfg.color||'var(--ice)'};">${pxTxt(_ptPair, cur)}</span>
         </div>
       </div>
 
@@ -998,12 +998,12 @@ if(!Array.isArray(S.priceAlerts)) S.priceAlerts = [];
 
 function _prOkPair(p) { return typeof p === 'string' && /^[A-Z0-9]{1,20}\/[A-Z0-9]{2,10}$/.test(p); }
 function _prEsc(s) { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;'); }
-function _prDec(pair) { const d = (typeof PAIRS !== 'undefined' && PAIRS && PAIRS[pair]) ? Number(PAIRS[pair].dec) : 0; return d >= 4 ? d : 2; }
+// [GO AFFICHAGE 3 · 15/11/2026] (n° 86c) _prDec (2 décimales sous dec 4 : DOT « 0.76 ») retiré : les prix des alertes passent par 02 pxTxt
 function _prIsPnl(a) { return !!a && (a.type === 'pnl_pos' || a.type === 'pnl_neg'); }
 function _prNote(a) {
   const v = Number(a.value), m = _PR_MODE_LAB[a.mode];
-  if (a.type === 'above')    return a.pair + ' ≥ ' + v.toFixed(_prDec(a.pair));
-  if (a.type === 'below')    return a.pair + ' ≤ ' + v.toFixed(_prDec(a.pair));
+  if (a.type === 'above')    return a.pair + ' ≥ ' + pxTxt(a.pair, v);   // [GO AFFICHAGE 3 · 15/11/2026] (n° 86c) prix par 02 pxTxt
+  if (a.type === 'below')    return a.pair + ' ≤ ' + pxTxt(a.pair, v);
   if (a.type === 'pct_up')   return a.pair + ' +' + v + ' % depuis la création';
   if (a.type === 'pct_down') return a.pair + ' −' + v + ' % depuis la création';
   return 'Position ' + a.pair + (m ? ' ' + m : '') + ' · P&L ' + (a.type === 'pnl_pos' ? '≥ +$' : '≤ −$') + v;
@@ -1179,7 +1179,7 @@ setInterval(function () {
 }, 30000);
 
 function _prFireAlert(alert, cur, pnl) {
-  const quoi = _prNote(alert) + (pnl !== null && pnl !== undefined ? ' · P&L ' + _prMoney(pnl) : ' · prix ' + Number(cur).toFixed(_prDec(alert.pair)));
+  const quoi = _prNote(alert) + (pnl !== null && pnl !== undefined ? ' · P&L ' + _prMoney(pnl) : ' · prix ' + pxTxt(alert.pair, cur));
   // Toast visuel
   const toastEl = document.getElementById('prToast');
   const textEl  = document.getElementById('prToastText');
@@ -1284,9 +1284,9 @@ function renderPriceAlertSection() {
           actuel = pnl === null ? 'Aucune position ' + (_PR_MODE_LAB[a.mode] || '') : 'P&L actuel : ' + _prMoney(pnl);
         } else {
           const cur = _prRealPx(a.pair);
-          actuel = cur > 0 ? 'Prix réel : ' + cur.toFixed(_prDec(a.pair)) : 'Prix réel indisponible — l\'alerte attend';
+          actuel = cur > 0 ? 'Prix réel : ' + pxTxt(a.pair, cur) : 'Prix réel indisponible — l\'alerte attend';
           // [relecture adverse du 18/10/2026] sans prix réel au moment de la création, la référence est posée au PREMIER prix réel reçu : elle est dite
-          if ((a.type === 'pct_up' || a.type === 'pct_down')) actuel += a.priceAtCreation > 0 ? ' · référence ' + Number(a.priceAtCreation).toFixed(_prDec(a.pair)) : ' · référence au premier prix réel';
+          if ((a.type === 'pct_up' || a.type === 'pct_down')) actuel += a.priceAtCreation > 0 ? ' · référence ' + pxTxt(a.pair, a.priceAtCreation) : ' · référence au premier prix réel';
           if (cur > 0 && a.type === 'above') dist = (a.value - cur) / cur * 100;
           if (cur > 0 && a.type === 'below') dist = (cur - a.value) / cur * 100;
         }
@@ -1313,7 +1313,7 @@ function renderPriceAlertSection() {
         <div class="pr-alert-body">
           <div class="pr-alert-pair">${_prEsc(a.pair.replace('/USDT',''))}</div>
           <div class="pr-alert-cond">${_prEsc(_prNote(a))}</div>
-          <div style="font-size:8px;color:var(--gold);">Déclenchée ${typeof a.triggeredPnl === 'number' && isFinite(a.triggeredPnl) ? 'à P&L ' + _prMoney(a.triggeredPnl) : (typeof a.triggeredPrice === 'number' && isFinite(a.triggeredPrice) ? 'à ' + a.triggeredPrice.toFixed(_prDec(a.pair)) : '')}${typeof a.triggeredAt === 'number' && isFinite(a.triggeredAt) ? ' · ' + _prEsc(new Date(a.triggeredAt).toLocaleString('fr-FR')) : ''}</div>
+          <div style="font-size:8px;color:var(--gold);">Déclenchée ${typeof a.triggeredPnl === 'number' && isFinite(a.triggeredPnl) ? 'à P&L ' + _prMoney(a.triggeredPnl) : (typeof a.triggeredPrice === 'number' && isFinite(a.triggeredPrice) ? 'à ' + pxTxt(a.pair, a.triggeredPrice) : '')}${typeof a.triggeredAt === 'number' && isFinite(a.triggeredAt) ? ' · ' + _prEsc(new Date(a.triggeredAt).toLocaleString('fr-FR')) : ''}</div>
         </div>
       </div>`).join('')}`:''}
     </div>`;
@@ -1476,7 +1476,7 @@ function renderBtcImpactSection() {
       <div class="btc-live-row">
         <div>
           <div style="font-size:9px;color:var(--t3);margin-bottom:2px;">Bitcoin / USDT</div>
-          <div style="font-size:16px;font-weight:900;font-family:var(--font-mono);color:${PAIRS[_BTC_PAIR]?.color||'#f7931a'};">$${btcPrice.toFixed(dec)}</div>
+          <div style="font-size:16px;font-weight:900;font-family:var(--font-mono);color:${PAIRS[_BTC_PAIR]?.color||'#f7931a'};">${pxTxt(_BTC_PAIR, btcPrice)}</div>
         </div>
         <div style="flex:1;text-align:right;">
           <div class="btc-pct" style="color:${btcCol};">${btcRecentPct>=0?'+':''}${btcRecentPct.toFixed(2)}%</div>
@@ -1826,7 +1826,7 @@ function renderPriceHistSection() {
           <div class="ph-pair-header">
             <span class="ph-pair-name" style="color:${col};">${pair.replace('/USDT','')}</span>
             <div style="text-align:right;">
-              <span class="ph-pair-price" style="color:${col};">$${cur>0?cur.toFixed(dec):lastC.toFixed(dec)}</span>
+              <span class="ph-pair-price" style="color:${col};">${pxTxt(pair, cur>0?cur:lastC)}</span>
               <span class="ph-pair-change" style="background:${change7>=0?'rgba(0,232,122,.12)':'rgba(255,61,107,.12)'};color:${change7>=0?'var(--up)':'var(--down)'};">
                 ${change7>=0?'+':''}${change7.toFixed(2)}%
               </span>
@@ -1838,15 +1838,15 @@ function renderPriceHistSection() {
           </div>
           <div class="ph-stats-row">
             <div class="ph-stat">
-              <div class="ph-stat-val" style="color:var(--up);">$${high7.toFixed(dec)}</div>
+              <div class="ph-stat-val" style="color:var(--up);">${pxTxt(pair, high7)}</div>
               <div class="ph-stat-lbl">Haut 7j</div>
             </div>
             <div class="ph-stat">
-              <div class="ph-stat-val" style="color:var(--down);">$${low7.toFixed(dec)}</div>
+              <div class="ph-stat-val" style="color:var(--down);">${pxTxt(pair, low7)}</div>
               <div class="ph-stat-lbl">Bas 7j</div>
             </div>
             <div class="ph-stat">
-              <div class="ph-stat-val">$${firstC.toFixed(dec)}</div>
+              <div class="ph-stat-val">${pxTxt(pair, firstC)}</div>
               <div class="ph-stat-lbl">Ouverture</div>
             </div>
             <div class="ph-stat">
@@ -2057,8 +2057,8 @@ function renderCalcSection() {
         <div class="calc-result-row"><span style="color:var(--t2);">Mise${r.lev>1?' (marge, levier ×'+r.lev+')':''}</span><span class="calc-result-val" style="color:var(--ice);">$${r.stakeUsd.toFixed(2)}</span></div>
         <div class="calc-result-row"><span style="color:var(--t2);">Exposition</span><span class="calc-result-val">$${r.exposure.toFixed(2)}</span></div>
         <div class="calc-result-row"><span style="color:var(--t2);">Perte au SL (avant frais)</span><span class="calc-result-val" style="color:${r.riskCol};">$${r.riskUsd.toFixed(2)} (${r.riskPct}%)</span></div>
-        <div class="calc-result-row"><span style="color:var(--t2);">Prix SL</span><span class="calc-result-val" style="color:var(--down);">$${r.sl.toFixed(dec)}</span></div>
-        <div class="calc-result-row"><span style="color:var(--t2);">Prix TP</span><span class="calc-result-val" style="color:var(--up);">$${r.tp.toFixed(dec)}</span></div>
+        <div class="calc-result-row"><span style="color:var(--t2);">Prix SL</span><span class="calc-result-val" style="color:var(--down);">${pxTxt(_CALC.pair, r.sl)}</span></div>
+        <div class="calc-result-row"><span style="color:var(--t2);">Prix TP</span><span class="calc-result-val" style="color:var(--up);">${pxTxt(_CALC.pair, r.tp)}</span></div>
         <div class="calc-result-row"><span style="color:var(--t2);">Frais entrée + sortie</span><span class="calc-result-val" style="color:var(--t3);">-$${r.feesUsd.toFixed(2)}</span></div>
         <div class="calc-result-row"><span style="color:var(--t2);">Si TP atteint (net)</span><span class="calc-result-val" style="color:${r.netTP>=0?'var(--up)':'var(--down)'};">${r.netTP>=0?'+':'−'}$${Math.abs(r.netTP).toFixed(2)}</span></div>
         <div class="calc-result-row"><span style="color:var(--t2);">Si SL atteint (net)</span><span class="calc-result-val" style="color:var(--down);">−$${Math.abs(r.netSL).toFixed(2)}</span></div>
@@ -2426,7 +2426,7 @@ function _tgHebdoText(now) {
     let n = 0, gagnants = 0, pnl = 0;
     Object.values(w.pairStates || {}).forEach(ps => (ps && Array.isArray(ps.trades) ? ps.trades : []).forEach(t => {
       if (!t || !(Number(t.ts) >= t0) || (t.type !== 'position' && t.type !== 'urgence' && t.type !== 'tendance')) return;   // [GO TENDANCE RÉELLE · 12/11/2026]
-      n++; pnl += Number(t.pnlUsdt) || 0; if (Number(t.pnl) > 0) gagnants++;
+      const _r = _closeRowUsd(t); n++; pnl += _r.usd; if (_r.usd > 0) gagnants++;   // [GO AFFICHAGE 3 · 15/11/2026] (ETAT n° 64) + les parts fermées par paliers (02 _closeRowUsd)
     }));
     let pf = 0; try { pf = (typeof _computePortfolio === 'function') ? _computePortfolio(w) : (Number(w.portfolio) || 0); } catch(e) { pf = Number(w.portfolio) || 0; }
     lignes.push(`<b>${lab[m]}</b> ${w.running ? '▶' : '⏸'} · portefeuille <code>$${(Number(pf) || 0).toFixed(2)}</code>\n   ${n} trade(s) fermé(s)` +
@@ -4680,7 +4680,7 @@ function _cinUpdate() {
       const col    = PAIRS[pair]?.color||'#fff';
       return `<div class="cin-pair-block">
         <div class="cin-pair-sym" style="color:${col};">${pair.replace('/USDT','')}</div>
-        <div class="cin-pair-price" style="color:${hasPos?'#00e87a':'rgba(255,255,255,.5)'};">$${cur.toFixed(dec)}</div>
+        <div class="cin-pair-price" style="color:${hasPos?'#00e87a':'rgba(255,255,255,.5)'};">${pxTxt(pair, cur)}</div>
         <div class="cin-pair-chg" style="color:${pnl>=0?'#00e87a':'#ff3d6b'};">${pnl>=0?'+':''}$${pnl.toFixed(1)}</div>
       </div>`;
     }).join('');
@@ -4697,7 +4697,7 @@ function _cinUpdate() {
   const tickEl = document.getElementById('cinTickerTrack');
   if(tickEl && tickEl.children.length===0) {
     const items = [
-      ...Object.entries(S.pairStates||{}).map(([p,ps])=>`${p.replace('/USDT','')} $${(ps.price||0).toFixed(PAIRS[p]?.dec>=4?PAIRS[p].dec:2)} ${(ps.totalPnlUsd||0)>=0?'▲':'▼'}${Math.abs(ps.totalPnlUsd||0).toFixed(2)}`),
+      ...Object.entries(S.pairStates||{}).map(([p,ps])=>`${p.replace('/USDT','')} ${pxTxt(p, ps.price||0)} ${(ps.totalPnlUsd||0)>=0?'▲':'▼'}${Math.abs(ps.totalPnlUsd||0).toFixed(2)}`),
       `WR ${wr!==null?wr:50}%`,
       `TRADES ${n}`,
       `POSITIONS ${openPos.length}`,

@@ -621,9 +621,7 @@ function _resolvePairCycleCore(pair, ps) {
   // [P7] trace news : ouverture obtenue grâce aux news pour le pari
   if(_newsDecisive) _newsTrace(pair, _newsG, true);
 
-  const pt=cfg.dec>=4?ps.price.toFixed(cfg.dec):Math.floor(ps.price).toLocaleString();
-  const tt=cfg.dec>=4?tpE.toFixed(cfg.dec):Math.floor(tpE).toLocaleString();
-  const st=cfg.dec>=4?slE.toFixed(cfg.dec):Math.floor(slE).toLocaleString();
+  const pt=pxTxt(pair,ps.price), tt=pxTxt(pair,tpE), st=pxTxt(pair,slE);   // [GO AFFICHAGE 3 · 15/11/2026] (n° 86b) le texte du prix de l'écran (02 pxTxt) — avant : l'entier tronqué sous dec 4 (« BOT … @0 »)
   S.chainLog.push({icon:side==='long'?'🟢':'🔴',
     desc:`BOT ${side.toUpperCase()} ${pair} @${pt} | ${_dcR ? 'Commun:' + (_dcR.C*100).toFixed(0) + '% (' + _dcR.n + ' voix) ' : ''}${_thOn ? 'Seuil appris:' + (_thL*100).toFixed(0) + '% ' : ''}${_thP && typeof _thHzLab === 'function' ? '· tenue ' + _thHzLab(_thP.h, _thP.f) + ' ' : ''}AT:${(atScore*100).toFixed(0)}% AF:${(fundScore*100).toFixed(0)}% Ag:${(agentConsensus*100).toFixed(0)}% Conv:${(effectiveConviction*100).toFixed(0)}% | TP:${tt} SL:${st}`,
     hash:rndHash(),time:nowStr()});

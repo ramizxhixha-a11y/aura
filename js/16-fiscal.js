@@ -316,6 +316,7 @@ function _fiscOnClose(pos, pnlUsd, fees, exitPx) {
     fi: fxIn, fo: fxOut, ff: fxo.fallback ? 1 : 0, g: q(gainEur), fE: q(rg.regime === 'spec' ? feeEur : 0),
     d0: q(d0), d1: q(d1.due), mv: q(moved), sh: q(yr.shortUsd), hm: (_fiscNum(pos.entryTs) > 0 ? now - _fiscNum(pos.entryTs) : 0)
   };
+  if (pos._voix === 'tendance') h.v = 1;   // [GO AFFICHAGE 3 · 15/11/2026] (n° 88b) position de la voix tendance (ni le bot, ni toi) : l'historique la dit « 📈 Tendance » — absent sinon, le registre reste léger
   L.hist.unshift(h);
   var cap = _FISC_HIST_MAX[mode] || 300;
   if (L.hist.length > cap) L.hist.length = cap;

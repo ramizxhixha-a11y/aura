@@ -107,7 +107,7 @@ async function addPair(input) {
     // EV : activer la paire si la liste des actives existe (miroir du comportement défaut)
     try { if (S.paperRealActivePairs) S.paperRealActivePairs[pair] = true; } catch (e) {}
 
-    _pairLog('➕', 'Paire ajoutée : ' + pair + ' @ ' + price.toFixed(dec) + (hadMemory ? ' · mémoire retrouvée (LMSR/stats conservés du retrait)' : ' · naissance neutre (LMSR 130/130)'));
+    _pairLog('➕', 'Paire ajoutée : ' + pair + ' @ ' + pxTxt(pair, price) + (hadMemory ? ' · mémoire retrouvée (LMSR/stats conservés du retrait)' : ' · naissance neutre (LMSR 130/130)'));
     try { if (typeof saveState === 'function') saveState(true); } catch (e) {}
     try { if (typeof renderAll === 'function') renderAll(); } catch (e) {}
     return { ok: true, pair: pair, price: price };

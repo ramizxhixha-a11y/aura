@@ -72,7 +72,7 @@ function world(o) {
     _modeBehind: () => false, _schoolBehind: () => false, _walletKey: m => m || 'paperReal', updateStreakBadge() {}, _p5PreActionSave() {}, _autoSnapshotBeforeLeverage() {},
     _stakeFloor: () => 2, _stakeRound: x => Math.round((Number(x) || 0) * 10) / 10 };
   c._activeWallet = () => S;   // le portefeuille du mode traité (ici : S à plat)
-  c.window = c; vm.createContext(c);
+  c.window = c; vm.createContext(c); require('./banc-fixtures/px-vm.js')(c, ROOT);   /* [GO AFFICHAGE 3 · 15/11/2026] aides d'affichage de 02 (pxTxt, _closeRowUsd : banc-fixtures/px-vm.js) */
   const src = F02.filter(n => n !== '_levNormAuto' || has(s02, n)).map(n => fnSrc(s02, n));
   if (has(s02, '_feesDueOf')) src.push(fnSrc(s02, '_feesDueOf'));
   src.push('var _leverageMarginCheck = ' + between(s02, 'window._leverageMarginCheck = function _leverageMarginCheck() {', '\n};\n').replace('window._leverageMarginCheck = ', '') + '\n};');
@@ -263,7 +263,7 @@ const S18 = ex('js/18-recalage-aa.js') ? rd('js/18-recalage-aa.js') : (ex('banc-
 function aa(w) {
   const S = { walletStore: { sim: w, paperReal: { tradingAccount: 1074.06 }, real: { tradingAccount: 1145.42 } }, chainLog: [] };
   const c = { S, Date, Math, JSON, Number, String, Array, isFinite, console, _computePortfolio: x => x.cashAccount + x.tradingAccount + (x.openPositions || []).reduce((a, p) => a + p.stakeUsdt, 0), saveState() { c.sauve = 1; } };
-  c.window = c; vm.createContext(c); assert.ok(S18, 'module absent'); vm.runInContext(S18, c); return c;
+  c.window = c; vm.createContext(c); require('./banc-fixtures/px-vm.js')(c, ROOT);   /* [GO AFFICHAGE 3 · 15/11/2026] aides d'affichage de 02 (pxTxt, _closeRowUsd : banc-fixtures/px-vm.js) */ assert.ok(S18, 'module absent'); vm.runInContext(S18, c); return c;
 }
 const aaW = () => ({ totalTrades: 2188, fees: { tradeCount: 2188 }, tradingAccount: 4123.61, cashAccount: 47.39, portfolio: 4388.07, openPositions: [{ stakeUsdt: 217.07 }], _startPortfolio: 4388.49,
   bunker: { capRef: 4341.10, startCapital: 948.47 }, pnlHistory: [1003.29, 4388.07], pnlPeriod: { todayStartPortfolio: 4388.49, weekStartPortfolio: 1003.29, monthStartPortfolio: 1077.06,

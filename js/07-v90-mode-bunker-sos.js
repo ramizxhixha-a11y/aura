@@ -2561,13 +2561,13 @@ function manuEditTp(pair) {
   const cfg = PAIRS[pair];
   if(!ps || !cfg) return;
   const dec  = cfg.dec >= 4 ? cfg.dec : 2;
-  const curr = pos.tp ? pos.tp.toFixed(dec) : '';
-  const val  = prompt('🎯 Target (TP) pour '+pair+' :\nPrix actuel : '+ps.price.toFixed(dec)+'\nEntrez le prix cible :', curr);
+  const curr = pos.tp ? pxIn(pair, pos.tp) : '';   // [GO AFFICHAGE 3 · 15/11/2026] (n° 86c) prix par 02 pxTxt ; champ : pxIn
+  const val  = prompt('🎯 Target (TP) pour '+pair+' :\nPrix actuel : '+pxTxt(pair, ps.price)+'\nEntrez le prix cible :', curr);
   if(val === null) return;
   const n = parseFloat(val);
   if(!isFinite(n) || n <= 0) { showToast('⚠ Prix invalide', 1500, 'warn'); return; }
   pos.tp = n;
-  showToast('🎯 TP '+pair+' → '+n.toFixed(dec), 1800, 'win');
+  showToast('🎯 TP '+pair+' → '+pxTxt(pair, n), 1800, 'win');
   if(typeof renderActionsGrid === 'function') try { renderActionsGrid(); } catch(e) {}
 }
 window.manuEditTp = manuEditTp;
@@ -2581,13 +2581,13 @@ function manuEditSl(pair) {
   const cfg = PAIRS[pair];
   if(!ps || !cfg) return;
   const dec  = cfg.dec >= 4 ? cfg.dec : 2;
-  const curr = pos.sl ? pos.sl.toFixed(dec) : '';
-  const val  = prompt('🛑 Stop Loss (SL) pour '+pair+' :\nPrix actuel : '+ps.price.toFixed(dec)+'\nEntrez le prix stop :', curr);
+  const curr = pos.sl ? pxIn(pair, pos.sl) : '';   // [GO AFFICHAGE 3 · 15/11/2026] (n° 86c) prix par 02 pxTxt ; champ : pxIn
+  const val  = prompt('🛑 Stop Loss (SL) pour '+pair+' :\nPrix actuel : '+pxTxt(pair, ps.price)+'\nEntrez le prix stop :', curr);
   if(val === null) return;
   const n = parseFloat(val);
   if(!isFinite(n) || n <= 0) { showToast('⚠ Prix invalide', 1500, 'warn'); return; }
   pos.sl = n;
-  showToast('🛑 SL '+pair+' → '+n.toFixed(dec), 1800, 'win');
+  showToast('🛑 SL '+pair+' → '+pxTxt(pair, n), 1800, 'win');
   if(typeof renderActionsGrid === 'function') try { renderActionsGrid(); } catch(e) {}
 }
 window.manuEditSl = manuEditSl;
@@ -3484,7 +3484,7 @@ function learnFromOpenPositions() {
         const tpHit = pos.side==='long' ? cur >= pos.tp : cur <= pos.tp;
         if(tpHit) {
           closePosition(pos.id, false, { sortie: { k: 'tp', why: 'TP' } });  // user-set TP — always allowed · [GO ALERTES] raison pour les notifications
-          S.chainLog.push({ icon:'🎯', desc:`TP atteint ${pos.pair} ${pos.side.toUpperCase()} @${cur.toFixed(2)}`, hash:rndHash(), time:nowStr() });
+          S.chainLog.push({ icon:'🎯', desc:`TP atteint ${pos.pair} ${pos.side.toUpperCase()} @${pxTxt(pos.pair, cur)}`, hash:rndHash(), time:nowStr() });
           showToast('🎯 TP atteint — '+pos.pair+' fermé');
           return;
         }
@@ -3497,7 +3497,7 @@ function learnFromOpenPositions() {
           : ((pos.entryPrice - cur) / pos.entryPrice) * 100;
         if (rawLossPct <= -90) {
           closePosition(pos.id, false, { sortie: { k: 'sl', why: 'garde-fou −90 %' } });
-          S.chainLog.push({ icon:'💥', desc:`LIQUIDATION ${pos.pair} ${pos.side.toUpperCase()} @${cur.toFixed(pos.pair.includes('USDT')&&ps.price<10?4:2)} · perte extrême évitée`, hash:rndHash(), time:nowStr() });
+          S.chainLog.push({ icon:'💥', desc:`LIQUIDATION ${pos.pair} ${pos.side.toUpperCase()} @${pxTxt(pos.pair, cur)} · perte extrême évitée`, hash:rndHash(), time:nowStr() });
           showToast('💥 Liquidation — '+pos.pair+' (garde-fou -90%)', 4000, 'critical');
           return;
         }
@@ -3507,7 +3507,7 @@ function learnFromOpenPositions() {
         const slHit = pos.side==='long' ? cur <= pos.sl : cur >= pos.sl;
         if(slHit) {
           closePosition(pos.id, false, { sortie: { k: 'sl', why: 'SL' } });  // user-set SL — always allowed · [GO ALERTES] raison pour les notifications
-          S.chainLog.push({ icon:'🛑', desc:`SL déclenché ${pos.pair} ${pos.side.toUpperCase()} @${cur.toFixed(2)}`, hash:rndHash(), time:nowStr() });
+          S.chainLog.push({ icon:'🛑', desc:`SL déclenché ${pos.pair} ${pos.side.toUpperCase()} @${pxTxt(pos.pair, cur)}`, hash:rndHash(), time:nowStr() });
           showToast('🛑 Stop Loss — '+pos.pair+' fermé', 2800, 'critical');
           return;
         }
@@ -4829,7 +4829,9 @@ function _computeNetUsdParts() {
   // [S1 25/08] fundDue retiré : le circuit préexistant prélève funding+intérêts toutes
   // les 30 s directement du trading — le résidu couru est ≤30 s ≈ 0, le déduire encore
   // aurait été un double comptage. fundCum = compteur cumulé réel (informatif).
-  const fundCum = ((S.fees&&S.fees.totalFunding)||0) + (S.leverageTotalFees||0);
+  // [GO AFFICHAGE 3 · 15/11/2026] (n° 77b) totalFunding SEUL : 02 applyLeverageBorrowFees y ajoute déjà les intérêts du levier (et leverageTotalFees) — la somme
+  // des deux les comptait deux fois (taux d'emprunt à 0 aujourd'hui : 0 $ d'écart, mais faux dès qu'un taux est réglé)
+  const fundCum = (S.fees&&S.fees.totalFunding)||0;
   const feesDue = (typeof _feesDueOf === 'function') ? _feesDueOf(null) : 0;   // [GO NETTOYAGE · 19/10/2026] (n° 54) frais restés dus : une dette comme une autre
   const net = Math.max(0,(S.cashAccount||0)+(S.tradingAccount||0)+(S.antiNegReserve||0)+posVal-closeFees-taxAnt-levDebt-feesDue);
   return { trading:(S.tradingAccount||0), cash:(S.cashAccount||0), antiNeg:(S.antiNegReserve||0), posVal, latentPos, closeFees, taxAnt, fundCum, levDebt, feesDue, net };
@@ -4879,7 +4881,7 @@ window._toggleHeroBk = function(which){
        +_tile('\ud83e\uddfe','Provisions taxes',fmt$2(S.antiNegTaxPart||0),'')
        // [GO ALERTES 2 · 14/11/2026] (ETAT n° 77) la « réserve frais » est le cumul des frais déjà payés : affichée pour info, HORS total (02 computePortfolioTotal)
        +_tile('\ud83e\ude99','Frais payés (info)',fmt$2((S.fees&&S.fees.feeReserveAccount)||0),'cumul · déjà sortis du trading, hors total')
-       +_tile('\u23f3','Funding payé (info)',fmt$2(((S.fees&&S.fees.totalFunding)||0)+(S.leverageTotalFees||0)),'déjà sorti du trading, hors total')
+       +_tile('\u23f3','Funding payé (info)',fmt$2((S.fees&&S.fees.totalFunding)||0),'intérêts du levier compris · déjà sorti du trading, hors total')   // [GO AFFICHAGE 3 · 15/11/2026] (n° 77b) une fois, plus deux
        +((()=>{ const d=_heroDebtParts(); if(!(d.debt>0.005)) return '';   // [GO LEVIER 56 · 27/10/2026]
            return _tile('\u26a1','Dont emprunté',fmt$2(d.debt),'levier : compté dans le total, à rendre','neg')
                  +_tile('\ud83d\ude4b','À toi',fmt$2(_pnlBasis()),'caisse + trading + mises − emprunt'+(d.due>0.005?' − frais dus':''),'cy'); })())
@@ -4893,7 +4895,7 @@ window._toggleHeroBk = function(which){
        +_tile('\ud83d\udfe1','Positions (mise+latent)',fmt$2(p.posVal),'latent +'+p.latentPos.toFixed(2)+'$','cy')
        +_tile('\u2702\ufe0f','Frais de clôture est.','\u2212'+fmt$2(p.closeFees),'','neg')
        +_tile('\ud83c\udfdb\ufe0f','Impôt anticipé',(p.taxAnt>=0?'\u2212':'+')+fmt$2(Math.abs(p.taxAnt)),'si tout fermait maintenant · registre fiscal',p.taxAnt>=0?'neg':'')
-       +_tile('\u23f3','Funding payé (cumul)',fmt$2(p.fundCum),'prélevé en continu du trading','cy')
+       +_tile('\u23f3','Funding payé (cumul)',fmt$2(p.fundCum),'intérêts du levier compris · prélevé en continu du trading','cy')
        +(p.levDebt > 0.005 ? _tile('\u26a1','Dette du levier','\u2212'+fmt$2(p.levDebt),'emprunt versé au trading ou dans une mise','neg') : '')   // [GO LEVIER · 18/10/2026]
        +(p.feesDue > 0.005 ? _tile('\u26a0\ufe0f','Frais restés dus','\u2212'+fmt$2(p.feesDue),'repris sur le trading à la prochaine fermeture','neg') : '')   // [GO NETTOYAGE · 19/10/2026] (n° 54)
        +_tile('\u03a3','En $',fmt$2(p.net),'','sum');

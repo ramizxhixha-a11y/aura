@@ -63,8 +63,9 @@ function app(o) {
     _computePortfolio: w => Number(w.portfolio) || 0,
     fetch: async (url, opt) => { sent.push({ url, t: Date.now(), body: JSON.parse(opt.body) }); return { json: async () => ({ ok: true }) }; } };
   if (o.Notification) ctx.Notification = o.Notification;
-  ctx.window = ctx; ctx.self = ctx;
+  ctx.window = ctx; ctx.self = ctx; ctx.Intl = Intl;
   vm.createContext(ctx);
+  vm.runInContext('var _pxFmt = {};\n' + fnSrc(s02, 'pxTxt') + '\n' + (fnSrc(s02, '_isCloseRow') || '') + '\n' + (fnSrc(s02, '_closeRowUsd') || ''), ctx);   // [GO AFFICHAGE 3 · 15/11/2026] prix des alertes par 02 pxTxt (n° 86c), résumé de la semaine par 02 _closeRowUsd (n° 64)
   return { ctx, S, ws, real, sent, notifs, toasts, sons, tgAlert, tgGoal, minuteurs, now };
 }
 const tgOn = (ls, extra) => ls.setItem('aura_tg_cfg', JSON.stringify(Object.assign({ botToken: '123:abc', chatId: '42', enabled: true, onTrade: true, onAlert: true, onHebdo: false, onUrgence: true, onPnlGoal: true }, extra || {})));
@@ -186,7 +187,7 @@ const pause = ms => new Promise(r => setTimeout(r, ms));
     a.real['BTC/USDT'] = { px: 69000, ts: Date.now() }; a.ctx.checkPriceAlerts(); assert.strictEqual(a.S.priceAlerts[0].triggered, false, 'sous le seuil');
     a.real['BTC/USDT'] = { px: 70100, ts: Date.now() }; a.ctx.checkPriceAlerts(); a.ctx.checkPriceAlerts();
     assert.strictEqual(a.S.priceAlerts[0].triggered, true); assert.strictEqual(a.S.priceAlerts[0].triggeredPrice, 70100);
-    assert.deepStrictEqual(a.sons, ['alert'], 'son'); assert.strictEqual(a.ctx.document.els.prToastText.textContent, 'BTC/USDT ≥ 70000.00 · prix 70100.00');
+    assert.deepStrictEqual(a.sons, ['alert'], 'son'); assert.strictEqual(a.ctx.document.els.prToastText.textContent, 'BTC/USDT ≥ $70\u202f000,00 · prix $70\u202f100,00');   // [GO AFFICHAGE 3 · 15/11/2026] (n° 86c) prix par 02 pxTxt (avant : « 70000.00 »)
     // P&L : position EV (mode de création), pas celle du mode à l'écran ; « ≤ » et « < » échappés pour Telegram
     a.ws.paperReal.openPositions.push({ id: 'p', pair: 'ETH/USDT', side: 'short', entryPrice: 2000, stakeUsdt: 50, totalExposure: 50 });
     a.ws.paperReal.pairStates['ETH/USDT'] = { price: 2060 };
@@ -399,7 +400,7 @@ const pause = ms => new Promise(r => setTimeout(r, ms));
     a.S.priceAlerts = [{ id: 1, pair: 'BTC/USDT', type: 'above', value: 1, note: '<img src=x onerror=alert(1)>', col: 'red;background:url(x)', createdAt: 1, triggered: false },
                        { id: 2, pair: '<b>X</b>', type: 'above', value: 1, triggered: false }];
     a.ctx.renderPriceAlertSection(); const h = a.ctx.document.els.priceAlertSection.innerHTML;
-    assert.ok(!/<img|onerror|<b>X/.test(h), h.slice(0, 200)); assert.ok(/BTC\/USDT ≥ 1\.00/.test(h));
+    assert.ok(!/<img|onerror|<b>X/.test(h), h.slice(0, 200)); assert.ok(/BTC\/USDT ≥ \$1,00/.test(h));   // [GO AFFICHAGE 3 · 15/11/2026] (n° 86c) 02 pxTxt
   });
   await T('B5 · Outils › 🔔 Alertes : un clic sur un seuil P&L re-rend la section VISIBLE (alertsSection2) — avant, le rendu allait au conteneur caché de l\'accueil et l\'interrupteur semblait mort', () => {
     const a = app({ document: fakeDoc(['alertsSection', 'alertsSection2']) });

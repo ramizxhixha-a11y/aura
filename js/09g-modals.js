@@ -324,7 +324,7 @@ function openWhyModal(posId) {
       </div>
       <div class="why-metric-row">
         <span class="why-metric-lbl">Prix entrée</span>
-        <span class="why-metric-val">${entryPrice.toFixed(dec)}</span>
+        <span class="why-metric-val">${pxTxt(pos.pair, entryPrice)}</span>
       </div>
     </div>
 
@@ -350,11 +350,11 @@ function openWhyModal(posId) {
       <div class="why-section-title">🎯 Objectifs</div>
       ${pos.tp ? `<div class="why-metric-row">
         <span class="why-metric-lbl">Take Profit</span>
-        <span class="why-metric-val" style="color:var(--up)">${pos.tp.toFixed(dec)}</span>
+        <span class="why-metric-val" style="color:var(--up)">${pxTxt(pos.pair, pos.tp)}</span>
       </div>` : ''}
       ${pos.sl ? `<div class="why-metric-row">
         <span class="why-metric-lbl">Stop Loss</span>
-        <span class="why-metric-val" style="color:var(--down)">${pos.sl.toFixed(dec)}</span>
+        <span class="why-metric-val" style="color:var(--down)">${pxTxt(pos.pair, pos.sl)}</span>
       </div>` : ''}
     </div>` : ''}
   `;

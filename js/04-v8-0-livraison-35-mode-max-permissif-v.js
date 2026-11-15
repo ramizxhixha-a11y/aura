@@ -699,8 +699,9 @@ function renderSettingsPanel() {
         const freqLabel = ad.everyMin < 60 ? ad.everyMin + ' min' : (ad.everyMin/60) + 'h';
         let countdown = '—';
         if (ad.enabled) {
-          if (!ad.last) countdown = 'au prochain cycle';
-          else { let r = ad.last + ad.everyMin*60000 - Date.now(); if (r<=0) countdown='imminent…'; else { const h=Math.floor(r/3600000),mn=Math.floor((r%3600000)/60000),s=Math.floor((r%60000)/1000); countdown=(h>0?h+'h ':'')+mn+'min '+(s<10?'0':'')+s+'s'; } }
+          const _adT = Math.max(ad.last || 0, ad.fail || 0);   // [GO AFFICHAGE 3 · 15/11/2026] (n° 68b) après un échec, le prochain essai part de l'échec (09b3 autoDlTick)
+          if (!_adT) countdown = 'au prochain cycle';
+          else { let r = _adT + ad.everyMin*60000 - Date.now(); if (r<=0) countdown='imminent…'; else { const h=Math.floor(r/3600000),mn=Math.floor((r%3600000)/60000),s=Math.floor((r%60000)/1000); countdown=(h>0?h+'h ':'')+mn+'min '+(s<10?'0':'')+s+'s'; } }
         }
         const mkBtn = (min,lbl) => `<button onclick="if(window.autoDownload){window.autoDownload.enable(${min});renderSettingsPanel();}" style="flex:1;min-width:52px;height:30px;border-radius:8px;border:1px solid ${ad.enabled&&ad.everyMin===min?'rgba(0,232,122,.5)':'var(--border)'};background:${ad.enabled&&ad.everyMin===min?'rgba(0,232,122,.15)':'var(--s2)'};color:${ad.enabled&&ad.everyMin===min?'var(--up)':'var(--t2)'};font-size:var(--fs-10);font-weight:700;cursor:pointer;">${lbl}</button>`;
         return `
@@ -708,6 +709,7 @@ function renderSettingsPanel() {
           <div style="flex:1;">
             <div style="font-size:var(--fs-12);font-weight:600;color:var(--t1);">Téléchargement auto ${ad.enabled?'· '+freqLabel:''}</div>
             <div style="font-size:var(--fs-9);color:var(--t3);margin-top:2px;">${ad.enabled?'⏳ Prochain dans : <b id="savCountdown" style="color:var(--up)">'+countdown+'</b>':'désactivé'}</div>
+            ${ad.enabled && ad.fail && ad.fail > (ad.last || 0) ? '<div style="font-size:var(--fs-9);color:var(--down);margin-top:2px;">❌ Dernier essai ' + new Date(ad.fail).toLocaleString('fr-FR', { day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit' }) + ' : non écrit — ' + String(ad.failWhy || '').replace(/[<>&]/g, '') + '</div>' : ''}
           </div>
           <button onclick="if(window.autoDownload){if(${ad.enabled}){window.autoDownload.disable();}else{window.autoDownload.enable(180);}renderSettingsPanel();}" style="min-width:54px;height:28px;border-radius:14px;border:1px solid ${ad.enabled?'rgba(0,232,122,.4)':'var(--border)'};background:${ad.enabled?'rgba(0,232,122,.15)':'var(--s2)'};color:${ad.enabled?'var(--up)':'var(--t3)'};font-size:var(--fs-10);font-weight:700;cursor:pointer;">${ad.enabled?'ON':'OFF'}</button>
         </div>
@@ -1708,8 +1710,9 @@ function renderSettingsPanel() {
       if (!cd || !window.autoDownload) { if (window._savCountdownTimer) clearInterval(window._savCountdownTimer); return; }
       const ad = window.autoDownload.getMeta();
       if (!ad.enabled) { cd.textContent = 'désactivé'; return; }
-      if (!ad.last) { cd.textContent = 'au prochain cycle'; return; }
-      let r = ad.last + ad.everyMin*60000 - Date.now();
+      const _adT = Math.max(ad.last || 0, ad.fail || 0);   // [GO AFFICHAGE 3 · 15/11/2026] (n° 68b) comme le panneau
+      if (!_adT) { cd.textContent = 'au prochain cycle'; return; }
+      let r = _adT + ad.everyMin*60000 - Date.now();
       if (r <= 0) { cd.textContent = 'imminent…'; return; }
       const h = Math.floor(r/3600000), mn = Math.floor((r%3600000)/60000), s = Math.floor((r%60000)/1000);
       cd.textContent = (h>0?h+'h ':'') + mn + 'min ' + (s<10?'0':'') + s + 's';
@@ -3158,7 +3161,7 @@ async function runBacktest() {
       <div class="bt-log">
         ${last5.map(t=>`<div class="bt-trade-row">
           <span style="color:${t.side==='long'?'var(--up)':'var(--down)'};">${t.side==='long'?'↑':'↓'} ${t.reason}</span>
-          <span style="color:var(--t3);">${t.entry.toFixed(2)} → ${t.exit.toFixed(2)}</span>
+          <span style="color:var(--t3);">${pxTxt(pair, t.entry)} → ${pxTxt(pair, t.exit)}</span>
           <span style="font-weight:700;color:${t.netPnl>=0?'var(--up)':'var(--down)'};">${t.netPnl>=0?'+':''}$${t.netPnl.toFixed(2)}</span>
         </div>`).join('')}
       </div>
@@ -3943,15 +3946,15 @@ function renderMlPredSection() {
         <!-- Cibles prix -->
         <div class="ml-target">
           <div class="ml-target-card">
-            <span class="ml-target-val" style="color:var(--up);">${pred.tpTarget.toFixed(pred.dec)}</span>
+            <span class="ml-target-val" style="color:var(--up);">${pxTxt(pred.pair, pred.tpTarget)}</span>
             <span class="ml-target-lbl">🎯 TP estimé</span>
           </div>
           <div class="ml-target-card">
-            <span class="ml-target-val" style="color:var(--t1);">${pred.cur.toFixed(pred.dec)}</span>
+            <span class="ml-target-val" style="color:var(--t1);">${pxTxt(pred.pair, pred.cur)}</span>
             <span class="ml-target-lbl">Prix actuel</span>
           </div>
           <div class="ml-target-card">
-            <span class="ml-target-val" style="color:var(--down);">${pred.slTarget.toFixed(pred.dec)}</span>
+            <span class="ml-target-val" style="color:var(--down);">${pxTxt(pred.pair, pred.slTarget)}</span>
             <span class="ml-target-lbl">🛑 SL estimé</span>
           </div>
         </div>
@@ -4322,7 +4325,7 @@ function detectAnomalies() {
     if(chgPct > 8) {
       alerts.push({ level:'critical', icon:'🚨', title:`${pair} : Mouvement extrême +${chgPct.toFixed(1)}%`,
         desc:`Variation de ${chgPct.toFixed(2)}% sur 5 bougies. Possible pump/dump. Les positions ouvertes sont à risque.`,
-        val:`Prix : ${last.toFixed(PAIRS[pair]?.dec>=4?PAIRS[pair].dec:2)}` });
+        val:`Prix : ${pxTxt(pair, last)}` });   // [GO AFFICHAGE 3 · 15/11/2026] (n° 86c) prix par 02 pxTxt
     } else if(chgPct > 4) {
       alerts.push({ level:'warn', icon:'⚡', title:`${pair} : Forte volatilité (${chgPct.toFixed(1)}%)`,
         desc:`Mouvement inhabituel sur 5 bougies. Surveille les positions.`, val:'' });

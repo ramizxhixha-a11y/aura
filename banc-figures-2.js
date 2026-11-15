@@ -40,7 +40,7 @@ function monde(candles) {
   ].join('\n;\n');
   const S = { pairStates: { 'BTC/USDT': { candles, price: candles[candles.length - 1].c } }, realCandles: {}, tradingMode: 'paperReal', paperRealTimeframe: '15m', genome: {}, pairGenome: null };
   const c = { S, window: {}, Date, Math, JSON, Number, String, Array, Object, isFinite, isNaN, parseFloat, parseInt, console, PAIRS: { 'BTC/USDT': {} } };
-  vm.createContext(c); vm.runInContext(CODE, c);
+  vm.createContext(c); require('./banc-fixtures/px-vm.js')(c, ROOT);   /* [GO AFFICHAGE 3 · 15/11/2026] aides d'affichage de 02 (pxTxt, _closeRowUsd : banc-fixtures/px-vm.js) */ vm.runInContext(CODE, c);
   return c;
 }
 // séries de 60 bougies 15 min (déterministes)
@@ -94,7 +94,7 @@ T('G4 l\'écran « Patterns chartistes », rendu (vrai texte de 06), affiche que
   const c = { S: { pairStates: { 'BTC/USDT': { candles: cs, price: cs[cs.length - 1].c } } }, PAIRS: { 'BTC/USDT': { dec: 2 } }, console, JSON, Number, Object, Array, String, isFinite, isNaN, Math,
     REAL_CANDLE_INTERVALS: { '1m': 60000, '5m': 300000, '15m': 900000, '1h': 3600000, '4h': 14400000 }, _getActiveRealTimeframe: () => '15m',
     Date: { now: () => now }, document: { getElementById: id => (id === 'patternSection' ? (c.__el = c.__el || { innerHTML: '' }) : null) } };
-  c.window = c; vm.createContext(c);
+  c.window = c; vm.createContext(c); require('./banc-fixtures/px-vm.js')(c, ROOT);   /* [GO AFFICHAGE 3 · 15/11/2026] aides d'affichage de 02 (pxTxt, _closeRowUsd : banc-fixtures/px-vm.js) */
   const note = ['_PT_DECISION_NOTE', '_PT_MESURE_NOTE'].map(n => (s06.match(new RegExp('\\nconst ' + n + ' = [^\\n]*\\n')) || [''])[0]).join('');
   assert.ok(/_PT_DECISION_NOTE/.test(note), '_PT_DECISION_NOTE absente');
   const fns = ['function _ptClosedSeries(candles) {', 'function _detectCandlePatterns(candles) {', 'function _ptClosedCandles(pair) {', 'function _ptMiniChart(candles, w, h) {', 'function renderPatternSection() {'].map(a => fnAt(s06, a));

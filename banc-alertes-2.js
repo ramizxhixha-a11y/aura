@@ -68,8 +68,9 @@ function app(o) {
     _walletKey: m => (m === 'paperReal' || m === 'real') ? m : 'sim', _modeLab: m => (m === 'paperReal' ? 'EV' : (m === 'real' ? 'RE' : 'AA')),
     Blob: function () { rec.blobs++; }, URL: { createObjectURL: () => { rec.blobs++; return 'blob:x'; }, revokeObjectURL() {} },
     document: { els: {}, getElementById(id) { return this.els[id] || null; }, createElement: () => ({ click() {}, style: {} }), body: { appendChild() {}, removeChild() {} }, querySelector: () => null } };
-  ctx.window = ctx; ctx.self = ctx;
+  ctx.window = ctx; ctx.self = ctx; ctx.Intl = Intl;
   vm.createContext(ctx);
+  vm.runInContext('var _pxFmt = {};\n' + fnSrc(C.s02, 'pxTxt') + '\n' + fnSrc(C.s02, 'pxIn'), ctx);   // [GO AFFICHAGE 3 · 15/11/2026] (n° 86c) les prix de l'écran par 02 pxTxt / pxIn
   return { ctx, S, ws, rec };
 }
 const ALERTS = fnSrc(C.s04, '_initAlerts') + '\n' + fnSi(C.s04, '_alertModeLab') + fnSi(C.s04, '_alertMode') + fnSi(C.s04, '_alertFired') + fnSi(C.s04, '_alertFire') + fnSi(C.s04, '_alertWinStreak') + fnSrc(C.s04, 'checkPnlAlerts') + '\n';
@@ -385,15 +386,15 @@ const tr = (o) => Object.assign({ type: 'position', side: 'buy', pnl: 1, stakeUs
 
   console.log('▶ G. garde : la décision n\'a pas bougé');
   await T('G1 · fonctions de la décision et de l\'argent identiques au commit ab5be43 (ouverture, fermeture, frais, funding, mises, portefeuille canonique, argent à Rams, rotation des périodes, résolveur) ; fichiers de la décision identiques', () => {
-    const P = { openPosition: [require('./banc-fixtures/sans-n61.js')(require('./banc-fixtures/sans-n99.js')(C.s02, F.s02), F.s02), '4253a25008eb23a3'],   // [GO N° 99 · 15/11/2026] hors la retouche de go n° 99 (banc-n99.js) ·   // [GO N° 61 · 15/11/2026] hors la retouche de go n° 61 (banc-n61.js)
+    const P = { openPosition: [require('./banc-fixtures/sans-n61.js')(require('./banc-fixtures/sans-n99.js')(require('./banc-fixtures/sans-affichage-3.js')(C.s02, F.s02), F.s02), F.s02), '4253a25008eb23a3'],   // [GO AFFICHAGE 3 · 15/11/2026] hors la retouche de go affichage 3 (banc-affichage-3.js) ·   // [GO N° 99 · 15/11/2026] hors la retouche de go n° 99 (banc-n99.js) ·   // [GO N° 61 · 15/11/2026] hors la retouche de go n° 61 (banc-n61.js)
       closePosition: [C.s02, 'f306ef7b27f64ac3'], recordFees: [C.s02, 'f2b897580fc692af'], applyFundingFees: [C.s02, '9f9d15892dd2757c'],
       applyLeverageBorrowFees: [C.s02, 'e364c8a77e5c72ad'], estimateStakes: [C.s02, '191de2e4cf018d53'], _computePortfolio: [C.s02, '257f2a1047dbc64b'], _pnlBasis: [C.s02, 'd03c58239bff81bd'],
       calcTaxProvision: [C.s02, 'a53f25980c254185'], botRescue: [C.s03, 'd5ab2721c75c37af'], learnFromOutcome: [C.s03, '1d0bef339fad49fa'],
-      _checkAndRotatePeriods: [rd('js/10c-profil-ab-contexte.js'), 'e97c74c187cb8e10'], _resolvePairCycleCore: [rd('js/10f-resolveur-cycle.js'), 'a3b9d1df45a293d9'] };
+      _checkAndRotatePeriods: [rd('js/10c-profil-ab-contexte.js'), 'e97c74c187cb8e10'], _resolvePairCycleCore: [require('./banc-fixtures/sans-affichage-3.js')(rd('js/10f-resolveur-cycle.js'), 'js/10f-resolveur-cycle.js'), 'a3b9d1df45a293d9'] };   // [GO AFFICHAGE 3 · 15/11/2026] hors la ligne « BOT … @ » (n° 86b, banc-affichage-3.js)
     Object.entries(P).forEach(([n, [src, h]]) => assert.strictEqual(h16(fnSrc(src, n)), h, n + ' a changé'));
     const H = {"js/09c-auto-open.js":"cb981dcbb9806d73","js/10f-resolveur-cycle.js":"2c7f1bbbb66741a0","js/15-voix-tendance.js":"9757929e4b295254","js/15b-tendance-reelle.js":"08582a20cd8f495a",
       "js/16-fiscal.js":"45259077a3003f56","js/10d-protections-indicateurs.js":"5df7acbcb09379ca","js/12-bots-disciples.js":"22be243cac985f66","js/10a-base-analyse.js":"31a4ecb469243d0a"};
-    Object.keys(H).forEach(f => assert.strictEqual(h16(rd(f)), H[f], f + ' a changé'));
+    Object.keys(H).forEach(f => assert.strictEqual(h16(require('./banc-fixtures/sans-affichage-3.js')(rd(f), f)), H[f], f + ' a changé'));   // [GO AFFICHAGE 3 · 15/11/2026] hors les retouches d'affichage de go affichage 3 (10f ligne « BOT … @ », 16 marque de la voix — banc-affichage-3.js)
   });
 
   console.log(`\n${fail ? '❌' : '✅'} ${pass}/${pass + fail} tests passés`);

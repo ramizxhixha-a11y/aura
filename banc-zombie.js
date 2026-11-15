@@ -44,7 +44,7 @@ function mkCtx(positions, prices, over) {
       closed.push({ id, botClose, pair: S.openPositions[i].pair }); S.openPositions = S.openPositions.filter(p => p.id !== id);   // comme 02 closePosition
     } };
   ctx.window = ctx; ctx.closed = closed; ctx.toasts = toasts;
-  vm.createContext(ctx);
+  vm.createContext(ctx); require('./banc-fixtures/px-vm.js')(ctx, ROOT);   /* [GO AFFICHAGE 3 · 15/11/2026] aides d'affichage de 02 (pxTxt, _closeRowUsd : banc-fixtures/px-vm.js) */
   vm.runInContext([fnSrc(s07, '_trailStopHit'), fnSrc(s07, 'learnFromOpenPositions'), fnSrc(s09e, '_manConsignesWatchdog')].join('\n'), ctx);
   return ctx;
 }

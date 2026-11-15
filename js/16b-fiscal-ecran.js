@@ -131,7 +131,8 @@ function _fiscInsights(mode) {
 function _fiscWhy(e) {
   if (e.r === 'n') return 'MANU · LONG · sans levier';
   var w = [];
-  if (e.a) w.push('AUTO (bot)');
+  if (e.v) w.push('voix tendance longue (décision automatique)');   // [GO AFFICHAGE 3 · 15/11/2026] (n° 88b) comme 16 _fiscRegimeOf
+  else if (e.a) w.push('AUTO (bot)');
   if (e.s !== 'L') w.push('SHORT (vente à découvert = crypto empruntée)');
   if (_fiscNum(e.lv) > 0) w.push('levier (emprunt ' + _fiscNum(e.lv).toFixed(2) + ' $)');
   return w.join(' · ') || 'spéculatif';
@@ -245,7 +246,7 @@ function _fiscRenderPage(el) {
     var rc = e.r === 'n' ? 'var(--up)' : 'var(--down)';
     h.push('<div class="fz-tr"><div class="fz-tr1"><span class="fz-t">' + _fiscHm(e.t) + '</span><b>' + _fiscEsc(e.p) + '</b>'
       + '<span style="color:' + (e.s === 'L' ? 'var(--up)' : 'var(--down)') + ';">' + (e.s === 'L' ? '↑ LONG' : '↓ SHORT') + '</span>'
-      + '<span class="fx-chip">' + (e.a ? '🤖 AUTO' : '👤 MAN') + '</span><span class="fx-chip" style="color:' + rc + ';border-color:' + rc + ';">' + (e.r === 'n' ? 'normal' : 'spéculatif') + '</span>'
+      + '<span class="fx-chip">' + (e.v ? '📈 Tendance' : e.a ? '🤖 AUTO' : '👤 MAN') + '</span><span class="fx-chip" style="color:' + rc + ';border-color:' + rc + ';">' + (e.r === 'n' ? 'normal' : 'spéculatif') + '</span>'
       + '<span class="fz-g" style="color:' + (e.g >= 0 ? 'var(--up)' : 'var(--down)') + ';">' + _fiscSgnEur(e.g) + '</span></div>'
       + '<div class="fz-tr2">' + (_fiscNum(e.lv) > 0 ? 'levier · emprunt ' + _fiscUsd(e.lv) + ' · ' : '') + 'mise ' + _fiscUsd(e.st) + (e.N > e.st + 1e-9 ? ' (expo ' + _fiscUsd(e.N) + ')' : '')
       + ' · frais ' + _fiscUsd(e.fe + e.sl) + ' · dépôt ' + _fiscUsd(e.mv, true) + ' · dû ' + _fiscEur(e.d0) + ' → ' + _fiscEur(e.d1) + (e.ff ? ' · cours € de repli' : '') + '</div></div>');
@@ -316,7 +317,7 @@ function _fiscExportCsv() {
   var head = ['date', 'annee', 'paire', 'sens', 'ouvert_par', 'regime', 'raison', 'prix_entree', 'prix_sortie', 'exposition_usd', 'mise_usd', 'pnl_usd', 'glissement_usd', 'frais_usd', 'cours_eur_entree', 'cours_eur_sortie', 'gain_legal_eur', 'frais_deduits_eur', 'du_avant_eur', 'du_apres_eur', 'depot_usd'];
   var q = function (s) { s = String(s); return /[",;\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
   var rows = L.hist.slice().reverse().map(function (e) {
-    return [new Date(e.t).toISOString(), e.y, e.p, e.s === 'L' ? 'LONG' : 'SHORT', e.a ? 'AUTO' : 'MANU', e.r === 'n' ? 'normal 10%' : 'speculatif 33%', _fiscWhy(e),
+    return [new Date(e.t).toISOString(), e.y, e.p, e.s === 'L' ? 'LONG' : 'SHORT', e.v ? 'TENDANCE' : e.a ? 'AUTO' : 'MANU', e.r === 'n' ? 'normal 10%' : 'speculatif 33%', _fiscWhy(e),
             e.x0, e.x1, e.N.toFixed(4), e.st.toFixed(4), e.pu.toFixed(6), e.sl.toFixed(6), e.fe.toFixed(6), e.fi, e.fo, e.g.toFixed(6), e.fE.toFixed(6), e.d0.toFixed(6), e.d1.toFixed(6), e.mv.toFixed(6)].map(q).join(';');
   });
   var csv = head.join(';') + '\n' + rows.join('\n');

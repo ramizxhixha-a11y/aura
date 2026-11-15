@@ -44,7 +44,7 @@ function monde(o) {
     REAL_CANDLE_INTERVALS: { '1m': 60000, '5m': 300000, '15m': 900000, '1h': 3600000, '4h': 14400000 },
     _getActiveRealTimeframe: () => o.tf || '15m', document: { getElementById: id => (id === 'patternSection' ? (c.__el = { innerHTML: '' }) : null) } };
   c.Date = { now: () => (o.now != null ? o.now : 0) };
-  c.window = c; vm.createContext(c);
+  c.window = c; vm.createContext(c); require('./banc-fixtures/px-vm.js')(c, ROOT);   /* [GO AFFICHAGE 3 · 15/11/2026] aides d'affichage de 02 (pxTxt, _closeRowUsd : banc-fixtures/px-vm.js) */
   const fns = ['_detectPatterns', '_ptClosedSeries', '_detectCandlePatterns', '_ptClosedCandles', '_ptMiniChart', 'renderPatternSection'].map(n => fnSrc(s06, n)).filter(Boolean);
   const note = ['_PT_DECISION_NOTE', '_PT_MESURE_NOTE'].map(n => (s06.match(new RegExp('\\nconst ' + n + ' = [^\\n]*\\n')) || [''])[0]).join('');
   vm.runInContext("var _ptPair = 'BTC/USDT';\n" + note + fns.join('\n'), c);
