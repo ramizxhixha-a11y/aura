@@ -47,7 +47,9 @@ T('K1 · le cas n° 107 : 17 rend null à la lecture de l\'état → TypeError d
   assert.ok(!a[0].cles.includes('reseau'), 'aucune marque reseau'); assert.strictEqual(new Set(a.map(cleSentry)).size, 1, 'même empreinte à chaque battement : 00s n\'en envoie qu\'une par chargement');
   assert.ok(/faute de code : Cannot read properties of null/.test(X.st().err), X.st().err); assert.ok(ligne(X).includes('faute de code : ') && !/réseau/.test(ligne(X)), ligne(X));
   assert.ok(debut > 0, 'début de panne gardé'); assert.deepStrictEqual(sig(X), []); assert.strictEqual(etats(X), 0);
-  await X.avancer(J - 5 * MIN); assert.deepStrictEqual(sig(X), [], 'pas avant 24 h'); assert.strictEqual(etats(X), 0);
+  assert.ok(X.st().pauseUntil > X.clock.t && X.st().echecs >= a.length && X.st().suite >= a.length, 'compté et en pause comme un échec : ' + JSON.stringify([X.st().echecs, X.st().suite, X.st().pauseUntil - X.clock.t]));
+  await X.avancer(H - 2 * MIN); const n1 = av(X).length; assert.ok(n1 >= 5 && n1 <= 20, 'une heure de faute : pause qui double jusqu\'à 5 min (≈ 15 essais), pas un essai toutes les 15 s : ' + n1);
+  await X.avancer(J - H - 5 * MIN); assert.deepStrictEqual(sig(X), [], 'pas avant 24 h'); assert.strictEqual(etats(X), 0);
   await X.avancer(15 * MIN); assert.deepStrictEqual(sig(X), [TCODE], 'une fois passé 24 h'); assert.ok(X.clock.t - debut >= J);
   await X.avancer(6 * H); assert.deepStrictEqual(sig(X), [TCODE], 'une seule fois par chargement');
   X = avec({ lsMap: ls, t0: X.clock.t + MIN }); fauteEtat(X); await X.avancer(30 * MIN); assert.deepStrictEqual(sig(X), [], 'même jour UTC, relancée : rien'); assert.ok(av(X).length >= 1, 'avalee à nouveau (un chargement neuf)');
@@ -103,6 +105,15 @@ T('K5 · « Couper le pont » au milieu d\'un battement qui lève ensuite : rien
   await X.avancer(3 * MIN);
   assert.deepStrictEqual(av(X), []); assert.deepStrictEqual(sig(X), []); assert.strictEqual(memo(X).muet, undefined); assert.strictEqual(X.st().etat, 'coupe'); assert.strictEqual(X.ls.get('aura_pont_pat'), undefined);
   assert.ok(/^coupé · le PAT est effacé/.test(ligne(X)), ligne(X));
+});
+
+T('K9 · faute de code DANS gh(), au traitement d\'une réponse (réponse sans corps lisible : r.text n\'est pas une fonction) : c\'est une faute, pas le réseau — seul le rejet de la requête elle-même est marqué', async () => {
+  const X = avec(); await X.activer(PAT_OK); const f = X.c.fetch;
+  X.c.fetch = (u, i) => (/\/etat\.json$/.test(String(u)) && i && i.method === 'PUT') ? Promise.resolve({ status: 201, headers: { get: () => null } }) : f(u, i);
+  X.c.pontDirectEnvoyer(); await X.avancer(3 * MIN);
+  const a = av(X); assert.ok(a.length >= 1 && a[0].name === 'TypeError' && a[0].message === MSG, JSON.stringify(a[0])); assert.ok(!/text/.test(a[0].stack));
+  assert.ok(/^faute de code : /.test(X.st().err) && memo(X).muet > 0, X.st().err);
+  X.c.fetch = f; await X.avancer(6 * MIN); assert.strictEqual(memo(X).muet, undefined); assert.strictEqual(X.st().etat, 'actif');
 });
 
 // ───────────── B · témoins ─────────────
