@@ -1,0 +1,80 @@
+{
+ "regles_sha256": "960fae708a0a3f23df11e82f44a011dc70db7fba77a692ac969a501fd60089dc",
+ "donnees": {
+  "20261115-014135": "D1",
+  "20261017-230838": "D2",
+  "20261018-231602": "D2",
+  "20261019-215033": "D2",
+  "20261020-214342": "D2",
+  "20261021-034540": "D2",
+  "20261026-231837": "D2",
+  "20261027-210236": "D2",
+  "20261028-060435": "D2",
+  "20261029-223131": "D2",
+  "20261030-013131": "D2",
+  "20261105-182646": "D2",
+  "20261107-205835": "D2",
+  "20261108-210050": "D2",
+  "20261110-214859": "D2",
+  "20261111-155225": "D2",
+  "20261112-224331": "D2",
+  "20261113-222247": "D2",
+  "20261114-222804": "D2",
+  "20261115-012901": "D2",
+  "20261020-035156": "D2"
+ },
+ "M0": {
+  "etats": 63,
+  "actifs": 0,
+  "exemples": [],
+  "fraisExpo": 3,
+  "fraisN": 1468
+ },
+ "M1": {
+  "etats": 63,
+  "lectures": 6384,
+  "differences": 0,
+  "exemples": []
+ },
+ "M2": {
+  "secondesE": 0,
+  "Emax": 0,
+  "ouvertures": 4,
+  "fermetures": 3,
+  "ouverturesAvant": 4,
+  "comparaison": "DIFFÉRENT",
+  "erreurs": [],
+  "premiereDifference": {
+   "rang": 3,
+   "avant": [
+    "sim",
+    "ETH/USDT",
+    "long",
+    340.805703,
+    0,
+    0
+   ],
+   "apres": [
+    "sim",
+    "XRP/USDT",
+    "long",
+    340.801559,
+    0,
+    0
+   ]
+  }
+ },
+ "verdict": "NON PROUVÉ (et N'ENTRE PAS à la lettre : M1 ou M2 diffère)",
+ "horsRegles": {
+  "apres": "EUR/USDT short, SOL/USDT long, XRP/USDT short, XRP/USDT long · 3 fermetures",
+  "apres_bis": "EUR/USDT short, SOL/USDT long, XRP/USDT short, ETH/USDT long · 4 fermetures",
+  "apres_ter": "EUR/USDT short, SOL/USDT long, XRP/USDT short, ETH/USDT long · 4 fermetures",
+  "avant": "EUR/USDT short, SOL/USDT long, XRP/USDT short, ETH/USDT long · 4 fermetures",
+  "avant_bis": "EUR/USDT short, SOL/USDT long, XRP/USDT short, ETH/USDT long · 4 fermetures",
+  "temoin_commentaires": "EUR/USDT short, SOL/USDT long, XRP/USDT short, ETH/USDT long · 4 fermetures",
+  "diag": {
+   "appels": 9004,
+   "ecarts": 0
+  }
+ }
+}
