@@ -40,7 +40,7 @@ function fnSrc(src, name) {   // le texte d'une fonction de haut niveau (accolad
   throw new Error(name + ' : fin introuvable');
 }
 
-const html = rd('AURA8_v118.html'), s02 = rd('js/02-state-init.js'), s9b2 = require('./banc-fixtures/sans-n105.js')(rd('js/09b2-save-load.js'), 'js/09b2-save-load.js');   // [GO N° 105 · 15/11/2026] hors go n° 105 (08, 09b2 : bornes de l'école, banc-n105.js)
+const html = rd('AURA8_v118.html'), s02 = rd('js/02-state-init.js'), s9b2 = require('./banc-fixtures/sans-n105.js')(require('./banc-fixtures/sans-n106.js')(rd('js/09b2-save-load.js'), 'js/09b2-save-load.js'), 'js/09b2-save-load.js');   // [GO N° 105 · 15/11/2026] hors go n° 105 (08, 09b2 : bornes de l'école, banc-n105.js)   // [GO N° 106 · 15/11/2026] hors go n° 106 (08, 09b2 : amplitude de l'école, banc-n106.js)
 console.log('▶ banc-n63 · token ' + ((html.match(/DOC_V = '(\d{8}[a-z])'/) || [])[1]) + (process.env.BANC_ROOT ? ' · BANC_ROOT=' + ROOT : ''));
 
 // ── l'ancienne purge (c730c1b) : la retouche de go n° 63 remplacée par la ligne d'avant ──
@@ -214,7 +214,7 @@ T('G · garde : purge nouvelle = ancienne hors antiNegReserveLog ; aucun lecteur
   const H = { 'js/02-state-init.js': '5b82fc4d014f1cb4', 'js/03-per-pair-position-buttons-controls-buid.js': '117f962efbeb4f37', 'js/04-v8-0-livraison-35-mode-max-permissif-v.js': '56365f1615101466',
     'js/08-learning-history-render.js': 'e5b53d1146fba1b1', 'js/09c-auto-open.js': 'cb981dcbb9806d73', 'js/09j-helpers.js': '469be1c86f4a9337', 'js/10f-resolveur-cycle.js': '9935b3138d2a97b0', 'js/15-voix-tendance.js': '9757929e4b295254',
     'js/15b-tendance-reelle.js': '08582a20cd8f495a', 'js/16-fiscal.js': '18d61b55137bc8f3', 'js/09b1-build-snapshot.js': '393c4df7cf1df426' };
-  Object.keys(H).forEach(f => assert.strictEqual(h16(require('./banc-fixtures/sans-n103.js')(require('./banc-fixtures/sans-n86d.js')(require('./banc-fixtures/sans-n105.js')(rd(f), f), f), f)), H[f], f + ' a changé'));   // [GO N° 105 · 15/11/2026] hors go n° 105 (08, 09b2 : bornes de l'école, banc-n105.js)   // [GO N° 86D · 15/11/2026] hors go n° 86d (03, 08 : champs de saisie TP / SL, banc-n86d.js)   // hors go n° 103 (02, toast arrondi : banc-n103.js, livré pendant go n° 63)
+  Object.keys(H).forEach(f => assert.strictEqual(h16(require('./banc-fixtures/sans-n103.js')(require('./banc-fixtures/sans-n86d.js')(require('./banc-fixtures/sans-n105.js')(require('./banc-fixtures/sans-n106.js')(rd(f), f), f), f), f)), H[f], f + ' a changé'));   // [GO N° 105 · 15/11/2026] hors go n° 105 (08, 09b2 : bornes de l'école, banc-n105.js)   // [GO N° 86D · 15/11/2026] hors go n° 86d (03, 08 : champs de saisie TP / SL, banc-n86d.js)   // hors go n° 103 (02, toast arrondi : banc-n103.js, livré pendant go n° 63)   // [GO N° 106 · 15/11/2026] hors go n° 106 (08, 09b2 : amplitude de l'école, banc-n106.js)
 });
 
 T('F · garde : l\'ancienne purge reconstruite par ce banc = 09b2 du commit c730c1b au caractère près', () => {

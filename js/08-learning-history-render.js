@@ -2792,6 +2792,36 @@ function _schoolBoundsFromReal() {
   return n;
 }
 window._schoolBoundsFromReal = _schoolBoundsFromReal;
+// [GO N° 106 · 15/11/2026] (ETAT n° 106) L'AMPLITUDE DE L'ÉCOLE AVANT LE 1er PRIX RÉEL. _simCandleStep (plus haut) tire chaque bougie de l'école dans cfg.vol
+// (bruit ± 0,7 × vol, queue épaisse ± 2 × vol). 02 la pose à chaque prix réel : vol = variation 24 h × prix / 9,8 (Binance, CoinGecko ; le terme « × 0,3 » de 02
+// ne fait que la laisser descendre par paliers, elle rejoint cette valeur en une minute de prix réels). Elle n'est pas sauvée : au rechargement, une paire du code
+// (02 PAIRS) ou bâtie d'un candidat (09b2) repart de la constante du code — backup du pont du 15/11 19:06 : DOT 0,25 pour un prix de 0,733 (34 % du prix par pas,
+// 126 fois la règle de 02), LINK × 73, BNB × 84, ADA × 60 ; hors réseau, l'école de DOT balayait ses bornes en une minute (sonde de go n° 105 : 0,49 … 1,14).
+// Ici, appelée par 09b2 loadState juste après les bornes : l'amplitude repart de la règle de 02, sur les bougies réelles GARDÉES (S.realCandles) — prix = la bougie
+// la plus récente (la même que les bornes) ; variation 24 h = ce prix contre l'ouverture de la bougie posée 24 h avant la dernière de sa série (la série la plus
+// fraîche qui en a une : 1 h sur les backups, donc à l'heure près ; vérifié contre les bougies 1 h de Binance le 15/11). Rien si un prix réel est déjà arrivé ;
+// sans prix réel gardé, sans bougie 24 h plus tôt ou à variation nulle : amplitude gardée (comme 02 sans variation). Ne touche que cfg.vol, lue par _simCandleStep,
+// 02 _simulationTickAll (école), 08 renderMarket (éclat du prix à l'écran) et 07 runDreamScenario (BTC) : hors réseau, les mêmes valeurs qu'avec le réseau.
+function _schoolVolFromReal() {
+  if (_pricesFetched || typeof PAIRS === 'undefined' || !S || !S.realCandles || typeof S.realCandles !== 'object') return 0;
+  let n = 0;
+  Object.keys(PAIRS).forEach(pair => {
+    const cfg = PAIRS[pair], rc = S.realCandles[pair];
+    if (!cfg || !rc || typeof rc !== 'object') return;
+    let k = null, r = null;
+    Object.keys(rc).forEach(iv => { const a = rc[iv], x = Array.isArray(a) ? a[a.length - 1] : null;
+      if (!(x && isFinite(x.c) && x.c > 0 && isFinite(x.ts))) return;
+      if (!k || x.ts > k.ts) k = x;
+      const y = a.find(b => b && b.ts === x.ts - 86400000 && isFinite(b.o) && b.o > 0);
+      if (y && (!r || x.ts > r.x.ts)) r = { x: x, y: y }; });
+    if (!k || !r) return;
+    const change24h  = (k.c - r.y.o) / r.y.o * 100;
+    const dailyRange = k.c * Math.abs(change24h) / 100;   // la règle de 02 (fetchBinancePrices, CoinGecko)
+    if (dailyRange > 0) { cfg.vol = dailyRange / 9.8; n++; }
+  });
+  return n;
+}
+window._schoolVolFromReal = _schoolVolFromReal;
 
 // ═══ [MODES SÉPARÉS · 10/10/2026] LA SURVEILLANCE D'UN MODE EN PLAY DERRIÈRE L'ÉCRAN (go Rams 10/10 20:01 : « Go pour tout ») ═══
 // Le multiplexeur donnait à un mode d'arrière-plan ses cycles, les sorties de ses bots sur TP / SL (10f _botExitSweep) et le garde-fou de perte max (10f
