@@ -85,7 +85,7 @@ const etats = pont => pont.filter(x => /^PUT aura-pont\/contents\/etat\.json$/.t
   const auLancement = (racine, h) => passage(browser, racine, 'sain', muetDe(h) + FAUTE, async (page, lire) => { await attendre(page, 40); return { e: await lire() }; });
   try {
     /* 1 · faute en route */
-    const A = await enRoute(args.root), pa = duPont(A.E), wa = pa.filter(e => exc(e)), xa = wa.length ? exc(wa[0]) : null;
+    const A = await enRoute(args.root), pa = duPont(A.E), wa = pa.filter(e => (exc(e) || {}).value === MSG), xa = wa.length ? exc(wa[0]) : null;
     R('chargement : Sentry actif (environnement « sonde »), pont actif, état écrit', A.e0.sentry && A.e0.sentry.actif && A.e0.pont && A.e0.pont.etat === 'actif' && A.n0 >= 1, { pont: A.e0.pont, etats: A.n0, ligne: A.e0.ligne });
     R('1 · faute de CODE en route → UN envoi du pont : avalee=oui, warning, TypeError, message FIXE', pa.length === 1 && wa.length === 1 && wa[0].level === 'warning' && wa[0].tags && wa[0].tags.avalee === 'oui' && xa.type === 'TypeError' && xa.value === MSG,
       pa.map(e => [e.level, e.tags && e.tags.avalee, e.message || (exc(e) || {}).type + ': ' + (exc(e) || {}).value]));
@@ -97,12 +97,12 @@ const etats = pont => pont.filter(x => /^PUT aura-pont\/contents\/etat\.json$/.t
       { ligne: A.e.ligne, etats: [A.n0, A.n1] });
     /* 2 · faute au lancement, panne de 24 h 01 */
     const B = await auLancement(args.root, 24 + 1 / 60), pb = duPont(B.E);
-    const eb = pb.filter(e => e.message === TCODE), wb = pb.filter(e => exc(e));
+    const eb = pb.filter(e => e.message === TCODE), wb = pb.filter(e => (exc(e) || {}).value === MSG);
     R('2 · faute au lancement, panne commencée il y a 24 h 01 → UN envoi « muet · faute de code … » (error, avalee=non) + UN avalee (warning)',
-      pb.length === 2 && eb.length === 1 && eb[0].level === 'error' && eb[0].tags && eb[0].tags.avalee === 'non' && wb.length === 1 && wb[0].level === 'warning', pb.map(e => [e.level, e.message || (exc(e) || {}).value]));
+      pb.length === 2 && eb.length === 1 && eb[0].level === 'error' && eb[0].tags && eb[0].tags.avalee === 'non' && wb.length === 1 && wb[0].level === 'warning', pb.map(e => [e.level, e.tags && e.tags.avalee, e.message || (exc(e) || {}).value]));
     /* 3 · témoin : 23 h */
     const C = await auLancement(args.root, 23), pc = duPont(C.E);
-    R('3 · même faute, panne de 23 h → la warning seule, AUCUN envoi error (la sonde voit la différence)', pc.length === 1 && exc(pc[0]) && pc[0].level === 'warning', pc.map(e => [e.level, e.message || (exc(e) || {}).value]));
+    R('3 · même faute, panne de 23 h → la warning seule, AUCUN envoi error (la sonde voit la différence)', pc.length === 1 && (exc(pc[0]) || {}).value === MSG && pc[0].level === 'warning', pc.map(e => [e.level, e.message || (exc(e) || {}).value]));
     /* 4 · réseau coupé */
     const D = await passage(browser, args.root, 'reseau', muetDe(72), async (page, lire) => { await attendre(page, 40); return { e: await lire() }; });
     R('4 · réseau coupé vers GitHub (panne de 3 jours en mémoire) → AUCUN envoi du pont ; la ligne dit « réseau »', duPont(D.E).length === 0 && D.pont.length >= 1 && /réseau/.test(D.e.ligne || '') && !/faute de code/.test(D.e.ligne || ''), { ligne: D.e.ligne, pont: D.pont.slice(0, 3) });
