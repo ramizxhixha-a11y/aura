@@ -2490,6 +2490,124 @@ window.manuReinforce = manuReinforce;
 // mise 30 $ (la mise par défaut de la paire), TP 1,05 % (règle fixe), consignes perdues ; « inversé » dit même si rien ne rouvrait.
 // Désormais la nouvelle position garde ta mise, ton levier, les MÊMES distances de TP et de SL (posées du bon côté pour le nouveau sens) et
 // tes consignes (perte max, durée — la durée repart de zéro : c'est un nouveau trade). Résultat vérifié avant d'être dit.
+// [GO N° 62 · 15/11/2026] (ETAT n° 62) « Inverser » fermait la position PUIS cherchait à combien la rouvrir, sans rien demander : mise réduite ou rien
+// rouvert, appris après coup ; levier arrondi (×1,4 rouvert en ×1, ×1,5 en ×2) ; avec un levier de paire, la mise était cherchée SANS l'emprunt de la part
+// à levier, qu'openPosition (02) prend AVANT son contrôle de capital (branche « levier » : plafond = dette − mises engagées) → « fermé, mais … non rouvert ».
+// Désormais, AVANT de fermer : _invPlan calcule l'état d'après la fermeture (_invApres : la même suite d'argent que closePosition) et ce qu'openPosition y
+// accepterait (_invPasse : son emprunt, son contrôle, son emprunt « juste à temps », sans rien écrire) ; une question dit la fermeture et la réouverture
+// (mise, levier exact, et pourquoi si moins). Rien ne peut être rouvert → rien n'est fermé. Après la fermeture, la réouverture annoncée est revérifiée sur
+// l'état réel : différente → nouvelle question avec les vrais montants (rien n'est rouvert sans ton accord). Aucun chemin du bot n'appelle ces fonctions.
+// État modifié le temps d'un calcul (le portefeuille du mode à l'écran), remis au centime dans finally : rien d'autre ne tourne entre les deux (synchrone).
+function _invAvec(o, fn) {
+  const keep = {};
+  Object.keys(o).forEach(k => { keep[k] = S[k]; });
+  try { Object.keys(o).forEach(k => { S[k] = o[k]; }); return fn(); }
+  finally { Object.keys(keep).forEach(k => { S[k] = keep[k]; }); }
+}
+// Ce que 02 borrowLeverage prêterait pour la part à levier (mêmes refus, même ordre), sans rien écrire.
+function _invEmprunt(a) {
+  a = Number(a) || 0;
+  let cap10 = Infinity; try { cap10 = _tradingCapitalBase() * 10; } catch (e) {}
+  if ((Number(S.leverageBorrowed) || 0) + a > cap10) return 0;
+  if (a <= 0 || (Number(S.leverage) || 0) === 0) return 0;
+  const v = Math.min(Number(S.leverageReserve), a);
+  return v < 10 ? 0 : v;
+}
+// openPosition (02, ouverture à la main) accepterait-elle la mise x au levier L ? Sa suite exacte : emprunt de la part à levier, contrôle de capital
+// (09j validateManualExposure) AVEC cet emprunt, emprunt « juste à temps » de l'index (02 ensureLeverageCoverForTrade), mise ≤ trading. Rien n'est écrit.
+function _invPasse(x, L) {
+  const bonus = x * (L - 1), b = bonus > 0 ? _invEmprunt(bonus) : 0;
+  return _invAvec({ leverageBorrowed: (Number(S.leverageBorrowed) || 0) + b, leverageReserve: (Number(S.leverageReserve) || 0) - b }, () => {
+    const c = validateManualExposure(x, b);
+    if (!c.ok && c.available < x * 0.5) return { ok: false, b, why: 'cap', c };
+    const T = S.tradingAccount || 0, ix = S.leverage || 0;
+    let jit = 0, tient = T;
+    if (ix >= 1) {
+      const base = _tradingCapitalBase(), Bn = S.leverageBorrowed || 0, mm = S.leverageMaxMult || 10;
+      const maxB = base * Math.min(ix, mm) - Bn, abs = base * mm, p9 = (abs > 0 ? Bn / abs * 100 : 0) >= 95;
+      if (maxB > 0 && !p9) { tient = T + maxB; if (x > T) jit = Math.min(x - T, maxB); }
+    }
+    if (x > T + jit + 1e-9) return { ok: false, b, why: 'trading', tient };
+    return { ok: true, b };
+  });
+}
+// La plus grande mise ≤ stake qu'openPosition accepterait au levier lev, sinon à ×1 si c'est le levier qui bloque. { x, L, b, why, levWhy } — x = 0 : rien.
+function _invChoix(pair, stake, lev) {
+  const meilleur = (L) => {
+    const r0 = _invPasse(stake, L);
+    if (r0.ok) return { x: stake, L, b: r0.b, r0 };
+    let lo = 0, hi = stake;
+    for (let i = 0; i < 40; i++) { const m = (lo + hi) / 2; if (_invPasse(m, L).ok) lo = m; else hi = m; }
+    const x = Math.floor(lo * 100) / 100, r = x >= 0.01 ? _invPasse(x, L) : null;
+    return r && r.ok ? { x, L, b: r.b, r0 } : { x: 0, L, b: 0, r0 };
+  };
+  const A = meilleur(lev), U = lev > 1 + 1e-9 ? meilleur(1) : A, c = U.x > A.x + 0.005 ? U : A;
+  const pourquoi = (r) => r.why === 'trading' ? 'le trading ne tiendra que ' + fmt$2(Math.max(0, r.tient)) + ' après la fermeture'
+    : 'contrôle de capital : ' + (r.c && r.c.phase5 && r.c.phase5Mode === 'leverage' ? 'avec une dette de levier, plafond = dette − mises engagées (' + fmt$2(Math.max(0, r.c.phase5Cap)) + ')'
+      : r.c && r.c.phase5 ? 'mise ≤ trading (' + fmt$2(Math.max(0, r.c.available)) + ')'
+      : 'exposition ≤ ' + (r.c && r.c.autoCap ? '80 % de ' : '') + 'trading + réserve du levier');
+  c.why = c.x < stake - 0.005 ? pourquoi(c.r0) : '';
+  if (c.L < lev) c.levWhy = 'à ×' + _levTxt(lev) + ', ' + pourquoi(A.r0);
+  else if (c.x > 0 && c.b < c.x * (lev - 1) - 0.005) { try { c.levWhy = _pairLevShortWhy(c.x * (lev - 1), c.b); } catch (e) { c.levWhy = 'emprunt du levier réduit'; } }
+  c.eff = c.x > 0 ? (c.x + c.b) / c.x : 1;
+  return c;
+}
+// L'état du portefeuille du mode à l'écran juste APRÈS closePosition(pos) au prix du moment — même suite que 02 closePosition / recordFees : part à levier
+// « exposition » rendue au compteur, mise rendue, résultat (perte bornée à la mise), frais (réserve anti-négatif d'abord), frais restés dus, impôt (16,
+// estimé par _fiscLatentTaxUsd sur cette seule position), emprunt versé en argent rendu, part caisse du gain, dette orpheline (P2), réserve du levier
+// recalculée la position encore comptée (comme closePosition), puis la position retirée. Rien n'est écrit. { etat, usd, frais, impot }
+function _invApres(pos) {
+  const ps = S.pairStates[pos.pair], fx = Number(pos._forcedExitPx);
+  const px = (isFinite(fx) && fx > 0) ? fx : (ps ? ps.price : pos.entryPrice);
+  const lt = _posLatent(pos, px), usd = lt.usd, F = _posCloseFees(pos, lt.pct).total, stake = Number(pos.stakeUsdt) || 0;
+  let T = S.tradingAccount || 0, B = S.leverageBorrowed || 0, auto = S._autoLevBorrowed || 0, A = Math.max(0, S.antiNegReserve || 0), C = S.cashAccount || 0;
+  const cash = _posLevCash(pos), expo = Math.max(0, (Number(pos.levBorrowed) || 0) - cash);
+  B -= Math.min(B, expo);
+  const p2 = ((S.leverage || 0) === 0 && auto > 0) ? Math.min(auto, T + stake) : 0;
+  T = Math.max(0, T + stake); T = Math.max(0, T + usd);
+  const res = Math.max(0, (typeof pos._reservedAmount === 'number' && pos._reservedAmount >= 0) ? pos._reservedAmount : F), pris = Math.min(res, A), couvert = Math.min(pris, F);
+  T += pris - couvert; A -= pris; T = Math.max(0, T - (F - couvert));
+  const w = (typeof _activeWallet === 'function') ? _activeWallet() : null;
+  T -= Math.min(Math.max(0, Number(w && w._feesDue) || 0), Math.max(0, T));
+  let impot = 0;
+  if (S.taxConfig && S.taxConfig.region === 'BE' && typeof _fiscOnClose === 'function' && typeof _fiscLatentTaxUsd === 'function') {
+    try { impot = Number(_invAvec({ openPositions: [pos] }, () => _fiscLatentTaxUsd(_walletKey()))) || 0; } catch (e) { impot = 0; }
+  }
+  T = impot > 0 ? T - Math.min(impot, Math.max(0, T)) : T + Math.min(-impot, Math.max(0, S.fiscalReserveAccount || 0));
+  if (cash > 0) { const pay = Math.min(cash, Math.max(0, T), Math.max(0, B)); T -= pay; B -= pay; auto = Math.max(0, auto - pay); }
+  if (usd > 0) {
+    const split = (typeof S.profitSplitCaissePct === 'number' ? S.profitSplitCaissePct : 30) / 100;
+    const toC = Math.min(Math.max(0, usd - F - impot) * split, Math.max(0, T)); T -= toC; C += toC;
+  }
+  if (p2 > 0) {
+    const libre = Math.max(0, B - (S.openPositions || []).reduce((s, p) => s + (p === pos ? 0 : Math.max(0, Number(p && p.levBorrowed) || 0)), 0));
+    const rp = Math.min(p2, Math.max(0, T), auto, libre);
+    if (rp > 0) { T -= rp; B -= rp; auto -= rp; }
+  }
+  const eng = (S.openPositions || []).reduce((s, p) => s + (Number(p && p.stakeUsdt) || 0), 0);
+  const R = Math.max(0, Math.max(0, C + T + eng - B) * 10 - B);
+  return { etat: { tradingAccount: T, leverageBorrowed: B, leverageReserve: R, cashAccount: C, _autoLevBorrowed: auto, antiNegReserve: A,
+    openPositions: (S.openPositions || []).filter(p => p !== pos) }, usd, frais: F, impot };
+}
+// Le plan d'« Inverser » : la fermeture estimée et la réouverture que l'état d'après accepterait (_invChoix sur _invApres). Lecture seule.
+function _invPlan(pos) {
+  const stake = Number(pos.stakeUsdt) || 0;
+  const lev = stake > 0 ? Math.max(1, Math.round((Number(pos.totalExposure) || stake) / stake * 1e6) / 1e6) : 1;   // le levier EXACT de la position (avant : arrondi)
+  const ap = _invApres(pos);
+  const ch = _invAvec(ap.etat, () => _invChoix(pos.pair, stake, lev));
+  return { stake, lev, ap, ch };
+}
+function _invQuestion(pair, side, newSide, p) {
+  const c = p.ch, lt = (L, b, x) => L > 1 + 1e-9 || b > 0 ? ' · ×' + _levTxt((x + b) / x, b < x * (L - 1) - 0.005 ? L : 0) + ' (exposition ' + fmt$2(x + b) + ')' : '';
+  const net = p.ap.usd - p.ap.frais;
+  return '↓ Inverser ' + pair + '\n\n'
+    + '1. Fermer le ' + side.toUpperCase() + ' · mise ' + fmt$2(p.stake) + ' · résultat ≈ ' + (net >= 0 ? '+' : '−') + fmt$2(Math.abs(net)) + ' (frais compris)'
+    + (Math.abs(p.ap.impot) >= 0.005 ? ' · impôt ≈ ' + fmt$2(Math.abs(p.ap.impot)) + (p.ap.impot > 0 ? ' au dépôt fiscal' : ' rendu') : '') + '\n'
+    + '2. Ouvrir un ' + newSide.toUpperCase() + ' · mise ' + fmt$2(c.x) + lt(c.L, c.b, c.x) + '\n'
+    + '   TP / SL aux mêmes distances, mêmes consignes.'
+    + (c.why ? '\n\n⚠ Mise ' + fmt$2(c.x) + ' au lieu de ' + fmt$2(p.stake) + ' : ' + c.why : '')
+    + (c.levWhy ? '\n⚠ ×' + _levTxt(c.eff, c.eff < p.lev - 0.005 ? p.lev : 0) + ' au lieu de ×' + _levTxt(p.lev) + ' : ' + c.levWhy : '');
+}
 function manuInvert(pair) {
   const pos = S.openPositions.find(p => p.pair === pair);
   if(!pos) { showToast('⚠ Pas de position ouverte sur '+pair, 2000, 'warn'); return; }
@@ -2498,46 +2616,40 @@ function manuInvert(pair) {
   const e0 = Number(pos.entryPrice);
   const dist = (x) => (Number(x) > 0 && e0 > 0) ? Math.abs(Number(x) / e0 - 1) * 100 : null;
   const keep = { tpPct: dist(pos.tp), slPct: dist(pos.sl), maxLossPct: pos._manMaxLossPct, timeoutMin: pos._manTimeoutMin };
-  const stake = Number(pos.stakeUsdt) || 0;
-  const lev = stake > 0 ? Math.max(1, Math.round((Number(pos.totalExposure) || stake) / stake)) : 1;
+  const ps = S.pairStates[pair];
+  // [GO N° 62 · 15/11/2026] le plan AVANT de fermer, la question, puis la fermeture
+  let plan = null;
+  try { plan = _invPlan(pos); } catch(e) { try{window._decErr&&window._decErr(e)}catch(_e){} }
+  if (!plan || !ps) { showToast('⚠ ' + pair + ' : inversion impossible à calculer · rien n\'est fermé', 3500, 'warn'); return; }
+  if (!(plan.ch.x >= 0.01)) {
+    showToast('⚠ ' + pair + ' : rien ne pourrait être rouvert en ' + newSide.toUpperCase() + ' (' + (plan.ch.why || '—') + ') · rien n\'est fermé — ✕ pour seulement fermer', 5000, 'warn');
+    return;
+  }
+  if (typeof confirm === 'function' && !confirm(_invQuestion(pair, pos.side, newSide, plan))) { showToast('↓ Inverser ' + pair + ' annulé · rien n\'a changé', 2000, 'info'); return; }
   closePosition(pos.id);
   if (S.openPositions.some(p => p && p.id === pos.id)) { showToast('⚠ '+pair+' : fermeture non aboutie · pas d\'inversion', 3000, 'warn'); return; }
-  const ps = S.pairStates[pair];
-  let np = null;
-  // [GO NETTOYAGE · 19/10/2026] (ETAT n° 60) après la fermeture d'une position perdante d'un compte investi, le trading (emprunt « juste à temps » du levier
-  // compris, 02 ensureLeverageCoverForTrade) ne tient plus la mise d'origine : la nouvelle position s'ouvre avec ce qui est disponible, et c'est dit.
-  // Avant : openPosition refusait (« mise > trading ») — la position était fermée et pas rouverte.
-  let reStake = stake, why = '';
+  // la réouverture annoncée, revérifiée sur l'état RÉEL d'après la fermeture ; différente → nouvelle question avec les vrais montants
+  let ch = plan.ch;
   try {
-    const _ix = Number(S.leverage) || 0;
-    const _jit = _ix >= 1 ? Math.max(0, (typeof _tradingCapitalBase === 'function' ? _tradingCapitalBase() : 0) * Math.min(_ix, S.leverageMaxMult || 10) - (Number(S.leverageBorrowed) || 0)) : 0;
-    const _avail = Math.max(0, Number(S.tradingAccount) || 0) + _jit;
-    if (reStake > _avail) { reStake = Math.floor(_avail * 100) / 100; why = 'c\'est ce que le trading tient après la fermeture'; }
-    // le contrôle de capital de l'ouverture manuelle (09j validateManualExposure, sans écriture), tel qu'openPosition (02) le lit : refus si !ok ET disponible
-    // < la moitié de la mise. La plus grande mise qu'il laisse passer est cherchée sur lui-même (relecture du 19/10 : avec plusieurs positions ouvertes, son
-    // « disponible » retirait deux fois les mises engagées et la mise rouverte tombait à 13,82 $ au lieu de 490 $ — [GO N° 61 · 15/11/2026] corrigé pour
-    // les ouvertures à la main, n° 61 ; la recherche reste pour le levier et les autres plafonds). Limite : la recherche se fait SANS l'emprunt de la part
-    // à levier de la paire, qu'openPosition prend AVANT son contrôle (branche « levier » de la phase 5) — avec un levier de paire, le message peut différer (n° 62).
-    if (typeof validateManualExposure === 'function' && reStake > 0) {
-      const passe = (x) => { const r = validateManualExposure(x, x * (lev - 1)); return !!(r && (r.ok || Number(r.available) >= x * 0.5)); };
-      if (!passe(reStake)) {
-        let lo = 0, hi = reStake;
-        for (let i = 0; i < 40; i++) { const mid = (lo + hi) / 2; if (passe(mid)) lo = mid; else hi = mid; }
-        reStake = Math.floor(lo * 100) / 100; why = 'c\'est ce que le contrôle de capital laisse ouvrir';
-      }
+    const r = _invPasse(ch.x, ch.L);
+    if (!(r.ok && Math.abs(r.b - ch.b) < 0.005)) {
+      const c2 = _invChoix(pair, plan.stake, plan.lev);
+      if (!(c2.x >= 0.01)) { showToast('⚠ ' + pair + ' : ' + pos.side.toUpperCase() + ' fermé, mais ' + newSide.toUpperCase() + ' non rouvert · ' + (c2.why || '—'), 5000, 'warn'); return; }
+      const q2 = '↓ Inverser ' + pair + ' : le ' + pos.side.toUpperCase() + ' est fermé.\n\nLa fermeture a laissé moins que prévu. Ouvrir le ' + newSide.toUpperCase()
+        + ' avec mise ' + fmt$2(c2.x) + ' · ×' + _levTxt(c2.eff, c2.eff < plan.lev - 0.005 ? plan.lev : 0) + ' (au lieu de ' + fmt$2(ch.x) + ' · ×' + _levTxt(ch.eff, ch.eff < plan.lev - 0.005 ? plan.lev : 0) + ' annoncés) ?'
+        + (c2.why ? '\n⚠ ' + c2.why : '') + (c2.levWhy ? '\n⚠ ' + c2.levWhy : '') + '\n\nAnnuler = rien n\'est rouvert.';
+      if (typeof confirm === 'function' && !confirm(q2)) { showToast('⚠ ' + pair + ' : ' + pos.side.toUpperCase() + ' fermé · ' + newSide.toUpperCase() + ' non rouvert (annulé)', 3500, 'warn'); return; }
+      ch = c2;
     }
   } catch(e) { try{window._decErr&&window._decErr(e)}catch(_e){} }
-  if (ps && reStake >= 0.01) {
-    const prevStake = ps.stake, prevLev = ps.pairLeverage;
-    if (reStake > 0) ps.stake = reStake;
-    ps.pairLeverage = lev;
-    try { np = openPosition(pair, newSide, keep); }
-    catch(e) { try{window._decErr&&window._decErr(e)}catch(_e){} }
-    finally { ps.stake = prevStake; ps.pairLeverage = prevLev; }
-  }
-  if (np && reStake < stake - 0.005) showToast('🔄 '+pair+' inversé → '+newSide.toUpperCase()+' · mise $'+reStake.toFixed(2)+' (au lieu de $'+stake.toFixed(2)+' : '+why+')', 4500, 'warn');
-  else if (np) showToast('🔄 '+pair+' inversé → '+newSide.toUpperCase()+' · mise $'+stake, 2500, 'win');
-  else showToast('⚠ '+pair+' fermé, mais '+newSide.toUpperCase()+' non rouvert'+(reStake < 0.01 ? ' (' + (why || 'rien à remiser') + ')' : ''), 3500, 'warn');
+  let np = null;
+  const prevStake = ps.stake, prevLev = ps.pairLeverage;
+  ps.stake = ch.x; ps.pairLeverage = ch.L;
+  try { np = openPosition(pair, newSide, keep); }
+  catch(e) { try{window._decErr&&window._decErr(e)}catch(_e){} }
+  finally { ps.stake = prevStake; ps.pairLeverage = prevLev; }
+  if (np) showToast('🔄 '+pair+' inversé → '+newSide.toUpperCase()+' · mise '+fmt$2(np.stakeUsdt)+(np.totalExposure > np.stakeUsdt + 0.005 ? ' · ×'+_levTxt(np.totalExposure / np.stakeUsdt) : ''), 2500, 'win');
+  else showToast('⚠ '+pair+' : '+pos.side.toUpperCase()+' fermé, mais '+newSide.toUpperCase()+' non rouvert (refusé à l\'ouverture)', 4000, 'warn');
   if(typeof renderActionsGrid === 'function') try { renderActionsGrid(); } catch(e) {}
 }
 window.manuInvert = manuInvert;
