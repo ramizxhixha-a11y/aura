@@ -8,11 +8,11 @@ Sentry : seule l'issue « Sentry branché ».
 
 ## Étapes
 - [x] Démarrage : ETAT, pont etat, Sentry, banc-all
-- [ ] Remède 15b : relecture des plus hauts 1 h depuis l'heure qui suit l'entrée EV (même règle que js/15 liqHist), 1 fois / h / SHORT ;
+- [x] Remède 15b : relecture des plus hauts 1 h depuis l'heure qui suit l'entrée EV (même règle que js/15 liqHist), 1 fois / h / SHORT ;
       mèche ≥ 2 × entrée → fermée AU PRIX DE LA LIQUIDATION (pos._forcedExitPx, comme go n° 80), pas rouverte avant le lundi qui suit la mèche
-- [ ] banc-n108.js (vm) + témoin banc-fixtures/tendance-reelle-avant-n108.js + sans-n108.js / n108-retours.json ; gardes des autres bancs
-- [ ] mutations rejeu/mutations_n108.py
-- [ ] sonde vraie page rejeu/sonde_n108.js (backup 15/11 23:13, mèche simulée dans les bougies 1 h)
+- [x] banc-n108.js (15/15, 11 échecs sur e09d72a) (vm) + témoin banc-fixtures/tendance-reelle-avant-n108.js + sans-n108.js / n108-retours.json ; gardes des autres bancs
+- [x] mutations (22/22 ; mutations_n80 12/12) rejeu/mutations_n108.py
+- [x] sonde vraie page rejeu/sonde_n108.js 7/7 + témoins 2/2 (backup 15/11 23:45 : rejeu/backups/pont/aura_guardian_full_20261115-234506.json)
 - [ ] ETAT, PASSATION, token, banc-all, squash sur main, push, DOC_V raw + Pages
 
 ## Données
