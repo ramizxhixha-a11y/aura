@@ -727,7 +727,7 @@ T('P34 · relecture — le marqueur de 00 (window._auraLastOp, nommé par la lig
 });
 
 // ───────────── J · statique, page, erreurs ─────────────
-T('P35 · textes : de l\'app, le pont n\'appelle que buildSnapshot, _perfOp et (go pont) _auraSentry.signal — liste fermée de ce qu\'il lit sur window ; ni eval, ni Function, ni Math.random, showToast, _decErr, XMLHttpRequest, sendBeacon, WebSocket, cookie ; un seul innerHTML (texte fixe) ; 17 ne connaît ni fetch, ni setInterval, ni écouteur, ni le PAT (une seule minuterie : la borne de 3 s) ; la sonde vise CE fichier, déclaré dans le HTML ; ≤ 500 lignes ; en-têtes au jeton', () => {
+T('P35 · textes : de l\'app, le pont n\'appelle que buildSnapshot, _perfOp, (go pont) _auraSentry.signal et (go n° 107) _auraSentry.avalee — liste fermée de ce qu\'il lit sur window ; ni eval, ni Function, ni Math.random, showToast, _decErr, XMLHttpRequest, sendBeacon, WebSocket, cookie ; un seul innerHTML (texte fixe) ; 17 ne connaît ni fetch, ni setInterval, ni écouteur, ni le PAT (une seule minuterie : la borne de 3 s) ; la sonde vise CE fichier, déclaré dans le HTML ; ≤ 500 lignes ; en-têtes au jeton', () => {
   const p = codeStrict(M.PONT), l = codeStrict(M.LECT);   // les textes SOUS ESSAI (ceux des arguments, pour les mutations)
   for (const [nom, s, brut] of [[F17B, p, M.PONT], [F17, l, M.LECT]]) {
     for (const re of [/\beval\s*\(/, /\bFunction\s*\(/, /Math\.random/, /showToast/, /_decErr/, /XMLHttpRequest/, /sendBeacon/, /WebSocket/, /document\.cookie/, /document\.write/, /insertAdjacentHTML/, /outerHTML/, /\bimport\s*\(/, /setTimeout\(\s*['"`]/, /postMessage/, /\bnew\s+Proxy/, /__defineGetter__|__lookupGetter__/]) assert.ok(!re.test(s), nom + ' : ' + re);

@@ -137,7 +137,7 @@ const MUT = [
   ['b', '401 : essais rapprochés', "PAUSE_LONGUE = 3600000,", "PAUSE_LONGUE = 60000,"],
   ['b', 'hors ligne ignoré', "if (t < st.pauseUntil || !enLigne()) { peindre(); return; }", "if (t < st.pauseUntil) { peindre(); return; }"],
   ['b', 'pause ignorée', "if (t < st.pauseUntil || !enLigne()) { peindre(); return; }", "if (!enLigne()) { peindre(); return; }"],
-  ['b', 'délai d\'abandon retiré', "rate(new Error('délai dépassé')); }, delai || T_GET);", "rate(new Error('délai dépassé')); }, 1e9);"],
+  ['b', 'délai d\'abandon retiré', "rate(reseau('délai dépassé')); }, delai || T_GET);", "rate(reseau('délai dépassé')); }, 1e9);"],   // [GO N° 107 · 16/11/2026] ancre au texte du jour (le délai est marqué « réseau »)
   ['b', 'compression sans délai', "var to = setTimeout(function () { ok(null); }, T_GZIP)", "var to = setTimeout(function () { ok(null); }, 1e9)"],
   ['b', 'sha de etat.json non relu', "    if (r.st === 409 || r.st === 422 || (r.st === 404 && m.sha)) {", "    if (false) {"],
   ['b', 'etat.json retiré du dépôt : non relu', "    if (r.st === 409 || r.st === 422 || (r.st === 404 && m.sha)) {", "    if (r.st === 409 || r.st === 422) {"],

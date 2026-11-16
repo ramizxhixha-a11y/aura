@@ -29,7 +29,7 @@ M = [
  ('verdict : 401 signale aussi « controle »', VERD, VERD.replace('muet(null)', "muet('controle')")),
  ('etat.json refusé : pas compté', ETAT, ''),
  ('etat.json : 401 compté comme « etat »', ETAT, ETAT.replace("? null : 'etat'", "? 'etat' : 'etat'")),
- ('réseau coupé compté comme panne', "    } catch (e) { echec({ st: 0,", "    } catch (e) { muet('etat'); echec({ st: 0,"),
+ ('réseau coupé compté comme panne', "    } catch (e) { if (e && e.reseau === 1) echec({ st: 0,", "    } catch (e) { if (e && e.reseau === 1) muet('etat'), echec({ st: 0,"),   # [GO N° 107 · 16/11/2026] ancre au texte du jour (branche réseau du battement)
  ('PAT disparu en route : arrêt muet (le n° 98 refait)', ROUTE, ''),
  ('PAT disparu en route : sans signal', ROUTE, ROUTE.replace("signaler('disparu'); ", '')),
  ('PAT disparu en route : la marque effacée', ROUTE, ROUTE.replace('couper(DISPARU, true)', 'couper(DISPARU)')),
