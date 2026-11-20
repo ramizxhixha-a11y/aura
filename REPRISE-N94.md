@@ -12,11 +12,11 @@ Constats (*code*) :
 
 ## Étapes
 - [x] Démarrage : pont (app 20261120a, 60 scripts, relance 20/11 22:15), Sentry (rien de neuf), banc-all LIVRABLE sur le brut
-- [ ] Correction : 11 `_activePairKeepLive` (removePair + _replayPairChanges) ; 08 selectPair refuse une paire hors PAIRS
-- [ ] banc-n94.js (vm, témoin `--temoin` sur le code d'avant) + mutations_n94.py
-- [ ] sonde_n94.js (Chromium, vraie page, backup du pont, avant / après)
-- [ ] Relecture adverse (agent séparé)
-- [ ] ETAT, PASSATION, jeton, banc-all, squash sur main, push, DOC_V raw + Pages
+- [x] Correction : 11 `_activePairKeepLive` (removePair + _replayPairChanges) ; 08 selectPair refuse une paire hors PAIRS
+- [x] banc-n94.js (vm, témoin `--temoin` sur le code d'avant) + mutations_n94.py
+- [x] sonde_n94.js (Chromium, vraie page, backup du pont, avant / après)
+- [x] Relecture : par la session seule (registre n° 110 : carte restée)
+- [x] ETAT, PASSATION, jeton 20261120b · [ ] banc-all, squash sur main, push, DOC_V raw + Pages
 
 ## Commandes
 - `node rejeu/pont.js etat` · `node rejeu/pont.js backup` (backup du jour → rejeu/backups/pont/)
