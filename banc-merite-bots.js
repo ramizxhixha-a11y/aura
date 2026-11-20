@@ -9,6 +9,7 @@
 const fs = require('fs'), vm = require('vm'), assert = require('assert'), path = require('path');
 const ROOT = __dirname, rd = f => fs.readFileSync(path.join(ROOT, f), 'utf8');
 let pass = 0, fail = 0;
+const REF = require('./banc-fixtures/note-prouvee-ref.js');   // [GO N° 109 · 20/11/2026]
 function T(name, fn) { try { fn(); pass++; console.log('  ✅ ' + name); } catch (e) { fail++; console.log('  ❌ ' + name + '\n     ' + (e && e.stack || e).toString().split('\n').slice(0, 5).join('\n     ')); } }
 const between = (s, a, b, incl) => { const i = s.indexOf(a); assert.ok(i >= 0, 'ancre début : ' + a.slice(0, 40)); assert.strictEqual(s.indexOf(a, i + 1), -1, 'ancre non unique : ' + a.slice(0, 40)); const j = s.indexOf(b, i + a.length); assert.ok(j > i, 'ancre fin'); return s.slice(i, incl ? j + b.length : j); };
 const codeStrict = s => s.split('\n').filter(l => !/^\s*\/\//.test(l)).join('\n');
@@ -73,7 +74,7 @@ T('D3 · _botJudgeMeasured RÉEL (TWAP, Smart Sizer) : en AA rien ; en EV signe 
   t = mk('paperReal'); const sz = t.S.agents.find(a => a.id === 'smart_sizer_v1');
   assert.strictEqual(t.run("_botJudgeMeasured('smart_sizer_v1', 0.0004, 'taille')"), null, 'zéro n\'est pas une perte');
   [0.3, 0.2, -0.1, 0.4, 0.1].forEach(v => t.run("_botJudgeMeasured('smart_sizer_v1', " + v + ", 'taille')"));
-  assert.strictEqual(sz._judgments.length, 5); assert.strictEqual(sz.fitness, Math.round(350 + 1000 * (0.3 + 0.2 - 0.1 + 0.4 + 0.1) / 1.1), 'fenêtre de SES actes');
+  assert.strictEqual(sz._judgments.length, 5); assert.strictEqual(sz.fitness, REF.deJugements(sz._judgments, 60), 'fenêtre de SES actes'); assert.strictEqual(sz.fitness, 350, '4 bons actes sur 5 : avantage pas prouvé (note brute : 1 168)');   /* [GO N° 109 · 20/11/2026] note prouvée (banc-fixtures/note-prouvee-ref.js) */
   assert.strictEqual(sz.streak, 2); assert.deepStrictEqual([t.S.botMerit.smart_sizer_v1.good, t.S.botMerit.smart_sizer_v1.bad], [4, 1]);
   assert.strictEqual(t.run("_botJudgeMeasured('smart_sizer_v1', NaN, 'x')"), null); assert.strictEqual(t.run("_botJudgeMeasured('smart_sizer_v1', null, 'x')"), null);
 });

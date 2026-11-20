@@ -19,22 +19,23 @@ function mkAgents(n, events, pFn, seed) {
   const r = rng(seed || 7);
   return Array.from({ length: n }, (_, i) => ({ id: 'a' + i, fitness: 350, _judgments: Array.from({ length: events }, (_, t) => ({ s: r() < pFn(i, t) ? 1 : -1, w: 0.5 + r(), k: t + 1 })) }));
 }
+const REF = require('./banc-fixtures/note-prouvee-ref.js');   // [GO N° 109 · 20/11/2026]
 function ctx(S) { const c = { S, Math, Number, Object, Array, JSON, isFinite, String, window: {}, Date }; vm.createContext(c); vm.runInContext(JUDGE + '\n' + RULE, c); return c; }
 console.log('▶ banc-fenetre-jugement');
 
 T('D1 · _fitJudge RÉEL : garde 240 jugements (n° d\'événement k), juge sur la fenêtre EFFECTIVE (60 par défaut, celle de la règle si armée) ; _fitRecomputeAll recalcule tout le monde', () => {
   const S = { _realJudgments: 0, agents: [] }; const c = ctx(S); const a = { fitness: 350 }; c.a = a;
   for (let i = 0; i < 1000; i++) { S._realJudgments++; vm.runInContext('_fitJudge(a, 1, 0.7)', c); }
-  assert.strictEqual(a.fitness, 1350); assert.strictEqual(a._judgments.length, 240); assert.strictEqual(a._judgments[239].k, 1000); assert.strictEqual(a._judgments[0].k, 761);
-  // 100 erreurs puis 20 bonnes : fenêtre 60 → mélange ; fenêtre apprise 20 → 1 350
+  assert.strictEqual(a.fitness, REF.deJugements(a._judgments, 60)); assert.ok(a.fitness > 1200 && a.fitness < 1350); /* [GO N° 109 · 20/11/2026] note prouvée (banc-fixtures/note-prouvee-ref.js) */ assert.strictEqual(a._judgments.length, 240); assert.strictEqual(a._judgments[239].k, 1000); assert.strictEqual(a._judgments[0].k, 761);
+  // 100 erreurs puis 20 bonnes : fenêtre 60 → mélange ; fenêtre apprise 20 → note prouvée de 20 bonnes (≈ 1 028 ; brute : 1 350)
   const b = { fitness: 350 }; c.b = b;
   for (let i = 0; i < 100; i++) vm.runInContext('_fitJudge(b, -1, 1)', c); for (let i = 0; i < 20; i++) vm.runInContext('_fitJudge(b, 1, 1)', c);
   assert.strictEqual(b.fitness, 50, 'fenêtre 60 : 40 erreurs + 20 bonnes → 350 − 333 → plancher 50');
   S.fitWindowRule = { armed: true, window: 20 };
   assert.strictEqual(vm.runInContext('_fitWindow()', c), 20);
   S.agents = [a, b, { fitness: 999 }, { fitness: 500, _judgments: [{ s: 1, w: 1, k: 1 }] }];
-  assert.strictEqual(vm.runInContext('_fitRecomputeAll()', c), 1, 'seul b change (a déjà à 1 350 ; sans jugements ou < 5 : intouchés)');
-  assert.strictEqual(b.fitness, 1350);
+  assert.strictEqual(vm.runInContext('_fitRecomputeAll()', c), 2, 'a et b changent (la note prouvée dépend de la fenêtre : 60 → 20 justes, borne plus basse ; sans jugements ou < 5 : intouchés)'); /* [GO N° 109 · 20/11/2026] note prouvée (banc-fixtures/note-prouvee-ref.js) */
+  assert.strictEqual(b.fitness, REF.deJugements(b._judgments, 20)); assert.strictEqual(a.fitness, REF.deJugements(a._judgments, 20)); assert.strictEqual(a.fitness, b.fitness);
   S.fitWindowRule = { armed: true, window: 9999 }; assert.strictEqual(vm.runInContext('_fitWindow()', c), 60, 'fenêtre hors bornes → défaut');
   S.fitWindowRule = { armed: false, window: 20 }; assert.strictEqual(vm.runInContext('_fitWindow()', c), 60, 'désarmée → défaut');
 });

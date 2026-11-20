@@ -8,6 +8,7 @@
 const fs = require('fs'), vm = require('vm'), assert = require('assert'), path = require('path');
 const ROOT = __dirname, rd = f => fs.readFileSync(path.join(ROOT, f), 'utf8');
 let pass = 0, fail = 0;
+const REF = require('./banc-fixtures/note-prouvee-ref.js');   // [GO N° 109 · 20/11/2026]
 function T(name, fn) { try { fn(); pass++; console.log('  ✅ ' + name); } catch (e) { fail++; console.log('  ❌ ' + name + '\n     ' + (e && e.stack || e).toString().split('\n').slice(0, 6).join('\n     ')); } }
 const between = (s, a, b, incl) => { const i = s.indexOf(a); assert.ok(i >= 0, 'ancre début : ' + a.slice(0, 60)); assert.strictEqual(s.indexOf(a, i + 1), -1, 'ancre non unique : ' + a.slice(0, 60)); const j = s.indexOf(b, i + a.length); assert.ok(j > i, 'ancre fin : ' + b.slice(0, 60)); return s.slice(i, incl ? j + b.length : j); };
 const codeStrict = s => s.split('\n').filter(l => !/^\s*\/\//.test(l)).join('\n');
@@ -100,9 +101,9 @@ T('T2 · bloc RÉEL de 08 : la fitness ne bouge plus d\'un centime ; le portefeu
   const g = { S: { agents: [] }, Math, Number, Array, Object, isFinite, window: {} }; vm.createContext(g); vm.runInContext(FIT + '\n' + WALLET, g);
   const y = { id: 'y', fitness: 350, _judgments: [], lmsrWallet: 12 }; g.S.agents.push(y); g.y = y;
   for (let i = 0; i < 4; i++) vm.runInContext('_fitJudge(y, 1, 1)', g); assert.deepStrictEqual([y.fitness, y.lmsrWallet], [350, 12], '4 jugements : pas de preuve, pas d\'écriture, pas de recharge (comme avant : la fitness débitée restait)');
-  vm.runInContext('_fitJudge(y, 1, 1)', g); assert.deepStrictEqual([y.fitness, y.lmsrWallet], [1350, 1350], '5e jugement : écriture → recharge');
-  y.lmsrWallet = 3; vm.runInContext('_fitJudge(y, 1, 1)', g); assert.deepStrictEqual([y.fitness, y.lmsrWallet], [1350, 1350], 'même valeur réécrite : rechargé quand même (comme avant)');
-  y.lmsrWallet = 3; assert.strictEqual(vm.runInContext('_fitRecomputeAll()', g), 0); assert.strictEqual(y.lmsrWallet, 1350, 'recompute sans changement de valeur : rechargé quand même (avant : la fitness débitée différait toujours → écriture)');
+  vm.runInContext('_fitJudge(y, 1, 1)', g); const P5 = REF.deJugements(y._judgments, 60); assert.ok(P5 > 350); assert.deepStrictEqual([y.fitness, y.lmsrWallet], [P5, P5], '5e jugement : écriture → recharge'); /* [GO N° 109 · 20/11/2026] note prouvée (banc-fixtures/note-prouvee-ref.js) */
+  y.lmsrWallet = 3; vm.runInContext('_fitJudge(y, 1, 1)', g); const P6 = REF.deJugements(y._judgments, 60); assert.deepStrictEqual([y.fitness, y.lmsrWallet], [P6, P6], '6e jugement : rechargé (note prouvée : un juste de plus, borne plus haute)'); /* [GO N° 109 · 20/11/2026] note prouvée (banc-fixtures/note-prouvee-ref.js) */
+  y.lmsrWallet = 3; assert.strictEqual(vm.runInContext('_fitRecomputeAll()', g), 0); assert.strictEqual(y.lmsrWallet, P6, 'recompute sans changement de valeur : rechargé quand même (avant : la fitness débitée différait toujours → écriture)');
   const noProof = { id: 'z', fitness: 350, _judgments: [], lmsrWallet: 9 }; g.S.agents.push(noProof); vm.runInContext('_fitRecomputeAll()', g); assert.strictEqual(noProof.lmsrWallet, 9, 'sans preuve : rien');
   y._judgments = y._judgments.map(j => ({ s: -1, w: 1 })); assert.strictEqual(vm.runInContext('_fitRecomputeAll()', g), 1); assert.deepStrictEqual([y.fitness, y.lmsrWallet], [50, 50], 'recompute qui écrit : recharge');
   const a = { id: 'x', fitness: 777 }; assert.strictEqual(t.c._lmsrWallet(a), 777); a.lmsrWallet = 5; t.c._lmsrRefill(a); assert.strictEqual(a.lmsrWallet, 777); a.fitness = 812; assert.strictEqual(t.c._lmsrRefill(a), 812); t.c._lmsrSpend(a, 12); assert.deepStrictEqual([a.lmsrWallet, a.lmsrSpent], [800, 12]); t.c._lmsrSpend(a, NaN); assert.deepStrictEqual([a.lmsrWallet, a.lmsrSpent], [800, 12]);

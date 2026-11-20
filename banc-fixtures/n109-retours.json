@@ -1,0 +1,28 @@
+{
+"js/03-per-pair-position-buttons-controls-buid.js": [
+[
+"function _fitScale(E) { return Math.max(50, Math.min(2000, Math.round(350 + 1000 * E))); }\n// [NOTE PROUVÉE · 20/11/2026] go n° 109 (porte rejeu/porte_n109.py, remède R2 : ENTRE) — la note (T$) ne monte au-dessus de 350 que si l'avantage est\n// PROUVÉ, même loi que la mise des bots (_botStakeMult) : E = Σ s·w / Σ w, p = (E + 1) / 2, effectif de Kish n = (Σ w)² / Σ w², borne basse de Wilson\n// à 95 % ; E ≤ 0 → E inchangé ; borne > 50 % → 2·borne − 1 ; sinon 0 (350). Avant : 350 + 1 000 × E brut, sur 20 jugements (< 1 h de marché) — Futures·Levier\n// 736, Stat·OBV 706, Scalper 638 sans aucune preuve (backup du pont 20/11 21:28). Porte, 24 mois d'archives : la note brute prédit quelle voix aura\n// raison le lendemain (Spearman +0,104, z 7,4) ; la note prouvée le garde (+0,099, z 7,1 ; écart z 1,6 < 3,2). Ce qu'elle touche : la note seule\n// (évolution, sortie « signal inversé », mémoire, conseil du roster, écran) — PAS le poids d'une voix dans la décision commune (_dcMeritHz lit _vjE\n// brut), ni la mise des bots (_botStakeMult, sa propre preuve), ni la règle de fenêtre (10i _fitWindowEval rejoue la fitness brute : son choix, mesuré\n// ainsi, bat 60 hors échantillon — R1 n'entre pas). n : effectif de repli si Σ w² est nul.\nfunction _fitProven(sw, se, sw2, n) {\n  var E = sw > 0 ? se / sw : 0;\n  if (!(E > 0)) return E;\n  var k = sw2 > 0 ? (sw * sw) / sw2 : n, z = 1.96, p = (E + 1) / 2;\n  if (!(k > 0)) return 0;\n  var lo = (p + z * z / (2 * k) - z * Math.sqrt(Math.max(0, p * (1 - p) / k + z * z / (4 * k * k)))) / (1 + z * z / k);   // Wilson, comme _botStakeMult\n  return lo > 0.5 ? 2 * lo - 1 : 0;\n}\n// Fitness sur les W derniers jugements d'une liste (pur) ; null si moins de FIT_MIN_N. [NOTE PROUVÉE · 20/11/2026] E prouvé (_fitProven).\nfunction _fitOf(js, W) {",
+"function _fitScale(E) { return Math.max(50, Math.min(2000, Math.round(350 + 1000 * E))); }\n// Fitness sur les W derniers jugements d'une liste (pur) ; null si moins de FIT_MIN_N.\nfunction _fitOf(js, W) {"
+],
+[
+"  if (n - start < FIT_MIN_N) return null;\n  var sw = 0, se = 0, sw2 = 0;\n  for (var i = start; i < n; i++) { sw += js[i].w; se += js[i].s * js[i].w; sw2 += js[i].w * js[i].w; }\n  return _fitScale(_fitProven(sw, se, sw2, n - start));\n}",
+"  if (n - start < FIT_MIN_N) return null;\n  var sw = 0, se = 0;\n  for (var i = start; i < n; i++) { sw += js[i].w; se += js[i].s * js[i].w; }\n  var E = sw > 0 ? se / sw : 0;\n  return _fitScale(E);\n}"
+],
+[
+"window._fitJudge = _fitJudge;\nwindow._fitWindow = _fitWindow; window._fitOf = _fitOf; window._fitRecomputeAll = _fitRecomputeAll; window._fitScale = _fitScale; window._fitProven = _fitProven;\n",
+"window._fitJudge = _fitJudge;\nwindow._fitWindow = _fitWindow; window._fitOf = _fitOf; window._fitRecomputeAll = _fitRecomputeAll; window._fitScale = _fitScale;\n"
+],
+[
+"// horizon ; null tant qu'un horizon a moins de 5 jugements. Sert au poids de la voix (_dcMeritHz, borné à 0) et à la fitness du siège (_fitHz).\n// [NOTE PROUVÉE · 20/11/2026] prouve (vrai pour la note du siège, _fitHz ; jamais pour le poids de la voix, _dcMeritHz) : chaque E_h prouvé (_fitProven,\n// s·w = v·D, w = |v·D|) avant la moyenne des 5 horizons.\nfunction _vjE(id, W, prouve) {\n  const T = S.dcThreshold, Jv = T && T.vHz && T.vHz[id];",
+"// horizon ; null tant qu'un horizon a moins de 5 jugements. Sert au poids de la voix (_dcMeritHz, borné à 0) et à la fitness du siège (_fitHz).\nfunction _vjE(id, W) {\n  const T = S.dcThreshold, Jv = T && T.vHz && T.vHz[id];"
+],
+[
+"    if (n < nMin) return null;\n    let a = 0, b = 0, b2 = 0;\n    for (let j = Math.max(0, L.length - 2 * W); j + 1 < L.length; j += 2) { const x = Number(L[j]) * Number(L[j + 1]); if (isFinite(x)) { a += x; b += Math.abs(x); b2 += x * x; } }\n    s += prouve ? _fitProven(b, a, b2, n) : (b > 0 ? a / b : 0);\n  }",
+"    if (n < nMin) return null;\n    let a = 0, b = 0;\n    for (let j = Math.max(0, L.length - 2 * W); j + 1 < L.length; j += 2) { const x = Number(L[j]) * Number(L[j + 1]); if (isFinite(x)) { a += x; b += Math.abs(x); } }\n    s += b > 0 ? a / b : 0;\n  }"
+],
+[
+"    if (!a || a.isBot || a.isMeta || a.id === 'composite' || typeof a.id !== 'string') return null;\n    const e = _vjE(a.id, (typeof _fitWindow === 'function') ? _fitWindow() : 60, true);   // [NOTE PROUVÉE · 20/11/2026] note prouvée\n    return e === null ? null : _fitScale(e);",
+"    if (!a || a.isBot || a.isMeta || a.id === 'composite' || typeof a.id !== 'string') return null;\n    const e = _vjE(a.id, (typeof _fitWindow === 'function') ? _fitWindow() : 60);\n    return e === null ? null : _fitScale(e);"
+]
+]
+}
