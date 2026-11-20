@@ -1,0 +1,26 @@
+{
+"js/08-learning-history-render.js": [
+[
+"function selectPair(pair) {\n  if (!PAIRS[pair]) return;   // [GO N° 94 · 20/11/2026] (ETAT n° 94) une paire retirée ne revient pas à l'écran (sa carte du marché reste jusqu'à la relance : 03 drawMiniCharts)\n  S.activePair = pair;",
+"function selectPair(pair) {\n  S.activePair = pair;"
+]
+],
+"js/11-gestion-paires.js": [
+[
+"  try { if (typeof _ensureWalletStore === 'function') _ensureWalletStore(); } catch (e) {}\n  try { _activePairKeepLive(); } catch (e) { try{window._decErr&&window._decErr(e)}catch(_e){} }   // [GO N° 94] S.activePair repart de 'BTC/USDT' (02), qui peut être retirée\n}",
+"  try { if (typeof _ensureWalletStore === 'function') _ensureWalletStore(); } catch (e) {}\n}"
+],
+[
+"}\n\n// [GO N° 94 · 20/11/2026] (ETAT n° 94) la paire à l'écran (S.activePair : graphique, prix, analyse, débat, « FORCER ») est toujours une paire VIVANTE (dans PAIRS).\n// Avant : retirer la paire à l'écran la laissait là — 02 ACFG() rendait undefined, 08 renderMarket (cfg.color) et 02 drawMobileChart levaient à chaque battement de\n// l'écran Marché, renderAll s'arrêtait à renderMarket (chaîne, bandeau, matrice non repeints), 04 forceTrade visait la paire retirée. Même panne au lancement si\n// BTC/USDT est retirée : S.activePair n'est pas sauvé, il repart de 'BTC/USDT' (02) et _replayPairChanges la retire. Sa remplaçante : la 1re paire de PAIRS\n// (l'ordre des puces) qui a son état dans le portefeuille à l'écran. Rend { from, to } quand elle change, null sinon ; rien d'autre n'est touché.\nfunction _activePairKeepLive() {\n  if (typeof S === 'undefined' || !S) return null;\n  if (PAIRS[S.activePair]) return null;\n  var keys = Object.keys(PAIRS), ps = S.pairStates || {}, next = null;\n  for (var i = 0; i < keys.length; i++) { if (ps[keys[i]]) { next = keys[i]; break; } }\n  if (!next) next = keys[0] || null;\n  if (!next) return null;\n  var was = S.activePair;\n  S.activePair = next;\n  return { from: was, to: next };\n}\nwindow._activePairKeepLive = _activePairKeepLive;\n",
+"}\n"
+],
+[
+"    delete PAIRS[pair];\n    var _ap = _activePairKeepLive();   // [GO N° 94 · 20/11/2026] la paire retirée était à l'écran : la 1re paire vivante prend sa place\n    if (S.removedPairs.indexOf(pair) === -1) S.removedPairs.push(pair);",
+"    delete PAIRS[pair];\n    if (S.removedPairs.indexOf(pair) === -1) S.removedPairs.push(pair);"
+],
+[
+"    } catch (e) {}\n    _pairLog('➖', 'Paire retirée : ' + pair + ' · mémoire conservée (ré-ajout = LMSR/stats restitués)' + (_ap ? ' · à l’écran : ' + _ap.to : ''));\n    try { if (typeof saveState === 'function') saveState(true); } catch (e) {}",
+"    } catch (e) {}\n    _pairLog('➖', 'Paire retirée : ' + pair + ' · mémoire conservée (ré-ajout = LMSR/stats restitués)');\n    try { if (typeof saveState === 'function') saveState(true); } catch (e) {}"
+]
+]
+}
