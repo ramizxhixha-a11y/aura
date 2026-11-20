@@ -17,7 +17,8 @@ Code de départ : `main` e84e8ae (token 20261116b). Branche : `travail/n109`.
       W20 +0,104 z 7,41 / W60 +0,082 z 5,97 ; R2 +0,099 z 7,10 / +0,079 z 5,75 ; écart d'aujourd'hui − R2 z 1,60 / 1,11 < 3,2).
       D1 : M0 25/25 T$, règle rejouée identique ; armement vivant NON prouvé (borne 39,6 %). R2 seul (W 20) : 12 T$ changent.
       Commande : `python3 -I rejeu/porte_n109.py --d1 rejeu/backups/pont/aura_guardian_full_20261120-212812.json --data /home/claude/talent/p --votes /home/claude/talent/v_a /home/claude/talent/v_b --out rejeu/out/porte_n109/resultat.json` (~30 s).
-- [ ] R2 seul : code 03 (`_fitProven`, `_fitOf`, `_vjE(id, W, prouve)` lu par `_fitHz` seulement ; `_dcMeritHz` et 10i inchangés), banc-n109.js, mutations, sonde vraie page.
-- [ ] ETAT, PASSATION, banc-all, un commit sur main, push, DOC_V raw + Pages.
+- [x] R2 seul : code 03 (`_fitProven`, `_fitOf`, `_vjE(id, W, prouve)` lu par `_fitHz` seulement ; `_dcMeritHz` et 10i inchangés), banc-n109.js, mutations, sonde vraie page.
+- [x] banc-n109 7/7 (témoin 6 échecs), mutations 14/14, sonde vraie page 6/6 ; ETAT, PASSATION ; banc-all LIVRABLE (20261120a).
+- [ ] un commit sur main (squash, sans cette note), push, DOC_V raw + Pages.
 
 ## Notes
