@@ -181,6 +181,7 @@ function renderMarket() {
 }
 
 function selectPair(pair) {
+  if (!PAIRS[pair]) return;   // [GO N° 94 · 20/11/2026] (ETAT n° 94) une paire retirée ne revient pas à l'écran (sa carte du marché reste jusqu'à la relance : 03 drawMiniCharts)
   S.activePair = pair;
   renderMarket();
   drawMobileChart();

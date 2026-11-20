@@ -61,7 +61,26 @@ function _replayPairChanges() {
   // (backup du 14/10 18:45 : RE 10 paires, EV 13), alors que la liste RE les coche ; l'écran RE plantait (07 renderPairPnl) 1 battement sur 2 (ETAT n° 10).
   // _ensureWalletStore ajoute ce qui manque, n'écrase rien.
   try { if (typeof _ensureWalletStore === 'function') _ensureWalletStore(); } catch (e) {}
+  try { _activePairKeepLive(); } catch (e) { try{window._decErr&&window._decErr(e)}catch(_e){} }   // [GO N° 94] S.activePair repart de 'BTC/USDT' (02), qui peut être retirée
 }
+
+// [GO N° 94 · 20/11/2026] (ETAT n° 94) la paire à l'écran (S.activePair : graphique, prix, analyse, débat, « FORCER ») est toujours une paire VIVANTE (dans PAIRS).
+// Avant : retirer la paire à l'écran la laissait là — 02 ACFG() rendait undefined, 08 renderMarket (cfg.color) et 02 drawMobileChart levaient à chaque battement de
+// l'écran Marché, renderAll s'arrêtait à renderMarket (chaîne, bandeau, matrice non repeints), 04 forceTrade visait la paire retirée. Même panne au lancement si
+// BTC/USDT est retirée : S.activePair n'est pas sauvé, il repart de 'BTC/USDT' (02) et _replayPairChanges la retire. Sa remplaçante : la 1re paire de PAIRS
+// (l'ordre des puces) qui a son état dans le portefeuille à l'écran. Rend { from, to } quand elle change, null sinon ; rien d'autre n'est touché.
+function _activePairKeepLive() {
+  if (typeof S === 'undefined' || !S) return null;
+  if (PAIRS[S.activePair]) return null;
+  var keys = Object.keys(PAIRS), ps = S.pairStates || {}, next = null;
+  for (var i = 0; i < keys.length; i++) { if (ps[keys[i]]) { next = keys[i]; break; } }
+  if (!next) next = keys[0] || null;
+  if (!next) return null;
+  var was = S.activePair;
+  S.activePair = next;
+  return { from: was, to: next };
+}
+window._activePairKeepLive = _activePairKeepLive;
 
 // ── AJOUT ────────────────────────────────────────────────────────────────
 async function addPair(input) {
@@ -134,6 +153,7 @@ function removePair(pair) {
     if (held.length) return { ok: false, reason: 'position ouverte sur ' + pair + ' (' + held.join(',') + ') — fermer d\u2019abord' };
 
     delete PAIRS[pair];
+    var _ap = _activePairKeepLive();   // [GO N° 94 · 20/11/2026] la paire retirée était à l'écran : la 1re paire vivante prend sa place
     if (S.removedPairs.indexOf(pair) === -1) S.removedPairs.push(pair);
     try { if (S.paperRealActivePairs) delete S.paperRealActivePairs[pair]; } catch (e) {}
     try {
@@ -141,7 +161,7 @@ function removePair(pair) {
         _bgCollectorWSMap[pair].close(); delete _bgCollectorWSMap[pair];
       }
     } catch (e) {}
-    _pairLog('➖', 'Paire retirée : ' + pair + ' · mémoire conservée (ré-ajout = LMSR/stats restitués)');
+    _pairLog('➖', 'Paire retirée : ' + pair + ' · mémoire conservée (ré-ajout = LMSR/stats restitués)' + (_ap ? ' · à l’écran : ' + _ap.to : ''));
     try { if (typeof saveState === 'function') saveState(true); } catch (e) {}
     try { if (typeof renderAll === 'function') renderAll(); } catch (e) {}
     return { ok: true };
