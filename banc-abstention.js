@@ -9,6 +9,7 @@
 'use strict';
 const fs = require('fs'), vm = require('vm'), assert = require('assert'), path = require('path');
 const ROOT = __dirname, rd = f => fs.readFileSync(path.join(ROOT, f), 'utf8');
+const REF = require('./banc-fixtures/note-prouvee-ref.js');   // [GO N° 109 · 20/11/2026]
 let pass = 0, fail = 0;
 function T(name, fn) { try { fn(); pass++; console.log('  ✅ ' + name); } catch (e) { fail++; console.log('  ❌ ' + name + '\n     ' + (e && e.stack || e).toString().split('\n').slice(0, 6).join('\n     ')); } }
 const between = (s, a, b, incl) => { const i = s.indexOf(a); assert.ok(i >= 0, 'ancre début : ' + a.slice(0, 50)); assert.strictEqual(s.indexOf(a, i + 1), -1, 'ancre non unique : ' + a.slice(0, 50)); const j = s.indexOf(b, i + a.length); assert.ok(j > i, 'ancre fin : ' + b.slice(0, 40)); return s.slice(i, incl ? j + b.length : j); };
@@ -86,7 +87,7 @@ T('D3 · le siège qui s\'abstient garde la fitness de SA fenêtre : un nouveau-
   const f = ag(c, MUTE_SCOUT); f._judgments = Array.from({ length: 6 }, () => ({ s: 1, w: 0.5, k: 0 })); f.fitness = 1310;   // fenêtre → 1 350, affichée dérivée
   lose(c, 12);
   assert.strictEqual(hold.fitness, 350, 'naissance conservée'); assert.strictEqual(hold._judgments.length, 0);
-  assert.strictEqual(f.fitness, 1350, 'fitness = sa fenêtre'); assert.strictEqual(f._judgments.length, 6, 'aucun jugement ajouté');
+  assert.strictEqual(f.fitness, REF.deJugements(f._judgments, 60), 'fitness = sa fenêtre'); assert.ok(f.fitness > 350 && f.fitness !== 1310, 'affichée dérivée effacée'); /* [GO N° 109 · 20/11/2026] note prouvée (banc-fixtures/note-prouvee-ref.js) */ assert.strictEqual(f._judgments.length, 6, 'aucun jugement ajouté');
 });
 T('D4 · essai de l\'Évolueur RÉEL : une abstention n\'est jugée ni pour le nouveau génome ni pour l\'ancien ; si un seul des deux parle, lui seul est jugé', () => {
   const c = { S: { agents: [{ id: 'trend_v2' }, { id: 'evolver_v1', isMeta: true, _judgments: [] }], pairStates: { 'BTC/USDT': { roster: { shadow: { trend_v2: -0.5 } } } }, chainLog: [] }, Math, Number, Object, JSON, Date, window: {}, console };
@@ -114,7 +115,7 @@ T('D5 · migration RÉELLE (une fois) : poids plancher retirés des fenêtres de
     { id: 'evolver_v1', isMeta: true, fitness: 50, _judgments: jj(6, -1, 0.01) }] };
   const c = runMigr(S), A = id => S.agents.find(a => a.id === id);
   assert.deepStrictEqual([A('macro_v1')._judgments.length, A('macro_v1').fitness, A('macro_v1').errors], [0, 350, 0], 'que des abstentions → neutre');
-  assert.deepStrictEqual([A('security_v1')._judgments.length, A('security_v1').fitness, A('security_v1').errors], [30, 683, 5], 'vrais votes gardés : 350 + 1000 × (8 − 4) / 12');
+  assert.deepStrictEqual([A('security_v1')._judgments.length, A('security_v1').fitness, A('security_v1').errors], [30, REF.deJugements(A('security_v1')._judgments, 60), 5], 'vrais votes gardés : 20 justes sur 30, E = (8 − 4) / 12 — note prouvée (brute : 683)'); assert.strictEqual(A('security_v1').fitness, 350, '67 % sur 30 : pas prouvé'); /* [GO N° 109 · 20/11/2026] note prouvée (banc-fixtures/note-prouvee-ref.js) */
   assert.deepStrictEqual([A('trend_v2')._judgments.length, A('trend_v2').fitness], [0, 520], 'moins de 5 jugements : fitness de naissance gardée');
   assert.deepStrictEqual([A('nlp_v1')._judgments.length, A('nlp_v1').fitness], [8, 1350]);
   assert.deepStrictEqual([A('exec_bot_v1')._judgments.length, A('exec_bot_v1').fitness, A('evolver_v1')._judgments.length], [10, 50, 6], 'bots et Évolueur : autres juges');

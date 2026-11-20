@@ -144,7 +144,7 @@ T('V6 · VRAI 09b2 loadState : l\'appel vient juste après celui des bornes (apr
 
 T('G · garde : fichiers de la décision, 02, 09b1, 11 au texte d\'avant (empreintes du commit 15eb7af)', () => {
   const H = {"js/02-state-init.js":"9f458ee895a6c0bc", "js/03-per-pair-position-buttons-controls-buid.js":"edeb1cf93142e44b", "js/04-v8-0-livraison-35-mode-max-permissif-v.js":"56365f1615101466", "js/07-v90-mode-bunker-sos.js":"037d807afdbdafed", "js/09b1-build-snapshot.js":"393c4df7cf1df426", "js/09c-auto-open.js":"cb981dcbb9806d73", "js/09j-helpers.js":"469be1c86f4a9337", "js/10f-resolveur-cycle.js":"9935b3138d2a97b0", "js/11-gestion-paires.js":"9c5179b84cae2ea3", "js/15-voix-tendance.js":"9757929e4b295254", "js/15b-tendance-reelle.js":"08582a20cd8f495a", "js/16-fiscal.js":"18d61b55137bc8f3"};
-  Object.keys(H).forEach(f => assert.strictEqual(h16(require('./banc-fixtures/sans-n80.js')(require('./banc-fixtures/sans-n108.js')(rd(f), f), f)), H[f], f + ' a changé'));   // [GO N° 80 · 15/11/2026] hors go n° 80 (15b : liquidation de la poche au prix de la liquidation, banc-n80.js) · [GO N° 108 · 15/11/2026] hors go n° 108 (15b : liquidation propre de l'EV relue sur les bougies 1 h, banc-fixtures/sans-n108.js)
+  Object.keys(H).forEach(f => assert.strictEqual(h16(require('./banc-fixtures/sans-n80.js')(require('./banc-fixtures/sans-n108.js')(require('./banc-fixtures/sans-n109.js')(rd(f), f), f), f)), H[f], f + ' a changé'));   // [GO N° 80 · 15/11/2026] hors go n° 80 (15b : liquidation de la poche au prix de la liquidation, banc-n80.js) · [GO N° 108 · 15/11/2026] hors go n° 108 (15b : liquidation propre de l'EV relue sur les bougies 1 h, banc-fixtures/sans-n108.js)   // [GO N° 109 · 20/11/2026] hors go n° 109 (03 : note prouvée, banc-fixtures/sans-n109.js)
 });
 
 T('C · appels : _schoolVolFromReal ← 09b2 loadState seul ; écrivains de cfg.vol : 02 (2) + 08 ; lecteurs : la liste connue', () => {
@@ -166,7 +166,7 @@ T('C · appels : _schoolVolFromReal ← 09b2 loadState seul ; écrivains de cfg.
 T('F · garde : banc-fixtures/n106-retours.json redonne 08 et 09b2 du commit 15eb7af au caractère près', () => {
   if (!NOUVEAU) return;   // code d'avant : rien à retirer
   const A = {"js/08-learning-history-render.js":"01642da3956a9670", "js/09b2-save-load.js":"246e0b7eb4e21195"};
-  Object.keys(A).forEach(f => { const s = rd(f); assert.notStrictEqual(h16(s), A[f], f + ' : la retouche manque'); assert.strictEqual(h16(sansN106(s, f)), A[f], f + ' : autre chose a bougé'); });
+  Object.keys(A).forEach(f => { const s = require('./banc-fixtures/sans-n109.js')(rd(f), f); assert.notStrictEqual(h16(s), A[f], f + ' : la retouche manque'); assert.strictEqual(h16(sansN106(s, f)), A[f], f + ' : autre chose a bougé'); });   // [GO N° 109 · 20/11/2026] hors go n° 109 (03 : note prouvée, banc-fixtures/sans-n109.js)
 });
 
 console.log('\n' + (fail ? '❌' : '✅') + ' ' + pass + '/' + (pass + fail) + ' tests passés' + (fail ? ' — ' + fail + ' ÉCHEC(S)' : ''));

@@ -1259,14 +1259,29 @@ function _fitWindow() {
 }
 // Échelle de la fitness — une seule, pour la bougie (_fitOf) et les horizons (_fitHz) : 350 + 1 000 × E, bornée 50-2 000. [FITNESS AUX HORIZONS · 28/09/2026]
 function _fitScale(E) { return Math.max(50, Math.min(2000, Math.round(350 + 1000 * E))); }
-// Fitness sur les W derniers jugements d'une liste (pur) ; null si moins de FIT_MIN_N.
+// [NOTE PROUVÉE · 20/11/2026] go n° 109 (porte rejeu/porte_n109.py, remède R2 : ENTRE) — la note (T$) ne monte au-dessus de 350 que si l'avantage est
+// PROUVÉ, même loi que la mise des bots (_botStakeMult) : E = Σ s·w / Σ w, p = (E + 1) / 2, effectif de Kish n = (Σ w)² / Σ w², borne basse de Wilson
+// à 95 % ; E ≤ 0 → E inchangé ; borne > 50 % → 2·borne − 1 ; sinon 0 (350). Avant : 350 + 1 000 × E brut, sur 20 jugements (< 1 h de marché) — Futures·Levier
+// 736, Stat·OBV 706, Scalper 638 sans aucune preuve (backup du pont 20/11 21:28). Porte, 24 mois d'archives : la note brute prédit quelle voix aura
+// raison le lendemain (Spearman +0,104, z 7,4) ; la note prouvée le garde (+0,099, z 7,1 ; écart z 1,6 < 3,2). Ce qu'elle touche : la note seule
+// (évolution, sortie « signal inversé », mémoire, conseil du roster, écran) — PAS le poids d'une voix dans la décision commune (_dcMeritHz lit _vjE
+// brut), ni la mise des bots (_botStakeMult, sa propre preuve), ni la règle de fenêtre (10i _fitWindowEval rejoue la fitness brute : son choix, mesuré
+// ainsi, bat 60 hors échantillon — R1 n'entre pas). n : effectif de repli si Σ w² est nul.
+function _fitProven(sw, se, sw2, n) {
+  var E = sw > 0 ? se / sw : 0;
+  if (!(E > 0)) return E;
+  var k = sw2 > 0 ? (sw * sw) / sw2 : n, z = 1.96, p = (E + 1) / 2;
+  if (!(k > 0)) return 0;
+  var lo = (p + z * z / (2 * k) - z * Math.sqrt(Math.max(0, p * (1 - p) / k + z * z / (4 * k * k)))) / (1 + z * z / k);   // Wilson, comme _botStakeMult
+  return lo > 0.5 ? 2 * lo - 1 : 0;
+}
+// Fitness sur les W derniers jugements d'une liste (pur) ; null si moins de FIT_MIN_N. [NOTE PROUVÉE · 20/11/2026] E prouvé (_fitProven).
 function _fitOf(js, W) {
   var n = js.length, start = Math.max(0, n - W);
   if (n - start < FIT_MIN_N) return null;
-  var sw = 0, se = 0;
-  for (var i = start; i < n; i++) { sw += js[i].w; se += js[i].s * js[i].w; }
-  var E = sw > 0 ? se / sw : 0;
-  return _fitScale(E);
+  var sw = 0, se = 0, sw2 = 0;
+  for (var i = start; i < n; i++) { sw += js[i].w; se += js[i].s * js[i].w; sw2 += js[i].w * js[i].w; }
+  return _fitScale(_fitProven(sw, se, sw2, n - start));
 }
 function _fitJudge(a, sign, w) {
   if (!a) return 0;
@@ -1293,7 +1308,7 @@ function _fitRecomputeAll(only) {
   return n;
 }
 window._fitJudge = _fitJudge;
-window._fitWindow = _fitWindow; window._fitOf = _fitOf; window._fitRecomputeAll = _fitRecomputeAll; window._fitScale = _fitScale;
+window._fitWindow = _fitWindow; window._fitOf = _fitOf; window._fitRecomputeAll = _fitRecomputeAll; window._fitScale = _fitScale; window._fitProven = _fitProven;
 
 function learnFromOutcome(source, pnlPct, pair) {
   // ═══ [ÉCOLE · 17/09/2026] L'ÉCOLE NE NOTE PLUS (décision Rams 17/09) ═══
@@ -7261,7 +7276,9 @@ function _vjReset(id) {
 // de la fitness) ; null tant qu'un horizon a moins de 5 jugements (la décision prend alors son ancien poids). Une erreur ici est signalée (_decErr).
 // [FITNESS AUX HORIZONS · 28/09/2026] Le bilan aux horizons d'une voix, brut : moyenne des E_h ∈ [−1, 1] sur ses W derniers jugements à chaque
 // horizon ; null tant qu'un horizon a moins de 5 jugements. Sert au poids de la voix (_dcMeritHz, borné à 0) et à la fitness du siège (_fitHz).
-function _vjE(id, W) {
+// [NOTE PROUVÉE · 20/11/2026] prouve (vrai pour la note du siège, _fitHz ; jamais pour le poids de la voix, _dcMeritHz) : chaque E_h prouvé (_fitProven,
+// s·w = v·D, w = |v·D|) avant la moyenne des 5 horizons.
+function _vjE(id, W, prouve) {
   const T = S.dcThreshold, Jv = T && T.vHz && T.vHz[id];
   if (!Array.isArray(Jv) || Jv.length !== TH_HZ.length) return null;
   const nMin = (typeof FIT_MIN_N !== 'undefined') ? FIT_MIN_N : 5;
@@ -7269,9 +7286,9 @@ function _vjE(id, W) {
   for (let i = 0; i < Jv.length; i++) {
     const L = Array.isArray(Jv[i]) ? Jv[i] : [], n = Math.min(L.length >> 1, W);   // à plat : v, D, v, D, … ; comptés dans la fenêtre, comme _dcMerit
     if (n < nMin) return null;
-    let a = 0, b = 0;
-    for (let j = Math.max(0, L.length - 2 * W); j + 1 < L.length; j += 2) { const x = Number(L[j]) * Number(L[j + 1]); if (isFinite(x)) { a += x; b += Math.abs(x); } }
-    s += b > 0 ? a / b : 0;
+    let a = 0, b = 0, b2 = 0;
+    for (let j = Math.max(0, L.length - 2 * W); j + 1 < L.length; j += 2) { const x = Number(L[j]) * Number(L[j + 1]); if (isFinite(x)) { a += x; b += Math.abs(x); b2 += x * x; } }
+    s += prouve ? _fitProven(b, a, b2, n) : (b > 0 ? a / b : 0);
   }
   return s / Jv.length;
 }
@@ -7312,7 +7329,7 @@ function _dcMeritHz(id) {
 function _fitHz(a) {
   try {
     if (!a || a.isBot || a.isMeta || a.id === 'composite' || typeof a.id !== 'string') return null;
-    const e = _vjE(a.id, (typeof _fitWindow === 'function') ? _fitWindow() : 60);
+    const e = _vjE(a.id, (typeof _fitWindow === 'function') ? _fitWindow() : 60, true);   // [NOTE PROUVÉE · 20/11/2026] note prouvée
     return e === null ? null : _fitScale(e);
   } catch (e) { try { window._decErr && window._decErr(e); } catch (_e) {} return null; }
 }

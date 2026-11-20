@@ -14,12 +14,14 @@ const between = (s, a, b, incl) => { const i = s.indexOf(a); assert.ok(i >= 0, '
 const codeStrict = s => s.split('\n').filter(l => !/^\s*\/\//.test(l)).join('\n');
 const s03 = rd('js/03-per-pair-position-buttons-controls-buid.js');
 function ctx() { const c = { Math, Number, Array, window: {} }; vm.createContext(c); vm.runInContext(between(s03, 'const FIT_WINDOW = 60, FIT_MIN_N = 5;', 'window._fitJudge = _fitJudge;', true), c); return c; }
+const REF = require('./banc-fixtures/note-prouvee-ref.js');   // [GO N° 109 · 20/11/2026]
 const judge = (c, a, s, w) => { c.a = a; c.s = s; c.w = w; return vm.runInContext('_fitJudge(a, s, w)', c); };
 console.log('▶ banc-fitness-glissante');
 T('D1 · 1 000 bonnes réponses : fitness plafonne à 1 350, jamais 2 000 ; 240 jugements gardés (fenêtre effective 60 par défaut — [FENÊTRE APPRENANTE 26/09])', () => {
   const c = ctx(), a = { fitness: 350 };
   let mx = 0; for (let i = 0; i < 1000; i++) mx = Math.max(mx, judge(c, a, 1, 0.5 + (i % 7) * 0.1));
-  assert.strictEqual(a.fitness, 1350); assert.strictEqual(mx, 1350); assert.strictEqual(a._judgments.length, 240);
+  const P = REF.deJugements(a._judgments, 60);   // [GO N° 109 · 20/11/2026] note PROUVÉE (Kish + Wilson 95 %, banc-fixtures/note-prouvee-ref.js) : le plafond n'est plus 1 350 (note brute), il reste sous 2 000
+  assert.ok(P > 1200 && P < 1350, 'plafond prouvé ' + P); assert.strictEqual(a.fitness, P); assert.strictEqual(mx, P); assert.strictEqual(a._judgments.length, 240);
 });
 T('D2 · pile-ou-face pondéré : fitness ≈ 350 (poids symétriques) ; 1 000 erreurs : plancher 50', () => {
   const c = ctx(), a = { fitness: 650 };
@@ -30,14 +32,15 @@ T('D2 · pile-ou-face pondéré : fitness ≈ 350 (poids symétriques) ; 1 000 e
 T('D3 · un siège à 80 % (≈ 950) qui se met à perdre passe sous 600 en moins de 30 jugements', () => {
   const c = ctx(), a = { fitness: 350 };
   for (let i = 0; i < 200; i++) judge(c, a, i % 5 === 0 ? -1 : 1, 1);
-  assert.ok(a.fitness >= 900 && a.fitness <= 1000, '80 % → ' + a.fitness);
+  assert.strictEqual(a.fitness, REF.deJugements(a._judgments, 60), '80 % → ' + a.fitness);   // [GO N° 109 · 20/11/2026] note prouvée : 80 % sur 60 → ≈ 714 (la note brute disait ≈ 950)
+  assert.ok(a.fitness >= 650 && a.fitness <= 800, '80 % → ' + a.fitness);
   let n = 0; while (a.fitness >= 600 && n < 60) { judge(c, a, -1, 1); n++; }
   assert.ok(n < 30, 'redescendu sous 600 en ' + n + ' jugements');
 });
 T('D4 · moins de 5 jugements : la fitness de naissance est conservée ; au 5e elle est recalculée', () => {
   const c = ctx(), a = { fitness: 650 };
   for (let i = 0; i < 4; i++) { judge(c, a, 1, 1); assert.strictEqual(a.fitness, 650); }
-  judge(c, a, 1, 1); assert.strictEqual(a.fitness, 1350);
+  judge(c, a, 1, 1); assert.strictEqual(a.fitness, REF.deJugements(a._judgments, 60)); assert.ok(a.fitness !== 650 && a.fitness > 350, 'recalculée : ' + a.fitness);   // [GO N° 109 · 20/11/2026] 5 sur 5 : avantage prouvé à peine (≈ 481), plus 1 350
 });
 T('D5 · l\'amplitude pèse : 1 grosse erreur (poids 10) annule 10 petites bonnes réponses (poids 1)', () => {
   const c = ctx(), a = { fitness: 350 };
