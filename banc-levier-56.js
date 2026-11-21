@@ -229,7 +229,7 @@ T('G aucun lecteur du P&L des périodes ni de _pnlBasis hors de l\'écran et des
   const files = fs.readdirSync(path.join(ROOT, 'js')).filter(f => f.endsWith('.js')).map(f => 'js/' + f).concat(['AURA8_v118.html', 'aura-guardian.html', 'guardian-core.js', 'guardian-embed.js', 'guardian-config.js']);
   const permis = { _computePnlByPeriod: ['js/09d1-paper-real-core.js', 'js/04-v8-0-livraison-35-mode-max-permissif-v.js', 'js/07-v90-mode-bunker-sos.js'],
     // [GO ALERTES 2 · 14/11/2026] + 04 : checkPnlAlerts (les ALERTES) mesure la session et la baisse du jour sur l'argent à Rams (ETAT n° 67)
-    _pnlBasis: ['js/02-state-init.js', 'js/09d1-paper-real-core.js', 'js/10c-profil-ab-contexte.js', 'js/09b2-save-load.js', 'js/09j-helpers.js', 'js/07-v90-mode-bunker-sos.js', 'js/04-v8-0-livraison-35-mode-max-permissif-v.js'],
+    _pnlBasis: ['js/02-state-init.js', 'js/09d1-paper-real-core.js', 'js/10c-profil-ab-contexte.js', 'js/09b2-save-load.js', 'js/09j-helpers.js', 'js/07-v90-mode-bunker-sos.js', 'js/04-v8-0-livraison-35-mode-max-permissif-v.js', 'js/18c-gains-paires.js'],   // [GO LIBÉRER · 21/11/2026] + 18c : « Mes paires », résultat réel (écran seul)
     _pnlSansPos: ['js/02-state-init.js'] };
   Object.entries(permis).forEach(([n, ok]) => {
     const vus = files.filter(f => fs.existsSync(path.join(ROOT, f)) && rd(f).split('\n').some(l => l.includes(n) && !/^\s*\/\//.test(l)));
