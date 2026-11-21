@@ -4,7 +4,8 @@
 //   1. la voix tendance lâche l'EV : UNE fois, S.tendance.reel.on = 0 — l'interrupteur qui existait déjà dans 15b (sync n'ouvre ni ne ferme plus
 //      rien, _tlrTientEV rend faux) ; 09c:75 laisse donc les bots ouvrir en EV. Marque reel.libre = '20261121' : remettre la voix = reel.on = 1, ce
 //      module ne la recoupe pas. Revérifié toutes les 20 s (un import de backup d'avant ce jour la rallumerait). Une position de la voix encore
-//      ouverte reste à Rams (✕ de la fiche). La poche (js/15) n'a pas d'argent : elle continue de mesurer, sans effet.
+//      ouverte reste à Rams (✕ de la fiche). [GO SANS VOIX · 21/11/2026] 15 et 15b ne sont plus chargés : ce point 1 n'agit plus
+//      que sur l'état gardé (sans effet) ; le point 2 reste.
 //   2. le seuil appris ne décide plus des ouvertures EN EV : _thLevel (03) rend null en EV → 10f prend les portes par régime, comme dans l'AA.
 //      Le moteur continue de MESURER (trades virtuels, bilan aux horizons, _thPick). Le RE — seul chemin vers l'argent réel — garde le seuil.
 // Tout le reste ne change pas : AUTO / MANU (Rams), réseau, anti-revenge, plafonds de positions, jamais sous zéro, urgence, Bunker, garde-fous des

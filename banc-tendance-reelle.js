@@ -262,10 +262,9 @@ await T('D4 · rapports, résumé hebdo et historique comptent les fermetures de
   assert.ok(/t\.type === 'urgence' \|\| t\.type === 'tendance';/.test(s07) && /'TENDANCE'/.test(s07), 'historique (07)');
   assert.ok(/i\.voix \? '📈 tendance longue'/.test(s06), 'Telegram');
 });
-await T('D5 · HTML : 15b chargé une fois, juste après 15 ; cadre #tlReel dans la barre Tendance longue ; 15 dit que ton argent EV la suit', () => {
-  const i15 = html.indexOf('src="js/15-voix-tendance.js'), i15b = html.indexOf('src="js/15b-tendance-reelle.js');
-  assert.ok(i15 > 0 && i15b > i15 && html.split('src="js/15b-tendance-reelle.js').length === 2);
-  assert.ok(html.indexOf('id="tlReel"') > html.indexOf('id="tlGrid"'));
+await T('D5 · HTML : [GO SANS VOIX · 21/11/2026] 15 et 15b ne sont PLUS chargés, la barre Tendance longue (#tlBar, #tlReel) est retirée (Rams 10:13 « Enlève les voix ») ; le texte de 15 reste', () => {
+  assert.ok(!html.includes('src="js/15-voix-tendance.js') && !html.includes('src="js/15b-tendance-reelle.js'));
+  assert.ok(!html.includes('id="tlReel"') && !html.includes('id="tlBar"'));
   assert.ok(/ton argent EV la suit avec de vraies positions/.test(rd('js/15-voix-tendance.js')));
 });
 

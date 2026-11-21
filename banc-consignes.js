@@ -186,8 +186,9 @@ T('K10 · rien pour les bots : openPosition n\'est appelée que par les ouvertur
   });
   assert.ok(seen.length >= 5, 'appelants trouvés : ' + seen.join(', '));
   // [GO TENDANCE RÉELLE · 12/11/2026] seul autre appelant : js/15b (l'EV suit la voix tendance, décision de Rams 12/11), TOUJOURS avec { voix: true } — pas un bot : ni consignes, ni avis
+  // [GO SANS VOIX · 21/11/2026] 15b n'est plus chargé (Rams 10:13 « Enlève les voix ») : plus aucun appel d'un script chargé ; son texte garde l'appel { voix: true }
   const _15b = seen.filter(s => s.startsWith('js/15b-tendance-reelle.js:'));
-  assert.strictEqual(_15b.length, 1, '15b : un seul appel'); assert.ok(/openPosition\(pair, pp\.side, \{ voix: true, stakeUsdt: stake, voixT0: num\(pp\.t0\) \}\)/.test(rd('js/15b-tendance-reelle.js')), '15b passe { voix: true }');
+  assert.strictEqual(_15b.length, 0, '15b chargé ?'); assert.ok(/openPosition\(pair, pp\.side, \{ voix: true, stakeUsdt: stake, voixT0: num\(pp\.t0\) \}\)/.test(rd('js/15b-tendance-reelle.js')), '15b passe { voix: true }');
   seen.filter(s => !s.startsWith('js/15b-tendance-reelle.js:')).forEach(s => assert.ok(allowed.has(s.split(':')[1]), 'appelant inattendu : ' + s));
 });
 

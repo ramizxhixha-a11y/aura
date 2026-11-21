@@ -1,15 +1,15 @@
-# ÉTAT-AURA8 — 21/11/2026 (go libérer : l'EV aux bots, voix arrêtée, « Mes paires » = résultat réel ; go fibonacci : lecture sans vote) — token `20261121c` — À LIRE EN PREMIER (≤ 20 Ko, banc-all le vérifie)
+# ÉTAT-AURA8 — 21/11/2026 (go sans voix : voix tendance retirée de l'app ; go libérer : l'EV aux bots, « Mes paires » = résultat réel ; go fibonacci) — token `20261121d` — À LIRE EN PREMIER (≤ 20 Ko, banc-all le vérifie)
 
 Ce fichier dit OÙ EN EST AURA8 aujourd'hui. L'histoire : `PASSATION-AURA8.md` (≈ 580 Ko), qu'on CHERCHE (`grep -n`). Les règles de travail de Claude sont dans `CLAUDE.md`. Audit du 13/10 : `rejeu/audit-20261013/`.
 
 ## 1. L'app (`pont.js etat` du 21/11 07:46 ; backup du pont du 21/11 08:25, `rejeu/backups/pont/aura_guardian_full_20261121-082520.json`)
-- Tourne avec `20261120b` depuis la relance du 21/11 07:30 (60 scripts, pont actif ; Sentry : rien de neuf). `20261121c` (go fibonacci + go libérer) livré, pas encore chargé : à la relance, la voix lâche l'EV (journal 🔓).
+- Tourne avec `20261120b` depuis la relance du 21/11 07:30 (60 scripts, pont actif ; Sentry : rien de neuf). `20261121d` (fibonacci, libérer, sans voix) livré, pas encore chargé : à la relance, la voix lâche l'EV (journal 🔓).
 - **Pont** : actif depuis le 15/11 (muet du 08 au 14/11, PAT expiré). Pont suspendu, muet 24 h ou PAT disparu sans « Couper » → Sentry (« AURA8 · Pont direct … », 1 / motif / jour). Agents : 31 (9 bots, 22 analystes) ; 12 paires.
 - EV : **0 position** — les 11 de la voix (SHORT) fermées le 21/11 de 07:28:05 à 07:28:23, toutes en gain (≈ +236 $) ; motif absent du trade (supposé : à la main, à confirmer par Rams) ; la poche garde ses 11 (EV rouverte lundi si le signal le dit). EV 2 312,46 $, 388 trades. RE : 1 145,42 $, 0 trade. AA : 115,93 $, 2 967 trades. Levier : index ×0 en EV (20/11) ; AVAX réglée ×2 dans l'EV seule, sans effet à ×0 (15/11) ; Rams la change dans la fiche MAN de la paire (« ⚡ Levier de la paire », − / +).
 - Modes : AA, EV et RE en play. **AUTO** au backup du 21/11 08:25 (`botAutoMode: true`, EV à l'écran). RE n'envoie aucun ordre réel (aucun appel `/api/v3/order`).
 - **Seuil appris fermé partout** (recalculé le 12/11 18:42 UTC sur > 5 000 décisions à 5 et 15 min : ≈ −0,29 % net par décision, coût 0,275 %) : les bots à 15 min n'ont aucune information, volatilité ou pas.
-- **Poche tendance longue (`js/15`)** : 11 ouvertes, 13 trades fermés, réalisé −13,52 % (« LONG ou rien » −12,68 %) (pont du 21/11). Entrées de l'EV SOUS celles de la poche : sa liquidation (2 × son entrée) = −100 % de la mise EV (go n° 80) ; celle de l'EV (2 × SON entrée) relue sur les plus hauts 1 h du sommeil (go n° 108).
-- **Depuis `20261121b` (go libérer)** : la voix lâche l'EV (`js/18b` : `S.tendance.reel.on = 0`, une fois, marque `libre`) ; les bots y ouvrent comme dans l'AA (portes par régime) ; le seuil appris ne ferme plus que le RE. La poche (js/15) mesure encore, sans argent.
+- **Voix tendance RETIRÉE de l'app** (21/11 10:13, Rams « Enlève les voix, je ne veux plus de tes tests ») : js/15 et js/15b plus chargés, barre « Tendance longue » retirée ; code et `S.tendance` gardés (poche figée, sans argent). Elle avait fait +224,70 $ en EV (12 fermetures) — dit à Rams.
+- **Depuis `20261121b` (go libérer)** : les bots ouvrent en EV comme dans l'AA (portes par régime ; `js/18b`) ; le seuil appris ne ferme plus que le RE.
 - **Sentry** : erreurs de la tablette → `aura8-app` (org `aura8`, https://de.sentry.io), à lire à CHAQUE session (CLAUDE.md 2).
 - Arrêts : tablette sans réseau loin du Wi-Fi (GO VEILLE, remède côté Rams) ; la voix, qui tient des semaines, les supporte.
 
@@ -18,7 +18,7 @@ Ce fichier dit OÙ EN EST AURA8 aujourd'hui. L'histoire : `PASSATION-AURA8.md` (
 - Noms internes `sim` / `paperReal` / `real` et clés de stockage (`nexus_state_v2`, `nexusSnap_A/B/C`, `NEXUS_DB`) : jamais renommés.
 - Aucune limite ni seuil chiffré posé à la main : le système l'apprend sur ses données. Pas de retrait de paire ni de réduction du nombre de trades pour corriger les pertes.
 - Rien n'est remis à plat : AA / EV / RE, agents, bots, rêves, Guardian restent entiers.
-- Une mission par conversation, nommée par « go … » ; un commit de livraison. Décision du RE : porte TALENT ou SOURCE d'abord ; EV : libre (21/11).
+- Une mission par conversation, nommée par « go … » ; un commit de livraison. Décision du RE : porte TALENT ou SOURCE d'abord ; EV : libre (21/11). **Plus de test ni de porte PROPOSÉS à Rams** (21/11 « je ne veux plus de tes tests ») : les bancs restent le garde-fou de livraison.
 - Le bot doit pouvoir tenir une position le temps qu'il faut (pas 15 min) ; perdre peu, gagner gros.
 - Fiscal (07/10) : calcul de la loi trade par trade — MANU LONG sans levier = normal (10 000 €/an exonérés), AUTO ou levier = spéculatif 33 %.
 - **Jamais sous zéro (18/10)** : « le trade est clôturé avant de perdre plus que la capacité du compte trading — frais, taxes, dettes » ; la réserve anti-négatif calcule en permanence. Livré par go nettoyage (n° 52, 54) : contrôle à chaque seconde, avec ou sans levier, dans chaque mode en play.
