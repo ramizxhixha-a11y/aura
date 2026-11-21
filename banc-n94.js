@@ -237,7 +237,7 @@ T('G · garde : n94-retours redonne 08 et 11 de 121562e au caractère près ; le
   Object.keys(A).forEach(f => { const s = rd(f); assert.notStrictEqual(h16(s), A[f], f + ' : la retouche manque'); assert.strictEqual(h16(sansN94(s, f)), A[f], f + ' : autre chose a bougé'); });
   const H = require('./banc-fixtures/n94-gardes.json');   // empreintes de 121562e : tous les js/ sauf 08 et 11 ; le HTML au jeton près (DOC_V et ses ?v=)
   Object.keys(H).forEach(f => {
-    if (f === 'AURA8_v118.html#jeton') { const h = rd('AURA8_v118.html'), j = /var DOC_V = '([^']+)'/.exec(h)[1]; assert.strictEqual(h16(h.split(j).join('JETON')), H[f], 'HTML : autre chose que le jeton a changé'); }
+    if (f === 'AURA8_v118.html#jeton') { const h = rd('AURA8_v118.html').replace(/\n<script src="js\/18-fibonacci-lecture\.js\?v=[0-9a-z]+"><\/script><!-- \[GO FIBONACCI[^\n]*-->/, ''), j = /var DOC_V = '([^']+)'/.exec(h)[1]; assert.strictEqual(h16(h.split(j).join('JETON')), H[f], 'HTML : autre chose que le jeton a changé'); }
     else assert.strictEqual(h16(rd(f)), H[f], f + ' a changé');
   });
   assert.ok(Object.keys(H).length >= 55, 'gardes : ' + Object.keys(H).length);
