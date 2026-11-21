@@ -263,7 +263,7 @@ const ctxOf = (o) => { const c = Object.assign({ console, Math, Object, JSON, Ar
       const fns = [...s.matchAll(/\n(?:async )?function ([\w$]+)\s*\(/g)].map(m => [m.index, m[1]]);
       for (const m of s.matchAll(re)) { const line = s.slice(s.lastIndexOf('\n', m.index) + 1, s.indexOf('\n', m.index)); if (/^\s*\/\//.test(line)) continue;
         const before = fns.filter(x => x[0] < m.index).pop(); out.push(f + ':' + (before ? before[1] : '(haut du fichier)')); } }); return [...new Set(out)].sort(); };
-    assert.deepStrictEqual(appelants(/_closeRowUsd\s*\(/g), ['js/02-state-init.js:_closeRowUsd', 'js/05-v37-19-indicateur-de-fatigue-bot.js:_outilsClosedTrades', 'js/06-v63-patterns-chartistes.js:_tgHebdoText'].sort());
+    assert.deepStrictEqual(appelants(/_closeRowUsd\s*\(/g), ['js/02-state-init.js:_closeRowUsd', 'js/05-v37-19-indicateur-de-fatigue-bot.js:_outilsClosedTrades', 'js/06-v63-patterns-chartistes.js:_tgHebdoText', 'js/18c-gains-paires.js:(haut du fichier)'].sort());   // [GO LIBÉRER · 21/11/2026] + 18c (usdOf, dans le module) : « Mes paires », gains du jour (affichage seul)
     assert.deepStrictEqual(appelants(/_badgeWinRun\s*\(/g), ['js/05-v37-19-indicateur-de-fatigue-bot.js:_badgeWinRun', 'js/05-v37-19-indicateur-de-fatigue-bot.js:renderZenSection'].sort(),
       '_badgeWinRun : badges (la liste _BADGES suit renderZenSection dans le fichier) et elle-même');
     ['js/09c-auto-open.js', 'js/09e-guards.js', 'js/09j-helpers.js', 'js/15-voix-tendance.js', 'js/15b-tendance-reelle.js', 'js/10a-base-analyse.js', 'js/10d-protections-indicateurs.js', 'js/12-bots-disciples.js']
