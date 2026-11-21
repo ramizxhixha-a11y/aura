@@ -48,7 +48,9 @@ T('Z1 #page0 : sommaire collant (6 boutons → 6 zones), urgences, puis les 6 zo
 
 T('Z2 aucun bloc perdu : les ' + FIX.ids.length + ' id de #page0 (' + FIX.commit + ') présents une seule fois ; HTML sans id en double ; balises équilibrées', () => {
   const now = idsOf(p0);
-  const manque = FIX.ids.filter(i => !now.includes(i)); assert.deepStrictEqual(manque, [], 'perdus');
+  const RETIRES = ['tlBar', 'tlBarLiveDot', 'tlBarCounter', 'tlBarPnl', 'tlGrid', 'tlReel'];   // [GO SANS VOIX · 21/11/2026] barre « Tendance longue » retirée sur demande de Rams (10:13 « Enlève les voix »)
+  const manque = FIX.ids.filter(i => !now.includes(i) && !RETIRES.includes(i)); assert.deepStrictEqual(manque, [], 'perdus');
+  RETIRES.forEach(i => assert.ok(!now.includes(i), i + ' encore là'));
   const all = idsOf(html), dbl = [...new Set(all.filter((x, i) => all.indexOf(x) !== i))]; assert.deepStrictEqual(dbl, [], 'doublons');
   const n = re => (p0.match(re) || []).length;
   assert.strictEqual(n(/<div\b/g), n(/<\/div>/g), 'div'); assert.strictEqual(n(/<section\b/g), n(/<\/section>/g), 'section');
@@ -60,7 +62,7 @@ T('Z3 chaque bloc dans sa zone ; volets : techniques, Brain, Intelligence, journ
   const Z = Object.fromEntries(ZONES.map(z => [z, block(p0, z) || '']));
   const dans = (z, ids) => ids.forEach(i => assert.ok(Z[z].includes('id="' + i + '"'), i + ' hors de ' + z));
   dans('accArgent', ['qPortfolio', 'heroVal', 'heroUsd', 'heroPnlBadge', 'capBarPct', 'capStaked', 'capFree', 'capMax', 'sparkline', 'openPnlBanner']);
-  dans('accPaires', ['pairPnlBars', 'globalPnlUsd', 'autoBar', 'manBar', 'tlBar', 'paramBar', 'actionBrickGrid', 'pairBrickGrid', 'openPosSummaryCards']);
+  dans('accPaires', ['pairPnlBars', 'globalPnlUsd', 'autoBar', 'manBar', 'paramBar', 'actionBrickGrid', 'pairBrickGrid', 'openPosSummaryCards']);   // [GO SANS VOIX · 21/11/2026] − tlBar (retirée)
   dans('accComptes', ['cashVal', 'tradVal', 'levReserveVal', 'fiscalResVal', 'ownFundsVal', 'antiNegReserveVal', 'fiscalRegimeVal', 'leverageDisp', 'splitDisp', 'wAllocCash', 'fiscalMini']);
   dans('accSante', ['trustScoreWrap', 'qPnlNet', 'qSessionPnl', 'qWin', 'qDD', 'qFeesTotal', 'cycleTrades', 'marketMoodWrap', 'thoughtsTicker', 'intelBanner']);
   dans('accCerveau', ['brainSection', 'brainCanvas', 'apanel-debate', 'atab-leadlag']);

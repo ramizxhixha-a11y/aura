@@ -232,12 +232,20 @@ T('R7 · remplaçante : 1re paire de PAIRS avec son état dans le portefeuille �
   const s = world(CODE, { active: 'EUR/USDT' }); delete s.ctx.S; assert.strictEqual(s.run('typeof S'), 'undefined'); assert.strictEqual(s.run('_activePairKeepLive()'), null);
 });
 
+// [GO SANS VOIX · 21/11/2026] le retrait de la voix (HTML : 2 scripts, la barre « Tendance longue ») est remis avant l'empreinte du HTML ; le reste reste épinglé
+const BLOC_TL = "        <!-- \u2550\u2550\u2550 BAR 2b \u2014 TENDANCE LONGUE (EV) \u00b7 [VOIX TENDANCE LONGUE \u00b7 07/10/2026] poche \u00e0 part, rendue par js/15-voix-tendance.js \u2550\u2550\u2550 -->\n        <div class=\"auto-bar\" id=\"tlBar\" data-bar=\"tl\">\n          <button class=\"auto-bar-toggle\" onclick=\"window._tlToggle && window._tlToggle()\">\n            <div class=\"auto-bar-left\">\n              <span class=\"auto-bar-chevron\">\u25b6</span>\n              <span class=\"auto-bar-title\">Tendance longue <span style=\"color:var(--mode-paper);\">EV</span></span>\n              <span class=\"auto-bar-livedot\" id=\"tlBarLiveDot\"></span>\n            </div>\n            <div class=\"auto-bar-right\">\n              <span class=\"auto-bar-counter\" id=\"tlBarCounter\">\u2014</span>\n              <span class=\"auto-bar-paircount\" id=\"tlBarPnl\">\u2014</span>\n            </div>\n          </button>\n          <div class=\"auto-bar-content\">\n            <div id=\"tlGrid\"></div>\n            <div id=\"tlReel\"></div><!-- [GO TENDANCE R\u00c9ELLE \u00b7 12/11/2026] ton argent EV qui suit la voix, rendu par js/15b-tendance-reelle.js -->\n          </div>\n        </div>\n\n";
+function sansRetraitVoix(h) {
+  const j = /var DOC_V = '([^']+)'/.exec(h)[1];
+  h = h.replace(/<!-- \[GO SANS VOIX[^\n]*-->\n/, '');
+  h = h.replace('<script src="js/16-fiscal.js', '<script src="js/15-voix-tendance.js?v=' + j + '"></script>\n<script src="js/15b-tendance-reelle.js?v=' + j + '"></script>\n<script src="js/16-fiscal.js');
+  return h.replace('        <!-- ═══ BAR 3 — PARAMÈTRES & ANALYSE DÉTAILLÉE', BLOC_TL + '        <!-- ═══ BAR 3 — PARAMÈTRES & ANALYSE DÉTAILLÉE');
+}
 T('G · garde : n94-retours redonne 08 et 11 de 121562e au caractère près ; les autres fichiers js/ et le HTML au texte de 121562e', () => {
   const A = { 'js/08-learning-history-render.js': 'dad75731357decaf', 'js/11-gestion-paires.js': '9c5179b84cae2ea3' };
   Object.keys(A).forEach(f => { const s = rd(f); assert.notStrictEqual(h16(s), A[f], f + ' : la retouche manque'); assert.strictEqual(h16(sansN94(s, f)), A[f], f + ' : autre chose a bougé'); });
   const H = require('./banc-fixtures/n94-gardes.json');   // empreintes de 121562e : tous les js/ sauf 08 et 11 ; le HTML au jeton près (DOC_V et ses ?v=)
   Object.keys(H).forEach(f => {
-    if (f === 'AURA8_v118.html#jeton') { const h = rd('AURA8_v118.html').replace(/\n<script src="js\/18-fibonacci-lecture\.js\?v=[0-9a-z]+"><\/script><!-- \[GO FIBONACCI[^\n]*-->/, '').replace(/\n<script src="js\/18b-liberer\.js\?v=[0-9a-z]+"><\/script><!-- \[GO LIBÉRER[^\n]*-->/, '').replace(/\n<script src="js\/18c-gains-paires\.js\?v=[0-9a-z]+"><\/script><!-- \[GO LIBÉRER[^\n]*-->/, ''), j = /var DOC_V = '([^']+)'/.exec(h)[1]; assert.strictEqual(h16(h.split(j).join('JETON')), H[f], 'HTML : autre chose que le jeton a changé'); }
+    if (f === 'AURA8_v118.html#jeton') { const h = sansRetraitVoix(rd('AURA8_v118.html')).replace(/\n<script src="js\/18-fibonacci-lecture\.js\?v=[0-9a-z]+"><\/script><!-- \[GO FIBONACCI[^\n]*-->/, '').replace(/\n<script src="js\/18b-liberer\.js\?v=[0-9a-z]+"><\/script><!-- \[GO LIBÉRER[^\n]*-->/, '').replace(/\n<script src="js\/18c-gains-paires\.js\?v=[0-9a-z]+"><\/script><!-- \[GO LIBÉRER[^\n]*-->/, ''), j = /var DOC_V = '([^']+)'/.exec(h)[1]; assert.strictEqual(h16(h.split(j).join('JETON')), H[f], 'HTML : autre chose que le jeton a changé'); }
     else assert.strictEqual(h16(rd(f)), H[f], f + ' a changé');
   });
   assert.ok(Object.keys(H).length >= 55, 'gardes : ' + Object.keys(H).length);

@@ -231,8 +231,8 @@ const run = (sb, code) => vm.runInContext(code, sb);
   {
     const html = fs.readFileSync(path.join(ROOT, 'AURA8_v118.html'), 'utf8');
     const b1 = fs.readFileSync(path.join(ROOT, 'js/09b1-build-snapshot.js'), 'utf8'), b2 = fs.readFileSync(path.join(ROOT, 'js/09b2-save-load.js'), 'utf8');
-    const i15 = html.indexOf('src="js/15-voix-tendance.js'), i16 = html.indexOf('src="js/16-fiscal.js');
-    t('HTML : js/16-fiscal.js chargé une fois, après 15', i16 > i15 && i15 > 0 && html.split('src="js/16-fiscal.js').length === 2);
+    const i15 = html.indexOf('src="js/14-enregistreur.js'), i16 = html.indexOf('src="js/16-fiscal.js');   // [GO SANS VOIX · 21/11/2026] 15 plus chargé : après 14
+    t('HTML : js/16-fiscal.js chargé une fois, après 14 (15 retiré le 21/11)', i16 > i15 && i15 > 0 && html.split('src="js/16-fiscal.js').length === 2);
     const i16b = html.indexOf('src="js/16b-fiscal-ecran.js');
     t('HTML : js/16b-fiscal-ecran.js chargé une fois, juste après 16 ; chaque fichier ≤ 500 lignes', i16b > i16 && html.split('src="js/16b-fiscal-ecran.js').length === 2 && SRC.split('\n').length <= 500 && SRCB.split('\n').length <= 500);
     t('HTML : onglet ⚖ Impôt actif par défaut, son panneau visible, « Frais » masqué (tuiles depuis GO CSS écran 6, 14/11)', /class="fz-tile active" id="ftab-tax"/.test(html) && /<div id="fpanel-tax">/.test(html) && /<div id="fpanel-global" style="display:none;">/.test(html));

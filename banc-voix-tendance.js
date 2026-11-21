@@ -265,9 +265,9 @@ const tick = (sb) => run(sb, 'window._tl.tick()');
     t('buildSnapshot (09b1) : tendance: S.tendance', /\btendance: S\.tendance \|\| null,/.test(b1));
     t('applySnap (09b2) : S.tendance = snap.tendance', /if \(snap\.tendance && typeof snap\.tendance === 'object'\)\s+S\.tendance\s+= snap\.tendance;/.test(b2));
     t('_APPLYSNAP_MANIFEST contient tendance', /window\._APPLYSNAP_MANIFEST = \[[^\]]*'tendance'/.test(b2));
-    t('HTML : barre tlBar (compteur, P&L, grille) et bouton → _tlToggle', ['id="tlBar"', 'id="tlBarCounter"', 'id="tlBarPnl"', 'id="tlGrid"', 'window._tlToggle'].every(x => html.includes(x)));
+    t('HTML : [GO SANS VOIX · 21/11/2026] barre tlBar retirée (Rams 10:13 « Enlève les voix »)', ['id="tlBar"', 'id="tlBarCounter"', 'id="tlBarPnl"', 'id="tlGrid"', 'window._tlToggle'].every(x => !html.includes(x)));
     const i14 = html.indexOf('src="js/14-enregistreur.js'), i15 = html.indexOf('src="js/15-voix-tendance.js');
-    t('HTML : js/15-voix-tendance.js chargé une fois, après 14', i15 > i14 && i14 > 0 && html.split('src="js/15-voix-tendance.js').length === 2);
+    t('HTML : [GO SANS VOIX · 21/11/2026] js/15-voix-tendance.js plus chargé (le module reste éprouvé ici sur son texte)', i14 > 0 && i15 < 0);
   }
   console.log('\n' + (ko ? '❌ ' : '✅ ') + ok + '/' + (ok + ko) + ' tests passés');
   process.exit(ko ? 1 : 0);
