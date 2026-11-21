@@ -7,8 +7,8 @@ Branche `travail/fibonacci`. Reprendre par « reprends go fibonacci » : `git ch
 ## Étapes
 - [x] Démarrage : ETAT lu, pont 07:46 (app 20261120b, EV 0 position / 388 trades), Sentry rien de neuf, banc-all brut : P22 de banc-pont-direct intermittent connu (2 passes sur 4)
 - [x] Règles figées + commit
-- [ ] Code de la porte, essayé sur données synthétiques
-- [ ] Données : `sh rejeu/sessions_get.sh /home/claude/d5m 2018-07 2026-09` (hors dépôt)
+- [x] Code de la porte, essayé sur données synthétiques (marche aléatoire : brut ≈ 0, net ≈ −0,26 % ; T1 ✓ T2 ✓) + cas à la main
+- [x] Données (937 archives, 152 absentes avant cotation) : `sh rejeu/sessions_get.sh /home/claude/d5m 2018-07 2026-09` (hors dépôt)
 - [ ] Passage : `python3 -I rejeu/porte_fibonacci.py /home/claude/d5m`
 - [ ] Livraison selon verdict (ENTRE → bot qui vote ; sinon lecture affichée sans vote)
 - [ ] Relecture, ETAT, PASSATION, banc-all, un commit sur main, DOC_V
